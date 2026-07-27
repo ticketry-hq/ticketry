@@ -8,6 +8,21 @@ import studio_server.asgi as asgi
 
 
 @pytest.mark.asyncio
+async def test_startup_terminal_reconcile_uses_terminal_session_service(monkeypatch):
+    reconciled = []
+
+    monkeypatch.setattr(
+        asgi.terminal_session,
+        "reconcile",
+        lambda: reconciled.append(True),
+    )
+
+    await asgi._reap_dead_terminal_sessions()
+
+    assert reconciled == [True]
+
+
+@pytest.mark.asyncio
 async def test_idle_terminal_sweep_seconds_parses_and_disables(monkeypatch):
     monkeypatch.setenv("MUXED_IDLE_SWEEP_MINUTES", "15")
     assert asgi._idle_terminal_sweep_seconds() == 900.0

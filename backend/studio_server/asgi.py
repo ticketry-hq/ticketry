@@ -39,7 +39,6 @@ django_asgi_app = get_asgi_application()
 from studio_server.routing import websocket_urlpatterns
 
 from apps.documents import watch as documents_watch
-from apps.terminals import tmux
 from apps.terminals.session import session as terminal_session
 from apps.worktrees import service as worktrees_service
 
@@ -71,7 +70,7 @@ async def _reap_dead_terminal_sessions() -> None:
     """
 
     try:
-        await asyncio.to_thread(tmux.reconcile_sessions)
+        await asyncio.to_thread(terminal_session.reconcile)
     except Exception as exc:
         logger.warning("startup terminal reconcile failed: %s", exc)
 

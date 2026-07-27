@@ -19,22 +19,30 @@ export function launchFailureReason(code: string): string {
   return LAUNCH_FAILURE_REASONS[code] ?? code;
 }
 
-function errorCodeFrom(body: unknown): string | null {
-  if (!body || typeof body !== "object") return null;
+function errorDetailFrom(body: unknown): { code: string | null; message: string | null } {
+  if (!body || typeof body !== "object") return { code: null, message: null };
   const detail = (body as { detail?: unknown }).detail;
-  if (detail && typeof detail === "object") {
-    const error = (detail as { error?: unknown }).error;
-    if (typeof error === "string" && error) return error;
+  if (!detail || typeof detail !== "object") {
+    return {
+      code: typeof detail === "string" && detail ? detail : null,
+      message: null,
+    };
   }
-  if (typeof detail === "string" && detail) return detail;
-  return null;
+  const { error, message } = detail as { error?: unknown; message?: unknown };
+  return {
+    code: typeof error === "string" && error ? error : null,
+    message: typeof message === "string" && message ? message : null,
+  };
 }
 
 /** What to write into the terminal when creating the run was refused. */
 export function launchFailureMessage(error: unknown): string {
-  const code = errorCodeFrom(
-    error && typeof error === "object" ? (error as { body?: unknown }).body : null,
-  );
+  const body =
+    error && typeof error === "object" ? (error as { body?: unknown }).body : null;
+  const { code, message } = errorDetailFrom(body);
+  if (code === "launch_unavailable" && message) {
+    return `Launch unavailable: ${message}`;
+  }
   if (code) return launchFailureReason(code);
   return error instanceof Error ? error.message : "launch_failed";
 }

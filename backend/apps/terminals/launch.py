@@ -182,6 +182,7 @@ async def _launch(
     except Exception as exc:
         # tmux missing/broken, or persistence failed — delete the half-created
         # row so no orphan remains, then signal the caller to decide.
+        logger.exception("terminal launch failed run=%s", agent_run_id)
         try:
             await asyncio.to_thread(_delete_agent_run, agent_run_id)
         except Exception:

@@ -72,6 +72,50 @@ describe("Model configuration settings", () => {
     });
   });
 
+  it("shows commit actions only for the save-gated Models section", async () => {
+    await openModelConfiguration();
+
+    expect(
+      screen.getByRole("region", { name: "Settings commit actions" }),
+    ).toHaveTextContent("No unsaved changes");
+    expect(screen.getByRole("button", { name: "Discard" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("tab", { name: "States" }));
+    expect(
+      screen.queryByRole("region", { name: "Settings commit actions" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Issue types" }));
+    expect(
+      screen.queryByRole("region", { name: "Settings commit actions" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("counts outstanding changes and discards the draft without closing", async () => {
+    await openModelConfiguration({
+      activated_providers: ["claude", "codex"],
+      global_default: { provider: "claude", model: "sonnet", reasoning: null },
+    });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
+      target: { value: "opus" },
+    });
+
+    expect(
+      screen.getByRole("region", { name: "Settings commit actions" }),
+    ).toHaveTextContent("2 unsaved changes");
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(screen.getByRole("dialog", { name: "Studio settings" })).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Settings commit actions" }),
+    ).toHaveTextContent("No unsaved changes");
+    expect(screen.getByRole("checkbox", { name: "Activate gemini" })).not.toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("sonnet");
+  });
+
   it("saves provider activation and the global default through the catalog endpoint", async () => {
     catalogApi.putProviderCatalog.mockImplementation(async (value: ProviderCatalog) => ({
       value,
@@ -88,7 +132,7 @@ describe("Model configuration settings", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Reasoning" }), {
       target: { value: "high" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
       expect(catalogApi.putProviderCatalog).toHaveBeenCalledWith({
@@ -101,7 +145,10 @@ describe("Model configuration settings", () => {
     // leaves nothing to save.
     expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("sonnet");
     expect(screen.getByRole("checkbox", { name: "Activate gemini" })).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(
+      screen.getByRole("region", { name: "Settings commit actions" }),
+    ).toHaveTextContent("No unsaved changes");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
   it("refuses to deactivate the provider the global default uses", async () => {
@@ -112,15 +159,21 @@ describe("Model configuration settings", () => {
 
     const codex = screen.getByRole("checkbox", { name: "Activate codex" });
     expect(codex).toBeChecked();
-    expect(codex).toBeDisabled();
+    expect(codex).toBeEnabled();
     expect(screen.getByRole("checkbox", { name: "Activate claude" })).toBeEnabled();
 
-    // Repointing the default releases the guard on codex.
+    fireEvent.click(codex);
+    expect(codex).toBeChecked();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Repoint the launch default before deactivating codex.",
+    );
+
+    // Repointing the default allows codex to be deactivated.
     fireEvent.change(screen.getByRole("combobox", { name: "Agent/provider" }), {
       target: { value: "claude" },
     });
     expect(screen.getByRole("checkbox", { name: "Activate codex" })).toBeEnabled();
-    expect(screen.getByRole("checkbox", { name: "Activate claude" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Activate claude" })).toBeEnabled();
 
     catalogApi.putProviderCatalog.mockImplementation(
       async (value: ProviderCatalog) => ({ value }),
@@ -129,7 +182,7 @@ describe("Model configuration settings", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
       target: { value: "opus" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
       expect(catalogApi.putProviderCatalog).toHaveBeenCalledWith({
@@ -156,7 +209,7 @@ describe("Model configuration settings", () => {
       capabilities.filter((capability) => capability.agent !== "gemini"),
     );
     fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
       expect(catalogApi.getLaunchProviderCapabilities).toHaveBeenCalledTimes(2);
@@ -181,7 +234,7 @@ describe("Model configuration settings", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Model 'sonnet' is not compatible with agent/provider 'gemini'.",
     );
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(catalogApi.putProviderCatalog).not.toHaveBeenCalled();
   });
 
@@ -256,7 +309,7 @@ describe("Model configuration settings", () => {
     await openModelConfiguration();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "global default provider must be activated",

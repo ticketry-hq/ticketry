@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import {
   LaunchDefaultPicker,
   type LaunchDefaultPickerValue,
@@ -19,7 +25,6 @@ import * as api from "../studio/lib/api";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SettingsSubsection,
-  settingsButtonClass,
 } from "../../shared/ui/SettingsPrimitives";
 
 const EMPTY_DEFAULT: LaunchDefaultPickerValue = {
@@ -56,25 +61,29 @@ function catalogFrom(
   };
 }
 
-// Compared structurally rather than by JSON string: the string form depends on
-// CONFIGURABLE_PROVIDERS matching the server's PROVIDER_ORDER serialization and
-// on object key order, so a reorder on either side would make a freshly loaded
-// panel read as dirty.
-function sameCatalog(left: ProviderCatalog, right: ProviderCatalog): boolean {
-  const activation = (catalog: ProviderCatalog) =>
-    [...catalog.activated_providers].sort().join(",");
-  const launchDefault = (catalog: ProviderCatalog) =>
-    catalog.global_default
-      ? [
-          catalog.global_default.provider,
-          catalog.global_default.model ?? "",
-          catalog.global_default.reasoning ?? "",
-        ].join("\u0000")
-      : null;
-  return (
-    activation(left) === activation(right) &&
-    launchDefault(left) === launchDefault(right)
-  );
+function outstandingChangeCount(
+  saved: ProviderCatalog | null,
+  draft: ProviderCatalog,
+): number {
+  if (!saved) return 0;
+  const providerChanges = CONFIGURABLE_PROVIDERS.filter(
+    (provider) =>
+      saved.activated_providers.includes(provider) !==
+      draft.activated_providers.includes(provider),
+  ).length;
+  return providerChanges +
+    Number(
+      (saved.global_default?.provider ?? null) !==
+      (draft.global_default?.provider ?? null),
+    ) +
+    Number(
+      (saved.global_default?.model ?? null) !==
+      (draft.global_default?.model ?? null),
+    ) +
+    Number(
+      (saved.global_default?.reasoning ?? null) !==
+      (draft.global_default?.reasoning ?? null),
+    );
 }
 
 function errorMessage(error: unknown): string {
@@ -109,16 +118,31 @@ function blockedBindingsPrompt(blocked: number): string {
   return `${blockedBindingsSummary(blocked)}\n\nSave anyway?`;
 }
 
+export interface ModelConfigurationCommitState {
+  outstandingCount: number;
+  saving: boolean;
+}
+
+export interface ModelConfigurationPanelHandle {
+  discard: () => void;
+  save: () => void;
+}
+
 interface ModelConfigurationPanelProps {
+  onCommitStateChange?: (state: ModelConfigurationCommitState) => void;
   onStatusChange?: (status: {
-    tone: "success" | "danger";
+    tone: "success" | "attention" | "danger";
     text: string;
   } | null) => void;
 }
 
-export function ModelConfigurationPanel({
+export const ModelConfigurationPanel = forwardRef<
+  ModelConfigurationPanelHandle,
+  ModelConfigurationPanelProps
+>(function ModelConfigurationPanel({
+  onCommitStateChange,
   onStatusChange,
-}: ModelConfigurationPanelProps = {}) {
+}, ref) {
   const providerCapabilities = useWorkflowEditorStore(
     (state) => state.providerCapabilities,
   );
@@ -133,6 +157,7 @@ export function ModelConfigurationPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [attention, setAttention] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,8 +197,11 @@ export function ModelConfigurationPanel({
     [activated, providerCapabilities],
   );
 
-  const draft = catalogFrom(activated, launchDefault);
-  const dirty = saved !== null && !sameCatalog(draft, saved);
+  const draft = useMemo(
+    () => catalogFrom(activated, launchDefault),
+    [activated, launchDefault],
+  );
+  const outstandingCount = outstandingChangeCount(saved, draft);
   // Same mirror validation the launch configuration form runs, so Settings and
   // the per-state form reject the same combinations before the server does.
   const validationError = validateLaunchBindingOptions(
@@ -184,8 +212,12 @@ export function ModelConfigurationPanel({
     },
     pickerCapabilities,
   );
-  const statusText = error ?? validationError?.message ?? notice;
-  const statusTone = validationError || error ? "danger" : "success";
+  const statusText = error ?? validationError?.message ?? attention ?? notice;
+  const statusTone = validationError || error
+    ? "danger"
+    : attention
+      ? "attention"
+      : "success";
 
   useEffect(() => {
     onStatusChange?.(
@@ -196,6 +228,13 @@ export function ModelConfigurationPanel({
   const toggleProvider = (provider: ConfigurableProvider, active: boolean) => {
     setNotice(null);
     setError(null);
+    if (!active && launchDefault.provider === provider) {
+      setAttention(
+        `Repoint the launch default before deactivating ${provider}.`,
+      );
+      return;
+    }
+    setAttention(null);
     setActivated((current) =>
       active
         ? [...current.filter((candidate) => candidate !== provider), provider]
@@ -205,13 +244,30 @@ export function ModelConfigurationPanel({
   const updateDefault = (value: LaunchDefaultPickerValue) => {
     setNotice(null);
     setError(null);
+    setAttention(null);
     setLaunchDefault(value);
   };
 
+  const discard = () => {
+    if (!saved) return;
+    setActivated(saved.activated_providers);
+    setLaunchDefault(pickerValueFrom(saved));
+    setError(null);
+    setNotice(null);
+    setAttention(null);
+  };
+
   const save = async () => {
+    if (validationError) {
+      setError(validationError.message);
+      setNotice(null);
+      setAttention(null);
+      return;
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
+    setAttention(null);
     try {
       // Every other workflow mutation previews its blast radius first. A
       // deactivation silently invalidated every binding naming that provider,
@@ -240,6 +296,20 @@ export function ModelConfigurationPanel({
     }
   };
 
+  useImperativeHandle(ref, () => ({
+    discard,
+    save: () => {
+      void save();
+    },
+  }));
+
+  useEffect(() => {
+    onCommitStateChange?.({
+      outstandingCount,
+      saving,
+    });
+  }, [onCommitStateChange, outstandingCount, saving]);
+
   if (loading) {
     return <p className="text-sm text-text-muted">Loading model configuration…</p>;
   }
@@ -253,7 +323,6 @@ export function ModelConfigurationPanel({
         <ul className="mt-2 divide-y divide-pane-border/70">
           {CONFIGURABLE_PROVIDERS.map((provider) => {
             const active = activated.includes(provider);
-            const locked = active && launchDefault.provider === provider;
             return (
               <li
                 key={provider}
@@ -261,19 +330,13 @@ export function ModelConfigurationPanel({
               >
                 <div className="min-w-0">
                   <span className="text-sm text-text-primary">{provider}</span>
-                  {locked ? (
-                    <p className="text-sm text-text-muted">
-                      Used by the launch default. Repoint the default before
-                      deactivating {provider}.
-                    </p>
-                  ) : null}
                 </div>
                 <label className="flex shrink-0 items-center gap-2 text-sm text-text-muted">
                   <input
                     type="checkbox"
                     aria-label={`Activate ${provider}`}
                     checked={active}
-                    disabled={locked || saving}
+                    disabled={saving}
                     onChange={(event) =>
                       toggleProvider(provider, event.target.checked)}
                     className={SETTINGS_CHECKBOX_CLASS}
@@ -304,14 +367,6 @@ export function ModelConfigurationPanel({
         </div>
       </SettingsSubsection>
 
-      <button
-        type="button"
-        onClick={() => void save()}
-        disabled={saving || !dirty || validationError !== null}
-        className={settingsButtonClass("primary")}
-      >
-        {saving ? "Saving…" : "Save"}
-      </button>
     </section>
   );
-}
+});

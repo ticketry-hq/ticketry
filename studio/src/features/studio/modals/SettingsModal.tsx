@@ -26,7 +26,12 @@ import {
   SETTINGS_EYEBROW_CLASS,
   SETTINGS_SECTION_HEADING_CLASS,
   SettingsStatusLine,
+  settingsButtonClass,
 } from "../../../shared/ui/SettingsPrimitives";
+import type {
+  ModelConfigurationCommitState,
+  ModelConfigurationPanelHandle,
+} from "../../workflows/ModelConfigurationPanel";
 
 const WorkflowSettingsPanel = lazy(async () => ({
   default: (await import("../../workflows/WorkflowSettingsPanel"))
@@ -40,17 +45,33 @@ const ModelConfigurationPanel = lazy(async () => ({
 
 type SettingsSection = "states" | "issue-types" | "models" | "keyboard";
 
-const SECTION_LABELS: Record<SettingsSection, string> = {
-  states: "States",
-  "issue-types": "Issue types",
-  models: "Models",
-  keyboard: "Keyboard",
-};
-const SECTION_LEDES: Record<SettingsSection, string> = {
-  states: "Project-wide names, groups, colors, and display order. Changes apply as you make them.",
-  "issue-types": "Per-type start state and allowed transitions. Changes apply as you make them.",
-  models: "Which providers are available to launch, and what runs when a configuration leaves it unset.",
-  keyboard: "Customize Studio keyboard shortcuts.",
+interface SettingsSectionDescriptor {
+  label: string;
+  lede: string;
+  saveGated: boolean;
+}
+
+const SECTION_DESCRIPTORS: Record<SettingsSection, SettingsSectionDescriptor> = {
+  states: {
+    label: "States",
+    lede: "Project-wide names, groups, colors, and display order. Changes apply as you make them.",
+    saveGated: false,
+  },
+  "issue-types": {
+    label: "Issue types",
+    lede: "Per-type start state and allowed transitions. Changes apply as you make them.",
+    saveGated: false,
+  },
+  models: {
+    label: "Models",
+    lede: "Which providers are available to launch, and what runs when a configuration leaves it unset.",
+    saveGated: true,
+  },
+  keyboard: {
+    label: "Keyboard",
+    lede: "Customize Studio keyboard shortcuts.",
+    saveGated: false,
+  },
 };
 type RecorderMessage = { kind: "error" | "warning"; text: string };
 type SettingsStatus = {
@@ -117,6 +138,12 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
   const workflowError = useWorkflowEditorStore((state) => state.error);
   const [activeSection, setActiveSection] = useState<SettingsSection>("states");
   const [modelStatus, setModelStatus] = useState<SettingsStatus | null>(null);
+  const [modelCommitState, setModelCommitState] =
+    useState<ModelConfigurationCommitState>({
+      outstandingCount: 0,
+      saving: false,
+    });
+  const modelConfigurationRef = useRef<ModelConfigurationPanelHandle>(null);
   const [recording, setRecording] = useState<EffectiveBinding | null>(null);
   const [message, setMessage] = useState<RecorderMessage | null>(null);
   const [saving, setSaving] = useState(false);
@@ -254,7 +281,7 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
                 <RailItem
                   key={section}
                   active={activeSection === section}
-                  label={SECTION_LABELS[section]}
+                  label={SECTION_DESCRIPTORS[section].label}
                   onSelect={() => selectSection(section)}
                 />
               ))}
@@ -262,7 +289,7 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
             <RailGroup label="Configuration">
               <RailItem
                 active={activeSection === "models"}
-                label={SECTION_LABELS.models}
+                label={SECTION_DESCRIPTORS.models.label}
                 onSelect={() => selectSection("models")}
               />
             </RailGroup>
@@ -285,10 +312,10 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
           >
             <header className="border-b border-pane-border px-5 py-4">
               <h2 className={SETTINGS_SECTION_HEADING_CLASS}>
-                {SECTION_LABELS[activeSection]}
+                {SECTION_DESCRIPTORS[activeSection].label}
               </h2>
               <p className="mt-0.5 text-sm text-text-muted">
-                {SECTION_LEDES[activeSection]}
+                {SECTION_DESCRIPTORS[activeSection].lede}
               </p>
             </header>
             <div className="min-w-0 px-5 py-4">
@@ -298,7 +325,11 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
                 </Suspense>
               ) : activeSection === "models" ? (
                 <Suspense fallback={<p className="text-sm text-text-muted">Loading model configuration…</p>}>
-                  <ModelConfigurationPanel onStatusChange={setModelStatus} />
+                  <ModelConfigurationPanel
+                    ref={modelConfigurationRef}
+                    onCommitStateChange={setModelCommitState}
+                    onStatusChange={setModelStatus}
+                  />
                 </Suspense>
               ) : (
                 <KeyboardSettingsPanel
@@ -318,7 +349,51 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
             </div>
           </div>
 
-          <div aria-label="Settings commit actions" />
+          {SECTION_DESCRIPTORS[activeSection].saveGated ? (
+            <div
+              role="region"
+              aria-label="Settings commit actions"
+              className="flex items-center justify-between gap-4 border-t border-pane-border bg-pane-panel px-5 py-3"
+            >
+              <span
+                className={
+                  modelCommitState.outstandingCount > 0
+                    ? "text-sm text-lifecycle-attention"
+                    : "text-sm text-text-muted"
+                }
+              >
+                {modelCommitState.outstandingCount === 0
+                  ? "No unsaved changes"
+                  : modelCommitState.outstandingCount === 1
+                    ? "1 unsaved change"
+                    : `${modelCommitState.outstandingCount} unsaved changes`}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={
+                    modelCommitState.saving ||
+                    modelCommitState.outstandingCount === 0
+                  }
+                  onClick={() => modelConfigurationRef.current?.discard()}
+                  className={settingsButtonClass("secondary")}
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    modelCommitState.saving ||
+                    modelCommitState.outstandingCount === 0
+                  }
+                  onClick={() => modelConfigurationRef.current?.save()}
+                  className={settingsButtonClass("primary")}
+                >
+                  {modelCommitState.saving ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </SettingsFrame>

@@ -18,7 +18,6 @@ import type {
 import * as api from "../studio/lib/api";
 import {
   SETTINGS_CHECKBOX_CLASS,
-  SettingsStatusLine,
   SettingsSubsection,
   settingsButtonClass,
 } from "../../shared/ui/SettingsPrimitives";
@@ -110,7 +109,16 @@ function blockedBindingsPrompt(blocked: number): string {
   return `${blockedBindingsSummary(blocked)}\n\nSave anyway?`;
 }
 
-export function ModelConfigurationPanel() {
+interface ModelConfigurationPanelProps {
+  onStatusChange?: (status: {
+    tone: "success" | "danger";
+    text: string;
+  } | null) => void;
+}
+
+export function ModelConfigurationPanel({
+  onStatusChange,
+}: ModelConfigurationPanelProps = {}) {
   const providerCapabilities = useWorkflowEditorStore(
     (state) => state.providerCapabilities,
   );
@@ -176,6 +184,14 @@ export function ModelConfigurationPanel() {
     },
     pickerCapabilities,
   );
+  const statusText = error ?? validationError?.message ?? notice;
+  const statusTone = validationError || error ? "danger" : "success";
+
+  useEffect(() => {
+    onStatusChange?.(
+      statusText ? { tone: statusTone, text: statusText } : null,
+    );
+  }, [onStatusChange, statusText, statusTone]);
 
   const toggleProvider = (provider: ConfigurableProvider, active: boolean) => {
     setNotice(null);
@@ -287,22 +303,6 @@ export function ModelConfigurationPanel() {
           />
         </div>
       </SettingsSubsection>
-
-      {validationError ? (
-        <SettingsStatusLine tone="danger">
-          {validationError.message}
-        </SettingsStatusLine>
-      ) : null}
-      {error ? (
-        <SettingsStatusLine tone="danger">
-          {error}
-        </SettingsStatusLine>
-      ) : null}
-      {notice ? (
-        <SettingsStatusLine tone="success">
-          {notice}
-        </SettingsStatusLine>
-      ) : null}
 
       <button
         type="button"

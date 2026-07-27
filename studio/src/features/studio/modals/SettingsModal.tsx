@@ -1,9 +1,15 @@
-import { lazy, Suspense, useState, useSyncExternalStore } from "react";
-import { ModalShell } from "../../../app/modal/ModalShell";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { studioRuntime, type StudioPlatform } from "../../../runtime";
 import {
-  MODAL_ACTIONS,
   studioKeymapRegistry,
   type BindingOverride,
   type EffectiveBinding,
@@ -15,6 +21,12 @@ import {
   formatKeyChord,
   KeyboardSettingsPanel,
 } from "./KeyboardSettingsPanel";
+import { useWorkflowEditorStore } from "../../workflows/workflowEditorStore";
+import {
+  SETTINGS_EYEBROW_CLASS,
+  SETTINGS_SECTION_HEADING_CLASS,
+  SettingsStatusLine,
+} from "../../../shared/ui/SettingsPrimitives";
 
 const WorkflowSettingsPanel = lazy(async () => ({
   default: (await import("../../workflows/WorkflowSettingsPanel"))
@@ -26,16 +38,29 @@ const ModelConfigurationPanel = lazy(async () => ({
     .ModelConfigurationPanel,
 }));
 
-type SettingsSection = "workflow" | "models" | "keyboard";
+type SettingsSection = "states" | "issue-types" | "models" | "keyboard";
 
 const SECTION_LABELS: Record<SettingsSection, string> = {
-  workflow: "Workflow",
-  models: "Model configuration",
+  states: "States",
+  "issue-types": "Issue types",
+  models: "Models",
   keyboard: "Keyboard",
 };
+const SECTION_LEDES: Record<SettingsSection, string> = {
+  states: "Project-wide names, groups, colors, and display order. Changes apply as you make them.",
+  "issue-types": "Per-type start state and allowed transitions. Changes apply as you make them.",
+  models: "Which providers are available to launch, and what runs when a configuration leaves it unset.",
+  keyboard: "Customize Studio keyboard shortcuts.",
+};
 type RecorderMessage = { kind: "error" | "warning"; text: string };
+type SettingsStatus = {
+  tone: "success" | "attention" | "danger";
+  text: string;
+};
 
 const BROWSER_RESERVED_KEYS = new Set(["l", "n", "q", "r", "t", "w"]);
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function bindingKey(binding: Pick<EffectiveBinding, "context" | "actionId">) {
   return `${binding.context}:${binding.actionId}`;
@@ -88,7 +113,10 @@ interface SettingsModalProps {
 
 export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
   const popModal = useModalStore((state) => state.popModal);
-  const [activeSection, setActiveSection] = useState<SettingsSection>("workflow");
+  const workflowNotice = useWorkflowEditorStore((state) => state.notice);
+  const workflowError = useWorkflowEditorStore((state) => state.error);
+  const [activeSection, setActiveSection] = useState<SettingsSection>("states");
+  const [modelStatus, setModelStatus] = useState<SettingsStatus | null>(null);
   const [recording, setRecording] = useState<EffectiveBinding | null>(null);
   const [message, setMessage] = useState<RecorderMessage | null>(null);
   const [saving, setSaving] = useState(false);
@@ -106,6 +134,7 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
     if (section === activeSection) return;
     setRecording(null);
     setMessage(null);
+    setModelStatus(null);
     setActiveSection(section);
   };
 
@@ -203,64 +232,229 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
     return true;
   };
 
+  const workflowStatus: SettingsStatus | null = workflowError
+    ? { tone: "danger", text: workflowError }
+    : workflowNotice
+      ? { tone: "success", text: workflowNotice }
+      : null;
+  const status = activeSection === "models" ? modelStatus : workflowStatus;
+
   return (
-    <ModalShell
-      title={<h1 className="text-lg font-semibold normal-case tracking-normal text-text-primary">Settings</h1>}
-      ariaLabel="Studio settings"
-      width="w-[min(64rem,calc(100vw-2rem))]"
-      bindings={[
-        { actionId: MODAL_ACTIONS.close, label: "Close Settings" },
-      ]}
-      interceptKeyDown={captureRecording}
-      onClose={close}
-    >
-      <div className="space-y-4">
-        <div
-          role="tablist"
-          aria-label="Settings sections"
-          className="inline-flex rounded-md border border-pane-border p-0.5"
-        >
-          {(["workflow", "models"] as const).map((section) => (
-            <button
-              key={section}
-              type="button"
-              role="tab"
-              aria-selected={activeSection === section}
-              onClick={() => selectSection(section)}
-              className={
-                activeSection === section
-                  ? "rounded bg-pane-title px-3 py-1.5 text-sm font-medium text-text-primary"
-                  : "rounded px-3 py-1.5 text-sm text-text-muted hover:text-text-primary"
-              }
+    <SettingsFrame interceptKeyDown={captureRecording} onClose={close}>
+      <div className="grid min-h-0 grid-cols-[13rem_minmax(0,1fr)] max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)]">
+        <aside className="min-h-0 border-r border-pane-border bg-pane-bg max-md:border-b max-md:border-r-0">
+          <div
+            role="tablist"
+            aria-label="Settings sections"
+            aria-orientation="vertical"
+            className="flex flex-col gap-0.5 p-2 max-md:flex-row max-md:flex-wrap"
+          >
+            <RailGroup label="Workflow">
+              {(["states", "issue-types"] as const).map((section) => (
+                <RailItem
+                  key={section}
+                  active={activeSection === section}
+                  label={SECTION_LABELS[section]}
+                  onSelect={() => selectSection(section)}
+                />
+              ))}
+            </RailGroup>
+            <RailGroup label="Configuration">
+              <RailItem
+                active={activeSection === "models"}
+                label={SECTION_LABELS.models}
+                onSelect={() => selectSection("models")}
+              />
+            </RailGroup>
+          </div>
+        </aside>
+
+        <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] bg-pane-panel">
+          {status ? (
+            <SettingsStatusLine
+              tone={status.tone}
+              className="mx-5 mb-0.5 mt-3"
             >
-              {SECTION_LABELS[section]}
-            </button>
-          ))}
+              {status.text}
+            </SettingsStatusLine>
+          ) : null}
+
+          <div
+            data-testid="settings-scroll-container"
+            className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
+          >
+            <header className="border-b border-pane-border px-5 py-4">
+              <h2 className={SETTINGS_SECTION_HEADING_CLASS}>
+                {SECTION_LABELS[activeSection]}
+              </h2>
+              <p className="mt-0.5 text-sm text-text-muted">
+                {SECTION_LEDES[activeSection]}
+              </p>
+            </header>
+            <div className="min-w-0 px-5 py-4">
+              {activeSection === "states" || activeSection === "issue-types" ? (
+                <Suspense fallback={<p className="text-sm text-text-muted">Loading workflow settings…</p>}>
+                  <WorkflowSettingsPanel activeSection={activeSection} />
+                </Suspense>
+              ) : activeSection === "models" ? (
+                <Suspense fallback={<p className="text-sm text-text-muted">Loading model configuration…</p>}>
+                  <ModelConfigurationPanel onStatusChange={setModelStatus} />
+                </Suspense>
+              ) : (
+                <KeyboardSettingsPanel
+                  bindings={bindings}
+                  overridden={overridden}
+                  recordingKey={recording ? bindingKey(recording) : null}
+                  message={message}
+                  saving={saving}
+                  onRecord={(binding) => {
+                    setMessage(null);
+                    setRecording(binding);
+                  }}
+                  onReset={resetBinding}
+                  onRestoreDefaults={restoreDefaults}
+                />
+              )}
+            </div>
+          </div>
+
+          <div aria-label="Settings commit actions" />
         </div>
-        {activeSection === "workflow" ? (
-          <Suspense fallback={<p className="text-sm text-text-muted">Loading workflow settings…</p>}>
-            <WorkflowSettingsPanel />
-          </Suspense>
-        ) : activeSection === "models" ? (
-          <Suspense fallback={<p className="text-sm text-text-muted">Loading model configuration…</p>}>
-            <ModelConfigurationPanel />
-          </Suspense>
-        ) : (
-          <KeyboardSettingsPanel
-            bindings={bindings}
-            overridden={overridden}
-            recordingKey={recording ? bindingKey(recording) : null}
-            message={message}
-            saving={saving}
-            onRecord={(binding) => {
-              setMessage(null);
-              setRecording(binding);
-            }}
-            onReset={resetBinding}
-            onRestoreDefaults={restoreDefaults}
-          />
-        )}
       </div>
-    </ModalShell>
+    </SettingsFrame>
+  );
+}
+
+function RailGroup({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className="contents max-md:flex max-md:gap-0.5">
+      <div
+        className={`${SETTINGS_EYEBROW_CLASS} px-2 pb-1 pt-3 first:pt-1 max-md:hidden`}
+      >
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RailItem({
+  active,
+  label,
+  onSelect,
+}: {
+  active: boolean;
+  label: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onSelect}
+      className={
+        active
+          ? "rounded border-l-2 border-focus-accent bg-pane-title px-2 py-1.5 text-left text-sm font-medium text-text-primary"
+          : "rounded border-l-2 border-transparent px-2 py-1.5 text-left text-sm text-text-secondary hover:text-text-primary"
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
+function SettingsFrame({
+  children,
+  interceptKeyDown,
+  onClose,
+}: {
+  children: ReactNode;
+  interceptKeyDown: (event: KeyboardEvent) => boolean;
+  onClose: () => void;
+}) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const setActiveBindings = useModalStore((state) => state.setActiveBindings);
+
+  useEffect(() => {
+    setActiveBindings([{ key: "Esc", label: "Close Settings" }]);
+    return () => setActiveBindings(null);
+  }, [setActiveBindings]);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const card = cardRef.current;
+    if (!card) return;
+    (card.querySelector<HTMLElement>(FOCUSABLE) ?? card).focus();
+    const trapTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const elements = Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (!elements.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === card)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", trapTab, true);
+    return () => {
+      document.removeEventListener("keydown", trapTab, true);
+      previousFocus?.focus?.();
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Studio settings"
+        tabIndex={-1}
+        onKeyDownCapture={(event) => {
+          if (interceptKeyDown(event.nativeEvent)) {
+            event.preventDefault();
+            event.stopPropagation();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            onClose();
+          }
+        }}
+        className="grid h-[min(42rem,calc(100vh-3rem))] w-[min(64rem,calc(100vw-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded border border-pane-border bg-pane-panel text-text-primary outline-none max-md:h-[calc(100vh-1.5rem)] max-md:w-[calc(100vw-1.5rem)]"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-pane-border px-4 py-3">
+          <h1 className="text-lg font-semibold text-text-primary">Settings</h1>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="rounded px-2 py-1 text-lg leading-none text-text-muted hover:bg-pane-title hover:text-text-primary"
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }

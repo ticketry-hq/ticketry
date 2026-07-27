@@ -69,7 +69,7 @@ function nextWorkflow(patch: Partial<ScopedWorkflowSettings>): ScopedWorkflowSet
 }
 
 async function openIssueTypes() {
-  fireEvent.click(await screen.findByRole("tab", { name: "Issue Types" }));
+  fireEvent.click(await screen.findByRole("tab", { name: "Issue types" }));
   await screen.findByRole("tab", { name: "Story" });
 }
 
@@ -149,6 +149,47 @@ describe("Studio workflow settings", () => {
         subtree_run_enabled: true,
       }],
     }));
+  });
+
+  it("uses one settings rail and one scroll container", async () => {
+    render(<SettingsModal />);
+
+    const dialog = screen.getByRole("dialog", { name: "Studio settings" });
+    const rail = within(dialog).getByRole("tablist", {
+      name: "Settings sections",
+    });
+    const statesTab = within(rail).getByRole("tab", { name: "States" });
+    const issueTypesTab = within(rail).getByRole("tab", {
+      name: "Issue types",
+    });
+    const modelsTab = within(rail).getByRole("tab", { name: "Models" });
+
+    expect(statesTab).toHaveAttribute("aria-selected", "true");
+    expect(within(rail).getByText("Workflow")).not.toHaveAttribute("tabindex");
+    expect(within(rail).getByText("Configuration")).not.toHaveAttribute("tabindex");
+    expect(within(rail).queryByRole("tab", { name: "Keyboard" }))
+      .not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("tablist", {
+      name: "Workflow settings sections",
+    })).not.toBeInTheDocument();
+
+    fireEvent.click(issueTypesTab);
+    expect(issueTypesTab).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("region", { name: "Issue Types" }))
+      .toBeInTheDocument();
+
+    fireEvent.click(modelsTab);
+    expect(modelsTab).toHaveAttribute("aria-selected", "true");
+
+    const scrollContainer = within(dialog).getByTestId(
+      "settings-scroll-container",
+    );
+    expect(
+      within(dialog).getAllByTestId("settings-scroll-container"),
+    ).toHaveLength(1);
+    expect(scrollContainer).toContainElement(
+      within(dialog).getByRole("heading", { name: "Models" }),
+    );
   });
 
   it("keeps States as a pure catalog and removes draft lifecycle affordances", async () => {
@@ -436,6 +477,8 @@ describe("Studio workflow settings", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Workflow changed elsewhere. Latest settings loaded.",
     );
+    const scrollContainer = screen.getByTestId("settings-scroll-container");
+    expect(scrollContainer).not.toContainElement(screen.getByRole("status"));
     expect(workflowApi.getIssueTypeWorkflowSettings).toHaveBeenCalledTimes(2);
     expect(prompt).toHaveValue("Keep this draft text.");
   });

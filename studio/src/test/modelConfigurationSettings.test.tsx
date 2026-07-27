@@ -54,7 +54,7 @@ const firstRunCatalog: ProviderCatalog = {
 async function openModelConfiguration(catalog: ProviderCatalog = firstRunCatalog) {
   catalogApi.getProviderCatalog.mockResolvedValue({ value: catalog });
   render(<SettingsModal runtimePlatform="desktop" />);
-  fireEvent.click(await screen.findByRole("tab", { name: "Model configuration" }));
+  fireEvent.click(await screen.findByRole("tab", { name: "Models" }));
   return await screen.findByRole("region", { name: "Model configuration" });
 }
 

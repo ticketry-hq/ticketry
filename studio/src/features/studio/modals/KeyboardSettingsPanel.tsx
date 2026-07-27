@@ -3,6 +3,12 @@ import type {
   EffectiveBinding,
   KeyChord,
 } from "../../../app/navigation/keymapRegistry";
+import {
+  SETTINGS_FIELD_CLASS,
+  SETTINGS_SECTION_HEADING_CLASS,
+  SettingsStatusLine,
+  settingsButtonClass,
+} from "../../../shared/ui/SettingsPrimitives";
 
 const ACTION_LABELS: Record<string, string> = {
   "edit-view.next-zone": "Next edit-view zone",
@@ -146,8 +152,8 @@ export function KeyboardSettingsPanel({
     <section aria-label="Keyboard settings" className="min-w-0 space-y-3">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-text-primary">Bindings</h2>
-          <p className="mt-0.5 text-xs text-text-muted">
+          <h2 className={SETTINGS_SECTION_HEADING_CLASS}>Bindings</h2>
+          <p className="mt-0.5 text-sm text-text-muted">
             Select a key cell, then press one chord. Esc cancels recording.
           </p>
         </div>
@@ -155,7 +161,7 @@ export function KeyboardSettingsPanel({
           type="button"
           onClick={onRestoreDefaults}
           disabled={saving || overridden.size === 0}
-          className="shrink-0 rounded border border-pane-border px-3 py-1.5 text-sm text-text-primary hover:border-text-muted disabled:opacity-40"
+          className={settingsButtonClass("secondary", "shrink-0")}
         >
           Restore defaults
         </button>
@@ -171,25 +177,20 @@ export function KeyboardSettingsPanel({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search actions or contexts"
-          className="w-full rounded border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent"
+          className={`${SETTINGS_FIELD_CLASS} w-full`}
         />
       </div>
 
       {message ? (
-        <div
-          role={message.kind === "error" ? "alert" : "status"}
-          className={
-            message.kind === "error"
-              ? "rounded border border-red-500/50 bg-red-950/30 px-3 py-2 text-sm text-red-200"
-              : "rounded border border-amber-500/50 bg-amber-950/20 px-3 py-2 text-sm text-amber-200"
-          }
+        <SettingsStatusLine
+          tone={message.kind === "error" ? "danger" : "attention"}
         >
           {message.text}
-        </div>
+        </SettingsStatusLine>
       ) : null}
 
       <div className="overflow-hidden rounded border border-pane-border">
-        <div className="grid grid-cols-[minmax(12rem,1fr)_8rem_12rem_5rem] gap-3 border-b border-pane-border bg-pane-title px-3 py-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <div className="grid grid-cols-[minmax(12rem,1fr)_8rem_12rem_5rem] gap-3 border-b border-pane-border px-3 py-2 text-sm font-semibold uppercase tracking-wide text-text-muted">
           <span>Action</span>
           <span>Context</span>
           <span>Binding</span>
@@ -206,7 +207,7 @@ export function KeyboardSettingsPanel({
                 className="grid grid-cols-[minmax(12rem,1fr)_8rem_12rem_5rem] items-center gap-3 border-b border-pane-border/70 px-3 py-2 last:border-b-0"
               >
                 <span className="text-sm text-text-primary">{label}</span>
-                <span className="text-xs text-text-muted">
+                <span className="text-sm text-text-muted">
                   {CONTEXT_LABELS[binding.context]}
                 </span>
                 <button
@@ -214,11 +215,11 @@ export function KeyboardSettingsPanel({
                   aria-label={`Record ${label} binding`}
                   onClick={() => onRecord(binding)}
                   disabled={locked || saving}
-                  className={`rounded border px-2 py-1.5 text-left font-mono text-xs ${
+                  className={`${settingsButtonClass("secondary", "text-left font-mono")} ${
                     recordingKey === key
-                      ? "border-focus-accent bg-focus-accent/10 text-text-primary"
-                      : "border-pane-border bg-pane-bg text-text-primary hover:border-text-muted"
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                      ? "bg-pane-title"
+                      : "bg-pane-bg"
+                  }`}
                 >
                   {locked
                     ? `${formatKeyChord(binding.chord)} · Locked`
@@ -233,12 +234,12 @@ export function KeyboardSettingsPanel({
                       aria-label={`Reset ${label} binding`}
                       onClick={() => onReset(binding)}
                       disabled={saving}
-                      className="rounded px-2 py-1 text-xs text-text-muted hover:bg-pane-title hover:text-text-primary disabled:opacity-40"
+                      className={settingsButtonClass("secondary")}
                     >
                       Reset
                     </button>
                   ) : (
-                    <span className="text-xs text-text-muted/60">Default</span>
+                    <span className="text-sm text-text-muted/60">Default</span>
                   )}
                 </div>
               </div>

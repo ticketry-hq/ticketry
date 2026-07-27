@@ -10,6 +10,13 @@ import type {
 import { LaunchConfigurationForm } from "./LaunchConfigurationForm";
 import { validateLaunchBindingOptions } from "./launchBindingValidation";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
+import {
+  SETTINGS_CHECKBOX_CLASS,
+  SETTINGS_EYEBROW_CLASS,
+  SETTINGS_FIELD_CLASS,
+  SettingsStatusLine,
+  settingsButtonClass,
+} from "../../shared/ui/SettingsPrimitives";
 
 const controlKey = (...parts: string[]) => parts.join(":");
 
@@ -111,8 +118,8 @@ export function IssueTypesSection() {
               void selectType(issueType.id);
             }}
             className={issueType.id === selectedTypeId
-              ? "rounded-full border border-focus-accent bg-pane-title px-3.5 py-1.5 text-sm font-medium text-text-primary"
-              : "rounded-full border border-pane-border px-3.5 py-1.5 text-sm text-text-muted hover:border-text-muted hover:text-text-primary"}
+              ? "rounded-full border border-focus-accent bg-pane-title px-3 py-1.5 text-sm font-medium text-text-primary"
+              : "rounded-full border border-pane-border px-3 py-1.5 text-sm text-text-muted hover:border-text-muted hover:text-text-primary"}
           >
             {issueType.name}
           </button>
@@ -121,7 +128,7 @@ export function IssueTypesSection() {
 
       {selectedIssueType && workflow ? (
         <>
-          <label className="grid max-w-sm gap-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+          <label className="grid max-w-sm gap-1 text-sm text-text-muted">
             Start State
             <select
               aria-label="Start State"
@@ -142,7 +149,7 @@ export function IssueTypesSection() {
                   );
                 }
               }}
-              className="rounded border border-pane-border bg-pane-panel px-3 py-2 text-sm font-normal normal-case tracking-normal text-text-primary"
+              className={SETTINGS_FIELD_CLASS}
             >
               <option value="">Select a start state</option>
               {states.map((state) => state.id ? (
@@ -152,7 +159,7 @@ export function IssueTypesSection() {
             <InlineError message={controlErrors[controlKey("start", selectedIssueType.id)]} />
           </label>
 
-          <label className="grid max-w-sm gap-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+          <label className="grid max-w-sm gap-1 text-sm text-text-muted">
             Add state to workflow
             <select
               aria-label="Add state to workflow"
@@ -161,7 +168,7 @@ export function IssueTypesSection() {
               onChange={(event) => {
                 stageState(selectedIssueType.id, event.target.value || null);
               }}
-              className="rounded border border-pane-border bg-pane-panel px-3 py-2 text-sm font-normal normal-case tracking-normal text-text-primary"
+              className={SETTINGS_FIELD_CLASS}
             >
               <option value="">
                 {catalogStates.length > 0 ? "Choose a catalog state" : "All states are members"}
@@ -318,7 +325,7 @@ function PendingWorkflowStateRow({
   return (
     <li
       aria-label={`${state.name} pending workflow state`}
-      className="rounded border border-dashed border-focus-accent bg-pane-bg p-3"
+      className="border-t border-dashed border-lifecycle-attention pt-4"
     >
       <div className="flex flex-wrap items-start gap-3">
         <span
@@ -329,11 +336,11 @@ function PendingWorkflowStateRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-text-primary">{state.name}</span>
-            <span className="rounded-full border border-focus-accent px-2 py-0.5 text-xs text-focus-accent">
+            <span className="rounded-full border border-lifecycle-attention px-2 py-0.5 text-sm text-lifecycle-attention">
               Pending
             </span>
           </div>
-          <p className="mt-1 text-xs text-text-muted">
+          <p className="mt-1 text-sm text-text-muted">
             Connect it from a workflow member to make it part of this workflow.
           </p>
         </div>
@@ -344,7 +351,7 @@ function PendingWorkflowStateRow({
           value={sourceId}
           disabled={memberStates.length === 0 || action !== null}
           onChange={(event) => setSourceId(event.target.value)}
-          className="min-w-48 flex-1 rounded border border-pane-border bg-pane-panel px-2 py-1.5 text-sm text-text-primary"
+          className={`${SETTINGS_FIELD_CLASS} min-w-48 flex-1`}
         >
           {memberStates.map((candidate) => (
             <option key={candidate.id} value={candidate.id ?? ""}>{candidate.name}</option>
@@ -360,7 +367,7 @@ function PendingWorkflowStateRow({
             stateId,
             control,
           )}
-          className="rounded border border-focus-accent px-3 py-1.5 text-sm text-focus-accent disabled:opacity-40"
+          className={settingsButtonClass("primary")}
         >
           Connect
         </button>
@@ -429,14 +436,14 @@ function WorkflowStateRow({
   return (
     <li
       aria-label={`${state.name} workflow state`}
-      className="rounded border border-pane-border bg-pane-bg"
+      className="border-b border-pane-border"
     >
       <button
         type="button"
         aria-label={`${expanded ? "Collapse" : "Expand"} ${state.name}`}
         aria-expanded={expanded}
         onClick={onToggle}
-        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-text-primary"
+        className={settingsButtonClass("secondary", "flex w-full items-center gap-3 border-0 text-left")}
       >
         <span
           aria-hidden="true"
@@ -445,7 +452,7 @@ function WorkflowStateRow({
         />
         <span className="min-w-0 flex-1">
           <span className="font-medium">{state.name}</span>
-          <span className="ml-3 text-xs text-text-muted">
+          <span className="ml-3 text-sm text-text-muted">
             Can move to: {outgoingNames.length > 0 ? outgoingNames.join(", ") : "None"}
           </span>
         </span>
@@ -459,20 +466,21 @@ function WorkflowStateRow({
           <section aria-label={`${state.name} on entry`} className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                <h3 className={SETTINGS_EYEBROW_CLASS}>
                   On entry
                 </h3>
-                <p className="mt-1 text-xs text-text-muted">
+                <p className="mt-1 text-sm text-text-muted">
                   {launchSummary(binding)}
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-xs text-text-primary">
+                <label className="flex items-center gap-2 text-sm text-text-primary">
                   <input
                     type="checkbox"
                     aria-label={`Run subtree ${state.name}`}
                     checked={binding?.subtree_run_enabled === true}
                     disabled={action !== null}
+                    className={SETTINGS_CHECKBOX_CLASS}
                     onChange={(event) => void setSubtreeRun(
                       issueType.id,
                       stateId,
@@ -482,12 +490,13 @@ function WorkflowStateRow({
                   />
                   Run subtree
                 </label>
-                <label className="flex items-center gap-2 text-xs text-text-primary">
+                <label className="flex items-center gap-2 text-sm text-text-primary">
                   <input
                     type="checkbox"
                     aria-label={`Auto-start ${state.name}`}
                     checked={binding?.auto_start === true}
                     disabled={action !== null || (!launchIsValid && binding?.auto_start !== true)}
+                    className={SETTINGS_CHECKBOX_CLASS}
                     onChange={(event) => void setAutoStart(
                       issueType.id,
                       stateId,
@@ -501,7 +510,7 @@ function WorkflowStateRow({
                   type="button"
                   aria-label={`Edit launch for ${state.name}`}
                   onClick={onEditLaunch}
-                  className="text-xs text-focus-accent hover:underline"
+                  className={settingsButtonClass("secondary")}
                 >
                   {editingLaunch ? "Hide launch form" : "Edit launch"}
                 </button>
@@ -543,7 +552,7 @@ function WorkflowStateRow({
               aria-label={`Remove ${state.name} from workflow`}
               disabled={action !== null}
               onClick={() => void requestRemoveState(stateId, state.name)}
-              className="text-sm text-red-300 hover:text-red-200 disabled:opacity-40"
+              className={settingsButtonClass("danger")}
             >
               Remove state from workflow
             </button>
@@ -596,10 +605,10 @@ function TransitionEditor({
 
   return (
     <section aria-label={`${source.name} transitions`} className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+      <h3 className={SETTINGS_EYEBROW_CLASS}>
         Can move to
       </h3>
-      <ul className="space-y-2">
+      <ul className="divide-y divide-pane-border">
         {outgoing.map((edge) => {
           const target = states.find((candidate) => candidate.id === edge.to_state_id);
           const permissionControl = controlKey(
@@ -615,17 +624,18 @@ function TransitionEditor({
             edge.to_state_id,
           );
           return (
-            <li key={edge.to_state_id} className="rounded border border-pane-border bg-pane-panel px-3 py-2">
+            <li key={edge.to_state_id} className="px-3 py-2">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="min-w-0 flex-1 text-sm text-text-primary">
                   {target?.name ?? "Unknown state"}
                 </span>
-                <label className="flex items-center gap-2 text-xs text-text-muted">
+                <label className="flex items-center gap-2 text-sm text-text-muted">
                   <input
                     type="checkbox"
                     aria-label={`Agents may move ${source.name} to ${target?.name ?? "Unknown state"}`}
                     checked={edge.agent_allowed}
                     disabled={action !== null}
+                    className={SETTINGS_CHECKBOX_CLASS}
                     onChange={(event) => void setTransitionPermission(
                       issueType.id,
                       sourceId,
@@ -646,7 +656,7 @@ function TransitionEditor({
                     edge.to_state_id,
                     removeControl,
                   )}
-                  className="text-sm text-text-muted hover:text-red-300 disabled:opacity-40"
+                  className={settingsButtonClass("danger")}
                 >
                   ×
                 </button>
@@ -664,7 +674,7 @@ function TransitionEditor({
           value={destination}
           disabled={available.length === 0 || action !== null}
           onChange={(event) => setDestination(event.target.value)}
-          className="min-w-48 flex-1 rounded border border-pane-border bg-pane-panel px-2 py-1.5 text-sm text-text-primary"
+          className={`${SETTINGS_FIELD_CLASS} min-w-48 flex-1`}
         >
           {available.length === 0 ? <option value="">All states added</option> : null}
           {available.map((candidate) => (
@@ -681,7 +691,7 @@ function TransitionEditor({
             destination,
             addControl,
           )}
-          className="rounded border border-focus-accent px-3 py-1.5 text-sm text-focus-accent disabled:opacity-40"
+          className={settingsButtonClass("secondary")}
         >
           Add
         </button>
@@ -709,7 +719,11 @@ function launchSummary(binding: ScopedWorkflowLaunchBinding | undefined): string
 }
 
 function InlineError({ message }: { message?: string }) {
-  return message ? <p role="alert" className="mt-1 text-xs text-red-300">{message}</p> : null;
+  return message ? (
+    <SettingsStatusLine className="mt-1" tone="danger">
+      {message}
+    </SettingsStatusLine>
+  ) : null;
 }
 
 function hasDeletedConfiguration(impact: ScopedWorkflowImpact): boolean {
@@ -738,7 +752,7 @@ function WorkflowImpactDialog({
       aria-label="Workflow deletion impact"
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
     >
-      <div className="w-full max-w-lg space-y-4 rounded border border-pane-border bg-pane-bg p-5 shadow-xl">
+      <div className="w-full max-w-lg space-y-4 rounded border border-pane-border bg-pane-panel p-5 shadow-xl">
         <div>
           <h2 className="text-base font-semibold text-text-primary">{change.title}</h2>
           <p className="mt-1 text-sm text-text-muted">
@@ -768,14 +782,14 @@ function WorkflowImpactDialog({
           <button
             type="button"
             onClick={close}
-            className="rounded border border-pane-border px-3 py-1.5 text-sm text-text-primary"
+            className={settingsButtonClass("secondary")}
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={() => void confirm()}
-            className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
+            className={settingsButtonClass("danger-filled")}
           >
             {change.confirmLabel}
           </button>

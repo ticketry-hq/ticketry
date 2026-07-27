@@ -10,7 +10,7 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 interface ModalShellProps {
-  title?: string;
+  title?: React.ReactNode;
   ariaLabel?: string;
   bindings?: ModalKeyBinding[];
   width?: string;
@@ -155,7 +155,9 @@ export function ModalShell({
         ref={cardRef}
         role="dialog"
         aria-modal="true"
-        aria-label={ariaLabel ?? title ?? "Dialog"}
+        aria-label={
+          ariaLabel ?? (typeof title === "string" ? title : "Dialog")
+        }
         tabIndex={-1}
         onKeyDownCapture={handleKey}
         className={`${width} max-h-[85vh] overflow-auto rounded border border-pane-border bg-pane-panel p-4 text-text-primary outline-none`}

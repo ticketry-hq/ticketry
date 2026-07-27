@@ -205,7 +205,7 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
 
   return (
     <ModalShell
-      title="Settings"
+      title={<h1 className="text-lg font-semibold normal-case tracking-normal text-text-primary">Settings</h1>}
       ariaLabel="Studio settings"
       width="w-[min(64rem,calc(100vw-2rem))]"
       bindings={[
@@ -218,7 +218,7 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
         <div
           role="tablist"
           aria-label="Settings sections"
-          className="inline-flex rounded-md border border-pane-border bg-pane-bg p-0.5"
+          className="inline-flex rounded-md border border-pane-border p-0.5"
         >
           {(["workflow", "models"] as const).map((section) => (
             <button

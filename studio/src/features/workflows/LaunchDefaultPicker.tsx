@@ -1,5 +1,6 @@
 import { useId } from "react";
 import type { ProviderCapabilities } from "../../shared/api/types";
+import { SETTINGS_FIELD_CLASS } from "../../shared/ui/SettingsPrimitives";
 
 export interface LaunchDefaultPickerValue {
   provider: string;
@@ -65,13 +66,13 @@ export function LaunchDefaultPicker({
 
   return (
     <>
-      <label className="grid gap-1 text-xs text-text-muted">
+      <label className="grid gap-1 text-sm text-text-muted">
         Agent/provider
         <select
           aria-label="Agent/provider"
           value={value.provider}
           onChange={(event) => update("provider", event.target.value, true)}
-          className="rounded border border-pane-border bg-pane-panel px-2 py-2 text-sm text-text-primary"
+          className={SETTINGS_FIELD_CLASS}
         >
           <option value="">Not configured</option>
           {providerCapabilities.map((capability) => (
@@ -82,14 +83,14 @@ export function LaunchDefaultPicker({
         </select>
       </label>
 
-      <label className="grid gap-1 text-xs text-text-muted">
+      <label className="grid gap-1 text-sm text-text-muted">
         Model
         <input
           aria-label="Model"
           value={value.model}
           onChange={(event) => update("model", event.target.value, false)}
           onBlur={() => onCommit?.(value, "model")}
-          className="rounded border border-pane-border bg-pane-panel px-2 py-2 text-sm text-text-primary"
+          className={SETTINGS_FIELD_CLASS}
           placeholder="Provider default"
           list={modelSuggestionsId}
         />
@@ -100,13 +101,13 @@ export function LaunchDefaultPicker({
         </datalist>
       </label>
 
-      <label className="grid gap-1 text-xs text-text-muted">
+      <label className="grid gap-1 text-sm text-text-muted">
         Reasoning
         <select
           aria-label="Reasoning"
           value={value.reasoning}
           onChange={(event) => update("reasoning", event.target.value, true)}
-          className="rounded border border-pane-border bg-pane-panel px-2 py-2 text-sm text-text-primary"
+          className={SETTINGS_FIELD_CLASS}
         >
           <option value="">Provider default</option>
           {unsupportedCurrentReasoning ? (

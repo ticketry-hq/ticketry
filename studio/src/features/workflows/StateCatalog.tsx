@@ -4,6 +4,11 @@ import { ApiError, apiErrorMessage } from "../../shared/api/client";
 import type { State } from "../../shared/api/types";
 import { STATE_GROUP_ORDER } from "../../shared/utilities/display";
 import * as api from "../studio/workflowApi";
+import {
+  SETTINGS_FIELD_CLASS,
+  SettingsStatusLine,
+  settingsButtonClass,
+} from "../../shared/ui/SettingsPrimitives";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
 
 const GROUP_LABELS: Record<string, string> = {
@@ -130,12 +135,13 @@ export function StateCatalog() {
       </ul>
 
       {previewStateId ? (
-        <section
+        <SettingsStatusLine
           aria-label="State replacement impact"
-          className="mt-3 rounded border border-amber-500/50 bg-amber-950/20 p-3 text-xs"
+          className="mt-3"
+          tone="attention"
         >
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-amber-200">
+            <h3 className="font-semibold text-lifecycle-attention">
               Remove {previewState?.name ?? "state"}
             </h3>
             <button
@@ -147,24 +153,28 @@ export function StateCatalog() {
                 setImpactError(null);
                 setImpactConflict(null);
               }}
-              className="text-text-muted hover:text-text-primary"
+              className={settingsButtonClass("secondary")}
             >
               Close
             </button>
           </div>
           {impactLoading ? <p className="mt-2 text-text-muted">Loading impact…</p> : null}
-          {impactError ? <p role="alert" className="mt-2 text-red-200">{impactError}</p> : null}
+          {impactError ? (
+            <SettingsStatusLine className="mt-2" tone="danger">
+              {impactError}
+            </SettingsStatusLine>
+          ) : null}
           {impactConflict ? (
-            <div role="alert" className="mt-2 rounded border border-red-500/50 p-2 text-red-200">
+            <SettingsStatusLine className="mt-2" tone="danger">
               <p>{impactConflict}</p>
               <button
                 type="button"
                 onClick={() => void preview(previewStateId)}
-                className="mt-2 rounded border border-red-300 px-2 py-1"
+                className={settingsButtonClass("danger", "mt-2")}
               >
                 Refresh impact
               </button>
-            </div>
+            </SettingsStatusLine>
           ) : null}
           {impact ? (
             <div className="mt-3 space-y-3 text-text-primary">
@@ -172,7 +182,7 @@ export function StateCatalog() {
                 {impact.total_work_items} affected work {impact.total_work_items === 1 ? "item" : "items"}
               </p>
               {(impact.protection_rules ?? []).length > 0 ? (
-                <ul className="list-disc space-y-1 pl-4 text-amber-200">
+                <ul className="list-disc space-y-1 pl-4 text-lifecycle-attention">
                   {(impact.protection_rules ?? []).map((rule) => (
                     <li key={rule.code}>{rule.message}</li>
                   ))}
@@ -186,7 +196,7 @@ export function StateCatalog() {
                       aria-label="Replacement state"
                       value={replacementId}
                       onChange={(event) => setReplacementId(event.target.value)}
-                      className="rounded border border-pane-border bg-pane-panel px-2 py-1.5 text-text-primary"
+                      className={SETTINGS_FIELD_CLASS}
                     >
                       {(impact.valid_replacements ?? []).map((candidate) =>
                         candidate.id ? (
@@ -201,7 +211,7 @@ export function StateCatalog() {
                     aria-label={`Replace ${previewState?.name ?? "state"} with ${replacement?.name ?? "selected state"}`}
                     onClick={() => void confirmRemoval()}
                     disabled={!replacementId || action !== null || impactConflict !== null}
-                    className="rounded border border-amber-400 px-2 py-1.5 text-amber-200 disabled:opacity-50"
+                    className={settingsButtonClass("danger")}
                   >
                     {action === "remove-state" ? "Replacing…" : "Confirm replacement"}
                   </button>
@@ -213,35 +223,35 @@ export function StateCatalog() {
                   aria-label={`Delete ${previewState?.name ?? "state"}`}
                   onClick={() => void confirmRemoval()}
                   disabled={action !== null || impactConflict !== null}
-                  className="rounded border border-red-400 px-2 py-1.5 text-red-200 disabled:opacity-50"
+                  className={settingsButtonClass("danger")}
                 >
                   {action === "remove-state" ? "Deleting…" : "Confirm deletion"}
                 </button>
               ) : null}
             </div>
           ) : null}
-        </section>
+        </SettingsStatusLine>
       ) : null}
 
       {adding ? (
         <div className="mt-3 grid gap-2 rounded border border-dashed border-pane-border p-3">
-          <label className="grid gap-1 text-xs text-text-muted">
+          <label className="grid gap-1 text-sm text-text-muted">
             State name
             <input
               aria-label="State name"
               autoFocus
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="rounded border border-pane-border bg-pane-panel px-2 py-1.5 text-sm text-text-primary"
+              className={SETTINGS_FIELD_CLASS}
             />
           </label>
-          <label className="grid gap-1 text-xs text-text-muted">
+          <label className="grid gap-1 text-sm text-text-muted">
             State group
             <select
               aria-label="State group"
               value={group}
               onChange={(event) => setGroup(event.target.value)}
-              className="rounded border border-pane-border bg-pane-panel px-2 py-1.5 text-sm text-text-primary"
+              className={SETTINGS_FIELD_CLASS}
             >
               {STATE_GROUP_ORDER.map((value) => (
                 <option key={value} value={value}>{GROUP_LABELS[value]}</option>
@@ -253,7 +263,7 @@ export function StateCatalog() {
               type="button"
               onClick={() => void submit()}
               disabled={!name.trim() || action !== null}
-              className="rounded border border-focus-accent px-2 py-1.5 text-xs text-focus-accent disabled:opacity-50"
+              className={settingsButtonClass("primary")}
             >
               {action === "create-state" ? "Creating…" : "Create state"}
             </button>
@@ -261,7 +271,7 @@ export function StateCatalog() {
               type="button"
               onClick={() => setAdding(false)}
               disabled={action !== null}
-              className="rounded border border-pane-border px-2 py-1.5 text-xs disabled:opacity-50"
+              className={settingsButtonClass("secondary")}
             >
               Cancel
             </button>
@@ -271,7 +281,7 @@ export function StateCatalog() {
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="mt-3 block w-full rounded border border-dashed border-pane-border px-3 py-2 text-left text-sm text-text-muted hover:border-focus-accent hover:text-focus-accent"
+          className={settingsButtonClass("secondary", "mt-3 block w-full border-dashed text-left")}
         >
           + Add State
         </button>
@@ -312,7 +322,7 @@ function CatalogStateRow({
       onDragStart={onStartDrag}
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDropState}
-      className="grid cursor-grab gap-2 rounded border border-pane-border bg-pane-panel p-2 active:cursor-grabbing sm:grid-cols-[minmax(10rem,1fr)_auto_auto_auto] sm:items-center"
+      className="grid cursor-grab gap-2 border-b border-pane-border p-2 active:cursor-grabbing sm:grid-cols-[minmax(10rem,1fr)_auto_auto_auto] sm:items-center"
     >
       <input
         aria-label={`State name for ${state.name}`}
@@ -322,9 +332,9 @@ function CatalogStateRow({
           const next = name.trim();
           if (next && next !== state.name) void updateState(stateId, { name: next });
         }}
-        className="min-w-0 rounded border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-text-primary focus:border-pane-border"
+        className={`${SETTINGS_FIELD_CLASS} font-medium`}
       />
-      <span className="rounded bg-pane-title px-2 py-1 text-xs text-text-secondary">
+      <span className="rounded border border-pane-border px-2 py-1 text-sm text-text-secondary">
         {GROUP_LABELS[state.group] ?? state.group}
       </span>
       <input
@@ -340,7 +350,7 @@ function CatalogStateRow({
           aria-label={`Move ${state.name} earlier`}
           disabled={action !== null || index === 0}
           onClick={() => void moveState(stateId, -1)}
-          className="rounded px-1.5 py-1 text-text-muted disabled:opacity-30"
+          className={settingsButtonClass("secondary")}
         >
           ↑
         </button>
@@ -349,7 +359,7 @@ function CatalogStateRow({
           aria-label={`Move ${state.name} later`}
           disabled={action !== null || index === stateCount - 1}
           onClick={() => void moveState(stateId, 1)}
-          className="rounded px-1.5 py-1 text-text-muted disabled:opacity-30"
+          className={settingsButtonClass("secondary")}
         >
           ↓
         </button>
@@ -358,7 +368,7 @@ function CatalogStateRow({
           aria-label={`Review impact for ${state.name}`}
           onClick={onRemove}
           disabled={action !== null}
-          className="rounded px-1.5 py-1 text-xs text-amber-300 disabled:opacity-40"
+          className={settingsButtonClass("danger")}
         >
           Remove
         </button>

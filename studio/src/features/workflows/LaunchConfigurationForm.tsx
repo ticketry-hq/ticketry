@@ -11,6 +11,10 @@ import {
   type LaunchDefaultPickerValue,
 } from "./LaunchDefaultPicker";
 import { validateLaunchBindingOptions } from "./launchBindingValidation";
+import {
+  SETTINGS_FIELD_CLASS,
+  SettingsStatusLine,
+} from "../../shared/ui/SettingsPrimitives";
 
 interface LaunchConfigurationFormProps {
   binding?: ScopedWorkflowLaunchBinding;
@@ -83,7 +87,7 @@ export function LaunchConfigurationForm({
       className="mt-3 space-y-3"
       onSubmit={(event) => event.preventDefault()}
     >
-      <label className="grid gap-1 text-xs text-text-muted">
+      <label className="grid gap-1 text-sm text-text-muted">
         Prompt
         <textarea
           aria-label="Prompt"
@@ -91,7 +95,7 @@ export function LaunchConfigurationForm({
           rows={4}
           onChange={(event) => setPrompt(event.target.value)}
           onBlur={() => void apply(input)}
-          className="resize-y rounded border border-pane-border bg-pane-panel px-2 py-2 text-sm text-text-primary"
+          className={`${SETTINGS_FIELD_CLASS} resize-y`}
           placeholder="No prompt configured"
         />
       </label>
@@ -104,12 +108,12 @@ export function LaunchConfigurationForm({
       />
 
       {validationError || error ? (
-        <div role="alert" className="rounded border border-red-500/50 bg-red-950/30 p-2 text-xs text-red-200">
+        <SettingsStatusLine tone="danger">
           {validationError?.message ?? error}
-        </div>
+        </SettingsStatusLine>
       ) : null}
-      {applying ? <p className="text-xs text-text-muted">Applying…</p> : null}
-      <p className="text-[11px] text-text-muted">
+      {applying ? <p className="text-sm text-text-muted">Applying…</p> : null}
+      <p className="text-sm text-text-muted">
         Changes apply when a field is changed or left.
       </p>
     </form>

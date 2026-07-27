@@ -16,6 +16,12 @@ import type {
   ProviderCatalog,
 } from "../../shared/api/types";
 import * as api from "../studio/lib/api";
+import {
+  SETTINGS_CHECKBOX_CLASS,
+  SettingsStatusLine,
+  SettingsSubsection,
+  settingsButtonClass,
+} from "../../shared/ui/SettingsPrimitives";
 
 const EMPTY_DEFAULT: LaunchDefaultPickerValue = {
   provider: "",
@@ -224,11 +230,10 @@ export function ModelConfigurationPanel() {
 
   return (
     <section aria-label="Model configuration" className="min-w-0 space-y-4">
-      <div className="rounded border border-pane-border bg-pane-bg p-3">
-        <h3 className="text-base font-semibold text-text-primary">Providers</h3>
-        <p className="mt-0.5 text-xs text-text-muted">
-          Only activated providers appear in launch selectors.
-        </p>
+      <SettingsSubsection
+        title="Providers"
+        description="Only activated providers appear in launch selectors."
+      >
         <ul className="mt-2 divide-y divide-pane-border/70">
           {CONFIGURABLE_PROVIDERS.map((provider) => {
             const active = activated.includes(provider);
@@ -241,13 +246,13 @@ export function ModelConfigurationPanel() {
                 <div className="min-w-0">
                   <span className="text-sm text-text-primary">{provider}</span>
                   {locked ? (
-                    <p className="text-xs text-text-muted">
+                    <p className="text-sm text-text-muted">
                       Used by the launch default. Repoint the default before
                       deactivating {provider}.
                     </p>
                   ) : null}
                 </div>
-                <label className="flex shrink-0 items-center gap-2 text-xs text-text-muted">
+                <label className="flex shrink-0 items-center gap-2 text-sm text-text-muted">
                   <input
                     type="checkbox"
                     aria-label={`Activate ${provider}`}
@@ -255,7 +260,7 @@ export function ModelConfigurationPanel() {
                     disabled={locked || saving}
                     onChange={(event) =>
                       toggleProvider(provider, event.target.checked)}
-                    className="h-4 w-4 accent-focus-accent disabled:opacity-40"
+                    className={SETTINGS_CHECKBOX_CLASS}
                   />
                   {active ? "On" : "Off"}
                 </label>
@@ -263,16 +268,17 @@ export function ModelConfigurationPanel() {
             );
           })}
         </ul>
-      </div>
+      </SettingsSubsection>
 
-      <div className="rounded border border-pane-border bg-pane-bg p-3">
-        <h3 className="text-base font-semibold text-text-primary">
-          Global launch default
-        </h3>
-        <p className="mt-0.5 text-xs text-text-muted">
-          Used wherever a launch configuration leaves provider, model, or
-          reasoning unset, and for every automated launch.
-        </p>
+      <SettingsSubsection
+        title="Global launch default"
+        description={
+          <>
+            Used wherever a launch configuration leaves provider, model, or
+            reasoning unset, and for every automated launch.
+          </>
+        }
+      >
         <div className="mt-2 grid gap-3 sm:grid-cols-3">
           <LaunchDefaultPicker
             providerCapabilities={pickerCapabilities}
@@ -280,37 +286,29 @@ export function ModelConfigurationPanel() {
             onChange={updateDefault}
           />
         </div>
-      </div>
+      </SettingsSubsection>
 
-      {/* Rendered separately: routing both through one box with validation
-          winning made a failed save invisible while any mirror error stood. */}
       {validationError ? (
-        <div
-          role="alert"
-          className="rounded border border-red-500/50 bg-red-950/30 p-3 text-sm text-red-200"
-        >
+        <SettingsStatusLine tone="danger">
           {validationError.message}
-        </div>
+        </SettingsStatusLine>
       ) : null}
       {error ? (
-        <div
-          role="alert"
-          className="rounded border border-red-500/50 bg-red-950/30 p-3 text-sm text-red-200"
-        >
+        <SettingsStatusLine tone="danger">
           {error}
-        </div>
+        </SettingsStatusLine>
       ) : null}
       {notice ? (
-        <div role="status" className="text-sm text-emerald-300">
+        <SettingsStatusLine tone="success">
           {notice}
-        </div>
+        </SettingsStatusLine>
       ) : null}
 
       <button
         type="button"
         onClick={() => void save()}
         disabled={saving || !dirty || validationError !== null}
-        className="rounded border border-pane-border px-3 py-1.5 text-sm text-text-primary hover:border-text-muted disabled:opacity-40"
+        className={settingsButtonClass("primary")}
       >
         {saving ? "Saving…" : "Save"}
       </button>

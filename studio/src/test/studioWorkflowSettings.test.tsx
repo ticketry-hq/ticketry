@@ -329,45 +329,54 @@ describe("Studio workflow settings", () => {
     expect(workflowApi.getIssueTypeWorkflowSettings).not.toHaveBeenCalledWith("module");
   });
 
-  it("adds and removes transitions from a dropdown and defaults agents to allowed", async () => {
+  it("renders transitions as disclosures under their source states", async () => {
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Todo" }));
 
-    expect(screen.getByText("Can move to: Review")).toBeInTheDocument();
-    const destination = screen.getByRole("combobox", {
-      name: "Add destination from Todo",
+    expect(screen.getByRole("heading", { name: "Todo" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review" })).toBeInTheDocument();
+    expect(screen.getByText("No outgoing transitions.")).toBeInTheDocument();
+    const transition = screen.getByRole("listitem", {
+      name: "Review to Done transition",
     });
-    expect(within(destination).queryByRole("option", { name: "Idea" }))
-      .not.toBeInTheDocument();
-    fireEvent.change(destination, {
-      target: { value: "done" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add transition from Todo" }));
+    expect(transition).toHaveTextContent("Agents + people");
+    expect(transition).toHaveTextContent("claude · sonnet");
+    expect(transition).not.toHaveTextContent("Auto-start");
+    expect(screen.queryByText("Edit launch")).not.toBeInTheDocument();
 
-    await waitFor(() => expect(workflowApi.addIssueTypeWorkflowTransition)
-      .toHaveBeenCalledWith("story", {
-        from_state_id: "todo",
-        to_state_id: "done",
-        agent_allowed: true,
-        workflow_revision: 7,
-      }));
+    fireEvent.click(within(transition).getByRole("button", {
+      name: "Expand Review to Done",
+    }));
+    expect(within(transition).getByRole("region", {
+      name: "Review to Done transition properties",
+    })).toBeInTheDocument();
+    expect(within(transition).getByRole("region", {
+      name: "Done on entry",
+    })).toBeInTheDocument();
+    expect(within(transition).getByRole("form", {
+      name: "Story · Done launch configuration",
+    })).toBeInTheDocument();
+    expect(within(transition).getByRole("checkbox", {
+      name: "Agents may move Review to Done",
+    })).toBeChecked();
 
     workflowApi.previewIssueTypeWorkflowImpact.mockResolvedValueOnce({
-      workflow_revision: 8,
+      workflow_revision: 7,
       deleted_transitions: [
-        { from_state_id: "todo", to_state_id: "review", agent_allowed: true },
+        { from_state_id: "review", to_state_id: "done", agent_allowed: true },
       ],
       deleted_launch_bindings: [],
       disabled_auto_start_state_ids: [],
     });
-    fireEvent.click(screen.getByRole("button", { name: "Remove transition Todo to Review" }));
+    fireEvent.click(within(transition).getByRole("button", {
+      name: "Remove transition Review to Done",
+    }));
     expect(await screen.findByRole("dialog", {
       name: "Workflow deletion impact",
-    })).toHaveTextContent("Transition: Todo → Review");
+    })).toHaveTextContent("Transition: Review → Done");
     fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
     await waitFor(() => expect(workflowApi.removeIssueTypeWorkflowTransition)
-      .toHaveBeenCalledWith("story", "todo", "review", 8));
+      .toHaveBeenCalledWith("story", "review", "done", 7));
   });
 
   it("previews every cascading deletion before removing a workflow state", async () => {
@@ -384,7 +393,6 @@ describe("Studio workflow settings", () => {
     });
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Review" }));
     fireEvent.click(screen.getByRole("button", {
       name: "Remove Review from workflow",
     }));
@@ -430,7 +438,7 @@ describe("Studio workflow settings", () => {
     await waitFor(() => expect(workflowApi.setIssueTypeWorkflowStartState)
       .toHaveBeenCalledWith("story", "review", 7));
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand Review to Done" }));
     fireEvent.click(screen.getByRole("checkbox", {
       name: "Agents may move Review to Done",
     }));
@@ -441,10 +449,9 @@ describe("Studio workflow settings", () => {
   it("gates auto-start on valid launch configuration and applies launch edits", async () => {
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand Todo to Review" }));
 
     expect(screen.getByRole("checkbox", { name: "Auto-start Review" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Edit launch for Review" }));
     const form = screen.getByRole("form", { name: "Story · Review launch configuration" });
     fireEvent.change(within(form).getByRole("textbox", { name: "Prompt" }), {
       target: { value: "Review the implementation." },
@@ -469,7 +476,7 @@ describe("Studio workflow settings", () => {
   it("sets Run subtree without requiring launch configuration", async () => {
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand Todo to Review" }));
 
     const checkbox = screen.getByRole("checkbox", { name: "Run subtree Review" });
     expect(checkbox).toBeEnabled();
@@ -494,7 +501,7 @@ describe("Studio workflow settings", () => {
       .not.toHaveTextContent("warnings");
   });
 
-  it("stages a catalog state until an incoming transition connects it", async () => {
+  it("adds a destination inline from its source and focuses the filtered picker", async () => {
     workflowApi.addIssueTypeWorkflowTransition.mockResolvedValue(nextWorkflow({
       transitions: [
         ...baseWorkflow.transitions,
@@ -504,27 +511,22 @@ describe("Studio workflow settings", () => {
     render(<SettingsModal />);
     await openIssueTypes();
 
-    const picker = screen.getByRole("combobox", { name: "Add state to workflow" });
+    expect(screen.queryByRole("combobox", { name: "Add state to workflow" }))
+      .not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {
+      name: "Add transition from Todo",
+    }));
+    const picker = screen.getByRole("combobox", {
+      name: "Add destination from Todo",
+    });
+    expect(picker).toHaveFocus();
     expect(within(picker).getByRole("option", { name: "Idea" })).toBeInTheDocument();
     expect(within(picker).queryByRole("option", { name: "Review" }))
       .not.toBeInTheDocument();
-
     fireEvent.change(picker, { target: { value: "idea" } });
-
-    const pending = screen.getByRole("listitem", { name: "Idea pending workflow state" });
-    expect(within(pending).getByText("Pending")).toBeInTheDocument();
-    expect(within(pending).getByText(/connect it/i)).toBeInTheDocument();
-    expect(workflowApi.addIssueTypeWorkflowTransition).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Expand Todo" }));
-    expect(within(screen.getByRole("combobox", {
-      name: "Add destination from Todo",
-    })).getByRole("option", { name: "Idea" })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("combobox", { name: "Connect Idea from" }), {
-      target: { value: "todo" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Connect Idea" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Create transition from Todo",
+    }));
 
     await waitFor(() => expect(workflowApi.addIssueTypeWorkflowTransition)
       .toHaveBeenCalledWith("story", {
@@ -533,27 +535,74 @@ describe("Studio workflow settings", () => {
         agent_allowed: true,
         workflow_revision: 7,
       }));
-    await waitFor(() => expect(screen.queryByRole("listitem", {
-      name: "Idea pending workflow state",
-    })).not.toBeInTheDocument());
-    expect(screen.getByRole("listitem", { name: "Idea workflow state" }))
-      .toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("listitem", {
+      name: "Todo to Idea transition",
+    })).toBeInTheDocument());
   });
 
-  it("abandons a staged state without a backend write", async () => {
+  it("discloses shared destination launch settings and preserves unsupported reasoning", async () => {
+    workflowApi.getLaunchProviderCapabilities.mockResolvedValue([
+      {
+        agent: "claude",
+        accepts_model: true,
+        accepts_any_model: false,
+        model_aliases: ["sonnet"],
+        model_prefixes: [],
+        reasoning_levels: ["high"],
+      },
+      {
+        agent: "codex",
+        accepts_model: true,
+        accepts_any_model: true,
+        model_aliases: [],
+        model_prefixes: [],
+        reasoning_levels: ["medium"],
+      },
+    ]);
+    workflowApi.getIssueTypeWorkflowSettings.mockResolvedValue({
+      ...structuredClone(baseWorkflow),
+      transitions: [
+        ...baseWorkflow.transitions,
+        { from_state_id: "todo", to_state_id: "done", agent_allowed: false },
+      ],
+      launch_bindings: [{
+        ...baseWorkflow.launch_bindings[0],
+        auto_start: true,
+        subtree_run_enabled: true,
+      }],
+    });
     render(<SettingsModal />);
     await openIssueTypes();
 
-    const picker = screen.getByRole("combobox", { name: "Add state to workflow" });
-    fireEvent.change(picker, { target: { value: "idea" } });
-    expect(screen.getByRole("listitem", { name: "Idea pending workflow state" }))
-      .toBeInTheDocument();
-
-    fireEvent.change(picker, { target: { value: "" } });
-
-    expect(screen.queryByRole("listitem", { name: "Idea pending workflow state" }))
-      .not.toBeInTheDocument();
-    expect(workflowApi.addIssueTypeWorkflowTransition).not.toHaveBeenCalled();
+    const transition = screen.getByRole("listitem", {
+      name: "Todo to Done transition",
+    });
+    expect(transition).toHaveTextContent("People only");
+    expect(transition).toHaveTextContent("Auto-start");
+    expect(transition).toHaveTextContent("Run subtree");
+    fireEvent.click(within(transition).getByRole("button", {
+      name: "Expand Todo to Done",
+    }));
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "Shared by 2 transitions entering Done.",
+    );
+    const form = screen.getByRole("form", {
+      name: "Story · Done launch configuration",
+    });
+    const provider = within(form).getByRole("combobox", {
+      name: "Agent/provider",
+    });
+    fireEvent.change(provider, { target: { value: "codex" } });
+    expect(within(form).getByRole("combobox", { name: "Model" })).toHaveValue("");
+    expect(within(form).getByRole("option", {
+      name: "high (unsupported)",
+    })).toBeInTheDocument();
+    await waitFor(() => expect(workflowApi.upsertIssueTypeWorkflowLaunchBinding)
+      .toHaveBeenLastCalledWith("story", "done", expect.objectContaining({
+        agent: "codex",
+        model: null,
+        reasoning: "high",
+      }), 7));
   });
 
   it("shows a rejected edit inline on the touched control", async () => {
@@ -564,7 +613,7 @@ describe("Studio workflow settings", () => {
     );
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Todo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand Todo to Review" }));
     fireEvent.click(screen.getByRole("checkbox", {
       name: "Agents may move Todo to Review",
     }));
@@ -582,8 +631,7 @@ describe("Studio workflow settings", () => {
     );
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Review" }));
-    fireEvent.click(screen.getByRole("button", { name: "Edit launch for Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand Todo to Review" }));
     const prompt = screen.getByRole("textbox", { name: "Prompt" });
     fireEvent.change(prompt, { target: { value: "Keep this draft text." } });
     fireEvent.blur(prompt);

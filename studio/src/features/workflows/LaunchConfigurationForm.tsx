@@ -95,7 +95,7 @@ export function LaunchConfigurationForm({
           rows={4}
           onChange={(event) => setPrompt(event.target.value)}
           onBlur={() => void apply(input)}
-          className={`${SETTINGS_FIELD_CLASS} resize-y`}
+          className={`${SETTINGS_FIELD_CLASS} w-full resize-y`}
           placeholder="No prompt configured"
         />
       </label>

@@ -247,7 +247,10 @@ def _validated_launch_binding(
 ) -> tuple[LaunchBinding, str | None]:
     """Validate policy shared by interactive and unattended launch doors."""
 
-    if binding is None:
+    # A row that only carries ``subtree_run_enabled`` is not a configuration.
+    # Reading its existence as one would refuse the same user-visible situation
+    # with a different code than an absent row does.
+    if binding is None or not binding.has_launch_policy:
         raise LaunchBindingError(
             "binding_not_configured",
             "No agent launch binding is configured for this work-item type and current state.",

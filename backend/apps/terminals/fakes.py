@@ -36,7 +36,11 @@ class FakeAdapter:
         *,
         model: str | None = None,
         reasoning: str | None = None,
+        activated_providers=None,
     ) -> list[str]:
+        # ``activated_providers`` mirrors the real adapter's signature: the
+        # launch path passes the set it read off-thread. A fake never gates.
+        del activated_providers
         if self.command_fn is not None:
             return self.command_fn(prompt)
         options = []

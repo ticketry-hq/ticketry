@@ -10,6 +10,7 @@ four agents.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shlex
@@ -152,6 +153,18 @@ def test_resume_command_rejects_empty_session_id(provider_session_id):
         get_adapter("claude").resume_command(provider_session_id)  # type: ignore[arg-type]
 
 
+async def _command(slug: str, prompt: str = "hello") -> list[str]:
+    """Build launch argv from an async test.
+
+    ``AgentAdapter.command`` is closed by default: with no activation set
+    passed it reads the host catalog, which is a sync ORM call and therefore
+    illegal on the async path. The production launcher hands it a set it read
+    off-thread; a test that only wants the argv takes the thread hop instead.
+    """
+
+    return await asyncio.to_thread(get_adapter(slug).command, prompt)
+
+
 async def _launch_and_capture(monkeypatch, slug, argv) -> str:
     """Drive the real launch path and return the shlex-joined tmux command.
 
@@ -228,7 +241,7 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
 
 async def test_claude_real_injection(monkeypatch):
     command = await _launch_and_capture(
-        monkeypatch, "claude", get_adapter("claude").command("hello")
+        monkeypatch, "claude", await _command("claude")
     )
     assert "--settings" in command
     assert "--mcp-config" in command
@@ -283,7 +296,7 @@ def test_mcp_enabled_adapter_resume_receives_a_fresh_run_authorization(slug):
 
 async def test_codex_real_injection(monkeypatch):
     command = await _launch_and_capture(
-        monkeypatch, "codex", get_adapter("codex").command("hello")
+        monkeypatch, "codex", await _command("codex")
     )
     # shlex.join quotes each -c value, so the markers appear as `-c 'hooks=…'`.
     assert "-c" in shlex.split(command)
@@ -294,7 +307,7 @@ async def test_codex_real_injection(monkeypatch):
 
 async def test_gemini_real_injection_has_no_mcp(monkeypatch):
     command = await _launch_and_capture(
-        monkeypatch, "gemini", get_adapter("gemini").command("hello")
+        monkeypatch, "gemini", await _command("gemini")
     )
     assert command.startswith("env GEMINI_CLI_SYSTEM_SETTINGS_PATH=")
     assert "--skip-trust" in command
@@ -306,7 +319,7 @@ async def test_gemini_real_injection_has_no_mcp(monkeypatch):
 
 async def test_agy_real_injection(monkeypatch):
     command = await _launch_and_capture(
-        monkeypatch, "agy", get_adapter("agy").command("hello")
+        monkeypatch, "agy", await _command("agy")
     )
     assert command.startswith(f"env {_AGY_SYSTEM_SETTINGS_ENV}=")
 

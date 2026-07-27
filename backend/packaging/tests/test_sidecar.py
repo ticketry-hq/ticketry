@@ -507,7 +507,83 @@ def test_packaged_posture_is_forced_and_secret_survives_restarts(tmp_path):
         assert list(tmp_path.glob(SNAPSHOT_GLOB)) == []
 
 
-def test_shared_settings_keep_development_defaults():
+def test_an_empty_secret_key_is_a_reported_failure_not_a_retried_timeout(tmp_path):
+    """``configure_environment`` used to raise outside the failure handler.
+
+    Its create path was not atomic, so a crash or a second process in the
+    window left the secret file existing and empty; every later start then
+    raised before any ``MUXED_FAILURE`` line was printed. The supervisor read
+    that as a readiness timeout and retried a deterministic failure until the
+    restart budget was gone (H5).
+    """
+
+    (tmp_path / SECRET_KEY_FILE).write_text("")
+
+    result = subprocess.run(
+        _sidecar_command(_free_port(), tmp_path),
+        cwd=tmp_path,
+        env=_isolated_sidecar_environment(),
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 1
+    assert (
+        result.stdout.splitlines().count("MUXED_FAILURE crash sidecar could not start")
+        == 1
+    )
+    assert '"event":"ready"' not in result.stdout
+    # The give-up screen should name a cause, so the traceback still ships.
+    assert "packaged secret key is empty" in result.stderr
+
+
+def test_a_packaged_start_leaves_no_active_superuser(tmp_path):
+    """A packaged install ships without an administrative surface (T1419).
+
+    An install upgraded from a pre-T1419 build carries a superuser created
+    with the old ``admin``/``admin`` defaults. The packaged start has to close
+    it, not merely stop routing to it.
+    """
+
+    with _running_sidecar(tmp_path):
+        pass
+
+    database = sqlite3.connect(tmp_path / "state.db")
+    try:
+        database.execute(
+            "INSERT INTO auth_user (password, is_superuser, username, first_name,"
+            " last_name, email, is_staff, is_active, date_joined)"
+            " VALUES ('!', 1, 'admin', '', '', '', 1, 1, '2026-07-27 00:00:00')"
+        )
+        database.commit()
+    finally:
+        database.close()
+
+    with _running_sidecar(tmp_path):
+        pass
+
+    database = sqlite3.connect(tmp_path / "state.db")
+    try:
+        remaining = database.execute(
+            "SELECT COUNT(*) FROM auth_user"
+            " WHERE is_active = 1 AND (is_staff = 1 OR is_superuser = 1)"
+        ).fetchone()[0]
+    finally:
+        database.close()
+
+    assert remaining == 0
+
+
+def test_shared_settings_keep_development_defaults_but_close_the_admin():
+    """The localhost defaults stay; the admin surface is not one of them.
+
+    ``MUXED_ADMIN_ENABLED`` unset must mean *off*, so any start of this code
+    that is not an explicit dev entrypoint — ``manage.py runserver`` against a
+    packaged data dir, a launcher that forgets the variable — cannot bring
+    ``wt-admin/`` back (T1419 / ADR-0013).
+    """
+
     environment = os.environ.copy()
     for name in (
         "MUXED_ADMIN_ENABLED",
@@ -534,4 +610,4 @@ def test_shared_settings_keep_development_defaults():
         check=True,
     )
 
-    assert json.loads(result.stdout) == [True, "muxed-localhost-only", ["*"], True]
+    assert json.loads(result.stdout) == [True, "muxed-localhost-only", ["*"], False]

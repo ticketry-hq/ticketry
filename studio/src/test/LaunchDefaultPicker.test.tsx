@@ -14,7 +14,11 @@ const capabilities: ProviderCapabilities[] = [
     accepts_any_model: false,
     model_aliases: ["sonnet", "opus"],
     model_prefixes: ["claude-"],
-    reasoning_levels: ["low", "high"],
+    // Deliberately only partly overlapping with codex below: "medium" is
+    // shared, "high" and "low" are claude-only here. Reasoning names overlap
+    // across providers but not completely, which is what makes carrying one
+    // across a provider change a real decision rather than a formality.
+    reasoning_levels: ["low", "medium", "high"],
   },
   {
     agent: "codex",
@@ -93,17 +97,67 @@ describe("LaunchDefaultPicker", () => {
       .toBeInTheDocument();
     expect(within(reasoning).queryByRole("option", { name: "low" }))
       .not.toBeInTheDocument();
-    expect(within(reasoning).getByRole("option", { name: "high (unsupported)" }))
-      .toBeInTheDocument();
 
     const model = screen.getByRole("combobox", { name: "Model" });
     const suggestions = document.getElementById(model.getAttribute("list") ?? "");
     expect(suggestions?.querySelector('option[value="gpt-5.4"]')).not.toBeNull();
     expect(suggestions?.querySelector('option[value="sonnet"]')).toBeNull();
+  });
+
+  it("drops a reasoning the newly chosen provider does not offer", () => {
+    // Carrying it forward wrote an (agent, reasoning) pair the server 422s, so
+    // the save was lost while the form already showed the new provider.
+    const onCommit = vi.fn();
+    render(
+      <PickerHarness
+        initialValue={{ provider: "claude", model: "opus", reasoning: "high" }}
+        onCommit={onCommit}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Agent/provider" }), {
+      target: { value: "codex" },
+    });
+
     expect(onCommit).toHaveBeenCalledWith({
       provider: "codex",
       model: "",
-      reasoning: "high",
+      reasoning: "",
     }, "provider");
+    expect(screen.getByRole("combobox", { name: "Reasoning" })).toHaveValue("");
+  });
+
+  it("carries a reasoning both providers offer across the change", () => {
+    const onCommit = vi.fn();
+    render(
+      <PickerHarness
+        initialValue={{ provider: "claude", model: "", reasoning: "medium" }}
+        onCommit={onCommit}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Agent/provider" }), {
+      target: { value: "codex" },
+    });
+
+    expect(onCommit).toHaveBeenCalledWith({
+      provider: "codex",
+      model: "",
+      reasoning: "medium",
+    }, "provider");
+  });
+
+  it("still marks a reasoning that arrived from the server as unsupported", () => {
+    // Only a *user-driven* provider change drops one; a stored pair the server
+    // already has must stay visible rather than silently disappear.
+    render(
+      <PickerHarness
+        initialValue={{ provider: "codex", model: "", reasoning: "high" }}
+      />,
+    );
+
+    const reasoning = screen.getByRole("combobox", { name: "Reasoning" });
+    expect(within(reasoning).getByRole("option", { name: "high (unsupported)" }))
+      .toBeInTheDocument();
   });
 });

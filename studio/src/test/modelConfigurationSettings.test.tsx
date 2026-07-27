@@ -10,6 +10,7 @@ import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStor
 const catalogApi = vi.hoisted(() => ({
   getProviderCatalog: vi.fn(),
   putProviderCatalog: vi.fn(),
+  previewProviderCatalogImpact: vi.fn(),
   getLaunchProviderCapabilities: vi.fn(),
 }));
 
@@ -64,6 +65,11 @@ describe("Model configuration settings", () => {
     useTasksStore.setState({ selectedProjectId: null });
     useWorkflowEditorStore.setState({ providerCapabilities: [] });
     catalogApi.getLaunchProviderCapabilities.mockResolvedValue(capabilities);
+    // A save previews its blast radius first; most tests deactivate nothing
+    // that any binding names, so the default preview is "nothing blocked".
+    catalogApi.previewProviderCatalogImpact.mockResolvedValue({
+      blocked_launch_bindings: 0,
+    });
   });
 
   it("saves provider activation and the global default through the catalog endpoint", async () => {
@@ -177,6 +183,68 @@ describe("Model configuration settings", () => {
     );
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     expect(catalogApi.putProviderCatalog).not.toHaveBeenCalled();
+  });
+
+  it("confirms before a deactivation that would block launch bindings", async () => {
+    // Every other workflow mutation previews its blast radius. A deactivation
+    // used to save silently and be discovered one failed launch at a time.
+    catalogApi.previewProviderCatalogImpact.mockResolvedValue({
+      blocked_launch_bindings: 3,
+    });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      await openModelConfiguration();
+
+      fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+      await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+      expect(confirm.mock.calls[0][0]).toContain("3 launch configurations");
+      expect(catalogApi.putProviderCatalog).not.toHaveBeenCalled();
+      // Declining leaves the draft alone rather than reverting it.
+      expect(screen.getByRole("checkbox", { name: "Activate gemini" }))
+        .not.toBeChecked();
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it("reports the blocked bindings in the notice once the save is confirmed", async () => {
+    catalogApi.previewProviderCatalogImpact.mockResolvedValue({
+      blocked_launch_bindings: 1,
+    });
+    catalogApi.putProviderCatalog.mockImplementation(
+      async (value: ProviderCatalog) => ({ value, blocked_launch_bindings: 1 }),
+    );
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      await openModelConfiguration();
+
+      fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+      expect(await screen.findByRole("status")).toHaveTextContent(
+        "1 launch configuration names a deactivated provider",
+      );
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it("renders a pydantic 422's per-field messages, not a bare status", async () => {
+    catalogApi.putProviderCatalog.mockRejectedValue(
+      new ApiError(422, "HTTP 422", {
+        detail: [{ msg: "reasoning is not valid for provider 'gemini'" }],
+      }),
+    );
+    await openModelConfiguration();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "reasoning is not valid for provider 'gemini'",
+    );
   });
 
   it("surfaces a rejected catalog without clearing the draft", async () => {

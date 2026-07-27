@@ -598,10 +598,17 @@ export const getProviderCatalog = () =>
   request<{ value: ProviderCatalog }>("/api/settings/provider-catalog");
 
 export const putProviderCatalog = (value: ProviderCatalog) =>
-  request<{ value: ProviderCatalog }>("/api/settings/provider-catalog", {
-    method: "PUT",
-    body: JSON.stringify({ value }),
-  });
+  request<{ value: ProviderCatalog; blocked_launch_bindings: number }>(
+    "/api/settings/provider-catalog",
+    { method: "PUT", body: JSON.stringify({ value }) },
+  );
+
+/** How many launch bindings a candidate activation set would block, unsaved. */
+export const previewProviderCatalogImpact = (value: ProviderCatalog) =>
+  request<{ blocked_launch_bindings: number }>(
+    "/api/settings/provider-catalog/impact",
+    { method: "POST", body: JSON.stringify({ value }) },
+  );
 
 // ---------- Persisted terminal sessions ----------
 // gated: CODIN-668 — host /api/terminals surface is not in the SDK's OpenAPI.

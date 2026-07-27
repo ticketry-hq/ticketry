@@ -42,7 +42,10 @@ interface SettingsState {
   /** Page-LOAD error: set only by loadSettings; SettingsView renders THIS inline. */
   loadError: string | null;
 
+  /** Always refetches. Use for an explicit reload (project switch, page load). */
   loadSettings: (projectId: string) => Promise<void>;
+  /** Loads at most once per project, sharing one request across N callers. */
+  ensureSettings: (projectId: string) => Promise<void>;
   refreshSubtreeRunCapabilities: (projectId: string) => Promise<void>;
   synchronizeSubtreeRunCapabilities: (
     projectId: string,
@@ -64,6 +67,8 @@ interface SettingsState {
   reorderStates: (orderedIds: string[]) => Promise<void>;
 }
 
+let inFlightSettings: { projectId: string; request: Promise<void> } | null = null;
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   projectId: null,
   issueTypes: [],
@@ -75,13 +80,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   error: null,
   loadError: null,
 
-  async loadSettings(projectId) {
-    if (
-      get().projectId === projectId &&
-      (get().loading || get().settingsLoaded)
-    ) {
-      return;
+  async ensureSettings(projectId) {
+    if (get().projectId === projectId && get().capabilitiesLoaded) return;
+    if (inFlightSettings?.projectId === projectId) {
+      return inFlightSettings.request;
     }
+    const request = get()
+      .loadSettings(projectId)
+      .finally(() => {
+        if (inFlightSettings?.request === request) inFlightSettings = null;
+      });
+    inFlightSettings = { projectId, request };
+    return request;
+  },
+
+  async loadSettings(projectId) {
     const capabilityGeneration = nextCapabilityGeneration(projectId);
     set({
       projectId,

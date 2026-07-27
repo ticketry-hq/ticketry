@@ -26,10 +26,12 @@ export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
   const capabilityMap = useSettingsStore(
     (state) => state.subtreeRunCapabilities,
   );
-  const loadSettings = useSettingsStore((state) => state.loadSettings);
+  // One row per work item mounts this, so they share a single request rather
+  // than each firing its own (and each retrying after a failure).
+  const ensureSettings = useSettingsStore((state) => state.ensureSettings);
   useEffect(() => {
-    void loadSettings(task.project_id);
-  }, [loadSettings, task.project_id]);
+    void ensureSettings(task.project_id);
+  }, [ensureSettings, task.project_id]);
 
   const enabledStates =
     capabilityProjectId === task.project_id && task.issue_type

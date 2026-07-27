@@ -199,8 +199,12 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
   async refreshProviderCapabilities() {
     try {
       // Through the shared catalog so every launch surface — not just the
-      // editor — sees the activation change without a reload.
-      const providerCapabilities = await fetchLaunchProviderCatalog();
+      // editor — sees the activation change without a reload. `force` because
+      // this runs after a write: a read-only GET already in flight when the
+      // PUT committed would otherwise be handed back as the new truth.
+      const providerCapabilities = await fetchLaunchProviderCatalog({
+        force: true,
+      });
       set({ providerCapabilities });
     } catch {
       // A stale capability list is better than clearing the editor's options;
@@ -257,15 +261,17 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       const next = await operation(workflow.workflow_revision);
       const projectId = get().projectId;
       if (projectId === null) return null;
-      const settings = useSettingsStore.getState();
-      settings.synchronizeSubtreeRunCapabilities(
+      // `next` is the authoritative response the server just returned, so the
+      // capability map is derivable from it. Refetching the same fact — and
+      // awaiting it before publishing — would make every control in the editor
+      // block its spinner on a GET it does not need.
+      useSettingsStore.getState().synchronizeSubtreeRunCapabilities(
         projectId,
         next.issue_type_id,
         next.launch_bindings
           .filter((binding) => binding.subtree_run_enabled)
           .map((binding) => binding.state_id),
       );
-      await settings.refreshSubtreeRunCapabilities(projectId);
       set((state) => ({
         workflows: { ...state.workflows, [typeId]: next },
         action: null,

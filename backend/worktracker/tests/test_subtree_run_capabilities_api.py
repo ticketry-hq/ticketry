@@ -70,8 +70,9 @@ def test_subtree_run_capability_map_reflects_a_toggle_immediately(
         headers=auth,
     )
     assert response.status_code == 200
-    binding.refresh_from_db()
-    assert binding.subtree_run_enabled is False
+    # This row existed only to carry the flag, so disabling it takes the row
+    # with it rather than leaving an empty launch policy on the state.
+    assert not LaunchBinding.objects.filter(pk=binding.pk).exists()
 
     response = client.get(url, headers=auth)
     assert response.status_code == 200

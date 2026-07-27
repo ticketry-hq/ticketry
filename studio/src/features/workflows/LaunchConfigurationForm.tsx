@@ -59,27 +59,22 @@ export function LaunchConfigurationForm({
     }
   };
 
-  const nextInput = (patch: Partial<LaunchBindingInput>): LaunchBindingInput => ({
-    ...input,
-    ...patch,
-  });
   const updatePicker = (next: LaunchDefaultPickerValue) => {
     setAgent(next.provider);
     setModel(next.model);
     setReasoning(next.reasoning);
   };
-  const commitPicker = (
-    next: LaunchDefaultPickerValue,
-    field: keyof LaunchDefaultPickerValue,
-  ) => {
-    const patch = field === "provider"
-      // The picker resets the model when the provider changes; persist that
-      // reset with the same write rather than leaving the old model stored.
-      ? { agent: optional(next.provider), model: optional(next.model) }
-      : field === "model"
-        ? { model: optional(next.model) }
-        : { reasoning: optional(next.reasoning) };
-    void apply(nextInput(patch));
+  const commitPicker = (next: LaunchDefaultPickerValue) => {
+    // Built from `next`, not from the `input` memo. `updatePicker`'s setState
+    // calls have not been applied yet in this same event, so merging a patch
+    // into `input` would carry the *previous* render's values — writing the
+    // old reasoning alongside the new provider, a pair the server 422s.
+    void apply({
+      prompt,
+      agent: optional(next.provider),
+      model: optional(next.model),
+      reasoning: optional(next.reasoning),
+    });
   };
 
   return (

@@ -137,6 +137,53 @@ describe("settingsStore", () => {
     });
   });
 
+  it("loadSettings always refetches, so out-of-band changes land", async () => {
+    fn(api.listIssueTypes).mockResolvedValue([EPIC]);
+    fn(api.listStates).mockResolvedValue([STATE("s1", 0)]);
+    fn(api.listSubtreeRunCapabilities).mockResolvedValue({});
+
+    await useSettingsStore.getState().loadSettings("p1");
+    fn(api.listIssueTypes).mockResolvedValue([EPIC, TASK]);
+    await useSettingsStore.getState().loadSettings("p1");
+
+    expect(api.listIssueTypes).toHaveBeenCalledTimes(2);
+    expect(useSettingsStore.getState().issueTypes.map((t) => t.id))
+      .toEqual(["epic", "task"]);
+  });
+
+  it("ensureSettings shares one request across concurrent callers", async () => {
+    fn(api.listIssueTypes).mockResolvedValue([EPIC]);
+    fn(api.listStates).mockResolvedValue([STATE("s1", 0)]);
+    fn(api.listSubtreeRunCapabilities).mockResolvedValue({});
+
+    await Promise.all([
+      useSettingsStore.getState().ensureSettings("p1"),
+      useSettingsStore.getState().ensureSettings("p1"),
+      useSettingsStore.getState().ensureSettings("p1"),
+    ]);
+
+    expect(api.listIssueTypes).toHaveBeenCalledTimes(1);
+  });
+
+  it("ensureSettings skips a loaded project but retries after a failure", async () => {
+    fn(api.listIssueTypes).mockResolvedValue([EPIC]);
+    fn(api.listStates).mockResolvedValue([STATE("s1", 0)]);
+    fn(api.listSubtreeRunCapabilities).mockResolvedValue({});
+
+    await useSettingsStore.getState().ensureSettings("p1");
+    await useSettingsStore.getState().ensureSettings("p1");
+    expect(api.listIssueTypes).toHaveBeenCalledTimes(1);
+
+    useSettingsStore.setState({ capabilitiesLoaded: false });
+    fn(api.listIssueTypes).mockRejectedValue(new ApiError(500, "down", null));
+    await Promise.all([
+      useSettingsStore.getState().ensureSettings("p1"),
+      useSettingsStore.getState().ensureSettings("p1"),
+    ]);
+    expect(api.listIssueTypes).toHaveBeenCalledTimes(2);
+    expect(useSettingsStore.getState().loadError).toContain("500");
+  });
+
   it("createType appends the server row", async () => {
     const bug = { ...STORY, id: "bug", name: "Bug", sort_order: 3 };
     fn(api.createIssueType).mockResolvedValue(bug);

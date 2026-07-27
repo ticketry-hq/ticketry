@@ -36,6 +36,7 @@ Recorded decisions:
 
 from __future__ import annotations
 
+from collections.abc import Set
 from dataclasses import dataclass
 from typing import Callable
 
@@ -86,17 +87,24 @@ class AgentAdapter:
         *,
         model: str | None = None,
         reasoning: str | None = None,
+        activated_providers: Set[str] | None = None,
     ) -> list[str]:
-        """Return launch argv with only provider-validated optional settings."""
+        """Return launch argv with only provider-validated optional settings.
+
+        Closed by default: leaving ``activated_providers`` unset reads the host
+        catalog, so a deactivated provider is refused here even if a caller
+        forgot to check. Command construction can run on the async launch path,
+        where that sync ORM read is illegal — such a caller passes the set it
+        already loaded off-thread (see ``TerminalSessionService.spawn``) rather
+        than opting out of the gate.
+        """
 
         try:
             _, model, reasoning = validate_provider_options(
                 agent=self.slug,
                 model=model,
                 reasoning=reasoning,
-                # Command construction can run on the async launch path. Host
-                # activation is enforced before this already-resolved step.
-                activated_providers=PROVIDER_CAPABILITIES.keys(),
+                activated_providers=activated_providers,
             )
         except LaunchBindingError as exc:
             raise LaunchConfigurationError(exc.code) from exc

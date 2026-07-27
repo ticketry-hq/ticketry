@@ -14,6 +14,7 @@ import signal
 import sys
 import tempfile
 import threading
+import traceback
 from pathlib import Path
 
 
@@ -21,6 +22,7 @@ CREDENTIAL_ENV = "MUXED_SIDECAR_CREDENTIAL"
 DEFAULT_DESKTOP_ORIGIN = "http://tauri.localhost"
 PACKAGED_HOOK_RUNNER_ENV = "MUXED_PACKAGED_HOOK_RUNNER"
 MIGRATION_FAILURE_LINE = "MUXED_FAILURE migration database could not be migrated"
+STARTUP_FAILURE_LINE = "MUXED_FAILURE crash sidecar could not start"
 SNAPSHOT_RETENTION = 3
 
 HOOK_MODULES = {
@@ -39,32 +41,44 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def load_or_create_secret_key(data_dir: Path) -> str:
-    """Return the install's persistent Django signing secret."""
+    """Return the install's persistent Django signing secret.
+
+    The create path writes to a temporary file and renames it into place, so
+    the secret only ever becomes visible complete. An ``O_CREAT|O_EXCL`` open
+    followed by a separate write has a window — a second sidecar arriving in
+    it, or a crash between the two steps — that leaves the file existing and
+    empty, which every later start then reads and rejects. With a rename the
+    loser of that race is harmless: it discards its own candidate and reads
+    the winner's.
+    """
 
     secret_path = data_dir / "django_secret_key"
-    generated_secret = secrets.token_urlsafe(48)
-    try:
-        descriptor = os.open(
-            secret_path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-            0o600,
+    if not secret_path.exists():
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".django_secret_key.",
+            suffix=".tmp",
+            dir=data_dir,
         )
-    except FileExistsError:
-        os.chmod(secret_path, 0o600)
-        secret = secret_path.read_text()
-        if not secret:
-            raise RuntimeError(f"packaged secret key is empty: {secret_path}")
-        return secret
+        temporary_path = Path(temporary_name)
+        try:
+            os.fchmod(descriptor, 0o600)
+            with os.fdopen(descriptor, "w") as secret_file:
+                descriptor = -1
+                secret_file.write(secrets.token_urlsafe(48))
+                secret_file.flush()
+                os.fsync(secret_file.fileno())
+            os.replace(temporary_path, secret_path)
+        except BaseException:
+            if descriptor >= 0:
+                os.close(descriptor)
+            temporary_path.unlink(missing_ok=True)
+            raise
 
-    try:
-        with os.fdopen(descriptor, "w") as secret_file:
-            secret_file.write(generated_secret)
-            secret_file.flush()
-            os.fsync(secret_file.fileno())
-    except BaseException:
-        secret_path.unlink(missing_ok=True)
-        raise
-    return generated_secret
+    os.chmod(secret_path, 0o600)
+    secret = secret_path.read_text()
+    if not secret:
+        raise RuntimeError(f"packaged secret key is empty: {secret_path}")
+    return secret
 
 
 def configure_environment(args: argparse.Namespace) -> None:
@@ -240,10 +254,26 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if not 0 < args.port < 65536:
         raise SystemExit("--port must be between 1 and 65535")
-    configure_environment(args)
+    # Environment setup can fail deterministically (an empty secret-key file,
+    # an unwritable data dir). Outside a handler that raise printed no failure
+    # line, so the supervisor saw only a readiness timeout and retried a start
+    # that was never going to succeed. Classify it as ``crash`` instead.
+    try:
+        configure_environment(args)
+    except BaseException as exc:
+        if isinstance(exc, KeyboardInterrupt):
+            raise
+        traceback.print_exc()
+        print(STARTUP_FAILURE_LINE, flush=True)
+        return 1
     try:
         migrate_and_provision()
-    except Exception:
+    except BaseException as exc:
+        # ``call_command`` can raise SystemExit, which is not an ``Exception``
+        # and used to escape without a failure line — H5's symptom again.
+        if isinstance(exc, KeyboardInterrupt):
+            raise
+        traceback.print_exc()
         print(MIGRATION_FAILURE_LINE, flush=True)
         return 1
     serve(args.port)

@@ -23,11 +23,13 @@ case "$cmd" in
     echo "==> Migrating the database"
     (cd "$ROOT/backend" && uv run python manage.py migrate)
     echo "==> Provisioning a workspace + admin + token"
-    (cd "$ROOT/backend" && uv run python manage.py provision --admin-username admin --admin-password admin)
+    # The admin surface fails closed (studio_server.settings.ADMIN_ENABLED); a
+    # dev bootstrap is the one entrypoint that opts in.
+    (cd "$ROOT/backend" && MUXED_ADMIN_ENABLED=true uv run python manage.py provision --admin-username admin --admin-password admin)
     echo "==> Done. Set VITE_WT_API_KEY (studio/.env.local) to the printed token."
     ;;
   backend)
-    (cd "$ROOT/backend" && uv run python manage.py runserver 127.0.0.1:8787)
+    (cd "$ROOT/backend" && MUXED_ADMIN_ENABLED=true uv run python manage.py runserver 127.0.0.1:8787)
     ;;
   studio)
     (cd "$ROOT/studio" && npm run dev)

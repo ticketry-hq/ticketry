@@ -40,7 +40,7 @@ const WITHOUT_GEMINI = [
 ];
 
 function activate(capabilities: ProviderCapabilities[]): void {
-  useLaunchProviderCatalog.setState({ capabilities, loaded: true });
+  useLaunchProviderCatalog.setState({ capabilities, loaded: true, failed: false });
 }
 
 describe("agent picker reflects host activation", () => {
@@ -93,6 +93,39 @@ describe("agent picker reflects host activation", () => {
     expect(
       screen.getByText(/Activate one in Settings → Model configuration/),
     ).toBeInTheDocument();
+  });
+
+  it("says it is still loading rather than claiming nothing is activated", () => {
+    // An empty list before the payload arrives is not an answer, and the same
+    // empty list after a dead fetch is a different non-answer again.
+    useLaunchProviderCatalog.setState({
+      capabilities: [],
+      loaded: false,
+      failed: false,
+    });
+    render(
+      <AgentPicker
+        payload={{ mode: "open", projectId: "proj-1", moduleId: "mod-1", taskId: "task-1" }}
+      />,
+    );
+
+    expect(screen.getByText("Loading providers…")).toBeInTheDocument();
+  });
+
+  it("reports a dead fetch as an error rather than as a hang", () => {
+    useLaunchProviderCatalog.setState({
+      capabilities: [],
+      loaded: false,
+      failed: true,
+    });
+    render(
+      <AgentPicker
+        payload={{ mode: "open", projectId: "proj-1", moduleId: "mod-1", taskId: "task-1" }}
+      />,
+    );
+
+    expect(screen.getByText(/Providers unavailable/)).toBeInTheDocument();
+    expect(screen.queryByText("Loading providers…")).not.toBeInTheDocument();
   });
 });
 

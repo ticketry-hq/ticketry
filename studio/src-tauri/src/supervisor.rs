@@ -1272,6 +1272,7 @@ fn select_pinned_loopback_port(
     Ok(port)
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum ControlLine {
     Ready,
     Failure(FailureKind, String),
@@ -1323,14 +1324,22 @@ fn parse_control_line(line: &str, expected_port: u16) -> ControlLine {
     let (class, message) = failure
         .split_once(' ')
         .unwrap_or((failure, "sidecar failure"));
-    let kind = match class {
-        "migration" => FailureKind::Migration,
-        "authentication" => FailureKind::Authentication,
-        "bind" => FailureKind::Bind,
-        "crash" => FailureKind::Crash,
-        _ => return ControlLine::Other,
-    };
-    ControlLine::Failure(kind, message.to_owned())
+    // A class this build does not know still announced a failure. Dropping it
+    // to `Other` degrades a reported failure into a readiness timeout that is
+    // retried until the restart budget is gone, so an unknown class is treated
+    // as a crash and keeps its raw class in the message.
+    match class {
+        "migration" => ControlLine::Failure(FailureKind::Migration, message.to_owned()),
+        "authentication" => {
+            ControlLine::Failure(FailureKind::Authentication, message.to_owned())
+        }
+        "bind" => ControlLine::Failure(FailureKind::Bind, message.to_owned()),
+        "crash" => ControlLine::Failure(FailureKind::Crash, message.to_owned()),
+        _ => ControlLine::Failure(
+            FailureKind::Crash,
+            format!("{class}: {message}"),
+        ),
+    }
 }
 
 fn start_log_readers(
@@ -2710,6 +2719,47 @@ mod tests {
             ))
         }));
         paths.into_iter().filter(|path| path.is_file()).collect()
+    }
+
+    #[test]
+    fn known_failure_classes_keep_their_kind() {
+        for (class, expected) in [
+            ("migration", FailureKind::Migration),
+            ("authentication", FailureKind::Authentication),
+            ("bind", FailureKind::Bind),
+            ("crash", FailureKind::Crash),
+        ] {
+            let line = format!("{FAILURE_PREFIX}{class} something went wrong");
+            assert_eq!(
+                parse_control_line(&line, 1234),
+                ControlLine::Failure(expected, "something went wrong".to_owned()),
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_failure_class_is_reported_not_dropped() {
+        // Dropping it to `Other` turned an announced, deterministic failure
+        // into a readiness timeout the supervisor retried until the restart
+        // budget was gone. The raw class stays in the message so the give-up
+        // screen still names the cause.
+        let line = format!("{FAILURE_PREFIX}newclass something went wrong");
+
+        assert_eq!(
+            parse_control_line(&line, 1234),
+            ControlLine::Failure(
+                FailureKind::Crash,
+                "newclass: something went wrong".to_owned(),
+            ),
+        );
+    }
+
+    #[test]
+    fn a_line_without_the_failure_prefix_is_still_other() {
+        assert_eq!(
+            parse_control_line("some ordinary log line", 1234),
+            ControlLine::Other,
+        );
     }
 
     fn restarting_attempts(supervisor: &Supervisor) -> Vec<usize> {

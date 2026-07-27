@@ -10,7 +10,11 @@ from apps.settings_store.config import CONFIG_DIR
 SECRET_KEY = os.getenv("MUXED_SECRET_KEY", "muxed-localhost-only")
 DEBUG = os.getenv("MUXED_DEBUG", "true").lower() in ("1", "true", "yes")
 ALLOWED_HOSTS = os.getenv("MUXED_ALLOWED_HOSTS", "*").split(",")
-ADMIN_ENABLED = os.getenv("MUXED_ADMIN_ENABLED", "true").lower() in (
+# The Django admin is a development affordance, not a product surface
+# (T1419 / ADR-0013). It fails closed: every entrypoint that wants it — only
+# ``scripts/dev.sh`` today — opts in explicitly, so starting this same code
+# any other way against a packaged data dir cannot resurrect ``wt-admin/``.
+ADMIN_ENABLED = os.getenv("MUXED_ADMIN_ENABLED", "false").lower() in (
     "1",
     "true",
     "yes",

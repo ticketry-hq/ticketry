@@ -37,7 +37,10 @@ import {
   useTaskWorkspaceTabNavigation,
   type TaskWorkspaceTabIdentity,
 } from "./useTaskWorkspaceTabNavigation";
-import { useActivatedProviders } from "../../workflows/launchProviderCatalog";
+import {
+  providerListPlaceholder,
+  useActivatedProviders,
+} from "../../workflows/launchProviderCatalog";
 import { useUIStore } from "../../studio/stores/uiStore";
 import { formatChordSymbols } from "../../../app/navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../app/navigation/three-zone/threeZoneNavigation";
@@ -238,7 +241,11 @@ export function WorkspacePane({
   modal?: boolean;
 }) {
   const sessions = useTerminalStore((s) => s.sessions);
-  const { slugs: activatedProviders } = useActivatedProviders();
+  const {
+    slugs: activatedProviders,
+    loaded: providersLoaded,
+    failed: providersFailed,
+  } = useActivatedProviders();
   const tabs = useTaskSessions(bucket);
   const activeTermIdOrNull = useActiveSession(bucket);
   const chatByDoc = useWorkspaceTabsStore((s) => s.chatByDoc);
@@ -832,6 +839,16 @@ export function WorkspacePane({
         ]
       : DRAWER_AGENTS.filter((agent) => activatedProviders.has(agent))
           .map((agent) => ({ id: agent, label: agent }));
+  // An empty provider list is ambiguous — not loaded yet, a dead fetch, and
+  // "nothing activated" all look the same. Say which, rather than opening a
+  // menu with nothing in it and no explanation.
+  const launcherNotice =
+    launchContext?.kind === "scratch" || launcherItems.length > 0
+      ? null
+      : providerListPlaceholder({
+          loaded: providersLoaded,
+          failed: providersFailed,
+        });
 
   function activateLauncherItem(id: string) {
     if (launchCommittedRef.current) return;
@@ -988,17 +1005,23 @@ export function WorkspacePane({
                 onKeyDown={onLauncherMenuKeyDown}
                 className="absolute left-0 top-full z-10 mt-1 flex min-w-[10ch] flex-col border border-pane-border bg-pane-panel py-1 shadow-lg"
               >
-                {launcherItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => activateLauncherItem(item.id)}
-                    className="px-3 py-1 text-left text-xs font-medium text-text-muted hover:bg-pane-title hover:text-text-primary"
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                {launcherNotice ? (
+                  <p className="px-3 py-1 text-xs text-text-muted">
+                    {launcherNotice}
+                  </p>
+                ) : (
+                  launcherItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => activateLauncherItem(item.id)}
+                      className="px-3 py-1 text-left text-xs font-medium text-text-muted hover:bg-pane-title hover:text-text-primary"
+                    >
+                      {item.label}
+                    </button>
+                  ))
+                )}
               </div>
             )}
           </div>

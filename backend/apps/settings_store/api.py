@@ -7,15 +7,19 @@ from ninja import Router
 from pydantic import BaseModel
 
 from apps.settings_store import dao, service
-from apps.settings_store.provider_catalog import ProviderCatalog
+from apps.settings_store.provider_catalog import (
+    PROVIDER_CATALOG_KEY,
+    PROVIDER_CATALOG_SCOPE,
+    PROVIDER_ORDER,
+    ProviderCatalog,
+    parse_provider_catalog,
+)
 
 
 router = Router(tags=["system"])
 
 KEYBINDINGS_SCOPE = "host"
 KEYBINDINGS_KEY = "keybindings"
-PROVIDER_CATALOG_SCOPE = "host"
-PROVIDER_CATALOG_KEY = "provider_catalog"
 
 
 class SettingValueBody(BaseModel):
@@ -23,6 +27,17 @@ class SettingValueBody(BaseModel):
 
 
 class ProviderCatalogBody(BaseModel):
+    value: ProviderCatalog
+
+
+class ProviderCatalogImpactBody(BaseModel):
+    # How many per-state launch bindings this activation set blocks. Every
+    # other workflow mutation shows its blast radius before committing; a
+    # deactivation used to be the one that reported nothing.
+    blocked_launch_bindings: int = 0
+
+
+class ProviderCatalogSavedBody(ProviderCatalogImpactBody):
     value: ProviderCatalog
 
 
@@ -73,17 +88,26 @@ async def put_keybindings(request, body: SettingValueBody):
 @router.get("/settings/provider-catalog", response=ProviderCatalogBody)
 async def get_provider_catalog(request):
     value = await dao.get_setting(PROVIDER_CATALOG_SCOPE, PROVIDER_CATALOG_KEY)
-    if value is None:
-        catalog = ProviderCatalog()
-    else:
-        try:
-            catalog = ProviderCatalog.model_validate_json(value)
-        except ValueError:
-            catalog = ProviderCatalog()
+    # The same salvage the launch path reads through, so the panel can never
+    # show a wider activation set than the gate will actually honour.
+    catalog = (
+        ProviderCatalog() if value is None else parse_provider_catalog(value)
+    )
     return {"value": catalog.model_dump(mode="json")}
 
 
-@router.put("/settings/provider-catalog", response=ProviderCatalogBody)
+@router.post(
+    "/settings/provider-catalog/impact", response=ProviderCatalogImpactBody
+)
+async def preview_provider_catalog_impact(request, body: ProviderCatalogBody):
+    """Report what a candidate activation set would block, without saving it."""
+
+    return {
+        "blocked_launch_bindings": await _count_blocked_launch_bindings(body.value)
+    }
+
+
+@router.put("/settings/provider-catalog", response=ProviderCatalogSavedBody)
 async def put_provider_catalog(request, body: ProviderCatalogBody):
     await dao.upsert_setting(
         scope=PROVIDER_CATALOG_SCOPE,
@@ -91,7 +115,27 @@ async def put_provider_catalog(request, body: ProviderCatalogBody):
         value=body.value.model_dump_json(),
         updated_at=datetime.now(timezone.utc).isoformat(),
     )
-    return {"value": body.value.model_dump(mode="json")}
+    return {
+        "value": body.value.model_dump(mode="json"),
+        "blocked_launch_bindings": await _count_blocked_launch_bindings(
+            body.value
+        ),
+    }
+
+
+async def _count_blocked_launch_bindings(catalog: ProviderCatalog) -> int:
+    """Count launch bindings this activation set refuses at launch time."""
+
+    from worktracker.models import LaunchBinding
+
+    deactivated = [
+        provider
+        for provider in PROVIDER_ORDER
+        if provider not in catalog.activated_providers
+    ]
+    if not deactivated:
+        return 0
+    return await LaunchBinding.objects.filter(agent__in=deactivated).acount()
 
 
 @router.get("/config")

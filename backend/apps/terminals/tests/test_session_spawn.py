@@ -16,7 +16,7 @@ every launch/tmux call is faked or monkeypatched.
 from __future__ import annotations
 
 import pytest
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 
 from apps import worktracker_queries
 import apps.terminals.launch as launch
@@ -355,3 +355,83 @@ def test_spawn_sync_via_async_to_sync(tmp_config, tmp_path, monkeypatch):
     assert created["agent_run_id"] == run_id
     run = AgentRun.objects.get(id=run_id)
     assert run.task_id == TASK_ID
+
+
+# ---------- host activation (ADR-0015) ----------
+
+
+def _deactivate(*providers: str) -> None:
+    """Persist a host catalog with ``providers`` switched off."""
+
+    from apps.settings_store.models import AppSetting
+    from apps.settings_store.provider_catalog import (
+        PROVIDER_CATALOG_KEY,
+        PROVIDER_CATALOG_SCOPE,
+        PROVIDER_ORDER,
+        ProviderCatalog,
+    )
+
+    catalog = ProviderCatalog(
+        activated_providers=frozenset(
+            provider for provider in PROVIDER_ORDER if provider not in providers
+        )
+    )
+    AppSetting.objects.update_or_create(
+        scope=PROVIDER_CATALOG_SCOPE,
+        key=PROVIDER_CATALOG_KEY,
+        defaults={
+            "value": catalog.model_dump_json(),
+            "updated_at": "2026-07-27T00:00:00+00:00",
+        },
+    )
+
+
+@pytest.mark.parametrize("scope", ("plan", "instant", "docchat"))
+async def test_spawn_blocks_a_deactivated_provider_on_every_scope(
+    tmp_config, tmp_path, monkeypatch, scope
+):
+    """Only ``scope == "task"`` used to run activation through a real check.
+
+    The spawn request carries both the scope and the provider, so a scratch
+    Plan/Instant terminal or a doc chat could name a provider the host had
+    switched off and launch it. ADR-0015 says such a launch is blocked, never
+    silently substituted, for every scope.
+    """
+
+    module_folder = tmp_path / "repo"
+    module_folder.mkdir()
+    _profile(tmp_config, module_folder)
+    _patch_worktracker(monkeypatch)
+    _capture_create_session(monkeypatch)
+    _patch_argv(monkeypatch)
+    await sync_to_async(_deactivate)("claude")
+
+    with pytest.raises(ValueError, match="provider_not_activated"):
+        await session_module.session.spawn(
+            _intent(
+                scope=scope,
+                initial_prompt="do the thing" if scope == "instant" else None,
+                doc_rel_path="doc.html" if scope == "docchat" else None,
+                doc_id="d1" if scope == "docchat" else None,
+            )
+        )
+
+    assert await AgentRun.objects.acount() == 0
+
+
+def test_activation_gate_returns_the_set_it_read_for_an_activated_provider():
+    """The adapter re-uses this read rather than touching the ORM off-path."""
+
+    _deactivate("gemini")
+
+    assert session_module._enforce_provider_activation("claude") == frozenset(
+        {"claude", "codex"}
+    )
+
+
+def test_activation_gate_leaves_a_non_configurable_adapter_alone():
+    """``agy`` is not a configurable provider, so activation never gates it."""
+
+    _deactivate("claude", "codex", "gemini")
+
+    assert session_module._enforce_provider_activation("agy") == frozenset()

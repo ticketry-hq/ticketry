@@ -23,6 +23,7 @@ from apps.terminals.agents.registry import UnknownAgent, get_adapter
 from apps.terminals.dao import sessions as session_dao
 from apps.terminals.launch import LaunchUnavailable, _launch  # noqa: F401 - public seam
 from apps.terminals.launch_configuration import (
+    LaunchConfigurationError,
     ResolvedLaunchConfiguration,
     resolve_task_launch_configuration,
 )
@@ -152,6 +153,39 @@ class AttachHandle:
         self.release()
 
 
+def _enforce_provider_activation(agent: str) -> frozenset[str]:
+    """Refuse a deactivated provider and return the activation set in force.
+
+    ``resolve_task_launch_configuration`` validates activation only for
+    ``scope == "task"``, but the spawn request carries both the scope and the
+    provider, so a plan/instant/doc-chat run could name a provider the host
+    switched off (ADR-0015 promises such a launch is *blocked*, never silently
+    substituted). This runs for every scope. The set it returns is handed to
+    the adapter so command construction re-uses this read instead of touching
+    the ORM from the async launch path.
+    """
+
+    from apps.settings_store.provider_catalog import load_provider_catalog
+    from worktracker.services.launch_bindings import (
+        LaunchBindingError,
+        validate_provider_options,
+    )
+
+    try:
+        activated_providers = load_provider_catalog().activated_providers
+        validate_provider_options(
+            agent=agent,
+            model=None,
+            reasoning=None,
+            activated_providers=activated_providers,
+        )
+    except LaunchBindingError as exc:
+        raise LaunchConfigurationError(exc.code) from exc
+    finally:
+        close_old_connections()
+    return activated_providers
+
+
 class TerminalSessionService:
     async def spawn(self, intent: LaunchIntent) -> str:
         launch_configuration = intent.launch_configuration
@@ -164,6 +198,13 @@ class TerminalSessionService:
             )
         if launch_configuration is not None:
             effective_agent = launch_configuration.agent
+        if effective_agent is None:
+            # Preserve the consumer's error frame: it maps ValueError
+            # "unknown_agent" to the dedicated WS close code.
+            raise ValueError("unknown_agent")
+        activated_providers = await asyncio.to_thread(
+            _enforce_provider_activation, effective_agent
+        )
 
         profile_index = _resolve_profile_index()
         if profile_index is None:
@@ -205,8 +246,6 @@ class TerminalSessionService:
             cwd = worktree_cwd
 
         try:
-            if effective_agent is None:
-                raise UnknownAgent("")
             adapter = get_adapter(effective_agent)
         except UnknownAgent:
             # Preserve the consumer's error frame: it maps ValueError
@@ -222,6 +261,7 @@ class TerminalSessionService:
                 if launch_configuration is not None
                 else None
             ),
+            activated_providers=activated_providers,
         )
 
         return await _launch(

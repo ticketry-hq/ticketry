@@ -6,6 +6,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
+from django.db.models import Q
 
 from worktracker.models import Workspace
 
@@ -42,13 +43,13 @@ class Command(BaseCommand):
 
         # Step 2: development-only admin superuser.
 
+        user_model = get_user_model()
         if settings.ADMIN_ENABLED:
             if not options["admin_username"] or not options["admin_password"]:
                 raise CommandError(
                     "admin-enabled provisioning requires explicit "
                     "--admin-username and --admin-password"
                 )
-            user_model = get_user_model()
             admin, created = user_model.objects.get_or_create(
                 username=options["admin_username"],
                 defaults={"is_staff": True, "is_superuser": True},
@@ -56,6 +57,14 @@ class Command(BaseCommand):
             if created:
                 admin.set_password(options["admin_password"])
                 admin.save()
+        else:
+            # No admin surface means no admin credential. Hiding ``wt-admin/``
+            # does not remove an account an earlier install created — and the
+            # pre-T1419 defaults were literally admin/admin — so close every
+            # administrative row here rather than rely on the URL staying off.
+            user_model.objects.filter(
+                Q(is_staff=True) | Q(is_superuser=True)
+            ).update(is_staff=False, is_superuser=False, is_active=False)
 
         # Step 3: ensure the static API token, persisting once if generated.
 

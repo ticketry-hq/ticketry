@@ -1288,6 +1288,25 @@ describe("task workspace manual agent launch", () => {
     expect(screen.queryByRole("menuitem", { name: "codex" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "gemini" })).not.toBeInTheDocument();
   });
+
+  // An empty provider list is ambiguous: not loaded yet, a dead fetch, and
+  // "nothing activated" all render the same. The menu has to say which rather
+  // than open with nothing in it and no explanation.
+  it.each([
+    [{ loaded: false, failed: false }, /Loading providers/],
+    [{ loaded: false, failed: true }, /Providers unavailable/],
+    [{ loaded: true, failed: false }, /No activated providers/],
+  ])("explains an empty launcher menu (%o)", (status, expected) => {
+    useLaunchProviderCatalog.setState({ capabilities: [], ...status });
+    useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
+    useWorkspaceTabsStore.setState({ byTaskId: {}, activeByTask: {} });
+    mount();
+
+    fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
+
+    expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
+    expect(screen.getByText(expected)).toBeInTheDocument();
+  });
 });
 
 describe("mounted task workspace terminal refresh", () => {

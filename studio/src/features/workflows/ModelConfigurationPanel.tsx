@@ -5,6 +5,7 @@ import {
 } from "./LaunchDefaultPicker";
 import {
   CONFIGURABLE_PROVIDERS,
+  PROVIDER_CAPABILITY_DEFAULTS,
   validateLaunchBindingOptions,
 } from "./launchBindingValidation";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
@@ -50,16 +51,57 @@ function catalogFrom(
   };
 }
 
+// Compared structurally rather than by JSON string: the string form depends on
+// CONFIGURABLE_PROVIDERS matching the server's PROVIDER_ORDER serialization and
+// on object key order, so a reorder on either side would make a freshly loaded
+// panel read as dirty.
 function sameCatalog(left: ProviderCatalog, right: ProviderCatalog): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  const activation = (catalog: ProviderCatalog) =>
+    [...catalog.activated_providers].sort().join(",");
+  const launchDefault = (catalog: ProviderCatalog) =>
+    catalog.global_default
+      ? [
+          catalog.global_default.provider,
+          catalog.global_default.model ?? "",
+          catalog.global_default.reasoning ?? "",
+        ].join("\u0000")
+      : null;
+  return (
+    activation(left) === activation(right) &&
+    launchDefault(left) === launchDefault(right)
+  );
 }
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.body && typeof error.body === "object") {
     const detail = (error.body as { detail?: unknown }).detail;
     if (typeof detail === "string" && detail) return detail;
+    // A pydantic/Ninja 422 arrives as a list of per-field objects. Reading only
+    // the string form replaced the server's actual message ("reasoning is not
+    // valid for provider 'gemini'") with a bare "HTTP 422".
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map((entry) =>
+          entry && typeof entry === "object"
+            ? String((entry as { msg?: unknown }).msg ?? "")
+            : String(entry))
+        .filter(Boolean);
+      if (messages.length > 0) return messages.join("; ");
+    }
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+function blockedBindingsSummary(blocked: number): string {
+  return blocked === 1
+    ? "1 launch configuration names a deactivated provider and is blocked "
+      + "until it is repointed."
+    : `${blocked} launch configurations name a deactivated provider and are `
+      + "blocked until they are repointed.";
+}
+
+function blockedBindingsPrompt(blocked: number): string {
+  return `${blockedBindingsSummary(blocked)}\n\nSave anyway?`;
 }
 
 export function ModelConfigurationPanel() {
@@ -102,23 +144,17 @@ export function ModelConfigurationPanel() {
   }, [refreshProviderCapabilities]);
 
   // The capabilities payload only carries activated providers, so a provider
-  // switched on but not yet saved still needs an entry to be selectable. Its
-  // real option rules arrive with the refetch after save; until then the
-  // placeholder stays permissive rather than mirror-rejecting a valid model.
+  // switched on but not yet saved still needs an entry to be selectable. The
+  // placeholder comes from the client-side mirror of the server's catalog, so
+  // its models and reasoning levels are offered immediately instead of only
+  // after a save round-trip. The authoritative payload wins once it arrives.
   const pickerCapabilities = useMemo<ProviderCapabilities[]>(
     () =>
       CONFIGURABLE_PROVIDERS.filter((provider) => activated.includes(provider))
         .map((provider) =>
           providerCapabilities.find(
             (capability) => capability.agent === provider,
-          ) ?? {
-            agent: provider,
-            accepts_model: true,
-            accepts_any_model: true,
-            model_aliases: [],
-            model_prefixes: [],
-            reasoning_levels: [],
-          }),
+          ) ?? PROVIDER_CAPABILITY_DEFAULTS[provider]),
     [activated, providerCapabilities],
   );
 
@@ -155,6 +191,14 @@ export function ModelConfigurationPanel() {
     setError(null);
     setNotice(null);
     try {
+      // Every other workflow mutation previews its blast radius first. A
+      // deactivation silently invalidated every binding naming that provider,
+      // discovered one failed launch at a time — so ask before committing.
+      const { blocked_launch_bindings: blocked } =
+        await api.previewProviderCatalogImpact(draft);
+      if (blocked > 0 && !window.confirm(blockedBindingsPrompt(blocked))) {
+        return;
+      }
       const { value } = await api.putProviderCatalog(draft);
       setSaved(value);
       setActivated(value.activated_providers);
@@ -162,7 +206,11 @@ export function ModelConfigurationPanel() {
       // Activation and the default drive launch selectors elsewhere in the
       // app, so the workflow editor has to see the change without a reload.
       await refreshProviderCapabilities();
-      setNotice("Model configuration saved.");
+      setNotice(
+        blocked > 0
+          ? `Model configuration saved. ${blockedBindingsSummary(blocked)}`
+          : "Model configuration saved.",
+      );
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {
@@ -234,12 +282,22 @@ export function ModelConfigurationPanel() {
         </div>
       </div>
 
-      {validationError || error ? (
+      {/* Rendered separately: routing both through one box with validation
+          winning made a failed save invisible while any mirror error stood. */}
+      {validationError ? (
         <div
           role="alert"
           className="rounded border border-red-500/50 bg-red-950/30 p-3 text-sm text-red-200"
         >
-          {validationError?.message ?? error}
+          {validationError.message}
+        </div>
+      ) : null}
+      {error ? (
+        <div
+          role="alert"
+          className="rounded border border-red-500/50 bg-red-950/30 p-3 text-sm text-red-200"
+        >
+          {error}
         </div>
       ) : null}
       {notice ? (

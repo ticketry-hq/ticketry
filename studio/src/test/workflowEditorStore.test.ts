@@ -166,8 +166,11 @@ describe("workflowEditorStore scoped apply", () => {
       .toHaveBeenCalledWith("story", "todo", true, 3);
     expect(useWorkflowEditorStore.getState().workflows.story.launch_bindings[0])
       .toMatchObject({ state_id: "todo", subtree_run_enabled: true });
+    // Derived from the authoritative response the server just returned, not
+    // refetched: the extra GET told us nothing new and every control in the
+    // editor blocked its spinner on it.
     expect(useSettingsStore.getState().refreshSubtreeRunCapabilities)
-      .toHaveBeenCalledWith("project-1");
+      .not.toHaveBeenCalled();
     expect(useSettingsStore.getState().subtreeRunCapabilities)
       .toEqual({ story: ["todo"] });
   });

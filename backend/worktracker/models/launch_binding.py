@@ -32,6 +32,19 @@ class LaunchBinding(models.Model):
         ]
         ordering = ("issue_type__sort_order", "state__sort_order", "id")
 
+    @property
+    def has_launch_policy(self) -> bool:
+        """Whether this row carries launch policy rather than only a flag.
+
+        ``subtree_run_enabled`` lives on this row but has a lifetime of its
+        own, so a row can exist purely to carry that flag. Every "is a launch
+        configured here" read goes through this predicate instead of through
+        the row's existence, which would otherwise report a state as
+        configured merely because subtree-run was switched on for it.
+        """
+
+        return bool(self.prompt.strip() or self.agent)
+
     def clean(self):
         super().clean()
         errors = {}

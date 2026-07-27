@@ -4,7 +4,10 @@ import { useModalStore } from "../../../app/modal/modalStore";
 import { launchScratchPlanning } from "./create/launchTerminalCreate";
 import { launchAgent, launchDocumentAgent } from "./internal/actions";
 import { useIssueDrawerWorkspaceStore } from "../../work-items";
-import { useActivatedProviders } from "../../workflows/launchProviderCatalog";
+import {
+  providerListPlaceholder,
+  useActivatedProviders,
+} from "../../workflows/launchProviderCatalog";
 import { TEMP_TASK_ID } from "../types";
 import { bucketFor, isScratchBucket } from "./internal/sessionStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
@@ -38,7 +41,7 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
   // Host activation decides what can be launched, and the capabilities payload
   // is the one place it is published (ADR-0015). A provider the host switched
   // off never reaches this list, so it cannot be picked by accident.
-  const { slugs: activatedProviders, loaded } = useActivatedProviders();
+  const { slugs: activatedProviders, loaded, failed } = useActivatedProviders();
   const agents = useMemo(
     () => AGENTS.filter((agent) => activatedProviders.has(agent)),
     [activatedProviders],
@@ -174,9 +177,7 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
     >
       {agents.length === 0 ? (
         <p className="px-2 py-1 text-sm text-text-muted">
-          {loaded
-            ? "No activated providers. Activate one in Settings → Model configuration."
-            : "Loading providers…"}
+          {providerListPlaceholder({ loaded, failed })}
         </p>
       ) : (
         <ul>

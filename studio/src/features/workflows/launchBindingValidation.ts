@@ -13,6 +13,44 @@ export const CONFIGURABLE_PROVIDERS: readonly ConfigurableProvider[] = [
   "gemini",
 ];
 
+/**
+ * A client-side mirror of the server's `PROVIDER_CAPABILITIES`
+ * (`worktracker/launch_capabilities.py`), used only to describe a provider the
+ * user has just switched on. The capabilities payload carries activated
+ * providers only, so until the save round-trips there is no entry for one — and
+ * an empty placeholder made setting its reasoning take two saves with no
+ * explanation. The authoritative payload still wins the moment it arrives.
+ */
+export const PROVIDER_CAPABILITY_DEFAULTS: Record<
+  ConfigurableProvider,
+  ProviderCapabilities
+> = {
+  claude: {
+    agent: "claude",
+    accepts_model: true,
+    accepts_any_model: false,
+    model_aliases: ["sonnet", "opus", "haiku", "fable"],
+    model_prefixes: ["claude-"],
+    reasoning_levels: ["low", "medium", "high", "xhigh", "max"],
+  },
+  codex: {
+    agent: "codex",
+    accepts_model: true,
+    accepts_any_model: false,
+    model_aliases: [],
+    model_prefixes: ["gpt-", "codex-", "chatgpt-", "o1", "o3", "o4"],
+    reasoning_levels: ["minimal", "low", "medium", "high", "xhigh"],
+  },
+  gemini: {
+    agent: "gemini",
+    accepts_model: true,
+    accepts_any_model: false,
+    model_aliases: [],
+    model_prefixes: ["gemini-"],
+    reasoning_levels: [],
+  },
+};
+
 export interface LaunchBindingValidationError {
   field: "agent" | "model" | "reasoning";
   message: string;
@@ -87,9 +125,10 @@ export function canAutoLaunchTo(
   binding: LaunchBinding | undefined,
   capabilities: ProviderCapabilities[],
 ): boolean {
+  if (!binding) return false;
   return Boolean(
-    binding?.prompt.trim() &&
+    text(binding.prompt) &&
     text(binding.agent) &&
-    validateLaunchBindingOptions(binding ?? {}, capabilities) === null,
+    validateLaunchBindingOptions(binding, capabilities) === null,
   );
 }

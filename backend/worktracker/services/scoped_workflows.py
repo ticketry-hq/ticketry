@@ -254,6 +254,61 @@ def _standing_warnings(issue_type: IssueType, states, transitions):
     return warnings
 
 
+def _launch_policy_warnings(bindings, states):
+    """Report bindings the *current* host catalog would refuse at launch time.
+
+    Activation and the global launch default live in host settings and are read
+    live at launch, so a Settings change can invalidate a binding that was
+    valid when it was written — with nothing on the workflow editor to say so.
+    These two warnings surface that blast radius standing, rather than one
+    failed launch at a time.
+    """
+
+    from apps.settings_store.provider_catalog import (
+        PROVIDER_ORDER,
+        load_provider_catalog,
+    )
+
+    catalog = load_provider_catalog()
+    state_names = {state.id: state.name for state in states}
+    warnings = []
+    for binding in bindings:
+        if not binding.has_launch_policy:
+            continue
+        state_name = state_names.get(binding.state_id, "This state")
+        if (
+            binding.agent in PROVIDER_ORDER
+            and binding.agent not in catalog.activated_providers
+        ):
+            warnings.append(
+                {
+                    "code": "provider_not_activated",
+                    "state_id": binding.state_id,
+                    "message": (
+                        f"{state_name} launches with {binding.agent}, which is "
+                        "deactivated in Settings → Model configuration; those "
+                        "launches are blocked."
+                    ),
+                }
+            )
+        elif (
+            binding.auto_start
+            and binding.agent is None
+            and catalog.global_default is None
+        ):
+            warnings.append(
+                {
+                    "code": "auto_start_without_default",
+                    "state_id": binding.state_id,
+                    "message": (
+                        f"{state_name} auto-starts through the global launch "
+                        "default, and none is configured."
+                    ),
+                }
+            )
+    return warnings
+
+
 def get_workflow(type_id):
     issue_type = _issue_type(type_id)
     states = list(
@@ -295,7 +350,10 @@ def get_workflow(type_id):
             }
             for binding in bindings
         ],
-        "warnings": _standing_warnings(issue_type, states, transitions),
+        "warnings": [
+            *_standing_warnings(issue_type, states, transitions),
+            *_launch_policy_warnings(bindings, states),
+        ],
     }
 
 
@@ -479,12 +537,15 @@ def set_auto_start(
 ):
     issue_type = _locked_issue_type(type_id, workflow_revision)
     state = _state(issue_type, state_id, field="state")
-    try:
-        binding = LaunchBinding.objects.get(issue_type=issue_type, state=state)
-    except LaunchBinding.DoesNotExist as exc:
+    binding = LaunchBinding.objects.filter(
+        issue_type=issue_type, state=state
+    ).first()
+    # A row that exists only to carry ``subtree_run_enabled`` is not a launch
+    # configuration, so it must not satisfy this guard.
+    if binding is None or not binding.has_launch_policy:
         raise ValidationError(
             "Configure a launch binding before changing auto-start."
-        ) from exc
+        )
     if auto_start:
         validate_unattended_launch_binding(binding)
     binding.auto_start = auto_start
@@ -504,6 +565,11 @@ def set_subtree_run(
         state=state,
     )
     binding.subtree_run_enabled = enabled
-    binding.save(update_fields=["subtree_run_enabled", "updated_at"])
+    if not enabled and not binding.has_launch_policy and not binding.auto_start:
+        # The row only ever existed to carry this flag. Leaving it behind would
+        # leave an empty launch policy on a state that has none.
+        binding.delete()
+    else:
+        binding.save(update_fields=["subtree_run_enabled", "updated_at"])
     _advance_revision(issue_type)
     return get_workflow(type_id)

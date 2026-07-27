@@ -79,6 +79,42 @@ def test_admin_disabled_provision_is_idempotent_without_a_superuser(tmp_path):
 
 
 @pytest.mark.django_db
+def test_admin_disabled_provision_closes_an_upgraded_installs_superuser(tmp_path):
+    """Hiding ``wt-admin/`` does not remove a credential an earlier install made.
+
+    Before T1419 the provisioning defaults were literally ``admin``/``admin``,
+    so an upgraded install carries a superuser with well-known credentials. No
+    admin surface has to mean no admin credential.
+    """
+
+    user_model = get_user_model()
+    legacy = user_model.objects.create_user(
+        username="admin", password="admin", is_staff=True, is_superuser=True
+    )
+
+    _run(tmp_path / "token", admin_enabled=False)
+
+    legacy.refresh_from_db()
+    assert (legacy.is_staff, legacy.is_superuser, legacy.is_active) == (
+        False,
+        False,
+        False,
+    )
+    assert not user_model.objects.filter(is_active=True, is_superuser=True).exists()
+
+
+@pytest.mark.django_db
+def test_admin_disabled_provision_leaves_ordinary_accounts_alone(tmp_path):
+    user_model = get_user_model()
+    member = user_model.objects.create_user(username="member", password="pw")
+
+    _run(tmp_path / "token", admin_enabled=False)
+
+    member.refresh_from_db()
+    assert member.is_active is True
+
+
+@pytest.mark.django_db
 def test_rerun_preserves_acknowledged_onboarding(tmp_path):
     token_file = tmp_path / "token"
     _run(token_file)

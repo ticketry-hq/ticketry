@@ -563,7 +563,7 @@ describe("Studio workflow settings", () => {
     })).toBeInTheDocument());
   });
 
-  it("discloses shared destination launch settings and preserves unsupported reasoning", async () => {
+  it("discloses shared destination launch settings and drops unsupported reasoning", async () => {
     workflowApi.getLaunchProviderCapabilities.mockResolvedValue([
       {
         agent: "claude",
@@ -617,14 +617,14 @@ describe("Studio workflow settings", () => {
     });
     fireEvent.change(provider, { target: { value: "codex" } });
     expect(within(form).getByRole("combobox", { name: "Model" })).toHaveValue("");
-    expect(within(form).getByRole("option", {
+    expect(within(form).queryByRole("option", {
       name: "high (unsupported)",
-    })).toBeInTheDocument();
+    })).not.toBeInTheDocument();
     await waitFor(() => expect(workflowApi.upsertIssueTypeWorkflowLaunchBinding)
       .toHaveBeenLastCalledWith("story", "done", expect.objectContaining({
         agent: "codex",
         model: null,
-        reasoning: "high",
+        reasoning: null,
       }), 7));
   });
 

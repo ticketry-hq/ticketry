@@ -286,7 +286,7 @@ describe("Model configuration settings", () => {
       await openModelConfiguration();
 
       fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
       await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
       expect(confirm.mock.calls[0][0]).toContain("3 launch configurations");
@@ -311,7 +311,7 @@ describe("Model configuration settings", () => {
       await openModelConfiguration();
 
       fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
       expect(await screen.findByRole("status")).toHaveTextContent(
         "1 launch configuration names a deactivated provider",
@@ -330,7 +330,7 @@ describe("Model configuration settings", () => {
     await openModelConfiguration();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "reasoning is not valid for provider 'gemini'",

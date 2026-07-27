@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T720 · Planning Tracer 5 — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  header { background: var(--panel); padding: 26px 40px 16px; border-bottom: 1px solid var(--line); }
+  .crumb { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+  h1 { margin: 6px 0 4px; font-size: 23px; line-height: 1.2; }
+  .sub { max-width: 980px; color: var(--muted); font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip { border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 800; padding: 4px 10px; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { position: sticky; top: 0; z-index: 20; display: flex; gap: 2px; overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { color: var(--muted); text-decoration: none; white-space: nowrap; padding: 10px 14px 8px; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 800; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 34px 40px 70px; }
+  section { margin-bottom: 56px; scroll-margin-top: 58px; }
+  h2 { margin: 0 0 4px; font-size: 18px; }
+  .lede { margin: 0 0 18px; max-width: 900px; color: var(--muted); font-size: 14px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+  .card h3 { margin: 0 0 10px; font-size: 15px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { position: relative; padding: 6px 0 6px 20px; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .list li:last-child { border-bottom: 0; }
+  .list li:before { content: "•"; position: absolute; left: 3px; color: var(--accent); font-weight: 900; }
+  .list li.no:before { content: "x"; color: var(--red); }
+  .diagram { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: stretch; }
+  svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; fill: var(--ink); }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { fill: #fff; stroke: var(--accent); stroke-width: 2; }
+  .node.deferred rect { stroke-dasharray: 6 5; stroke: var(--amber); }
+  .node.selected rect, .node.selected ellipse { fill: var(--accent-soft); stroke-width: 3; }
+  .edge { stroke: #7f8aa3; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .edge.deferred { stroke-dasharray: 6 5; stroke: var(--amber); }
+  .side h3 { margin: 0 0 6px; color: var(--accent); font-size: 15px; }
+  .side .tag { display: inline-block; margin-bottom: 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); padding: 2px 8px; font-size: 11px; font-weight: 800; }
+  .side ul { margin: 8px 0 0; padding: 0; list-style: none; }
+  .side li { position: relative; padding: 4px 0 4px 18px; font-size: 13px; }
+  .side li:before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 900; }
+  .side li.no:before { content: "x"; color: var(--red); }
+  table { width: 100%; border-collapse: collapse; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+  th { background: #fbfcfe; color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: 0; }
+  tr[data-node] { cursor: pointer; }
+  tr.hl td { background: var(--accent-soft); }
+  .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 800; }
+  .pill.new { background: var(--green-soft); color: var(--green); }
+  .pill.mod { background: var(--amber-soft); color: var(--amber); }
+  .pill.ro { background: var(--accent-soft); color: var(--accent); }
+  .pill.def { background: var(--red-soft); color: var(--red); }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 8px; padding: 13px 14px; min-height: 132px; }
+  .step .n { color: var(--accent); font-size: 18px; font-weight: 900; }
+  .step b { display: block; margin: 2px 0 4px; font-size: 13.5px; }
+  .step span { color: var(--muted); font-size: 12.5px; }
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+  details + details { margin-top: 10px; }
+  summary { cursor: pointer; font-weight: 800; color: var(--accent); }
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 8px; padding: 18px 20px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    header, nav, main { padding-left: 18px; padding-right: 18px; }
+    .grid2, .diagram, .steps { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">Coding · WorkTracker module · Ticket #720 · LLD</div>
+  <h1>Planning Tracer 5 — Split Proposal Phase</h1>
+  <div class="sub">Low-level plan to add a third phase to the #716/#719 tracer: launch one HLD/splitter run for a Todo task that consumes the locked PRD and writes a code-context-aware HLD with a proposed split tree, then mark the local split state done only when the same task is observed moving into the <span class="m">LLD</span> state. The engine never creates leaf tasks, wires edges, or generates leaf LLDs.</div>
+  <div class="chips">
+    <span class="chip">Phase: Todo to LLD review</span>
+    <span class="chip green">No implementation in this phase</span>
+    <span class="chip amber">Extends #719 reducer, driver, recipes</span>
+    <span class="chip violet">No DB table · no endpoint · no new UI</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#scope" class="active">Scope</a>
+  <a href="#diagram">Execution Loop</a>
+  <a href="#signal">Completion Gate</a>
+  <a href="#visibility">Visibility</a>
+  <a href="#map">Change Map</a>
+  <a href="#contracts">Contracts</a>
+  <a href="#steps">Steps</a>
+  <a href="#tests">Harness</a>
+  <a href="#edges">Edges</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+<main>
+  <section id="scope">
+    <h2>Scope lock</h2>
+    <div class="lede">This slice proves the planning split-proposal phase only. The engine launches the HLD/splitter agent and observes the approval transition into <span class="m">LLD</span>; it does not register the proposed split, generate leaf LLDs, or start the next phase.</div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Build</h3>
+        <ul class="list">
+          <li>Add <span class="m">split</span> as a third phase beside <span class="m">implement</span> and <span class="m">refine</span> in the existing phase vocabulary.</li>
+          <li>Add a <span class="m">split</span> entry to the per-phase contract: launch recipe plus completion gate.</li>
+          <li>Launch the <span class="m">split</span> recipe only for a task currently in the <span class="m">unstarted</span> group (Todo).</li>
+          <li>Build the HLD/splitter launch prompt from the locked PRD task context, instructing <span class="m">to-issues</span>-style tracer-bullet reasoning and a proposed split tree in the HLD.</li>
+          <li>Carry the destination <span class="m">to_state</span> name through the seam so the gate can match a move into the named <span class="m">LLD</span> state.</li>
+          <li>Complete <span class="m">split</span> only when the active task is observed moving into the state named <span class="m">LLD</span>.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Do not build</h3>
+        <ul class="list">
+          <li class="no">No split registration: no leaf task creation, no <span class="m">blocked_by</span> edge wiring — deferred to #745.</li>
+          <li class="no">No leaf-level LLD generation — deferred to #743.</li>
+          <li class="no">No hidden/internal lifecycle-state model — deferred to #744; reuse the existing <span class="m">LLD</span> state as the interim approval signal.</li>
+          <li class="no">No engine mutation of <span class="m">Issue.state</span>; the agent or a human moves Todo to LLD.</li>
+          <li class="no">No HLD-artifact existence or content validation before completion counts.</li>
+          <li class="no">No new public HTTP route, MCP tool, Studio action, CLI, UI surface, trigger pipeline (#721), or agent default policy.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="diagram">
+    <h2>Execution loop</h2>
+    <div class="lede">Click a node to see responsibilities. Dashed boxes are seams, the human-paced agent, or future phases that this slice observes but does not own.</div>
+    <div class="diagram">
+      <svg viewBox="0 0 850 500" role="img" aria-label="Split-proposal tracer component diagram">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#7f8aa3"></path>
+          </marker>
+        </defs>
+        <path class="edge" d="M135 100 C215 100 225 100 295 100"></path>
+        <path class="edge" d="M475 100 C560 100 570 100 640 100"></path>
+        <path class="edge" d="M390 145 C390 205 390 220 390 270"></path>
+        <path class="edge" d="M390 350 C390 405 390 415 390 448"></path>
+        <path class="edge" d="M270 310 C210 310 190 310 135 310"></path>
+        <path class="edge deferred" d="M690 138 C660 222 580 285 510 307"></path>
+        <path class="edge deferred" d="M604 448 C670 448 690 420 700 360"></path>
+        <g class="node" data-node="caller" transform="translate(38 64)">
+          <ellipse cx="72" cy="36" rx="72" ry="36"></ellipse>
+          <text x="72" y="41" text-anchor="middle">Internal caller</text>
+        </g>
+        <g class="node" data-node="driver" transform="translate(295 58)">
+          <rect width="180" height="86" rx="8"></rect>
+          <text x="90" y="34" text-anchor="middle">Execution driver</text>
+          <text x="90" y="55" text-anchor="middle" fill="#5b6478">phase · gate · launch</text>
+        </g>
+        <g class="node deferred" data-node="spawn" transform="translate(640 66)">
+          <rect width="160" height="72" rx="8"></rect>
+          <text x="80" y="31" text-anchor="middle">spawn_run</text>
+          <text x="80" y="52" text-anchor="middle" fill="#5b6478">existing launch seam</text>
+        </g>
+        <g class="node" data-node="reducer" transform="translate(270 270)">
+          <rect width="240" height="80" rx="8"></rect>
+          <text x="120" y="31" text-anchor="middle">Phase reducer</text>
+          <text x="120" y="52" text-anchor="middle" fill="#5b6478">implement + refine + split</text>
+        </g>
+        <g class="node" data-node="registry" transform="translate(24 278)">
+          <rect width="168" height="66" rx="8"></rect>
+          <text x="84" y="30" text-anchor="middle">Local registry</text>
+          <text x="84" y="49" text-anchor="middle" fill="#5b6478">keyed by task id</text>
+        </g>
+        <g class="node deferred" data-node="agent" transform="translate(628 286)">
+          <rect width="150" height="74" rx="8"></rect>
+          <text x="75" y="31" text-anchor="middle">HLD/splitter</text>
+          <text x="75" y="52" text-anchor="middle" fill="#5b6478">or human move</text>
+        </g>
+        <g class="node" data-node="signal" transform="translate(270 428)">
+          <rect width="244" height="48" rx="8"></rect>
+          <text x="122" y="30" text-anchor="middle">issue_state_changed</text>
+        </g>
+        <g class="node deferred" data-node="next" transform="translate(618 428)">
+          <rect width="170" height="48" rx="8"></rect>
+          <text x="85" y="30" text-anchor="middle">#745 / #743 / #721</text>
+        </g>
+      </svg>
+      <div class="panel side" id="nodeInfo">
+        <h3>Execution driver</h3>
+        <span class="tag">selected</span>
+        <ul>
+          <li>Accepts explicit task id, agent, and phase.</li>
+          <li>Validates split starts only from a Todo (unstarted) task.</li>
+          <li>Resolves the destination state name and threads it into the seam event.</li>
+          <li class="no">Does not register the split, generate leaf LLDs, or expose a user trigger.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="signal">
+    <h2>Completion gate — why state name, not group</h2>
+    <div class="lede">The #719 refine gate matched a group change (Backlog to Todo). The split gate cannot, because a move into <span class="m">LLD</span> may not change the group.</div>
+    <div class="grid2">
+      <div class="card">
+        <h3>The seam fires on state identity</h3>
+        <ul class="list">
+          <li>The #704 seam detects a transition on <span class="m">state_id</span> identity, not group, so a move between two states in the same group still emits an event.</li>
+          <li>If a project models <span class="m">LLD</span> in the <span class="m">unstarted</span> group, a Todo to LLD move emits an event with <span class="m">from_group</span> equal to <span class="m">to_group</span> equal to <span class="m">unstarted</span>.</li>
+          <li>A group-only gate would either miss that move or fire on unrelated unstarted moves, so the split gate must read the destination state name.</li>
+          <li>The seam payload already carries <span class="m">to_state_id</span>; the driver resolves it to the destination state name before building the reducer event.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>The split gate</h3>
+        <ul class="list">
+          <li>Complete <span class="m">split</span> when the active task is <span class="m">running</span> and the resolved destination state name equals <span class="m">LLD</span>.</li>
+          <li>The source state is unconstrained: any observed move into <span class="m">LLD</span> for the active task is the approval signal.</li>
+          <li>The literal target name <span class="m">LLD</span> is the interim convention recorded in the refinement notes, to be replaced by #744's hidden-state model later.</li>
+          <li class="no">Reaching <span class="m">LLD</span> does not trigger split registration here; it only marks the local split phase done.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="visibility">
+    <h2>Visibility contract</h2>
+    <div class="lede">This slice adds no new UI, but the operator should still know where the HLD/splitter run appears and where the proposal is reviewed.</div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Where the proposal appears</h3>
+        <ul class="list">
+          <li>The HLD/splitter run uses the existing per-task agent launch flow: the same operator path as starting an agent run from a task.</li>
+          <li>The agent writes the visual HLD with the proposed split tree into the task spec directory and presents it for review in the existing agent terminal/tmux session.</li>
+          <li>The run stays visible through the current Coding app run and terminal surfaces that already attach to launched task runs.</li>
+          <li>The task board shows the user-visible approval signal when the task moves into the <span class="m">LLD</span> state.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What this slice does not add</h3>
+        <ul class="list">
+          <li class="no">No new Todo button, command palette action, or dedicated planning panel.</li>
+          <li class="no">No engine-specific progress dashboard beyond the existing run record and terminal attach flow.</li>
+          <li class="no">No UI affordance for split registration, recursion, or leaf LLD review; those belong to #745, #743, and #721.</li>
+          <li class="no">No special waiting state in the UI; an HLD/splitter run awaiting human review is still a running agent run.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="map">
+    <h2>File change map</h2>
+    <div class="lede">The local repo already contains the #716/#719 <span class="m">apps/execution</span> package with <span class="m">implement</span> and <span class="m">refine</span> phases. This ticket extends those seams additively rather than recreating them.</div>
+    <table>
+      <thead><tr><th>File</th><th>Kind</th><th>Exact delta</th></tr></thead>
+      <tbody>
+        <tr data-node="reducer"><td><span class="m">server/apps/execution/state.py</span></td><td><span class="pill mod">modify</span></td><td>Add <span class="m">split</span> to the <span class="m">Phase</span> literal; add a <span class="m">to_state</span> field (resolved destination state name) to <span class="m">SeamEvent</span>.</td></tr>
+        <tr data-node="reducer"><td><span class="m">server/apps/execution/reducer.py</span></td><td><span class="pill mod">modify</span></td><td>Extend <span class="m">_is_complete</span> with a <span class="m">split</span> branch: destination state name equals <span class="m">LLD</span>. No other reducer logic changes.</td></tr>
+        <tr data-node="driver"><td><span class="m">server/apps/execution/recipes.py</span></td><td><span class="pill mod">modify</span></td><td>Add a <span class="m">split</span> case returning the HLD/splitter prompt built from the locked PRD task context; implement and refine prompts unchanged.</td></tr>
+        <tr data-node="driver"><td><span class="m">server/apps/execution/driver.py</span></td><td><span class="pill mod">modify</span></td><td>Gate <span class="m">split</span> launch to tasks in the <span class="m">unstarted</span> group; in the observer, resolve <span class="m">to_state_id</span> to its state name and pass it as <span class="m">to_state</span> into the reducer event.</td></tr>
+        <tr data-node="signal"><td><span class="m">server/apps/execution/signals.py</span></td><td><span class="pill mod">modify</span></td><td>Forward the seam's <span class="m">to_state_id</span> into <span class="m">observe_issue_state_changed</span> alongside the existing groups.</td></tr>
+        <tr data-node="reducer"><td><span class="m">server/apps/execution/tests/test_reducer.py</span></td><td><span class="pill mod">modify</span></td><td>Add split coverage: launch action, run lifecycle, completion on <span class="m">to_state=LLD</span>, ignored events, done idempotence.</td></tr>
+        <tr data-node="driver"><td><span class="m">server/apps/execution/tests/test_driver.py</span></td><td><span class="pill mod">modify</span></td><td>Assert the Todo launch gate, non-Todo rejection, recipe prompt threading, and destination-name resolution in the observer.</td></tr>
+        <tr data-node="signal"><td><span class="m">server/apps/execution/tests/test_signals.py</span></td><td><span class="pill mod">modify</span></td><td>Assert the receiver forwards <span class="m">to_state_id</span> so the split gate can match the named LLD destination.</td></tr>
+        <tr data-node="spawn"><td><span class="m">server/apps/terminals/launch.py</span></td><td><span class="pill ro">read-only</span></td><td>Existing <span class="m">spawn_run</span> launch boundary. This slice calls it; it does not change launch plumbing.</td></tr>
+        <tr data-node="signal"><td><span class="m">worktracker/worktracker/signals.py</span></td><td><span class="pill ro">read-only</span></td><td>Existing #704 seam already carrying <span class="m">to_state_id</span> and <span class="m">to_group</span>. This slice observes it; it does not alter WorkTracker state.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="contracts">
+    <h2>Decision contracts</h2>
+    <div class="lede">Implementation follows these choices without reopening scope.</div>
+    <table>
+      <thead><tr><th>Contract</th><th>Decision</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr data-node="reducer"><td>Phase name</td><td>Add <span class="m">split</span> as a third phase value.</td><td>The phase produces the HLD with a proposed split tree; it coexists additively with implement and refine.</td></tr>
+        <tr data-node="caller"><td>Entrypoint</td><td>Internal callable accepts task id, agent, and <span class="m">phase=split</span>.</td><td>This slice adds no public trigger surface and owns no agent defaulting policy; #721 owns the trigger.</td></tr>
+        <tr data-node="driver"><td>Launch gate</td><td>Split launches only when the target task is in the <span class="m">unstarted</span> group.</td><td>The phase begins when the refined PRD reaches Todo; not-yet-refined or already-designed work is excluded.</td></tr>
+        <tr data-node="driver"><td>Split recipe</td><td>HLD/splitter prompt using <span class="m">to-issues</span>-style reasoning over the locked PRD; proposes leaf tasks and <span class="m">blocked_by</span> edges in the HLD only.</td><td>The proposal must be reviewable before any registration; the recipe explicitly forbids creating tasks or edges.</td></tr>
+        <tr data-node="signal"><td>Completion gate</td><td>Active task observed moving into the state named <span class="m">LLD</span>, matched on the resolved destination state name.</td><td>A Todo to LLD move may not change group, so a group-only gate is insufficient; the seam carries <span class="m">to_state_id</span> for resolution.</td></tr>
+        <tr data-node="reducer"><td>Reducer purity</td><td>The reducer compares the pre-resolved <span class="m">to_state</span> string; the driver does the State lookup.</td><td>Keeps <span class="m">decide</span> I/O-free and DB-free, consistent with #716/#719.</td></tr>
+        <tr data-node="registry"><td>Run state</td><td>Process-local statuses remain <span class="m">idle</span>, <span class="m">running</span>, <span class="m">done</span>, <span class="m">failed</span>.</td><td>A human-paced HLD review can keep the run running indefinitely; no stall or awaiting-input semantics.</td></tr>
+        <tr data-node="next"><td>Stop point</td><td>After done, stop. No registration, recursion, or leaf LLD generation.</td><td>#745 registers the approved split, #743 generates leaf LLDs, #721 owns the trigger pipeline.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="steps">
+    <h2>Decision-complete steps</h2>
+    <div class="lede">Build order for the implementation phase after this LLD is accepted.</div>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><b>Extend state vocabulary</b><span>Add split to the supported phases and add a resolved destination state name field to the seam event.</span></div>
+      <div class="step"><div class="n">2</div><b>Extend phase contract</b><span>Add the split completion predicate: destination state name equals LLD; preserve implement and refine gates unchanged.</span></div>
+      <div class="step"><div class="n">3</div><b>Add split recipe</b><span>Return an HLD/splitter prompt built from the locked PRD task context, instructing tracer-bullet reasoning, a proposed split tree with intended edges, and an explicit no-registration, no-code boundary.</span></div>
+      <div class="step"><div class="n">4</div><b>Gate split launch</b><span>In the driver, resolve the task's current state group and reject split unless it is unstarted.</span></div>
+      <div class="step"><div class="n">5</div><b>Thread launch payload</b><span>Call spawn_run with recipe split and the HLD/splitter prompt while preserving explicit agent selection.</span></div>
+      <div class="step"><div class="n">6</div><b>Resolve destination name</b><span>In the observer, resolve to_state_id to the destination state name and pass it as to_state into the reducer event; forward it from the signal receiver.</span></div>
+      <div class="step"><div class="n">7</div><b>Observe approval</b><span>Mark done only when the active task is running and moves into the state named LLD; keep done stable on duplicate or late matches; ignore all non-matching events.</span></div>
+      <div class="step"><div class="n">8</div><b>Lock tests</b><span>Focus reducer tests on pure input-output behavior and driver tests on the launch gate, prompt threading, and name resolution, with no real agent or tmux.</span></div>
+    </div>
+  </section>
+
+  <section id="tests">
+    <h2>Implementation harness</h2>
+    <div class="lede">The reducer remains the main test seam. Driver and receiver tests only prove boundary adaptation. No code blocks; tests assert the behaviors below.</div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Reducer tests</h3>
+        <ul class="list">
+          <li>Execute split from idle produces exactly one launch action with recipe <span class="m">split</span>.</li>
+          <li>Run started records the agent run id and marks status <span class="m">running</span>.</li>
+          <li>Run failed records error text and marks status <span class="m">failed</span>.</li>
+          <li>An <span class="m">issue_state_changed</span> event with <span class="m">to_state=LLD</span> for the active running task marks split <span class="m">done</span>.</li>
+          <li>Completion after <span class="m">done</span> leaves the state unchanged.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Negative tests</h3>
+        <ul class="list">
+          <li>Unrelated task id is ignored.</li>
+          <li>Destination state name other than <span class="m">LLD</span> is ignored, even within the same group.</li>
+          <li>A <span class="m">to_state=LLD</span> event while status is not <span class="m">running</span> is ignored.</li>
+          <li>Non-Todo split launch raises and does not call <span class="m">spawn_run</span>.</li>
+          <li>Receiver does not mutate WorkTracker state or launch any follow-up phase, registration, or leaf LLD.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="edges">
+    <h2>Failure and edge matrix</h2>
+    <div class="lede">These outcomes are intentionally narrow for tracer value.</div>
+    <table>
+      <thead><tr><th>Situation</th><th>Expected behavior</th><th>Owner</th></tr></thead>
+      <tbody>
+        <tr><td>Task is not in Todo at split launch</td><td>Reject in #716's existing validation style; no launch action reaches <span class="m">spawn_run</span>.</td><td>#720</td></tr>
+        <tr><td><span class="m">spawn_run</span> raises</td><td>Reducer records <span class="m">failed</span> with error text.</td><td>#720</td></tr>
+        <tr><td>Project has no state named <span class="m">LLD</span></td><td>Split can never complete in this slice; the named-state precondition is a project-config assumption recorded for #744.</td><td>Assumption</td></tr>
+        <tr><td>Agent waits on human HLD review</td><td>Registry remains <span class="m">running</span>; no timeout or awaiting-input state.</td><td>Deferred</td></tr>
+        <tr><td>Human moves task Todo to LLD</td><td>Actor-agnostic seam event completes split; no second approval gate.</td><td>#720</td></tr>
+        <tr><td>Agent writes no HLD but task reaches LLD</td><td>Split still completes; HLD artifact checking is deferred to the registration boundary.</td><td>#745</td></tr>
+        <tr><td>Task reaches LLD while split is done or absent</td><td>No registration, recursion, or leaf LLD is launched here; downstream chaining is not present yet.</td><td>#745 / #743 / #721</td></tr>
+        <tr><td>Server restarts during HLD review</td><td>Process-local registry is lost; durable <span class="m">AgentRun</span> and tmux are outside this engine state.</td><td>Deferred</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance signal</h2>
+    <div class="lede">The LLD is ready for implementation when these statements are acceptable.</div>
+    <div class="accept">
+      <b>Green signal:</b> the accepted implementation will launch one HLD/splitter recipe for one Todo task, record the run in process-local state, mark it failed on launch failure, mark it done only on the active task's observed move into the named <span class="m">LLD</span> state, and stop without registering the split, wiring edges, generating leaf LLDs, or chaining to the next phase.
+    </div>
+  </section>
+</main>
+<script>
+const nodeInfo = {
+  caller: {
+    h: "Internal caller",
+    items: [
+      ["Passes task id, agent, and phase=split explicitly."],
+      ["May choose codex or another agent at its own call site."],
+      ["Does not get a new public API, MCP tool, Studio action, or CLI in this slice.", true]
+    ]
+  },
+  driver: {
+    h: "Execution driver",
+    items: [
+      ["Accepts explicit task id, agent, and phase."],
+      ["Validates split starts only from a Todo (unstarted) task."],
+      ["Resolves to_state_id to a state name and threads it into the seam event."],
+      ["Does not register the split, generate leaf LLDs, or expose a user trigger.", true]
+    ]
+  },
+  spawn: {
+    h: "spawn_run",
+    items: [
+      ["Starts the coding-agent tmux run and returns the run id."],
+      ["Receives the HLD/splitter prompt as initial launch context."],
+      ["Is reused as a port; launch plumbing is not changed here.", true]
+    ]
+  },
+  reducer: {
+    h: "Phase reducer",
+    items: [
+      ["Keeps decide(state, event) pure, synchronous, and I/O-free."],
+      ["Uses per-phase completion gates for implement, refine, and split."],
+      ["Compares the pre-resolved to_state string; does not query the State table.", true]
+    ]
+  },
+  registry: {
+    h: "Local registry",
+    items: [
+      ["Stores one active engine state per task id."],
+      ["Carries running, done, failed, run id, and error."],
+      ["Does not survive process restart.", true]
+    ]
+  },
+  agent: {
+    h: "HLD/splitter agent",
+    items: [
+      ["Consumes the locked PRD and explores code context."],
+      ["Writes the visual HLD with a proposed split tree and intended blocked_by edges."],
+      ["Proposes only; does not create tasks or edges, and may move the task to LLD on approval.", true]
+    ]
+  },
+  signal: {
+    h: "issue_state_changed",
+    items: [
+      ["Provides issue id, project id, from/to state ids, and from/to groups."],
+      ["Completes split only for the active task moving into the named LLD state."],
+      ["Must not synchronously mutate Issue.state from the receiver.", true]
+    ]
+  },
+  next: {
+    h: "#745 / #743 / #721",
+    items: [
+      ["#745 registers the approved split tree after the LLD transition."],
+      ["#743 generates one LLD per registered leaf task."],
+      ["#721 owns the capstone trigger/pipeline surface; none are triggered from #720.", true]
+    ]
+  }
+};
+function renderNode(id) {
+  const info = nodeInfo[id];
+  if (!info) return;
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("selected", n.dataset.node === id));
+  document.querySelectorAll("tr[data-node]").forEach(r => r.classList.toggle("hl", r.dataset.node === id));
+  const lis = info.items.map(([text, no]) => `<li class="${no ? "no" : ""}">${text}</li>`).join("");
+  document.getElementById("nodeInfo").innerHTML = `<h3>${info.h}</h3><span class="tag">selected</span><ul>${lis}</ul>`;
+}
+document.querySelectorAll(".node").forEach(n => n.addEventListener("click", () => renderNode(n.dataset.node)));
+document.querySelectorAll("tr[data-node]").forEach(r => r.addEventListener("click", () => renderNode(r.dataset.node)));
+const navLinks = [...document.querySelectorAll("nav a")];
+const sections = navLinks.map(a => document.querySelector(a.getAttribute("href")));
+addEventListener("scroll", () => {
+  let active = 0;
+  sections.forEach((s, i) => { if (s.getBoundingClientRect().top < 92) active = i; });
+  navLinks.forEach((a, i) => a.classList.toggle("active", i === active));
+}, { passive: true });
+renderNode("driver");
+</script>
+</body>
+</html>

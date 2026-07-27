@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Newest story on top — HLD v1</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478;
+    --line: #e3e7ee; --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea; --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7; --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; margin: 0 -40px; padding: 0 40px; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 52px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; border-top: 4px solid var(--accent); }
+  .card.g { border-top-color: var(--green); } .card.v { border-top-color: var(--violet); }
+  .card .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .card h3 { font-size: 15px; margin: 4px 0 8px; }
+  .card p { font-size: 13px; color: var(--muted); }
+
+  .diagram-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  @media (max-width: 820px) { .diagram-wrap { grid-template-columns: 1fr; } .cards { grid-template-columns: 1fr; } }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .32; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .does, #nodeInfo .not { font-size: 12.5px; padding: 3px 0 3px 18px; position: relative; }
+  #nodeInfo .does::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  #nodeInfo .not::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 700; }
+  #nodeInfo .grp { margin-top: 10px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: #fafbfc; }
+  tr[data-node] { cursor: pointer; }
+  tr.hl { background: var(--accent-soft); }
+  td .mono { color: var(--ink); }
+
+  .tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; font-family: var(--mono); font-size: 13px; line-height: 1.8; }
+  .tree .new { color: var(--green); font-weight: 700; }
+  .tree .mod { color: var(--amber); font-weight: 700; }
+  .tree .ro  { color: var(--muted); }
+  .tree .pill { font-size: 10px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; font-family: -apple-system, sans-serif; font-weight: 700; }
+  .tree .pill.new { background: var(--green-soft); color: var(--green); }
+  .tree .pill.mod { background: var(--amber-soft); color: var(--amber); }
+  .tree .pill.ro  { background: #eef0f3; color: var(--muted); }
+
+  .accept { background: var(--green-soft); border: 1px solid #bfe3cd; border-radius: 12px; padding: 20px 24px; }
+  .accept h3 { color: var(--green); font-size: 15px; margin-bottom: 10px; }
+  .accept li { font-size: 13.5px; padding: 4px 0 4px 22px; position: relative; }
+  .accept li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .callout { background: var(--amber-soft); border: 1px solid #ecd9a6; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #6b4e00; margin-top: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">WorkTracker · Module 81c3aa9b · Planning</div>
+  <h1>Newest story on top — global rank flip</h1>
+  <p class="sub">Stories currently list oldest-first. Seed newly created items at the <b>top</b> of the shared LexoRank instead of the bottom, and re-stamp existing items newest-first once. Manual drag-to-reorder keeps working and persists, unchanged.</p>
+  <div class="chips">
+    <span class="chip">HLD v1</span>
+    <span class="chip violet">Backend-only</span>
+    <span class="chip amber">1 fn + 2 call-sites + 1 migration</span>
+    <span class="chip green">Zero frontend change</span>
+  </div>
+</header>
+
+<nav>
+  <a href="#why" class="active">Problem</a>
+  <a href="#approach">Approach</a>
+  <a href="#flow">Change map</a>
+  <a href="#trace">Trace</a>
+  <a href="#files">Files</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+  <section id="why">
+    <h2>The problem</h2>
+    <p class="lede">Every surface — Backlog, Board columns, Story Map cells — sorts by one <b>global</b> <code>rank</code> string (fractional-index LexoRank, #626), ascending, tiebroken by <code>sequence_id</code>. The frontend comparator <code>compareRank</code> deliberately mirrors the server's <code>ORDER BY rank, sequence_id</code>.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="tag">TODAY</div>
+        <h3>Oldest first</h3>
+        <p>The 0006 backfill stamped ranks in <code>sequence_id</code> ascending order, and every create calls <code>append_rank</code> → new items land at the <b>bottom</b>. So the list reads oldest → newest.</p>
+      </div>
+      <div class="card g">
+        <div class="tag">WANTED</div>
+        <h3>Newest first</h3>
+        <p>Latest-created story appears at the <b>top</b>, on all rank-driven surfaces. New items prepend to the shared rank.</p>
+      </div>
+      <div class="card v">
+        <div class="tag">INVARIANT</div>
+        <h3>Drag still wins</h3>
+        <p>Manual reorder (<code>reorderWorkItem</code> → <code>key_between</code>) is untouched; any arrangement the user drags into place persists exactly as before.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="approach">
+    <h2>Approach — mirror <code>append_rank</code></h2>
+    <p class="lede">The rank machinery already supports "before the first": <code>key_between(None, first)</code>. We add the symmetric helper and flip the seam. Comparator, drag endpoint, schemas, and the whole frontend stay as-is — only the <em>seed value</em> of new ranks and a one-time re-stamp change.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="tag">1 · NEW FN</div>
+        <h3><code>prepend_rank(project_id)</code></h3>
+        <p>Mirror of <code>append_rank</code>: <code>key_between(None, Min(rank) or None)</code> — a key sorting before every existing rank in the project.</p>
+      </div>
+      <div class="card">
+        <div class="tag">2 · SWAP SEAM</div>
+        <h3>Both create paths</h3>
+        <p><code>create_work_item</code> and <code>create_module_work_item</code> switch <code>rank=append_rank(...)</code> → <code>prepend_rank(...)</code>.</p>
+      </div>
+      <div class="card g">
+        <div class="tag">3 · MIGRATION</div>
+        <h3>Re-stamp existing</h3>
+        <p>Sibling of 0006: <code>rebalance()</code> keys applied in <code>-sequence_id</code> order per project → existing list flips to newest-first in one pass.</p>
+      </div>
+    </div>
+    <div class="callout"><b>Global by design:</b> rank is a single shared key, so Board columns and Story Map cells also become newest-first within each cell — the intended, confirmed scope.</div>
+  </section>
+
+  <section id="flow">
+    <h2>Change map</h2>
+    <p class="lede">Click a node to see what it does — and what it deliberately does <span style="color:var(--red)">not</span> touch. Dashed = unchanged seam we rely on.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 300" width="100%" role="img" aria-label="Rank flip change map">
+        <!-- create -->
+        <g class="node" data-node="prepend">
+          <rect x="20" y="20" width="180" height="56" rx="9" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="110" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">prepend_rank()</text>
+          <text x="110" y="62" text-anchor="middle" font-size="11" fill="var(--muted)">work_items.py · NEW</text>
+        </g>
+        <g class="node" data-node="create">
+          <rect x="20" y="118" width="180" height="56" rx="9" fill="#fff" stroke="var(--amber)" stroke-width="1.5"/>
+          <text x="110" y="142" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">create_*_work_item</text>
+          <text x="110" y="160" text-anchor="middle" font-size="11" fill="var(--muted)">services · seam swap</text>
+        </g>
+        <g class="node" data-node="mig">
+          <rect x="20" y="216" width="180" height="56" rx="9" fill="var(--green-soft)" stroke="var(--green)" stroke-width="1.5"/>
+          <text x="110" y="240" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">0007 re-stamp</text>
+          <text x="110" y="258" text-anchor="middle" font-size="11" fill="var(--muted)">migration · NEW</text>
+        </g>
+        <!-- rank column -->
+        <g class="node" data-node="rank">
+          <rect x="250" y="118" width="150" height="56" rx="9" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="325" y="142" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">Issue.rank</text>
+          <text x="325" y="160" text-anchor="middle" font-size="11" fill="var(--muted)">shared global key</text>
+        </g>
+        <!-- comparator / frontend (unchanged) -->
+        <g class="node" data-node="cmp">
+          <rect x="450" y="60" width="170" height="52" rx="9" fill="#fff" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="535" y="82" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--ink)">compareRank</text>
+          <text x="535" y="99" text-anchor="middle" font-size="11" fill="var(--muted)">rank asc · unchanged</text>
+        </g>
+        <g class="node" data-node="drag">
+          <rect x="450" y="180" width="170" height="52" rx="9" fill="#fff" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="535" y="202" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--ink)">reorderWorkItem</text>
+          <text x="535" y="219" text-anchor="middle" font-size="11" fill="var(--muted)">key_between · unchanged</text>
+        </g>
+        <!-- arrows -->
+        <g stroke="var(--muted)" stroke-width="1.4" fill="none" marker-end="url(#a)">
+          <path d="M200 48 C 225 48, 225 130, 250 138"/>
+          <path d="M200 146 L 250 146"/>
+          <path d="M200 244 C 225 244, 225 160, 250 154"/>
+          <path d="M400 138 C 425 138, 425 92, 450 88"/>
+          <path d="M400 154 C 425 154, 425 200, 450 206"/>
+        </g>
+        <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker></defs>
+      </svg>
+      <div id="nodeInfo">
+        <h4>Click a node</h4>
+        <p style="color:var(--muted); font-size:12.5px;">Solid = changed. Dashed = unchanged seam this design depends on.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="trace">
+    <h2>Requirement trace</h2>
+    <p class="lede">Hover a row to highlight its node above.</p>
+    <table>
+      <thead><tr><th>Requirement</th><th>How</th><th>Node</th></tr></thead>
+      <tbody>
+        <tr data-node="prepend"><td>New story appears at the top</td><td><code>prepend_rank</code> = key before current min</td><td class="mono">prepend_rank()</td></tr>
+        <tr data-node="create"><td>Both create paths seed top</td><td>swap <code>append_rank</code> → <code>prepend_rank</code> at 2 call-sites</td><td class="mono">create_*_work_item</td></tr>
+        <tr data-node="mig"><td>Existing stories flip to newest-first</td><td>0007 re-stamps <code>rebalance()</code> in <code>-sequence_id</code> order</td><td class="mono">0007 migration</td></tr>
+        <tr data-node="drag"><td>Manual arrangement persists</td><td>reorder endpoint & <code>key_between</code> untouched</td><td class="mono">reorderWorkItem</td></tr>
+        <tr data-node="cmp"><td>No client change needed</td><td>comparator stays <code>rank asc, sequence_id</code></td><td class="mono">compareRank</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="files">
+    <h2>File change map</h2>
+    <div class="tree">
+<div>worktracker/worktracker/</div>
+<div>├─ <span class="mod">work_items.py</span><span class="pill mod">MOD</span> <span class="ro"># add prepend_rank() beside append_rank()</span></div>
+<div>├─ services/<span class="mod">work_items.py</span><span class="pill mod">MOD</span> <span class="ro"># 2 call-sites: append_rank → prepend_rank</span></div>
+<div>├─ migrations/<span class="new">0007_rank_newest_first.py</span><span class="pill new">NEW</span> <span class="ro"># re-stamp ranks in -sequence_id order</span></div>
+<div>├─ <span class="ro">ranking.py</span><span class="pill ro">READ-ONLY</span> <span class="ro"># key_between / rebalance reused as-is</span></div>
+<div>└─ <span class="ro">api/work_items.py</span><span class="pill ro">READ-ONLY</span> <span class="ro"># ORDER BY rank, sequence_id unchanged</span></div>
+<div>studio/src/workitems/internal/</div>
+<div>└─ <span class="ro">backlogSelectors.ts</span><span class="pill ro">READ-ONLY</span> <span class="ro"># compareRank unchanged</span></div>
+    </div>
+    <div class="callout">Add/adjust a unit test for <code>prepend_rank</code> (sorts before min; empty-project safe) and assert the 0007 backfill leaves highest <code>sequence_id</code> with the smallest rank.</div>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance</h2>
+    <div class="accept">
+      <h3>Done when</h3>
+      <ul>
+        <li>On the Backlog, the most-recently-created story sits at the top of its group; creating a new story puts it at the very top.</li>
+        <li>Board columns and Story Map cells show their members newest-first within each cell.</li>
+        <li>Dragging a story to a new position persists across reload (manual rank still wins over the seed).</li>
+        <li>After migration 0007, existing stories render newest-first with no data loss; migration is reversible to a no-op.</li>
+        <li>No frontend code changed; existing rank/reorder tests stay green; new <code>prepend_rank</code> test passes.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script>
+  const INFO = {
+    prepend: { t: "prepend_rank(project_id)", does: ["Return key_between(None, Min(rank) or None)", "Sort before every existing rank in the project", "Handle empty project (min is None → first key)"], not: ["Touch any existing row", "Know about surfaces / grouping"] },
+    create: { t: "create_work_item / create_module_work_item", does: ["Seed new issue rank via prepend_rank", "Keep every other create behavior identical"], not: ["Change sequence_id allocation", "Special-case a surface — global rank only"] },
+    mig: { t: "0007 re-stamp migration", does: ["Per project: rebalance(n) applied in -sequence_id order", "Flip existing list to newest-first in one pass", "Reverse = no-op (RunPython.noop)"], not: ["Preserve prior manual drags (one-time re-stamp, confirmed)", "Add/remove columns"] },
+    rank: { t: "Issue.rank (shared global key)", does: ["Single fractional-index key per issue", "Sorted ascending everywhere"], not: ["Store per-surface order", "Get a new field / schema change"] },
+    cmp: { t: "compareRank (frontend)", does: ["Sort by rank asc, then sequence_id", "Mirror server ORDER BY"], not: ["Change at all — reads flipped data as-is"] },
+    drag: { t: "reorderWorkItem + key_between", does: ["Compute a key between two neighbors on drop", "Persist manual order (wins over seed)"], not: ["Change — the manual path is untouched"] },
+  };
+  const info = document.getElementById("nodeInfo");
+  const nodes = [...document.querySelectorAll(".node")];
+  function show(k) {
+    const d = INFO[k]; if (!d) return;
+    nodes.forEach(n => n.classList.toggle("hl", n.dataset.node === k));
+    nodes.forEach(n => n.classList.toggle("dim", n.dataset.node !== k));
+    info.innerHTML = "<h4>" + d.t + "</h4><div class='grp'>Does</div>" +
+      d.does.map(x => "<div class='does'>" + x + "</div>").join("") +
+      "<div class='grp'>Does not</div>" + d.not.map(x => "<div class='not'>" + x + "</div>").join("");
+  }
+  nodes.forEach(n => n.addEventListener("click", () => show(n.dataset.node)));
+  document.querySelectorAll("tr[data-node]").forEach(tr => {
+    tr.addEventListener("mouseenter", () => { show(tr.dataset.node); document.querySelectorAll("tr[data-node]").forEach(r => r.classList.toggle("hl", r === tr)); });
+  });
+  // scroll-spy
+  const links = [...document.querySelectorAll("nav a")];
+  const secs = links.map(a => document.querySelector(a.getAttribute("href")));
+  addEventListener("scroll", () => {
+    let i = secs.findIndex((s, k) => s.getBoundingClientRect().top > 80);
+    if (i === -1) i = secs.length; i = Math.max(0, i - 1);
+    links.forEach((a, k) => a.classList.toggle("active", k === i));
+  });
+</script>
+</body>
+</html>

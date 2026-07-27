@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Board Agent Launch Parity - HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px; }
+  .chip { background: var(--accent-soft); border-radius: 20px; color: var(--accent); font-size: 12px; font-weight: 700; padding: 3px 10px; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    gap: 2px;
+    margin: 0 -40px;
+    overflow-x: auto;
+    padding: 0 40px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  nav a {
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 14px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  nav a.active, nav a:hover { border-bottom-color: var(--accent); color: var(--accent); }
+  main { margin: 0 auto; max-width: 1180px; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .evo { align-items: stretch; display: grid; gap: 10px; grid-template-columns: 1fr 28px 1fr 28px 1fr; }
+  .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 12.5px; padding: 14px 16px; }
+  .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .stage.dead { opacity: .68; }
+  .stage.dead .lbl { color: var(--red); }
+  .stage.mid .lbl { color: var(--amber); }
+  .stage.live { border: 2px solid var(--green); color: var(--ink); }
+  .stage.live .lbl { color: var(--green); }
+  .arr { align-self: center; color: var(--violet); font-size: 18px; font-weight: 800; text-align: center; }
+  .iface { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); }
+  .icard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+  .icard .ihead { color: var(--violet); font-size: 11px; font-weight: 800; letter-spacing: .07em; }
+  .icard h3 { font-size: 15px; margin: 4px 0 8px; }
+  .icard p { color: var(--muted); font-size: 13px; }
+  .rule { background: var(--violet-soft); border-radius: 8px; color: var(--violet); font-size: 12.5px; font-weight: 700; margin-top: 10px; padding: 8px 12px; }
+  .keys { display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); }
+  .keycard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .keycard kbd { background: var(--accent-soft); border-radius: 6px; color: var(--accent); display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 800; margin-bottom: 6px; padding: 2px 8px; }
+  .keycard h4 { font-size: 13.5px; margin-bottom: 4px; }
+  .keycard p { color: var(--muted); font-size: 12.5px; }
+  .diagram-wrap {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: 1fr 310px;
+    padding: 18px;
+  }
+  svg { height: auto; width: 100%; }
+  svg text { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .node { cursor: pointer; }
+  .node rect { transition: filter .12s, stroke-width .12s; }
+  .node.hl rect { filter: drop-shadow(0 0 6px rgba(53,86,212,.42)); stroke-width: 3; }
+  .node.dim { opacity: .32; }
+  #nodeInfo { border-left: 1px solid var(--line); font-size: 13px; padding-left: 18px; }
+  #nodeInfo h4 { color: var(--accent); font-size: 14px; margin-bottom: 6px; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { color: var(--ink); padding: 3px 0 3px 16px; position: relative; }
+  #nodeInfo li:before { color: var(--accent); content: "."; font-weight: 900; left: 2px; position: absolute; }
+  #nodeInfo li.no { color: var(--red); }
+  table { background: var(--panel); border: 1px solid var(--line); border-collapse: collapse; border-radius: 10px; overflow: hidden; width: 100%; }
+  th, td { border-bottom: 1px solid var(--line); font-size: 13.5px; padding: 11px 14px; text-align: left; vertical-align: top; }
+  th { background: #fbfcfe; color: var(--muted); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  .rid { color: var(--accent); font-family: var(--mono); font-size: 12.5px; font-weight: 800; white-space: nowrap; }
+  .pill { border-radius: 10px; display: inline-block; font-size: 11px; font-weight: 800; margin: 1px 2px; padding: 2px 8px; }
+  .pill.b1 { background: var(--accent-soft); color: var(--accent); }
+  .pill.b2 { background: var(--green-soft); color: var(--green); }
+  .pill.b3 { background: var(--amber-soft); color: var(--amber); }
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; display: flex; gap: 28px; padding: 22px; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 460px; }
+  .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .ro { color: var(--muted); }
+  .tree-notes { border-left: 1px solid var(--line); color: var(--muted); font-size: 13px; padding-left: 24px; }
+  .tree-notes li { list-style: none; margin-bottom: 8px; }
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 10px; font-size: 14px; padding: 20px 24px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .evo, .iface, .keys, .diagram-wrap { grid-template-columns: 1fr; }
+    .arr { transform: rotate(90deg); }
+    .tree-wrap { flex-direction: column; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">Coding · WorkTracker module · planning HLD</div>
+  <h1>Board Agent Launch Parity</h1>
+  <div class="sub">Remove stale tracked planning-run controls from the issue drawer and make the Board able to launch a normal task-bound agent from the keyboard, matching the /coding task list interaction.</div>
+  <div class="chips">
+    <span class="chip green">Planning only</span>
+    <span class="chip violet">Board view</span>
+    <span class="chip amber">Coding overlay</span>
+    <span class="chip">No orchestrator work</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">Evolution</a>
+    <a href="#contract">Contract</a>
+    <a href="#keymap">Keymap</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Trace</a>
+    <a href="#files">Files</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+<main>
+  <section id="evo">
+    <div class="evo">
+      <div class="stage dead">
+        <div class="lbl">TODAY</div>
+        Drawer exposes old planning-run controls: Refine, Split, an agent select, Release lock, plus tracked-run errors.
+      </div>
+      <div class="arr">-&gt;</div>
+      <div class="stage mid">
+        <div class="lbl">REPLACED DIRECTION</div>
+        Tracked execution/planning launch moves to Orchestrator. The board should not carry transitional execution controls.
+      </div>
+      <div class="arr">-&gt;</div>
+      <div class="stage live">
+        <div class="lbl">THIS SLICE</div>
+        Keep normal + Agent. Remove tracked planning controls. Enter on a Board task opens the same AgentPicker path users know from /coding.
+      </div>
+    </div>
+  </section>
+
+  <section id="contract">
+    <h2>The Contract</h2>
+    <p class="lede">This is a cleanup and keyboard parity slice, not a new execution system.</p>
+    <div class="iface">
+      <div class="icard">
+        <div class="ihead">REMOVE</div>
+        <h3>Tracked planning-run UI</h3>
+        <p>Delete Refine, Split, the planning phase agent select, Release lock, and the associated pending/error/release note state from the drawer tab strip.</p>
+        <div class="rule">No postPlanningRun path from drawer</div>
+      </div>
+      <div class="icard">
+        <div class="ihead">KEEP</div>
+        <h3>Normal task agent launch</h3>
+        <p>The existing + Agent affordance remains. It starts a task-bound terminal session with the selected agent and foregrounds the terminal tab.</p>
+        <div class="rule">No replacement with orchestrator yet</div>
+      </div>
+      <div class="icard">
+        <div class="ihead">ADD</div>
+        <h3>Board Enter launch</h3>
+        <p>A focused Board card resolves task context, then opens AgentPicker in task-bound open mode with an explicit-context payload. The final agent choice launches the same terminal path as /coding.</p>
+        <div class="rule">AgentPicker gains explicit taskId/ticketSeq payload (ADR-0001)</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="keymap">
+    <h2>Keymap</h2>
+    <p class="lede">Match the /coding mental model while preserving Board navigation through mouse click and drawer affordances.</p>
+    <div class="keys">
+      <div class="keycard">
+        <kbd>Enter</kbd>
+        <h4>Open AgentPicker</h4>
+        <p>When a Board card has keyboard focus or a single Board selection exists, open task-bound AgentPicker.</p>
+      </div>
+      <div class="keycard">
+        <kbd>Shift</kbd> + <kbd>Enter</kbd>
+        <h4>Prompt first</h4>
+        <p>In scope: open prompt-before-agent (open-with-prompt) for the focused task. Requires threading explicit task context through PromptInput → AgentPicker (ADR-0001).</p>
+      </div>
+      <div class="keycard">
+        <kbd>Click</kbd>
+        <h4>Keep drawer open</h4>
+        <p>Plain click on a card continues to navigate to the issue drawer; multi-select click behavior remains unchanged.</p>
+      </div>
+      <div class="keycard">
+        <kbd>Esc</kbd>
+        <h4>Clear selection</h4>
+        <p>Existing Board selection escape behavior stays intact; it does not terminate or close agent sessions.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="shape">
+    <h2>Clickable System Shape</h2>
+    <p class="lede">Click nodes to inspect responsibility. Dashed nodes are deferred or seam-only.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 760 420" role="img" aria-label="Board agent launch shape">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6478"></path>
+          </marker>
+        </defs>
+        <g class="node" data-node="board" transform="translate(30 50)">
+          <rect width="170" height="70" rx="8" fill="#e8edfb" stroke="#3556d4" stroke-width="2"></rect>
+          <text x="85" y="32" text-anchor="middle" font-size="15" font-weight="700">BoardView</text>
+          <text x="85" y="52" text-anchor="middle" font-size="12" fill="#5b6478">selection + key routing</text>
+        </g>
+        <g class="node" data-node="card" transform="translate(260 50)">
+          <rect width="170" height="70" rx="8" fill="#ffffff" stroke="#3556d4" stroke-width="2"></rect>
+          <text x="85" y="32" text-anchor="middle" font-size="15" font-weight="700">BoardCard</text>
+          <text x="85" y="52" text-anchor="middle" font-size="12" fill="#5b6478">focused task identity</text>
+        </g>
+        <g class="node" data-node="picker" transform="translate(520 50)">
+          <rect width="180" height="70" rx="8" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="2"></rect>
+          <text x="90" y="32" text-anchor="middle" font-size="15" font-weight="700">AgentPicker</text>
+          <text x="90" y="52" text-anchor="middle" font-size="12" fill="#5b6478">choose codex/claude/etc.</text>
+        </g>
+        <g class="node" data-node="drawer" transform="translate(90 210)">
+          <rect width="190" height="86" rx="8" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"></rect>
+          <text x="95" y="30" text-anchor="middle" font-size="15" font-weight="700">IssueDrawerTabs</text>
+          <text x="95" y="52" text-anchor="middle" font-size="12" fill="#5b6478">docs, terminals, + Agent</text>
+          <text x="95" y="70" text-anchor="middle" font-size="12" fill="#b03030">no Refine/Split</text>
+        </g>
+        <g class="node" data-node="terminal" transform="translate(360 210)">
+          <rect width="190" height="86" rx="8" fill="#ffffff" stroke="#1d7a4f" stroke-width="2"></rect>
+          <text x="95" y="30" text-anchor="middle" font-size="15" font-weight="700">terminal store</text>
+          <text x="95" y="52" text-anchor="middle" font-size="12" fill="#5b6478">openSession task run</text>
+        </g>
+        <g class="node" data-node="orch" transform="translate(590 220)">
+          <rect width="140" height="64" rx="8" fill="#fbe7e7" stroke="#b03030" stroke-width="2" stroke-dasharray="6 4"></rect>
+          <text x="70" y="29" text-anchor="middle" font-size="14" font-weight="700">Orchestrator</text>
+          <text x="70" y="48" text-anchor="middle" font-size="12" fill="#5b6478">deferred owner</text>
+        </g>
+        <path d="M200 85 H260" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M430 85 H520" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M610 120 C600 170 535 190 490 210" stroke="#5b6478" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+        <path d="M280 253 H360" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M550 252 H590" stroke="#b03030" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow)"></path>
+      </svg>
+      <aside id="nodeInfo">
+        <h4>Click a node</h4>
+        <p class="hint">Responsibilities and non-responsibilities appear here.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section id="trace">
+    <h2>Requirement Trace</h2>
+    <p class="lede">Rows highlight the diagram nodes they exercise.</p>
+    <table>
+      <thead><tr><th>ID</th><th>Requirement</th><th>Nodes</th><th>Acceptance signal</th></tr></thead>
+      <tbody>
+        <tr class="trace" data-nodes="drawer">
+          <td><span class="rid">R1</span></td>
+          <td>Remove Refine, Split, phase agent select, Release lock, pending phase state, release note, and planning-run error UI from the drawer.</td>
+          <td><span class="pill b2">IssueDrawerTabs</span></td>
+          <td>No drawer control imports or calls `postPlanningRun` / `releasePlanningRun`.</td>
+        </tr>
+        <tr class="trace" data-nodes="drawer terminal">
+          <td><span class="rid">R2</span></td>
+          <td>Keep the normal + Agent task-bound launcher and existing terminal tab foregrounding behavior.</td>
+          <td><span class="pill b2">IssueDrawerTabs</span><span class="pill b2">terminal store</span></td>
+          <td>Clicking + Agent still opens a task terminal after agent choice.</td>
+        </tr>
+        <tr class="trace" data-nodes="board card picker terminal">
+          <td><span class="rid">R3</span></td>
+          <td>Enter from a focused or singly-selected Board card opens AgentPicker for that work item, matching /coding task-list launch.</td>
+          <td><span class="pill b1">BoardView</span><span class="pill b1">BoardCard</span><span class="pill b1">AgentPicker</span><span class="pill b2">terminal store</span></td>
+          <td>Keyboard test proves Enter reaches task-bound `openSession` after choosing an agent.</td>
+        </tr>
+        <tr class="trace" data-nodes="board card">
+          <td><span class="rid">R4</span></td>
+          <td>Preserve existing Board click, drag, multi-select, and Escape behavior.</td>
+          <td><span class="pill b1">BoardView</span><span class="pill b1">BoardCard</span></td>
+          <td>Existing board, selection, DnD, and shortcut tests remain green.</td>
+        </tr>
+        <tr class="trace" data-nodes="orch">
+          <td><span class="rid">R5</span></td>
+          <td>Do not add new orchestrator behavior or migrate task launch into the orchestrator in this slice.</td>
+          <td><span class="pill b3">Orchestrator</span></td>
+          <td>No `studio/src/orchestrator` code changes are needed.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="files">
+    <h2>Change Map</h2>
+    <p class="lede">Expected implementation footprint. This HLD is planning-only.</p>
+    <div class="tree-wrap">
+      <div class="tree">
+        studio/src/<br>
+        &nbsp;&nbsp;issue/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">IssueDrawerTabs.tsx</span><br>
+        &nbsp;&nbsp;workitems/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">BoardView.tsx</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">BoardCard.tsx</span><br>
+        &nbsp;&nbsp;coding/modals/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">AgentPicker.tsx</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">PromptInput.tsx</span> <span class="ro">(Shift+Enter)</span><br>
+        &nbsp;&nbsp;coding/lib/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">api.ts / types.ts</span> <span class="ro">(remove planning-run)</span><br>
+        &nbsp;&nbsp;test/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">IssueDrawerTerminalTabs.test.tsx</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">board.test.tsx</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="new">boardAgentLaunch.test.tsx</span>
+      </div>
+      <ul class="tree-notes">
+        <li><b>Modified</b> drawer tab strip: remove only stale planning-run controls.</li>
+        <li><b>Modified</b> board/card key handling: route Enter to launch instead of issue navigation when keyboard-invoked.</li>
+        <li><b>Read-only seam</b> AgentPicker: prefer reuse; only adjust if explicit task context is required.</li>
+        <li><b>New/updated tests</b> lock removal, keyboard launch, and preserved Board behavior.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance</h2>
+    <div class="accept">
+      <b>Done means:</b> the Board no longer surfaces obsolete Refine/Split execution controls anywhere in the issue drawer, normal + Agent still works, and pressing Enter on a Board task launches the same task-bound agent choice flow that /coding users already expect.
+    </div>
+  </section>
+</main>
+<script>
+  const nodeText = {
+    board: {
+      title: "BoardView",
+      yes: ["Owns Board-level selection and global key routing.", "Finds the single task target when Enter is pressed.", "Preserves Escape clear-selection behavior."],
+      no: ["Does not create direct work items.", "Does not own orchestrator execution."]
+    },
+    card: {
+      title: "BoardCard",
+      yes: ["Carries the focused work item identity.", "May invoke a supplied keyboard-launch callback for Enter.", "Keeps click and drag behavior separate."],
+      no: ["Does not know terminal APIs.", "Does not bypass selection rules."]
+    },
+    picker: {
+      title: "AgentPicker",
+      yes: ["Presents the normal agent list.", "Commits the chosen agent into a task-bound run.", "Matches the /coding task-open flow."],
+      no: ["Does not run Refine/Split phases.", "Does not choose an agent automatically."]
+    },
+    drawer: {
+      title: "IssueDrawerTabs",
+      yes: ["Shows Details, Docs, Terminal tabs, and + Agent.", "Foregrounds terminal sessions after launch.", "Keeps task-bound launch available."],
+      no: ["No Refine button.", "No Split button.", "No Release lock button."]
+    },
+    terminal: {
+      title: "terminal store",
+      yes: ["Owns `openSession` and foreground session state.", "Creates task-bound terminal sessions with agent metadata."],
+      no: ["Does not decide Board keyboard policy.", "Does not track planning phases here."]
+    },
+    orch: {
+      title: "Orchestrator",
+      yes: ["Future home for coordinated execution UX.", "Intentionally left untouched in this cleanup slice."],
+      no: ["No dependency graph launch changes.", "No run console changes."]
+    }
+  };
+  function selectNodes(ids) {
+    document.querySelectorAll(".node").forEach((n) => {
+      const on = ids.includes(n.dataset.node);
+      n.classList.toggle("hl", on);
+      n.classList.toggle("dim", ids.length > 0 && !on);
+    });
+  }
+  document.querySelectorAll(".node").forEach((node) => {
+    node.addEventListener("click", () => {
+      const id = node.dataset.node;
+      const info = nodeText[id];
+      selectNodes([id]);
+      document.getElementById("nodeInfo").innerHTML =
+        `<h4>${info.title}</h4><b>Does</b><ul>${info.yes.map((x) => `<li>${x}</li>`).join("")}</ul>` +
+        `<b>Does not</b><ul>${info.no.map((x) => `<li class="no">${x}</li>`).join("")}</ul>`;
+    });
+  });
+  document.querySelectorAll("tr.trace").forEach((row) => {
+    row.addEventListener("click", () => {
+      document.querySelectorAll("tr.trace").forEach((r) => r.classList.remove("sel"));
+      row.classList.add("sel");
+      selectNodes(row.dataset.nodes.split(" "));
+    });
+  });
+  const sections = [...document.querySelectorAll("main section")];
+  const links = [...document.querySelectorAll("nav a")];
+  window.addEventListener("scroll", () => {
+    const active = sections.findLast((s) => s.getBoundingClientRect().top < 90) || sections[0];
+    links.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === `#${active.id}`));
+  }, { passive: true });
+</script>
+</body>
+</html>

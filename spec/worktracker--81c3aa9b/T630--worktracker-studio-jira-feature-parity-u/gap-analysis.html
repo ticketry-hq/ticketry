@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T630 · Studio Jira-Parity — Gap Analysis</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: 26px 40px 0; position: sticky; top: 0; z-index: 30;
+  }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 20px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; }
+  nav a {
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted);
+    text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 150px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+
+  /* benchmark callout cards */
+  .bench { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .bcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; border-top: 4px solid var(--violet); }
+  .bcard.d1 { border-top-color: var(--red); }
+  .bcard.d2 { border-top-color: var(--amber); }
+  .bcard .tag { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); }
+  .bcard h3 { font-size: 15px; margin: 4px 0 8px; }
+  .bcard p { font-size: 13px; color: var(--muted); }
+  .bcard p b { color: var(--ink); }
+
+  /* diagram */
+  .diagram-wrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; display: grid; grid-template-columns: 1fr 310px; gap: 18px;
+  }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .28; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo .lab { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin-top: 12px; color: var(--muted); }
+  #nodeInfo ul { list-style: none; margin-top: 4px; }
+  #nodeInfo li { padding: 3px 0 3px 18px; position: relative; color: var(--ink); }
+  #nodeInfo li.does::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  #nodeInfo li.gap::before { content: "△"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+  .dlegend { display: flex; gap: 18px; margin-top: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .dlegend b { font-weight: 700; }
+
+  /* trace table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12px; white-space: nowrap; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin: 1px 1px; white-space: nowrap; }
+  .pill.fe { background: var(--accent-soft); color: var(--accent); }
+  .pill.be { background: var(--red-soft); color: var(--red); }
+  .pill.hi { background: var(--green-soft); color: var(--green); }
+  .pill.md { background: var(--amber-soft); color: var(--amber); }
+  .pill.lo { background: #eef0f4; color: var(--muted); }
+  .pill.eL { background: var(--green-soft); color: var(--green); }
+  .pill.eM { background: var(--amber-soft); color: var(--amber); }
+  .pill.eH { background: var(--red-soft); color: var(--red); }
+  .pill.cm { background: var(--violet-soft); color: var(--violet); }
+
+  /* subtask cards */
+  .legendrow { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 4px 0 20px; }
+  .lvl { font-size: 12px; font-weight: 800; letter-spacing: .07em; color: var(--muted); margin: 24px 0 10px; text-transform: uppercase; }
+  .lvl span { color: var(--ink); }
+  .stgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .st {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; border-left: 4px solid var(--accent); cursor: pointer;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .st:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .st.p1 { border-left-color: var(--amber); }
+  .st.p2 { border-left-color: var(--red); }
+  .st .cid { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); }
+  .st.p1 .cid { color: var(--amber); }
+  .st.p2 .cid { color: var(--red); }
+  .st h3 { font-size: 15px; margin: 3px 0 8px; }
+  .st p { font-size: 13px; color: var(--muted); }
+  .st .gaprefs { margin-top: 10px; }
+  .st .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; font-size: 12.5px; color: var(--muted); }
+  .st.open .more { display: block; }
+  .st .meta { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+
+  /* backend gaps */
+  .be { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .becard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--red); }
+  .becard.defer { border-left-color: var(--muted); opacity: .92; }
+  .becard .bid { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--red); }
+  .becard.defer .bid { color: var(--muted); }
+  .becard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .becard p { font-size: 12.5px; color: var(--muted); }
+  .becard p b { color: var(--ink); }
+
+  .note { background: var(--amber-soft); border: 1px solid #ecdcb0; border-radius: 10px; padding: 14px 18px; font-size: 13px; color: #6b4d00; margin-top: 14px; }
+  .note b { color: var(--amber); }
+
+  .accept {
+    background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px;
+    padding: 20px 24px; font-size: 14px;
+  }
+  .accept b { color: var(--green); }
+  .accept ol { margin: 10px 0 0 20px; }
+  .accept li { margin-bottom: 6px; }
+
+  @media (max-width: 900px) {
+    .bench, .be, .stgrid { grid-template-columns: 1fr; }
+    .diagram-wrap { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · Studio module · Ticket #630 · Gap Analysis</div>
+  <h1>Studio ↔ Basic Jira — Feature-Parity &amp; UX Hardening</h1>
+  <div class="sub">A surface-by-surface read of WorkTracker Studio against the everyday single-user Jira experience. The deliverable is this report plus a prioritized, non-overlapping child breakdown — <b>#630 ships no polish code itself</b>; the polish happens in the children once the slicing is approved.</div>
+  <div class="chips">
+    <span class="chip">Phase: HLD / Gap Report</span>
+    <span class="chip green">Parity over novelty</span>
+    <span class="chip violet">Builds on #628 UI pass</span>
+    <span class="chip amber">#627 / #628 territory excluded</span>
+    <span class="chip red">Backend = last resort, flagged not built</span>
+  </div>
+  <nav id="nav">
+    <a href="#benchmark" class="active">Benchmark</a>
+    <a href="#map">Surface Map</a>
+    <a href="#gaps">Gap Register</a>
+    <a href="#subtasks">Decomposition</a>
+    <a href="#backend">Backend Gaps</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ BENCHMARK ============ -->
+<section id="benchmark">
+  <h2>Benchmark &amp; scope assumptions</h2>
+  <div class="lede">Three decisions from refinement fix the frame of comparison before any gap is named. Stated explicitly so every row below is read against the same yardstick.</div>
+  <div class="bench">
+    <div class="bcard d1">
+      <div class="tag">D3 · BENCHMARK</div>
+      <h3>Basic / standard Jira, current featureset</h3>
+      <p>Compared from product knowledge against the <b>everyday single-user backlog / board / issue-detail flows</b> — no live Jira, no enterprise or company-managed-only surfaces. Comparison is bounded to the surfaces Studio <b>already ships</b>: this is parity polish, never feature expansion (no estimates, points, due dates, sprints-burndown, dashboards).</p>
+    </div>
+    <div class="bcard">
+      <div class="tag">D1 · EXCLUSIONS</div>
+      <h3>#627 and #628 are already-owned work</h3>
+      <p><b>CODIN-627</b> (epic filter rail), <b>CODIN-628</b> (UI legibility pass), and the newer board siblings <b>CODIN-632</b> (epic swimlanes) / <b>CODIN-635</b> (board card hierarchy) / <b>CODIN-604</b> (sprint lifecycle) are referenced where relevant as <i>"covered by #N"</i> but produce <b>no child here</b>. No gap below touches epic-filtering UI, generic visual restyle, board swimlanes, or sprint start/complete.</p>
+    </div>
+    <div class="bcard d2">
+      <div class="tag">D2 · PROCESS</div>
+      <h3>Decompose now, file after review</h3>
+      <p>Order: (1) this report, (2) the prioritized child list <b>for review first</b>. Subtasks are filed as children of #630 only <b>after the user approves the slicing</b> — the breakdown below is a proposal, not final.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SURFACE MAP ============ -->
+<section id="map">
+  <h2>What Studio ships today — surface map</h2>
+  <div class="lede">Click any surface to see what it already does (✓) and where it diverges from basic Jira (△). The dashed <b>Global</b> band is a cross-cutting capability layer that does not yet exist as a surface.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 640 420" width="100%" role="img" aria-label="Studio surface map">
+      <!-- shell container -->
+      <rect x="8" y="8" width="624" height="404" rx="14" fill="none" stroke="#c9d0dd" stroke-width="1.5"/>
+      <text x="22" y="30" font-size="11" font-weight="800" letter-spacing="1" fill="#5b6478">STUDIO SHELL · NavDrawer · ProjectSwitcher · IssueDrawer · AgentBadge</text>
+
+      <!-- TRACK group -->
+      <text x="40" y="70" font-size="11" font-weight="800" fill="#5b6478">TRACK</text>
+      <g class="node" data-n="backlog">
+        <rect x="40" y="78" width="250" height="78" rx="10" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="58" y="104" font-size="14" font-weight="700" fill="#1d2433">Backlog</text>
+        <text x="58" y="124" font-size="11.5" fill="#5b6478">Epic-grouped tree · reorder · filters</text>
+        <text x="58" y="141" font-size="11.5" fill="#5b6478">create modal · agent badge</text>
+      </g>
+      <g class="node" data-n="board">
+        <rect x="310" y="78" width="250" height="78" rx="10" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="328" y="104" font-size="14" font-weight="700" fill="#1d2433">Board</text>
+        <text x="328" y="124" font-size="11.5" fill="#5b6478">Kanban by state · drag + reorder</text>
+        <text x="328" y="141" font-size="11.5" fill="#5b6478">module + subtask filters</text>
+      </g>
+
+      <!-- PLAN group -->
+      <text x="40" y="184" font-size="11" font-weight="800" fill="#5b6478">PLAN</text>
+      <g class="node" data-n="sprints">
+        <rect x="40" y="192" width="250" height="64" rx="10" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="1.5"/>
+        <text x="58" y="216" font-size="14" font-weight="700" fill="#1d2433">Sprints + Story Map</text>
+        <text x="58" y="236" font-size="11.5" fill="#5b6478">Now/Later/History lens · drag→sprint</text>
+      </g>
+      <g class="node" data-n="settings">
+        <rect x="310" y="192" width="250" height="64" rx="10" fill="#fbf0d8" stroke="#9a6700" stroke-width="1.5"/>
+        <text x="328" y="216" font-size="14" font-weight="700" fill="#1d2433">Settings</text>
+        <text x="328" y="236" font-size="11.5" fill="#5b6478">Issue-type + state CRUD · reorder</text>
+      </g>
+
+      <!-- Issue detail -->
+      <g class="node" data-n="detail">
+        <rect x="40" y="280" width="520" height="64" rx="10" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="58" y="304" font-size="14" font-weight="700" fill="#1d2433">Issue Detail drawer · /issues/KEY-N</text>
+        <text x="58" y="324" font-size="11.5" fill="#5b6478">name · state · description · children · parent/epic/sprint/priority · blockers · delete</text>
+      </g>
+
+      <!-- Global cross-cutting (dashed = not yet built) -->
+      <g class="node" data-n="global">
+        <rect x="40" y="360" width="520" height="40" rx="10" fill="none" stroke="#b03030" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="58" y="385" font-size="12.5" font-weight="700" fill="#b03030">Global layer — search · jump-to-issue · toasts/flags · confirmations  (does not exist yet)</text>
+      </g>
+    </svg>
+
+    <div id="nodeInfo">
+      <h4>Pick a surface</h4>
+      <p class="hint">Each surface lists what it already does and where it parts ways with basic Jira. Click a node, or scroll to the Gap Register and click a row to light up the surface it touches.</p>
+      <div class="dlegend">
+        <span><b style="color:#1d7a4f">✓</b> ships today</span>
+        <span><b style="color:#9a6700">△</b> parity gap</span>
+        <span><b style="color:#b03030">▱</b> dashed = not yet built</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GAP REGISTER ============ -->
+<section id="gaps">
+  <h2>Gap register</h2>
+  <div class="lede">Every parity gap, scored for <b>effort</b> (build cost) and <b>impact</b> (how much an everyday user feels its absence), tagged FE-only or BE-required. Click a row to highlight the surface it lives on. Excludes #627 / #628 territory.</div>
+  <table id="gapTable">
+    <thead>
+      <tr><th>ID</th><th>Surface</th><th>Gap vs basic Jira</th><th>Effort</th><th>Impact</th><th>Layer</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace" data-n="backlog"><td><span class="rid">G10</span></td><td>Backlog / Board</td><td><b>No text search box.</b> Cannot type to narrow the loaded list by key or name; Jira's list filter is reflexive.</td><td><span class="pill eL">Low</span></td><td><span class="pill hi">High</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="backlog"><td><span class="rid">G09</span></td><td>Backlog / Board</td><td><b>No multi-select + bulk actions.</b> Can't ⌘/⇧-select N issues and change state / sprint / priority / delete at once (the deferred S1/S2 Jira interaction).</td><td><span class="pill eM">Med-Hi</span></td><td><span class="pill hi">High</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="backlog"><td><span class="rid">G11</span></td><td>Backlog</td><td><b>No priority quick-filter.</b> Only state + sprint narrow the list; Jira offers priority among quick filters.</td><td><span class="pill eL">Low</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="backlog"><td><span class="rid">G12</span></td><td>Backlog</td><td><b>No top-level inline create row.</b> Only a modal + per-epic "Add story"; Jira has an always-present inline "create issue" row.</td><td><span class="pill eL">Low-Md</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="backlog"><td><span class="rid">G13</span></td><td>Backlog</td><td><b>No keyboard list navigation.</b> No j/k move, Enter-to-open; Jira backlog is keyboard-first.</td><td><span class="pill eM">Med</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="board"><td><span class="rid">G14</span></td><td>Board</td><td><b>No per-column quick-add.</b> Cards are created elsewhere then dragged; Jira columns carry a "+ Create" affordance.</td><td><span class="pill eL">Low-Md</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="board"><td><span class="rid">G15</span></td><td>Board</td><td><b>No swimlanes.</b> Board is a flat column set; Jira groups rows into epic swimlanes. <span style="color:var(--violet);font-weight:600">Owned by #632 — excluded here.</span></td><td><span class="pill lo">—</span></td><td><span class="pill lo">—</span></td><td><span class="pill cm">#632</span></td></tr>
+      <tr class="trace" data-n="detail"><td><span class="rid">G01</span></td><td>Issue Detail</td><td><b>Delete has no confirmation.</b> "Delete issue" fires immediately (only guarded if it has children); Jira confirms destructive deletes.</td><td><span class="pill eL">Low</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="detail"><td><span class="rid">G02</span></td><td>Issue Detail</td><td><b>Attachments never rendered.</b> <span style="font-family:var(--mono);font-size:11.5px">GET /work-items/{id}</span> already returns <span style="font-family:var(--mono);font-size:11.5px">attachments[]</span>, but the drawer ignores it. Display is essentially free.</td><td><span class="pill eL">Low</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="detail"><td><span class="rid">G03</span></td><td>Issue Detail</td><td><b>No copy-link / breadcrumb.</b> No one-click "copy KEY-N link" and no Project › Epic › Issue context line.</td><td><span class="pill eL">Low</span></td><td><span class="pill lo">Low-Md</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="detail"><td><span class="rid">G04</span></td><td>Issue Detail</td><td><b>No keyboard in drawer.</b> No Esc-to-close, no prev/next-issue navigation; Jira's issue view is keyboard-navigable.</td><td><span class="pill eM">Med</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="detail"><td><span class="rid">G05</span></td><td>Issue Detail</td><td><b>Raw-HTML description editor.</b> A plain <span style="font-family:var(--mono);font-size:11.5px">&lt;textarea&gt;</span> writing <span style="font-family:var(--mono);font-size:11.5px">description_html</span> — no markdown render, no formatting, no preview.</td><td><span class="pill eM">Med</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="detail"><td><span class="rid">G07</span></td><td>Issue Detail</td><td><b>No created / updated timestamps.</b> Model has the columns; <span style="font-family:var(--mono);font-size:11.5px">WorkItemOut</span> doesn't expose them. Additive read field + small render.</td><td><span class="pill eL">Low</span></td><td><span class="pill lo">Low-Md</span></td><td><span class="pill be">BE</span></td></tr>
+      <tr class="trace" data-n="detail"><td><span class="rid">G06</span></td><td>Issue Detail</td><td><b>Labels read-only.</b> Labels display but can't be added/removed — <span style="font-family:var(--mono);font-size:11.5px">WorkItemPatch</span> has no labels write.</td><td><span class="pill eM">Med</span></td><td><span class="pill md">Med</span></td><td><span class="pill be">BE</span></td></tr>
+      <tr class="trace" data-n="detail"><td><span class="rid">G08</span></td><td>Issue Detail</td><td><b>No comments / activity feed.</b> No Comment model or history at all; Jira's issue view is built around it.</td><td><span class="pill eH">High</span></td><td><span class="pill md">Med</span></td><td><span class="pill be">BE</span></td></tr>
+      <tr class="trace" data-n="global"><td><span class="rid">G16</span></td><td>Global</td><td><b>No toast / flag feedback.</b> Optimistic writes roll back silently on error; success is invisible. Feedback is inline in some views, absent in others.</td><td><span class="pill eM">Med</span></td><td><span class="pill hi">High</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="global"><td><span class="rid">G18</span></td><td>Global</td><td><b>No jump-to-issue / command palette.</b> No "/" or ⌘K to jump to an issue by key across the loaded set; Jira's quick-search is core muscle-memory.</td><td><span class="pill eM">Med</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="settings"><td><span class="rid">G17</span></td><td>Settings</td><td><b>Destructive flows use <span style="font-family:var(--mono);font-size:11.5px">window.prompt/alert</span>.</b> Reassign-on-delete asks for a typed type/state name in a browser prompt — error-prone vs an in-app picker modal.</td><td><span class="pill eM">Med</span></td><td><span class="pill md">Med</span></td><td><span class="pill fe">FE</span></td></tr>
+      <tr class="trace" data-n="sprints"><td><span class="rid">G19</span></td><td>Sprints</td><td><b>No sprint start/complete workflow.</b> Status is a flat patch — no "complete sprint, roll incomplete forward." <span style="color:var(--violet);font-weight:600">Owned by #604 — excluded here.</span></td><td><span class="pill lo">—</span></td><td><span class="pill lo">—</span></td><td><span class="pill cm">#604</span></td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>Out of scope (feature expansion, not parity-on-current-featureset):</b> story points / estimates, due dates, dashboards &amp; reports, burndown charts, assignees + workload (Studio is a deliberate single-user tracker — no assignee surface). These are not gaps against <i>Studio's current featureset</i> and are excluded per D3.</div>
+</section>
+
+<!-- ============ DECOMPOSITION ============ -->
+<section id="subtasks">
+  <h2>Proposed child breakdown (for review)</h2>
+  <div class="lede">Gaps grouped into coherent, non-overlapping, FE-first slices. Each card maps to the gap IDs it closes. Click a card to expand its scope sentence. <b>Nothing is filed until you approve the slicing</b> (D2). P2 cards are backend-gated and listed in the next section.</div>
+  <div class="legendrow">
+    <span><span class="pill fe">FE</span> frontend-only</span>
+    <span><span class="pill be">BE</span> needs backend</span>
+    <span><span class="pill hi">High</span> / <span class="pill md">Med</span> / <span class="pill lo">Low</span> impact</span>
+    <span><span class="pill eL">Low</span> / <span class="pill eM">Med</span> / <span class="pill eH">High</span> effort</span>
+  </div>
+
+  <div class="lvl">P0 — <span>high impact, FE-only, do first</span></div>
+  <div class="stgrid">
+    <div class="st" data-gaps="backlog">
+      <div class="cid">C1 · Search &amp; quick-filter parity</div>
+      <h3>Find anything fast</h3>
+      <p>A text-search box that narrows the loaded backlog/board by key or name, a priority quick-filter on the backlog, and ⌘K/“/” jump-to-issue-by-key.</p>
+      <div class="gaprefs"><span class="pill cm">G10</span> <span class="pill cm">G11</span> <span class="pill cm">G18</span></div>
+      <div class="meta"><span class="pill fe">FE</span><span class="pill hi">High</span><span class="pill eM">Med</span></div>
+      <div class="more">Client-side over the already-loaded item set; reuses <span style="font-family:var(--mono)">backlogStore.filters</span>. Search shared between Backlog and Board surfaces. No new endpoint.</div>
+    </div>
+    <div class="st" data-gaps="backlog">
+      <div class="cid">C2 · Multi-select &amp; bulk actions</div>
+      <h3>Edit many at once</h3>
+      <p>Click / ⌘-click / ⇧-click selection on backlog &amp; board, a bulk action bar to set state, sprint, priority, or delete across the selection.</p>
+      <div class="gaprefs"><span class="pill cm">G09</span></div>
+      <div class="meta"><span class="pill fe">FE</span><span class="pill hi">High</span><span class="pill eM">Med-Hi</span></div>
+      <div class="more">Implements the Jira selection model agreed in S1/S2 and deferred. Each bulk op is a fan-out of the existing optimistic <span style="font-family:var(--mono)">patchWorkItem</span> with rollback. Zero backend.</div>
+    </div>
+    <div class="st" data-gaps="global">
+      <div class="cid">C3 · Feedback &amp; confirmation layer</div>
+      <h3>Tell the user what happened</h3>
+      <p>A lightweight toast/flag system for mutation success + error (replacing silent rollback), a real delete-confirm modal, and an in-app reassign modal replacing Settings’ <span style="font-family:var(--mono)">window.prompt</span>.</p>
+      <div class="gaprefs"><span class="pill cm">G16</span> <span class="pill cm">G01</span> <span class="pill cm">G17</span></div>
+      <div class="meta"><span class="pill fe">FE</span><span class="pill hi">High</span><span class="pill eM">Med</span></div>
+      <div class="more">One shared toast host + confirm/modal primitive reused everywhere. Makes the existing optimistic-rollback pattern legible. Pure FE.</div>
+    </div>
+  </div>
+
+  <div class="lvl">P1 — <span>medium impact, FE-only</span></div>
+  <div class="stgrid">
+    <div class="st p1" data-gaps="detail">
+      <div class="cid">C4 · Issue-detail completeness</div>
+      <h3>Round out the drawer</h3>
+      <p>Render the attachments the API already returns, a copy-link + Project › Epic breadcrumb, and Esc-to-close + prev/next-issue keyboard navigation.</p>
+      <div class="gaprefs"><span class="pill cm">G02</span> <span class="pill cm">G03</span> <span class="pill cm">G04</span></div>
+      <div class="meta"><span class="pill fe">FE</span><span class="pill md">Med</span><span class="pill eM">Med</span></div>
+      <div class="more">Attachment <i>display</i> only — upload is a backend gap (B3). Prev/next walks the loaded backlog order.</div>
+    </div>
+    <div class="st p1" data-gaps="detail">
+      <div class="cid">C5 · Rich description editing</div>
+      <h3>A description worth writing</h3>
+      <p>Markdown render + a minimal formatting toolbar / preview for the description, replacing the raw-HTML textarea — still writing <span style="font-family:var(--mono)">description_html</span>.</p>
+      <div class="gaprefs"><span class="pill cm">G05</span></div>
+      <div class="meta"><span class="pill fe">FE</span><span class="pill md">Med</span><span class="pill eM">Med</span></div>
+      <div class="more">No schema change — converts markdown to the same <span style="font-family:var(--mono)">description_html</span> field on save and renders it on read.</div>
+    </div>
+    <div class="st p1" data-gaps="board">
+      <div class="cid">C6 · Board per-column quick-add</div>
+      <h3>Create on the board</h3>
+      <p>A “+ add card” affordance per board column that creates an issue seeded with that column’s state. <b>Swimlanes (G15) are excluded — owned by #632.</b></p>
+      <div class="gaprefs"><span class="pill cm">G14</span></div>
+      <div class="meta"><span class="pill fe">FE</span><span class="pill md">Med</span><span class="pill eL">Low-Md</span></div>
+      <div class="more">Quick-add reuses <span style="font-family:var(--mono)">createWorkItem</span> seeded with the column’s state. Lands cleanly whether or not #632’s swimlanes ship — the affordance sits per state-column either way. Smallest FE child; could optionally fold into C7 as shared “create affordances.”</div>
+    </div>
+    <div class="st p1" data-gaps="backlog">
+      <div class="cid">C7 · Backlog inline-create &amp; keyboard nav</div>
+      <h3>Keyboard-first backlog</h3>
+      <p>An always-present inline create row at the top of the backlog and j/k/Enter list navigation.</p>
+      <div class="gaprefs"><span class="pill cm">G12</span> <span class="pill cm">G13</span></div>
+      <div class="meta"><span class="pill fe">FE</span><span class="pill md">Med</span><span class="pill eM">Med</span></div>
+      <div class="more">Inline row is a thin wrapper over the existing create modal’s submit path. Keyboard nav layers onto the rendered tree.</div>
+    </div>
+  </div>
+
+  <div class="lvl">P2 — <span>backend-gated — file only on approval (see Backend Gaps)</span></div>
+  <div class="stgrid">
+    <div class="st p2" data-gaps="detail">
+      <div class="cid">C8 · Issue metadata (BE)</div>
+      <h3>Timestamps + editable labels</h3>
+      <p>Expose <span style="font-family:var(--mono)">created_at/updated_at</span> on <span style="font-family:var(--mono)">WorkItemOut</span> (columns already exist) and add labels write to <span style="font-family:var(--mono)">WorkItemPatch</span>, then surface both in the drawer.</p>
+      <div class="gaprefs"><span class="pill cm">G07</span> <span class="pill cm">G06</span></div>
+      <div class="meta"><span class="pill be">BE</span><span class="pill md">Med</span><span class="pill eM">Low-Md</span></div>
+      <div class="more">Additive schema only — no migration for timestamps; labels write needs a small set-replace handler. SDK must co-ship (strict extra=forbid).</div>
+    </div>
+    <div class="st p2" data-gaps="detail">
+      <div class="cid">C9 · Attachment upload (BE)</div>
+      <h3>Add files, not just see them</h3>
+      <p>A multipart upload route + delete, behind the C4 display. Only worth filing if attachment <i>capture</i> is wanted beyond display.</p>
+      <div class="gaprefs"><span class="pill cm">G02</span>+</div>
+      <div class="meta"><span class="pill be">BE</span><span class="pill md">Med</span><span class="pill eM">Med</span></div>
+      <div class="more">Depends on C4. No upload route exists in <span style="font-family:var(--mono)">lib/api.ts</span> today; storage location is an open question.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BACKEND GAPS ============ -->
+<section id="backend">
+  <h2>Backend gaps — flagged, not built</h2>
+  <div class="lede">Per the story’s charter, backend work is a last resort and is surfaced here rather than silently implemented. Each item names the exact missing surface so the cost is visible before any child is filed.</div>
+  <div class="be">
+    <div class="becard">
+      <div class="bid">B1 · SMALL · ADDITIVE</div>
+      <h4>Expose timestamps (G07)</h4>
+      <p><span style="font-family:var(--mono)">Issue.created_at/updated_at</span> exist on the model but not on <span style="font-family:var(--mono)">WorkItemOut</span>. <b>Add two read-only fields</b>; no migration. Lowest-risk BE change — recommend bundling into C8.</p>
+    </div>
+    <div class="becard">
+      <div class="bid">B2 · SMALL-MED</div>
+      <h4>Editable labels (G06)</h4>
+      <p>Labels resolve on read but <span style="font-family:var(--mono)">WorkItemPatch</span> has no labels field. <b>Add a label set-replace</b> write path (and SDK mirror). Recommend bundling into C8.</p>
+    </div>
+    <div class="becard">
+      <div class="bid">B3 · MED · OPEN QUESTION</div>
+      <h4>Attachment upload (G02+)</h4>
+      <p>Display rides the existing <span style="font-family:var(--mono)">attachments[]</span> payload (free, in C4). <b>Upload needs a new multipart route</b> + a storage decision. File as C9 only if capture is in scope.</p>
+    </div>
+    <div class="becard defer">
+      <div class="bid">B4 · HEAVY · RECOMMEND DEFER</div>
+      <h4>Comments / activity feed (G08)</h4>
+      <p>No Comment model or history exists. A full feed is a <b>new model + routes + SDK + FE</b> — the largest single item here and the least essential for a single-user tracker. <b>Recommend deferring to its own story</b>, not a #630 child.</p>
+    </div>
+  </div>
+  <div class="note"><b>Recommendation:</b> ship C1–C7 (all FE-only) first; file C8 (B1+B2) only if timestamps/labels are wanted now; treat B3/B4 as their own follow-ups. This keeps #630’s children overwhelmingly frontend and honors “backend = last resort.”</div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance</h2>
+  <div class="accept">
+    <b>This story is done when:</b>
+    <ol>
+      <li>This gap-analysis report stands in the T630 design dir in the canonical HLD/LLD design language — surface-by-surface vs basic Jira, with effort/impact ratings, <b>excluding #627 / #628 territory</b>. ✓ delivered.</li>
+      <li>The prioritized child breakdown above (C1–C7, plus optionally C8/C9) is <b>reviewed and approved by the user</b>, then filed as children of #630 — each with a title + one-paragraph scope.</li>
+      <li>No scope creep into net-new features (estimates/points/due-dates/dashboards/assignees stay out); every required backend item is explicitly called out in <a href="#backend" style="color:var(--green);font-weight:700">Backend Gaps</a> rather than silently built.</li>
+    </ol>
+    <p style="margin-top:12px"><b>#630 itself ships no polish code</b> — the report and the filed children are the entire deliverable. The polish happens in the children, all carried out in the main working context (D4 — no subagents).</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+  // Surface-map node detail panel
+  const NODE = {
+    backlog: { t: "Backlog", does: ["Epic-grouped Epic→Story→Sub-task tree","Collapsible epic groups + rows, per-epic progress bar","Within-column reorder (drag, global LexoRank)","Filter by state + sprint","Create-issue modal + per-epic add","Agent-state badge, sprint + priority pills"],
+      gap: ["No text search (G10)","No multi-select / bulk actions (G09)","No priority quick-filter (G11)","No top-level inline create row (G12)","No keyboard list nav (G13)","Epic filter rail = #627 (excluded)"] },
+    board: { t: "Board", does: ["Kanban columns by workflow state","Drag between columns + reorder within","Filter by module + show/hide sub-tasks","Live per-column count","Card: key · name · priority"],
+      gap: ["No per-column quick-add (G14)","No epic swimlanes — owned by #632 (G15, excluded)","No card sub-task/story hierarchy — owned by #635 (excluded)","Shares the missing search (G10)"] },
+    detail: { t: "Issue Detail drawer", does: ["Inline name edit","State picker","Description (raw-HTML textarea)","Child-issue list + add sub-task","Parent / Epic-link / Sprint / Priority","Blockers: blocked-by editable, blocks read-only","Delete (guarded if it has children)"],
+      gap: ["No delete confirm (G01)","Attachments not rendered (G02)","No copy-link / breadcrumb (G03)","No keyboard (Esc / prev-next) (G04)","Raw-HTML description, no markdown (G05)","Labels read-only — BE (G06)","No created/updated — BE (G07)","No comments / activity — BE (G08)"] },
+    sprints: { t: "Sprints + Story Map", does: ["Now / Later / History lens","Sprint cards, new-sprint create","Story map: epic cols × sprint rows + Backlog","Drag card → patch sprint_id"],
+      gap: ["No sprint start/complete workflow — owned by #604 (G19, excluded)","Burndown/points = feature expansion (out of scope)"] },
+    settings: { t: "Settings", does: ["Issue-type CRUD (per level) + default","Workflow-state CRUD within frozen 5 groups","Drag reorder, color swatches","Reassign-on-delete"],
+      gap: ["Destructive flows use window.prompt/alert (G17)"] },
+    global: { t: "Global layer (not built)", does: ["— no cross-cutting surface exists yet —"],
+      gap: ["No toast / flag feedback (G16)","No jump-to-issue / command palette (G18)","No shared confirm modal (feeds G01/G17)"] },
+  };
+  const info = document.getElementById('nodeInfo');
+  const nodes = document.querySelectorAll('.node');
+  function render(key) {
+    const d = NODE[key]; if (!d) return;
+    const li = (arr, cls) => arr.map(x => `<li class="${cls}">${x}</li>`).join('');
+    info.innerHTML = `<h4>${d.t}</h4>`
+      + `<div class="lab">Ships today</div><ul>${li(d.does,'does')}</ul>`
+      + `<div class="lab">Parity gaps</div><ul>${li(d.gap,'gap')}</ul>`;
+  }
+  function showNode(key) {
+    nodes.forEach(n => { n.classList.toggle('hl', n.dataset.n === key); n.classList.remove('dim'); });
+    render(key);
+  }
+  nodes.forEach(n => n.addEventListener('click', e => { e.stopPropagation(); showNode(n.dataset.n); }));
+
+  // Gap-table row → highlight its surface node
+  document.querySelectorAll('tr.trace').forEach(tr => {
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('tr.trace').forEach(r => r.classList.remove('sel'));
+      tr.classList.add('sel');
+      const key = tr.dataset.n;
+      nodes.forEach(n => { n.classList.toggle('hl', n.dataset.n === key); n.classList.toggle('dim', n.dataset.n !== key); });
+      render(key);
+      document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // Subtask cards expand
+  document.querySelectorAll('.st').forEach(c => c.addEventListener('click', () => c.classList.toggle('open')));
+
+  // Nav scroll-spy
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) { if (window.scrollY >= s.offsetTop - 160) cur = s.id; }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  });
+</script>
+</body>
+</html>

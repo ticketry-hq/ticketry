@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-746 · Drawer Planning-Tracer Bridge · LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 72px;
+  }
+  header { background: var(--panel); padding: 26px 40px 16px; border-bottom: 1px solid var(--line); }
+  .crumb { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 23px; margin: 6px 0 4px; letter-spacing: 0; }
+  .sub { color: var(--muted); max-width: 980px; font-size: 14px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 13px 0 14px; }
+  .chip { border-radius: 20px; padding: 3px 10px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { position: sticky; top: 0; z-index: 20; display: flex; gap: 2px; overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; border-bottom: 2px solid transparent; color: var(--muted); text-decoration: none; white-space: nowrap; font-size: 13px; font-weight: 700; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 34px 40px; }
+  section { margin-bottom: 54px; scroll-margin-top: 58px; }
+  h2 { font-size: 18px; margin-bottom: 4px; letter-spacing: 0; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 920px; }
+  .m, code { font-family: var(--mono); font-size: 12.5px; }
+  code { background: #eef1f6; border-radius: 4px; padding: 1px 5px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+  .card h3 { font-size: 15px; margin-bottom: 8px; }
+  .card ul { list-style: none; }
+  .card li { position: relative; padding: 4px 0 4px 18px; font-size: 13.5px; }
+  .card li:before { content: ">"; position: absolute; left: 0; color: var(--accent); font-weight: 800; }
+  .card.green { border-top: 3px solid var(--green); }
+  .card.amber { border-top: 3px solid var(--amber); }
+  .card.violet { border-top: 3px solid var(--violet); }
+  .card.red { border-top: 3px solid var(--red); }
+  .diagram { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: stretch; }
+  .svgbox, .side, table, .accept, .stepinfo { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .svgbox { padding: 16px; overflow-x: auto; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.sel rect, .node.sel ellipse { stroke-width: 3; filter: drop-shadow(0 2px 3px rgba(53,86,212,.2)); }
+  .side { padding: 18px 20px; font-size: 13px; }
+  .side h3 { font-size: 15px; color: var(--accent); margin-bottom: 6px; }
+  .side .tag { display: inline-block; margin-bottom: 10px; border-radius: 12px; padding: 2px 8px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .04em; }
+  .side .k { margin: 11px 0 3px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+  .side li { margin-left: 17px; padding: 2px 0; }
+  .side .no li { color: var(--red); }
+  table { width: 100%; border-collapse: collapse; overflow: hidden; }
+  th, td { border-bottom: 1px solid var(--line); padding: 10px 13px; text-align: left; vertical-align: top; font-size: 13px; }
+  th { background: #fbfcfe; color: var(--muted); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  tr[data-node] { cursor: pointer; }
+  tr.hl td { background: var(--accent-soft); }
+  .pill { display: inline-block; border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 800; }
+  .pill.new { background: var(--green-soft); color: var(--green); }
+  .pill.mod { background: var(--amber-soft); color: var(--amber); }
+  .pill.ro { background: var(--accent-soft); color: var(--accent); }
+  .pill.none { background: var(--red-soft); color: var(--red); }
+  .seq { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 8px; padding: 13px 14px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+  .step.sel { border-color: var(--accent); box-shadow: 0 2px 8px rgba(53,86,212,.14); }
+  .step .n { color: var(--accent); font-weight: 900; font-size: 18px; }
+  .step b { display: block; color: var(--ink); margin: 1px 0 4px; font-size: 13px; }
+  .stepinfo { margin-top: 12px; padding: 14px 18px; font-size: 13px; border-left: 3px solid var(--accent); }
+  .stepinfo .k { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; margin: 8px 0 2px; }
+  .tests { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .t { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 15px; font-size: 13px; }
+  .t .lab { font-family: var(--mono); font-size: 11px; font-weight: 800; color: var(--accent); }
+  .accept { padding: 20px 24px; background: var(--green-soft); border-color: #cfe5d8; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    header, main { padding-left: 18px; padding-right: 18px; }
+    nav { padding: 0 18px; }
+    .grid2, .grid3, .diagram, .seq, .tests { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">Coding · WorkTracker · CODIN-746 · LLD</div>
+  <h1>Drawer Planning-Tracer Bridge — explicit Refine / Split launch</h1>
+  <div class="sub">The tabbed issue drawer gets two dedicated, state-gated controls — <b>Refine</b> (Backlog task) and <b>Split</b> (Todo task) — that launch a <b>tracked</b> planning-tracer phase through the already-shipped internal primitive <span class="m">apps.execution.driver.execute(task_id, agent, phase)</span>. A new authenticated endpoint <span class="m">POST /work-items/{id}/planning-run</span> creates the process-local tracer state and launches; the run then surfaces as a normal drawer Terminal-tab run by attaching to its spawned tmux session. The generic untracked terminal launch path is untouched.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD draft</span>
+    <span class="chip green">Thin HTTP surface over shipped driver</span>
+    <span class="chip violet">Explicit buttons, never inferred</span>
+    <span class="chip amber">Completion-only transitions</span>
+    <span class="chip red">Process-local; no durable tracking (#744)</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <a href="#shape" class="active">Shape</a>
+  <a href="#rules">Rules</a>
+  <a href="#contract">Endpoint</a>
+  <a href="#map">Change Map</a>
+  <a href="#sequence">Sequence</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#edge">Edges</a>
+  <a href="#tests">Tests</a>
+  <a href="#order">Steps</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+  <section id="shape">
+    <h2>System shape</h2>
+    <p class="lede">Click a node for its responsibilities and non-responsibilities. Blue = new in CODIN-746. Violet = already shipped, reused unchanged. Amber = consumed from CODIN-751 / the terminal transport. Dashed = a seam observed but not owned. Red = the untracked path this ticket must not disturb.</p>
+    <div class="diagram">
+      <div class="svgbox">
+        <svg viewBox="0 0 940 520" width="100%" height="470" role="img" aria-label="Drawer planning-tracer bridge architecture">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#5b6478"></path>
+            </marker>
+          </defs>
+
+          <g class="node" data-node="button">
+            <rect x="24" y="40" width="212" height="112" rx="8" fill="#e8edfb" stroke="#3556d4" stroke-width="2"></rect>
+            <text x="130" y="70" text-anchor="middle" font-size="13" font-weight="700">Drawer Refine / Split</text>
+            <text x="130" y="90" text-anchor="middle" font-size="11" fill="#5b6478">state-gated buttons</text>
+            <text x="130" y="108" text-anchor="middle" font-size="11" fill="#5b6478">uses selected agent</text>
+            <text x="130" y="126" text-anchor="middle" font-size="11" fill="#5b6478">fire-and-forget</text>
+            <text x="130" y="144" text-anchor="middle" font-size="11" fill="#3556d4" font-weight="700">NEW controls</text>
+          </g>
+
+          <g class="node" data-node="api">
+            <rect x="24" y="220" width="212" height="120" rx="8" fill="#e8edfb" stroke="#3556d4" stroke-width="2"></rect>
+            <text x="130" y="250" text-anchor="middle" font-size="13" font-weight="700">POST planning-run</text>
+            <text x="130" y="270" text-anchor="middle" font-size="11" fill="#5b6478">apps/execution/api.py</text>
+            <text x="130" y="288" text-anchor="middle" font-size="11" fill="#5b6478">auth + dup-run 409</text>
+            <text x="130" y="306" text-anchor="middle" font-size="11" fill="#5b6478">maps errors → status</text>
+            <text x="130" y="326" text-anchor="middle" font-size="11" fill="#3556d4" font-weight="700">NEW endpoint</text>
+          </g>
+
+          <g class="node" data-node="driver">
+            <rect x="310" y="150" width="216" height="130" rx="8" fill="#ffffff" stroke="#6b3fb8" stroke-width="2"></rect>
+            <text x="418" y="180" text-anchor="middle" font-size="13" font-weight="700">driver.execute</text>
+            <text x="418" y="200" text-anchor="middle" font-size="11" fill="#5b6478">group gate + registry</text>
+            <text x="418" y="218" text-anchor="middle" font-size="11" fill="#5b6478">_registry[task_id]</text>
+            <text x="418" y="236" text-anchor="middle" font-size="11" fill="#5b6478">reducer → LaunchAction</text>
+            <text x="418" y="256" text-anchor="middle" font-size="11" fill="#6b3fb8" font-weight="700">SHIPPED / reused</text>
+          </g>
+
+          <g class="node" data-node="reducer">
+            <rect x="310" y="316" width="216" height="112" rx="8" fill="#ffffff" stroke="#6b3fb8" stroke-width="2" stroke-dasharray="7 5"></rect>
+            <text x="418" y="346" text-anchor="middle" font-size="13" font-weight="700">reducer.decide</text>
+            <text x="418" y="366" text-anchor="middle" font-size="11" fill="#5b6478">completion-only:</text>
+            <text x="418" y="384" text-anchor="middle" font-size="11" fill="#5b6478">refine: backlog→unstarted</text>
+            <text x="418" y="402" text-anchor="middle" font-size="11" fill="#5b6478">split: →state "LLD"</text>
+            <text x="418" y="420" text-anchor="middle" font-size="11" fill="#6b3fb8" font-weight="700">SHIPPED / reused</text>
+          </g>
+
+          <g class="node" data-node="signal">
+            <rect x="600" y="316" width="216" height="112" rx="8" fill="#ffffff" stroke="#6b3fb8" stroke-width="2" stroke-dasharray="7 5"></rect>
+            <text x="708" y="346" text-anchor="middle" font-size="13" font-weight="700">issue_state_changed</text>
+            <text x="708" y="366" text-anchor="middle" font-size="11" fill="#5b6478">worktracker signal (#704)</text>
+            <text x="708" y="384" text-anchor="middle" font-size="11" fill="#5b6478">observe_completion receiver</text>
+            <text x="708" y="402" text-anchor="middle" font-size="11" fill="#5b6478">marks phase done only</text>
+            <text x="708" y="420" text-anchor="middle" font-size="11" fill="#6b3fb8" font-weight="700">SHIPPED / reused</text>
+          </g>
+
+          <g class="node" data-node="terminal">
+            <rect x="600" y="150" width="216" height="130" rx="8" fill="#fbf0d8" stroke="#9a6700" stroke-width="2" stroke-dasharray="7 5"></rect>
+            <text x="708" y="180" text-anchor="middle" font-size="13" font-weight="700">Drawer Terminal tab</text>
+            <text x="708" y="200" text-anchor="middle" font-size="11" fill="#5b6478">openSession(attach)</text>
+            <text x="708" y="218" text-anchor="middle" font-size="11" fill="#5b6478">mode:"attach" + run id</text>
+            <text x="708" y="236" text-anchor="middle" font-size="11" fill="#5b6478">DrawerTerminalHost (#751)</text>
+            <text x="708" y="256" text-anchor="middle" font-size="11" fill="#9a6700" font-weight="700">CONSUMED</text>
+          </g>
+
+          <g class="node" data-node="untracked">
+            <rect x="600" y="40" width="216" height="80" rx="8" fill="#fbe7e7" stroke="#b03030" stroke-width="2"></rect>
+            <text x="708" y="70" text-anchor="middle" font-size="13" font-weight="700">Generic "＋ Agent" launch</text>
+            <text x="708" y="90" text-anchor="middle" font-size="11" fill="#5b6478">prompt-driven, untracked</text>
+            <text x="708" y="108" text-anchor="middle" font-size="11" fill="#b03030" font-weight="700">UNCHANGED — no tracer</text>
+          </g>
+
+          <path d="M130 152 V220" stroke="#5b6478" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="180" y="190" text-anchor="middle" font-size="10" fill="#5b6478">POST {phase, agent}</text>
+          <path d="M236 270 H310" stroke="#5b6478" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="273" y="260" text-anchor="middle" font-size="10" fill="#5b6478">execute()</text>
+          <path d="M418 280 V316" stroke="#6b3fb8" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="455" y="302" text-anchor="middle" font-size="10" fill="#6b3fb8">decide</text>
+          <path d="M526 210 H600" stroke="#5b6478" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="563" y="200" text-anchor="middle" font-size="10" fill="#5b6478">spawn_run → run id</text>
+          <path d="M236 300 C 470 470, 560 470, 690 428" stroke="#3556d4" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="430" y="486" text-anchor="middle" font-size="10" fill="#3556d4">201 {agent_run_id} → attach in drawer</text>
+          <path d="M526 372 H600" stroke="#6b3fb8" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="563" y="362" text-anchor="middle" font-size="10" fill="#6b3fb8">on completion</text>
+        </svg>
+      </div>
+      <aside class="side" id="nodeInfo">
+        <h3>Select a node</h3>
+        <span class="tag">Interactive map</span>
+        <p>Click a diagram node for responsibilities and non-responsibilities.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section id="rules">
+    <h2>Rules settled in refinement</h2>
+    <p class="lede">Load-bearing rules. The implementation should make the explicit, completion-only, single-live-run path easy and every other path awkward.</p>
+    <div class="grid3">
+      <div class="card green">
+        <h3>Explicit, never inferred</h3>
+        <ul>
+          <li>A tracked run is created <b>only</b> by the Refine / Split buttons.</li>
+          <li>Never inferred from prompt text or the generic launch path.</li>
+          <li><code>phase</code> in the request body selects the recipe.</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <h3>State-gated + re-validated</h3>
+        <ul>
+          <li>Refine visible/enabled only for the <code>backlog</code> group.</li>
+          <li>Split only for <code>unstarted</code> (Todo).</li>
+          <li>Server re-validates the group; wrong group → <code>422</code>.</li>
+        </ul>
+      </div>
+      <div class="card violet">
+        <h3>Completion-only transitions</h3>
+        <ul>
+          <li>Backlog→Todo only <b>completes</b> an in-flight refine.</li>
+          <li>Todo→LLD only <b>completes</b> an in-flight split.</li>
+          <li>No transition auto-launches the next phase.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>One live run per task</h3>
+        <ul>
+          <li>Re-click while a run is live → <code>409</code>, guarded server-side.</li>
+          <li>Guard reads <code>driver.get_state(task_id)</code> before launching.</li>
+          <li>No GET/status endpoint; the button shows no live status.</li>
+        </ul>
+      </div>
+      <div class="card amber">
+        <h3>Agent from the drawer</h3>
+        <ul>
+          <li>Body carries the drawer's currently-selected agent.</li>
+          <li>Endpoint owns no agent-defaulting policy; <code>agent</code> is required.</li>
+          <li>Same agent set as the terminal-tab picker (#751).</li>
+        </ul>
+      </div>
+      <div class="card red">
+        <h3>Process-local only</h3>
+        <ul>
+          <li>Registry stays the in-process <code>_registry</code> dict.</li>
+          <li>Restart drops in-flight tracer state; documented limitation.</li>
+          <li>Durable lifecycle tracking deferred to #744.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="contract">
+    <h2>Endpoint contract</h2>
+    <p class="lede">One authenticated route, owned by CODIN-746, thin over the shipped driver. Registered on the host API (no <code>/work-tracker</code> prefix) since it drives the Coding-side <code>apps.execution</code> tracer, which the generic worktracker package must not import.</p>
+    <table>
+      <tbody>
+        <tr><th>Route</th><td><code>POST /api/work-items/{issue_id}/planning-run</code></td></tr>
+        <tr><th>Auth</th><td>Router-level <code>ApiKeyAuth</code> (<code>x-api-key</code>), matching every other host/worktracker route.</td></tr>
+        <tr><th>Path</th><td><code>issue_id</code> — task UUID (the drawer's <code>launchContext.taskId</code>).</td></tr>
+        <tr><th>Body</th><td><code>{ "phase": "refine" | "split", "agent": "claude" | "agy" | "codex" | "gemini" }</code>. Both required; no defaulting.</td></tr>
+        <tr><th>Success</th><td><code>201</code> → <code>{ task_id, phase, status, agent_run_id }</code> reflecting the freshly-launched engine state (<code>status = "running"</code> on a successful spawn).</td></tr>
+        <tr><th>409 Conflict</th><td>A live tracer run already exists for the task — <code>driver.get_state(issue_id)</code> is present with <code>status == "running"</code>.</td></tr>
+        <tr><th>422 Unprocessable</th><td>Task not in the phase's required group (<code>task_not_in_backlog</code> / <code>task_not_in_todo</code>) or its module cannot be resolved (<code>module_id_required</code>).</td></tr>
+        <tr><th>404 Not Found</th><td>No task with that id (<code>task_not_found</code>).</td></tr>
+        <tr><th>500</th><td>Only for a genuinely unexpected fault; the spawn failure itself is folded to a <code>failed</code> engine state by the driver, not raised here.</td></tr>
+      </tbody>
+    </table>
+    <p class="lede" style="margin-top:16px">The endpoint adds exactly two responsibilities on top of the shipped <code>execute()</code>: the <b>duplicate-live-run 409 pre-check</b> (needed because <code>execute()</code> otherwise overwrites the registry entry and would relaunch), and the <b>ValueError → HTTP status mapping</b>. Group re-validation is already enforced inside <code>execute()</code> and is surfaced, not re-implemented.</p>
+  </section>
+
+  <section id="map">
+    <h2>Change map</h2>
+    <p class="lede">Rows highlight the matching diagram node. The backend tracer engine is already shipped; CODIN-746 adds one endpoint + its tests, the two FE buttons, a thin API client call, and doc-corrections. No migration, no model change, no SDK regeneration.</p>
+    <table>
+      <thead><tr><th>File</th><th>Kind</th><th>Delta</th><th>Guardrail</th></tr></thead>
+      <tbody>
+        <tr data-node="api"><td><code>server/apps/execution/api.py</code></td><td><span class="pill new">new</span></td><td>Ninja <code>Router</code> with <code>ApiKeyAuth</code>; one <code>POST /work-items/{issue_id}/planning-run</code> handler: dup-run 409 pre-check via <code>driver.get_state</code>, call <code>driver.execute</code>, map <code>ValueError</code> messages to 404/422, return the launched state.</td><td>No status/GET route. No agent default. No import from the generic worktracker package's router.</td></tr>
+        <tr data-node="api"><td><code>server/studio_server/api.py</code></td><td><span class="pill mod">modify</span></td><td>Import and <code>api.add_router("", execution_router)</code> alongside the other host routers.</td><td>Mount at <code>""</code>, not under <code>/work-tracker</code>.</td></tr>
+        <tr data-node="driver"><td><code>server/apps/execution/driver.py</code></td><td><span class="pill ro">reuse</span></td><td><code>execute()</code>, <code>get_state()</code>, group gate, and <code>_registry</code> consumed unchanged.</td><td>Do not add HTTP concerns to the driver; the dup-run guard lives in the endpoint.</td></tr>
+        <tr data-node="reducer"><td><code>server/apps/execution/reducer.py</code></td><td><span class="pill ro">reuse</span></td><td>Completion-only <code>_is_complete</code> already encodes refine (backlog→unstarted) and split (→<code>LLD</code>).</td><td>No change; its behavior is an acceptance criterion verified by existing tests.</td></tr>
+        <tr data-node="api"><td><code>server/apps/execution/tests/test_api.py</code></td><td><span class="pill new">new</span></td><td>Endpoint tests: refine-on-backlog, split-on-todo, dup-run 409, wrong-group 422, not-found 404, auth-required, agent passthrough.</td><td>Use a fake <code>spawn</code> injected via the driver seam; assert no relaunch on the duplicate call.</td></tr>
+        <tr data-node="button"><td><code>studio/src/shell/IssueDrawerTabs.tsx</code></td><td><span class="pill mod">modify</span></td><td>Add Refine / Split controls in the Terminal-tab header region. Gate by <code>workspace.task.state.group</code> (Refine ⇔ <code>backlog</code>, Split ⇔ <code>unstarted</code>) and by <code>launchContext.profileReady</code>. On click: call the API with the drawer's selected agent; on 201 register an attach-mode terminal session for the returned run and focus the Terminal tab.</td><td>Reuse the existing <code>canLaunch</code> profile gate. Do not touch the generic "＋ Agent" launcher path.</td></tr>
+        <tr data-node="button"><td><code>studio/src/shell/IssueDrawerHost.tsx</code></td><td><span class="pill mod">modify</span></td><td>Surface the active task's <code>state.group</code> and the drawer's selected agent (<code>activeMeta?.agent</code>, falling back to the picker default) to <code>IssueDrawerTabs</code> for gating and launch.</td><td>Read agent from the drawer's own terminal session; never from <code>tasksStore.selected*</code>.</td></tr>
+        <tr data-node="api"><td><code>studio/src/coding/lib/api.ts</code></td><td><span class="pill mod">modify</span></td><td>Add <code>postPlanningRun(taskId, phase, agent)</code> using the host <code>request()</code> helper (the same non-SDK path as <code>createWorktree</code>), returning the launched-run payload.</td><td>Host surface, not the SDK; keep the <code>x-api-key</code> fetch wrapper.</td></tr>
+        <tr data-node="terminal"><td><code>studio/src/coding/stores/terminalStore.ts</code></td><td><span class="pill mod">modify</span></td><td>Ensure a session can be registered in <b>attach</b> mode from a known <code>agent_run_id</code> (reuse the existing attach transport / reconnect path), so the server-spawned run appears as a normal drawer terminal tab without relaunching.</td><td>Attach, never spawn, when <code>agentRunId</code> is supplied. No doc-chat coupling.</td></tr>
+        <tr data-node="reducer"><td><code>spec/…/T720…/refinement-notes.md</code> · <code>T719…/*</code></td><td><span class="pill mod">modify</span></td><td>Annotate the "immediate"/"triggers the next actions immediately" Todo→LLD wording (T720 notes ll. 54–56, 67–69) as describing the <b>deferred autonomous pipeline</b> (#721/#745/#743), not the interactive drawer path; the interactive path is explicit-button + completion-only.</td><td>Clarify, don't rewrite the deferred-pipeline design; scope the correction to the interactive-path caveat.</td></tr>
+        <tr data-node="untracked"><td>Generic "＋ Agent" launch / <code>terminalEntryPool</code> spawn branch</td><td><span class="pill none">untouched</span></td><td>The prompt-driven, untracked launch path is not modified and creates no tracer state.</td><td>No tracer registry write from the spawn branch.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="sequence">
+    <h2>Sequence — Refine on a Backlog task</h2>
+    <p class="lede">Click a step for mechanics and failure behavior. Split is identical with <code>phase="split"</code>, the <code>unstarted</code> gate, and completion on reaching the <code>LLD</code> state.</p>
+    <div class="seq">
+      <div class="step" data-step="1"><div class="n">1</div><b>Button shown</b>Task state group is <code>backlog</code> and a Coding profile is ready.</div>
+      <div class="step" data-step="2"><div class="n">2</div><b>Click Refine</b>FE reads the drawer's selected agent and POSTs <code>{phase:"refine", agent}</code>.</div>
+      <div class="step" data-step="3"><div class="n">3</div><b>Dup-run guard</b>Endpoint checks <code>get_state</code>; a running run for the task → 409.</div>
+      <div class="step" data-step="4"><div class="n">4</div><b>execute()</b>Group gate + registry store; reducer emits a <code>LaunchAction</code>.</div>
+      <div class="step" data-step="5"><div class="n">5</div><b>spawn_run</b>Driver launches the tmux run with the refine recipe prompt; state → running.</div>
+      <div class="step" data-step="6"><div class="n">6</div><b>201 response</b>Endpoint returns <code>{task_id, phase, status, agent_run_id}</code>.</div>
+      <div class="step" data-step="7"><div class="n">7</div><b>Attach in drawer</b>FE opens an attach-mode terminal session for the run and focuses Terminal.</div>
+      <div class="step" data-step="8"><div class="n">8</div><b>Completion</b>Human moves task Backlog→Todo; the signal marks the phase <code>done</code> and launches nothing.</div>
+    </div>
+    <div class="stepinfo" id="stepInfo"><b>Select a step.</b> Mechanics and edge cases appear here.</div>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <p class="lede">The LLD keeps the surface minimal and refuses to reshape the shipped driver or the untracked path.</p>
+    <table>
+      <thead><tr><th>Decision</th><th>Chosen path</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr data-node="api"><td>Endpoint ownership</td><td>New <code>apps/execution/api.py</code> router on the host API.</td><td>The generic worktracker package cannot import the Coding-side tracer; the tracer's own app owns its HTTP seam.</td></tr>
+        <tr data-node="api"><td>Duplicate-run guard placement</td><td>In the endpoint, before <code>execute()</code>, via <code>get_state</code>.</td><td><code>execute()</code> overwrites the registry unconditionally; the 409 must be decided before that overwrite. Keeps the driver primitive untouched.</td></tr>
+        <tr data-node="api"><td>Wrong-group status</td><td><code>422</code> for group mismatch; <code>409</code> reserved for a live run.</td><td>Group mismatch is an unprocessable request against task state; a live run is a genuine conflict. Both are permitted by the AC ("409/422").</td></tr>
+        <tr data-node="button"><td>Agent source</td><td>Drawer's selected terminal-tab agent, sent explicitly in the body.</td><td>Decision #5: no server defaulting; the drawer already owns agent selection via #751.</td></tr>
+        <tr data-node="terminal"><td>Run surfacing</td><td>Attach to the spawned tmux run by <code>agent_run_id</code>.</td><td>The WS transport already supports <code>mode:"attach"</code>; this makes the tracked run appear as a normal drawer terminal tab with no second launch mechanism.</td></tr>
+        <tr data-node="reducer"><td>No auto-chaining</td><td>Completion only marks the phase done.</td><td>Decision #3; auto-launch/chaining is #721's deferred pipeline, kept out of the interactive path.</td></tr>
+        <tr data-node="signal"><td>No durable tracking</td><td>Process-local registry; restart limitation documented.</td><td>Decision #7; durable lifecycle-state tracking is #744.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="edge">
+    <h2>Edge cases</h2>
+    <p class="lede">Every failure is a launch-scope or state-gate failure; none may corrupt the drawer, the untracked path, or an already-live run.</p>
+    <table>
+      <thead><tr><th>Case</th><th>Expected behavior</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Re-click Refine while its run is live</td><td>Endpoint returns <code>409</code>; no second spawn; registry entry unchanged.</td><td><span class="pill new">required</span></td></tr>
+        <tr><td>Refine requested on a Todo task (button bypassed)</td><td>Group gate → <code>422 task_not_in_backlog</code>; nothing launched.</td><td><span class="pill new">required</span></td></tr>
+        <tr><td>Split requested on a Backlog task</td><td>Group gate → <code>422 task_not_in_todo</code>.</td><td><span class="pill new">required</span></td></tr>
+        <tr><td>Task with no resolvable module ancestor</td><td><code>422 module_id_required</code>; the recipe needs a module for launch routing.</td><td><span class="pill ro">inherited</span></td></tr>
+        <tr><td>Unknown / non-task id</td><td><code>404 task_not_found</code>.</td><td><span class="pill new">required</span></td></tr>
+        <tr><td>tmux spawn fails</td><td>Driver folds it to a <code>failed</code> engine state; endpoint returns the failed state (not a 5xx). FE opens no attach session; button is re-enabled.</td><td><span class="pill mod">surfaced</span></td></tr>
+        <tr><td>Backlog→Todo with a completed/absent refine state</td><td>Signal receiver is a no-op; launches nothing.</td><td><span class="pill ro">inherited</span></td></tr>
+        <tr><td>Server restart mid-run</td><td>Registry lost; a later completion transition finds no state and no-ops. The tmux run itself survives and is still attachable. Documented limitation.</td><td><span class="pill none">accepted</span></td></tr>
+        <tr><td>Missing / not-ready profile</td><td>Buttons disabled with a scoped reason (reuse <code>canLaunch</code>); no request sent.</td><td><span class="pill new">required</span></td></tr>
+        <tr><td>Task in started/completed/cancelled group</td><td>Neither button rendered.</td><td><span class="pill new">required</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tests">
+    <h2>Test plan</h2>
+    <p class="lede">Backend: endpoint contract tests injecting a fake <code>spawn</code> through the driver seam. Frontend: rendered drawer integration for gating + launch. The completion-only reducer behavior is already covered by the shipped <code>test_reducer</code> / <code>test_driver</code> suites and is re-asserted, not rebuilt.</p>
+    <div class="tests">
+      <div class="t"><div class="lab">api · refine happy path</div>POST <code>{phase:refine,agent}</code> on a Backlog task → 201, <code>status=running</code>, <code>agent_run_id</code> present; spawn called once with the refine recipe and the given agent.</div>
+      <div class="t"><div class="lab">api · split happy path</div>POST <code>{phase:split,agent}</code> on a Todo task → 201, split recipe prompt, correct agent.</div>
+      <div class="t"><div class="lab">api · duplicate 409</div>Second POST while <code>get_state</code> is running → 409; spawn not called a second time; registry entry unchanged.</div>
+      <div class="t"><div class="lab">api · wrong group 422</div>Refine on Todo and Split on Backlog each → 422 with the matching gate message; nothing spawned.</div>
+      <div class="t"><div class="lab">api · not found / auth</div>Unknown id → 404; missing/invalid <code>x-api-key</code> → 401.</div>
+      <div class="t"><div class="lab">reducer · completion-only (existing)</div>Re-assert: Backlog→Todo completes a running refine; Todo→<code>LLD</code> completes a running split; neither launches anything.</div>
+      <div class="t"><div class="lab">drawer · gating</div>Refine renders only for <code>backlog</code>, Split only for <code>unstarted</code>; neither for started/completed/cancelled; both disabled when profile not ready.</div>
+      <div class="t"><div class="lab">drawer · launch + attach</div>Click Refine → posts correct phase + selected agent; on 201 an attach-mode session for the returned run appears in the Terminal tab and is focused; no relaunch.</div>
+      <div class="t"><div class="lab">drawer · no tracked run from generic path</div>Using the "＋ Agent" launcher creates no tracer state (driver registry stays empty for that task).</div>
+    </div>
+  </section>
+
+  <section id="order">
+    <h2>Implementation order</h2>
+    <p class="lede">Backend contract first (it is what #703/#751 build the buttons against), then the FE wiring, then doc-correction.</p>
+    <div class="seq">
+      <div class="step"><div class="n">1</div><b>Endpoint</b>Add <code>apps/execution/api.py</code> with the dup-run guard + error mapping; register the router.</div>
+      <div class="step"><div class="n">2</div><b>BE tests</b>Write <code>test_api.py</code> for all status paths; re-assert completion-only via the shipped reducer tests.</div>
+      <div class="step"><div class="n">3</div><b>API client</b>Add <code>postPlanningRun</code> to the studio host API layer.</div>
+      <div class="step"><div class="n">4</div><b>Attach path</b>Ensure the terminal store can register an attach-mode session from an <code>agent_run_id</code>.</div>
+      <div class="step"><div class="n">5</div><b>Buttons</b>Add state-gated Refine / Split to the drawer, wired to the API + attach + Terminal focus.</div>
+      <div class="step"><div class="n">6</div><b>FE tests</b>Drawer gating, launch/attach, and generic-path-untouched assertions.</div>
+      <div class="step"><div class="n">7</div><b>Doc-correction</b>Annotate the #719/#720 "immediate Todo→LLD" wording as the deferred pipeline, not the interactive path.</div>
+      <div class="step"><div class="n">8</div><b>Finalize</b>Document the process-local restart limitation in the ticket notes; run both suites.</div>
+    </div>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance signal</h2>
+    <div class="accept">
+      <b>CODIN-746 is complete when</b> a Refine button on a Backlog task and a Split button on a Todo task each POST <code>/work-items/{id}/planning-run</code> with the drawer's selected agent, creating process-local tracer state and launching a tracked run that appears as a normal drawer Terminal-tab run; a duplicate click while the run is live returns <code>409</code> and a wrong-group request returns <code>422</code>; Backlog→Todo completes an in-flight refine and Todo→<code>LLD</code> completes an in-flight split, each launching nothing; no tracked run is ever created from prompt text or the generic launch path; and the #719/#720 "immediate Todo→LLD" wording is corrected to attribute automatic chaining to the deferred pipeline. All paths are tested and the process-local restart limitation is documented.
+    </div>
+  </section>
+</main>
+
+<script>
+  const nodes = {
+    button: {
+      title: "Drawer Refine / Split buttons",
+      tag: "new controls",
+      does: ["Render only for the phase's required state group (backlog / unstarted).", "Disable when no ready Coding profile (reuse canLaunch).", "POST planning-run with the drawer's currently-selected agent.", "On 201, attach the returned run in the Terminal tab and focus it."],
+      no: ["Do not infer a tracked run from prompt text.", "Do not modify the generic '＋ Agent' launcher.", "Do not read tasksStore selected task/module."]
+    },
+    api: {
+      title: "POST /work-items/{id}/planning-run",
+      tag: "new endpoint",
+      does: ["Authenticate with ApiKeyAuth.", "Pre-check get_state → 409 if a live run exists.", "Call driver.execute(task_id, agent, phase).", "Map execute() ValueErrors to 404 / 422; return the launched engine state."],
+      no: ["Owns no agent-defaulting policy.", "Exposes no GET/status route.", "Does not re-implement the group gate (execute() enforces it)."]
+    },
+    driver: {
+      title: "driver.execute + registry",
+      tag: "shipped / reused",
+      does: ["Load the task, resolve module, enforce the group gate.", "Store EngineState in the process-local _registry.", "Run the reducer and apply the LaunchAction via spawn_run."],
+      no: ["Does not carry HTTP status codes.", "Does not itself reject a duplicate live run (the endpoint does).", "Is not modified by this ticket."]
+    },
+    reducer: {
+      title: "reducer.decide — completion-only",
+      tag: "shipped / reused",
+      does: ["Emit a LaunchAction on execute_requested when idle.", "Mark refine done on backlog→unstarted.", "Mark split done on reaching the LLD state."],
+      no: ["Does not chain to the next phase.", "Does not perform I/O.", "Is not modified by this ticket."]
+    },
+    signal: {
+      title: "issue_state_changed observer",
+      tag: "shipped / reused",
+      does: ["Receive the worktracker state-change signal (#704).", "Fold it into any active EngineState best-effort.", "Complete a matching in-flight phase."],
+      no: ["Never launches a follow-up run.", "Never breaks the worktracker save.", "Owns no auto-chaining."]
+    },
+    terminal: {
+      title: "Drawer Terminal tab (attach)",
+      tag: "consumed",
+      does: ["Register an attach-mode session from the returned agent_run_id.", "Reuse the mode:'attach' WS transport and DrawerTerminalHost (#751).", "Show the tracked run as a normal terminal tab."],
+      no: ["Does not spawn a second run.", "Does not couple to doc-chat.", "Does not decide tracer state."]
+    },
+    untracked: {
+      title: "Generic '＋ Agent' launch",
+      tag: "untouched",
+      does: ["Keeps the prompt-driven, untracked terminal launch exactly as-is."],
+      no: ["Creates no tracer state.", "Is never reinterpreted as a tracked run.", "Is not modified."]
+    }
+  };
+
+  function renderNode(id) {
+    const data = nodes[id];
+    if (!data) return;
+    document.querySelectorAll(".node").forEach(n => n.classList.toggle("sel", n.dataset.node === id));
+    document.querySelectorAll("tr[data-node]").forEach(r => r.classList.toggle("hl", r.dataset.node === id));
+    document.getElementById("nodeInfo").innerHTML = `
+      <h3>${data.title}</h3>
+      <span class="tag">${data.tag}</span>
+      <div class="k">Does</div>
+      <ul>${data.does.map(x => `<li>${x}</li>`).join("")}</ul>
+      <div class="k">Does not</div>
+      <ul class="no">${data.no.map(x => `<li>${x}</li>`).join("")}</ul>`;
+  }
+  document.querySelectorAll(".node, tr[data-node]").forEach(el => {
+    el.addEventListener("click", () => renderNode(el.dataset.node));
+  });
+
+  const steps = {
+    1: ["Button shown", "IssueDrawerTabs reads workspace.task.state.group; Refine renders for 'backlog', Split for 'unstarted'. canLaunch requires a ready profile.", "Wrong group or missing profile: the button is absent or disabled with a scoped reason."],
+    2: ["Click Refine", "FE resolves the selected agent (active terminal session's agent, else picker default) and POSTs {phase:'refine', agent} to the host endpoint with x-api-key.", "No agent selectable → fall back to the drawer's default agent; the body is never sent without an agent."],
+    3: ["Dup-run guard", "The endpoint calls driver.get_state(issue_id); a present state with status=='running' means a live tracked run exists → 409.", "Because execute() would otherwise overwrite the registry and relaunch, this pre-check is the sole duplicate defense."],
+    4: ["execute()", "Loads the task, resolves the module ancestor, enforces the group gate, stores EngineState, and runs the reducer which emits a LaunchAction.", "task_not_found → 404; task_not_in_backlog / module_id_required → 422."],
+    5: ["spawn_run", "The driver launches the tmux run with the refine recipe's initial prompt and scope='task'; a run_started event sets status='running' and records agent_run_id.", "A tmux failure yields a run_failed event → status='failed'; the endpoint returns the failed state, not a 5xx."],
+    6: ["201 response", "The endpoint returns {task_id, phase, status, agent_run_id} from the stored state.", "Fire-and-forget: no status endpoint follows; the FE uses only this payload."],
+    7: ["Attach in drawer", "The FE registers an attach-mode terminal session bound to agent_run_id (mode:'attach') and focuses the Terminal tab, so the tracked run reads as a normal run.", "If the run already failed, the FE skips attach and re-enables the button."],
+    8: ["Completion", "When the human moves the task Backlog→Todo, issue_state_changed fires; the observer completes the in-flight refine (status='done').", "It launches nothing — Split is a separate, explicit button. Auto-chaining is deferred to #721."]
+  };
+  function renderStep(id) {
+    const s = steps[id];
+    document.querySelectorAll(".step[data-step]").forEach(n => n.classList.toggle("sel", n.dataset.step === id));
+    document.getElementById("stepInfo").innerHTML = `<b>${s[0]}</b><p>${s[1]}</p><div class="k">Failure/edge</div><p>${s[2]}</p>`;
+  }
+  document.querySelectorAll(".step[data-step]").forEach(el => {
+    el.addEventListener("click", () => renderStep(el.dataset.step));
+  });
+
+  const sections = [...document.querySelectorAll("section")];
+  const navLinks = [...document.querySelectorAll("nav a")];
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      navLinks.forEach(a => a.classList.toggle("active", a.getAttribute("href") === "#" + entry.target.id));
+    });
+  }, { rootMargin: "-20% 0px -70% 0px", threshold: 0.01 });
+  sections.forEach(s => obs.observe(s));
+  renderNode("api");
+  renderStep("3");
+</script>
+</body>
+</html>

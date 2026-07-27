@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T655 · Review StoryMap and Sprints views for composition consistency — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel);
+    padding: 26px 40px 0;
+  }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 20px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    display: flex; gap: 2px; overflow-x: auto;
+    margin: 0 -40px; padding: 0 40px;
+    position: sticky; top: 0; z-index: 30;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  nav a {
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted);
+    text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+
+  /* evolution strip */
+  .evo { display: grid; grid-template-columns: 1fr 28px 1fr 28px 1fr; gap: 10px; align-items: stretch; margin-bottom: 40px; }
+  .evo .stage {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; font-size: 12.5px; color: var(--muted);
+  }
+  .evo .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .evo .stage.dead { opacity: .65; }
+  .evo .stage.dead .lbl { color: var(--red); }
+  .evo .stage.mid .lbl { color: var(--amber); }
+  .evo .stage.live { border: 2px solid var(--green); color: var(--ink); }
+  .evo .stage.live .lbl { color: var(--green); }
+  .evo .arr { align-self: center; text-align: center; color: var(--violet); font-size: 18px; font-weight: 700; }
+
+  /* pillar cards */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .pillar {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px; border-top: 4px solid var(--accent); cursor: pointer;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .pillar:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .pillar.p2 { border-top-color: var(--green); }
+  .pillar.p3 { border-top-color: var(--violet); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .pillar.open .more { display: block; }
+  .pillar ul { list-style: none; }
+  .pillar li { font-size: 13px; padding: 3px 0 3px 20px; position: relative; }
+  .pillar li.in::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .pillar li.done::before { content: "✓✓"; position: absolute; left: -4px; color: var(--accent); font-weight: 700; font-size: 11px; top: 7px; }
+  .pillar li.prep::before { content: "◌"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+  .legend { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend b { font-weight: 700; }
+  .legend .g { color: var(--green); } .legend .a { color: var(--amber); } .legend .b { color: var(--accent); }
+
+  /* interface contract strip */
+  .iface { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .icard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .icard .ihead { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--violet); }
+  .icard h3 { font-size: 15px; margin: 4px 0 8px; }
+  .icard p { font-size: 13px; color: var(--muted); }
+  .icard .rule { margin-top: 10px; font-size: 12.5px; background: var(--violet-soft); color: var(--violet); border-radius: 8px; padding: 8px 12px; font-weight: 600; }
+
+  /* diagram */
+  .diagram-wrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px;
+  }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  #nodeInfo li.does-not::before { content: "×"; color: var(--red); }
+  #nodeInfo li.does-not { color: var(--red); }
+
+  /* trace table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 1px 2px; }
+  .pill.b1 { background: var(--accent-soft); color: var(--accent); }
+  .pill.b2 { background: var(--green-soft); color: var(--green); }
+  .pill.b3 { background: var(--violet-soft); color: var(--violet); }
+
+  /* question board */
+  .qgrid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--red); }
+  .qcard.ans { border-left-color: var(--green); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--red); }
+  .qcard.ans .qid { color: var(--green); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 12.5px; color: var(--muted); }
+  .qcard p b { color: var(--green); }
+  .qcard .dref { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 6px; display: inline-block; }
+  .qcard.openq p b { color: var(--red); }
+
+  /* repo tree */
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; gap: 30px; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 380px; }
+  .tree .dir { color: var(--accent); font-weight: 700; }
+  .tree .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .ex { color: var(--muted); }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; }
+  .tree-notes li { margin-bottom: 8px; list-style: none; padding-left: 16px; position: relative; }
+  .tree-notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+  .accept {
+    background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px;
+    padding: 20px 24px; font-size: 14px;
+  }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .pillars, .qgrid, .iface { grid-template-columns: 1fr; }
+    .diagram-wrap { grid-template-columns: 1fr; }
+    .evo { grid-template-columns: 1fr; }
+    .evo .arr { transform: rotate(90deg); }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Ticketry · Design module · Ticket #655 · HLD v1</div>
+  <h1>Review StoryMap and Sprints views — HLD</h1>
+  <div class="sub">Refactor StoryMap and Sprints views to match the frontend composition direction, decomposing inline components and deduplicating helper logic.</div>
+  <div class="chips">
+    <span class="chip">Phase: HLD (v1)</span>
+    <span class="chip violet">Decisions T655-0001–T655-0002 recorded</span>
+    <span class="chip green">Zero regression</span>
+    <span class="chip green">All tests green</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">Evolution</a>
+    <a href="#iface">The Interface</a>
+    <a href="#slice">Refactor Pillars</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Decision Trace</a>
+    <a href="#questions">Question Board</a>
+    <a href="#repo">Repo Shape</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ EVOLUTION ============ -->
+<section id="evo">
+  <h2>Evolution Strip</h2>
+  <div class="lede">The component progression from monolithic layout containers to focused, clean, composition-aligned presenters.</div>
+  <div class="evo">
+    <div class="stage dead">
+      <div class="lbl">STAGE 1 · MONOLITHIC</div>
+      SprintsLens.tsx contains inlined ItemRow. Date formatting logic fmtDates is copy-pasted across SprintCard.tsx and SprintRow.tsx.
+    </div>
+    <div class="arr">→</div>
+    <div class="stage mid">
+      <div class="lbl">STAGE 2 · IN ANALYSIS</div>
+      Audit component structures and design a clean abstraction for sprint date formatting and dedicated issue row components.
+    </div>
+    <div class="arr">→</div>
+    <div class="stage live">
+      <div class="lbl">STAGE 3 · COMPOSITION READY</div>
+      SprintItemRow is a standalone file. display.ts contains formatSprintDates helper. Orchestrator components are fully presentation-focused.
+    </div>
+  </div>
+</section>
+
+<!-- ============ INTERFACE ============ -->
+<section id="iface">
+  <h2>The Interface Contract</h2>
+  <div class="lede">Stable functional signatures introduced for the refactoring targets.</div>
+  <div class="iface">
+    <div class="icard">
+      <div class="ihead">display.ts</div>
+      <h3>formatSprintDates(sprint)</h3>
+      <p>Accepts a sprint object (or null) and formats its start and end dates with standard fallbacks.</p>
+      <div class="rule">Returns: string</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">SprintItemRow.tsx</div>
+      <h3>&lt;SprintItemRow item={item} /&gt;</h3>
+      <p>Presentational component that renders a button representing an issue row within a sprint or backlog bucket. Triggers drawer navigation on click.</p>
+      <div class="rule">Props: { item: WorkItem }</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PILLARS ============ -->
+<section id="slice">
+  <h2>Refactor, in two pillars</h2>
+  <div class="lede">Click a pillar to expand its details.</div>
+  <div class="pillars">
+    <div class="pillar" data-k="extraction">
+      <div class="tag">PILLAR 1 · COMPONENT EXTRACTION</div>
+      <h3>Extract SprintItemRow</h3>
+      <p>Move the private ItemRow component out of SprintsLens.tsx into a dedicated presenter to match IssueDetail subcomponent hygiene.</p>
+      <div class="more"><ul>
+        <li class="prep">Create <b>SprintItemRow.tsx</b> under views/Sprints/</li>
+        <li class="prep">Export SprintItemRow and import it back into SprintsLens.tsx</li>
+        <li class="prep">Keep it as a pure presentational component with no internal lifecycle</li>
+      </ul></div>
+    </div>
+    <div class="pillar p2 open" data-k="consolidation">
+      <div class="tag">PILLAR 2 · HELPER CONSOLIDATION</div>
+      <h3>Consolidate Date Formatting</h3>
+      <p>Unify date range formatting between Sprints view (cards) and StoryMap view (rows) to prevent duplication.</p>
+      <div class="more"><ul>
+        <li class="prep">Create <b>formatSprintDates</b> in lib/display.ts</li>
+        <li class="prep">Update SprintCard.tsx to import and use formatSprintDates</li>
+        <li class="prep">Update SprintRow.tsx to import and use formatSprintDates</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SYSTEM SHAPE ============ -->
+<section id="shape">
+  <h2>System shape</h2>
+  <div class="lede">Click any box for its responsibility and boundary. Green = modified/new files. Blue = existing files.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 760 380" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+          <path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/>
+        </marker>
+      </defs>
+      <!-- SprintsLens -->
+      <g class="node" data-n="sprintslens">
+        <rect x="30" y="30" width="180" height="70" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="2"/>
+        <text x="120" y="64" text-anchor="middle" font-size="13" font-weight="700">SprintsLens.tsx</text>
+        <text x="120" y="82" text-anchor="middle" font-size="11" fill="var(--muted)">Orchestrator</text>
+      </g>
+      <!-- SprintCard -->
+      <g class="node" data-n="sprintcard">
+        <rect x="30" y="160" width="180" height="70" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="120" y="194" text-anchor="middle" font-size="13" font-weight="700">SprintCard.tsx</text>
+        <text x="120" y="212" text-anchor="middle" font-size="11" fill="var(--muted)">Presenter</text>
+      </g>
+      <!-- SprintItemRow -->
+      <g class="node" data-n="sprintitemrow">
+        <rect x="300" y="30" width="180" height="70" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="390" y="64" text-anchor="middle" font-size="13" font-weight="700">SprintItemRow.tsx</text>
+        <text x="390" y="82" text-anchor="middle" font-size="11" fill="var(--muted)">New Presenter</text>
+      </g>
+      <!-- StoryMap -->
+      <g class="node" data-n="storymap">
+        <rect x="550" y="30" width="180" height="70" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="640" y="64" text-anchor="middle" font-size="13" font-weight="700">StoryMap.tsx</text>
+        <text x="640" y="82" text-anchor="middle" font-size="11" fill="var(--muted)">Orchestrator</text>
+      </g>
+      <!-- SprintRow -->
+      <g class="node" data-n="sprintrow">
+        <rect x="550" y="160" width="180" height="70" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="640" y="194" text-anchor="middle" font-size="13" font-weight="700">SprintRow.tsx</text>
+        <text x="640" y="212" text-anchor="middle" font-size="11" fill="var(--muted)">Presenter Row</text>
+      </g>
+      <!-- display.ts -->
+      <g class="node" data-n="display">
+        <rect x="290" y="280" width="200" height="70" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="390" y="314" text-anchor="middle" font-size="13" font-weight="700">lib/display.ts</text>
+        <text x="390" y="332" text-anchor="middle" font-size="11" fill="var(--muted)">Shared Utilities</text>
+      </g>
+
+      <!-- lines -->
+      <path d="M120,100 L120,160" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <path d="M210,65 L300,65" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <path d="M640,100 L640,160" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <path d="M210,195 L290,290" stroke="#8a93a8" stroke-width="1.5" stroke-dasharray="3" marker-end="url(#arr)"/>
+      <path d="M550,195 L490,290" stroke="#8a93a8" stroke-width="1.5" stroke-dasharray="3" marker-end="url(#arr)"/>
+    </svg>
+    <div id="nodeInfo">
+      <h4 id="infoTitle">Click a node to view details</h4>
+      <div id="infoBody" class="hint">Responsibilities and non-responsibilities will appear here.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRACE ============ -->
+<section id="trace">
+  <h2>Decision Trace</h2>
+  <div class="lede">Mapping architectural design decisions to files and verification mechanisms.</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 80px;">ID</th>
+        <th style="width: 250px;">Decision</th>
+        <th>Rationale</th>
+        <th style="width: 140px;">Trace Target</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="trace" data-n="sprintitemrow">
+        <td><span class="rid">D-655-1</span></td>
+        <td>Extract SprintItemRow to Standalone file</td>
+        <td>Follows `IssueDetail` decomposition pattern. Moves the item presentation out of SprintsLens.tsx, making the orchestrator cleaner.</td>
+        <td><span class="pill b1">SprintItemRow.tsx</span></td>
+      </tr>
+      <tr class="trace" data-n="display">
+        <td><span class="rid">D-655-2</span></td>
+        <td>Consolidate Sprint Date formatting</td>
+        <td>Deduplicates dates range logic across StoryMap rows and Sprints cards. Avoids discrepancy where null dates returned differently.</td>
+        <td><span class="pill b2">lib/display.ts</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ QUESTIONS ============ -->
+<section id="questions">
+  <h2>Question Board</h2>
+  <div class="lede">Resolved questions regarding scope boundary.</div>
+  <div class="qgrid">
+    <div class="qcard ans">
+      <div class="qid">RESOLVED · T655-Q1</div>
+      <h4>Should SprintsLens sections and Backlog buckets be extracted too?</h4>
+      <p><b>Decision:</b> Keep them inline inside SprintsLens.tsx. They are relatively simple container segments (e.g. BacklogBucket), and extracting them would cause unnecessary file proliferation (needless churn) without improving comprehension.</p>
+      <span class="dref">SprintsLens.tsx</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ REPO ============ -->
+<section id="repo">
+  <h2>Repo Shape</h2>
+  <div class="lede">The repository shape showing new and modified files.</div>
+  <div class="tree-wrap">
+    <div class="tree">
+      <span class="dir">studio/src/</span><br>
+      &nbsp;&nbsp;<span class="dir">lib/</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">display.ts</span> <span class="ex">(modified)</span><br>
+      &nbsp;&nbsp;<span class="dir">views/</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">Sprints/</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="new">SprintItemRow.tsx</span> <span class="ex">(new)</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">SprintCard.tsx</span> <span class="ex">(modified)</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">SprintsLens.tsx</span> <span class="ex">(modified)</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">StoryMap/</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">SprintRow.tsx</span> <span class="ex">(modified)</span>
+    </div>
+    <div class="tree-notes">
+      <ul>
+        <li><b>display.ts:</b> Adds formatSprintDates function.</li>
+        <li><b>SprintItemRow.tsx:</b> Renders a single flat item row inside active sprints or backlog.</li>
+        <li><b>SprintsLens.tsx:</b> Refactored to import SprintItemRow and remove inlined helper.</li>
+        <li><b>SprintCard.tsx &amp; SprintRow.tsx:</b> Refactored to import and use the consolidated date formatting helper.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <div class="accept">
+    <h4><b>Acceptance Signal</b></h4>
+    <p class="mt-1">Implementations are purely structural. Date formats match exactly, and the extraction has zero functional logic difference, ensuring 100% test compatibility.</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+  // Interactive nodes definition
+  const nodeDetails = {
+    sprintslens: {
+      title: "SprintsLens.tsx",
+      does: [
+        "Orchestrates Sprints view tabs and routing",
+        "Calculates sprint divisions (active, planned, completed, unsprinted) on client side",
+        "Renders the appropriate lens (Now / Later / History) based on uiStore planningLens"
+      ],
+      doesNot: [
+        "Render individual item rows directly (delegated to SprintItemRow)",
+        "Format date ranges locally"
+      ]
+    },
+    sprintcard: {
+      title: "SprintCard.tsx",
+      does: [
+        "Presents summary information for a single sprint (name, status pill, progress bar)",
+        "Imports and displays formatted date ranges"
+      ],
+      doesNot: [
+        "Compute sprint item details or backlog lists",
+        "Define custom date formatting logic"
+      ]
+    },
+    sprintitemrow: {
+      title: "SprintItemRow.tsx",
+      does: [
+        "Renders a single flat item row with key, status color circle, and name",
+        "Provides click action to navigate to issue drawer"
+      ],
+      doesNot: [
+        "Manage project or backlog loading state",
+        "Embed other nested layout wrappers"
+      ]
+    },
+    storymap: {
+      title: "StoryMap.tsx",
+      does: [
+        "Orchestrates the StoryMap column and row grid",
+        "Pulls selected project modules and backlog"
+      ],
+      doesNot: [
+        "Handle card rendering and drag-and-drop targets directly"
+      ]
+    },
+    sprintrow: {
+      title: "SprintRow.tsx",
+      does: [
+        "Renders a horizontal row band representing a sprint",
+        "Binds Pragmatic Drag and Drop row-drop-target handlers",
+        "Imports and displays formatted dates"
+      ],
+      doesNot: [
+        "Implement individual card styling or drag/reorder details"
+      ]
+    },
+    display: {
+      title: "lib/display.ts",
+      does: [
+        "Provides shared formatting and label helpers",
+        "Exposes consolidated formatSprintDates helper"
+      ],
+      doesNot: [
+        "Reference React component state or route details"
+      ]
+    }
+  };
+
+  // Node click events
+  document.querySelectorAll('.node').forEach(node => {
+    node.addEventListener('click', () => {
+      const key = node.getAttribute('data-n');
+      const details = nodeDetails[key];
+      if (!details) return;
+
+      // Highlight active node
+      document.querySelectorAll('.node').forEach(n => n.classList.add('dim'));
+      node.classList.remove('dim');
+      node.classList.add('hl');
+
+      // Update info panel
+      const infoTitle = document.getElementById('infoTitle');
+      const infoBody = document.getElementById('infoBody');
+      
+      infoTitle.innerText = details.title;
+      
+      let html = "<h5>Does:</h5><ul>";
+      details.does.forEach(item => {
+        html += `<li>${item}</li>`;
+      });
+      html += "</ul>";
+      
+      if (details.doesNot && details.doesNot.length > 0) {
+        html += "<h5 style='margin-top:10px; color:var(--red);'>Does Not:</h5><ul>";
+        details.doesNot.forEach(item => {
+          html += `<li class='does-not'>${item}</li>`;
+        });
+        html += "</ul>";
+      }
+      
+      infoBody.innerHTML = html;
+      infoBody.classList.remove('hint');
+    });
+  });
+
+  // Pillar click events
+  document.querySelectorAll('.pillar').forEach(pillar => {
+    pillar.addEventListener('click', () => {
+      pillar.classList.toggle('open');
+    });
+  });
+
+  // Decision trace click linking
+  document.querySelectorAll('.trace').forEach(row => {
+    row.addEventListener('click', () => {
+      document.querySelectorAll('.trace').forEach(r => r.classList.remove('sel'));
+      row.classList.add('sel');
+      const targetNodeKey = row.getAttribute('data-n');
+      const targetNode = document.querySelector(`.node[data-n="${targetNodeKey}"]`);
+      if (targetNode) {
+        targetNode.dispatchEvent(new Event('click'));
+      }
+    });
+  });
+
+  // Nav scroll spy and link highlighting
+  const navLinks = document.querySelectorAll('nav a');
+  const sections = document.querySelectorAll('section');
+
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(section => {
+      const sectionTop = section.offsetTop;
+      const sectionHeight = section.clientHeight;
+      if (pageYOffset >= (sectionTop - 120)) {
+        current = section.getAttribute('id');
+      }
+    });
+
+    navLinks.forEach(a => {
+      a.classList.remove('active');
+      if (a.getAttribute('href') === `#${current}`) {
+        a.classList.add('active');
+      }
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T652 · Board Boundaries — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel);
+    padding: 26px 40px 16px;
+  }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+
+  /* change map */
+  .cm { display: grid; grid-template-columns: 410px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* sequence */
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+
+  /* contract card */
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; }
+  .contract .sect { display: grid; grid-template-columns: 190px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); padding-top: 2px; }
+  .contract .sv { color: var(--ink); }
+
+  /* build order */
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  @media (max-width: 900px) {
+    .cm, .seq-wrap { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Board · Refactor · Ticket #652 · LLD</div>
+  <h1>Normalize Board View Component Boundaries — LLD</h1>
+  <div class="sub">Low-level specifications for removing Zustand store hooks, React Router navigation hooks, and neighbor calculation coupling from layout sub-components. Includes interactive sequence logic and file change map.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">4 files modified · 1 new component</span>
+    <span class="chip violet">TypeScript & Vitest validated</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#contracts">Contracts</a>
+  <a href="#seq">Sequence</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Click a highlighted file to see the planned modifications and narrow props contract.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">studio/src/views/</div>
+      <div>&nbsp;&nbsp;├─ <span class="hit mod sel" data-f="boardview">BoardView.tsx</span></div>
+      <div>&nbsp;&nbsp;├─ <span class="hit new" data-f="header">BoardColumnHeader.tsx</span></div>
+      <div>&nbsp;&nbsp;├─ <span class="hit mod" data-f="column">BoardColumn.tsx</span></div>
+      <div>&nbsp;&nbsp;├─ <span class="hit mod" data-f="swimlane">BoardSwimlane.tsx</span></div>
+      <div>&nbsp;&nbsp;└─ <span class="hit mod" data-f="card">BoardCard.tsx</span></div>
+      <div class="cm-legend">
+        <span class="pill b2">new</span> New File
+        <span class="pill b1">mod</span> Modified File
+      </div>
+    </div>
+    <div class="cm-detail" id="fileDetail">
+      <h4>BoardView.tsx</h4>
+      <div class="kind">MODIFIED · COORDINATOR LAYER</div>
+      <ul>
+        <li>Coordinates store hooks: <code>useBacklogStore</code>, <code>useSelectionStore</code>, <code>useUiStore</code>, <code>useNavigate</code></li>
+        <li>Computes flat columns and swimlane layouts</li>
+        <li>Defines click/keydown handlers for navigation and selection, passing them down to columns and cards</li>
+        <li>Substitutes inline swimlane headers with the extracted <code>BoardColumnHeader</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTRACTS ============ -->
+<section id="contracts">
+  <h2>Props Contracts</h2>
+  <div class="lede">The redefined interfaces for layout and presenter components. All Zustand and router bindings are removed from card/column levels.</div>
+  <div class="contract">
+    <div class="sect">
+      <div class="sk">BoardCardProps</div>
+      <div class="sv">
+        <pre class="m">interface BoardCardProps {
+  item: WorkItem;
+  selected: boolean;
+  onClick: (item: WorkItem, e: ReactMouseEvent) => void;
+  onKeyDown: (item: WorkItem, e: React.KeyboardEvent) => void;
+  onDropOnCard: (draggedId: string, targetId: string, edge: CardEdge, stateId: string | null) => void;
+}</pre>
+        <span class="hint">Removes columnItems, laneEpicId, orderedIds, and navigate references. Reorder calculation (neighbors list) is delegated to BoardColumn or the DropCallback.</span>
+      </div>
+    </div>
+    <div class="sect">
+      <div class="sk">BoardColumnProps</div>
+      <div class="sv">
+        <pre class="m">interface BoardColumnProps {
+  column: Column;
+  laneEpicId?: string | null;
+  showHeader?: boolean;
+  onAdd?: (stateId: string) => void;
+  orderedIds: string[];
+  selectedIds: Set&lt;string&gt;;
+  onCardClick: (item: WorkItem, e: ReactMouseEvent) => void;
+  onCardKeyDown: (item: WorkItem, e: React.KeyboardEvent) => void;
+  onDropOnColumn: (draggedId: string, stateId: string, element: HTMLDivElement) => void;
+  onDropOnCard: (draggedId: string, targetId: string, edge: CardEdge, stateId: string | null, laneEpicId?: string | null) => void;
+}</pre>
+        <span class="hint">Removes direct store writes. Sets up dropTargetForElements and maps items directly to cards with callbacks.</span>
+      </div>
+    </div>
+    <div class="sect">
+      <div class="sk">BoardColumnHeaderProps</div>
+      <div class="sv">
+        <pre class="m">interface BoardColumnHeaderProps {
+  state: State | null;
+  count: number;
+  onAdd?: (stateId: string) => void;
+}</pre>
+        <span class="hint">Extracted presentational component. Used by BoardColumn for flat layouts, and by BoardView for sticky swimlane headers.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SEQUENCE ============ -->
+<section id="seq">
+  <h2>Interactive Drop Sequence</h2>
+  <div class="lede">Click on a step circle to see the sequence logic from drop gesture to store updates.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 760 300" width="100%">
+      <!-- Actors -->
+      <text x="70" y="30" font-size="12" font-weight="700" fill="#5b6478" text-anchor="middle">Pragmatic DnD</text>
+      <text x="230" y="30" font-size="12" font-weight="700" fill="#5b6478" text-anchor="middle">BoardCard / Column</text>
+      <text x="430" y="30" font-size="12" font-weight="700" fill="#5b6478" text-anchor="middle">BoardView</text>
+      <text x="630" y="30" font-size="12" font-weight="700" fill="#5b6478" text-anchor="middle">BacklogStore</text>
+
+      <!-- Lifelines -->
+      <line x1="70" y1="40" x2="70" y2="280" stroke="#e3e7ee" stroke-dasharray="4 4"/>
+      <line x1="230" y1="40" x2="230" y2="280" stroke="#e3e7ee" stroke-dasharray="4 4"/>
+      <line x1="430" y1="40" x2="430" y2="280" stroke="#e3e7ee" stroke-dasharray="4 4"/>
+      <line x1="630" y1="40" x2="630" y2="280" stroke="#e3e7ee" stroke-dasharray="4 4"/>
+
+      <!-- Step 1 -->
+      <g class="step" data-s="1">
+        <line x1="70" y1="80" x2="230" y2="80" stroke="#3556d4" stroke-width="1.5" marker-end="url(#arr)"/>
+        <circle cx="150" cy="80" r="10" fill="#e8edfb"/>
+        <text x="150" y="84" font-size="11" font-weight="700" fill="#3556d4" text-anchor="middle">1</text>
+      </g>
+
+      <!-- Step 2 -->
+      <g class="step" data-s="2">
+        <line x1="230" y1="130" x2="430" y2="130" stroke="#3556d4" stroke-width="1.5" marker-end="url(#arr)"/>
+        <circle cx="330" cy="130" r="10" fill="#e8edfb"/>
+        <text x="330" y="134" font-size="11" font-weight="700" fill="#3556d4" text-anchor="middle">2</text>
+      </g>
+
+      <!-- Step 3 -->
+      <g class="step" data-s="3">
+        <line x1="430" y1="180" x2="630" y2="180" stroke="#3556d4" stroke-width="1.5" marker-end="url(#arr)"/>
+        <circle cx="530" cy="180" r="10" fill="#e8edfb"/>
+        <text x="530" y="184" font-size="11" font-weight="700" fill="#3556d4" text-anchor="middle">3</text>
+      </g>
+
+      <!-- Step 4 -->
+      <g class="step" data-s="4">
+        <line x1="630" y1="230" x2="430" y2="230" stroke="#1d7a4f" stroke-width="1.5" marker-end="url(#arr)"/>
+        <circle cx="530" cy="230" r="10" fill="#e3f3ea"/>
+        <text x="530" y="234" font-size="11" font-weight="700" fill="#1d7a4f" text-anchor="middle">4</text>
+      </g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a step number to view sequence description and data structures.</span></div>
+  </div>
+</section>
+
+<!-- ============ TESTS ============ -->
+<section id="tests">
+  <h2>Test Verification Plan</h2>
+  <div class="lede">Continuous validation strategy to ensure board behavior remains identical.</div>
+  <table>
+    <thead><tr><th>Test Target</th><th>Validating Feature</th><th>Expected Outcome</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">board.test.tsx</span></td><td>Swimlane rendering, header layout, quick-add triggers, reordering behaviors</td><td><span class="sev ok">Passed</span> (32 tests)</td></tr>
+      <tr><td><span class="m">selectionWiring.test.tsx</span></td><td>Selection surface boundaries, shift-clicks, range highlights, actions bar</td><td><span class="sev ok">Passed</span> (5 tests)</td></tr>
+      <tr><td><span class="m">dnd.test.ts</span></td><td>Reorder calculation helpers and targets</td><td><span class="sev ok">Passed</span> (11 tests)</td></tr>
+      <tr><td>TypeScript build</td><td>Prop-type verification</td><td><span class="sev ok">Passed</span> (tsc validation)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build Order</h2>
+  <div class="lede">Implementation phases to minimize compiler errors.</div>
+  <div class="steps">
+    <div class="bstep">
+      <div class="n">1</div>
+      <b>Create Header Component</b>
+      Create <code>BoardColumnHeader.tsx</code> and extract markup.
+    </div>
+    <div class="bstep">
+      <div class="n">2</div>
+      <b>Refactor BoardCard</b>
+      Narrow parameters. Move neighbor calculation to column, selection/nav to callbacks.
+    </div>
+    <div class="bstep">
+      <div class="n">3</div>
+      <b>Refactor Columns</b>
+      Receive selection state and callbacks from view. Handle reorder logic in drop callback.
+    </div>
+    <div class="bstep">
+      <div class="n">4</div>
+      <b>Refactor BoardView</b>
+      Integrate headers, pass down callbacks and selections, perform validations.
+    </div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance confirmation</h2>
+  <div class="accept">
+    LLD approved. Changes will be made incrementally, validated by <code>vitest</code> and <code>tsc</code> compiler runs.
+  </div>
+</section>
+
+</main>
+
+<script>
+  // change map detail view
+  const CM_DETAILS = {
+    boardview: {
+      t: 'BoardView.tsx',
+      k: 'MODIFIED · COORDINATOR LAYER',
+      d: ['Coordinates store hooks: useBacklogStore, useSelectionStore, useUiStore, useNavigate', 'Computes flat columns and swimlane layouts', 'Defines click/keydown handlers for navigation and selection, passing them down to columns and cards', 'Substitutes inline swimlane headers with the extracted BoardColumnHeader']
+    },
+    header: {
+      t: 'BoardColumnHeader.tsx',
+      k: 'NEW · SHARED PRESENTER',
+      d: ['Color dot state indicators based on status colors', 'Render workflow status labels and issues count', 'Provide optional quick-add button triggered via state ID callback', 'No store reads or side effects']
+    },
+    column: {
+      t: 'BoardColumn.tsx',
+      k: 'MODIFIED · LAYOUT COMPONENT',
+      d: ['Receives columns, item collections, and coordinates selection sets', 'Binds pragmatic-drag-and-drop dropTargetForElements DOM ref', 'Performs reorderNeighbors calculations when a card lands on another card within its boundary', 'Does not query stores or execute navigations directly']
+    },
+    swimlane: {
+      t: 'BoardSwimlane.tsx',
+      k: 'MODIFIED · LAYOUT COMPONENT',
+      d: ['Preserves epic collapse layout flags in localStorage', 'Integrates BoardColumnHeader for swimlane rows', 'Passes callbacks from BoardView down to BoardColumn children']
+    },
+    card: {
+      t: 'BoardCard.tsx',
+      k: 'MODIFIED · PRESENTER COMPONENT',
+      d: ['Binds draggable Pragmatic elements and registers drop target edge zones', 'Fires presenter-level callbacks (onClick, onKeyDown) on mouse and keyboard clicks', 'Accepts selected highlighting flags from parent layout element', 'No store dependencies or useNavigate links']
+    }
+  };
+
+  document.querySelectorAll('.cm-tree .hit').forEach(h => {
+    h.addEventListener('click', () => {
+      document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+      h.classList.add('sel');
+      const data = CM_DETAILS[h.dataset.f];
+      if (!data) return;
+      document.getElementById('fileDetail').innerHTML = 
+        '<h4>' + data.t + '</h4>' +
+        '<div class="kind">' + data.k + '</div>' +
+        '<ul>' + data.d.map(x => '<li>' + x + '</li>').join('') + '</ul>';
+    });
+  });
+
+  // sequence info details
+  const SEQ_DETAILS = {
+    1: {
+      t: 'Drop gesture captured by Pragmatic target',
+      p: 'A user drops a BoardCard. Pragmatic Drag and Drop catches the drop location. The BoardColumn drop target handles the drop event first, calculating whether it landing on a card (triggering edge coordinates) or empty space.',
+      e: 'Coordinates payload: source (itemId), location dropTargets.'
+    },
+    2: {
+      t: 'Callback forwarded to BoardView coordinator',
+      p: 'BoardColumn or BoardCard fires the delegated onDrop callback with target details, edges, and state identifiers, passing control to BoardView.',
+      e: 'Params: (draggedId, stateId, beforeId, afterId, laneEpicId)'
+    },
+    3: {
+      t: 'Store action dropOnBoard dispatched',
+      p: 'BoardView dispatches the dropOnBoard store action in BacklogStore. The store performs HTTP operations (patchWorkItem/reorderWorkItem) and mutates local items in-place.',
+      e: 'Store update triggers react updates on all components listening to backlogStore.'
+    },
+    4: {
+      t: 'React components render updated states',
+      p: 'BoardView receives mutated item states and columns data, recalculating and re-rendering layouts. Decoupled presenter cards update instantly with new positions.',
+      e: 'Zero local state stale bugs.'
+    }
+  };
+
+  const steps = document.querySelectorAll('.step');
+  const seqInfo = document.getElementById('seqInfo');
+  steps.forEach(s => {
+    s.addEventListener('click', e => {
+      e.stopPropagation();
+      steps.forEach(x => x.classList.remove('hl'));
+      s.classList.add('hl');
+      const d = SEQ_DETAILS[s.dataset.s];
+      if (!d) return;
+      seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge" style="font-size:12px; font-weight:600; font-family:var(--mono); margin-top:8px;">' + d.e + '</div>';
+    });
+  });
+
+  // nav scroll highlights
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

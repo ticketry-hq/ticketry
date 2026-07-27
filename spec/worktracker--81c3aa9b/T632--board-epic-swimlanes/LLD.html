@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-632 · Board epic swimlanes — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel);
+    padding: 26px 40px 16px;
+  }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  p.note { font-size: 13.5px; color: var(--muted); margin-top: 14px; max-width: 880px; }
+  p.note b { color: var(--ink); }
+
+  /* mock board */
+  .mock { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; overflow-x: auto; }
+  .mgrid { display: grid; grid-template-columns: 150px repeat(3, 150px); gap: 0; min-width: 620px; }
+  .mhdr { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; position: sticky; top: 0; }
+  .mhdr .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .mlane { display: contents; }
+  .mlanehdr { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-top: 1px solid var(--line); font-size: 12.5px; font-weight: 700; color: var(--accent); }
+  .mlanehdr .ek { font-family: var(--mono); font-size: 11px; }
+  .mlanehdr .prog { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 600; }
+  .mlanehdr.noepic { color: var(--muted); }
+  .mcell { min-height: 46px; border: 1px dashed var(--line); margin: 3px; border-radius: 8px; padding: 4px; }
+  .mcard { background: var(--accent-soft); border: 1px solid #c9d6f6; border-radius: 6px; padding: 4px 7px; font-size: 11.5px; margin-bottom: 4px; }
+  .mcard.sub { background: var(--violet-soft); border-color: #d9c7f3; }
+  .mcard .k { font-family: var(--mono); font-size: 10px; color: var(--muted); display: block; }
+  .mocknote { font-size: 13px; color: var(--muted); margin-top: 14px; }
+  .mocknote b { color: var(--ink); }
+
+  /* change map */
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* contract / signature card */
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; }
+  .contract .sect { display: grid; grid-template-columns: 210px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); padding-top: 2px; }
+  .contract .sv { color: var(--ink); }
+  .contract .sv .m { color: var(--violet); font-weight: 600; }
+
+  /* decision flow */
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step rect, .step circle { transition: all .12s; }
+  .step.hl rect { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+
+  /* build order */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .cm, .seq-wrap { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker Studio · Module 81c3aa9b · Ticket #632 · LLD</div>
+  <h1>Board epic swimlanes — Low-Level Design</h1>
+  <div class="sub">Implements the HLD: a default-ON <span class="m">Group by epic</span> toggle re-lays the Kanban Board into horizontal epic lanes. One new pure selector, one new lane component, and a five-argument extension to the existing <span class="m">dropOnBoard</span> — grounded in the live code of <span class="m">backlogStore.ts</span>, <span class="m">BoardView/Column/Card.tsx</span>, <span class="m">lib/dnd.ts</span>, and <span class="m">lib/rank.ts</span>. Zero backend.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">1 new file · 6 modified</span>
+    <span class="chip violet">No migration · no route · no SDK</span>
+    <span class="chip amber">Q1 + Q2 settled</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#mock" class="active">Layout</a>
+  <a href="#map">Change Map</a>
+  <a href="#selector">Selector</a>
+  <a href="#drop">Drop Logic</a>
+  <a href="#contract">dropOnBoard Contract</a>
+  <a href="#failures">Edge Matrix</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ LAYOUT ============ -->
+<section id="mock">
+  <h2>What it looks like</h2>
+  <div class="lede">One sticky column-header strip at the top; every lane shares the same column-width grid so columns line up across the whole board. Each lane is a collapsible epic band; a card sits in its state column <i>within its owning epic's lane</i>.</div>
+  <div class="mock">
+    <div class="mgrid">
+      <div class="mhdr"></div>
+      <div class="mhdr"><span class="dot" style="background:#9aa3b8"></span>Todo</div>
+      <div class="mhdr"><span class="dot" style="background:#3556d4"></span>In&nbsp;Progress</div>
+      <div class="mhdr"><span class="dot" style="background:#1d7a4f"></span>Done</div>
+
+      <div class="mlanehdr"><span>▾</span><span class="ek">CK-1</span><span>Login &amp; Auth</span><span class="prog">1 / 3 done</span></div>
+      <div class="mhdr"></div>
+      <div class="mcell"><div class="mcard"><span class="k">CK-12</span>OAuth callback</div></div>
+      <div class="mcell"><div class="mcard"><span class="k">CK-9</span>Session store</div><div class="mcard sub"><span class="k">CK-31</span>↳ token rotation</div></div>
+      <div class="mcell"><div class="mcard"><span class="k">CK-7</span>Login form</div></div>
+
+      <div class="mlanehdr"><span>▾</span><span class="ek">CK-2</span><span>Billing</span><span class="prog">2 / 2 done</span></div>
+      <div class="mhdr"></div>
+      <div class="mcell"></div>
+      <div class="mcell"></div>
+      <div class="mcell"><div class="mcard"><span class="k">CK-44</span>Invoice PDF</div><div class="mcard"><span class="k">CK-45</span>Stripe webhook</div></div>
+
+      <div class="mlanehdr"><span>▾</span><span class="ek">CK-3</span><span>Search</span><span class="prog">0 / 0 done</span></div>
+      <div class="mhdr"></div>
+      <div class="mcell"></div>
+      <div class="mcell"></div>
+      <div class="mcell"></div>
+
+      <div class="mlanehdr noepic"><span>▾</span><span class="ek">—</span><span>No epic</span><span class="prog">1 / 1 done</span></div>
+      <div class="mhdr"></div>
+      <div class="mcell"></div>
+      <div class="mcell"></div>
+      <div class="mcell"><div class="mcard"><span class="k">CK-50</span>Loose chore</div></div>
+    </div>
+  </div>
+  <div class="mocknote">
+    <b>Empty lanes (Search) still render</b> — valid reparent drop targets. The <b>No epic</b> lane is always last. The violet card <span class="m">CK-31</span> is a sub-task rolled up into its story's lane (Login&amp;Auth) via <span class="m">owningEpic</span>; dragging it to Billing/Done changes its <i>state only</i> — it snaps back into the Login&amp;Auth lane (Q1). Dragging the <i>story</i> <span class="m">CK-44</span> from Billing/Done into Login&amp;Auth/Done sets state <i>and</i> reparents — it jumps lanes.
+  </div>
+</section>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Click a highlighted file for its exact delta. The flat-board path is preserved byte-for-byte; everything new is gated behind the <span class="m">groupByEpic</span> flag.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">studio/src/</div>
+      <div class="dir">├─ stores/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="store">backlogStore.ts</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="ui">uiStore.ts</span></div>
+      <div class="dir">├─ views/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="boardview">BoardView.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit new" data-f="swimlane">BoardSwimlane.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="column">BoardColumn.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="card">BoardCard.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="filterbar">BoardFilterBar.tsx</span></div>
+      <div class="dir">│&nbsp;&nbsp;&nbsp;└─ DropSlot.tsx <span style="color:#9aa3b8">— reused as-is</span></div>
+      <div class="dir">├─ lib/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit ro" data-f="dnd">dnd.ts</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit ro" data-f="rank">rank.ts</span></div>
+      <div class="dir">└─ test/</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="test">board.test.tsx</span></div>
+      <div class="dir" style="margin-top:8px">worktracker/ &amp; sdk/ <span style="color:#9aa3b8">— zero changes</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--accent-soft)"></i>read-only input</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail"><span class="hint">Select a file on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ SELECTOR ============ -->
+<section id="selector">
+  <h2>The <span class="m">boardSwimlanes()</span> selector</h2>
+  <div class="lede">A pure function beside <span class="m">boardColumns()</span> — same item set, re-bucketed by (lane × state). The board renders only what it returns. <span class="m">owningEpic()</span> is lifted to a module-level helper so both selectors share one walk-to-ancestor implementation.</div>
+  <div class="contract">
+    <div class="sect"><span class="sk">SIGNATURE</span><span class="sv"><span class="m">boardSwimlanes(items, states, modules, filters) → { columns: (State&nbsp;|&nbsp;null)[]; lanes: SwimLane[] }</span></span></div>
+    <div class="sect"><span class="sk">UNIFORM COLUMNS</span><span class="sv">Computed once across <i>all</i> visible items: a leading <span class="m">null</span> "No State" column only when some visible item is stateless/unknown, then the real states sorted by <span class="m">groupRank(group)</span>. The same array drives the sticky header strip and every lane's cells, so columns align.</span></div>
+    <div class="sect"><span class="sk">LANE = SwimLane</span><span class="sv"><span class="m">{ epic: Module&nbsp;|&nbsp;null; cells: WorkItem[][]; done; total }</span> — <span class="m">cells</span> is parallel to <span class="m">columns</span> (same length/order); each cell is rank-sorted via <span class="m">compareRank</span> (#626).</span></div>
+    <div class="sect"><span class="sk">LANE MEMBERSHIP</span><span class="sv">An item belongs to lane <span class="m">owningEpic(item)</span> — walk <span class="m">parent_id</span> to the first module ancestor (cycle-guarded), else the No-epic lane. Sub-tasks roll up to their story's ancestor epic for free.</span></div>
+    <div class="sect"><span class="sk">LANE SET</span><span class="sv">One lane per module in module order; trailing No-epic lane. When <span class="m">filters.epicIds</span> is set, only selected epics' lanes render (+ No-epic if <span class="m">NO_EPIC</span> ∈ selection) — the exact same gating <span class="m">groupBacklog</span> uses.</span></div>
+    <div class="sect"><span class="sk">VISIBILITY</span><span class="sv">Reuses <span class="m">boardColumns</span>' predicates: honors the epic + sprint filters, drops sub-tasks when <span class="m">showSubtasks === false</span>, and <i>ignores the state filter</i> (state is the column axis).</span></div>
+    <div class="sect"><span class="sk">PROGRESS</span><span class="sv">Per lane: <span class="m">total</span> = visible cards in the lane, <span class="m">done</span> = those with <span class="m">state.group === "completed"</span> — the Backlog group-header vocab, scoped to what the board shows.</span></div>
+  </div>
+  <p class="note"><b>Precedent:</b> a single global rank ordered within a 2-D bucket is exactly how <span class="m">buildStoryMap</span> already fills its (epic × sprint) cells. <span class="m">rank</span> stays one global field per item (#626) — swimlanes only change which neighbors a reorder compares against.</p>
+</section>
+
+<!-- ============ DROP LOGIC ============ -->
+<section id="drop">
+  <h2>Drop decision — three branches</h2>
+  <div class="lede">A drop target (column body or card) lives in a lane and always passes that lane's epic id to the store. The store — which has the full item list — decides reparent vs state-only. Click a node.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 560 430" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+      </defs>
+      <g stroke="#5b6478" stroke-width="1.5" fill="none">
+        <line x1="280" y1="58" x2="280" y2="78" marker-end="url(#arr)"/>
+        <line x1="280" y1="116" x2="280" y2="136" marker-end="url(#arr)"/>
+        <!-- branch out -->
+        <line x1="200" y1="174" x2="120" y2="206" marker-end="url(#arr)"/>
+        <line x1="280" y1="180" x2="280" y2="206" marker-end="url(#arr)"/>
+        <line x1="360" y1="174" x2="440" y2="206" marker-end="url(#arr)"/>
+        <!-- to rollback -->
+        <line x1="120" y1="270" x2="250" y2="330" marker-end="url(#arr)"/>
+        <line x1="280" y1="270" x2="280" y2="330" marker-end="url(#arr)"/>
+        <line x1="440" y1="270" x2="310" y2="330" marker-end="url(#arr)"/>
+      </g>
+      <g font-size="11" fill="#5b6478">
+        <text x="292" y="72">story, lane differs</text>
+        <text x="150" y="198" text-anchor="end">↙ story · lane ≠</text>
+        <text x="292" y="200">same lane</text>
+        <text x="410" y="198">sub-task · lane ≠ ↘</text>
+      </g>
+      <!-- nodes -->
+      <g class="step" data-s="1"><rect x="190" y="30" width="180" height="30" rx="8" fill="#e8edfb" stroke="#3556d4"/><text x="280" y="49" text-anchor="middle" font-size="12" font-weight="700" fill="#3556d4">1 · component computes neighbors</text></g>
+      <g class="step" data-s="2"><rect x="180" y="88" width="200" height="30" rx="8" fill="#fbf0d8" stroke="#9a6700"/><text x="280" y="107" text-anchor="middle" font-size="12" font-weight="700" fill="#9a6700">2 · dropOnBoard resolves item</text></g>
+      <g class="step" data-s="3"><rect x="222" y="146" width="116" height="30" rx="8" fill="#f0e9fb" stroke="#6b3fb8"/><text x="280" y="165" text-anchor="middle" font-size="12" font-weight="700" fill="#6b3fb8">3 · branch</text></g>
+      <g class="step" data-s="4"><rect x="35" y="208" width="170" height="62" rx="8" fill="#e3f3ea" stroke="#1d7a4f"/><text x="120" y="232" text-anchor="middle" font-size="12" font-weight="700" fill="#1d7a4f">A · reparent</text><text x="120" y="250" text-anchor="middle" font-size="10.5" fill="#1d7a4f">PATCH parent_id+state</text><text x="120" y="263" text-anchor="middle" font-size="10.5" fill="#1d7a4f">→ reorder (lane B)</text></g>
+      <g class="step" data-s="5"><rect x="200" y="208" width="160" height="62" rx="8" fill="#e3f3ea" stroke="#1d7a4f"/><text x="280" y="232" text-anchor="middle" font-size="12" font-weight="700" fill="#1d7a4f">C · same lane</text><text x="280" y="250" text-anchor="middle" font-size="10.5" fill="#1d7a4f">PATCH state? + reorder</text><text x="280" y="263" text-anchor="middle" font-size="10.5" fill="#1d7a4f">(today's path)</text></g>
+      <g class="step" data-s="6"><rect x="365" y="208" width="170" height="62" rx="8" fill="#fbf0d8" stroke="#9a6700"/><text x="450" y="232" text-anchor="middle" font-size="12" font-weight="700" fill="#9a6700">B · sub-task</text><text x="450" y="250" text-anchor="middle" font-size="10.5" fill="#9a6700">PATCH state only</text><text x="450" y="263" text-anchor="middle" font-size="10.5" fill="#9a6700">parent kept · no reorder</text></g>
+      <g class="step" data-s="7"><rect x="200" y="332" width="160" height="30" rx="8" fill="#fbe7e7" stroke="#b03030"/><text x="280" y="351" text-anchor="middle" font-size="12" font-weight="700" fill="#b03030">7 · failure → rollback</text></g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a node.</span></div>
+  </div>
+</section>
+
+<!-- ============ CONTRACT ============ -->
+<section id="contract">
+  <h2>The extended <span class="m">dropOnBoard</span> contract</h2>
+  <div class="lede">One added optional argument; the flat board calls it without that argument and behaves exactly as today. All branches are a single optimistic mutation with snapshot rollback.</div>
+  <div class="contract" style="margin-bottom:18px">
+    <div class="sect"><span class="sk">SIGNATURE</span><span class="sv"><span class="m">dropOnBoard(itemId, stateId, beforeId, afterId, targetEpicId?: string&nbsp;|&nbsp;null)</span></span></div>
+    <div class="sect"><span class="sk">targetEpicId</span><span class="sv">The destination lane's epic — a module id, <span class="m">null</span> for the No-epic lane, or <span class="m">undefined</span> when the flat board calls it. <b><span class="m">undefined</span> ⇒ never reparent</b> (flat board is byte-for-byte preserved).</span></div>
+    <div class="sect"><span class="sk">A · STORY, lane ≠</span><span class="sv">Item is top-level (not a sub-task) and <span class="m">targetEpicId !== owningEpic(item)</span>: optimistic <span class="m">{ parent_id: targetEpicId, state, rank }</span>; server = <span class="m">patchWorkItem({ parent_id, state_id })</span> then <span class="m">reorderWorkItem(before, after)</span>. Neighbors are correct because the card lands in lane B's bucket — the one the user dropped into.</span></div>
+    <div class="sect"><span class="sk">C · SAME lane</span><span class="sv"><span class="m">targetEpicId === owningEpic(item)</span> (or <span class="m">undefined</span>): unchanged from today — optimistic state (if changed) + rank; <span class="m">patchWorkItem({ state_id })</span> if the column changed, then <span class="m">reorderWorkItem</span>.</span></div>
+    <div class="sect"><span class="sk">B · SUB-TASK, lane ≠</span><span class="sv">Item is a sub-task and <span class="m">targetEpicId !== owningEpic(item)</span> (Q1): <b>state-only</b>. Optimistic <span class="m">{ state }</span>; server = <span class="m">patchWorkItem({ state_id })</span>. <b>No parent patch, no reorder</b> — the dropped neighbors belong to the wrong lane, so rank is left untouched and the card re-renders in its own lane's new-state column.</span></div>
+    <div class="sect"><span class="sk">NO-OP</span><span class="sv">If neither state, parent, nor position changes (or <span class="m">rankBetween</span> throws on inverted neighbors), the drop is dropped — same guard as today.</span></div>
+    <div class="sect"><span class="sk">ROLLBACK</span><span class="sv">Any thrown server call restores the pre-drop <span class="m">items</span> snapshot and surfaces <span class="m">error</span> — one path for all three branches.</span></div>
+  </div>
+  <p class="note"><b>Sub-task detection</b> reuses the existing rule: a parent that is another work item (in <span class="m">itemById</span>), not a module and not null/dangling. <b>Component contract</b>: <span class="m">BoardColumn</span> / <span class="m">BoardCard</span> gain a <span class="m">laneEpicId</span> prop and a <span class="m">showHeader</span> prop (false in swimlanes — headers live once in the sticky strip); they always pass <span class="m">laneEpicId</span> through to <span class="m">dropOnBoard</span> and are otherwise unchanged.</p>
+</section>
+
+<!-- ============ EDGE MATRIX ============ -->
+<section id="failures">
+  <h2>Edge &amp; decision matrix</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Behavior</th><th style="width:120px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Sub-task dragged into another lane's column</td><td>State changes; <span class="m">parent_id</span> kept; card re-renders in its own epic lane's new-state column (Q1)</td><td><span class="sev ok">by design</span></td></tr>
+      <tr><td>Top-level story dragged into the No-epic lane</td><td>Reparent to <span class="m">parent_id = null</span> — detach from module, same as backlog/story-map reparent</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Story dropped into an empty lane's column</td><td>Reparent + state; lands as the lane's first card (no neighbors → top rank)</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Same-lane cross-column / same-column reorder</td><td>Today's path exactly — state change and/or #626 reorder, no parent patch</td><td><span class="sev ok">existing</span></td></tr>
+      <tr><td>Flat board (toggle OFF)</td><td><span class="m">dropOnBoard</span> called without <span class="m">targetEpicId</span> → never reparents; columns byte-for-byte</td><td><span class="sev ok">preserved</span></td></tr>
+      <tr><td>Server failure on any branch</td><td>Snapshot rollback + <span class="m">error</span>; optimistic move reverts</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Inverted neighbors (<span class="m">rankBetween</span> throws) / cyclic parent chain</td><td>Drop ignored / <span class="m">owningEpic</span> cycle guard returns null (No-epic lane)</td><td><span class="sev ok">existing</span></td></tr>
+      <tr><td>Project has no modules</td><td>Board degrades to a single No-epic lane spanning the columns</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Module filter active while grouped</td><td>Only selected lanes render (items still pass <span class="m">passesEpic</span>); selected-but-empty lanes still show as headers</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Drop onto a collapsed lane</td><td>Not possible — a collapsed lane renders no column bodies, so there is no drop target</td><td><span class="sev warn">accepted</span></td></tr>
+      <tr><td>Per-column counts inside each lane</td><td>Not shown — lane progress lives in the lane header (done/total) and column labels live once in the sticky strip; per-lane per-column counts are omitted to keep the grid aligned</td><td><span class="sev def">deferred</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ TEST PLAN ============ -->
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">All in <span class="m">studio/src/test/board.test.tsx</span> (selector + store are pure / mockable); the live e2e is your gate. tsc + vitest + build green.</div>
+  <table>
+    <thead><tr><th style="width:240px">Group</th><th>Cases</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">boardSwimlanes()</span> selector</td><td>Lane per module + trailing No-epic, including empty lanes; uniform column set (No-State column only when a stateless item exists); a card lands in its owning epic's lane × state cell; a sub-task rolls up to its ancestor epic's lane; honors epic + sprint filters and the <span class="m">showSubtasks</span> toggle; ignores the state filter; per-lane done/total; cells rank-sorted.</td></tr>
+      <tr><td><span class="m">uiStore.groupByEpic</span></td><td>Defaults ON (missing key → true; only <span class="m">"0"</span> → false); <span class="m">toggleGroupByEpic</span> flips and persists to <span class="m">localStorage</span>.</td></tr>
+      <tr><td><span class="m">BoardView</span> render</td><td>Renders swimlanes by default; the Group-by-epic toggle flips to flat columns and the flat layout is unchanged; choice persists across remount; sticky header strip present once.</td></tr>
+      <tr><td><span class="m">dropOnBoard</span> branches</td><td>A: story cross-lane → <span class="m">patchWorkItem({parent_id,state_id})</span> + <span class="m">reorderWorkItem</span>; B: sub-task cross-lane → <span class="m">patchWorkItem({state_id})</span> only, parent unchanged, no reorder; C: same-lane → no parent patch; flat call (no <span class="m">targetEpicId</span>) → no parent patch (regression); failure → rollback.</td></tr>
+      <tr><td>Lane collapse</td><td>Collapsing a lane persists to its <span class="m">localStorage</span> key and hides its column bodies.</td></tr>
+      <tr><td>Live e2e (user)</td><td>Real project: board opens as swimlanes; drag a story across lanes (jumps + reparents); drag a sub-task across lanes (state changes, stays in its lane); toggle off → flat board; reload keeps the choice.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Five steps; each lands green before the next. Steps 1–3 are pure / store-level and testable without rendering a lane.</div>
+  <div class="steps">
+    <div class="bstep"><span class="n">1</span><b>Selector</b>Lift <span class="m">owningEpic</span>; add <span class="m">boardSwimlanes()</span> + types, with selector tests.</div>
+    <div class="bstep"><span class="n">2</span><b>Flag + control</b><span class="m">uiStore.groupByEpic</span> (persisted, default ON) + the Group-by-epic toggle in <span class="m">BoardFilterBar</span>.</div>
+    <div class="bstep"><span class="n">3</span><b>Drop logic</b>Extend <span class="m">dropOnBoard</span> with <span class="m">targetEpicId</span> + the three branches + sub-task guard; store tests.</div>
+    <div class="bstep"><span class="n">4</span><b>Lane UI</b><span class="m">BoardSwimlane.tsx</span>, the sticky strip + shared grid in <span class="m">BoardView</span>, and <span class="m">laneEpicId</span>/<span class="m">showHeader</span> on Column/Card. Flat path untouched.</div>
+    <div class="bstep"><span class="n">5</span><b>Green + e2e</b>Full vitest + tsc + build; your live validation gates Done.</div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section>
+  <h2>Acceptance</h2>
+  <div class="accept">
+    Done when the Board opens, by default, as <b>horizontal epic swimlanes</b> — a lane per epic (empty ones included) plus a No-epic lane, columns aligned across all lanes; a card sits in its state column within its owning epic's lane; a <b>story dragged across lanes</b> sets state <i>and</i> reparents in one optimistic patch, a <b>sub-task dragged across lanes</b> sets state only and keeps its parent (Q1); lanes <b>collapse and show done/total</b>; a <b>Group by epic</b> toggle (default ON) flips to today's flat columns and the choice persists — all with <b>zero backend change</b>, and tsc + vitest + build green.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    store: { t: 'studio/src/stores/backlogStore.ts', k: 'MODIFIED', items: [
+      'Lift owningEpic() out of boardColumns() to a module-level helper (moduleIds, itemById) and reuse it in both boardColumns and the new selector.',
+      'Add boardSwimlanes(items, states, modules, filters) → { columns, lanes }: uniform column set + a SwimLane per module + No-epic lane; cells rank-sorted; honors epic/sprint filters + showSubtasks; ignores state filter.',
+      'Extend dropOnBoard with an optional 5th arg targetEpicId; resolve isSubtask + owningEpic, then branch A (story reparent), B (sub-task state-only), C (same lane / flat).'
+    ], no: ['No change to moveItemToSprint, setItemState, reorderItem, groupBacklog, or buildStoryMap.', 'rank stays one global field — no second rank axis.'] },
+    ui: { t: 'studio/src/stores/uiStore.ts', k: 'MODIFIED', items: [
+      'Add groupByEpic: boolean (read from localStorage "studio.board.groupByEpic", default ON — missing → true, only "0" → false).',
+      'Add toggleGroupByEpic() that flips and persists, mirroring the existing navCollapsed pattern.'
+    ], no: ['No change to drawer or planningLens state.'] },
+    boardview: { t: 'studio/src/views/BoardView.tsx', k: 'MODIFIED', items: [
+      'Read groupByEpic; when ON, render a sticky one-row column-header strip + a vertical stack of <BoardSwimlane> over boardSwimlanes().',
+      'When OFF, render the existing flat <BoardColumn> strip unchanged.',
+      'Use a shared CSS grid column width so the strip and every lane align; keep the auto-scroll wiring.'
+    ], no: ['Flat-board branch is byte-for-byte the current code.'] },
+    swimlane: { t: 'studio/src/views/BoardSwimlane.tsx', k: 'NEW', items: [
+      'Renders one lane: a collapsible header (chevron · KEY · name · done/total bar) reusing the Backlog group-header vocab.',
+      'Persists collapse to a localStorage key in the collapsedEpics family ("studio.board.collapsedLanes").',
+      'When expanded, renders a row of <BoardColumn showHeader={false} laneEpicId={epic?.id ?? null}> aligned to the shared columns array.'
+    ], no: ['No data fetch — receives its lane + columns as props.'] },
+    column: { t: 'studio/src/views/BoardColumn.tsx', k: 'MODIFIED', items: [
+      'Accept laneEpicId?: string | null and showHeader?: boolean (default true).',
+      'When showHeader is false, render only the drop-zone body (headers live in the sticky strip).',
+      'Pass laneEpicId into dropOnBoard on the empty-area drop and down to each <BoardCard>.'
+    ], no: ['Same Pragmatic drop-target wiring; No-State lane still inert.'] },
+    card: { t: 'studio/src/views/BoardCard.tsx', k: 'MODIFIED', items: [
+      'Accept laneEpicId?: string | null and forward it as the 5th dropOnBoard arg in the reorder onDrop.',
+      'No drag-source change — still stashes the item UUID under "itemId".'
+    ], no: ['Click-to-open and #626 edge affordance unchanged.'] },
+    filterbar: { t: 'studio/src/views/BoardFilterBar.tsx', k: 'MODIFIED', items: [
+      'Add a Group-by-epic toggle (checkbox styled like the Show-sub-tasks control) bound to uiStore.groupByEpic / toggleGroupByEpic.'
+    ], no: ['Module + sub-task controls unchanged.'] },
+    dnd: { t: 'studio/src/lib/dnd.ts', k: 'READ-ONLY INPUT', items: [
+      'reorderNeighbors() + makeCardReorderTarget() reused unchanged — they already resolve before/after within whatever sorted bucket the lane column passes.'
+    ], no: ['No new DnD primitive; same library edge.'] },
+    rank: { t: 'studio/src/lib/rank.ts', k: 'READ-ONLY INPUT', items: [
+      'rankBetween() reused for the optimistic rank on the reparent + same-lane branches; the server reorder response remains authoritative.'
+    ], no: ['No change — fractional-index keys are global.'] },
+    test: { t: 'studio/src/test/board.test.tsx', k: 'MODIFIED', items: [
+      'Add selector, groupByEpic, render, dropOnBoard-branch, and lane-collapse cases (see Test Plan).',
+      'Keep the existing flat-board cases as the byte-for-byte regression guard.'
+    ], no: ['No new test file — the board suite already mocks api + auto-scroll.'] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    const kindColor = d.k.indexOf('NEW') === 0 ? 'var(--green)' : d.k.indexOf('READ') === 0 ? 'var(--accent)' : 'var(--amber)';
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + kindColor + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  const STEPS = {
+    1: { t: '1 · Component computes neighbors', p: 'The card (or column body) in the destination lane reads the dragged item id and resolves before/after ids from the bucket it renders — lane B, state X — then calls dropOnBoard(id, X, before, after, laneEpicId).', e: 'The component never knows the source lane; it only reports where the card landed.' },
+    2: { t: '2 · dropOnBoard resolves the item', p: 'The store looks up the dragged item, decides isSubtask (parent is a present work item) and currentEpic = owningEpic(item) from the full list, and computes the optimistic rank with rankBetween.', e: 'Edge: inverted neighbors throw → the drop is silently ignored, no mutation.' },
+    3: { t: '3 · Branch', p: 'Three mutually exclusive paths keyed on (isSubtask, targetEpicId vs currentEpic). targetEpicId === undefined (flat board) collapses to branch C.', e: 'targetEpicId === currentEpic is always branch C even across columns — only the lane identity decides reparent.' },
+    4: { t: 'A · Story reparent', p: 'Top-level story, lane differs: optimistic { parent_id: targetEpicId, state, rank }; server PATCH { parent_id, state_id } then reorderWorkItem. The card jumps to lane B and its neighbors there are correct.', e: 'targetEpicId null = No-epic lane → detach from module (parent_id null).' },
+    5: { t: 'C · Same lane', p: 'Same lane (or flat board): unchanged from today — patch state_id only if the column changed, then reorder against the bucket. No parent patch.', e: 'Same column + same position = no-op (no PATCH).' },
+    6: { t: 'B · Sub-task, lane differs', p: 'Q1: a sub-task never reparents from the board. State-only — optimistic { state }, server PATCH { state_id }. Rank is left untouched (the dropped neighbors are in the wrong lane), so the card re-renders in its OWN epic lane under the new state column.', e: 'Its state moves independently of the parent; the parent (epic) is never touched.' },
+    7: { t: '7 · Failure → rollback', p: 'Any branch that throws restores the pre-drop items snapshot and sets error — one rollback path shared by all three branches, exactly like setItemState / reorderItem today.', e: 'A lost optimistic move simply reverts; the user re-drops.' }
+  };
+  const seqInfo = document.getElementById('seqInfo');
+  document.querySelectorAll('.step').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = STEPS[s.dataset.s];
+    seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

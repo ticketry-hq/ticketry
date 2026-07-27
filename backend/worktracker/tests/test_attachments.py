@@ -1,0 +1,52 @@
+"""C6 — multipart upload to local disk + retrieve."""
+
+from pathlib import Path
+
+import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
+
+from worktracker.tests.conftest import BASE, post_json
+
+
+@pytest.fixture
+def task(client, project, auth):
+    return post_json(
+        client, f"{BASE}/projects/{project.id}/work-items", {"name": "T"}, auth
+    ).json()
+
+
+@pytest.mark.django_db
+def test_multipart_upload_to_disk(client, project, task, auth, tmp_path, settings):
+    settings.MEDIA_ROOT = str(tmp_path)
+
+    upload = SimpleUploadedFile("note.txt", b"hello", content_type="text/plain")
+    r = client.post(
+        f"{BASE}/work-items/{task['id']}/attachments",
+        data={"file": upload},
+        headers=auth,
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["filename"] == "note.txt"
+    assert body["mime_type"] == "text/plain"
+    assert body["size"] == 5
+
+    # The bytes landed under MEDIA_ROOT.
+    stored = list(Path(tmp_path).rglob("note*.txt"))
+    assert stored and stored[0].read_bytes() == b"hello"
+
+
+@pytest.mark.django_db
+def test_attachment_is_in_work_item_detail(client, project, task, auth, tmp_path, settings):
+    settings.MEDIA_ROOT = str(tmp_path)
+    client.post(
+        f"{BASE}/work-items/{task['id']}/attachments",
+        data={"file": SimpleUploadedFile("a.txt", b"x", content_type="text/plain")},
+        headers=auth,
+    )
+
+    r = client.get(f"{BASE}/work-items/{task['id']}", headers=auth)
+    assert r.status_code == 200
+    attachments = r.json()["attachments"]
+    assert len(attachments) == 1
+    assert attachments[0]["url"].startswith("/media/")

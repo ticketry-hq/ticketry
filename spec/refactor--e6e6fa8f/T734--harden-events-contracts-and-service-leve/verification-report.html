@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CODIN-734 · Verification Report — Harden Events Contracts &amp; Service Tests</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; border-bottom: 1px solid var(--line); }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 14px 0 2px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 4px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .kpi .n { font-size: 26px; font-weight: 800; color: var(--accent); }
+  .kpi .n.green { color: var(--green); }
+  .kpi .l { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+  .arch { display: grid; grid-template-columns: 1fr 360px; gap: 18px; align-items: start; }
+  .arch svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .node rect, .node ellipse { transition: filter .12s, stroke-width .12s; cursor: pointer; }
+  .node:hover rect, .node:hover ellipse, .node.sel rect, .node.sel ellipse { filter: brightness(.97); stroke-width: 2.4; }
+  .node text { font: 12px var(--mono); fill: var(--ink); pointer-events: none; }
+  .node .cap { font: 600 11px -apple-system, sans-serif; }
+  .edge { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#ar); }
+  .edge.dash { stroke-dasharray: 5 4; }
+  .elab { font: 10.5px var(--mono); fill: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; min-height: 320px; }
+  .panel h4 { font-size: 15px; color: var(--accent); margin-bottom: 2px; }
+  .panel .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); margin-bottom: 12px; }
+  .panel ul { list-style: none; }
+  .panel li { padding: 5px 0 5px 18px; position: relative; font-size: 13px; }
+  .panel li::before { content: "·"; position: absolute; left: 2px; color: var(--green); font-weight: 900; }
+  .panel li.no::before { content: "×"; color: var(--red); }
+  .panel .hint { color: var(--muted); font-style: italic; font-size: 12.5px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fafbfc; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  tr.ac { cursor: pointer; }
+  tr.ac:hover { background: var(--accent-soft); }
+  .verdict { font-weight: 700; font-size: 12px; padding: 2px 9px; border-radius: 20px; white-space: nowrap; }
+  .verdict.pass { background: var(--green-soft); color: var(--green); }
+  .verdict.acc { background: var(--violet-soft); color: var(--violet); }
+
+  .find { display: grid; gap: 14px; }
+  .fcard { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--amber); border-radius: 10px; padding: 16px 20px; }
+  .fcard.fixed { border-left-color: var(--green); }
+  .fcard.acc { border-left-color: var(--violet); }
+  .fcard h3 { font-size: 14.5px; margin-bottom: 4px; }
+  .fcard .tag { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--amber); }
+  .fcard.fixed .tag { color: var(--green); }
+  .fcard.acc .tag { color: var(--violet); }
+  .fcard p { font-size: 13px; color: var(--ink); margin-top: 6px; }
+  .fcard .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .fcard .ba div { font-family: var(--mono); font-size: 12px; padding: 8px 12px; border-radius: 8px; }
+  .fcard .before { background: var(--red-soft); color: var(--red); }
+  .fcard .after { background: var(--green-soft); color: var(--green); }
+
+  .cm { display: grid; grid-template-columns: 420px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 1.95; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; color: var(--muted); }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .scrollx { overflow-x: auto; }
+
+  .signoff { background: var(--green-soft); border: 1px solid #bfe3cd; border-radius: 14px; padding: 24px 28px; }
+  .signoff h2 { color: var(--green); }
+  .signoff ul { margin: 10px 0 0 20px; font-size: 13.5px; }
+  .signoff li { padding: 3px 0; }
+  pre.diff { background: #0d1117; color: #c9d1d9; border-radius: 10px; padding: 16px 18px; font-family: var(--mono); font-size: 12px; overflow-x: auto; line-height: 1.6; }
+  pre.diff .add { color: #7ee787; }
+  pre.diff .ok { color: #58a6ff; }
+  @media (max-width: 860px) { .arch, .cm { grid-template-columns: 1fr; } .kpis { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">CODIN-724 · Domain Service Refactor — Final Slice</div>
+  <h1>CODIN-734 — Harden Events Contracts &amp; Service-Level Tests</h1>
+  <p class="sub">Verification pass over the seven mutation-routing subtasks: confirm API behaviour is preserved, signal handlers are infrastructure glue, services own the business rules and carry their own tests, and the OpenAPI/SDK contract has not drifted — leaving room for a future DRF boundary without adding DRF here.</p>
+  <div class="chips">
+    <span class="chip green">284 tests pass</span>
+    <span class="chip green">2 regressions found &amp; fixed</span>
+    <span class="chip">14 docstrings restored</span>
+    <span class="chip violet">contract: 0 drift beyond accepted</span>
+    <span class="chip amber">no DRF added</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <a href="#overview">Overview</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#acceptance">Acceptance trace</a>
+  <a href="#findings">Findings</a>
+  <a href="#contract">Contract audit</a>
+  <a href="#changemap">Change map</a>
+  <a href="#signoff">Sign-off</a>
+</nav>
+
+<main>
+  <section id="overview">
+    <h2>Overview</h2>
+    <p class="lede">The structural refactor was already complete in the working tree: <code>api.py</code>/<code>models.py</code> exploded into the <code>api/</code>, <code>models/</code> and <code>services/</code> packages. This slice verifies that move did not change observable behaviour — and hardens the two seams where it silently had.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="n green">284</div><div class="l">tests pass (276 baseline + 8 added)</div></div>
+      <div class="kpi"><div class="n">2</div><div class="l">HTTP error-mapping regressions repaired (500 → 404 / 422)</div></div>
+      <div class="kpi"><div class="n">6 / 6</div><div class="l">domain rules covered by service-level tests</div></div>
+      <div class="kpi"><div class="n green">100%</div><div class="l">OpenAPI byte-identical to HEAD (bar 2 accepted endpoints)</div></div>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <h2>Layering after the refactor</h2>
+    <p class="lede">Click any box: routes translate request/response and map errors; services own mutation policy and raise framework-neutral <code>ServiceError</code>s; the router-free helper modules hold query &amp; interpretation logic; signals are an import-time event seam off the model save. This is the shape a future DRF boundary slots into.</p>
+    <div class="arch">
+      <svg viewBox="0 0 640 470" role="img" aria-label="Backend layering diagram">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#5b6478"/>
+          </marker>
+        </defs>
+        <!-- edges -->
+        <path class="edge" d="M320 86 L320 116"/>
+        <text class="elab" x="330" y="106">delegates + maps ServiceError→HttpError</text>
+        <path class="edge" d="M250 182 L250 214"/>
+        <path class="edge" d="M430 182 L430 214"/>
+        <text class="elab" x="262" y="204">calls helpers</text>
+        <path class="edge" d="M320 280 L320 312"/>
+        <text class="elab" x="330" y="302">ORM</text>
+        <path class="edge dash" d="M470 346 C 560 340, 560 250, 520 215"/>
+        <text class="elab" x="525" y="300">post_save</text>
+        <text class="elab" x="525" y="314">seam</text>
+
+        <!-- API layer -->
+        <g class="node" id="n-api" data-k="API package · route handlers">
+          <rect x="150" y="44" width="340" height="42" rx="9" fill="#e8edfb" stroke="#3556d4"/>
+          <text class="cap" x="320" y="64" text-anchor="middle" fill="#3556d4">api/  — work_items · modules · projects · sprints · configuration · attachments</text>
+          <text x="320" y="78" text-anchor="middle" fill="#5b6478" style="font-size:10px">ninja routers · request/response translation · error mapping only</text>
+        </g>
+
+        <!-- services -->
+        <g class="node" id="n-svc" data-k="services/ · mutation policy">
+          <rect x="120" y="116" width="400" height="66" rx="9" fill="#f0e9fb" stroke="#6b3fb8"/>
+          <text class="cap" x="320" y="140" text-anchor="middle" fill="#6b3fb8">services/  — work_items · modules · projects · sprints · workflow_config</text>
+          <text x="320" y="158" text-anchor="middle" fill="#5b6478" style="font-size:10px">owns: sequence/rank alloc · cancel-cascade · blocker-cycle guard</text>
+          <text x="320" y="172" text-anchor="middle" fill="#5b6478" style="font-size:10px">raises services/errors.py (ServiceError · NotFoundError · ValidationError)</text>
+        </g>
+
+        <!-- helpers left -->
+        <g class="node" id="n-wi" data-k="work_items.py · query helpers">
+          <rect x="120" y="214" width="260" height="66" rx="9" fill="#ffffff" stroke="#3556d4"/>
+          <text class="cap" x="250" y="238" text-anchor="middle">work_items.py</text>
+          <text x="250" y="256" text-anchor="middle" fill="#5b6478" style="font-size:10px">issue_qs · resolve_issue · append_rank</text>
+          <text x="250" y="270" text-anchor="middle" fill="#5b6478" style="font-size:10px">blocker_would_cycle · build_scope_context</text>
+        </g>
+        <!-- helpers right -->
+        <g class="node" id="n-sg" data-k="state_groups.py · interpretation">
+          <rect x="396" y="214" width="124" height="66" rx="9" fill="#ffffff" stroke="#3556d4"/>
+          <text class="cap" x="458" y="240" text-anchor="middle">state_groups</text>
+          <text x="458" y="258" text-anchor="middle" fill="#5b6478" style="font-size:10px">state_group()</text>
+          <text x="458" y="272" text-anchor="middle" fill="#5b6478" style="font-size:10px">RESOLVED_GROUPS</text>
+        </g>
+
+        <!-- models -->
+        <g class="node" id="n-mdl" data-k="models/ · ORM">
+          <rect x="180" y="312" width="280" height="42" rx="9" fill="#e3f3ea" stroke="#1d7a4f"/>
+          <text class="cap" x="320" y="337" text-anchor="middle" fill="#1d7a4f">models/  — Issue · State · Project · Sprint · IssueType · Attachment</text>
+        </g>
+
+        <!-- signals -->
+        <g class="node" id="n-sig" data-k="signals.py · event seam">
+          <rect x="440" y="384" width="170" height="58" rx="9" fill="#fbf0d8" stroke="#9a6700"/>
+          <text class="cap" x="525" y="406" text-anchor="middle" fill="#9a6700">signals.py</text>
+          <text x="525" y="424" text-anchor="middle" fill="#5b6478" style="font-size:10px">issue_state_changed</text>
+          <text x="525" y="437" text-anchor="middle" fill="#5b6478" style="font-size:10px">on_commit emit · log receiver</text>
+        </g>
+      </svg>
+      <div class="panel" id="arch-panel">
+        <h4>Pick a node</h4>
+        <div class="kind">LAYER RESPONSIBILITIES</div>
+        <p class="hint">Each layer lists what it <b>does</b> and, in red, what it explicitly <b>does not</b> do — the boundary this verification confirms holds.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="acceptance">
+    <h2>Acceptance-criteria trace</h2>
+    <p class="lede">Each criterion, its verdict, and the concrete evidence. Click a row to spotlight the layer it concerns in the diagram above.</p>
+    <div class="scrollx">
+    <table>
+      <thead><tr><th style="width:34%">Acceptance criterion</th><th style="width:10%">Verdict</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr class="ac" data-n="n-api">
+          <td>API behaviour preserved across work items, modules, workflow config, projects, sprints</td>
+          <td><span class="verdict pass">PASS*</span></td>
+          <td>OpenAPI byte-identical to pre-refactor HEAD (bar 2 accepted endpoints). <b>*</b> Two error-mapping regressions found &amp; fixed — see Findings F1/F2.</td>
+        </tr>
+        <tr class="ac" data-n="n-sig">
+          <td>Signal handlers delegate to services/events or are documented infrastructure glue only</td>
+          <td><span class="verdict pass">PASS</span></td>
+          <td><code>signals.py</code> is documented as the import-time <code>issue_state_changed</code> seam: snapshot (pre_save) → defer-emit on commit (post_save) → v1 log-only receiver. No business mutation; receivers contractually MUST NOT re-enter the save. 9 tests in <code>test_state_change_signal.py</code>.</td>
+        </tr>
+        <tr class="ac" data-n="n-svc">
+          <td>Service-level tests cover sequence alloc, rank alloc/reorder, blocker-cycle, state-group, seed idempotence, events</td>
+          <td><span class="verdict pass">PASS</span></td>
+          <td>sequence → <code>test_sequences</code>; rank → <code>test_ranking</code> + <code>test_service_work_items</code>; blocker-cycle → <code>test_service_work_items</code> + <code>test_blockers</code>; state-group → <b>new</b> <code>test_state_groups.py</code>; seed idempotence → <code>test_seed_is_idempotent</code> / <code>test_second_run_is_noop</code>; events → <code>test_state_change_signal</code>.</td>
+        </tr>
+        <tr class="ac" data-n="n-api">
+          <td>Route handlers no longer own business policy beyond request/response translation and error mapping</td>
+          <td><span class="verdict pass">PASS</span></td>
+          <td>Every mutation route delegates to a <code>services/</code> function and only maps <code>ServiceError → HttpError</code> (uniform after F1/F2). Reads keep their query-shaping inline — in scope, since the subtasks routed <i>mutations</i> only.</td>
+        </tr>
+        <tr class="ac" data-n="n-api">
+          <td>OpenAPI/SDK-visible contract drift absent or explicitly reviewed and accepted</td>
+          <td><span class="verdict acc">ACCEPTED</span></td>
+          <td>Diff vs HEAD: identical after restoring 14 truncated route descriptions (F3). Sole remaining delta = additive <code>PATCH</code>/<code>DELETE /attachments/{id}</code> — reviewed and <b>accepted</b> as intentional (shipped with tests, no existing op changed).</td>
+        </tr>
+        <tr class="ac" data-n="n-svc">
+          <td>Design still leaves room for a future DRF boundary without adding DRF here</td>
+          <td><span class="verdict pass">PASS</span></td>
+          <td>Services are framework-neutral and raise <code>services/errors.py</code> domain errors; no DRF import anywhere. A DRF view layer can replace <code>api/</code> verbatim by re-mapping the same <code>ServiceError</code> hierarchy.</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section id="findings">
+    <h2>Findings</h2>
+    <p class="lede">Two genuine behaviour regressions (confirmed red, then fixed green), one documentation drift restored, one additive change accepted.</p>
+    <div class="find">
+      <div class="fcard fixed">
+        <span class="tag">F1 · regression fixed</span>
+        <h3>Module work-item create dropped its 422 on a wrong-level issue type</h3>
+        <p>The moved service converts the helper's <code>HttpError</code> into a domain <code>ValidationError</code>, but <code>api/work_items.create_module_work_item</code> shipped without the <code>try/except ServiceError</code> its siblings all have — so the domain error escaped uncaught.</p>
+        <div class="ba"><div class="before">before: invalid type → <b>500</b></div><div class="after">after: invalid type → <b>422</b> (matches HEAD)</div></div>
+      </div>
+      <div class="fcard fixed">
+        <span class="tag">F2 · regression fixed</span>
+        <h3>Module create raised 500 on a missing project</h3>
+        <p><code>services/modules.create_module</code> used a bare <code>Project.objects.get</code> (raising <code>DoesNotExist</code>) where HEAD used <code>get_object_or_404</code>. Hardened the service to raise <code>NotFoundError</code> and to wrap the issue-type <code>HttpError</code> as <code>ValidationError</code>, and the route now maps <code>ServiceError → HttpError</code>.</p>
+        <div class="ba"><div class="before">before: absent project → <b>500</b></div><div class="after">after: absent project → <b>404</b> (matches HEAD)</div></div>
+      </div>
+      <div class="fcard fixed">
+        <span class="tag">F3 · doc drift restored</span>
+        <h3>14 route descriptions had been truncated to their first line</h3>
+        <p>Moving handlers into <code>api/*.py</code> kept only the summary line of each multi-paragraph docstring — and ninja publishes those as the OpenAPI <code>description</code>, so the generated SDK lost them. Restored verbatim from HEAD across work_items, projects, sprints and configuration. Contract descriptions now match exactly.</p>
+      </div>
+      <div class="fcard acc">
+        <span class="tag">F4 · accepted addition</span>
+        <h3>Two new attachment endpoints (PATCH + DELETE)</h3>
+        <p><code>updateAttachment</code> and <code>deleteAttachment</code> are absent from the pre-refactor baseline but arrived in this batch with 53 lines of passing tests, are purely additive, and change no existing operation. Reviewed and <b>accepted</b> as intentional under AC5.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="contract">
+    <h2>Contract audit method</h2>
+    <p class="lede">The OpenAPI schema was generated from a clean <code>HEAD</code> git worktree and from the refactored tree, then compared structurally. After F3, removing the two accepted attachment endpoints yields an exact match.</p>
+    <pre class="diff"># schema(refactored) − {/attachments/{id}, AttachmentPatch}  vs  schema(HEAD)
+<span class="ok">&gt;&gt;&gt; IDENTICAL after removing the 2 attachment endpoints + AttachmentPatch schema &lt;&lt;&lt;</span>
+
+# remaining path delta (the accepted additive surface):
+<span class="add">+ /attachments/{attachment_id}  patch   (updateAttachment)</span>
+<span class="add">+ /attachments/{attachment_id}  delete  (deleteAttachment)</span></pre>
+  </section>
+
+  <section id="changemap">
+    <h2>Change map — what this slice touched</h2>
+    <p class="lede">Click a file to see its exact delta. The refactor itself landed in earlier subtasks; this slice adds only the hardening edits and tests.</p>
+    <div class="cm">
+      <div class="cm-tree" id="tree">
+        <div class="dir">worktracker/worktracker/</div>
+        <div class="dir">&nbsp;&nbsp;api/</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit mod" data-f="api-wi">work_items.py</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit mod" data-f="api-mod">modules.py</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit mod" data-f="api-proj">projects.py</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit mod" data-f="api-spr">sprints.py</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit mod" data-f="api-cfg">configuration.py</span></div>
+        <div class="dir">&nbsp;&nbsp;services/</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit mod" data-f="svc-mod">modules.py</span></div>
+        <div>&nbsp;&nbsp;<span class="hit mod" data-f="wi">work_items.py</span> <span class="dir">(helper docstring)</span></div>
+        <div class="dir">&nbsp;&nbsp;tests/</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit new" data-f="t-err">test_t734_error_mapping.py</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit new" data-f="t-sg">test_state_groups.py</span></div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="hit mod" data-f="t-mod">test_module_services.py</span></div>
+        <div class="cm-legend"><span><i style="background:var(--green-soft)"></i>new</span><span><i style="background:var(--amber-soft)"></i>modified</span></div>
+      </div>
+      <div class="cm-detail" id="detail">
+        <h4>Select a file</h4>
+        <div class="kind">CHANGE DETAIL</div>
+        <p class="hint">Each entry lists the precise edit made during this verification slice.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="signoff">
+    <div class="signoff">
+      <h2>Acceptance signal</h2>
+      <p style="font-size:13.5px;max-width:880px">The domain-service refactor is verified behaviour-preserving. All six acceptance criteria are met — five PASS and one ACCEPTED (the additive attachment endpoints). The backend reads cleanly as routes → services → helpers → models with an import-time event seam, and is ready for a future DRF boundary with no DRF introduced here.</p>
+      <ul>
+        <li>284 / 284 tests pass (276 baseline + 8 added this slice).</li>
+        <li>Two HTTP-status regressions repaired; both pinned by new tests.</li>
+        <li>OpenAPI contract byte-identical to HEAD apart from the reviewed, accepted attachment endpoints.</li>
+        <li>State-group interpretation now has direct service-level coverage.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script>
+  const archData = {
+    "n-api": { t:"api/ — route handlers", k:"PRESENTATION LAYER", does:["Parse path/query/body into typed params","Call exactly one service function","Map ServiceError → ninja HttpError (status + message)","Serialize the returned model via response schema"], no:["Allocate sequences or ranks","Decide cancel-cascade or blocker-cycle policy","Touch the ORM beyond a read for the response"] },
+    "n-svc": { t:"services/ — mutation policy", k:"DOMAIN LAYER (framework-neutral)", does:["Own every mutation rule: create/patch/reorder/archive/delete","Allocate sequence_id and fractional rank","Run cancel→archive cascade and blocker-cycle guard","Raise ServiceError / NotFoundError / ValidationError"], no:["Import DRF or ninja routing","Build HTTP responses or status codes directly","Know about request objects"] },
+    "n-wi": { t:"work_items.py — query helpers", k:"ROUTER-FREE HELPERS", does:["Build annotated querysets (issue_qs / task_qs)","Resolve issues by UUID or KEY-N","append_rank · blocker_would_cycle · build_scope_context"], no:["Persist mutations (services do)","Define routes"] },
+    "n-sg": { t:"state_groups.py — interpretation", k:"ROUTER-FREE HELPERS (#705)", does:["Resolve a state_id → its group, read fresh from the table","Expose RESOLVED_GROUPS = {completed, cancelled}"], no:["Import the ninja API surface — so signals.py can import it at app-init"] },
+    "n-mdl": { t:"models/ — ORM", k:"PERSISTENCE", does:["Define Issue/State/Project/Sprint/IssueType/Attachment","Declare cascade + audit-timestamp columns"], no:["Hold mutation policy"] },
+    "n-sig": { t:"signals.py — event seam", k:"INFRASTRUCTURE GLUE (AC2)", does:["pre_save: snapshot old state_id from the table","post_save: detect transition, defer emit to transaction.on_commit","Send issue_state_changed; v1 receiver logs only"], no:["Mutate Issue.state synchronously (would re-enter the save)","Own any business decision — it is a seam for #700"] }
+  };
+  const archPanel = document.getElementById('arch-panel');
+  function showArch(id){
+    const d = archData[id]; if(!d) return;
+    document.querySelectorAll('.node').forEach(n=>n.classList.toggle('sel', n.id===id));
+    archPanel.innerHTML = '<h4>'+d.t+'</h4><div class="kind">'+d.k+'</div><ul>'+
+      d.does.map(x=>'<li>'+x+'</li>').join('')+
+      d.no.map(x=>'<li class="no">'+x+'</li>').join('')+'</ul>';
+  }
+  document.querySelectorAll('.node').forEach(n=>n.addEventListener('click',()=>showArch(n.id)));
+  showArch('n-svc');
+
+  // acceptance rows spotlight a node
+  document.querySelectorAll('tr.ac').forEach(r=>r.addEventListener('click',()=>{
+    const id=r.dataset.n;
+    document.getElementById('architecture').scrollIntoView({behavior:'smooth',block:'start'});
+    showArch(id);
+  }));
+
+  const fileData = {
+    "api-wi": { kind:"MODIFIED", t:"api/work_items.py", li:["Wrapped create_module_work_item in try/except ServiceError → HttpError (F1)","Restored full docstrings: listProjectWorkItems, listModuleWorkItems, reorderWorkItem, deleteWorkItem, scope-context (F3)"] },
+    "api-mod": { kind:"MODIFIED", t:"api/modules.py", li:["create_module now maps ServiceError → HttpError (F2)"] },
+    "api-proj": { kind:"MODIFIED", t:"api/projects.py", li:["Restored full docstrings: createProject, updateProject, deleteProject (F3)"] },
+    "api-spr": { kind:"MODIFIED", t:"api/sprints.py", li:["Restored full docstrings: createSprint, getSprint, updateSprint, startSprint, completeSprint (F3)"] },
+    "api-cfg": { kind:"MODIFIED", t:"api/configuration.py", li:["Restored updateIssueType wording: 'flips the level's default' (F3)"] },
+    "svc-mod": { kind:"MODIFIED", t:"services/modules.py", li:["create_module raises NotFoundError on missing project (F2)","Wraps resolve_issue_type HttpError → ValidationError, matching services/work_items"] },
+    "wi": { kind:"MODIFIED", t:"work_items.py", li:["Updated module docstring: routes live in api/ package, policy in services/ (stale api.py reference removed)"] },
+    "t-err": { kind:"NEW", t:"tests/test_t734_error_mapping.py", li:["Pins module work-item wrong-level type → 422","Pins module create under absent project → 404"] },
+    "t-sg": { kind:"NEW", t:"tests/test_state_groups.py", li:["Direct coverage of state_group(): id→group, fresh-read after regroup, None/unknown fallbacks","Pins RESOLVED_GROUPS = {completed, cancelled}"] },
+    "t-mod": { kind:"MODIFIED", t:"tests/test_module_services.py", li:["Wrong-level type now asserts ValidationError (was leaked HttpError)","Added missing-project → NotFoundError test"] }
+  };
+  const detail = document.getElementById('detail');
+  document.querySelectorAll('.hit').forEach(h=>h.addEventListener('click',()=>{
+    document.querySelectorAll('.hit').forEach(x=>x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d=fileData[h.dataset.f]; if(!d) return;
+    detail.innerHTML='<h4>'+d.t+'</h4><div class="kind">'+d.kind+'</div><ul>'+d.li.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+  }));
+
+  // scroll-spy nav
+  const links=[...document.querySelectorAll('#nav a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+  const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){const i=secs.indexOf(e.target);links.forEach(l=>l.classList.remove('active'));links[i]?.classList.add('active');}})},{rootMargin:"-45% 0px -50% 0px"});
+  secs.forEach(s=>s&&obs.observe(s));
+</script>
+</body>
+</html>

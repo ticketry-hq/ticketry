@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.cache/
+*.db
+build/
+dist/
+
+# Django
+*.sqlite3
+/host/media/
+/host/staticfiles/
+
+# Node / Studio
+node_modules/
+studio/dist/
+.openapi-generator/
+studio/src-tauri/binaries/
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store

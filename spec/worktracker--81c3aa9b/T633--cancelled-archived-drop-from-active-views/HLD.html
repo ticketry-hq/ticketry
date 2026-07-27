@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-633 · Cancelled = Archived — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; margin: 0 -40px; padding: 0 40px; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+  p.body { font-size: 14px; color: var(--ink); max-width: 860px; margin-bottom: 12px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: #eef1f6; padding: 1px 5px; border-radius: 4px; color: #324; }
+
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .card .tag { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); }
+  .card h3 { font-size: 15px; margin: 4px 0 8px; }
+  .card p { font-size: 13px; color: var(--muted); }
+  .card.accent { border-top: 4px solid var(--accent); }
+  .card.green { border-top: 4px solid var(--green); }
+  .card.red { border-top: 4px solid var(--red); }
+  .card.violet { border-top: 4px solid var(--violet); }
+
+  /* before/after strip */
+  .ba { display: grid; grid-template-columns: 1fr 36px 1fr; gap: 12px; align-items: stretch; margin-bottom: 8px; }
+  .ba .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .ba .pane .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 8px; }
+  .ba .pane.before .lbl { color: var(--red); }
+  .ba .pane.after { border: 2px solid var(--green); }
+  .ba .pane.after .lbl { color: var(--green); }
+  .ba .arr { align-self: center; text-align: center; color: var(--violet); font-size: 20px; font-weight: 700; }
+  .colstack { display: flex; flex-direction: column; gap: 5px; }
+  .colstack .col { font-size: 12px; padding: 5px 9px; border-radius: 6px; background: #f1f4f9; color: var(--muted); display: flex; justify-content: space-between; }
+  .colstack .col.cancel { background: var(--red-soft); color: var(--red); font-weight: 600; }
+  .colstack .col.gone { text-decoration: line-through; opacity: .5; }
+  .colstack .col .n { font-weight: 700; }
+
+  /* diagram */
+  .diagram-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .28; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  #nodeInfo li.no { color: var(--red); }
+  #nodeInfo li.no::before { content: "✕"; color: var(--red); font-size: 10px; top: 5px; }
+
+  /* trace table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover td, tr.trace.active td { background: var(--accent-soft); }
+  td .where { font-family: var(--mono); font-size: 12px; color: var(--violet); }
+
+  /* work list */
+  .tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+  .tnode { padding: 12px 14px; border-radius: 9px; cursor: pointer; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tnode:hover { background: #f5f7fb; }
+  .tnode + .tnode { border-top: 1px solid var(--line); border-radius: 0; }
+  .tnode .badge { font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 20px; letter-spacing: .05em; white-space: nowrap; }
+  .tnode.rule    .badge { background: var(--violet-soft); color: var(--violet); }
+  .tnode.free    .badge { background: var(--green-soft);  color: var(--green); }
+  .tnode.cleanup .badge { background: var(--amber-soft);  color: var(--amber); }
+  .tnode.test    .badge { background: #eef1f6;            color: var(--muted); }
+  .tnode .path { color: var(--ink); font-weight: 600; font-size: 14px; flex: 1; }
+  .tnode .twist { color: var(--muted); font-size: 16px; transition: transform .12s; }
+  .tnode.open .twist { transform: rotate(90deg); }
+  .tnode .delta { display: none; flex-basis: 100%; margin: 8px 0 2px 0; font-size: 13px; color: var(--ink); line-height: 1.55; }
+  .tnode.open .delta { display: block; }
+  .tnode .where { display: block; margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  /* steps */
+  ol.steps { list-style: none; counter-reset: s; }
+  ol.steps li { counter-increment: s; position: relative; padding: 10px 0 10px 40px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  ol.steps li:last-child { border-bottom: none; }
+  ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 9px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; text-align: center; line-height: 26px; font-size: 13px; }
+  ol.steps li b { color: var(--ink); }
+
+  .accept { background: var(--green-soft); border: 1px solid #bfe3cd; border-radius: 12px; padding: 22px 24px; }
+  .accept h2 { color: var(--green); }
+  .accept ul { list-style: none; margin-top: 10px; }
+  .accept li { padding: 5px 0 5px 26px; position: relative; font-size: 13.5px; }
+  .accept li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+
+  .note { font-size: 12.5px; color: var(--amber); background: var(--amber-soft); border-radius: 8px; padding: 9px 13px; margin-top: 10px; }
+  .out { font-size: 12.5px; color: var(--red); background: var(--red-soft); border-radius: 8px; padding: 9px 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">WorkTracker · Module 81c3aa9b · CODIN-633</div>
+  <h1>Cancelled = Archived — drop cancelled issues out of every active view</h1>
+  <p class="sub">Moving an issue into a <em>Cancelled</em>-group state auto-archives it. It then vanishes from board, backlog, story map, sprints and every other list consumer — because those routes already exclude archived rows. One coupling point; almost everything else is free.</p>
+  <div class="chips">
+    <span class="chip">HLD</span>
+    <span class="chip green">Mostly backend</span>
+    <span class="chip violet">1 coupling point</span>
+    <span class="chip amber">No new UI surface</span>
+    <span class="chip green">No migration</span>
+    <span class="chip">Priority: Medium</span>
+  </div>
+  <nav id="nav">
+    <a href="#why">Problem</a>
+    <a href="#decision">Decision</a>
+    <a href="#flow">Transition flow</a>
+    <a href="#trace">Requirement trace</a>
+    <a href="#changes">What changes</a>
+    <a href="#edges">Edge cases</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<section id="why">
+  <h2>The problem</h2>
+  <p class="lede">Cancelled is a terminal, dead state — but it still consumes screen real estate everywhere active work lives.</p>
+  <div class="ba">
+    <div class="pane before">
+      <div class="lbl">TODAY — cancelled clutters the board</div>
+      <div class="colstack">
+        <div class="col">Todo <span class="n">4</span></div>
+        <div class="col">In Progress <span class="n">3</span></div>
+        <div class="col">Done <span class="n">7</span></div>
+        <div class="col cancel">Cancelled <span class="n">12</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;">A dead column carrying 12 corpses. Same noise in the backlog list, story-map cells, and sprint rows.</p>
+    </div>
+    <div class="arr">→</div>
+    <div class="pane after">
+      <div class="lbl">AFTER — cancelled is gone</div>
+      <div class="colstack">
+        <div class="col">Todo <span class="n">4</span></div>
+        <div class="col">In Progress <span class="n">3</span></div>
+        <div class="col">Done <span class="n">7</span></div>
+        <div class="col gone">Cancelled <span class="n">—</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;">Cancelled column hidden; cancelled cards never load. Backlog / story-map / sprints all clean for the same reason.</p>
+    </div>
+  </div>
+</section>
+
+<section id="decision">
+  <h2>The decision</h2>
+  <p class="lede">Couple the existing <code>Cancelled</code> state group to the existing <code>is_archived</code> archive mechanism — instead of building a new "show cancelled" toggle.</p>
+  <div class="cols2">
+    <div class="card green">
+      <div class="tag">CHOSEN — transition-based</div>
+      <h3>Cancel → archive (auto)</h3>
+      <p><code>patch_work_item</code> reads the issue's <b>old</b> state group before applying the patch and compares it to the <b>new</b> target group. <code>active → cancelled</code> sets <code>is_archived=True</code> (and cascades down the subtree); <code>cancelled → active</code> sets <code>is_archived=False</code> (self only). Active→active and cancelled→cancelled leave the flag alone. Keying on the <em>transition</em> means no new field and <b>no migration</b> — and it naturally won't resurrect a manually-archived active item when its state is edited.</p>
+    </div>
+    <div class="card red">
+      <div class="tag">REJECTED</div>
+      <h3>A per-view "show cancelled" toggle</h3>
+      <p>Would mean threading a flag through board / backlog / story-map / sprint selectors and a UI control on each. More surface, more state, and the requester explicitly does <b>not</b> want a place to look at cancelled items. Archive coupling does it once, server-side.</p>
+    </div>
+  </div>
+  <div class="note">No new archive/cancelled <b>browsing</b> view is built. Recovery is by deep-link only (see Transition flow, step 5). The manual <code>archive</code>/<code>unarchive</code> routes are untouched.</div>
+</section>
+
+<section id="flow">
+  <h2>Transition flow</h2>
+  <p class="lede">Click a node to see what it does — and explicitly does not — do. The whole feature hangs off one write path.</p>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 640 380" width="100%" id="svg">
+      <!-- edges -->
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#8a93a6"/>
+        </marker>
+      </defs>
+      <line x1="120" y1="70" x2="120" y2="110" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="120" y1="170" x2="120" y2="210" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="200" y1="240" x2="330" y2="240" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="120" y1="270" x2="120" y2="310" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="214" y="234" font-size="10" fill="#5b6478">cascade</text>
+
+      <!-- user action -->
+      <g class="node" data-k="pick">
+        <ellipse cx="120" cy="45" rx="92" ry="26" fill="#fff" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="120" y="42" text-anchor="middle" font-size="12" font-weight="700">User picks state</text>
+        <text x="120" y="56" text-anchor="middle" font-size="10" fill="#5b6478">in IssueDetail picker</text>
+      </g>
+
+      <!-- patch route -->
+      <g class="node" data-k="patch">
+        <rect x="28" y="110" width="184" height="60" rx="9" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="120" y="135" text-anchor="middle" font-size="12" font-weight="700">patch_work_item()</text>
+        <text x="120" y="152" text-anchor="middle" font-size="10" fill="#5b6478">api.py:549 · sole transition path</text>
+      </g>
+
+      <!-- archive decision -->
+      <g class="node" data-k="couple">
+        <rect x="28" y="210" width="184" height="60" rx="9" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="1.5"/>
+        <text x="120" y="235" text-anchor="middle" font-size="12" font-weight="700">group == cancelled?</text>
+        <text x="120" y="252" text-anchor="middle" font-size="10" fill="#5b6478">set is_archived = True / False</text>
+      </g>
+
+      <!-- cascade -->
+      <g class="node" data-k="cascade">
+        <rect x="330" y="210" width="180" height="60" rx="9" fill="#fbf0d8" stroke="#9a6700" stroke-width="1.5"/>
+        <text x="420" y="235" text-anchor="middle" font-size="12" font-weight="700">cascade to descendants</text>
+        <text x="420" y="252" text-anchor="middle" font-size="10" fill="#5b6478">archive whole subtree</text>
+      </g>
+
+      <!-- list routes -->
+      <g class="node" data-k="lists">
+        <rect x="28" y="310" width="184" height="56" rx="9" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="120" y="333" text-anchor="middle" font-size="12" font-weight="700">list routes exclude</text>
+        <text x="120" y="349" text-anchor="middle" font-size="10" fill="#5b6478">is_archived (already!)</text>
+      </g>
+
+      <!-- consumers -->
+      <g class="node" data-k="views">
+        <rect x="330" y="300" width="280" height="76" rx="9" fill="#fff" stroke="#3556d4" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text x="470" y="324" text-anchor="middle" font-size="12" font-weight="700">All active views (no change)</text>
+        <text x="470" y="342" text-anchor="middle" font-size="10" fill="#5b6478">board · backlog · story map · sprints</text>
+        <text x="470" y="357" text-anchor="middle" font-size="10" fill="#5b6478">+ board hides Cancelled column</text>
+      </g>
+      <line x1="212" y1="338" x2="330" y2="338" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+    </svg>
+    <div id="nodeInfo">
+      <h4>Click a node</h4>
+      <p class="hint">Each box lists what it owns and what it deliberately leaves alone.</p>
+    </div>
+  </div>
+  <ol class="steps" style="margin-top:18px;">
+    <li><b>Pick the Cancelled state</b> in the issue-detail StatePicker (the state stays selectable — only its board column is hidden).</li>
+    <li><b>patch_work_item</b> receives <code>state_id</code>. This is the only path that mutates state, so the coupling lives in exactly one place.</li>
+    <li><b>Couple to archive:</b> compare <em>old</em> group (read pre-patch) to <em>new</em> group. Only the <code>active → cancelled</code> and <code>cancelled → active</code> transitions flip <code>is_archived</code>; same-group edits don't touch it.</li>
+    <li><b>Cascade:</b> <code>active → cancelled</code> archives the issue <em>and</em> its task descendants (BFS down the parent tree) so the tree never shows orphaned children. <code>cancelled → active</code> restores only the issue itself (intentional asymmetry).</li>
+    <li><b>Recovery:</b> the single-issue GET / <code>/issues/&lt;KEY-N&gt;</code> deep-link does NOT filter archived, so a cancelled issue is still openable; flipping its state back un-archives it, and the Studio drawer reloads the project so it repopulates the views. No browse view needed.</li>
+  </ol>
+</section>
+
+<section id="trace">
+  <h2>Requirement → mechanism trace</h2>
+  <p class="lede">Click a row to highlight the node that satisfies it.</p>
+  <table>
+    <thead><tr><th style="width:34%">Requirement</th><th>Mechanism</th><th style="width:24%">Where</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-k="couple"><td>Cancelled disappears from active views</td><td>Auto-set <code>is_archived</code> on entering the cancelled group</td><td><span class="where">api.py:549</span></td></tr>
+      <tr class="trace" data-k="lists"><td>Applies to board, backlog, story map, sprints — and the main app</td><td>List routes already <code>.exclude(is_archived=True)</code>; archived items aren't even loaded</td><td><span class="where">api.py:278/431/501</span></td></tr>
+      <tr class="trace" data-k="views"><td>Empty Cancelled column shouldn't linger on the board</td><td>Hide the <code>cancelled</code>-group column in <code>boardColumns</code></td><td><span class="where">backlogStore.ts:182</span></td></tr>
+      <tr class="trace" data-k="views"><td>Cancelled mustn't skew sprint / epic counts</td><td>Drop <code>|| cancelled</code> from done-count; exclude archived from rollups</td><td><span class="where">backlogStore.ts:394</span></td></tr>
+      <tr class="trace" data-k="cascade"><td>Cancelling a parent shouldn't orphan children</td><td>Cascade <code>is_archived</code> to descendants on cancel</td><td><span class="where">api.py:549</span></td></tr>
+      <tr class="trace" data-k="lists"><td>Epic whose only children are cancelled shouldn't show an empty expand arrow (main app)</td><td><code>child_count = Count("children", filter=is_archived=False)</code> → <code>sub_issues_count</code></td><td><span class="where">api.py:75</span></td></tr>
+      <tr class="trace" data-k="views"><td>The cancelled item leaves the open board immediately, not only on reload</td><td><code>applyServerItem</code> drops the item from the store when the patch returns <code>is_archived</code></td><td><span class="where">backlogStore.ts:685</span></td></tr>
+      <tr class="trace" data-k="patch"><td>Reversible</td><td>Move back to active group → <code>is_archived=False</code></td><td><span class="where">api.py:549</span></td></tr>
+      <tr class="trace" data-k="pick"><td>Can still cancel an issue</td><td>Cancelled state stays in the StatePicker; only its column is hidden</td><td><span class="where">IssueDetail / StatePicker</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="changes">
+  <h2>What actually changes</h2>
+  <p class="lede">The whole feature is <b>one new rule</b>. Most of what makes it work is already built — click any row to see what it means.</p>
+  <div class="tree">
+
+    <div class="tnode rule"><span class="badge">THE ONE RULE</span><span class="path">Cancelling an issue now also archives it</span><span class="twist">›</span>
+      <span class="delta">This is the entire backend of the feature. The moment someone moves an issue into a <em>Cancelled</em> state, the system quietly marks it <em>archived</em> too — and archives everything nested under it, so a cancelled epic takes its stories and sub-tasks with it. Move the issue back to any active state and it un-archives just as quietly. It costs nothing extra to use; it happens on the same action people already take.
+      <span class="where">Lives in the single state-change handler — <code>patch_work_item</code>, the only path that changes an issue's state.</span></span>
+    </div>
+
+    <div class="tnode free"><span class="badge">ALREADY WORKS</span><span class="path">Every active view stops showing cancelled items — for free</span><span class="twist">›</span>
+      <span class="delta">Board, backlog, story map and sprints all read the same filtered lists, and those lists <em>already</em> drop archived rows. So we don't touch any of them: once a cancelled issue is archived, it simply stops arriving on screen. This is why the feature is small — the hiding behaviour is inherited, not rebuilt for each view.
+      <span class="where">No code changes here — the existing list endpoints already exclude archived rows.</span></span>
+    </div>
+
+    <div class="tnode free"><span class="badge">ALREADY WORKS</span><span class="path">A cancelled issue is still recoverable — no special screen needed</span><span class="twist">›</span>
+      <span class="delta">Opening an issue by its direct link never filters by archived, so a cancelled issue stays reachable even though it's hidden from the lists. Flip its state back to active and it returns to its views at its old position. That's the entire recovery story — there's deliberately no "browse cancelled" screen to build.
+      <span class="where">No code changes — the single-issue lookup already ignores the archived filter.</span></span>
+    </div>
+
+    <div class="tnode cleanup"><span class="badge">SMALL CLEANUP</span><span class="path">Tidy the board column, the progress counts, and the open board</span><span class="twist">›</span>
+      <span class="delta">A handful of small touch-ups so nothing looks half-done: (1) the board stops drawing the now-permanently-empty <em>Cancelled</em> column; (2) sprint progress drops its redundant <code>|| cancelled</code> clause (cancelled rows no longer load, so they can't pad totals); (3) the moment a cancel patch comes back archived, <code>applyServerItem</code> drops that one item from the store so the open board updates without a reload; and (4) the FE <code>WorkItem</code> type gains <code>is_archived</code> so the store can recognise it. Cascade-archived descendants simply don't reappear on the next project load — no front-end descendant walk.
+      <span class="where">A few edits in the Studio store (<code>boardColumns</code>, <code>sprintProgress</code>, <code>applyServerItem</code>) and the shared <code>WorkItem</code> type.</span></span>
+    </div>
+
+    <div class="tnode rule"><span class="badge">BACKEND ROLLUP</span><span class="path">An epic with only cancelled children loses its expand arrow</span><span class="twist">›</span>
+      <span class="delta">The child-count the backend reports (<code>sub_issues_count</code>) drives the expand arrow in the <em>main</em> Muxed app's task tree. Today it counts every child, so an epic whose only surviving children are cancelled would still show an arrow over an empty subtree. The fix is one annotation change: count only non-archived children. Studio doesn't use this field, but the main app does — so it's a real, shared backend correction.
+      <span class="where">A single annotation in the work-item queryset — <code>child_count</code> filters out archived children.</span></span>
+    </div>
+
+    <div class="tnode test"><span class="badge">SAFETY NET</span><span class="path">Tests that pin each rule in place</span><span class="twist">›</span>
+      <span class="delta">New tests prove the behaviour and stop it regressing: cancel hides it, restore brings it back at the right spot, cancelling a parent takes its children along, the direct link still opens a cancelled issue, the board drops the Cancelled column, and progress counts ignore cancelled work.
+      <span class="where">Added to the backend suite and the Studio test suite.</span></span>
+    </div>
+
+  </div>
+</section>
+
+<section id="edges">
+  <h2>Edge cases &amp; calls to make</h2>
+  <div class="cols2">
+    <div class="card accent"><div class="tag">PARENT WITH CHILDREN</div><h3>Cascade on cancel</h3><p>Cancelling an epic/story archives its whole subtree so no child floats orphaned in the backlog tree or story map. Verify both renderers.</p></div>
+    <div class="card accent"><div class="tag">ASYMMETRY</div><h3>Un-cancel restores issue only</h3><p>Restoring a parent does not auto-restore children (we can't know which were independently cancelled). Document this; children are restored individually if ever needed.</p></div>
+    <div class="card green"><div class="tag">DECIDED — accepted residual</div><h3>Manual-archive → cancel → un-cancel</h3><p>Because the rule keys on the active↔cancelled <em>transition</em> (not a stored "why archived" flag), the round-trip <em>manually-archive an active item, cancel it, then un-cancel it</em> ends up visible. Rare, and not worth a tracking field — accepted and documented rather than designed around.</p></div>
+    <div class="card accent"><div class="tag">RANK</div><h3>Restore lands correctly</h3><p><code>rank</code> is never touched by the transition, so an un-cancelled issue returns to its prior position in the active column/row.</p></div>
+  </div>
+  <div class="out" style="margin-top:16px;"><b>Out of scope:</b> a dedicated archive/cancelled browsing view · a generic "show archived/cancelled" toggle · changes to the manual archive/unarchive routes.</div>
+</section>
+
+<section id="accept" class="accept">
+  <h2>Acceptance signal</h2>
+  <ul>
+    <li>Moving an issue to a cancelled-group state removes it from board, backlog, story map, and sprint rows.</li>
+    <li>Moving it back to an active state restores it to the matching view at its prior rank.</li>
+    <li>The Cancelled column no longer renders on the board; the Cancelled state stays selectable in the detail picker.</li>
+    <li>Sprint progress and epic/story rollups exclude cancelled issues entirely.</li>
+    <li>Cancelling a parent cascades archive to descendants — no orphaned children anywhere.</li>
+    <li>A cancelled issue is still openable by <code>/issues/&lt;KEY-N&gt;</code>; changing its state un-archives it and the drawer reloads the project.</li>
+    <li>An epic whose only remaining children are cancelled shows no expand arrow in the main app (<code>sub_issues_count</code> excludes archived).</li>
+    <li>No new model field and no migration — the rule keys on the state transition alone.</li>
+    <li>Backend + Studio suites green, with new tests covering each transition, the cascade, and the filtered <code>child_count</code>.</li>
+  </ul>
+</section>
+
+</main>
+
+<script>
+  const INFO = {
+    pick: { t: "User picks state (IssueDetail)", does: ["Offers every state incl. Cancelled", "Triggers a single state_id PATCH"], no: ["Does NOT remove Cancelled from the picker"] },
+    patch: { t: "patch_work_item — api.py:549", does: ["Only path that mutates state_id", "Hosts the cancel↔archive coupling", "Saves the issue row"], no: ["Reorder / list / GET paths add no coupling"] },
+    couple: { t: "Cancel↔archive coupling (transition-based)", does: ["Compare OLD group (pre-patch) to NEW group", "active→cancelled: is_archived=True", "cancelled→active: is_archived=False"], no: ["Does NOT add a field or migration", "Does NOT touch rank", "Does NOT flip on same-group edits"] },
+    cascade: { t: "Cascade to descendants", does: ["Archive the whole subtree on cancel", "Keeps tree free of orphans"], no: ["Un-cancel restores issue ONLY, not children"] },
+    lists: { t: "List routes (already exist)", does: ["exclude(is_archived=True) by default", "Feed every active view"], no: ["NO change needed — this is why it's cheap"] },
+    views: { t: "Active views + board column", does: ["Inherit hiding for free", "Board hides empty Cancelled column", "Counts/rollups drop cancelled"], no: ["No per-view show-cancelled toggle"] },
+  };
+  const info = document.getElementById('nodeInfo');
+  function show(k){
+    const d = INFO[k]; if(!d) return;
+    document.querySelectorAll('.node').forEach(n => n.classList.toggle('hl', n.dataset.k===k));
+    info.innerHTML = '<h4>'+d.t+'</h4><ul>'+
+      d.does.map(x=>'<li>'+x+'</li>').join('')+
+      d.no.map(x=>'<li class="no">'+x+'</li>').join('')+'</ul>';
+  }
+  document.querySelectorAll('.node').forEach(n => n.addEventListener('click', () => show(n.dataset.k)));
+  document.querySelectorAll('tr.trace').forEach(r => r.addEventListener('click', () => {
+    document.querySelectorAll('tr.trace').forEach(x=>x.classList.toggle('active', x===r));
+    show(r.dataset.k);
+    document.getElementById('flow').scrollIntoView({behavior:'smooth', block:'center'});
+  }));
+  document.querySelectorAll('.tnode').forEach(t => t.addEventListener('click', () => t.classList.toggle('open')));
+
+  // nav scroll-spy
+  const links = [...document.querySelectorAll('#nav a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href')));
+  const obs = new IntersectionObserver(es => {
+    es.forEach(e => { if(e.isIntersecting){ const i = secs.indexOf(e.target); links.forEach((l,j)=>l.classList.toggle('active', j===i)); }});
+  }, { rootMargin: '-50% 0px -45% 0px' });
+  secs.forEach(s => s && obs.observe(s));
+</script>
+</body>
+</html>

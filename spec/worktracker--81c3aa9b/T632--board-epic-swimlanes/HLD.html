@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkTracker · Board Epic Swimlanes — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    display: flex; gap: 2px; overflow-x: auto;
+    margin: 0 -40px; padding: 0 40px;
+    position: sticky; top: 0; z-index: 30;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+
+  /* evolution strip */
+  .evo { display: grid; grid-template-columns: 1fr 28px 1fr 28px 1fr; gap: 10px; align-items: stretch; margin-bottom: 40px; }
+  .evo .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); }
+  .evo .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .evo .stage.dead { opacity: .65; }
+  .evo .stage.dead .lbl { color: var(--red); }
+  .evo .stage.mid .lbl { color: var(--amber); }
+  .evo .stage.live { border: 2px solid var(--green); color: var(--ink); }
+  .evo .stage.live .lbl { color: var(--green); }
+  .evo .arr { align-self: center; text-align: center; color: var(--violet); font-size: 18px; font-weight: 700; }
+
+  /* mock board */
+  .mock { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; overflow-x: auto; }
+  .mhead { display: grid; grid-template-columns: 150px repeat(4, 1fr); gap: 8px; margin-bottom: 6px; }
+  .mhead .mh { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 4px 6px; }
+  .mhead .mh.corner { color: var(--violet); }
+  .lane { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .lane.collapsed .lanebody { display: none; }
+  .lanehdr { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #fbfcfe; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .lanehdr .chev { color: var(--muted); font-size: 11px; width: 12px; }
+  .lane.collapsed .lanehdr { border-bottom: none; }
+  .lanehdr .ekey { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); }
+  .lanehdr .ename { font-size: 13px; font-weight: 600; }
+  .lanehdr.noepic .ekey { color: var(--muted); }
+  .lanehdr .prog { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .lanebody { display: grid; grid-template-columns: 150px repeat(4, 1fr); gap: 8px; padding: 10px 12px; align-items: start; }
+  .lanebody .lanerail { font-size: 11px; color: var(--muted); align-self: center; }
+  .cell { min-height: 38px; border: 1px dashed var(--line); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 5px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; box-shadow: 0 1px 2px rgba(29,36,51,.06); }
+  .card .ck { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .card .cn { font-size: 11.5px; }
+  .cell.empty { border-style: dashed; opacity: .5; }
+  .mocknote { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+  /* pillar cards */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .pillar { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent); cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .pillar:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .pillar.p2 { border-top-color: var(--green); }
+  .pillar.p3 { border-top-color: var(--violet); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .pillar.open .more { display: block; }
+  .pillar ul { list-style: none; }
+  .pillar li { font-size: 13px; padding: 3px 0 3px 20px; position: relative; }
+  .pillar li.in::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .pillar li.reuse::before { content: "↻"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+  .pillar li.prep::before { content: "◌"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+  .legend { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend b { font-weight: 700; }
+  .legend .g { color: var(--green); } .legend .a { color: var(--amber); } .legend .b { color: var(--accent); }
+
+  /* diagram */
+  .diagram-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+
+  /* trace table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 1px 2px; }
+  .pill.b1 { background: var(--accent-soft); color: var(--accent); }
+  .pill.b2 { background: var(--green-soft); color: var(--green); }
+  .pill.b3 { background: var(--violet-soft); color: var(--violet); }
+
+  /* question board */
+  .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--red); }
+  .qcard.ans { border-left-color: var(--green); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--red); }
+  .qcard.ans .qid { color: var(--green); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 12.5px; color: var(--muted); }
+  .qcard p b { color: var(--green); }
+  .qcard.openq p b { color: var(--red); }
+
+  /* repo tree */
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; gap: 30px; flex-wrap: wrap; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 380px; }
+  .tree .dir { color: var(--accent); font-weight: 700; }
+  .tree .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .ex { color: var(--muted); }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; max-width: 420px; }
+  .tree-notes li { margin-bottom: 8px; list-style: none; padding-left: 16px; position: relative; }
+  .tree-notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .pillars, .qgrid, .iface { grid-template-columns: 1fr; }
+    .diagram-wrap { grid-template-columns: 1fr; }
+    .evo { grid-template-columns: 1fr; }
+    .evo .arr { transform: rotate(90deg); }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · Studio · Board · HLD</div>
+  <h1>Board Epic Swimlanes — High-Level Design</h1>
+  <div class="sub">Group the Kanban Board into horizontal bands, one per epic. Each lane spans the existing workflow-state columns; a card sits in its state column within its epic's lane. The same item set, re-laid-out — no new data, no backend change. Resolving a card's epic is already solved: <span style="font-family:var(--mono);font-size:12px">owningEpic()</span> walks <span style="font-family:var(--mono);font-size:12px">parent_id</span> to the first module ancestor.</div>
+  <div class="chips">
+    <span class="chip">Phase: HLD</span>
+    <span class="chip violet">3 decisions resolved</span>
+    <span class="chip green">Zero backend change</span>
+    <span class="chip amber">2 LLD questions open</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">What &amp; Why</a>
+    <a href="#mock">The Layout</a>
+    <a href="#slice">Three Pillars</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Requirement Trace</a>
+    <a href="#questions">Decision Board</a>
+    <a href="#repo">Change Map</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ WHAT & WHY ============ -->
+<section id="evo">
+  <div class="evo">
+    <div class="stage dead">
+      <div class="lbl">#627 · SHIPPED, NOT THIS</div>
+      An epic <i>filter rail</i> in the Backlog: a left panel of epics you multi-select to <b>narrow</b> the list. It hides everything else — it doesn't show the structure side by side.
+    </div>
+    <div class="arr">⟶</div>
+    <div class="stage mid">
+      <div class="lbl">TODAY'S BOARD</div>
+      A flat Kanban: one column per workflow state, all epics mixed together. To see "what's happening in Epic X" you must filter the whole board down to it.
+    </div>
+    <div class="arr">⟶</div>
+    <div class="stage live">
+      <div class="lbl">THIS DESIGN</div>
+      <b>Epic swimlanes:</b> horizontal bands across the board, one per epic. Every epic visible at once, each card flowing into its state column within its band. The classic Jira "Group by Epic" board.
+    </div>
+  </div>
+</section>
+
+<!-- ============ THE LAYOUT ============ -->
+<section id="mock">
+  <h2>The layout</h2>
+  <div class="lede">Column headers appear once at the top and stay aligned down every lane. Click a lane header to collapse it. This is exactly today's board, sliced into epic rows.</div>
+  <div class="mock">
+    <div class="mhead">
+      <div class="mh corner">Group by epic ▾</div>
+      <div class="mh">Backlog</div><div class="mh">Todo</div><div class="mh">In&nbsp;Progress</div><div class="mh">Done</div>
+    </div>
+
+    <div class="lane">
+      <div class="lanehdr"><span class="chev">▾</span><span class="ekey">CK-12</span><span class="ename">Login &amp; Auth</span><span class="prog">2 / 5 done</span></div>
+      <div class="lanebody">
+        <div class="lanerail"></div>
+        <div class="cell"><div class="card"><div class="ck">CK-31</div><div class="cn">OAuth callback</div></div></div>
+        <div class="cell"><div class="card"><div class="ck">CK-28</div><div class="cn">Session cookie</div></div></div>
+        <div class="cell empty"></div>
+        <div class="cell"><div class="card"><div class="ck">CK-14</div><div class="cn">Login form</div></div></div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <div class="lanehdr"><span class="chev">▾</span><span class="ekey">CK-40</span><span class="ename">Billing</span><span class="prog">0 / 2 done</span></div>
+      <div class="lanebody">
+        <div class="lanerail"></div>
+        <div class="cell"><div class="card"><div class="ck">CK-41</div><div class="cn">Stripe webhook</div></div></div>
+        <div class="cell empty"></div>
+        <div class="cell"><div class="card"><div class="ck">CK-44</div><div class="cn">Invoice PDF</div></div></div>
+        <div class="cell empty"></div>
+      </div>
+    </div>
+
+    <div class="lane collapsed">
+      <div class="lanehdr"><span class="chev">▸</span><span class="ekey">CK-60</span><span class="ename">Reporting</span><span class="prog">empty — shown as a drop target</span></div>
+      <div class="lanebody"></div>
+    </div>
+
+    <div class="lane">
+      <div class="lanehdr noepic"><span class="chev">▾</span><span class="ekey">—</span><span class="ename">No epic</span><span class="prog">1 / 1 done</span></div>
+      <div class="lanebody">
+        <div class="lanerail"></div>
+        <div class="cell empty"></div><div class="cell empty"></div><div class="cell empty"></div>
+        <div class="cell"><div class="card"><div class="ck">CK-50</div><div class="cn">Loose chore</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="mocknote">Dragging <b>CK-44</b> from Billing/Done into Login&amp;Auth/Done sets its state <i>and</i> reparents it to Login&amp;Auth — the card jumps lanes. Dragging within a lane behaves exactly like today (state change + #626 reorder).</div>
+</section>
+
+<!-- ============ THREE PILLARS ============ -->
+<section id="slice">
+  <h2>The slice, in three pillars</h2>
+  <div class="lede">Click a pillar to expand its boundary. Almost everything is reuse — the new surface is one selector, one lane component, one toggle.</div>
+  <div class="pillars">
+    <div class="pillar" data-k="model">
+      <div class="tag">PILLAR 1 · the lane model</div>
+      <h3>A pure swimlane selector</h3>
+      <p>A new <span style="font-family:var(--mono);font-size:12px">boardSwimlanes()</span> beside <span style="font-family:var(--mono);font-size:12px">boardColumns()</span> in backlogStore — same inputs, grouped by epic first.</p>
+      <div class="more"><ul>
+        <li class="reuse">Reuses <b>owningEpic()</b> (already in boardColumns) to resolve each card's lane — walks parent_id to the first module ancestor</li>
+        <li class="in">One lane per module in module order; a trailing <b>No-epic</b> lane (parent null / dangling)</li>
+        <li class="in">Within each lane, the existing per-state column buckets, each rank-sorted (#626)</li>
+        <li class="in">All epics get a lane — even empty ones — so they're valid drop targets</li>
+        <li class="reuse">Honors the shared epic / sprint filters exactly as boardColumns does today</li>
+      </ul></div>
+    </div>
+    <div class="pillar p2" data-k="layout">
+      <div class="tag">PILLAR 2 · the layout</div>
+      <h3>Lanes wrapping reused columns</h3>
+      <p>A new <span style="font-family:var(--mono);font-size:12px">BoardSwimlane</span> renders a collapsible lane header over a row of the <i>existing</i> BoardColumn components, scoped to that lane's items.</p>
+      <div class="more"><ul>
+        <li class="in">Sticky column-header strip once at the top; lanes share one column-width grid so columns line up</li>
+        <li class="reuse">Lane header reuses the Backlog group-header vocabulary: KEY · name, done/total, collapse chevron</li>
+        <li class="reuse">Per-lane collapse persists via the same <b>collapsedEpics</b> localStorage key pattern</li>
+        <li class="in">A <b>Group by epic</b> toggle (default ON) in the board header; OFF falls back to today's flat board</li>
+        <li class="in">Toggle state persisted in uiStore</li>
+      </ul></div>
+    </div>
+    <div class="pillar p3" data-k="drag">
+      <div class="tag">PILLAR 3 · drag = state + epic</div>
+      <h3>Cross-lane drop reparents</h3>
+      <p>Dropping a card into another lane's column sets <b>both</b> the state (the column) and the epic (the lane) in one optimistic patch.</p>
+      <div class="more"><ul>
+        <li class="reuse">Within-lane drag is unchanged: state change + #626 within-column reorder</li>
+        <li class="in">Cross-lane drop computes target epic from the lane → one combined PATCH { state, parent_id, rank }</li>
+        <li class="reuse">Optimistic update + rollback already exists in <b>dropOnBoard</b> / patchWorkItem — extended, not rebuilt</li>
+        <li class="prep">Sub-task cards across lanes: reparent-to-module would detach from their story — guarded (LLD Q1)</li>
+        <li class="reuse">No edge routes — parent_id, state, rank are already in WorkItemPatch</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="legend"><span><b class="b">↻ reuse</b> — existing machinery, unchanged</span><span><b class="g">✓ new</b> — built in this slice</span><span><b class="a">◌ prepared-for</b> — resolved in LLD</span></div>
+</section>
+
+<!-- ============ SYSTEM SHAPE ============ -->
+<section id="shape">
+  <h2>System shape</h2>
+  <div class="lede">Click any box for what it owns and what it explicitly does not do. Green stroke = new in this slice. Blue = existing Studio machinery, reused. Dashed = the backend, untouched.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 760 470" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/></marker>
+      </defs>
+      <!-- user -->
+      <g class="node" data-n="user">
+        <ellipse cx="110" cy="60" rx="80" ry="36" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="110" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="#0e4d2f">User</text>
+        <text x="110" y="74" text-anchor="middle" font-size="11" fill="#1d7a4f">drags cards · collapses lanes</text>
+      </g>
+      <!-- BoardView -->
+      <g class="node" data-n="boardview">
+        <rect x="280" y="24" width="200" height="78" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="380" y="50" text-anchor="middle" font-size="13" font-weight="700">BoardView</text>
+        <text x="380" y="69" text-anchor="middle" font-size="11" fill="#5b6478">+ group-by-epic branch</text>
+        <text x="380" y="85" text-anchor="middle" font-size="11" fill="#9a6700">picks flat vs swimlane</text>
+      </g>
+      <!-- uiStore -->
+      <g class="node" data-n="uistore">
+        <rect x="560" y="24" width="170" height="78" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="645" y="50" text-anchor="middle" font-size="13" font-weight="700">uiStore</text>
+        <text x="645" y="69" text-anchor="middle" font-size="11" fill="#9a6700">+ groupByEpic flag</text>
+        <text x="645" y="85" text-anchor="middle" font-size="11" fill="#5b6478">persisted toggle</text>
+      </g>
+      <!-- selector -->
+      <g class="node" data-n="selector">
+        <rect x="280" y="160" width="200" height="84" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="380" y="186" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">boardSwimlanes()</text>
+        <text x="380" y="205" text-anchor="middle" font-size="11" fill="#1d7a4f">NEW pure selector</text>
+        <text x="380" y="221" text-anchor="middle" font-size="11" fill="#5b6478">reuses owningEpic()</text>
+        <text x="380" y="237" text-anchor="middle" font-size="11" fill="#5b6478">lanes × state columns</text>
+      </g>
+      <!-- swimlane component -->
+      <g class="node" data-n="swimlane">
+        <rect x="280" y="300" width="200" height="80" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="380" y="326" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">BoardSwimlane</text>
+        <text x="380" y="345" text-anchor="middle" font-size="11" fill="#1d7a4f">NEW lane header + row</text>
+        <text x="380" y="361" text-anchor="middle" font-size="11" fill="#5b6478">wraps reused columns</text>
+      </g>
+      <!-- column/card -->
+      <g class="node" data-n="column">
+        <rect x="560" y="290" width="170" height="100" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="645" y="316" text-anchor="middle" font-size="13" font-weight="700">BoardColumn / Card</text>
+        <text x="645" y="335" text-anchor="middle" font-size="11" fill="#9a6700">+ lane epic context</text>
+        <text x="645" y="351" text-anchor="middle" font-size="11" fill="#5b6478">drop → dropOnBoard</text>
+        <text x="645" y="367" text-anchor="middle" font-size="11" fill="#5b6478">#626 reorder kept</text>
+      </g>
+      <!-- store action -->
+      <g class="node" data-n="action">
+        <rect x="40" y="300" width="190" height="80" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="135" y="326" text-anchor="middle" font-size="13" font-weight="700">dropOnBoard</text>
+        <text x="135" y="345" text-anchor="middle" font-size="11" fill="#9a6700">+ parent_id in patch</text>
+        <text x="135" y="361" text-anchor="middle" font-size="11" fill="#5b6478">optimistic + rollback</text>
+      </g>
+      <!-- backend -->
+      <g class="node" data-n="backend">
+        <rect x="40" y="160" width="190" height="84" rx="10" fill="#fff" stroke="#8a93a8" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="135" y="186" text-anchor="middle" font-size="13" font-weight="700" fill="#5b6478">WorkItemPatch (BE)</text>
+        <text x="135" y="205" text-anchor="middle" font-size="11" fill="#5b6478">state · parent_id · rank</text>
+        <text x="135" y="221" text-anchor="middle" font-size="11" fill="#5b6478">ALREADY accepts all 3</text>
+        <text x="135" y="237" text-anchor="middle" font-size="11" fill="#8a93a8">UNTOUCHED</text>
+      </g>
+      <!-- edges -->
+      <line x1="190" y1="60" x2="276" y2="60" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="558" y1="63" x2="482" y2="63" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="380" y1="104" x2="380" y2="156" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="380" y1="246" x2="380" y2="296" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="480" y1="340" x2="556" y2="340" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="558" y1="360" x2="232" y2="360" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="135" y1="298" x2="135" y2="248" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- labels -->
+      <text x="196" y="50" font-size="10.5" fill="#8a93a8">interacts</text>
+      <text x="490" y="55" font-size="10.5" fill="#8a93a8">reads flag</text>
+      <text x="388" y="132" font-size="10.5" fill="#8a93a8">calls when on</text>
+      <text x="388" y="276" font-size="10.5" fill="#8a93a8">lane[] → render</text>
+      <text x="486" y="330" font-size="10.5" fill="#8a93a8">lane-scoped items</text>
+      <text x="300" y="352" font-size="10.5" fill="#8a93a8">drop</text>
+      <text x="142" y="282" font-size="10.5" fill="#8a93a8">PATCH</text>
+    </svg>
+    <div id="nodeInfo"><span class="hint">Click a box to see its responsibility, what it owns, and what it explicitly does not do.</span></div>
+  </div>
+</section>
+
+<!-- ============ REQUIREMENT TRACE ============ -->
+<section id="trace">
+  <h2>Requirement → slice trace</h2>
+  <div class="lede">Click a row to highlight where each requirement lives in the diagram.</div>
+  <table>
+    <thead><tr><th style="width:110px">Req</th><th>What it requires</th><th>Where the slice honors it</th><th style="width:150px">Pillar</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-nodes="selector,swimlane"><td><span class="rid">SWIM-001</span></td><td>Board grouped into horizontal epic lanes</td><td>boardSwimlanes() groups by owning epic; BoardSwimlane renders each band</td><td><span class="pill b1">Model</span><span class="pill b2">Layout</span></td></tr>
+      <tr class="trace" data-nodes="swimlane,column"><td><span class="rid">SWIM-002</span></td><td>Each lane shows the full state-column set, aligned across lanes</td><td>Lanes share one column-width grid; reused BoardColumn per state, lane-scoped items</td><td><span class="pill b2">Layout</span></td></tr>
+      <tr class="trace" data-nodes="boardview,uistore"><td><span class="rid">SWIM-003</span></td><td>Group-by-epic toggle, default ON, persisted</td><td>uiStore.groupByEpic flag; BoardView branches flat vs swimlane</td><td><span class="pill b2">Layout</span></td></tr>
+      <tr class="trace" data-nodes="selector"><td><span class="rid">SWIM-004</span></td><td>Every epic gets a lane, even empty; plus a No-epic lane</td><td>boardSwimlanes() emits a lane per module + trailing null lane, regardless of card count</td><td><span class="pill b1">Model</span></td></tr>
+      <tr class="trace" data-nodes="column,action,backend"><td><span class="rid">SWIM-005</span></td><td>Cross-lane drag sets state AND epic (reparent)</td><td>Drop carries lane epic → dropOnBoard one combined { state, parent_id, rank } patch</td><td><span class="pill b3">Drag</span></td></tr>
+      <tr class="trace" data-nodes="column,action"><td><span class="rid">SWIM-006</span></td><td>Within-lane reorder + state change preserved (#626)</td><td>Within-lane drop path is today's dropOnBoard, unchanged</td><td><span class="pill b3">Drag</span></td></tr>
+      <tr class="trace" data-nodes="swimlane"><td><span class="rid">SWIM-007</span></td><td>Per-lane collapse + done/total progress</td><td>Lane header reuses Backlog group-header vocabulary + collapsedEpics persistence</td><td><span class="pill b2">Layout</span></td></tr>
+      <tr class="trace" data-nodes="backend"><td><span class="rid">SWIM-008</span></td><td>No backend change</td><td>parent_id, state, rank already in WorkItemPatch; pure frontend slice</td><td><span class="pill b3">Drag</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ DECISION BOARD ============ -->
+<section id="questions">
+  <h2>Decision board</h2>
+  <div class="lede">Green = resolved with the user this session. Red = genuinely open, settled in LLD — neither gates the shape.</div>
+  <div class="qgrid">
+    <div class="qcard ans"><div class="qid">RESOLVED · default</div><h4>Toggle, and what default?</h4><p><b>A "Group by epic" toggle, default ON.</b> Swimlanes are the board you remember from Jira; flip off to get today's flat columns.</p></div>
+    <div class="qcard ans"><div class="qid">RESOLVED · cross-lane drag</div><h4>What does dragging across lanes do?</h4><p><b>Sets state AND reparents.</b> Dropping into another lane's column changes the state (column) and the epic (lane) in one patch — true Jira behavior.</p></div>
+    <div class="qcard ans"><div class="qid">RESOLVED · empty lanes</div><h4>Show epics with no cards?</h4><p><b>Show all epics.</b> Every epic gets a lane even when empty, so it's a valid reparent drop target. Plus a No-epic lane for loose cards.</p></div>
+    <div class="qcard openq"><div class="qid">OPEN · LLD Q1</div><h4>Sub-task cards dragged across lanes?</h4><p>A sub-task's epic is inherited from its story. Reparenting it straight to a module would <b>detach it from its story</b>. Recommendation: block cross-lane drop for sub-task cards (state-only, snap back). Settle in LLD.</p></div>
+    <div class="qcard openq"><div class="qid">OPEN · LLD Q2</div><h4>Lane ordering &amp; sticky behavior</h4><p>Lane order = module sequence, No-epic last (low pressure). Whether the column-header strip and lane headers stick on vertical scroll is a <b>layout detail</b> for LLD.</p></div>
+  </div>
+</section>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="repo">
+  <h2>Change map — studio/src</h2>
+  <div class="lede">Green = new file. Amber = modified. Plain = reused untouched. Backend is entirely absent from this map.</div>
+  <div class="tree-wrap">
+    <div class="tree">
+      <div><span class="dir">studio/src/</span></div>
+      <div>├─ <span class="dir">stores/</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="mod">backlogStore.ts</span> <span class="ex">— + boardSwimlanes(); dropOnBoard takes target epic</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="mod">uiStore.ts</span> <span class="ex">— + groupByEpic toggle (persisted)</span></div>
+      <div>├─ <span class="dir">views/</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="mod">BoardView.tsx</span> <span class="ex">— branch flat vs swimlane</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="new">BoardSwimlane.tsx</span> <span class="ex">— lane header + aligned column row</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="mod">BoardColumn.tsx</span> <span class="ex">— accept lane epic for drop</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="mod">BoardCard.tsx</span> <span class="ex">— pass lane epic on reorder/drop</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="mod">BoardFilterBar.tsx</span> <span class="ex">— + Group-by-epic control</span></div>
+      <div>└─ <span class="dir">test/</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="mod">board.test.tsx</span> <span class="ex">+ swimlane selector/layout/reparent tests</span></div>
+    </div>
+    <ul class="tree-notes">
+      <li>No migration, no new route, no SDK change — <span style="font-family:var(--mono)">parent_id</span>, <span style="font-family:var(--mono)">state</span>, <span style="font-family:var(--mono)">rank</span> are all already on WorkItemPatch.</li>
+      <li>owningEpic() already lives in boardColumns — lift it to module scope so both selectors share it.</li>
+      <li>The flat board stays fully intact behind the toggle; OFF is byte-for-byte today's behavior.</li>
+      <li>Exact lane grid CSS, sticky behavior, and sub-task drag guard are LLD scope.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance signal</h2>
+  <div class="accept">
+    The slice is done when the Board, by default, renders as <b>horizontal epic swimlanes</b> — one lane per epic (empty ones included) plus a No-epic lane — each lane showing the workflow-state columns aligned across the board; a card sits in its state column within its epic's lane; <b>dragging a card across columns in the same lane</b> changes state and reorders (#626) as today, while <b>dragging it into another lane's column</b> sets both its state and its epic in one optimistic patch; lanes <b>collapse and show done/total</b>; a <b>Group by epic</b> toggle flips the whole board back to today's flat columns and the choice persists — all with <b>zero backend change</b>, and with the sub-task cross-lane guard (Q1) and lane sticky behavior (Q2) settled in LLD.
+  </div>
+</section>
+
+</main>
+
+<script>
+  document.querySelectorAll('.pillar').forEach(p => p.addEventListener('click', () => p.classList.toggle('open')));
+
+  // mock lane collapse
+  document.querySelectorAll('.lane .lanehdr').forEach(h => h.addEventListener('click', () => {
+    const lane = h.closest('.lane'); lane.classList.toggle('collapsed');
+    const chev = h.querySelector('.chev'); if (chev) chev.textContent = lane.classList.contains('collapsed') ? '▸' : '▾';
+  }));
+
+  const INFO = {
+    user: { t: 'User', does: ['Drags cards between columns and lanes', 'Collapses/expands lanes', 'Toggles Group by epic on/off'], not: ['Cannot create epics from the board — that stays in Backlog/Settings'] },
+    boardview: { t: 'BoardView (modified)', does: ['Reads the groupByEpic flag', 'Renders the flat column strip when OFF', 'Renders the swimlane layout when ON'], not: ['Holds no board-specific store — still rides the shared backlogStore'] },
+    uistore: { t: 'uiStore (modified)', does: ['Holds the groupByEpic boolean', 'Persists it so the choice survives reload'], not: ['Does not store lane collapse — that reuses the collapsedEpics localStorage key'] },
+    selector: { t: 'boardSwimlanes() — NEW pure selector', does: ['Resolves each card\'s epic via the lifted owningEpic()', 'Emits a lane per module (in order) + a No-epic lane', 'Buckets each lane into rank-sorted state columns', 'Honors the shared epic / sprint filters'], not: ['No fetch — same item set as boardColumns', 'Does not drop empty epics — all epics are lanes'] },
+    swimlane: { t: 'BoardSwimlane — NEW component', does: ['Renders the collapsible lane header (KEY · name · done/total)', 'Lays out the lane\'s state columns on the shared column grid'], not: ['Does not own drag logic — it composes the existing BoardColumn/Card', 'Does not re-fetch or re-sort — consumes the selector output'] },
+    column: { t: 'BoardColumn / BoardCard (modified)', does: ['Receive the lane\'s epic id as context', 'On drop, compute reparent target when the lane differs', 'Keep #626 within-column reorder intact'], not: ['No new drag library — same Pragmatic DnD', 'No state change semantics altered for same-lane drops'] },
+    action: { t: 'dropOnBoard (modified store action)', does: ['Builds one combined PATCH { state, parent_id, rank }', 'Applies it optimistically and rolls back on failure'], not: ['No new endpoint — same patchWorkItem call', 'Does not split into two requests'] },
+    backend: { t: 'WorkItemPatch (backend) — UNTOUCHED', does: ['Already accepts state, parent_id, and rank in one patch'], not: ['No migration', 'No new route', 'No SDK change — this slice never touches the backend'] }
+  };
+  const nodes = document.querySelectorAll('.node');
+  const info = document.getElementById('nodeInfo');
+  function showNode(key) {
+    nodes.forEach(n => { n.classList.toggle('hl', n.dataset.n === key); n.classList.remove('dim'); });
+    const d = INFO[key]; if (!d) return;
+    info.innerHTML = '<h4>' + d.t + '</h4><ul>' + d.does.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
+      '<ul style="margin-top:10px">' + d.not.map(x => '<li style="color:var(--red)">' + x + '</li>').join('') + '</ul>';
+  }
+  nodes.forEach(n => n.addEventListener('click', e => { e.stopPropagation(); showNode(n.dataset.n); }));
+
+  document.querySelectorAll('tr.trace').forEach(tr => {
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('tr.trace').forEach(r => r.classList.remove('sel'));
+      tr.classList.add('sel');
+      const keys = tr.dataset.nodes.split(',');
+      nodes.forEach(n => { n.classList.toggle('hl', keys.includes(n.dataset.n)); n.classList.toggle('dim', !keys.includes(n.dataset.n)); });
+    });
+  });
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

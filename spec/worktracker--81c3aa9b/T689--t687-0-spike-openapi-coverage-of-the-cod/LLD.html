@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T687-0 · OpenAPI Coverage Spike — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 4px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 52px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  p.body { font-size: 14px; max-width: 880px; margin-bottom: 12px; }
+  p.body b { color: var(--ink); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+  th, td { text-align: left; padding: 9px 13px; font-size: 12.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td code, .ic { font-family: var(--mono); font-size: 11.5px; color: var(--violet); }
+  tr:last-child td { border-bottom: none; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.miss { background: var(--red-soft); color: var(--red); }
+
+  .fam-h { font-size: 14px; font-weight: 700; margin: 18px 0 8px; display: flex; align-items: center; gap: 10px; }
+  .fam-h .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  .diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: opacity .12s; }
+  .node.sel rect, .node.sel ellipse { stroke: var(--accent); stroke-width: 2.5; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 4px 0 4px 18px; position: relative; font-size: 12.5px; }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 4px; color: var(--accent); font-weight: 900; }
+  #nodeInfo li.no::before { content: "×"; color: var(--red); }
+  .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+
+  .cmds { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px 0; }
+  .cmd { display: grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 11px 20px; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .cmd:last-child { border-bottom: none; }
+  .cmd .n { font-weight: 800; color: var(--accent); }
+  .cmd .ic { color: var(--violet); display: inline-block; margin-top: 4px; }
+
+  .verdict { border-radius: 12px; padding: 18px 22px; font-size: 14px; }
+  .verdict.gated { background: var(--amber-soft); border: 1px solid #e6cd8a; }
+  .verdict.gated h3 { color: var(--amber); }
+  .accept { background: var(--green-soft); border: 1px solid #b8ddc6; border-radius: 12px; padding: 18px 22px; font-size: 14px; }
+  .accept h3 { color: var(--green); margin-bottom: 6px; }
+  .rules { list-style: none; }
+  .rules li { font-size: 13px; padding: 6px 0 6px 24px; position: relative; border-bottom: 1px dashed var(--line); max-width: 880px; }
+  .rules li:last-child { border-bottom: none; }
+  .rules li::before { content: "▸"; position: absolute; left: 2px; color: var(--violet); font-weight: 900; }
+  tr.trace { cursor: default; }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">worktracker-stack · CODIN-689 · module 81c3aa9b</div>
+  <h1>T687-0 — Spike: OpenAPI coverage of the coding-surface endpoints</h1>
+  <div class="sub">Investigation plan. Determine, with reproducible command evidence, which of the ported Muxed REST endpoints are present in the OpenAPI schema that generates <code class="ic">@worktracker/typescript-sdk</code>, and conclude whether T687-5 is unblocked or gated by contract additions (CODIN-668).</div>
+  <div class="chips">
+    <span class="chip violet">Phase: LLD plan</span>
+    <span class="chip">Spike — report only</span>
+    <span class="chip green">No production code changed</span>
+    <span class="chip amber">Hypothesis: GATED</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#objective">Objective</a>
+  <a href="#surfaces">Two surfaces</a>
+  <a href="#inventory">Endpoint inventory</a>
+  <a href="#harness">Command harness</a>
+  <a href="#rules">Classification</a>
+  <a href="#gaps">Gap scope</a>
+  <a href="#deliverable">Report</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+<main>
+
+<section id="objective">
+  <h2>1 · Objective &amp; boundary</h2>
+  <div class="lede">Answer CODIN-687 HLD open question Q1 with evidence, across the whole ported REST surface.</div>
+  <p class="body">For <b>every raw REST endpoint the ported Muxed surface consumes</b> (six families below), state present-in-OpenAPI vs. missing, and whether a generated SDK method exists. The boundary is the refinement-final one: the <b>whole ported surface</b>, not only the Q1-named coding endpoints. WebSocket frames (<code class="ic">/ws/terminal</code>) are out of scope — hand-kept under T687-3/T687-4.</p>
+  <p class="body">This phase produces the <b>plan</b>. The spike output is one interactive HTML coverage report (§7). The <code class="ic">/tdd</code> analogue for a no-code spike: every coverage claim must be backed by a verbatim, re-runnable command (§4).</p>
+</section>
+
+<section id="surfaces">
+  <h2>2 · The root cause: two separate OpenAPI surfaces</h2>
+  <div class="lede">Click a node to see what it does and does not contribute to the SDK contract.</div>
+  <div class="diagram">
+    <svg viewBox="0 0 640 430" width="100%" role="img" aria-label="Two OpenAPI surfaces">
+      <!-- edges -->
+      <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5b6478"/></marker>
+      <marker id="arR" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#b03030"/></marker></defs>
+      <!-- standalone contract path -->
+      <line x1="150" y1="78" x2="150" y2="112" stroke="#5b6478" marker-end="url(#ar)"/>
+      <line x1="150" y1="158" x2="150" y2="192" stroke="#5b6478" marker-end="url(#ar)"/>
+      <line x1="150" y1="238" x2="150" y2="272" stroke="#5b6478" marker-end="url(#ar)"/>
+      <text x="160" y="100" font-size="10" fill="#5b6478">export_openapi</text>
+      <text x="160" y="180" font-size="10" fill="#5b6478">sdk:generate</text>
+      <text x="160" y="260" font-size="10" fill="#5b6478">imports</text>
+      <!-- host api NOT read -->
+      <line x1="455" y1="130" x2="250" y2="180" stroke="#b03030" stroke-dasharray="6 5" marker-end="url(#arR)"/>
+      <text x="300" y="150" font-size="10" fill="#b03030">never read by generator</text>
+
+      <g class="node" data-k="settings"><rect x="40" y="40" width="220" height="38" rx="8" fill="#e8edfb" stroke="#3556d4"/><text x="150" y="64" text-anchor="middle" font-size="12" fill="#1d2433">worktracker.openapi_settings</text></g>
+      <g class="node" data-k="openapi"><rect x="55" y="116" width="190" height="40" rx="8" fill="#fff" stroke="#3556d4"/><text x="150" y="141" text-anchor="middle" font-size="12.5" fill="#1d2433">openapi.json (committed)</text></g>
+      <g class="node" data-k="sdk"><rect x="45" y="196" width="210" height="40" rx="8" fill="#e3f3ea" stroke="#1d7a4f"/><text x="150" y="221" text-anchor="middle" font-size="12.5" fill="#1d2433">@worktracker/typescript-sdk</text></g>
+      <g class="node" data-k="studio"><rect x="55" y="276" width="190" height="40" rx="8" fill="#f0e9fb" stroke="#6b3fb8"/><text x="150" y="301" text-anchor="middle" font-size="12.5" fill="#1d2433">Studio api.ts (via SDK)</text></g>
+
+      <g class="node" data-k="host"><rect x="380" y="40" width="230" height="92" rx="8" fill="#fff" stroke="#b03030"/><text x="495" y="62" text-anchor="middle" font-size="12" fill="#1d2433">server/studio_server</text><text x="495" y="80" text-anchor="middle" font-size="11" fill="#5b6478">/api.py — Muxed NinjaAPI</text><text x="495" y="100" text-anchor="middle" font-size="10.5" fill="#b03030">root routers: settings, runs,</text><text x="495" y="116" text-anchor="middle" font-size="10.5" fill="#b03030">terminals, documents, worktrees</text></g>
+      <g class="node" data-k="web"><rect x="380" y="276" width="230" height="40" rx="8" fill="#fbf0d8" stroke="#9a6700"/><text x="495" y="301" text-anchor="middle" font-size="12.5" fill="#1d2433">web/frontend api.ts (raw fetch)</text></g>
+      <line x1="495" y1="276" x2="495" y2="135" stroke="#9a6700" stroke-dasharray="3 3"/>
+      <text x="500" y="210" font-size="10" fill="#9a6700">consumes host routes raw</text>
+    </svg>
+    <div id="nodeInfo"><h4>Pick a node</h4><p class="hint">Two OpenAPI surfaces exist. Only the standalone <code class="ic">worktracker</code> contract reaches the SDK; the unified host routers do not.</p></div>
+  </div>
+  <div class="legend"><span>■ blue = contract pipeline</span><span>■ green = generated SDK</span><span>■ red = host API, outside contract</span><span>dashed red = edge that does not exist in the generator</span></div>
+</section>
+
+<section id="inventory">
+  <h2>3 · Endpoint inventory under test</h2>
+  <div class="lede">Decision-complete list. Every row is classified in the report with columns: family · path · verb · params · request/response shape · source file:function · In OpenAPI? · SDK method. Expected results shown here are the hypothesis to confirm, not the recorded result.</div>
+
+  <div class="fam-h"><span class="dot" style="background:var(--green)"></span>Family A — WorkTracker <code class="ic">/api/work-tracker/*</code> · control group</div>
+  <table>
+    <tr><th>Scope</th><th>Source</th><th>Expected</th></tr>
+    <tr><td>projects, modules, work-items (CRUD + reorder/archive/scope-context/attachments), states (+reorder), sprints (+start/complete), issue-types (+reorder)</td><td><code class="ic">studio/src/lib/api.ts</code> (SDK) · <code class="ic">web/frontend/src/lib/api.ts</code> (raw)</td><td><span class="sev ok">present + SDK</span></td></tr>
+  </table>
+
+  <div class="fam-h"><span class="dot" style="background:var(--red)"></span>Family B — Terminal / session (host, root-mounted)</div>
+  <table>
+    <tr><th>Endpoint</th><th>Verb · params</th><th>Source</th><th>Expected</th></tr>
+    <tr><td><code>/api/terminals</code></td><td>GET · <code class="ic">task_id</code></td><td>web api.ts <code class="ic">getTerminals</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/terminals/scratch</code></td><td>GET · <code class="ic">project_id,module_id</code></td><td><code class="ic">getScratchTerminals</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/terminals/running-counts</code></td><td>GET · <code class="ic">project_id,module_id</code></td><td><code class="ic">getRunningAgentCounts</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/terminals/</code></td><td>DELETE · <code class="ic">agent_run_id</code></td><td><code class="ic">terminateTerminal</code></td><td><span class="sev miss">missing</span></td></tr>
+  </table>
+
+  <div class="fam-h"><span class="dot" style="background:var(--red)"></span>Family C — Runs / lifecycle (host, root-mounted)</div>
+  <table>
+    <tr><th>Endpoint</th><th>Verb · params</th><th>Source</th><th>Expected</th></tr>
+    <tr><td><code>/api/runs/module-activity</code></td><td>GET · <code class="ic">project_id,window_days</code></td><td>web api.ts <code class="ic">getModuleActivity</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/runs/lifecycle-states</code></td><td>GET · <code class="ic">project_id,window_days</code></td><td><b>studio</b> <code class="ic">codingBridge.ts fetchLifecycleStates</code> — Studio's only raw-fetch escape hatch</td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/lifecycle/events</code></td><td>POST · body</td><td>agent hooks ingress</td><td><span class="sev miss">missing</span></td></tr>
+  </table>
+
+  <div class="fam-h"><span class="dot" style="background:var(--red)"></span>Family D — Documents / doc-asset / fs (host, root-mounted)</div>
+  <table>
+    <tr><th>Endpoint</th><th>Verb · params</th><th>Source</th><th>Expected</th></tr>
+    <tr><td><code>/api/documents</code></td><td>GET · <code class="ic">task_id,project_id,module_id</code></td><td>web api.ts <code class="ic">getDocuments</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/documents?scope=scratch</code></td><td>GET · <code class="ic">module_id</code></td><td><code class="ic">getScratchDocuments</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/docs/{doc_id}/{asset_path}</code></td><td>GET · opaque iframe asset</td><td><code class="ic">docUrl</code> builder</td><td><span class="sev warn">missing — may not belong in a typed SDK</span></td></tr>
+    <tr><td><code>/api/fs/complete</code></td><td>GET · <code class="ic">path</code></td><td><code class="ic">fsComplete</code></td><td><span class="sev miss">missing</span></td></tr>
+  </table>
+
+  <div class="fam-h"><span class="dot" style="background:var(--red)"></span>Family E — Worktree (host, root-mounted)</div>
+  <table>
+    <tr><th>Endpoint</th><th>Verb · params</th><th>Source</th><th>Expected</th></tr>
+    <tr><td><code>/api/worktrees</code></td><td>GET · <code class="ic">task_id,parent_id,module_id</code></td><td>web api.ts <code class="ic">getWorktree</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/worktrees/{task_id}/create</code></td><td>POST · body</td><td><code class="ic">createWorktree</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/worktrees/{task_id}/discard</code></td><td>POST · <code class="ic">parent_id,module_id</code></td><td><code class="ic">discardWorktree</code></td><td><span class="sev miss">missing</span></td></tr>
+  </table>
+
+  <div class="fam-h"><span class="dot" style="background:var(--red)"></span>Family F — Settings / config / profile (host, root-mounted)</div>
+  <table>
+    <tr><th>Endpoint</th><th>Verb</th><th>Source</th><th>Expected</th></tr>
+    <tr><td><code>/api/config</code></td><td>GET, PATCH</td><td>web api.ts <code class="ic">getConfig,patchConfig</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/config/profiles</code> · <code>/{index}</code></td><td>POST, PUT, DELETE</td><td><code class="ic">postProfile,putProfile,deleteProfile</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/settings/panel_widths</code></td><td>GET, PUT</td><td><code class="ic">getPanelWidths,putPanelWidths</code></td><td><span class="sev miss">missing</span></td></tr>
+    <tr><td><code>/api/settings/expanded_subtasks</code></td><td>GET, PUT · <code class="ic">module_id</code></td><td><code class="ic">getExpandedSubtasks,putExpandedSubtasks</code></td><td><span class="sev miss">missing</span></td></tr>
+  </table>
+</section>
+
+<section id="harness">
+  <h2>4 · Investigation harness — exact, non-mutating</h2>
+  <div class="lede">All commands run from <code class="ic">worktracker-stack/</code>. Ordering guarantees "no production code changed"; steps 2–3 outputs and both git-status snapshots are pasted verbatim into the report.</div>
+  <div class="cmds">
+    <div class="cmd"><span class="n">1</span><div><b>Clean-tree guard.</b> Record <code class="ic">git status --porcelain</code> for <code class="ic">openapi.json</code> and <code class="ic">worktracker-typescript-sdk/src/generated</code> before anything, so any churn is attributable.</div></div>
+    <div class="cmd"><span class="n">2</span><div><b>Drift check (primary evidence).</b> Run <code class="ic">npm run contract:check</code>. The script exports OpenAPI to a temp file and regenerates the SDK into a temp dir (sets <code class="ic">WORKTRACKER_GENERATED_DIR</code> internally), then diffs both against the committed copies — it <b>never writes</b> into the repo. Capture stdout/stderr + exit. Expected: "Contract artifacts are current." (exit 0), which makes the committed <code class="ic">openapi.json</code> authoritative.</div></div>
+    <div class="cmd"><span class="n">3</span><div><b>Coverage inspection (no churn).</b> Read the committed <code class="ic">openapi.json</code> (justified by step 2), and generate the SDK to a scratch path with <code class="ic">WORKTRACKER_GENERATED_DIR=&lt;scratch&gt;/generated npm run sdk:generate</code> so generation lands entirely outside the repo. Record the invocation and the generated <code class="ic">apis/*.ts</code> classes/methods.</div></div>
+    <div class="cmd"><span class="n">4</span><div><b>Path extraction.</b> Enumerate <code class="ic">paths</code> from the schema and method names from the scratch SDK. These two lists are ground truth for the "In OpenAPI?" and "SDK method?" columns.</div></div>
+    <div class="cmd"><span class="n">5</span><div><b>Post-run guard.</b> Re-run step-1 <code class="ic">git status --porcelain</code>; confirm unchanged and record it. Scratch dirs are outside the repo — no cleanup needed.</div></div>
+  </div>
+</section>
+
+<section id="rules">
+  <h2>5 · Classification &amp; verdict rules</h2>
+  <div class="lede">How each row resolves and how the rows roll up to the binary verdict.</div>
+  <ul class="rules">
+    <li><b>Present + SDK method</b> → covered; T687-5 can migrate that call directly.</li>
+    <li><b>Present, no SDK method</b> → contract present but generator gap (note generator/config implication). Not expected given the pipeline shape.</li>
+    <li><b>Missing from OpenAPI</b> → gated; needs a contract addition before the SDK can serve it.</li>
+    <li><b>Verdict logic</b> — if any in-scope endpoint a ported call depends on is Missing, the overall verdict is <b>GATED</b>, naming the gating families. T687-5 proceeds directly <b>only if</b> every non-WebSocket endpoint is covered.</li>
+    <li>The report names the <b>root cause</b> (two OpenAPI surfaces — standalone <code class="ic">worktracker</code> contract vs. unified Muxed host API) so the follow-up is scoped as <i>which surface to expand and how</i>, and ties the gate to <b>CODIN-668</b>.</li>
+  </ul>
+  <div class="verdict gated" style="margin-top:14px"><h3>Working verdict to confirm: GATED</h3>Inspection of <code class="ic">openapi.json</code> (only <code class="ic">/work-tracker</code> paths) and <code class="ic">server/studio_server/api.py</code> (host routers on a separate NinjaAPI the generator never reads) indicates families B–F are entirely outside the generated contract. The report must <b>prove</b> this by running §4, not assert it.</div>
+</section>
+
+<section id="gaps">
+  <h2>6 · Gap enumeration for the follow-up (if GATED)</h2>
+  <div class="lede">Descriptive scoping for CODIN-668 / a T687-5 predecessor — the spike does not design or implement these.</div>
+  <p class="body">For each Missing family the report records: path + verb set, query/path params, request body schema, response schema (named from the host router signatures), and the <b>architectural decision</b> the follow-up must make:</p>
+  <ul class="rules">
+    <li>Fold host routers into the SDK-exported schema (one unified OpenAPI), <b>or</b> stand up a second generated client for the host surface.</li>
+    <li>Which endpoints are unsuitable for a typed REST SDK at all — e.g. <code class="ic">/api/docs/{doc_id}/{asset_path}</code> serves opaque assets; <code class="ic">/ws/terminal</code> is already excluded.</li>
+    <li><code class="ic">runs/lifecycle-states</code> overlaps the Studio coding-bridge seam (Studio's one current raw fetch) → highest-value first migration target.</li>
+  </ul>
+</section>
+
+<section id="deliverable">
+  <h2>7 · Report deliverable</h2>
+  <div class="lede">This <code class="ic">LLD.html</code> is the plan; the spike output is a separate report in the same dir.</div>
+  <p class="body"><b>File:</b> <code class="ic">spec/worktracker--81c3aa9b/T689--…/report.html</code>. <b>Format:</b> repo visual convention (sticky header + crumb + chips, token palette, the two-surfaces SVG, per-family coverage tables with §3 columns, verbatim command-evidence section, verdict callout, enumerated gaps). Reuses the repository's LLD design language.</p>
+</section>
+
+<section id="accept">
+  <h2>8 · Acceptance-criteria trace</h2>
+  <table>
+    <tr><th>Acceptance criterion</th><th>Satisfied by</th></tr>
+    <tr class="trace"><td>Each endpoint present/missing</td><td>§3 families A–F, classified per §5</td></tr>
+    <tr class="trace"><td><code class="ic">contract:check</code> run + recorded</td><td>§4 step 2 → report evidence section</td></tr>
+    <tr class="trace"><td>SDK export without production churn</td><td>§4 steps 1/3/5 (scratch <code class="ic">WORKTRACKER_GENERATED_DIR</code> + git-status guards)</td></tr>
+    <tr class="trace"><td>Clear unblocked/gated verdict (CODIN-668)</td><td>§5 verdict + report callout</td></tr>
+    <tr class="trace"><td>Gaps enumerated to scope contract work</td><td>§6</td></tr>
+    <tr class="trace"><td>No production code changed</td><td>§4 ordering + step 5; only new files are this dir's docs</td></tr>
+  </table>
+  <div class="accept" style="margin-top:14px"><h3>Out of scope</h3><code class="ic">/ws/terminal</code> WS frame typing (T687-3/T687-4); implementing any missing path or SDK wrapper (the gated follow-up); any change under <code class="ic">server/</code>, <code class="ic">studio/src/</code>, <code class="ic">web/frontend/src/</code>, or generated SDK sources.</div>
+</section>
+
+</main>
+<script>
+  const INFO = {
+    settings: {t:"worktracker.openapi_settings", does:["The Django settings module export-openapi.mjs runs under","Exposes ONLY the standalone worktracker contract app"], no:["Does not include the Muxed host routers (settings/runs/terminals/documents/worktrees)"]},
+    openapi: {t:"openapi.json (committed)", does:["Holds exactly the /work-tracker contract paths","Authoritative once contract:check is clean"], no:["Lists no /terminals, /runs, /documents, /worktrees, /settings, /config, /fs paths"]},
+    sdk: {t:"@worktracker/typescript-sdk", does:["Generated from openapi.json by sdk:generate","Covers Family A only"], no:["Has no method for any host-route family (B–F)"]},
+    studio: {t:"Studio api.ts", does:["Consumes the work-tracker contract entirely via the SDK"], no:["Except codingBridge.ts, which raw-fetches /api/runs/lifecycle-states — the one escape hatch"]},
+    host: {t:"Muxed NinjaAPI (server/studio_server/api.py)", does:["Root-mounts settings/runs/terminals/documents/worktrees","Mounts the work-tracker router at /work-tracker"], no:["Is NOT the schema the SDK generator reads — host routes are invisible to the contract"]},
+    web: {t:"web/frontend api.ts", does:["Raw-fetches all six families with hand-written types"], no:["Uses no generated SDK — the surface T687-5 wants to migrate"]}
+  };
+  const info = document.getElementById('nodeInfo');
+  document.querySelectorAll('.node').forEach(n => n.addEventListener('click', () => {
+    document.querySelectorAll('.node').forEach(x => x.classList.remove('sel'));
+    n.classList.add('sel');
+    const d = INFO[n.dataset.k];
+    info.innerHTML = '<h4>'+d.t+'</h4><ul>'+
+      d.does.map(x=>'<li>'+x+'</li>').join('')+
+      (d.no||[]).map(x=>'<li class="no">'+x+'</li>').join('')+'</ul>';
+  }));
+  // scroll-spy
+  const links = [...document.querySelectorAll('#nav a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href')));
+  const obs = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) {
+      links.forEach(l => l.classList.remove('active'));
+      const i = secs.indexOf(e.target);
+      if (i>=0) links[i].classList.add('active');
+    }});
+  }, {rootMargin:"-50px 0px -70% 0px"});
+  secs.forEach(s => s && obs.observe(s));
+</script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — Muxed / orchestrator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { border-style: dashed; }
+      .band { display: flex; align-items: center; padding: 0 .75rem; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <header class="space-y-2">
+        <h1 class="font-serif text-3xl">Architecture review — <span class="text-indigo-700">server/apps/orchestrator</span></h1>
+        <p class="text-sm text-slate-500">Muxed · 2026-07-06 · reference architecture studied: freedom-agents (Temporal workflow/activity split)</p>
+        <div class="flex gap-5 text-xs text-slate-500 pt-1">
+          <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-3 border border-slate-400 bg-white"></span> module</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-4 border-t-2 border-dashed border-slate-500"></span> seam</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-4 border-t-2 border-red-600"></span> leakage</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-3 bg-slate-800"></span> deep module</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-12">
+
+        <!-- ══════════════════ C1 ══════════════════ -->
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-8 space-y-5 shadow-sm">
+          <div class="flex items-baseline justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">1 · Strategy becomes code behind an Activity seam</h2>
+            <div class="flex gap-2">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">ports &amp; adapters</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">reducer.py · driver.py · loader.py · policy.py · strategies/*</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — strategy smeared across the engine</p>
+              <pre class="mermaid">
+flowchart TB
+  P["strategies/&lt;pack&gt;<br/><i>prompts only</i>"] --> L[loader.py]
+  L -->|"phase grammar<br/>(code constants)"| R[reducer.py]
+  R -->|"retry · cancel · verify routing<br/>done gating · scheduling"| D[driver.py]
+  D -->|"postconditions · prompt shaping<br/>corrective relaunch · attempt limits"| H[headless.py]
+  PO[policy.py] -->|"agent/model per (phase,depth,attempt)"| D
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#7f1d1d;
+  class L,R,D,PO leak
+              </pre>
+              <p class="text-xs text-red-700 mt-2">A new run style edits 5 files of engine code.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — deterministic strategy, effects behind activities</p>
+              <div class="relative h-[300px]">
+                <div class="absolute top-0 left-0 right-0 h-[120px] bg-slate-800 text-white rounded-lg p-3">
+                  <p class="text-xs uppercase tracking-wider text-slate-300">Strategy module (per pack)</p>
+                  <p class="text-xs text-slate-400 mt-1">phase graph · transitions · retry &amp; verify policy · prompts — <i>deterministic, replayable</i></p>
+                  <p class="font-mono text-[11px] text-emerald-300 mt-2">decide(state, event) → [Activity...]</p>
+                </div>
+                <div class="absolute top-[128px] left-0 right-0 border-t-2 border-dashed border-slate-500"></div>
+                <p class="absolute top-[131px] right-1 text-[10px] uppercase tracking-wider text-slate-400">activity seam</p>
+                <div class="absolute top-[150px] left-0 right-0 h-[120px] bg-slate-800 text-white rounded-lg p-3">
+                  <p class="text-xs uppercase tracking-wider text-slate-300">Executor module</p>
+                  <p class="text-xs text-slate-400 mt-1">spawn agent · gather tracker facts · read verdict · persist ledger · supervise — <i>all side effects</i></p>
+                  <p class="font-mono text-[11px] text-emerald-300 mt-2">run(activity) → Fact</p>
+                </div>
+              </div>
+              <p class="text-xs text-emerald-700 mt-2">A new run style is a new pack. Engine untouched.</p>
+            </div>
+          </div>
+
+          <dl class="space-y-1.5 text-sm">
+            <div><dt class="inline font-semibold">Problem:</dt> <dd class="inline">packs swap prompts, but the strategy — phase grammar (loader.py:34), lifecycle policy (reducer.py:68), postconditions &amp; corrective relaunch (driver.py:600, 687), model selection (policy.py) — is engine implementation; the seam admits no second control flow.</dd></div>
+            <div><dt class="inline font-semibold">Solution:</dt> <dd class="inline">the freedom-agents split — a pack ships deterministic strategy code that schedules work only through a narrow Activity interface; reducer + driver collapse into a generic executor that runs activities and folds their facts back in.</dd></div>
+          </dl>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li><b>Leverage:</b> one Activity interface, every future strategy</li>
+            <li><b>Locality:</b> a strategy's rules live in one module</li>
+            <li>Two packs exist → the seam is real</li>
+            <li>Strategy tested with a fake executor, no subprocesses</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">Engine invariants vs strategy choices needs a ruling: cancel-as-impossible (#796) and the fork-bomb brakes read as executor invariants, not pack policy — decide in the grilling loop.</div>
+        </article>
+
+        <!-- ══════════════════ C2 ══════════════════ -->
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-8 space-y-5 shadow-sm">
+          <div class="flex items-baseline justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">2 · Durable inbox, stateless fold — the redux answer</h2>
+            <div class="flex gap-2">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">local-substitutable</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">driver.py · headless.py · startup.py · signals.py · models.py · dao/runs.py</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — three state layers; restart kills the middle</p>
+              <div class="space-y-1.5">
+                <div class="band h-12 border-l-4 border-emerald-500 bg-emerald-50 rounded text-xs">DB rows — CoordinatorRun · RunNode · HeadlessRun <span class="ml-auto text-emerald-700 font-semibold">durable</span></div>
+                <div class="band h-12 border-l-4 border-red-500 bg-red-50 rounded text-xs">asyncio supervisors — _supervise_process, timeout tasks <span class="ml-auto text-red-700 font-semibold">dies on reload</span></div>
+                <div class="band h-12 border-l-4 border-red-500 bg-red-50 rounded text-xs">on_commit → schedule_coroutine → live loop required <span class="ml-auto text-red-700 font-semibold">dies on reload</span></div>
+                <div class="band h-12 border-l-4 border-amber-500 bg-amber-50 rounded text-xs">startup.py adoption — repairs the damage after the fact <span class="ml-auto text-amber-700 font-semibold">patch</span></div>
+              </div>
+              <p class="text-xs text-red-700 mt-2">#814: supervisor dies on ASGI reload → runs stuck "running".</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — DB is the only state; reconcile is the only loop</p>
+              <div class="space-y-1.5">
+                <div class="band h-14 border-l-4 border-emerald-500 bg-emerald-50 rounded text-xs">DB — run rows <b class="mx-1">+ durable event inbox</b> (exits, transitions, verdicts) <span class="ml-auto text-emerald-700 font-semibold">durable</span></div>
+                <div class="band h-20 bg-slate-800 text-slate-100 rounded text-xs">reconcile(): adopt pids → drain inbox → fold reducer → launch ready set. Idempotent — run it at startup, on signal, on poll. <span class="ml-auto text-emerald-300 font-semibold">stateless</span></div>
+              </div>
+              <p class="text-xs text-emerald-700 mt-2">Restart = run reconcile. No adoption "repair" path — recovery <i>is</i> the normal path.</p>
+            </div>
+          </div>
+
+          <dl class="space-y-1.5 text-sm">
+            <div><dt class="inline font-semibold">Problem:</dt> <dd class="inline">the fold is already rebuilt from DB rows each pass (driver.py:293), but launching and supervising hang off a live event loop (headless.py:36–62) and on_commit callbacks (driver.py:331) — the process, not the database, is what keeps a run moving.</dd></div>
+            <div><dt class="inline font-semibold">Solution:</dt> <dd class="inline">keep the reducer, drop the residency: every external fact lands as a durable event row; reconcile() adopts recorded pids and drains the inbox through the fold; delete the fallback-loop machinery and startup "repair" special case. Redux stays — as a replayable fold over the DB, which it already half is.</dd></div>
+          </dl>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li><b>Locality:</b> one recovery path, exercised constantly</li>
+            <li>Server restart is a non-event; kills #814's orphan class</li>
+            <li>Tests: seed inbox rows, call reconcile, assert rows</li>
+            <li>Deletes loop-registration + fallback-loop implementation</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">This is the honest answer to "why not Temporal": same durability idea (event history + deterministic replay) without a second runtime — single box, recursive runs, and tmux-bound interactive sessions make an external executor a poor fit.</div>
+        </article>
+
+        <!-- ══════════════════ C3 ══════════════════ -->
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-8 space-y-5 shadow-sm">
+          <div class="flex items-baseline justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">3 · Deepen headless.py into an AgentProcess module</h2>
+            <div class="flex gap-2">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">ports &amp; adapters</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">headless.py · driver.py (launch paths) · startup.py · ports.py</p>
+
+          <div class="grid md:grid-cols-2 gap-4 items-end">
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — shallow: interface nearly as wide as the implementation</p>
+              <div class="flex gap-3 items-end h-[260px]">
+                <div class="flex-1 flex flex-col justify-end">
+                  <div class="bg-red-100 border border-red-300 rounded-t p-2 h-[190px] text-[11px] font-mono text-red-900 leading-4">register loop<br/>schedule_coroutine<br/>fallback loop<br/>launch_headless_run<br/>adopt_recorded_runs<br/>+ callers must know:<br/>which loop is live,<br/>on_commit timing,<br/>pid liveness rules</div>
+                  <div class="bg-slate-200 border border-slate-300 rounded-b p-2 h-[60px] text-[11px] text-slate-600">implementation: spawn · parse · timeout</div>
+                  <p class="text-[10px] uppercase tracking-wider text-slate-400 mt-1 text-center">interface ≈ implementation</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — deep: two calls, everything else hidden</p>
+              <div class="flex gap-3 items-end h-[260px]">
+                <div class="flex-1 flex flex-col justify-end">
+                  <div class="bg-emerald-100 border border-emerald-300 rounded-t p-2 h-[44px] text-[11px] font-mono text-emerald-900">start(spec) → RunHandle<br/>reconcile() → [ExitFact]</div>
+                  <div class="bg-slate-800 text-slate-300 rounded-b p-2 h-[190px] text-[11px] leading-4">hidden: command construction · subprocess spawn · loop &amp; fallback management · timeout supervision · stdout parsing · durable HeadlessRun writes · dead-pid adoption</div>
+                  <p class="text-[10px] uppercase tracking-wider text-slate-400 mt-1 text-center">small interface, deep implementation</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="space-y-1.5 text-sm">
+            <div><dt class="inline font-semibold">Problem:</dt> <dd class="inline">headless.py leaks event-loop mechanics across its seam — driver.py and startup.py must know about loop registration, on_commit scheduling, and adoption to use it correctly.</dd></div>
+            <div><dt class="inline font-semibold">Solution:</dt> <dd class="inline">mirror the SessionPort precedent (ports.py) — a HeadlessPort with start/reconcile; the terminals-side Session module (#800) already proves the shape. This module is the concrete adapter behind candidate 1's Activity seam and the pid-adoption half of candidate 2's reconcile.</dd></div>
+          </dl>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li><b>Leverage:</b> headless + interactive behind twin ports</li>
+            <li><b>Locality:</b> process mechanics change in one module</li>
+            <li>Fake adapter → driver tests drop subprocess guards</li>
+            <li>Aligns with ticket #811's headless port direction</li>
+          </ul>
+        </article>
+
+        <!-- ══════════════════ C4 ══════════════════ -->
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-8 space-y-5 shadow-sm">
+          <div class="flex items-baseline justify-between flex-wrap gap-2">
+            <h2 class="font-serif text-2xl">4 · Split service.py: commands vs console read-model</h2>
+            <div class="flex gap-2">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">service.py · api.py</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — one module, two audiences</p>
+              <pre class="mermaid">
+flowchart LR
+  A[api.py] --> S["service.py (411)"]
+  S --> V[validation]
+  S --> SR[serialization]
+  S --> C[console shaping]
+  S --> K[kill-all / teardown]
+  S --> D[driver.fold + _live_topology]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class S leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — write path and read path, each deep</p>
+              <pre class="mermaid">
+flowchart LR
+  A[api.py] --> CM["commands<br/>start_run · abort · release"]
+  A --> CO["console<br/>run view · node output"]
+  CM --> D[engine]
+  CO --> DB[(dao)]
+  classDef deep fill:#1e293b,color:#fff,stroke:#0f172a;
+  class CM,CO deep
+              </pre>
+            </div>
+          </div>
+
+          <dl class="space-y-1.5 text-sm">
+            <div><dt class="inline font-semibold">Problem:</dt> <dd class="inline">service.py is shallow — start/abort commands, entry validation, serialization, console shaping, and terminal teardown share one interface, and it reaches through the engine's seam (imports driver._live_topology).</dd></div>
+            <div><dt class="inline font-semibold">Solution:</dt> <dd class="inline">split by audience: a command module (mutations, guards) and a console read module (queries dao directly); deletion test — removing today's service.py scatters both audiences into api.py, so each half earns its keep as a module.</dd></div>
+          </dl>
+          <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+            <li>Interface per audience shrinks to a handful of calls</li>
+            <li>Console reads stop coupling to engine internals</li>
+            <li>Pure readability win; no behavior change</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ══════════════════ TOP RECOMMENDATION ══════════════════ -->
+      <section id="top-recommendation" class="rounded-xl bg-slate-900 text-slate-100 p-8 space-y-3">
+        <p class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</p>
+        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-emerald-400 underline-offset-4">1 · Strategy behind an Activity seam</a> — designed together with <a href="#c2" class="underline decoration-emerald-400 underline-offset-4">2</a></h2>
+        <p class="text-sm text-slate-300 leading-relaxed">Candidate 1 is the stated pain — the air gap — and its Activity interface is the same list of facts candidate 2 must make durable, so one design session settles both seams. Candidate 3 falls out as the executor's first adapter; candidate 4 is an independent readability slice you can take any time. Deciding what is engine invariant vs strategy choice (the amber callout on card 1) is the first grilling-loop question.</p>
+      </section>
+
+    </main>
+  </body>
+</html>

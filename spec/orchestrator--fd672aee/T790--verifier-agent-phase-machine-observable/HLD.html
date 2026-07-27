@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-790 · Verifier-agent phase — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; margin: 0 -40px; padding: 0 40px; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 900px; }
+
+  .evo { display: grid; grid-template-columns: 1fr 28px 1fr 28px 1fr; gap: 10px; align-items: stretch; margin-bottom: 40px; }
+  .evo .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); }
+  .evo .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .evo .stage.dead { opacity: .7; } .evo .stage.dead .lbl { color: var(--muted); }
+  .evo .stage.mid .lbl { color: var(--amber); }
+  .evo .stage.live { border: 2px solid var(--green); color: var(--ink); } .evo .stage.live .lbl { color: var(--green); }
+  .evo .arr { align-self: center; text-align: center; color: var(--violet); font-size: 18px; font-weight: 700; }
+
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .pillar { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent); cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .pillar:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .pillar.p2 { border-top-color: var(--green); } .pillar.p3 { border-top-color: var(--violet); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .pillar.open .more { display: block; }
+  .pillar ul { list-style: none; } .pillar li { font-size: 13px; padding: 3px 0 3px 20px; position: relative; }
+  .pillar li.in::before { content: "+"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .pillar li.reuse::before { content: "\21bb"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+  .pillar li.prep::before { content: "\25cc"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+  .legend { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend .g { color: var(--green); } .legend .a { color: var(--amber); } .legend .b { color: var(--accent); }
+
+  .diagram-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse, .node polygon { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse, .node.hl polygon { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo, #smInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4, #smInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint, #smInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul, #smInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li, #smInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before, #smInfo li::before { content: "\00b7"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; } tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  code, .m { font-family: var(--mono); font-size: 12px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 1px 2px; }
+  .pill.b1 { background: var(--accent-soft); color: var(--accent); } .pill.b2 { background: var(--green-soft); color: var(--green); } .pill.b3 { background: var(--violet-soft); color: var(--violet); }
+
+  .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--green); }
+  .qcard.openq { border-left-color: var(--red); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--green); }
+  .qcard.openq .qid { color: var(--red); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 12.5px; color: var(--muted); } .qcard p b { color: var(--green); } .qcard.openq p b { color: var(--red); }
+
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; gap: 30px; flex-wrap: wrap; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.85; min-width: 420px; }
+  .tree .dir { color: var(--accent); font-weight: 700; }
+  .tree .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .ro { color: var(--muted); }
+  .tree .fitem { cursor: pointer; }
+  .tree .fitem:hover { outline: 1px dashed var(--line); }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; max-width: 380px; }
+  #fileDelta { font-size: 13px; }
+  #fileDelta h4 { color: var(--accent); font-size: 14px; margin-bottom: 6px; }
+  #fileDelta .hint { color: var(--muted); font-style: italic; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .pillars, .qgrid { grid-template-columns: 1fr; }
+    .diagram-wrap { grid-template-columns: 1fr; }
+    .evo { grid-template-columns: 1fr; } .evo .arr { transform: rotate(90deg); }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · Orchestrator module (CODIN-780) · Ticket #790 · post-v1 · HLD</div>
+  <h1>Verifier-agent phase — machine-observable quality verdict</h1>
+  <div class="sub">v1 completes a node on <i>structural</i> facts — commits exist, the check command is green. This adds a <b>quality axis without reopening a human gate</b>: a cheap judge agent runs against a node's artifact, and its own postcondition is writing a machine-readable accept/reject verdict. Accept lands the node; reject drops into the node's existing corrective retry with the findings as diagnostics. This is what makes the <code>auto</code>/<code>gated</code> flag a real choice — <code>auto</code> = verifier verdict, <code>gated</code> = human approval.</div>
+  <div class="chips">
+    <span class="chip">Phase: HLD</span>
+    <span class="chip violet">Builds on #784 coordinator core (in tree)</span>
+    <span class="chip green">Additive · zero new HTTP surface</span>
+    <span class="chip green">1 migration</span>
+    <span class="chip amber">2 owner forks locked</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">Why</a>
+    <a href="#seam">The Seam</a>
+    <a href="#pillars">Three Changes</a>
+    <a href="#flow">Data Flow</a>
+    <a href="#sm">State Machine</a>
+    <a href="#trace">Decision Trace</a>
+    <a href="#questions">Forks</a>
+    <a href="#repo">Change Map</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ WHY / EVOLUTION ============ -->
+<section id="evo">
+  <div class="evo">
+    <div class="stage dead">
+      <div class="lbl">V1 · STRUCTURAL ONLY</div>
+      A node is <code>done</code> when the driver's implement postcondition holds: <b>≥1 new commit</b> AND the <b>check command green</b> in the node worktree. Correctness of intent is never judged — a green build with a wrong-headed diff still lands.
+    </div>
+    <div class="arr">&rarr;</div>
+    <div class="stage mid">
+      <div class="lbl">GATED FALLBACK</div>
+      For doc-producing work there is no structural postcondition at all, so quality can only be caught by a <b>human at the landing gate</b>. That makes <code>auto</code> a non-choice for those strategies.
+    </div>
+    <div class="arr">&rarr;</div>
+    <div class="stage live">
+      <div class="lbl">THIS DESIGN · VERIFY PHASE</div>
+      A <b>separate cheap judge agent</b> runs after the structural postcondition, before merge-back. Its postcondition is a machine-readable <span class="m">verdict.json</span>. <b>Accept</b> lands; <b>reject</b> feeds the corrective retry. The human gate stays collapsed to the two bookends.
+    </div>
+  </div>
+</section>
+
+<!-- ============ THE SEAM ============ -->
+<section id="seam">
+  <h2>Where verify slots in — one seam, before merge-back</h2>
+  <div class="lede">The verify phase inserts itself into a single transition: the moment an <code>implement</code> node's structural postcondition would have flipped it to <code>done</code>. In <code>auto</code> mode with a verify-capable strategy, that flip is deferred until a judge verdict exists. Everything downstream (merge-back #788, halt propagation, budgets) is untouched.</div>
+  <div class="pillars">
+    <div class="pillar">
+      <div class="tag">BEFORE (v1)</div>
+      <h3>implement &rarr; done</h3>
+      <p>Driver verifies <span class="m">check_implement_postcondition</span> (commit + check green) &rarr; node <code>done</code> &rarr; topo merge-back into the integration branch.</p>
+    </div>
+    <div class="pillar p2">
+      <div class="tag">AFTER (this HLD)</div>
+      <h3>implement &rarr; verify &rarr; done</h3>
+      <p>Postcondition green &rarr; node enters the new <code>verify</code> phase (<code>pending</code>, re-launchable) &rarr; judge writes <span class="m">verdict.json</span> &rarr; <b>accept</b> &rarr; <code>done</code> &rarr; merge-back. Reject &rarr; corrective retry.</p>
+    </div>
+    <div class="pillar p3">
+      <div class="tag">THE INVARIANT</div>
+      <h3>rejected code never merges</h3>
+      <p>Verify runs <b>in the node's own worktree, entirely before the merge queue</b>. A reject relaunches implement on the same branch with findings; nothing enters the integration branch until a verdict is <code>accept</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ THREE CHANGES / PILLARS ============ -->
+<section id="pillars">
+  <h2>The change, in three pillars</h2>
+  <div class="lede">Purely additive to the #784 machinery. Click a pillar to see exactly what is new (<span class="g">+</span>), reused unchanged (<span class="b">&#x21bb;</span>), or a deferred seam (<span class="a">&#x25cc;</span>).</div>
+  <div class="pillars">
+    <div class="pillar open" data-k="reducer">
+      <div class="tag">PILLAR 1 · PURE REDUCER · state.py + reducer.py</div>
+      <h3>A <code>verify</code> phase &amp; verdict transition</h3>
+      <p>The reducer learns one new phase and how a verdict routes it. Still total, pure, framework-free.</p>
+      <div class="more"><ul>
+        <li class="in"><span class="m">Phase</span> gains <code>"verify"</code>; <span class="m">Event</span> gains <code>verdict: "accept"|"reject"|None</code>; <span class="m">RunState</span> gains <code>verify_enabled: bool</code></li>
+        <li class="in">Implement node succeeds &amp; <code>verify_enabled</code> &rarr; <b>not</b> <code>done</code> yet: phase&rarr;<code>verify</code>, status&rarr;<code>pending</code></li>
+        <li class="in">verify exit: <b>accept</b>&rarr;<code>done</code>; <b>reject</b>&rarr;implement <code>pending</code> + burn the single per-node retry; retry-spent or no-verdict&rarr;<code>failed</code>+surface</li>
+        <li class="reuse">Scheduler picks the pending verify node with no change — its blockers are already <code>done</code></li>
+        <li class="reuse">Halt propagation, max_depth, capped ready-set — all as-is</li>
+      </ul></div>
+    </div>
+    <div class="pillar p2" data-k="driver">
+      <div class="tag">PILLAR 2 · EFFECTFUL DRIVER · driver.py + loader.py + policy.py</div>
+      <h3>Launch the judge, read the verdict</h3>
+      <p>The judge is just another headless run; its verdict artifact is a checked fact, exactly like every other postcondition.</p>
+      <div class="more"><ul>
+        <li class="in"><span class="m">check_verify_postcondition</span>: a parseable <span class="m">verdict.json</span> with a valid verdict exists (postcondition = "a verdict was written")</li>
+        <li class="in"><span class="m">resolve_exit</span> reads the verdict file &rarr; sets <code>event.verdict</code> + <code>postcondition_ok</code></li>
+        <li class="in">Launch renders <span class="m">verify.md</span> (judge prompt) with the node's <b>diff</b> injected; spawns the cheap-model run in the node worktree</li>
+        <li class="in">loader: <code>verify</code> is an <b>optional</b> phase; new whitelist token <code>diff</code>; driver-supplied context</li>
+        <li class="in">policy: <code>(phase=verify) &rarr; cheap model</code> rule; <code>verify</code> added to the phase literal</li>
+        <li class="reuse">headless launch primitive, worktree, MCP injection, supervisor timeout — all reused</li>
+      </ul></div>
+    </div>
+    <div class="pillar p3" data-k="retry">
+      <div class="tag">PILLAR 3 · REJECT PATH &amp; RECORDS · models.py + strategy pack</div>
+      <h3>Reject reuses the corrective retry</h3>
+      <p>A reject is not a new failure mode — it is the existing "one informed corrective relaunch per node," with the verifier's findings as the diagnostic.</p>
+      <div class="more"><ul>
+        <li class="reuse">Reject &rarr; the node's <code>retried</code> flag + corrective implement relaunch (§3.6) — no new retry counter</li>
+        <li class="in">Corrective implement prompt threads the verifier's <b>findings</b> alongside the existing diagnostics</li>
+        <li class="in"><span class="m">HeadlessRun</span> gains <code>verdict</code> + <code>verdict_findings</code> (migration 0004) — durable, feeds A/B reject-rate metrics (§5)</li>
+        <li class="in"><span class="m">strategies/default/verify.md</span> + <code>pack.toml</code> declares the verify phase &amp; its cheap-model policy rule</li>
+        <li class="prep">by-interface pack (#5) may ship its own <span class="m">verify.md</span>; packs without one simply don't verify</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><b class="g">+ new</b> — added in this ticket</span>
+    <span><b class="b">&#x21bb; reused</b> — #784 machinery, unchanged</span>
+    <span><b class="a">&#x25cc; seam</b> — prepared-for, not built here</span>
+  </div>
+</section>
+
+<!-- ============ DATA FLOW ============ -->
+<section id="flow">
+  <h2>Data flow — one implement node, verify enabled</h2>
+  <div class="lede">Green stroke = new in this ticket. Blue = #784 machinery reused. Dashed = deferred seam (#788 merge-back). Click any box for its responsibility and its explicit non-responsibilities.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 760 470" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/></marker>
+        <marker id="arg" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#1d7a4f"/></marker>
+        <marker id="ard" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#b03030"/></marker>
+      </defs>
+      <!-- implement node -->
+      <g class="node" data-n="impl">
+        <rect x="40" y="40" width="180" height="80" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="130" y="70" text-anchor="middle" font-size="13" font-weight="700">implement node</text>
+        <text x="130" y="90" text-anchor="middle" font-size="11" fill="#5b6478">agent commits on branch</text>
+        <text x="130" y="106" text-anchor="middle" font-size="11" fill="#5b6478">flips ticket</text>
+      </g>
+      <!-- structural postcondition -->
+      <g class="node" data-n="post">
+        <polygon points="300,80 380,45 460,80 380,115" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="380" y="77" text-anchor="middle" font-size="11.5" font-weight="700">postcondition</text>
+        <text x="380" y="93" text-anchor="middle" font-size="10.5" fill="#5b6478">commit + check green?</text>
+      </g>
+      <!-- gate -->
+      <g class="node" data-n="gate">
+        <polygon points="380,170 470,215 380,260 290,215" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="1.5"/>
+        <text x="380" y="210" text-anchor="middle" font-size="11" font-weight="700" fill="#3d2370">auto &amp; pack</text>
+        <text x="380" y="226" text-anchor="middle" font-size="11" font-weight="700" fill="#3d2370">has verify?</text>
+      </g>
+      <!-- verify launch -->
+      <g class="node" data-n="verify">
+        <ellipse cx="600" cy="215" rx="110" ry="46" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="600" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">verify run · NEW</text>
+        <text x="600" y="218" text-anchor="middle" font-size="11" fill="#1d7a4f">cheap judge vs diff</text>
+        <text x="600" y="234" text-anchor="middle" font-size="11" fill="#1d7a4f">writes verdict.json</text>
+      </g>
+      <!-- verdict artifact -->
+      <g class="node" data-n="verdict">
+        <rect x="520" y="310" width="160" height="66" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="600" y="336" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0e4d2f">verdict.json</text>
+        <text x="600" y="354" text-anchor="middle" font-size="11" fill="#5b6478">accept | reject + findings</text>
+      </g>
+      <!-- done -->
+      <g class="node" data-n="done">
+        <rect x="300" y="315" width="150" height="56" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="375" y="340" text-anchor="middle" font-size="12.5" font-weight="700">node done</text>
+        <text x="375" y="358" text-anchor="middle" font-size="10.5" fill="#5b6478">&rarr; merge-back (#788)</text>
+      </g>
+      <!-- retry -->
+      <g class="node" data-n="retry">
+        <rect x="40" y="315" width="200" height="66" rx="10" fill="#fff" stroke="#b03030" stroke-width="1.5"/>
+        <text x="140" y="340" text-anchor="middle" font-size="12.5" font-weight="700" fill="#7a1f1f">corrective retry</text>
+        <text x="140" y="358" text-anchor="middle" font-size="10.5" fill="#b03030">implement + findings · 1x</text>
+      </g>
+      <!-- edges -->
+      <line x1="220" y1="80" x2="296" y2="80" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="380" y1="116" x2="380" y2="166" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="470" y1="215" x2="486" y2="215" stroke="#1d7a4f" stroke-width="1.6" marker-end="url(#arg)"/>
+      <line x1="600" y1="261" x2="600" y2="306" stroke="#1d7a4f" stroke-width="1.6" marker-end="url(#arg)"/>
+      <!-- accept path -->
+      <path d="M520 350 L454 346" stroke="#1d7a4f" stroke-width="1.6" fill="none" marker-end="url(#arg)"/>
+      <!-- reject path -->
+      <path d="M520 366 q-250 40 -370 15" stroke="#b03030" stroke-width="1.5" fill="none" marker-end="url(#ard)"/>
+      <!-- gate bypass to done when verify disabled -->
+      <path d="M340 250 q-30 55 -30 60" stroke="#8a93a8" stroke-width="1.3" stroke-dasharray="5 4" fill="none" marker-end="url(#arr)"/>
+      <!-- retry back to implement -->
+      <path d="M120 315 q-30 -110 20 -195" stroke="#b03030" stroke-width="1.3" stroke-dasharray="5 4" fill="none" marker-end="url(#ard)"/>
+      <!-- labels -->
+      <text x="228" y="70" font-size="10.5" fill="#8a93a8">exit + facts</text>
+      <text x="388" y="150" font-size="10.5" fill="#8a93a8">green</text>
+      <text x="474" y="205" font-size="10.5" fill="#1d7a4f">yes: launch</text>
+      <text x="300" y="290" font-size="10.5" fill="#8a93a8">no: straight to done</text>
+      <text x="466" y="336" font-size="10.5" fill="#1d7a4f">accept</text>
+      <text x="330" y="405" font-size="10.5" fill="#b03030">reject &rarr; relaunch implement</text>
+    </svg>
+    <div id="nodeInfo"><span class="hint">Click a box for its responsibility and what it explicitly does not do.</span></div>
+  </div>
+</section>
+
+<!-- ============ STATE MACHINE ============ -->
+<section id="sm">
+  <h2>Node state machine — the delta</h2>
+  <div class="lede">Only the <span style="color:var(--green);font-weight:700">green</span> phase and edges are new. Click a transition for its exact rule and the reducer branch that owns it. No new node <i>status</i> is introduced — verify reuses <code>pending</code>/<code>running</code>/<code>done</code>/<code>failed</code>; it is a <b>phase</b>, not a status.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 760 300" width="100%">
+      <defs><marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/></marker>
+        <marker id="arg2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#1d7a4f"/></marker></defs>
+      <g class="node sm" data-s="implement"><rect x="30" y="120" width="130" height="52" rx="9" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/><text x="95" y="150" text-anchor="middle" font-size="13" font-weight="700">implement</text></g>
+      <g class="node sm" data-s="tverify"><ellipse cx="330" cy="146" rx="80" ry="34" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/><text x="330" y="151" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">verify</text></g>
+      <g class="node sm" data-s="tdone"><rect x="560" y="60" width="150" height="50" rx="9" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="1.6"/><text x="635" y="90" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">done</text></g>
+      <g class="node sm" data-s="tfail"><rect x="560" y="200" width="150" height="50" rx="9" fill="#fbe7e7" stroke="#b03030" stroke-width="1.6"/><text x="635" y="230" text-anchor="middle" font-size="13" font-weight="700" fill="#7a1f1f">failed + surface</text></g>
+      <!-- implement -> verify -->
+      <path class="edge" data-e="e_enter" d="M160 140 q80 -6 90 6" stroke="#1d7a4f" stroke-width="1.8" fill="none" marker-end="url(#arg2)"/>
+      <text x="175" y="120" font-size="10.5" fill="#1d7a4f">postcond green &amp; verify_enabled</text>
+      <!-- implement -> done (verify disabled) -->
+      <path class="edge" data-e="e_bypass" d="M120 120 q120 -80 440 -45" stroke="#8a93a8" stroke-width="1.3" stroke-dasharray="5 4" fill="none" marker-end="url(#arr2)"/>
+      <text x="300" y="52" font-size="10.5" fill="#8a93a8">verify disabled: implement &rarr; done directly</text>
+      <!-- verify -> done accept -->
+      <path class="edge" data-e="e_accept" d="M405 132 q90 -30 150 -45" stroke="#1d7a4f" stroke-width="1.8" fill="none" marker-end="url(#arg2)"/>
+      <text x="430" y="100" font-size="10.5" fill="#1d7a4f">accept</text>
+      <!-- verify -> implement reject -->
+      <path class="edge" data-e="e_reject" d="M300 178 q-100 60 -205 -4" stroke="#b03030" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+      <text x="150" y="215" font-size="10.5" fill="#b03030">reject &amp; retry left: relaunch implement</text>
+      <!-- verify -> failed -->
+      <path class="edge" data-e="e_fail" d="M400 165 q100 55 155 55" stroke="#b03030" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+      <text x="415" y="215" font-size="10.5" fill="#b03030">reject &amp; retry spent, or no verdict</text>
+    </svg>
+    <div id="smInfo"><span class="hint">Click a phase or a labelled edge for its rule.</span></div>
+  </div>
+</section>
+
+<!-- ============ DECISION TRACE ============ -->
+<section id="trace">
+  <h2>Decision &rarr; design trace</h2>
+  <div class="lede">Click a row to highlight where each locked decision lands in the data-flow diagram.</div>
+  <table>
+    <thead><tr><th style="width:150px">Decision / source</th><th>What was decided</th><th>Where this design honors it</th><th style="width:120px">Node</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-nodes="verify,verdict"><td><span class="rid">Ticket #790</span></td><td>Verifier is a separate cheap-model agent; its postcondition is writing an accept/reject verdict — machine-observable</td><td>A <code>verify</code> phase launches a headless judge; <span class="m">verdict.json</span> is the checked-fact postcondition</td><td><span class="pill b2">verify</span></td></tr>
+      <tr class="trace" data-nodes="retry"><td><span class="rid">Ticket #790</span></td><td>Reject &rarr; the node's corrective-retry path with the verifier's findings as diagnostics</td><td>Reject reuses the §3.6 single per-node <code>retried</code> relaunch; findings thread into the corrective implement prompt</td><td><span class="pill b1">retry</span></td></tr>
+      <tr class="trace" data-nodes="gate"><td><span class="rid">Ticket #790</span></td><td><code>auto</code> = verifier verdict; <code>gated</code> = human approval — a real choice for doc strategies</td><td>Verify fires only when <code>autonomy=="auto"</code> AND the pack ships a <span class="m">verify.md</span>; otherwise unchanged v1 behaviour</td><td><span class="pill b3">gate</span></td></tr>
+      <tr class="trace" data-nodes="verify"><td><span class="rid">Fork A (locked)</span></td><td>Scope = <b>doc + code</b> artifacts</td><td>Verify gates every implement node: quality axis on code, sole machine gate on docs</td><td><span class="pill b2">verify</span></td></tr>
+      <tr class="trace" data-nodes="verify,retry"><td><span class="rid">Fork B (locked)</span></td><td>Verify runs <b>count against</b> <code>max_total_runs</code> (10)</td><td>Verify is an ordinary <span class="m">HeadlessRun</span>; the driver's launch budget check is unchanged; budget_exceeded still surfaces loudly</td><td><span class="pill b2">verify</span></td></tr>
+      <tr class="trace" data-nodes="done"><td><span class="rid">Brief §3.9</span></td><td>Node done = postcondition green in its own worktree, then topo merge-back; always waits for human landing</td><td>Verify runs <b>before</b> the merge queue; rejected code never merges; landing gate untouched</td><td><span class="pill b1">done</span></td></tr>
+      <tr class="trace" data-nodes="impl,post"><td><span class="rid">Brief §2.4</span></td><td>Add a state only when a transition must be machine-observed</td><td>One new <b>phase</b> (not a status), one new <code>verdict</code> event field — the minimum a verdict transition needs</td><td><span class="pill b1">reducer</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ FORKS ============ -->
+<section id="questions">
+  <h2>Owner forks</h2>
+  <div class="lede">Green = locked this session. Red = deliberately deferred; neither blocks the build.</div>
+  <div class="qgrid">
+    <div class="qcard"><div class="qid">LOCKED · Fork A</div><h4>Which artifacts does verify gate?</h4><p><b>Doc + code.</b> Verify gates all implement nodes — a quality axis layered on commit+check-green for code, and the sole machine gate for doc-producing nodes. Matches the ticket text literally.</p></div>
+    <div class="qcard"><div class="qid">LOCKED · Fork B</div><h4>How does a verify run count against budget?</h4><p><b>Counts against <code>max_total_runs</code>.</b> One hard ceiling; a verify is a normal launch. Worst case per node = implement + verify + implement-retry + verify = 4 runs; budget_exceeded surfaces loudly as designed.</p></div>
+    <div class="qcard openq"><div class="qid">OPEN · deferred</div><h4>Model escalation on the corrective retry?</h4><p><b>Off in v1</b> (owner decision #7). The <code>(phase, depth, attempt)</code> policy axis already exists, so a stronger model on the reject-driven retry is later config, not code.</p></div>
+    <div class="qcard openq"><div class="qid">OPEN · deferred</div><h4>Verify the decompose node too?</h4><p><b>No.</b> Decompose already has a structural gate (§3.2) that machine-checks its output. Verify targets artifact quality (code diff / doc), which is an <code>implement</code>-phase output. Revisit only if decompose quality proves a real gap.</p></div>
+  </div>
+</section>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="repo">
+  <h2>Change map — <span class="m">server/apps/orchestrator/</span></h2>
+  <div class="lede">Green = new file. Amber = modified. Plain = read-only reuse. Click an entry for its exact delta. The import rule holds: <b>worktracker only</b>, never <span class="m">apps.execution</span> / <span class="m">apps.terminals</span>.</div>
+  <div class="tree-wrap">
+    <div class="tree">
+      <div><span class="dir">apps/orchestrator/</span></div>
+      <div>├─ <span class="fitem mod" data-f="state">state.py</span> <span class="ro">— Phase+verify, Event.verdict, RunState.verify_enabled</span></div>
+      <div>├─ <span class="fitem mod" data-f="reducer">reducer.py</span> <span class="ro">— verify transitions</span></div>
+      <div>├─ <span class="fitem mod" data-f="driver">driver.py</span> <span class="ro">— verify postcondition + verdict read + launch</span></div>
+      <div>├─ <span class="fitem mod" data-f="loader">loader.py</span> <span class="ro">— optional verify phase, diff token</span></div>
+      <div>├─ <span class="fitem mod" data-f="policy">policy.py</span> <span class="ro">— verify in phase literal</span></div>
+      <div>├─ <span class="fitem mod" data-f="models">models.py</span> <span class="ro">— HeadlessRun.verdict + findings</span></div>
+      <div>├─ migrations/</div>
+      <div>│&nbsp;&nbsp;└─ <span class="fitem new" data-f="mig">0004_headlessrun_verdict.py</span></div>
+      <div>├─ strategies/default/</div>
+      <div>│&nbsp;&nbsp;├─ <span class="fitem new" data-f="verifymd">verify.md</span> <span class="ro">— judge prompt</span></div>
+      <div>│&nbsp;&nbsp;└─ <span class="fitem mod" data-f="packtoml">pack.toml</span> <span class="ro">— declare phase + policy rule</span></div>
+      <div>└─ tests/</div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="fitem mod" data-f="treducer">test_reducer.py</span></div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="fitem mod" data-f="tdriver">test_driver.py</span></div>
+      <div>&nbsp;&nbsp;&nbsp;└─ <span class="fitem mod" data-f="tstrat">test_strategies.py / test_policy.py</span></div>
+    </div>
+    <div id="fileDelta" class="tree-notes"><span class="hint">Click a file for its precise change. Nothing outside this app is touched — no HTTP surface, no frontend.</span></div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance signal</h2>
+  <div class="accept">
+    With a verify-capable strategy in <b>auto</b> mode, an implement node whose structural postcondition passes launches a <b>cheap judge run</b> that writes <span class="m">verdict.json</span>; an <b>accept</b> lands the node and it proceeds to merge-back unchanged, while a <b>reject</b> relaunches implement <b>once</b> with the verifier's findings threaded in and, if the retry is spent or no verdict is written, the node <b>fails loudly and surfaces</b>. A strategy pack with no <span class="m">verify.md</span> behaves exactly as v1. Verify runs are counted in <code>max_total_runs</code> and their verdicts are recorded on the <span class="m">HeadlessRun</span> for A/B reject-rate metrics. The reducer changes are covered by pure unit tests (accept / reject-with-retry / reject-retry-spent / no-verdict / verify-disabled bypass); the driver's verdict read and the loader's optional-phase handling are covered by their existing suites — all green.
+  </div>
+</section>
+
+</main>
+
+<script>
+  document.querySelectorAll('.pillar').forEach(p => p.addEventListener('click', () => p.classList.toggle('open')));
+
+  const INFO = {
+    impl: { t: 'implement node', does: ['Agent commits on the node branch and flips the ticket', 'Driver verifies the structural postcondition (commit + check green)'], not: ['Does not decide quality', 'Does not merge — merge-back is downstream of done'] },
+    post: { t: 'structural postcondition (v1)', does: ['≥1 new commit on the branch AND check command green in the worktree', 'Driver performs the ticket flip if the agent forgot'], not: ['Says nothing about whether the diff is correct or well-judged'] },
+    gate: { t: 'verify gate (NEW)', does: ['Fires verify only when autonomy=="auto" AND the pack ships verify.md', 'Derived each fold — nothing new persisted'], not: ['gated mode still goes to the human landing gate', 'A pack without verify.md behaves as v1'] },
+    verify: { t: 'verify run (NEW)', does: ['Cheap judge agent reads the node diff via injected prompt', 'Writes verdict.json (accept|reject + findings) as its postcondition', 'Ordinary HeadlessRun — counts against max_total_runs'], not: ['Never edits code — read-only judgement', 'Runs before merge-back, in the node worktree'] },
+    verdict: { t: 'verdict.json (NEW artifact)', does: ['Machine-readable accept/reject + findings text', 'Read by the driver in resolve_exit; recorded on HeadlessRun'], not: ['Not prose parsed from a transcript — a structured file'] },
+    done: { t: 'node done', does: ['Reached only on accept (or verify-disabled)', 'Proceeds to topo merge-back (#788), then human landing'], not: ['Rejected code never reaches here or the integration branch'] },
+    retry: { t: 'corrective retry', does: ['Reuses the single per-node retried relaunch (§3.6)', "Corrective implement prompt carries the verifier's findings"], not: ['No new retry counter — one corrective relaunch total', 'Retry spent or no verdict → failed + surface'] }
+  };
+  const nodes = document.querySelectorAll('#flow .node');
+  const info = document.getElementById('nodeInfo');
+  function showNode(key){ nodes.forEach(n=>{n.classList.toggle('hl', n.dataset.n===key); n.classList.remove('dim');}); const d=INFO[key]; if(!d) return;
+    info.innerHTML = '<h4>'+d.t+'</h4><ul>'+d.does.map(x=>'<li>'+x+'</li>').join('')+'</ul><ul style="margin-top:10px">'+d.not.map(x=>'<li style="color:var(--red)">'+x+'</li>').join('')+'</ul>'; }
+  nodes.forEach(n=>n.addEventListener('click', e=>{e.stopPropagation(); showNode(n.dataset.n);}));
+
+  // state machine info
+  const SM = {
+    implement: { t: 'implement phase', body: ['The v1 working phase. On exit the driver resolves the two-signal model and runs the structural postcondition.'] },
+    tverify: { t: 'verify phase (NEW)', body: ['A pending verify node the scheduler launches like any node — its blockers are already done.', 'The judge run writes verdict.json.'] },
+    tdone: { t: 'done', body: ['Reached on accept, or directly from implement when verify is disabled.', 'Feeds merge-back unchanged.'] },
+    tfail: { t: 'failed + surface', body: ['Reject with the single retry already spent, OR the judge exited without a parseable verdict (broken judge = loud exception).'] },
+    e_enter: { t: 'implement → verify', body: ['Rule: structural postcondition green AND state.verify_enabled.', 'Reducer: the implement success branch sets phase="verify", status="pending" instead of "done".'] },
+    e_bypass: { t: 'implement → done (bypass)', body: ['When verify is disabled (gated mode or pack without verify.md), v1 behaviour is unchanged — success goes straight to done.'] },
+    e_accept: { t: 'verify → done (accept)', body: ['Rule: event.verdict == "accept".', 'Reducer: node → done, then merge-back.'] },
+    e_reject: { t: 'verify → implement (reject)', body: ['Rule: verdict == "reject" AND not node.retried.', 'Reducer: phase→"implement", status→"pending", retried=True. Driver threads findings into the corrective prompt.'] },
+    e_fail: { t: 'verify → failed', body: ['Rule: verdict == "reject" with retry spent, OR no parseable verdict.', 'Reducer: _fail_node + halt dependents; surfaced to the human.'] }
+  };
+  const smNodes = document.querySelectorAll('#sm .node');
+  const smEdges = document.querySelectorAll('#sm .edge');
+  const smInfo = document.getElementById('smInfo');
+  function showSM(d){ if(!d) return; smInfo.innerHTML = '<h4>'+d.t+'</h4><ul>'+d.body.map(x=>'<li>'+x+'</li>').join('')+'</ul>'; }
+  smNodes.forEach(n=>n.addEventListener('click', e=>{e.stopPropagation(); smNodes.forEach(m=>m.classList.toggle('hl', m===n)); showSM(SM[n.dataset.s]);}));
+  smEdges.forEach(ed=>ed.addEventListener('click', e=>{e.stopPropagation(); showSM(SM[ed.dataset.e]);}));
+
+  // trace rows highlight flow diagram
+  document.querySelectorAll('tr.trace').forEach(tr=>tr.addEventListener('click', ()=>{
+    document.querySelectorAll('tr.trace').forEach(r=>r.classList.remove('sel')); tr.classList.add('sel');
+    const keys = tr.dataset.nodes.split(',');
+    nodes.forEach(n=>{ n.classList.toggle('hl', keys.includes(n.dataset.n)); n.classList.toggle('dim', !keys.includes(n.dataset.n)); });
+  }));
+
+  // change-map file deltas
+  const DELTA = {
+    state: { t: 'state.py — modified', body: ['<code>Phase = Literal["decompose","implement","verify"]</code>', '<code>Event.verdict: Literal["accept","reject"]|None = None</code>', '<code>RunState.verify_enabled: bool = False</code>'] },
+    reducer: { t: 'reducer.py — modified', body: ['Implement success branch: if verify_enabled → phase="verify", status="pending" (not done).', 'New verify-exit branch: accept→done; reject→implement+retried; retry-spent/no-verdict→_fail_node.'] },
+    driver: { t: 'driver.py — modified', body: ['<code>check_verify_postcondition(...)</code> — parseable verdict.json exists.', 'resolve_exit reads verdict.json → event.verdict + postcondition_ok.', 'Derive verify_enabled (autonomy=="auto" AND pack has verify) into rebuild_state.', 'Launch path renders verify.md with diff injected; reject relaunch threads findings.'] },
+    loader: { t: 'loader.py — modified', body: ['verify becomes an OPTIONAL phase (REQUIRED stays decompose+implement).', 'Whitelist gains <code>diff</code>; prompt_for accepts driver-supplied extra context.'] },
+    policy: { t: 'policy.py — modified', body: ['_rule phase literal accepts "verify".', 'No structural change — per-phase model rules already supported.'] },
+    models: { t: 'models.py — modified', body: ['HeadlessRun gains <code>verdict</code> (null CharField) + <code>verdict_findings</code> (TextField).', 'Populated only for verify runs; feeds A/B reject-rate. RunNode.phase already free-text — no change.'] },
+    mig: { t: '0004_headlessrun_verdict.py — new', body: ['Adds the two nullable HeadlessRun columns. No CoordinatorRun change — verify_enabled is derived, not persisted.'] },
+    verifymd: { t: 'strategies/default/verify.md — new', body: ['Judge prompt: assess the diff against the leaf scope; write verdict.json with accept/reject + findings; do not edit code.'] },
+    packtoml: { t: 'pack.toml — modified', body: ['phases gains "verify"; add a [[policy.rules]] entry mapping phase="verify" to a cheap model (e.g. claude / haiku).'] },
+    treducer: { t: 'test_reducer.py — modified', body: ['Pure cases: accept→done; reject→implement+retried; reject retry-spent→failed; no-verdict→failed; verify-disabled bypass.'] },
+    tdriver: { t: 'test_driver.py — modified', body: ['check_verify_postcondition on present/absent/garbage verdict.json; resolve_exit verdict wiring.'] },
+    tstrat: { t: 'test_strategies.py / test_policy.py — modified', body: ['Loader accepts a pack with verify.md and one without; policy resolves a verify-phase rule.'] }
+  };
+  const fitems = document.querySelectorAll('.fitem');
+  const fd = document.getElementById('fileDelta');
+  fitems.forEach(f=>f.addEventListener('click', ()=>{ const d=DELTA[f.dataset.f]; if(!d) return;
+    fd.innerHTML = '<h4>'+d.t+'</h4><ul style="list-style:none">'+d.body.map(x=>'<li style="margin-bottom:6px">'+x+'</li>').join('')+'</ul>'; }));
+
+  // nav active state on scroll
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', ()=>{ let cur=secs[0].id; for(const s of secs) if(s.getBoundingClientRect().top<180) cur=s.id;
+    links.forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='#'+cur)); }, { passive:true });
+</script>
+</body>
+</html>

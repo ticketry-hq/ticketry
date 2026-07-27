@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CODIN-700 · Remaining-Work Map</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1a1d21; --muted:#6b7280; --line:#e4e7ec;
+    --accent:#2563eb; --accent-soft:#e8f0fe;
+    --green:#16a34a; --green-soft:#e7f6ec;
+    --amber:#d97706; --amber-soft:#fdf1e0;
+    --violet:#7c3aed; --violet-soft:#f0e9fd;
+    --red:#dc2626; --red-soft:#fdeaea;
+    --gray:#9aa1ac; --gray-soft:#eef0f3;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;font-size:15px}
+  header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+  .crumb{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding-top:16px}
+  h1{font-size:23px;margin:6px 0 4px}
+  .sub{color:var(--muted);margin:0 0 12px;font-size:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;padding-bottom:12px}
+  .chip{font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid var(--line);display:inline-flex;gap:6px;align-items:center}
+  .chip .dot{width:8px;height:8px;border-radius:50%}
+  .c-done{background:var(--green-soft);color:#14622f;border-color:#bfe6cc}
+  .c-built{background:var(--accent-soft);color:#1a3f9e;border-color:#c5d8fb}
+  .c-next{background:var(--amber-soft);color:#8a4d00;border-color:#f3d9ab}
+  .c-future{background:var(--gray-soft);color:#525a66;border-color:#d9dee4}
+  nav{display:flex;flex-wrap:wrap;gap:2px;border-top:1px solid var(--line)}
+  nav a{font-size:13px;color:var(--muted);text-decoration:none;padding:10px 12px;border-bottom:2px solid transparent}
+  nav a:hover{color:var(--ink)}
+  nav a.active{color:var(--accent);border-bottom-color:var(--accent)}
+  section{padding:30px 0 8px;border-bottom:1px solid var(--line)}
+  h2{font-size:18px;margin:0 0 4px}
+  .lede{color:var(--muted);margin:0 0 18px;font-size:14px;max-width:75ch}
+  .grid2{display:grid;grid-template-columns:1.35fr .9fr;gap:18px}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#fbfcfd;position:sticky;top:0}
+  tr:last-child td{border-bottom:none}
+  tr.rowhi{background:var(--accent-soft)}
+  .tk{font-family:var(--mono);font-weight:600;font-size:12.5px;white-space:nowrap}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;display:inline-block}
+  .p-done{background:var(--green-soft);color:#14622f}
+  .p-built{background:var(--accent-soft);color:#1a3f9e}
+  .p-next{background:var(--amber-soft);color:#8a4d00}
+  .p-future{background:var(--gray-soft);color:#525a66}
+  .p-todo{background:var(--violet-soft);color:#5b21b6}
+  .dep{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  svg{width:100%;height:auto;display:block;background:var(--panel);border:1px solid var(--line);border-radius:11px}
+  .node{cursor:pointer}
+  .node rect,.node ellipse{transition:filter .12s,stroke-width .12s}
+  .node:hover rect,.node:hover ellipse,.node.sel rect,.node.sel ellipse{filter:brightness(.97);stroke-width:3px}
+  .nlabel{font-family:var(--mono);font-size:12px;font-weight:600;pointer-events:none}
+  .nsub{font-size:9.5px;fill:#fff;opacity:.9;pointer-events:none;font-family:var(--font)}
+  .edge{stroke:#b7bdc7;stroke-width:1.6;fill:none;marker-end:url(#arr)}
+  .edge.crit{stroke:var(--amber);stroke-width:2.4;stroke-dasharray:0}
+  .panel{min-height:150px}
+  .panel h3{margin:0 0 3px;font-size:15px;font-family:var(--mono)}
+  .panel .st{font-size:12px;color:var(--muted);margin:0 0 10px}
+  .panel ul{margin:8px 0 0;padding-left:18px}
+  .panel li{margin:3px 0;font-size:13px}
+  .muted{color:var(--muted)}
+  .kv{display:flex;gap:8px;font-size:13px;margin:2px 0}
+  .kv b{min-width:78px;color:var(--muted);font-weight:600}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin-bottom:14px}
+  .legend span{display:inline-flex;gap:6px;align-items:center}
+  .sw{width:13px;height:13px;border-radius:3px;display:inline-block}
+  .accept{background:var(--green-soft);border:1px solid #bfe6cc;border-radius:11px;padding:16px 18px;color:#14622f}
+  .accept b{color:#0f4a24}
+  .note{font-size:12.5px;color:var(--muted);margin-top:10px}
+  .flag{background:var(--red-soft);border:1px solid #f3c9c9;color:#8a1f1f;border-radius:9px;padding:11px 13px;font-size:13px;margin-top:12px}
+  code{font-family:var(--mono);font-size:12.5px;background:#eef0f3;padding:1px 5px;border-radius:4px}
+  .col2{columns:2;column-gap:22px}
+  @media(max-width:700px){.col2{columns:1}}
+  .col2 .card{break-inside:avoid;margin-bottom:14px;display:inline-block;width:100%}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="crumb">worktracker · module 81c3aa9b · CODIN-700</div>
+    <h1>Execute Dependency Graph — Remaining-Work Map</h1>
+    <p class="sub">Every ticket under #700: what is built, what is left, and how the pieces block each other. Snapshot 2026-07-02.</p>
+    <div class="chips">
+      <span class="chip c-done"><span class="dot" style="background:var(--green)"></span>4 Done</span>
+      <span class="chip c-built"><span class="dot" style="background:var(--accent)"></span>6 Built · unmerged</span>
+      <span class="chip c-next"><span class="dot" style="background:var(--amber)"></span>6 Remaining</span>
+      <span class="chip c-future"><span class="dot" style="background:var(--gray)"></span>+ parent #700 (Todo)</span>
+    </div>
+    <nav id="nav">
+      <a href="#summary">Summary</a>
+      <a href="#graph">Dependency map</a>
+      <a href="#remaining">What's left</a>
+      <a href="#table">Full ticket table</a>
+      <a href="#codemap">Code map</a>
+      <a href="#contracts">Contracts</a>
+      <a href="#build">Build recipe</a>
+      <a href="#ids">IDs &amp; refs</a>
+      <a href="#tests-cov">Tests</a>
+      <a href="#risks">Gaps &amp; flags</a>
+      <a href="#accept">Done-signal</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- SUMMARY -->
+<section id="summary">
+  <h2>The shape of it</h2>
+  <p class="lede">#700 is an autonomous two-phase engine — <b>Plan</b> (refine → split → register → leaf-LLD) then <b>Execute</b> (topo-launch implement runs). It is delivered as one linear chain of tracer slices over two shared foundations (the <code>issue_state_changed</code> seam and the <code>spawn_run()</code> launch primitive). The pure engine lives in <code>../server/apps/execution/</code> (<code>reducer.py · driver.py · recipes.py · signals.py · state.py</code>).</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="legend">
+        <span><span class="sw" style="background:var(--green)"></span>Done — closed in WorkTracker &amp; in code</span>
+        <span><span class="sw" style="background:var(--accent)"></span>Built — code landed, ticket still In&nbsp;Progress (unmerged)</span>
+        <span><span class="sw" style="background:var(--amber)"></span>Remaining — designed or planned, not built</span>
+        <span><span class="sw" style="background:var(--gray)"></span>Future / Backlog — not yet refined</span>
+      </div>
+      <p style="margin:0;font-size:13.5px">The single-task engine works today: an <code>implement</code> / <code>refine</code> / <code>split</code> run can be launched, and completion is observed off the seam. <b>What is not built</b> is everything that turns one task into a <i>graph</i>: multi-task ready-set release, failure/idempotency, split registration into real tasks+edges, per-leaf LLDs, and the user-facing trigger.</p>
+    </div>
+    <div class="card">
+      <div class="kv"><b>Engine home</b><span><code>../server/apps/execution/</code> (coding-app backend, in-process with worktracker)</span></div>
+      <div class="kv"><b>Seam</b><span><code>worktracker.signals.issue_state_changed</code> → #706</span></div>
+      <div class="kv"><b>Launch</b><span><code>apps/terminals/launch.py :: spawn_run()</code> → #707/#715</span></div>
+      <div class="kv"><b>Completion gate</b><span>tracker <code>state</code> group (<code>completed</code> / <code>→LLD</code>), <b>not</b> a lifecycle state</span></div>
+      <div class="kv"><b>Test seam</b><span>pure <code>decide(state,event)→{next,actions}</code> reducer; ports mocked</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- GRAPH -->
+<section id="graph">
+  <h2>Dependency map — click a node</h2>
+  <p class="lede">Boxes are tickets, colored by build status. Arrows are <code>blocked_by</code> edges (arrow points from blocker → dependent, i.e. the direction work unlocks). The amber path is the critical chain that must complete in order.</p>
+  <div class="grid2">
+    <div>
+      <svg viewBox="0 0 720 640" role="img" aria-label="Dependency graph of CODIN-700 subtasks">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0L10 5L0 10z" fill="#b7bdc7"/>
+          </marker>
+        </defs>
+        <!-- edges -->
+        <g>
+          <path class="edge" d="M120 96 L120 128"/>            <!-- 705->706 -->
+          <path class="edge crit" d="M120 172 L235 214"/>       <!-- 706->716 -->
+          <path class="edge" d="M330 96 L330 128"/>            <!-- 714->715 -->
+          <path class="edge crit" d="M330 172 L300 214"/>       <!-- 715->716 (via 707) -->
+          <path class="edge" d="M470 96 L300 214"/>            <!-- 707->716 -->
+          <path class="edge crit" d="M270 258 L270 300"/>       <!-- 716->717 -->
+          <path class="edge crit" d="M270 344 L270 386"/>       <!-- 717->718 -->
+          <path class="edge crit" d="M270 430 L270 472"/>       <!-- 718->719 -->
+          <path class="edge crit" d="M270 516 L270 558"/>       <!-- 719->720 -->
+          <path class="edge crit" d="M330 590 L470 560"/>       <!-- 720->745 -->
+          <path class="edge crit" d="M210 590 L110 560"/>       <!-- 720->721 -->
+        </g>
+        <!-- foundation A -->
+        <g class="node" data-k="705"><rect x="60" y="60" width="120" height="36" rx="7" fill="var(--green)"/><text class="nlabel" x="120" y="76" text-anchor="middle" fill="#fff">#705</text><text class="nsub" x="120" y="89" text-anchor="middle">prefactor</text></g>
+        <g class="node" data-k="706"><rect x="60" y="132" width="120" height="40" rx="7" fill="var(--accent)"/><text class="nlabel" x="120" y="150" text-anchor="middle" fill="#fff">#706</text><text class="nsub" x="120" y="164" text-anchor="middle">state seam</text></g>
+        <!-- foundation B -->
+        <g class="node" data-k="714"><rect x="270" y="60" width="120" height="36" rx="7" fill="var(--green)"/><text class="nlabel" x="330" y="76" text-anchor="middle" fill="#fff">#714</text><text class="nsub" x="330" y="89" text-anchor="middle">_launch</text></g>
+        <g class="node" data-k="715"><rect x="270" y="132" width="120" height="40" rx="7" fill="var(--accent)"/><text class="nlabel" x="330" y="150" text-anchor="middle" fill="#fff">#715</text><text class="nsub" x="330" y="164" text-anchor="middle">spawn_run()</text></g>
+        <g class="node" data-k="707"><rect x="430" y="60" width="120" height="36" rx="7" fill="var(--violet)"/><text class="nlabel" x="490" y="76" text-anchor="middle" fill="#fff">#707</text><text class="nsub" x="490" y="89" text-anchor="middle">launch (Todo)</text></g>
+        <!-- chain -->
+        <g class="node" data-k="716"><rect x="210" y="218" width="120" height="40" rx="7" fill="var(--accent)"/><text class="nlabel" x="270" y="236" text-anchor="middle" fill="#fff">#716</text><text class="nsub" x="270" y="250" text-anchor="middle">exec 1 · one task</text></g>
+        <g class="node" data-k="717"><rect x="210" y="304" width="120" height="40" rx="7" fill="var(--amber)"/><text class="nlabel" x="270" y="322" text-anchor="middle" fill="#fff">#717</text><text class="nsub" x="270" y="336" text-anchor="middle">exec 2 · ready-set</text></g>
+        <g class="node" data-k="718"><rect x="210" y="390" width="120" height="40" rx="7" fill="var(--amber)"/><text class="nlabel" x="270" y="408" text-anchor="middle" fill="#fff">#718</text><text class="nsub" x="270" y="422" text-anchor="middle">exec 3 · fail/idem</text></g>
+        <g class="node" data-k="719"><rect x="210" y="476" width="120" height="40" rx="7" fill="var(--accent)"/><text class="nlabel" x="270" y="494" text-anchor="middle" fill="#fff">#719</text><text class="nsub" x="270" y="508" text-anchor="middle">plan 4 · refine</text></g>
+        <g class="node" data-k="720"><rect x="210" y="562" width="120" height="40" rx="7" fill="var(--accent)"/><text class="nlabel" x="270" y="580" text-anchor="middle" fill="#fff">#720</text><text class="nsub" x="270" y="594" text-anchor="middle">plan 5 · split</text></g>
+        <!-- leaves off 720 -->
+        <g class="node" data-k="745"><rect x="470" y="524" width="120" height="40" rx="7" fill="var(--amber)"/><text class="nlabel" x="530" y="542" text-anchor="middle" fill="#fff">#745</text><text class="nsub" x="530" y="556" text-anchor="middle">register split</text></g>
+        <g class="node" data-k="721"><rect x="20" y="524" width="120" height="40" rx="7" fill="var(--amber)"/><text class="nlabel" x="80" y="542" text-anchor="middle" fill="#fff">#721</text><text class="nsub" x="80" y="556" text-anchor="middle">capstone</text></g>
+        <!-- unwired -->
+        <g class="node" data-k="743"><rect x="470" y="586" width="115" height="34" rx="7" fill="var(--gray)"/><text class="nlabel" x="527" y="601" text-anchor="middle" fill="#fff">#743</text><text class="nsub" x="527" y="614" text-anchor="middle">leaf LLDs</text></g>
+        <g class="node" data-k="746"><rect x="600" y="132" width="110" height="34" rx="7" fill="var(--accent)"/><text class="nlabel" x="655" y="147" text-anchor="middle" fill="#fff">#746</text><text class="nsub" x="655" y="160" text-anchor="middle">UI bridge</text></g>
+        <g class="node" data-k="744"><rect x="600" y="586" width="110" height="34" rx="7" fill="var(--gray)"/><text class="nlabel" x="655" y="601" text-anchor="middle" fill="#fff">#744</text><text class="nsub" x="655" y="614" text-anchor="middle">state model</text></g>
+      </svg>
+      <p class="note">#743, #744 and #746 have <b>no <code>blocked_by</code> edges wired</b> in WorkTracker (shown detached). See Gaps.</p>
+    </div>
+    <div class="card panel" id="panel">
+      <h3>Pick a node</h3>
+      <p class="st">Click any ticket to see status, scope, and what it unblocks.</p>
+      <p class="muted" style="font-size:13px">The critical chain is <b>#706/#707 → #716 → #717 → #718 → #719 → #720 → {#745, #721}</b>. Everything before #717 is already built; the first unbuilt link in the chain is <b>#717</b>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- REMAINING -->
+<section id="remaining">
+  <h2>What actually remains</h2>
+  <p class="lede">Six tickets carry net-new behavior, plus the housekeeping of merging/closing the six already-built ones. Ordered by the critical chain.</p>
+  <div class="col2">
+    <div class="card">
+      <span class="pill p-next">#717 · REMAINING</span> <span class="tk">exec tracer 2</span>
+      <p style="margin:8px 0 0;font-size:13.5px"><b>Ready-set release across a <code>blocked_by</code> chain.</b> Today <code>reducer.decide()</code> tracks exactly one task. This slice adds the multi-task core: a topo walk of the subtree, compute the ready-set (blockers all in <code>completed</code>), launch parallel-on-ready, and release newly-unblocked tasks as seam completions arrive.</p>
+      <p class="note">Blocks: #718. First unbuilt link in the chain.</p>
+    </div>
+    <div class="card">
+      <span class="pill p-next">#718 · REMAINING</span> <span class="tk">exec tracer 3</span>
+      <p style="margin:8px 0 0;font-size:13.5px"><b>Failure propagation + idempotency.</b> A failed run halts its dependents while independent branches keep draining; re-invoking an execution must not double-launch. Needs per-task run-state beyond the single <code>Status</code> enum.</p>
+      <p class="note">Blocked by #717 · Blocks #719 (chain ordering only).</p>
+    </div>
+    <div class="card">
+      <span class="pill p-next">#745 · REMAINING</span> <span class="pill p-todo">LLD ready</span> <span class="tk">register split</span>
+      <p style="margin:8px 0 0;font-size:13.5px"><b>Add a 4th phase <code>register</code>.</b> On root <code>→ LLD</code>, launch an agent that parses the approved HLD and creates the real leaf tasks + <code>blocked_by</code> edges (slug-idempotent, Todo landing, surface-and-halt on first failure). <b>Design is complete</b> (see ticket); <code>state.py</code> <code>Phase</code> still only has <code>implement/refine/split</code>.</p>
+      <p class="note">Blocked by #720 · Closest to shovel-ready.</p>
+    </div>
+    <div class="card">
+      <span class="pill p-future">#743 · REMAINING</span> <span class="tk">leaf LLDs</span>
+      <p style="margin:8px 0 0;font-size:13.5px"><b>Generate one LLD per registered leaf.</b> After #745 has created the leaves, launch a leaf-level LLD-generation phase for each. Does not run implementation agents. Still Backlog; <b>no dependency edge wired</b> (should follow #745).</p>
+    </div>
+    <div class="card">
+      <span class="pill p-next">#721 · REMAINING</span> <span class="tk">capstone</span>
+      <p style="margin:8px 0 0;font-size:13.5px"><b>Trigger surface + full plan→execute pipeline.</b> The user-facing entrypoints: MCP <code>execute_dependency_graph(root_task_id)</code> and a Dependency-view action, wiring the whole cascade end-to-end.</p>
+      <p class="note">Blocked by #720. (UI-launch bridging carved into #746.)</p>
+    </div>
+    <div class="card">
+      <span class="pill p-future">#744 · REMAINING</span> <span class="tk">state model</span>
+      <p style="margin:8px 0 0;font-size:13.5px"><b>Internal / hidden lifecycle states.</b> Replaces the interim reuse of WorkTracker states (<code>Todo</code>=start-HLD, <code>LLD</code>=approved-split) with a durable planning-pipeline state model. Explicitly deferred; the whole chain works on interim signals until then.</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <b style="font-size:14px">Built but not closed — merge &amp; sign-off work</b>
+    <p style="margin:6px 0 0;font-size:13.5px">These landed in <code>apps/execution/</code> / <code>apps/terminals/</code> but their tickets sit In&nbsp;Progress (unmerged): <span class="tk">#706</span> seam · <span class="tk">#715</span> spawn_run · <span class="tk">#716</span> single-task engine · <span class="tk">#719</span> refine phase · <span class="tk">#720</span> split phase · <span class="tk">#746</span> UI bridge. Parent <span class="tk">#707</span> (Todo) closes once #715 merges.</p>
+  </div>
+</section>
+
+<!-- TABLE -->
+<section id="table">
+  <h2>Full ticket table</h2>
+  <p class="lede">Every work item in the #700 family, its WorkTracker state, code reality, and its wired <code>blocked_by</code> / <code>blocks</code> edges. Hover a row to trace it.</p>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Ticket</th><th>Slice</th><th>Status</th><th>Code reality</th><th>Blocked by</th><th>Blocks</th></tr></thead>
+      <tbody>
+        <tr><td class="tk">#704</td><td>Task-state-change event hook (parent)</td><td><span class="pill p-done">Done</span></td><td>Seam family delivered</td><td class="dep">—</td><td class="dep">705,706</td></tr>
+        <tr><td class="tk">#705</td><td>Prefactor: state-group helpers → module</td><td><span class="pill p-done">Done</span></td><td>Landed (feat/705)</td><td class="dep">—</td><td class="dep">706</td></tr>
+        <tr><td class="tk">#706</td><td>The seam: <code>issue_state_changed</code></td><td><span class="pill p-built">In Progress</span></td><td><code>signals.py</code> + tests present</td><td class="dep">705</td><td class="dep">716</td></tr>
+        <tr><td class="tk">#707</td><td>spawn_run launch primitive (parent)</td><td><span class="pill p-todo">Todo</span></td><td>Delivered via #714/#715</td><td class="dep">—</td><td class="dep">716</td></tr>
+        <tr><td class="tk">#714</td><td>Extract shared <code>_launch</code> + LaunchUnavailable</td><td><span class="pill p-done">Done</span></td><td>Landed (a0d1c38)</td><td class="dep">—</td><td class="dep">715</td></tr>
+        <tr><td class="tk">#715</td><td><code>spawn_run()</code> primitive + tests</td><td><span class="pill p-built">In Progress</span></td><td><code>terminals/launch.py</code> present</td><td class="dep">714</td><td class="dep">—</td></tr>
+        <tr><td class="tk">#716</td><td>Exec tracer 1: execute one task</td><td><span class="pill p-built">In Progress</span></td><td>Single-task reducer + tests</td><td class="dep">706,707</td><td class="dep">717</td></tr>
+        <tr class="rowhi"><td class="tk">#717</td><td>Exec tracer 2: ready-set release (topo)</td><td><span class="pill p-next">Backlog · remaining</span></td><td><b>Not built</b> — reducer is single-task</td><td class="dep">716</td><td class="dep">718</td></tr>
+        <tr class="rowhi"><td class="tk">#718</td><td>Exec tracer 3: failure + idempotency</td><td><span class="pill p-next">Backlog · remaining</span></td><td><b>Not built</b></td><td class="dep">717</td><td class="dep">719</td></tr>
+        <tr><td class="tk">#719</td><td>Plan tracer 4: refine (→ PRD)</td><td><span class="pill p-built">In Progress</span></td><td><code>refine</code> phase + recipe built</td><td class="dep">718</td><td class="dep">720</td></tr>
+        <tr><td class="tk">#720</td><td>Plan tracer 5: split (→ HLD + tree)</td><td><span class="pill p-built">In Progress</span></td><td><code>split</code> phase + recipe built</td><td class="dep">719</td><td class="dep">721,745</td></tr>
+        <tr class="rowhi"><td class="tk">#745</td><td>Register approved HLD split tree</td><td><span class="pill p-next">LLD · remaining</span></td><td><b>Not built</b> — no <code>register</code> phase</td><td class="dep">720</td><td class="dep">—</td></tr>
+        <tr class="rowhi"><td class="tk">#743</td><td>Generate leaf LLDs for split tree</td><td><span class="pill p-future">Backlog · remaining</span></td><td><b>Not built</b></td><td class="dep">— (unwired)</td><td class="dep">—</td></tr>
+        <tr class="rowhi"><td class="tk">#721</td><td>Capstone: pipeline + trigger surface</td><td><span class="pill p-next">Backlog · remaining</span></td><td><b>Not built</b> — no MCP tool / UI action</td><td class="dep">720</td><td class="dep">—</td></tr>
+        <tr><td class="tk">#746</td><td>UI bridge: launch/state → tracer phases</td><td><span class="pill p-built">In Progress</span></td><td>Impl done (unmerged)</td><td class="dep">— (unwired)</td><td class="dep">—</td></tr>
+        <tr class="rowhi"><td class="tk">#744</td><td>Internal lifecycle-state model</td><td><span class="pill p-future">Backlog · deferred</span></td><td><b>Not built</b> — interim WorkTracker states used</td><td class="dep">— (unwired)</td><td class="dep">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- CODEMAP -->
+<section id="codemap">
+  <h2>Code map — where everything already lives</h2>
+  <p class="lede">The engine is <code>../server/apps/execution/</code> (the coding-app backend Django app, in-process with <code>worktracker</code>, sharing its DB). Paths below are relative to <code>worktracker-stack/</code>. Nothing here needs re-discovery.</p>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>File</th><th>Key symbols</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="tk">apps/execution/state.py</td><td class="dep">EngineState · SeamEvent · LaunchAction · Decision · Phase · Status · EventKind</td><td>Frozen dataclasses + the type literals. <b>Single-task</b> state only.</td></tr>
+        <tr><td class="tk">apps/execution/reducer.py</td><td class="dep">decide(state, event) → Decision · _is_complete()</td><td>Pure transition. The test seam. No I/O.</td></tr>
+        <tr><td class="tk">apps/execution/driver.py</td><td class="dep">execute() · observe_issue_state_changed() · _apply_launch_action() · _module_id_for() · _state_name() · _registry (process-local dict) · get_state() · clear_registry()</td><td>Impure edge: DB reads, calls <code>spawn_run</code>, holds run-state in a module-level dict.</td></tr>
+        <tr><td class="tk">apps/execution/recipes.py</td><td class="dep">initial_prompt_for(phase, issue) · _refine_prompt() · _split_prompt()</td><td>Per-phase agent prompt text. <code>implement</code> returns <code>None</code> (default prompt).</td></tr>
+        <tr><td class="tk">apps/execution/signals.py</td><td class="dep">observe_completion (@receiver, dispatch_uid="execution_observe_issue_state_changed")</td><td>Connects the driver to the worktracker seam. Swallows errors.</td></tr>
+        <tr><td class="tk">apps/execution/api.py</td><td class="dep">router · create_planning_run · PlanningRunIn/Out · PlanningPhase · PlanningAgent</td><td>The one HTTP entrypoint (see Contracts).</td></tr>
+        <tr><td class="tk">apps/execution/tests/</td><td class="dep">test_reducer · test_driver · test_signals · test_api (34 tests)</td><td>Full coverage of the built surface (see Contracts).</td></tr>
+        <tr><td class="tk">worktracker/worktracker/signals.py</td><td class="dep">issue_state_changed (Signal) · _snapshot_old_state (pre_save) · _emit_on_state_change (post_save) · _log_state_change</td><td>#706 seam. Emit-on-commit.</td></tr>
+        <tr><td class="tk">worktracker/worktracker/state_groups.py</td><td class="dep">state_group(state_id) · RESOLVED_GROUPS={completed,cancelled}</td><td>#705. Router-free group lookup.</td></tr>
+        <tr><td class="tk">apps/terminals/launch.py</td><td class="dep">spawn_run() · _launch() · LaunchUnavailable</td><td>#714/#715 launch primitive.</td></tr>
+        <tr><td class="tk">studio_server/api.py</td><td class="dep">api.add_router("", execution_router) — line 19</td><td>Mounts execution routes at root prefix.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- CONTRACTS -->
+<section id="contracts">
+  <h2>Contracts the next agent must honor</h2>
+  <p class="lede">Exact signatures, literals, gates, and payload shapes — verbatim from the code on 2026-07-02.</p>
+
+  <div class="col2">
+    <div class="card">
+      <b style="font-size:13.5px">Reducer state machine (state.py + reducer.py)</b>
+      <div class="kv"><b>Phase</b><span><code>"implement" | "refine" | "split"</code> &nbsp;(<b>no <code>register</code> yet</b>)</span></div>
+      <div class="kv"><b>Status</b><span><code>"idle" | "running" | "done" | "failed"</code></span></div>
+      <div class="kv"><b>EventKind</b><span><code>execute_requested · run_started · run_failed · issue_state_changed</code></span></div>
+      <div class="kv"><b>ActionKind</b><span><code>"launch"</code> (only)</span></div>
+      <p style="margin:8px 0 0;font-size:13px"><b>Completion gate</b> <code>_is_complete()</code>: <code>implement</code> → <code>to_group=="completed"</code> · <code>refine</code> → <code>from_group=="backlog" and to_group=="unstarted"</code> · <code>split</code> → <code>to_state=="LLD"</code> (by <b>name</b>, since LLD's group is <code>unstarted</code> — a Todo→LLD move doesn't change group).</p>
+      <p style="margin:6px 0 0;font-size:13px"><code>decide()</code> ignores any event whose <code>task_id</code> ≠ <code>state.task_id</code>; <code>execute_requested</code> is a no-op unless <code>status=="idle"</code>.</p>
+    </div>
+
+    <div class="card">
+      <b style="font-size:13.5px">Driver gates &amp; run-state (driver.py)</b>
+      <p style="margin:6px 0 0;font-size:13px"><code>execute(task_id, *, agent, phase="implement", spawn=None)</code> requires <code>Issue.type=="task"</code>; derives module via <code>_module_id_for</code> (walks <code>parent</code> chain to a <code>type=="module"</code> ancestor). Raises <code>ValueError</code>: <code>task_not_found · module_id_required · task_not_in_backlog</code> (refine needs <code>backlog</code> group) · <code>task_not_in_todo</code> (split needs <code>unstarted</code> group).</p>
+      <p style="margin:6px 0 0;font-size:13px">Run-state is a <b>module-level <code>_registry: dict[task_id → EngineState]</code></b> — <b>process-local, non-durable, single-task</b>. <code>observe_issue_state_changed</code> only acts if the task is already in <code>_registry</code>. This is the #716 deferral point.</p>
+    </div>
+
+    <div class="card">
+      <b style="font-size:13.5px">Seam contract (worktracker/signals.py) — #706</b>
+      <p style="margin:6px 0 0;font-size:13px"><b>Payload</b> on <code>issue_state_changed.send</code>: <code>sender=Issue, issue_id, project_id, from_state_id, to_state_id, from_group, to_group</code>. Groups ∈ <code>backlog/unstarted/started/completed/cancelled</code> or <code>None</code>.</p>
+      <p style="margin:6px 0 0;font-size:13px">Fires on <code>post_save</code> only when <code>state_id</code> <b>identity</b> changes, deferred to <code>transaction.on_commit</code> (rolled-back moves emit nothing). Create-into-state emits with <code>from_state_id=None</code>.</p>
+      <p style="margin:6px 0 0;font-size:13px"><b>Receiver rule:</b> handlers MUST NOT synchronously mutate <code>Issue.state</code> / call <code>save()</code> with a state change (re-entrancy).</p>
+      <div class="flag" style="margin-top:9px"><b>Gotcha:</b> queryset <code>.update(state=…)</code> writes fire <b>no</b> <code>post_save</code> → <b>no seam event</b>. Confirmed live at <code>worktracker/services/workflow_config.py:193</code>. Any bulk state change bypasses the executor.</div>
+    </div>
+
+    <div class="card">
+      <b style="font-size:13.5px">Launch primitive (terminals/launch.py) — #715</b>
+      <p style="margin:6px 0 0;font-size:13px"><code>async spawn_run(*, agent, project_id, module_id, task_id, initial_prompt=None, scope="task") → str</code> (returns <code>agent_run_id</code>). Persists <code>AgentRun</code> + <code>AgentTerminalSession</code> keyed by <code>task_id</code>; attachable via existing <code>mode:"attach"</code>. <b>No dedup</b> ("already running?" is #700's ready-set, explicitly out of scope).</p>
+      <p style="margin:6px 0 0;font-size:13px">Raises: <code>NoProfileSelected · ValueError</code> (build-prompt/context codes) · <code>LaunchUnavailable</code> (tmux/persist). Driver calls it via <code>async_to_sync(spawn)(...)</code>; on any exception it feeds a <code>run_failed</code> event.</p>
+    </div>
+
+    <div class="card">
+      <b style="font-size:13.5px">HTTP entrypoint (execution/api.py)</b>
+      <p style="margin:6px 0 0;font-size:13px"><code>POST /work-items/{issue_id}/planning-run</code> · auth <code>ApiKeyAuth</code>. Body <code>{phase: "refine"|"split", agent: "claude"|"agy"|"codex"|"gemini"}</code>. Returns <code>201 PlanningRunOut</code>. Codes: <code>409</code> already-running · <code>404</code> task_not_found · <code>422</code> other ValueError. This is what #746's drawer buttons call.</p>
+    </div>
+
+    <div class="card">
+      <b style="font-size:13.5px">Recipe prompts (recipes.py)</b>
+      <p style="margin:6px 0 0;font-size:13px"><code>refine</code>: grill interview → distilled visual HLD in spec dir → update description → move Backlog→Todo; no code. <code>split</code>: HLD/splitter → visual HLD + proposed leaf tree + intended <code>blocked_by</code>; creates <b>no</b> tasks/edges/leaf-LLDs; approval = human moves Todo→LLD. Both interpolate <code>issue.id/key/name/project_id/project.slug</code> + description.</p>
+    </div>
+  </div>
+</section>
+
+<!-- BUILD -->
+<section id="build">
+  <h2>Build recipe for the remaining tickets</h2>
+  <p class="lede">Concrete, code-anchored deltas — what each unbuilt ticket has to change against the current engine. Not opinion; derived from the existing structure.</p>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Ticket</th><th>Concrete deltas against current code</th></tr></thead>
+      <tbody>
+        <tr><td class="tk">#745<br><span class="muted" style="font-size:11px">register</span></td><td>Add <code>"register"</code> to <code>Phase</code> (state.py). Add <code>_register_prompt()</code> + branch in <code>initial_prompt_for</code> (recipes.py). In <code>observe_issue_state_changed</code>/reducer: when a <code>split</code> task in <code>running</code> observes <code>to_state=="LLD"</code>, complete <code>split</code> <b>and</b> immediately launch <code>register</code> for the same task (new launch), with a relaunch guard (skip if a <code>register</code> engine-state already exists). Agent-side does the WorkTracker create/blocker calls (slug-idempotent, land leaves in <b>Todo</b>, surface-and-halt). <b>LLD is written</b> — see the ticket description.</td></tr>
+        <tr><td class="tk">#717<br><span class="muted" style="font-size:11px">ready-set</span></td><td>The reducer is single-task; introduce a subtree/graph structure (mirror <code>studio/src/views/Dependencies/graph.ts</code> <code>buildGraph</code>/<code>reachable</code>). Compute ready-set = tasks whose <code>blocked_by</code> are all in <code>completed</code> group; launch parallel-on-ready; on each <code>issue_state_changed</code>→completed, recompute and release newly-unblocked. Registry becomes per-graph, not per-task.</td></tr>
+        <tr><td class="tk">#718<br><span class="muted" style="font-size:11px">fail/idem</span></td><td>Per-task run-state across the subtree; a <code>failed</code> task halts its transitive dependents while independent branches drain. Idempotency: no double-launch on re-invoke (needs a durable/keyed store — current <code>_registry</code> is process-local). Acyclicity already guarded server-side (<code>blocker_would_cycle</code>).</td></tr>
+        <tr><td class="tk">#743<br><span class="muted" style="font-size:11px">leaf LLDs</span></td><td>New phase/recipe that, per registered leaf (created by #745), launches a leaf-level LLD-generation run writing into each leaf's spec dir. Does not implement code. <b>Wire <code>blocked_by</code> #745 first</b> (currently unwired).</td></tr>
+        <tr><td class="tk">#721<br><span class="muted" style="font-size:11px">capstone</span></td><td>Trigger surface: MCP tool <code>execute_dependency_graph(root_task_id)</code> in <code>worktracker-agent/api/tools.py</code> (auto-registered via <code>mcp/tools_adapter.py</code>) + a Dependency-view UI action. Drives the full plan→execute cascade over #717/#718/#745/#743.</td></tr>
+        <tr><td class="tk">#744<br><span class="muted" style="font-size:11px">state model</span></td><td>Durable hidden planning-pipeline state model replacing interim WorkTracker-state reuse (Todo=start-HLD, LLD=approved-split). Deferred; whole chain runs on interim signals until then.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- IDS -->
+<section id="ids">
+  <h2>IDs, states &amp; ticket UUIDs</h2>
+  <p class="lede">Verified against <code>~/.config/worktracker-studio/state.db</code> (the running SQLite) and the WorkTracker MCP on 2026-07-02.</p>
+  <div class="grid2">
+    <div class="card">
+      <b style="font-size:13.5px">Project / module handles</b>
+      <div class="kv"><b>Workspace</b><span><code>meml</code></span></div>
+      <div class="kv"><b>Project</b><span>CODIN · <code><redacted-id></code></span></div>
+      <div class="kv"><b>Module</b><span><code><redacted-id></code></span></div>
+      <div class="kv"><b>Parent</b><span>#700 · <code><redacted-id></code></span></div>
+      <p style="margin:9px 0 0;font-size:12.5px" class="muted">CODIN state groups: Backlog=<code>backlog</code>, Todo=<code>unstarted</code>, <b>LLD=<code>unstarted</code></b>, In&nbsp;Progress=<code>started</code>, Done=<code>completed</code>, Cancelled=<code>cancelled</code>.</p>
+    </div>
+    <div class="card">
+      <b style="font-size:13.5px">state_id → name (this project)</b>
+      <div class="kv"><b>Backlog</b><span><code>87e86d05-…-1c1dc895aaed</code></span></div>
+      <div class="kv"><b>Todo</b><span><code>b2d5c6f8-…-5c4976626873</code></span></div>
+      <div class="kv"><b>LLD</b><span><code>4c9b5066-…-34ffbb14ff50</code></span></div>
+      <div class="kv"><b>In Progress</b><span><code>854b40bd-…-af1b0561e78c</code></span></div>
+      <div class="kv"><b>Done</b><span><code>e86a2240-…-23fe8c842d33</code></span></div>
+      <div class="kv"><b>Cancelled</b><span><code>a9e8e30f-…-b6cb4fd0</code></span></div>
+    </div>
+  </div>
+  <div class="tblwrap" style="margin-top:14px">
+    <table>
+      <thead><tr><th>Ticket</th><th>UUID</th><th>Ticket</th><th>UUID</th></tr></thead>
+      <tbody>
+        <tr><td class="tk">#704</td><td class="dep"><redacted-id></td><td class="tk">#718</td><td class="dep"><redacted-id></td></tr>
+        <tr><td class="tk">#705</td><td class="dep"><redacted-id></td><td class="tk">#719</td><td class="dep"><redacted-id></td></tr>
+        <tr><td class="tk">#706</td><td class="dep"><redacted-id></td><td class="tk">#720</td><td class="dep"><redacted-id></td></tr>
+        <tr><td class="tk">#707</td><td class="dep"><redacted-id></td><td class="tk">#721</td><td class="dep"><redacted-id></td></tr>
+        <tr><td class="tk">#714</td><td class="dep"><redacted-id></td><td class="tk">#743</td><td class="dep"><redacted-id></td></tr>
+        <tr><td class="tk">#715</td><td class="dep"><redacted-id></td><td class="tk">#744</td><td class="dep"><redacted-id></td></tr>
+        <tr><td class="tk">#716</td><td class="dep"><redacted-id></td><td class="tk">#745</td><td class="dep"><redacted-id></td></tr>
+        <tr><td class="tk">#717</td><td class="dep"><redacted-id></td><td class="tk">#746</td><td class="dep"><redacted-id></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- TESTS -->
+<section id="tests-cov">
+  <h2>Existing test coverage (34 tests, all in <code>apps/execution/tests/</code>)</h2>
+  <p class="lede">What is already asserted — so the next agent adds only the gaps, and knows the fixtures (<code>task</code>, <code>subtask</code>, <code>project</code>, <code>module</code>, <code>backlog</code>, <code>todo</code>, <code>client</code>, <code>monkeypatch</code>).</p>
+  <div class="col2">
+    <div class="card"><b style="font-size:13px">test_reducer.py (pure)</b><ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px">
+      <li>execute_requested → launch (idle); refine/split launch actions</li>
+      <li>completed→done; backlog→unstarted marks refine done; <code>to_state=="LLD"</code> marks split done</li>
+      <li>run_started→running(+run_id); run_failed→failed(+error)</li>
+      <li>non-LLD destination / not-running / unrelated-task / after-done all ignored</li>
+    </ul></div>
+    <div class="card"><b style="font-size:13px">test_driver.py</b><ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px">
+      <li>loads task, calls spawn once, returns running</li>
+      <li>refine grill prompt for backlog; split HLD prompt for todo; rejects wrong group</li>
+      <li>derives module from subtask ancestor; rejects missing/non-module</li>
+      <li>records launch failure; observe flips running→done; ignores non-completed / non-LLD</li>
+    </ul></div>
+    <div class="card"><b style="font-size:13px">test_signals.py</b><ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px">
+      <li>receiver delegates completion to driver</li>
+      <li>receiver swallows observer errors (never breaks the save)</li>
+    </ul></div>
+    <div class="card"><b style="font-size:13px">test_api.py</b><ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px">
+      <li>refine launches for backlog; split launches for todo</li>
+      <li>rejects duplicate live run (409); rejects wrong group (422)</li>
+    </ul></div>
+    <div class="card"><b style="font-size:13px">worktracker seam tests</b><ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px">
+      <li><code>worktracker/tests/test_state_change_signal.py</code> — emit-on-commit + v1 logging (#706)</li>
+    </ul></div>
+    <div class="card"><b style="font-size:13px">Not yet covered</b><ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px">
+      <li>multi-task ready-set / topo (#717)</li>
+      <li>failure propagation + no-double-launch (#718)</li>
+      <li><code>register</code> phase + relaunch guard (#745)</li>
+      <li>leaf-LLD phase (#743); trigger surface (#721)</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- RISKS -->
+<section id="risks">
+  <h2>Gaps &amp; flags</h2>
+  <p class="lede">Things worth deciding before picking up the remaining chain.</p>
+  <div class="col2">
+    <div class="card">
+      <b style="font-size:13.5px">Missing dependency edges</b>
+      <p style="margin:6px 0 0;font-size:13px">#743, #744 and #746 carry <b>no <code>blocked_by</code> edges</b>. Logically #743 (leaf LLDs) should follow #745 (register), and #721 (capstone) depends on the whole chain, not just #720. Wire these before the engine executes its own graph, or execution will mis-order them.</p>
+    </div>
+    <div class="card">
+      <b style="font-size:13.5px">The chain is built out of order vs. the demo order</b>
+      <p style="margin:6px 0 0;font-size:13px">Plan-phase slices #719/#720 are already built, but execute-phase #717/#718 (earlier in the chain) are not. The single-task engine (#716) is done; the <i>graph</i> engine (#717) is the true next build.</p>
+    </div>
+    <div class="card">
+      <b style="font-size:13.5px">Run-state model is thin</b>
+      <p style="margin:6px 0 0;font-size:13px"><code>EngineState.status</code> is a single enum for one task. #718 needs per-task run-state across a subtree and a durable, idempotent store — currently process-local only (the #716 orchestrator-home decision explicitly deferred durability).</p>
+    </div>
+    <div class="card">
+      <b style="font-size:13.5px">#745 is the cheapest next win</b>
+      <p style="margin:6px 0 0;font-size:13px">Its LLD is complete and it plugs straight into the existing phase machinery (add <code>register</code> to <code>Phase</code>, a recipe, a launch-on-<code>→LLD</code> trigger + relaunch guard). It does <i>not</i> require the #717/#718 graph work.</p>
+    </div>
+  </div>
+  <div class="flag"><b>Parent #700 state:</b> this map is a status/roadmap deliverable, not the engine LLD. #700 stays in <b>Todo</b> — its next design deliverable remains the engine HLD (phase model, reaction table, run-state model) that #717/#718 build against.</div>
+</section>
+
+<!-- ACCEPT -->
+<section id="accept">
+  <h2 style="border:0">Bottom line</h2>
+  <div class="accept">
+    <p style="margin:0 0 8px"><b>Foundations + single-task engine + planning phases are built.</b> A refine / split / implement run launches, and completion is observed off the tracker-state seam.</p>
+    <p style="margin:0"><b>To finish #700, build (in order):</b> #717 ready-set graph engine → #718 failure/idempotency → #745 register phase → #743 leaf LLDs → #721 trigger surface, with #744 (state model) deferred. Then merge &amp; close the six In-Progress tickets and wire the missing dependency edges.</p>
+  </div>
+  <p class="note">Sources: WorkTracker MCP (module 81c3aa9b, project f36d36f0), code in <code>../server/apps/execution/</code> &amp; <code>apps/terminals/launch.py</code>, and each ticket's frozen refinement notes.</p>
+</section>
+
+</div>
+
+<script>
+  const DATA = {
+    "705":{t:"#705 — Prefactor: state-group helpers",s:"Done · foundation A",b:["Lifted <code>_state_group</code>/<code>_RESOLVED_GROUPS</code> out of api.py into a neutral module.","Unblocks the seam (#706)."],u:"Unblocks #706"},
+    "706":{t:"#706 — The seam: issue_state_changed",s:"In Progress · built, unmerged",b:["<code>post_save</code> on Issue emits an on-commit signal with from/to state + group.","One logging receiver. This is the completion/transition detector the whole engine reacts to.","Present as <code>apps/execution/signals.py</code> (+ test_signals)."],u:"Unblocks #716"},
+    "714":{t:"#714 — Extract shared _launch",s:"Done · foundation B",b:["Lifted the WS-consumer launch path into <code>terminals/launch.py</code> (<code>_launch</code> + <code>LaunchUnavailable</code>).","Prefactor so a backend-initiated launch can reuse it."],u:"Unblocks #715"},
+    "715":{t:"#715 — spawn_run() primitive",s:"In Progress · built, unmerged",b:["<code>async spawn_run()</code> — backend-initiated agent run over #714's <code>_launch</code>.","Raises on tmux failure (no WS/fallback). 10 tests; consumers untouched.","This is how the engine actually starts a run."],u:"Closes #707"},
+    "707":{t:"#707 — spawn_run launch primitive (parent)",s:"Todo · delivered via slices",b:["Umbrella for the launch primitive; realized by #714 + #715.","Closes once #715 merges."],u:"Unblocks #716"},
+    "716":{t:"#716 — Exec tracer 1: execute one task",s:"In Progress · built, unmerged",b:["The pure single-task reducer <code>decide(state,event)→{next,actions}</code>.","Handles execute_requested→launch, run_started/run_failed, and issue_state_changed→done.","Pinned the orchestrator-home decision: driver lives in coding-app backend, in-process.","<b>This is the ceiling of what's built</b> — it is one task, not a graph."],u:"Unblocks #717"},
+    "717":{t:"#717 — Exec tracer 2: ready-set release",s:"Backlog · REMAINING (next build)",b:["Multi-task topo core: walk the subtree, compute ready-set from blocker states.","Parallel-on-ready launch; release newly-unblocked tasks on seam completions.","<b>First unbuilt link in the chain.</b>"],u:"Unblocks #718"},
+    "718":{t:"#718 — Exec tracer 3: failure + idempotency",s:"Backlog · REMAINING",b:["Failed run halts its dependents; independent branches keep draining.","No double-launch on re-invocation → needs per-task run-state + idempotency.","Requires a richer run-state model than the current single enum."],u:"Unblocks #719 (chain order)"},
+    "719":{t:"#719 — Plan tracer 4: refine",s:"In Progress · built, unmerged",b:["<code>refine</code> phase: grill agent turns a Backlog idea into a locked PRD.","Gate: Backlog→Todo (dumb, actor-agnostic). Built in recipes.py/driver.py.","Opens Phase 1 (Plan)."],u:"Unblocks #720"},
+    "720":{t:"#720 — Plan tracer 5: split",s:"In Progress · built, unmerged",b:["<code>split</code> phase: HLD/splitter agent writes the visual HLD + proposed split tree.","Gate: →LLD state = approval. Writes proposal only; creates no tasks/edges.","Built in recipes.py/driver.py."],u:"Unblocks #721 and #745"},
+    "745":{t:"#745 — Register approved HLD split tree",s:"LLD ready · REMAINING (cheapest win)",b:["Adds a 4th phase <code>register</code> (state.py Phase currently implement/refine/split only).","On root →LLD: launch agent that parses HLD, creates leaf tasks + blocked_by edges.","Slug-idempotent, Todo landing, surface-and-halt. Relaunch guard engine-side.","<b>Design complete</b> — does not need #717/#718."],u:"Terminal (leaf of chain)"},
+    "743":{t:"#743 — Generate leaf LLDs",s:"Backlog · REMAINING",b:["After #745 registers leaves, launch a per-leaf LLD-generation phase.","Does not run implementation agents.","<b>No blocked_by edge wired</b> — should follow #745."],u:"—"},
+    "721":{t:"#721 — Capstone: pipeline + trigger surface",s:"Backlog · REMAINING",b:["MCP <code>execute_dependency_graph(root_task_id)</code> + Dependency-view action.","Wires the full plan→execute cascade end-to-end and makes it user-triggerable.","UI-launch bridging carved into #746."],u:"—"},
+    "746":{t:"#746 — UI bridge: launch/state → tracer phases",s:"In Progress · built, unmerged",b:["Drawer Refine(Backlog)/Split(Todo) buttons → tracked tracer phases.","Explicit-only, completion-only, fire-and-forget (409 guard).","<b>No blocked_by edge wired.</b>"],u:"—"},
+    "744":{t:"#744 — Internal lifecycle-state model",s:"Backlog · DEFERRED",b:["Durable hidden state model for the planning pipeline.","Replaces interim reuse of WorkTracker states (Todo=start-HLD, LLD=approved-split).","Explicitly future work; whole chain runs on interim signals until then."],u:"—"}
+  };
+  const panel=document.getElementById('panel');
+  let sel=null;
+  document.querySelectorAll('.node').forEach(n=>{
+    n.addEventListener('click',()=>{
+      const k=n.getAttribute('data-k'), d=DATA[k]; if(!d)return;
+      if(sel)sel.classList.remove('sel'); n.classList.add('sel'); sel=n;
+      panel.innerHTML='<h3>'+d.t.split(' — ')[0]+'</h3><p class="st">'+d.s+'</p>'+
+        '<div style="font-size:13.5px;font-weight:600;margin-bottom:4px">'+d.t.split(' — ')[1]+'</div>'+
+        '<ul>'+d.b.map(x=>'<li>'+x+'</li>').join('')+'</ul>'+
+        '<div class="kv" style="margin-top:10px"><b>Unblocks</b><span>'+d.u+'</span></div>';
+    });
+  });
+  // scroll-spy
+  const links=[...document.querySelectorAll('#nav a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+  const obs=new IntersectionObserver(es=>{
+    es.forEach(e=>{ if(e.isIntersecting){ const id='#'+e.target.id;
+      links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')===id)); }});
+  },{rootMargin:'-45% 0px -50% 0px'});
+  secs.forEach(s=>s&&obs.observe(s));
+</script>
+</body>
+</html>

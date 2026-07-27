@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-637 · Studio C2 Multi-select & Bulk Actions — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 0; border-bottom: 1px solid var(--line); }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 980px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 900px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  .note { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--ink); background: #fbfcfe; }
+  .note.blue { background: var(--accent-soft); border-color: #c5d2f5; }
+  .note.blue b { color: var(--accent); }
+  .note.red { background: var(--red-soft); border-color: #f0cccc; }
+  .note.red b { color: var(--red); }
+
+  /* decision cards */
+  .dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .dcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; border-top: 3px solid var(--accent); }
+  .dcard h3 { font-size: 14px; margin-bottom: 6px; }
+  .dcard .q { color: var(--muted); font-size: 12.5px; margin-bottom: 8px; }
+  .dcard .a { font-size: 13.5px; }
+  .dcard .a b { color: var(--accent); }
+
+  /* change map */
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* marker / model cards */
+  .marker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .mcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .mcard h3 { font-size: 15px; margin-bottom: 10px; }
+  .mcard .mrow { display: grid; grid-template-columns: 130px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .mcard .mrow:last-child { border-bottom: none; }
+  .mcard .mk { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--violet); }
+  .mcard .mv { color: var(--ink); }
+  .mcard .mv .opt { color: var(--muted); font-size: 12px; }
+  .rules { list-style: none; }
+  .rules li { font-size: 13px; padding: 6px 0 6px 26px; position: relative; border-bottom: 1px dashed var(--line); }
+  .rules li:last-child { border-bottom: none; }
+  .rules li::before { content: "▸"; position: absolute; left: 4px; color: var(--violet); font-weight: 900; }
+  .rules li b { color: var(--violet); }
+
+  /* sequence */
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+
+  /* code block */
+  pre { background: #0f1729; color: #d8e0f0; border-radius: 10px; padding: 16px 18px; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; overflow-x: auto; }
+  pre .k { color: #8ab4ff; } pre .s { color: #7fd6a0; } pre .c { color: #6b7794; font-style: italic; } pre .r { color: #e6889a; }
+
+  /* scope does/doesnt */
+  .scope { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .slist { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .slist h3 { font-size: 14px; margin-bottom: 10px; }
+  .slist.does h3 { color: var(--green); }
+  .slist.not h3 { color: var(--red); }
+  .slist ul { list-style: none; }
+  .slist li { font-size: 13px; padding: 6px 0 6px 22px; position: relative; border-bottom: 1px dashed var(--line); }
+  .slist li:last-child { border-bottom: none; }
+  .slist.does li::before { content: "✓"; position: absolute; left: 2px; color: var(--green); font-weight: 800; }
+  .slist.not li::before { content: "×"; position: absolute; left: 2px; color: var(--red); font-weight: 800; }
+
+  /* build order */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .cm, .marker-grid, .seq-wrap, .dgrid, .scope { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    main, header, nav { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · WorkTracker Studio · Ticket #637 · LLD → awaiting approval</div>
+  <h1>Studio C2 — Multi-select &amp; Bulk Actions (Backlog + Board)</h1>
+  <div class="sub">Closes gap <b>G09</b>. Realizes the <b>Jira selection model</b> agreed in S1/S2 and deferred: <b>⌘/Ctrl-click</b> toggles a row/card into a selection, <b>Shift-click</b> selects a contiguous range, and a floating <b>bulk-action bar</b> sets <b>state · sprint · priority</b> or <b>deletes</b> across the selection. Every bulk op is a <b>fan-out of the existing optimistic <span class="m">patchWorkItem</span> / <span class="m">deleteWorkItem</span></b> with per-item rollback. <b>Zero backend.</b> FE-only.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD · awaiting approval</span>
+    <span class="chip green">FE-only: studio/src</span>
+    <span class="chip violet">2 new files · 5 modified</span>
+    <span class="chip amber">Rides existing PATCH / DELETE routes — zero BE change</span>
+    <span class="chip red">No migration · no SDK change</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#decision" class="active">Decisions</a>
+  <a href="#map">Change Map</a>
+  <a href="#model">Selection Model</a>
+  <a href="#order-list">Ordered Lists</a>
+  <a href="#stores">Store Delta &amp; Fan-out</a>
+  <a href="#seq">Select → Apply → Reconcile</a>
+  <a href="#failures">Failure Matrix</a>
+  <a href="#scope">Scope &amp; Boundaries</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#build">Build Order</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+
+<!-- ============ DECISIONS ============ -->
+<section id="decision">
+  <h2>Four decisions, all client-side</h2>
+  <div class="lede">C2 adds <b>no backend</b> and <b>no new fetch</b>. The selection is a small piece of pure client state; each bulk action is a parallel fan-out over the seam each single-item action already uses. These four choices were confirmed with the user during refinement.</div>
+  <div class="dgrid">
+    <div class="dcard">
+      <h3>1 · Where does selection live?</h3>
+      <div class="q">One store shared by both surfaces, or per-view?</div>
+      <div class="a">A new <b><span class="m">selectionStore</span></b> holds <span class="m">{ surface, ids, anchorId }</span>. Selection is <b>per-surface</b> — switching Backlog↔Board, changing project, or unmounting <b>clears</b> it. The store is <b>layout-agnostic</b>: the view passes the surface's ordered-id list into <span class="m">range()</span> at click time, so the store never knows about trees, columns, or collapse state.</div>
+    </div>
+    <div class="dcard">
+      <h3>2 · What does a plain click do?</h3>
+      <div class="q">Select the row (Jira) or open the drawer (today)?</div>
+      <div class="a">Unchanged: <b>plain click opens the drawer</b> (<span class="m">/issues/KEY-N</span>) and clears any selection. Selection <b>only begins with a modifier</b> — ⌘/Ctrl toggles, Shift ranges. This preserves the current one-click-to-open muscle memory and avoids a checkbox column.</div>
+    </div>
+    <div class="dcard">
+      <h3>3 · How does Shift-click range work on the Board?</h3>
+      <div class="q">Within one column, or across columns?</div>
+      <div class="a"><b>Across columns, in visual reading order</b> — columns left-to-right, each top-to-bottom (rank order), flattened to one list; the range spans column boundaries. On the Backlog the ordered list is the <b>visible (non-collapsed) row order</b>, top-to-bottom across epic groups.</div>
+    </div>
+    <div class="dcard">
+      <h3>4 · What happens to undeletable items in a bulk delete?</h3>
+      <div class="q">Block the whole op, or delete what you can?</div>
+      <div class="a"><b>Confirm → fan-out → report.</b> A confirm dialog shows the count; deletes fan out; items with sub-tasks <b>409 individually</b>; successes are removed and a <b>summary</b> reports "<i>N deleted · M skipped (have sub-tasks)</i>". Each delete rolls back independently.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Click a highlighted entry for its exact delta. Two new files, five modified, all under <span class="m">studio/src</span>. The backend, the SDK, the API client, and the data model are untouched.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">studio/src/</div>
+      <div class="dir">├─ stores/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit new" data-f="selstore">selectionStore.ts</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="backlogstore">backlogStore.ts</span></div>
+      <div class="dir">├─ views/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit new" data-f="bar">BulkActionBar.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="backloglist">BacklogList.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="boardview">BoardView.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="boardcard">BoardCard.tsx</span></div>
+      <div class="dir">├─ fields/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="pickers">State/Sprint/PriorityPicker.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ Popover.tsx <span style="color:#9aa3b8">— reused as-is</span></div>
+      <div class="dir">├─ lib/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit ro" data-f="api">api.ts</span> <span style="color:#9aa3b8">— patch/delete reused</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ types.ts <span style="color:#9aa3b8">— no change</span></div>
+      <div class="dir">└─ test/ <span style="color:#9aa3b8">— 3 new suites</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--accent-soft)"></i>read-only input</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail"><span class="hint">Select an entry on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ SELECTION MODEL ============ -->
+<section id="model">
+  <h2>The selection model</h2>
+  <div class="lede">A small Zustand store and three click intents. The store is the single source of truth for "what is selected"; the views translate raw clicks into intents and supply the ordered list a range needs.</div>
+  <div class="marker-grid">
+    <div class="mcard">
+      <h3>Store: <span class="m">selectionStore</span></h3>
+      <div class="mrow"><span class="mk">surface</span><span class="mv"><span class="m">"backlog" | "board" | null</span> — which view owns the current selection. A click on a different surface resets first. <span class="opt">Drives whether the bar renders in a given view.</span></span></div>
+      <div class="mrow"><span class="mk">ids</span><span class="mv"><span class="m">Set&lt;string&gt;</span> of selected work-item UUIDs (stories &amp; sub-tasks only).</span></div>
+      <div class="mrow"><span class="mk">anchorId</span><span class="mv">The last ⌘/plain-selected id — the fixed end of a Shift range. <span class="opt">null until the first modifier click.</span></span></div>
+      <div class="mrow"><span class="mk">toggle</span><span class="mv"><span class="m">(surface, id)</span> — ⌘/Ctrl: add/remove <span class="m">id</span>; set <span class="m">anchorId = id</span>; reset if surface changed.</span></div>
+      <div class="mrow"><span class="mk">range</span><span class="mv"><span class="m">(surface, id, orderedIds)</span> — Shift: select the inclusive slice of <span class="m">orderedIds</span> between <span class="m">anchorId</span> and <span class="m">id</span>; <span class="m">anchorId</span> unchanged. No anchor → behaves like toggle.</span></div>
+      <div class="mrow"><span class="mk">clear</span><span class="mv">Empty the set, drop the anchor and surface.</span></div>
+      <div class="mrow"><span class="mk">isSelected</span><span class="mv"><span class="m">(id) =&gt; boolean</span> — read by each row/card for its highlight.</span></div>
+    </div>
+    <div class="mcard">
+      <h3>Click intents &amp; lifecycle</h3>
+      <ul class="rules">
+        <li><b>Plain click</b> → <span class="m">clear()</span> then open the drawer. Drawer behavior is exactly today's.</li>
+        <li><b>⌘/Ctrl-click</b> → <span class="m">toggle()</span>. First one starts a selection of size 1; the bar appears.</li>
+        <li><b>Shift-click</b> → <span class="m">range()</span> over the surface's ordered-id list. Contiguous, inclusive, anchor-pinned.</li>
+        <li><b>Epic headers / module rows are never selectable</b> — only work-item rows wire the intents.</li>
+        <li><b>Cleared by</b> Escape (while a selection exists), a click on empty surface background, a project change, and surface unmount.</li>
+        <li><b>Drag is unaffected</b> — a modifier click never starts a drag; the post-drag <span class="m">draggedRef</span> click-suppression already in the row/card stands.</li>
+        <li><b>After a bulk op</b> the selection is trimmed to survivors (delete) or kept (state/sprint/priority) — see the fan-out section.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ORDERED LISTS ============ -->
+<section id="order-list">
+  <h2>The two ordered-id lists</h2>
+  <div class="lede">A Shift range is only as good as the order it ranges over. Each surface computes its own flat list <i>in the exact order the user sees</i>, and passes it to <span class="m">range()</span>. Decision 3, made concrete.</div>
+  <table>
+    <thead><tr><th style="width:120px">Surface</th><th>Ordered list (passed to <span class="m">range()</span>)</th><th style="width:260px">Source</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="m">backlog</span></td>
+        <td>The <b>visible row order</b>: walk <span class="m">groupBacklog()</span>'s groups top-to-bottom; within each, pre-order DFS over <span class="m">TreeNode</span>s, <b>skipping the children of collapsed rows and of collapsed epics</b> so the list matches exactly what is on screen.</td>
+        <td>Derived in <span class="m">BacklogList</span> from the same <span class="m">groups</span> + <span class="m">collapsed</span>/<span class="m">collapsedRows</span> sets it already renders.</td>
+      </tr>
+      <tr>
+        <td><span class="m">board</span></td>
+        <td>Columns concatenated <b>left-to-right</b> in display order; within each column, items in <b>rank order</b> (the same <span class="m">compareRank</span> sort the column renders). A flat reading-order list spanning column boundaries.</td>
+        <td>Derived in <span class="m">BoardView</span> from <span class="m">boardColumns(...)</span> — the array it already maps over.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note blue" style="margin-top:14px"><b>Why pass the list in rather than store it →</b> the order changes with collapse toggles, filters, and optimistic rank moves. Recomputing it at click time keeps the store free of layout state and guarantees the range matches the pixels under the cursor.</div>
+</section>
+
+<!-- ============ STORE DELTA & FAN-OUT ============ -->
+<section id="stores">
+  <h2>Store delta &amp; the fan-out</h2>
+  <div class="lede">Four new methods on <span class="m">backlogStore</span>, each a parallel fan-out of an action that already exists for one item. Snapshot once, apply optimistically to all, fire in parallel with <span class="m">Promise.allSettled</span>, reconcile per-item: fulfilled → <span class="m">applyServerItem</span>, rejected → roll that one row back.</div>
+  <pre><span class="c">// backlogStore.ts — new bulk methods (shapes; field-by-field is impl detail)</span>
+<span class="k">async</span> bulkSetState(ids, stateId) {
+  <span class="k">const</span> snapshot = get().items;
+  <span class="k">const</span> target = get().states.find(s =&gt; s.id === stateId) ?? <span class="k">null</span>;
+  <span class="k">const</span> todo = ids.filter(id =&gt; itemOf(id)?.state?.id !== stateId);  <span class="c">// skip no-ops</span>
+  set({ items: optimisticApply(snapshot, todo, i =&gt; ({ ...i, state: target })) });
+  <span class="k">const</span> results = <span class="k">await</span> Promise.allSettled(
+    todo.map(id =&gt; api.patchWorkItem(id, { state_id: stateId }))
+  );
+  reconcile(results, todo, snapshot);   <span class="c">// fulfilled→applyServerItem, rejected→rollback id</span>
+}
+<span class="c">// bulkSetSprint(ids, sprintId|null) and bulkSetPriority(ids, priority) are identical</span>
+<span class="c">// in shape — only the patch key and the optimistic field differ.</span>
+
+<span class="k">async</span> bulkDelete(ids) {
+  <span class="k">const</span> snapshot = get().items;
+  set({ items: snapshot.filter(i =&gt; !ids.has(i.id)) });           <span class="c">// optimistic remove-all</span>
+  <span class="k">const</span> results = <span class="k">await</span> Promise.allSettled(ids.map(api.deleteWorkItem));
+  <span class="k">const</span> skipped = [];                                            <span class="c">// 409 = has sub-tasks</span>
+  results.forEach((r, k) =&gt; { <span class="k">if</span> (r.status === <span class="s">"rejected"</span>) restore(ids[k], snapshot), skipped.push(ids[k]); });
+  <span class="k">return</span> { deleted: ids.length - skipped.length, skipped };       <span class="c">// → summary in the bar</span>
+}</pre>
+  <table style="margin-top:18px">
+    <thead><tr><th style="width:200px">Concern</th><th>Resolution</th></tr></thead>
+    <tbody>
+      <tr><td>No-op items</td><td>Each setter filters out ids already at the target value (mirrors the single-item <span class="m">setItemState</span> early-return) — fewer requests, no spurious rank churn.</td></tr>
+      <tr><td>Partial failure</td><td><span class="m">allSettled</span>, never <span class="m">all</span>: one rejection never aborts the rest. Only the failed ids roll back; the rest keep their server-reconciled value.</td></tr>
+      <tr><td>Board set-state landing spot</td><td>A bulk state change moves cards across columns; moved cards <b>append</b> to the destination column (server default rank — no within-column position is chosen). Within-column bulk re-ranking is out of scope.</td></tr>
+      <tr><td>Sprint / priority clearing</td><td>Bulk Sprint includes <b>"No sprint"</b> (present <span class="m">null</span> clears); bulk Priority includes <b>"none"</b>. Same option lists as the single-item pickers.</td></tr>
+      <tr><td>Selection after the op</td><td>State/Sprint/Priority: selection kept (you may chain edits). Delete: selection trimmed to the <span class="m">skipped</span> survivors so the bar shows what's left to deal with.</td></tr>
+      <tr><td>Summary channel</td><td>Surfaced via the store's existing <span class="m">error</span>/inline message channel for this slice; upgrades to a toast when <b>C3 (#638)</b> lands its toast layer. No hard dependency either way.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ SEQUENCE ============ -->
+<section id="seq">
+  <h2>Select → apply → reconcile</h2>
+  <div class="lede">Click a numbered step for its mechanics and edge cases. Lanes are the actual modules.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 720 440" width="100%">
+      <g font-size="11.5" font-weight="700">
+        <text x="70" y="22" text-anchor="middle" fill="#3d2370">User</text>
+        <text x="225" y="22" text-anchor="middle" fill="#9a6700">View (row/card)</text>
+        <text x="385" y="22" text-anchor="middle" fill="#6b3fb8">selectionStore</text>
+        <text x="535" y="22" text-anchor="middle" fill="#1d7a4f">BulkActionBar</text>
+        <text x="660" y="22" text-anchor="middle" fill="#3556d4">backlogStore + API</text>
+      </g>
+      <g stroke="#e3e7ee" stroke-width="1.5">
+        <line x1="70" y1="32" x2="70" y2="420"/>
+        <line x1="225" y1="32" x2="225" y2="420"/>
+        <line x1="385" y1="32" x2="385" y2="420"/>
+        <line x1="535" y1="32" x2="535" y2="420"/>
+        <line x1="660" y1="32" x2="660" y2="420"/>
+      </g>
+      <defs>
+        <marker id="sarr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+      </defs>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="70" y1="60" x2="221" y2="60" marker-end="url(#sarr)"/>
+        <line x1="225" y1="110" x2="381" y2="110" marker-end="url(#sarr)"/>
+        <line x1="385" y1="160" x2="531" y2="160" marker-end="url(#sarr)"/>
+        <line x1="70" y1="210" x2="531" y2="210" marker-end="url(#sarr)"/>
+        <line x1="535" y1="260" x2="656" y2="260" marker-end="url(#sarr)"/>
+        <line x1="660" y1="310" x2="660" y2="310"/>
+        <line x1="656" y1="360" x2="389" y2="360" marker-end="url(#sarr)" stroke-dasharray="5 4"/>
+      </g>
+      <g font-size="10.5" fill="#5b6478">
+        <text x="147" y="50" text-anchor="middle">⌘ / ⇧ click row</text>
+        <text x="305" y="100" text-anchor="middle">toggle() / range(orderedIds)</text>
+        <text x="460" y="150" text-anchor="middle">ids ≥ 1 → bar renders</text>
+        <text x="300" y="200" text-anchor="middle">pick State/Sprint/Priority, or Delete</text>
+        <text x="598" y="250" text-anchor="middle">bulk* fan-out (allSettled)</text>
+        <text x="525" y="352" text-anchor="end" fill="#1d7a4f">reconcile / trim selection</text>
+      </g>
+      <g class="step" data-s="1"><circle cx="70" cy="60" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="70" y="64.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3d2370">1</text></g>
+      <g class="step" data-s="2"><circle cx="225" cy="110" r="13" fill="#fbf0d8" stroke="#9a6700"/><text x="225" y="114.5" text-anchor="middle" font-size="12" font-weight="800" fill="#9a6700">2</text></g>
+      <g class="step" data-s="3"><circle cx="385" cy="160" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="385" y="164.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3d2370">3</text></g>
+      <g class="step" data-s="4"><circle cx="70" cy="210" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="70" y="214.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3d2370">4</text></g>
+      <g class="step" data-s="5"><circle cx="535" cy="260" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="535" y="264.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">5</text></g>
+      <g class="step" data-s="6"><circle cx="660" cy="310" r="13" fill="#e8edfb" stroke="#3556d4"/><text x="660" y="314.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3556d4">6</text></g>
+      <g class="step" data-s="7"><circle cx="385" cy="360" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="385" y="364.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">7</text></g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a numbered step.</span></div>
+  </div>
+</section>
+
+<!-- ============ FAILURE MATRIX ============ -->
+<section id="failures">
+  <h2>Failure &amp; edge matrix</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Behavior</th><th style="width:110px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>One PATCH in a bulk set fails (e.g. 422, network)</td><td><span class="m">allSettled</span>: only that id rolls back to its snapshot value; the rest stay applied; the failure count surfaces in the summary</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Bulk delete includes items with sub-tasks</td><td>Server 409s those rows individually; they're restored and reported as "skipped (have sub-tasks)"; childless rows delete</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Bulk set targets the value items already have</td><td>No-op filter drops them before fan-out — no request, no rank churn</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Shift-click with no prior anchor</td><td><span class="m">range()</span> degrades to a single-item select and sets the anchor</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Shift/⌘ click on a different surface than the current selection</td><td>Surface mismatch resets the selection first, then applies the intent on the new surface</td><td><span class="sev ok">by design</span></td></tr>
+      <tr><td>Selected item scrolls out / is filtered away before apply</td><td>Bulk methods operate on ids, not on rendered rows — a filtered-out id still patches; if the project reloaded, missing ids are skipped harmlessly</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Optimistic rank/state flips mid-selection (concurrent drag)</td><td>Ordered list is recomputed per click; a stale range is at worst a slightly-off selection the user re-clicks — no data risk</td><td><span class="sev warn">accepted</span></td></tr>
+      <tr><td>Confirm dialog dismissed</td><td>Bulk delete aborts entirely; nothing optimistically removed</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Right-click context menu with the same actions</td><td>The S1-mentioned menu is not built this slice — bottom bar only</td><td><span class="sev def">deferred</span></td></tr>
+      <tr><td>Bulk reparent / bulk assignee</td><td>Reparent is not in the bar; assignees were cut from Studio (personal tracker)</td><td><span class="sev def">out of scope</span></td></tr>
+      <tr><td>Story-map multi-select</td><td>C2 covers Backlog + Board only</td><td><span class="sev def">deferred</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ SCOPE ============ -->
+<section id="scope">
+  <h2>Scope &amp; boundaries</h2>
+  <div class="lede">A tight presentational + client-state slice. What it deliberately leaves alone keeps it zero-risk to the backend and the other concurrent C-series tickets.</div>
+  <div class="scope">
+    <div class="slist does">
+      <h3>This slice does</h3>
+      <ul>
+        <li>⌘/Ctrl-click toggle + Shift-click range on Backlog rows and Board cards</li>
+        <li>A floating bulk-action bar at ≥1 selected: State · Sprint · Priority · Delete · clear</li>
+        <li>Fan-out bulk set of state / sprint / priority (optimistic, per-item rollback)</li>
+        <li>Confirm-gated bulk delete with skip-children-and-report</li>
+        <li>Selected-row highlight; Escape / empty-click / nav clears</li>
+        <li>3 new Vitest suites; tsc + build green</li>
+      </ul>
+    </div>
+    <div class="slist not">
+      <h3>This slice does not</h3>
+      <ul>
+        <li>Touch the backend, SDK, migrations, or API client (reuses <span class="m">patchWorkItem</span> / <span class="m">deleteWorkItem</span>)</li>
+        <li>Add a right-click context menu (deferred follow-up)</li>
+        <li>Bulk reparent, bulk assignee (cut), or bulk label edits</li>
+        <li>Select-all / ⌘-A, or cross-surface persistent selection</li>
+        <li>Multi-select on the Story Map</li>
+        <li>Re-rank cards within a destination column on bulk state change</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TEST PLAN ============ -->
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">Unit suites live beside the code they test; the final gate is your live e2e on a real project.</div>
+  <table>
+    <thead><tr><th style="width:250px">Suite</th><th>Cases</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">test/selectionStore.test.ts</span> (new)</td><td>toggle adds/removes + sets anchor; surface switch resets; range selects inclusive slice between anchor and target over a given ordered list; range with no anchor = single select; clear empties; isSelected reflects membership.</td></tr>
+      <tr><td><span class="m">test/bulkActions.test.ts</span> (new)</td><td>On <span class="m">backlogStore</span> with mocked api: bulkSetState/Sprint/Priority apply optimistically to all, reconcile fulfilled via applyServerItem, roll back only rejected ids; no-op filter skips already-at-value ids; bulkDelete removes optimistically, restores 409 rows, returns {deleted, skipped}.</td></tr>
+      <tr><td><span class="m">test/BulkActionBar.test.tsx</span> (new)</td><td>Hidden at 0 selected; shows count at ≥1; State/Sprint/Priority option pick calls the matching bulk method with the selected ids; Delete opens confirm; confirming calls bulkDelete and renders the summary; clear ✕ empties the selection.</td></tr>
+      <tr><td><span class="m">test/board.test.tsx</span> · <span class="m">backlogStore.test.ts</span> (extend)</td><td>⌘-click on a card/row toggles selection not navigation; plain click still navigates; Shift range over the board's cross-column ordered list; empty-click clears.</td></tr>
+      <tr><td>Live e2e (user)</td><td>On a real project: ⌘ and ⇧ select on Backlog and Board (board range across columns), bulk set state/sprint/priority persist with rollback on a forced error, bulk delete confirms + skips a parent + reports, Escape clears.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="build">
+  <h2>Build order</h2>
+  <div class="lede">Five steps; each lands green before the next. Steps 1–2 are pure and testable without any view.</div>
+  <div class="steps">
+    <div class="bstep"><span class="n">1</span><b>selectionStore</b>Store + toggle/range/clear/isSelected, with its unit suite. Pure, no React.</div>
+    <div class="bstep"><span class="n">2</span><b>Bulk methods</b>bulkSet{State,Sprint,Priority} + bulkDelete on backlogStore; allSettled fan-out + per-item rollback; suite with mocked api.</div>
+    <div class="bstep"><span class="n">3</span><b>Wire clicks</b>Lift click branching to BacklogList + BoardView; compute the ordered lists; selected styling; Escape + empty-click clear.</div>
+    <div class="bstep"><span class="n">4</span><b>BulkActionBar</b>Floating bar reusing the pickers as action menus + Delete confirm + summary; render in both views at ≥1 selected.</div>
+    <div class="bstep"><span class="n">5</span><b>Live e2e</b>Real project on Backlog + Board; rollback + skip-children paths exercised. Your validation gates Done.</div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance</h2>
+  <div class="accept">
+    C2 is accepted when, on both the <b>Backlog</b> and the <b>Board</b>, <b>⌘/Ctrl-click toggles</b> and <b>Shift-click range-selects</b> (board range across columns in visual order); a floating <b>bulk bar</b> lets you set <b>state · sprint · priority</b> across the selection with <b>optimistic, per-item rollback</b>, and <b>delete</b> the selection behind a <b>confirm</b> that <b>skips items with sub-tasks and reports</b> the outcome; and <b>Escape / empty-click / navigation clears</b> the selection. <b>tsc + Vitest + build are green</b>, the backend is untouched, and your <b>live e2e</b> gates the move to Done.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    selstore: { t: 'studio/src/stores/selectionStore.ts', k: 'NEW', items: [
+      'Zustand store: { surface, ids:Set<string>, anchorId }.',
+      'toggle(surface, id): add/remove id, set anchorId=id, reset on surface change.',
+      'range(surface, id, orderedIds): select the inclusive slice between anchorId and id over the supplied ordered list; anchor unchanged.',
+      'clear(); isSelected(id) reads the set for row/card highlight.'
+    ], no: ['No knowledge of trees, columns, or collapse state — the view supplies orderedIds.', 'Not persisted to localStorage; selection is ephemeral.'] },
+    backlogstore: { t: 'studio/src/stores/backlogStore.ts', k: 'MODIFIED', items: [
+      'bulkSetState(ids, stateId), bulkSetSprint(ids, sprintId|null), bulkSetPriority(ids, priority): snapshot once, optimistic apply-all (minus no-ops), Promise.allSettled fan-out of patchWorkItem, per-item reconcile/rollback.',
+      'bulkDelete(ids): optimistic remove-all, allSettled deleteWorkItem, restore 409 rows, return {deleted, skipped} for the summary.',
+      'Reuses applyServerItem for fulfilled reconciliation.'
+    ], no: ['No change to single-item setItemState / moveItemToSprint / deleteIssue.', 'No new API client function — patchWorkItem & deleteWorkItem reused.'] },
+    bar: { t: 'studio/src/views/BulkActionBar.tsx', k: 'NEW', items: [
+      'Floating bar fixed bottom-center; renders only when selectionStore.surface matches this view and ids.size >= 1.',
+      'Shows "N selected" + State / Sprint / Priority action menus (reused pickers) + Delete + clear (✕).',
+      'Menu pick → matching bulk* method with [...ids]; Delete → confirm dialog → bulkDelete → renders {deleted, skipped} summary.'
+    ], no: ['No right-click variant this slice.', 'No reparent / assignee / label actions.'] },
+    backloglist: { t: 'studio/src/views/BacklogList.tsx', k: 'MODIFIED', items: [
+      'Row onClick branches: ⌘/Ctrl→toggle, Shift→range(orderedIds), plain→clear()+navigate.',
+      'Compute the visible flat row-id list (DFS over groups, skipping collapsed rows/epics) and pass to range().',
+      'Selected rows get a highlight class via isSelected(item.id).',
+      'Empty-surface click + Escape (while selection exists) clear; clear on projectId change.',
+      'Render <BulkActionBar surface="backlog" />.'
+    ], no: ['Drag/reorder wiring unchanged.', 'Epic headers stay non-selectable.'] },
+    boardview: { t: 'studio/src/views/BoardView.tsx', k: 'MODIFIED', items: [
+      'Compute the cross-column ordered-id list from boardColumns(...) (left→right, each column rank-ordered).',
+      'Thread an onCardClick(e, id) + orderedIds + isSelected down to BoardColumn → BoardCard.',
+      'Empty-strip click + Escape clear; clear on projectId change.',
+      'Render <BulkActionBar surface="board" />.'
+    ], no: ['boardColumns() selector unchanged.', 'Auto-scroll / drag wiring unchanged.'] },
+    boardcard: { t: 'studio/src/views/BoardCard.tsx', k: 'MODIFIED', items: [
+      'Replace direct navigate with onCardClick(e, item.id): ⌘/Ctrl→toggle, Shift→range, plain→clear()+navigate.',
+      'Selected style (ring) via isSelected(item.id).'
+    ], no: ['Draggable + reorder target wiring unchanged; post-drag click suppression stands.'] },
+    pickers: { t: 'studio/src/fields/{State,Sprint,Priority}Picker.tsx', k: 'MODIFIED (small)', items: [
+      'Optional neutral-trigger / placeholder mode so the bar can show "Set state…" with no current value while reusing the same Popover + option list.',
+      'onChange wired to the bulk method instead of a single-item patch.'
+    ], no: ['Single-item drawer usage unchanged (value still drives the trigger there).', 'No change to the option data or grouping.'] },
+    api: { t: 'studio/src/lib/api.ts', k: 'READ-ONLY INPUT', items: [
+      'patchWorkItem(id, {state_id|sprint_id|priority}) and deleteWorkItem(id) are called directly by the new bulk methods.',
+      'DELETE 409-if-children behavior is the source of the skip-and-report contract.'
+    ], no: ['No new function, no signature change.'] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    const kindColor = d.k.startsWith('NEW') ? 'var(--green)' : d.k.startsWith('READ') ? 'var(--accent)' : 'var(--amber)';
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + kindColor + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  const STEPS = {
+    1: { t: '1 · Modifier click', p: 'The user ⌘/Ctrl-clicks (toggle) or Shift-clicks (range) a Backlog row or Board card. A plain click is unchanged — it clears any selection and opens the drawer.', e: 'Edge: a click that follows a drag is suppressed by the existing draggedRef guard, so dragging never selects.' },
+    2: { t: '2 · View resolves intent', p: 'The row/card handler reads the modifier keys and, for a range, hands the store the surface and the freshly computed ordered-id list. Epic headers wire no intent and stay unselectable.', e: 'Edge: clicking on a different surface than the live selection is detected here and resets before applying.' },
+    3: { t: '3 · selectionStore updates', p: 'toggle() adds/removes the id and pins the anchor; range() selects the inclusive slice between anchor and target over orderedIds. The set is the single source of truth.', e: 'Edge: Shift with no anchor degrades to a single-item select and sets the anchor.' },
+    4: { t: '4 · Bar appears & user picks', p: 'With ids.size ≥ 1 and a matching surface, BulkActionBar renders the count and the State/Sprint/Priority menus + Delete. The user picks a value or chooses Delete.', e: 'Edge: navigating away or pressing Escape here clears the selection and hides the bar.' },
+    5: { t: '5 · Bulk method fires', p: 'The bar calls bulkSetState/Sprint/Priority([...ids], value) or, after a confirm, bulkDelete([...ids]). The store snapshots, applies optimistically to all (minus no-ops), and fans out.', e: 'Edge: bulkSet drops ids already at the target value before issuing any request.' },
+    6: { t: '6 · Fan-out (allSettled)', p: 'Parallel patchWorkItem / deleteWorkItem calls via Promise.allSettled — one failure can never abort the batch. The server computes authoritative state/rank for the successes.', e: 'Edge: a delete on an item with sub-tasks returns 409 and is collected as skipped, not thrown.' },
+    7: { t: '7 · Reconcile & trim', p: 'Fulfilled results flow through applyServerItem; rejected ids roll back to the snapshot. Set/priority/sprint keep the selection (chain edits); delete trims the selection to the skipped survivors and surfaces the summary.', e: 'Edge: if every item failed, the optimistic changes fully revert and the summary reports zero applied.' }
+  };
+  const seqInfo = document.getElementById('seqInfo');
+  document.querySelectorAll('.step').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = STEPS[s.dataset.s];
+    seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

@@ -1,0 +1,387 @@
+<title>WorkTracker Studio — HLD</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1c2230; --muted:#6b7280; --line:#e4e7ec;
+    --accent:#2563eb; --accent-soft:#e8f0fe;
+    --green:#16a34a; --green-soft:#e7f6ec;
+    --amber:#d97706; --amber-soft:#fdf2e3;
+    --violet:#7c3aed; --violet-soft:#f1ebfd;
+    --red:#dc2626; --red-soft:#fdeaea;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;font-size:15px}
+  a{color:var(--accent);text-decoration:none}
+  code,.mono{font-family:var(--mono);font-size:.86em}
+
+  header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 28px}
+  .crumb{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  header h1{margin:6px 0 2px;font-size:22px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13.5px;margin:0}
+  .chips{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
+  .chip.blue{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+  .chip.green{background:var(--green-soft);color:var(--green);border-color:transparent}
+  .chip.amber{background:var(--amber-soft);color:var(--amber);border-color:transparent}
+  .chip.violet{background:var(--violet-soft);color:var(--violet);border-color:transparent}
+
+  nav{position:sticky;top:78px;z-index:40;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 28px;display:flex;gap:4px;flex-wrap:wrap}
+  nav a{font-size:12.5px;font-weight:600;color:var(--muted);padding:5px 11px;border-radius:7px}
+  nav a:hover{background:var(--panel);color:var(--ink)}
+  nav a.active{background:var(--accent);color:#fff}
+
+  main{max-width:1080px;margin:0 auto;padding:30px 28px 80px}
+  section{margin-bottom:46px;scroll-margin-top:140px}
+  h2{font-size:18px;margin:0 0 4px;letter-spacing:-.01em}
+  .lede{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h3{margin:0 0 6px;font-size:14.5px;display:flex;align-items:center;gap:8px}
+  .card p{margin:0;font-size:13px;color:var(--muted)}
+  .dot{width:9px;height:9px;border-radius:3px;flex:none}
+
+  .diagram-wrap{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
+  @media(max-width:900px){.diagram-wrap{grid-template-columns:1fr}}
+  svg .node{cursor:pointer}
+  svg .node rect,svg .node ellipse{transition:filter .15s,stroke-width .15s}
+  svg .node:hover rect,svg .node:hover ellipse{filter:brightness(.97)}
+  svg .node.sel rect,svg .node.sel ellipse{stroke-width:2.5px}
+  svg text{font-family:var(--font);fill:var(--ink)}
+  .side{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;min-height:240px}
+  .side h3{margin:0 0 4px;font-size:14.5px}
+  .side .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .side ul{margin:8px 0 12px;padding-left:18px}
+  .side li{font-size:12.8px;margin:3px 0}
+  .does b{color:var(--green)}
+  .doesnot b{color:var(--red)}
+  .doesnot li{color:#9a3b3b}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);background:#fbfcfe}
+  tr:last-child td{border-bottom:none}
+  tr.trace{cursor:pointer}
+  tr.trace:hover{background:var(--accent-soft)}
+  tr.trace.on{background:var(--accent-soft)}
+  .pill{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .pill.have{background:var(--green-soft);color:var(--green)}
+  .pill.gap{background:var(--red-soft);color:var(--red)}
+  .pill.part{background:var(--amber-soft);color:var(--amber)}
+
+  .tree{font-family:var(--mono);font-size:12.6px;line-height:1.85}
+  .tree .row{cursor:pointer;padding:1px 6px;border-radius:6px;display:flex;gap:8px;align-items:baseline}
+  .tree .row:hover{background:var(--accent-soft)}
+  .tag-new{color:var(--green);font-weight:700}
+  .tag-mod{color:var(--amber);font-weight:700}
+  .tag-ext{color:var(--muted)}
+  .reveal{display:none;margin:2px 0 8px 26px;font-family:var(--font);font-size:12.5px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px}
+  .reveal.open{display:block}
+
+  details{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px 14px;margin-bottom:10px}
+  details summary{cursor:pointer;font-weight:600;font-size:13.5px;padding:8px 0;list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details summary::before{content:"▸";color:var(--muted);margin-right:8px}
+  details[open] summary::before{content:"▾"}
+  details .body{font-size:13px;color:#3a4151;padding:0 0 10px}
+
+  .decision{border-left:3px solid var(--violet);background:var(--violet-soft);border-radius:0 10px 10px 0;padding:12px 16px;margin-bottom:12px}
+  .decision h4{margin:0 0 4px;font-size:13.5px}
+  .decision p{margin:0;font-size:12.8px;color:#4a4458}
+  .rec{display:inline-block;margin-top:7px;font-size:11.5px;font-weight:700;color:var(--green);background:var(--green-soft);padding:2px 9px;border-radius:999px}
+
+  .accept{background:var(--green-soft);border:1px solid #bfe6cb;border-radius:12px;padding:18px 20px}
+  .accept h2{color:var(--green)}
+  .accept ul{margin:8px 0 0;padding-left:20px}
+  .accept li{font-size:13px;margin:4px 0}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+</style>
+
+<header>
+  <div class="crumb">WorkTracker · CODIN-609 · High-Level Design</div>
+  <h1>WorkTracker Studio</h1>
+  <p class="sub">A standalone issue-tracker UI living inside <code>worktracker-stack</code>, decoupled from the coding/terminal app.</p>
+  <div class="chips">
+    <span class="chip blue">Planning</span>
+    <span class="chip">Story #609</span>
+    <span class="chip green">Backend: mostly ready</span>
+    <span class="chip amber">3 open decisions</span>
+    <span class="chip violet">New frontend</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <a href="#why">Why</a>
+  <a href="#ia">Information Architecture</a>
+  <a href="#views">Views</a>
+  <a href="#arch">Architecture</a>
+  <a href="#gap">Backend Gap</a>
+  <a href="#decisions">Open Decisions</a>
+  <a href="#breakdown">Breakdown</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+
+<section id="why">
+  <h2>Why split it out</h2>
+  <p class="lede">Today one shell carries two jobs. New tracker features have nowhere natural to live.</p>
+  <div class="grid2">
+    <div class="card">
+      <h3><span class="dot" style="background:var(--red)"></span>The problem</h3>
+      <p>The coding app (<code>web/frontend</code>) overloads <b>work-tracking</b> (modules, tasks, sprints, planning) onto an <b>execution-first</b> shell (per-task terminals, agent runs, worktrees). Both pivot on the same <code>selectedTaskId</code> and converge in one right pane (<code>TicketWorkspace</code>). A backlog or story-map view has nowhere to go without fighting the terminal layout.</p>
+    </div>
+    <div class="card">
+      <h3><span class="dot" style="background:var(--green)"></span>The move</h3>
+      <p>Build a purpose-made issue tracker as its <b>own frontend folder inside <code>worktracker-stack</code></b>, talking to the worktracker django-ninja API over HTTP. The coding app stays where you <i>execute</i>; Studio is where you <i>plan and track</i>. They link, they don't merge.</p>
+    </div>
+  </div>
+</section>
+
+<section id="ia">
+  <h2>Information architecture</h2>
+  <p class="lede">A conventional tracker shell: workspace rail → project → a switchable work surface.</p>
+  <div class="panel">
+    <div class="grid3">
+      <div class="card">
+        <h3>Left rail</h3>
+        <p>Project switcher + primary view nav (Backlog, Board, Story Map, Sprints, Settings). Persistent, mode-free.</p>
+      </div>
+      <div class="card">
+        <h3>Work surface</h3>
+        <p>The selected view fills the main area. Each view is a peer route — no view is wedged inside another.</p>
+      </div>
+      <div class="card">
+        <h3>Issue panel</h3>
+        <p>Clicking any issue opens a detail panel (slide-over or route) for edit: name, description, state, priority, parent, sprint, assignees, attachments.</p>
+      </div>
+    </div>
+    <p class="lede" style="margin:16px 0 0">Hierarchy shown everywhere maps to the existing model: <b>Project → Epic (<code>module</code>) → Story (<code>task</code> under a module) → Sub-task (<code>task</code> under a task)</b>.</p>
+  </div>
+</section>
+
+<section id="views">
+  <h2>View inventory</h2>
+  <p class="lede">The first cut of screens. Click to expand what each does and which API it leans on.</p>
+
+  <details>
+    <summary>📋 Backlog — flat, filterable list of issues</summary>
+    <div class="body">Grouped/sortable list across a project or epic. Inline create, quick state &amp; priority edit, parent reassignment. <b>API:</b> <code>GET /work-items</code> (filter by <code>parent</code>/<code>state</code>), <code>POST /work-items</code>, <code>PATCH /work-items/{id}</code>. <span class="pill have">ready</span></div>
+  </details>
+  <details>
+    <summary>🗂️ Board — columns by state group</summary>
+    <div class="body">Kanban across the five state groups; drag a card to change state. <b>API:</b> <code>GET /projects/{id}/states</code> + <code>GET /work-items</code>, drag → <code>PATCH /work-items {state_id}</code>. <span class="pill have">ready</span></div>
+  </details>
+  <details>
+    <summary>🗺️ Story Map — epics as columns, stories beneath</summary>
+    <div class="body">User-story-map: epics across the top (backbone), stories in vertical lanes, optional sprint swimlanes. Overlaps with the deferred <b>#603</b> (sprint planning map) — Studio is the natural home for it. <b>API:</b> <code>GET /modules</code>, <code>GET /modules/{id}/work-items</code> (subtree walk). <span class="pill have">ready</span></div>
+  </details>
+  <details>
+    <summary>🏃 Sprints — plan &amp; track iterations</summary>
+    <div class="body">Create sprints, see progress (done/open/total), assign issues. Now/Later/History framing (#604) lives here. <b>API:</b> full sprint CRUD + <code>PATCH /work-items {sprint_id}</code>. <span class="pill have">ready</span></div>
+  </details>
+  <details>
+    <summary>📝 Issue detail — edit one work item</summary>
+    <div class="body">Name, description (HTML), state, priority, parent, sprint, assignees, labels, attachments. <b>API:</b> <code>GET/PATCH /work-items/{id}</code>, attachments endpoints. Assignee/label <i>assignment</i> exists in read shapes but has no management endpoint. <span class="pill part">partial</span></div>
+  </details>
+  <details>
+    <summary>⚙️ Settings — projects, issue types, states</summary>
+    <div class="body">Manage projects, define issue types, configure workflow states. This is the view that exposes the real backend gaps. <b>API:</b> projects are read/seed-only; types don't exist; states aren't editable. <span class="pill gap">needs backend</span></div>
+  </details>
+</section>
+
+<section id="arch">
+  <h2>Architecture</h2>
+  <p class="lede">Click a node to see what it owns — and explicitly does not. Dashed = seam / deferred.</p>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 560 430" role="img" aria-label="Architecture diagram">
+      <!-- edges -->
+      <g stroke="#9aa3b2" stroke-width="1.6" fill="none">
+        <path d="M150 70 L150 110"/>
+        <path d="M150 168 L150 205"/>
+        <path d="M150 263 L150 300"/>
+        <path d="M260 135 H430" stroke-dasharray="6 5"/>
+      </g>
+      <g fill="#6b7280" font-size="10">
+        <text x="158" y="92">HTTP · x-api-key</text>
+        <text x="158" y="190">SDK / fetch</text>
+        <text x="158" y="285">Django ORM</text>
+        <text x="300" y="126">link-out (per issue)</text>
+      </g>
+
+      <!-- studio frontend -->
+      <g class="node" data-k="fe">
+        <rect x="40" y="30" width="220" height="40" rx="9" fill="var(--violet-soft)" stroke="var(--violet)"/>
+        <text x="150" y="55" text-anchor="middle" font-weight="700" font-size="13">WorkTracker Studio (new FE)</text>
+      </g>
+      <!-- client layer -->
+      <g class="node" data-k="client">
+        <rect x="40" y="110" width="220" height="58" rx="9" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="150" y="134" text-anchor="middle" font-weight="700" font-size="12.5">API client + stores</text>
+        <text x="150" y="152" text-anchor="middle" font-size="10.5" fill="#475">typed worktracker client</text>
+      </g>
+      <!-- api -->
+      <g class="node" data-k="api">
+        <rect x="40" y="205" width="220" height="58" rx="9" fill="var(--green-soft)" stroke="var(--green)"/>
+        <text x="150" y="229" text-anchor="middle" font-weight="700" font-size="12.5">worktracker API (ninja)</text>
+        <text x="150" y="247" text-anchor="middle" font-size="10.5" fill="#475">17 routes · /api/work-tracker</text>
+      </g>
+      <!-- db -->
+      <g class="node" data-k="db">
+        <rect x="40" y="300" width="220" height="58" rx="9" fill="var(--panel)" stroke="#9aa3b2"/>
+        <text x="150" y="324" text-anchor="middle" font-weight="700" font-size="12.5">Models + DB</text>
+        <text x="150" y="342" text-anchor="middle" font-size="10.5" fill="#475">Project · Issue · State · Sprint</text>
+      </g>
+      <!-- coding app seam -->
+      <g class="node" data-k="coding">
+        <rect x="430" y="108" width="110" height="56" rx="9" fill="var(--panel)" stroke="#9aa3b2" stroke-dasharray="6 5"/>
+        <text x="485" y="130" text-anchor="middle" font-weight="700" font-size="11">Coding app</text>
+        <text x="485" y="147" text-anchor="middle" font-size="10" fill="#475">execute / terminals</text>
+      </g>
+    </svg>
+
+    <div class="side" id="side">
+      <span class="tag">Select a node</span>
+      <h3>Architecture nodes</h3>
+      <p style="font-size:12.8px;color:var(--muted)">Click any box in the diagram to see its responsibilities and explicit non-responsibilities.</p>
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--violet)"></span>new build</span>
+    <span><span class="dot" style="background:var(--accent)"></span>new client code</span>
+    <span><span class="dot" style="background:var(--green)"></span>exists, reused</span>
+    <span><span class="dot" style="background:#9aa3b2"></span>existing / seam</span>
+    <span>— — dashed = link-out / deferred seam</span>
+  </div>
+</section>
+
+<section id="gap">
+  <h2>Backend gap analysis</h2>
+  <p class="lede">What the API gives us today vs. what each capability needs. Click a row to highlight the architecture node it touches.</p>
+  <table id="gaptable">
+    <thead><tr><th>Capability</th><th>Status</th><th>What exists / what's missing</th><th>Touches</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-node="api"><td>Manage projects</td><td><span class="pill part">partial</span></td><td><code>GET /projects</code> only. Create/rename/archive need new routes (projects are provision-seeded today).</td><td>API</td></tr>
+      <tr class="trace" data-node="api"><td>Epics &amp; modules</td><td><span class="pill have">ready</span></td><td>List + create. Rename/delete would be a small add.</td><td>API</td></tr>
+      <tr class="trace" data-node="api"><td>Stories &amp; sub-tasks</td><td><span class="pill have">ready</span></td><td>Full CRUD via unified Issue + <code>parent_id</code>; subtree walk endpoint exists.</td><td>API</td></tr>
+      <tr class="trace" data-node="db"><td>Issue types (Story/Bug/…)</td><td><span class="pill gap">gap</span></td><td><code>type</code> is binary (module/task). Categorical types need a new field + migration + serializer/UI.</td><td>Models</td></tr>
+      <tr class="trace" data-node="db"><td>Configurable states</td><td><span class="pill gap">gap</span></td><td>Per-project <code>State</code> rows exist but groups are fixed and there's no create/edit route. Editable workflow = new routes (+ maybe schema).</td><td>Models</td></tr>
+      <tr class="trace" data-node="api"><td>Sprint planning</td><td><span class="pill have">ready</span></td><td>Full sprint CRUD + assign via <code>PATCH work-item {sprint_id}</code> + derived progress.</td><td>API</td></tr>
+      <tr class="trace" data-node="api"><td>User-story map</td><td><span class="pill have">ready</span></td><td>Modules + subtree + sprint membership all readable; map is a frontend composition.</td><td>API</td></tr>
+      <tr class="trace" data-node="api"><td>Assignees &amp; labels</td><td><span class="pill part">partial</span></td><td>Readable on issues; no create/assign endpoints (singletons today).</td><td>API</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="decisions">
+  <h2>Open product decisions</h2>
+  <p class="lede">Three forks that change scope. Recommendations marked — react to these and the breakdown firms up.</p>
+
+  <div class="decision">
+    <h4>1 · Issue types &amp; states — configurable or fixed for v1?</h4>
+    <p>The hierarchy (Epic→Story→Sub-task) is free today via <code>type</code>+<code>parent</code>. But categorical <b>issue types</b> (Bug/Feature/Chore) don't exist, and <b>states</b> aren't editable. Making both configurable is real backend work (new field/migration for types; new routes for state CRUD).</p>
+    <span class="rec">Recommend: v1 fixed — ship a working tracker on the existing model (Epic/Story/Sub-task + the 5 state groups). File "configurable types &amp; states" as a fast-follow phase.</span>
+  </div>
+
+  <div class="decision">
+    <h4>2 · Relationship to the coding app</h4>
+    <p>Studio is standalone, but issues still get executed somewhere. Do we (a) just deep-link from an issue out to the coding app, (b) ignore execution entirely in v1, or (c) embed a thin "open in coding app" affordance?</p>
+    <span class="rec">Recommend: (a) per-issue link-out seam only — no terminal/agent concepts in Studio.</span>
+  </div>
+
+  <div class="decision">
+    <h4>3 · Tech stack &amp; how it's served</h4>
+    <p>New folder in <code>worktracker-stack</code> needs a stack + serve story. Options: reuse the coding app's React/Vite/Zustand conventions (familiar, copy-paste-able patterns) vs. a fresh choice; served standalone (its own dev server/port) vs. mounted by Django static like the coding app.</p>
+    <span class="rec">Recommend: match the existing React + Vite + Zustand conventions; standalone dev server hitting the API over HTTP; decide static-serving at build time.</span>
+  </div>
+</section>
+
+<section id="breakdown">
+  <h2>Proposed breakdown</h2>
+  <p class="lede">Subtasks to file under #609 once decisions land. Click to reveal scope. <span class="tag-new">new</span> · <span class="tag-mod">backend change</span> · <span class="tag-ext">frontend slice</span></p>
+  <div class="panel tree" id="tree">
+    <div class="row" data-r="r0"><span class="tag-new">#609</span><span>WorkTracker Studio (this story)</span></div>
+    <div class="reveal" id="r0">Umbrella. Owns the HLD, the decisions, and sequencing of the slices below.</div>
+
+    <div class="row" data-r="r1"><span class="tag-ext">S1</span><span>App scaffold + API client + project switcher</span></div>
+    <div class="reveal" id="r1">New frontend folder, build config, typed worktracker client, left rail, project list (<code>GET /projects</code>). The walking skeleton everything else hangs on.</div>
+
+    <div class="row" data-r="r2"><span class="tag-ext">S2</span><span>Backlog + Issue detail (core CRUD loop)</span></div>
+    <div class="reveal" id="r2">First real value: list issues, create, open detail, edit name/state/priority/parent/description. Uses existing work-item routes end to end.</div>
+
+    <div class="row" data-r="r3"><span class="tag-ext">S3</span><span>Board view (state columns + drag)</span></div>
+    <div class="reveal" id="r3">Kanban over the 5 state groups; drag → PATCH state. Pure frontend on existing routes.</div>
+
+    <div class="row" data-r="r4"><span class="tag-ext">S4</span><span>Story Map + Sprint planning</span></div>
+    <div class="reveal" id="r4">Epics-as-columns map and sprint plan/track. Absorbs the deferred #603 and the #604 Now/Later/History framing into their natural home.</div>
+
+    <div class="row" data-r="r5"><span class="tag-mod">S5</span><span>Backend: project + module mutation routes</span></div>
+    <div class="reveal" id="r5">Create/rename/archive projects; rename/delete modules. Small additive routes to make Settings real.</div>
+
+    <div class="row" data-r="r6"><span class="tag-mod">S6</span><span>Backend: configurable issue types &amp; states (deferred)</span></div>
+    <div class="reveal" id="r6">Only if decision #1 goes "configurable." New <code>type</code>/category field + migration; state CRUD routes. Explicitly fast-follow, not v1.</div>
+  </div>
+</section>
+
+<section id="accept" class="accept">
+  <h2>Acceptance — this planning story is done when</h2>
+  <ul>
+    <li>The three open decisions are resolved and recorded here.</li>
+    <li>The view inventory and IA are agreed.</li>
+    <li>Subtasks S1–S6 are filed under #609 with descriptions, acceptance criteria, priority, and sequencing.</li>
+    <li>The first vertical slice (S1 → S2) is green-lit for implementation.</li>
+  </ul>
+</section>
+
+</main>
+
+<script>
+  // active nav on scroll
+  const secs=[...document.querySelectorAll('section')];
+  const links=[...document.querySelectorAll('#nav a')];
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id));}});},{rootMargin:'-45% 0px -50% 0px'});
+  secs.forEach(s=>io.observe(s));
+
+  // architecture node panel
+  const NODE={
+    fe:{t:'WorkTracker Studio (new frontend)',does:['Own shell, left rail, view routing','Render Backlog / Board / Story Map / Sprints / Settings','Hold UI + selection state in stores'],not:['Run terminals, agents, or worktrees','Own any business logic the API owns','Embed the coding app']},
+    client:{t:'API client + stores',does:['Typed calls to /api/work-tracker','Send x-api-key auth header','Optimistic updates + rollback'],not:['Talk to the DB directly','Reimplement sequence/seq logic','Know about tmux / lifecycle']},
+    api:{t:'worktracker API (django-ninja)',does:['17 routes: projects, modules, work-items, states, sprints, attachments','Allocate sequence ids, derive sprint progress','Enforce token auth'],not:['Serve a UI today','Expose project/state mutation (gap)','Know categorical issue types (gap)']},
+    db:{t:'Models + DB',does:['Unified Issue (module/task) + parent tree','Per-project State (fixed groups)','Sprint FK, assignees/labels M2M'],not:['Carry a categorical type field (gap)','Allow custom state groups','Store sprint progress (it is derived)']},
+    coding:{t:'Coding app (existing, seam only)',does:['Where execution happens: terminals, agents, worktrees','Receives a deep-link from an issue (proposed)'],not:['Be merged into Studio','Be a dependency of Studio','Share Studio’s shell or stores']}
+  };
+  const side=document.getElementById('side');
+  document.querySelectorAll('svg .node').forEach(n=>{
+    n.addEventListener('click',()=>{
+      document.querySelectorAll('svg .node').forEach(x=>x.classList.remove('sel'));
+      n.classList.add('sel');
+      const d=NODE[n.dataset.k];
+      side.innerHTML='<span class="tag">Node</span><h3>'+d.t+'</h3>'+
+        '<div class="does"><b>Does</b><ul>'+d.does.map(x=>'<li>'+x+'</li>').join('')+'</ul></div>'+
+        '<div class="doesnot"><b>Does not</b><ul>'+d.not.map(x=>'<li>'+x+'</li>').join('')+'</ul></div>';
+    });
+  });
+
+  // gap table -> highlight node
+  document.querySelectorAll('#gaptable tr.trace').forEach(r=>{
+    r.addEventListener('click',()=>{
+      document.querySelectorAll('#gaptable tr.trace').forEach(x=>x.classList.remove('on'));
+      r.classList.add('on');
+      const k=r.dataset.node;
+      document.querySelectorAll('svg .node').forEach(x=>x.classList.toggle('sel',x.dataset.k===k));
+      const n=document.querySelector('svg .node[data-k="'+k+'"]');
+      if(n) n.dispatchEvent(new Event('click'));
+    });
+  });
+
+  // breakdown tree reveals
+  document.querySelectorAll('#tree .row').forEach(r=>{
+    r.addEventListener('click',()=>{document.getElementById(r.dataset.r).classList.toggle('open');});
+  });
+</script>

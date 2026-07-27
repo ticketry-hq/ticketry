@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T667 · Task Dependency Graph — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  p.note { font-size: 13.5px; color: var(--ink); max-width: 880px; margin-bottom: 12px; }
+
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  .marker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .mcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .mcard h3 { font-size: 15px; margin-bottom: 10px; }
+  .mcard .mrow { display: grid; grid-template-columns: 150px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .mcard .mrow:last-child { border-bottom: none; }
+  .mcard .mk { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--violet); }
+  .mcard .mv { color: var(--ink); }
+  .rules { list-style: none; }
+  .rules li { font-size: 13px; padding: 6px 0 6px 26px; position: relative; border-bottom: 1px dashed var(--line); }
+  .rules li:last-child { border-bottom: none; }
+  .rules li::before { content: "▸"; position: absolute; left: 4px; color: var(--violet); font-weight: 900; }
+  .rules li b { color: var(--violet); }
+
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  .step[data-s] rect, .step[data-g] rect { transition: stroke .12s, stroke-width .12s; }
+  .step[data-s].hl rect, .step[data-g].hl rect { stroke: var(--accent); stroke-width: 2.5; }
+  .step[data-s].hl text, .step[data-g].hl text { fill: inherit; }
+  #seqInfo, #scopeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4, #scopeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint, #scopeInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p, #scopeInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge, #scopeInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; margin-bottom: 18px; }
+  .contract h3 { font-size: 14px; margin-bottom: 10px; color: var(--accent); font-family: var(--mono); }
+  .contract .sect { display: grid; grid-template-columns: 210px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); padding-top: 2px; font-family: var(--mono); }
+  .contract .sv { color: var(--ink); }
+  pre.code { background: #0f1320; color: #d7def0; border-radius: 10px; padding: 16px 18px; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; overflow-x: auto; margin-top: 12px; }
+  pre.code .c { color: #7c8aa8; }
+  pre.code .k { color: #b88cff; }
+  pre.code .s { color: #8fd6a0; }
+
+  .reuse { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
+  .reuse-col { display: flex; flex-direction: column; gap: 12px; }
+  .reuse-lane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .reuse-lane .role { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .reuse-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 6px 8px; border-radius: 7px; }
+  .reuse-row:hover { background: #f4f6fa; }
+  .reuse-row.sel { background: var(--accent-soft); }
+  .reuse-row .nm { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+  .reuse-row.sel .nm { color: var(--accent); }
+  .vb { font-size: 10px; font-weight: 800; letter-spacing: .04em; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .vb.reuse { background: var(--green-soft); color: var(--green); }
+  .vb.extend { background: var(--amber-soft); color: var(--amber); }
+  .vb.new { background: var(--violet-soft); color: var(--violet); }
+  .reuse-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; align-self: start; }
+  .reuse-detail h4 { font-size: 15px; color: var(--accent); font-family: var(--mono); margin-bottom: 2px; }
+  .reuse-detail .meta { font-size: 11px; font-weight: 800; letter-spacing: .05em; margin-bottom: 8px; }
+  .reuse-detail .grp { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+  .reuse-detail ul { list-style: none; }
+  .reuse-detail li { padding: 3px 0 3px 20px; position: relative; font-size: 13px; line-height: 1.45; }
+  .reuse-detail li.fit::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+  .reuse-detail li.miss::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 800; }
+
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  .gfig { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .gfig .cap { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  @media (max-width: 900px) {
+    .cm, .marker-grid, .seq-wrap, .reuse { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · Studio · Ticket #667 · Subtask of #629 · LLD</div>
+  <h1>Task Dependency Graph — Low-Level Design</h1>
+  <div class="sub">A read-only surface that turns the <span class="m">blocked_by</span> / <span class="m">blocks</span> edges (#624) into a legible dependency graph — scoped by module, task-ego, or sprint — plus a server-side <b>scope-context payload</b> a subagent can consume to stay inside its slice. Built on the live code of <span class="m">models.py</span>, <span class="m">schemas.py</span>, <span class="m">api.py</span>, <span class="m">issueStore.ts</span>, <span class="m">BlockerPicker.tsx</span>, <span class="m">ContentHost.tsx</span>, and <span class="m">NavDrawer.tsx</span>. No migration; no edge writes; advisory-only.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip amber">1 BE route + schema · 2 SDK · 4 new FE · 4 modified FE</span>
+    <span class="chip green">No migration · read-only · advisory-only</span>
+    <span class="chip violet">No new dependencies — hand-rolled layered SVG</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#scope">Scope Modes</a>
+  <a href="#graph">Graph Build &amp; Layout</a>
+  <a href="#reuse">Reuse Decisions</a>
+  <a href="#api">Scope-Context API</a>
+  <a href="#seq">View Flow</a>
+  <a href="#state">Relationship ↔ State</a>
+  <a href="#failures">Edge Matrix</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Click a highlighted file for its exact delta. The edge primitive (#624) is read-only input — we consume it, never rebuild it. <b>No migration:</b> every field the view needs already exists on <span class="m">WorkItemOut</span> (<span class="m">blocked_by_ids</span>, <span class="m">blocks_ids</span>, <span class="m">assignees</span>, <span class="m">parent_id</span>, <span class="m">sprint_id</span>, <span class="m">state</span>).</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">worktracker-stack/</div>
+      <div class="dir">├─ worktracker/worktracker/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit ro" data-f="models">models.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="schemas">schemas.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="api">api.py</span></div>
+      <div class="dir">├─ worktracker-sdk/worktracker_sdk/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="sdkmodels">models.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="sdkres">resources.py</span></div>
+      <div class="dir">└─ studio/src/</div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ lib/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit mod" data-f="types">types.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit mod" data-f="apits">api.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ <span class="hit ro" data-f="display">display.ts</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ stores/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit ro" data-f="backlog">backlog/backlogStore.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit ro" data-f="issuestore">issue/issueStore.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ <span class="hit new" data-f="depstore">dependency/dependencyStore.ts</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ views/Dependencies/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit new" data-f="view">DependencyView.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit new" data-f="graphlib">graph.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ <span class="hit new" data-f="svg">DependencyGraphSvg.tsx</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;└─ shell/</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="content">ContentHost.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="nav">NavDrawer.tsx</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--accent-soft)"></i>read-only input</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail"><span class="hint">Select a file on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ SCOPE MODES ============ -->
+<section id="scope">
+  <h2>Scope modes — one canvas, three lenses</h2>
+  <div class="lede">A single <span class="m">DependencyView</span> with a scope selector. "Strictly in-scope" is defined <b>per mode</b> — for module/sprint the scope is a membership set (cross-boundary edges are hidden); for task-ego the scope <em>is</em> the N-hop neighborhood. Click a mode for its node set and boundary rule.</div>
+  <div class="seq-wrap" style="grid-template-columns:1fr 340px">
+    <svg viewBox="0 0 540 250" width="100%">
+      <rect x="18" y="18" width="504" height="214" rx="10" fill="none" stroke="#e3e7ee" stroke-width="1.5"/>
+      <text x="34" y="42" font-size="12" font-weight="800" fill="#5b6478" letter-spacing="1">SCOPE</text>
+      <g class="step" data-g="module">
+        <rect x="30" y="56" width="150" height="48" rx="8" fill="#e8edfb" stroke="#3556d4"/>
+        <text x="44" y="78" font-size="13" font-weight="700" fill="#3556d4">Module</text>
+        <text x="44" y="95" font-size="10.5" fill="#5b6478">parent-tree members</text>
+      </g>
+      <g class="step" data-g="task">
+        <rect x="30" y="112" width="150" height="48" rx="8" fill="#fbfcfe" stroke="#e3e7ee"/>
+        <text x="44" y="134" font-size="13" font-weight="700" fill="#1d2433">Task (ego)</text>
+        <text x="44" y="151" font-size="10.5" fill="#5b6478">N-hop neighborhood</text>
+      </g>
+      <g class="step" data-g="sprint">
+        <rect x="30" y="168" width="150" height="48" rx="8" fill="#fbfcfe" stroke="#e3e7ee"/>
+        <text x="44" y="190" font-size="13" font-weight="700" fill="#1d2433">Sprint</text>
+        <text x="44" y="207" font-size="10.5" fill="#5b6478">sprint_id members</text>
+      </g>
+      <line x1="196" y1="56" x2="196" y2="216" stroke="#e3e7ee" stroke-width="1.5"/>
+      <!-- mini graph preview -->
+      <g class="step" data-g="preview">
+        <rect x="214" y="56" width="294" height="160" rx="8" fill="#f6f7f9" stroke="#e3e7ee"/>
+        <defs><marker id="ga" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker></defs>
+        <line x1="288" y1="96" x2="356" y2="96" stroke="#5b6478" stroke-width="1.5" marker-end="url(#ga)"/>
+        <line x1="288" y1="150" x2="356" y2="120" stroke="#5b6478" stroke-width="1.5" marker-end="url(#ga)"/>
+        <line x1="430" y1="110" x2="430" y2="150" stroke="#5b6478" stroke-width="1.5" marker-end="url(#ga)"/>
+        <rect x="234" y="80" width="54" height="30" rx="6" fill="#fff" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="261" y="99" text-anchor="middle" font-size="10" font-weight="700" fill="#1d7a4f">T-12</text>
+        <rect x="234" y="134" width="54" height="30" rx="6" fill="#fff" stroke="#9a6700" stroke-width="2"/>
+        <text x="261" y="153" text-anchor="middle" font-size="10" font-weight="700" fill="#9a6700">T-19 ⚠</text>
+        <rect x="356" y="80" width="54" height="30" rx="6" fill="#fff" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="383" y="99" text-anchor="middle" font-size="10" font-weight="700" fill="#3556d4">T-15</text>
+        <rect x="402" y="150" width="56" height="30" rx="6" fill="#fff" stroke="#e3e7ee" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="430" y="169" text-anchor="middle" font-size="9" fill="#5b6478">hidden ext</text>
+      </g>
+    </svg>
+    <div id="scopeInfo"><span class="hint">Click a scope mode (or the preview).</span></div>
+  </div>
+</section>
+
+<!-- ============ GRAPH BUILD & LAYOUT ============ -->
+<section id="graph">
+  <h2>Graph build &amp; layout — <span class="m">views/Dependencies/graph.ts</span></h2>
+  <div class="lede">Pure, store-free functions: take the loaded <span class="m">items</span> + a <span class="m">ScopeSpec</span>, return <span class="m">{ nodes, edges }</span> with x/y coordinates. No fetch — the view derives entirely from <span class="m">backlogStore.items</span> already in memory. Two stages: <b>(1) select the in-scope node set</b>, then <b>(2) layer + place</b>.</div>
+
+  <div class="marker-grid">
+    <div class="mcard">
+      <h3>Stage 1 — in-scope node selection</h3>
+      <div class="mrow"><span class="mk">module</span><span class="mv">Nodes = the module issue + its descendant tasks via the <span class="m">parent_id</span> tree (Epic→Story→Sub-task). A BFS down <span class="m">children</span> already computed by backlogStore.</span></div>
+      <div class="mrow"><span class="mk">task (ego)</span><span class="mv">BFS out from the target following <span class="m">blocked_by_ids</span> (upstream) and <span class="m">blocks_ids</span> (downstream), bounded by <span class="m">maxHops</span> (default 2). The reached set <em>is</em> the scope.</span></div>
+      <div class="mrow"><span class="mk">sprint</span><span class="mv">Nodes = items whose <span class="m">sprint_id</span> equals the selected sprint.</span></div>
+      <div class="mrow"><span class="mk">boundary</span><span class="mv">Build <span class="m">inScope: Set&lt;id&gt;</span>. <b>Edges kept only when BOTH endpoints ∈ inScope</b> — cross-boundary edges are dropped (no external stub nodes in v1). Archived items (<span class="m">is_archived</span>) excluded.</span></div>
+    </div>
+    <div class="mcard">
+      <h3>Stage 2 — layered DAG placement</h3>
+      <div class="mrow"><span class="mk">guarantee</span><span class="mv">The graph is <b>acyclic by construction</b> — the server's <span class="m">_blocker_would_cycle</span> BFS rejects any edge that would close a loop. So a longest-path layering always terminates; no cycle-breaking needed.</span></div>
+      <div class="mrow"><span class="mk">layer(n)</span><span class="mv"><span class="m">0</span> if n has no in-scope blocker; else <span class="m">1 + max(layer(b))</span> over in-scope blockers. Memoized DFS. Prerequisites sit left, dependents right.</span></div>
+      <div class="mrow"><span class="mk">x / y</span><span class="mv"><span class="m">x = layer · COL_W</span>; within a layer, stack by <span class="m">(state.group rank, key)</span> for stable order. SVG height grows with the tallest layer.</span></div>
+      <div class="mrow"><span class="mk">scale</span><span class="mv">Single-user graphs are small (tens of nodes). No virtualization; full SVG render. A soft cap (e.g. 150 nodes) shows a "scope too broad — narrow it" notice instead of rendering.</span></div>
+    </div>
+  </div>
+
+  <pre class="code"><span class="c">// views/Dependencies/graph.ts — shape (pure, unit-tested)</span>
+<span class="k">export type</span> ScopeSpec =
+  | { kind: <span class="s">"module"</span>; rootId: string }
+  | { kind: <span class="s">"task"</span>; rootId: string; maxHops: number }
+  | { kind: <span class="s">"sprint"</span>; sprintId: string };
+
+<span class="k">export interface</span> GraphNode {
+  id: string; key: string; name: string;
+  state: State | null; unresolved: boolean;   <span class="c">// reuse RESOLVED_GROUPS</span>
+  ownedElsewhere: boolean;                     <span class="c">// assignees.length > 0</span>
+  isFocus: boolean; layer: number; x: number; y: number;
+}
+<span class="k">export interface</span> GraphEdge { from: string; to: string; } <span class="c">// blocker → blocked</span>
+
+<span class="k">export function</span> buildGraph(items: WorkItem[], spec: ScopeSpec): { nodes: GraphNode[]; edges: GraphEdge[] };</pre>
+  <p class="note"><b>Reused logic, not reinvented:</b> the unresolved flag reuses <span class="m">issueStore.RESOLVED_GROUPS</span> (<span class="m">{completed, cancelled}</span>); the ego BFS mirrors the traversal already in <span class="m">BlockerPicker.blocksReach</span> (we generalize it to walk both directions and lift it into <span class="m">graph.ts</span> so picker + graph share one walker). Node fill uses <span class="m">display.stateColor</span> as-is.</p>
+</section>
+
+<!-- ============ REUSE DECISIONS ============ -->
+<section id="reuse">
+  <h2>Reuse decisions — what we build vs. what already exists</h2>
+  <div class="lede">This slice adds <b>zero new dependencies</b>. The edge data, traversal, resolved-state semantics, and color tokens all ship already. Click each surface for the verdict and why.</div>
+  <div class="reuse">
+    <div class="reuse-col">
+      <div class="reuse-lane">
+        <div class="role">Edge data &amp; traversal</div>
+        <div class="reuse-row" data-r="edges"><span class="nm">blocked_by_ids / blocks_ids (#624)</span><span class="vb reuse">REUSE</span></div>
+        <div class="reuse-row" data-r="walk"><span class="nm">blocksReach walker</span><span class="vb extend">EXTEND</span></div>
+        <div class="reuse-row" data-r="resolved"><span class="nm">RESOLVED_GROUPS</span><span class="vb reuse">REUSE</span></div>
+      </div>
+      <div class="reuse-lane">
+        <div class="role">Rendering</div>
+        <div class="reuse-row" data-r="color"><span class="nm">display.stateColor</span><span class="vb reuse">REUSE</span></div>
+        <div class="reuse-row" data-r="svglib"><span class="nm">graph viz library</span><span class="vb new">NEW (hand-rolled SVG)</span></div>
+        <div class="reuse-row" data-r="amber"><span class="nm">amber unresolved signal</span><span class="vb reuse">REUSE</span></div>
+      </div>
+      <div class="reuse-lane">
+        <div class="role">Data source &amp; nav</div>
+        <div class="reuse-row" data-r="store"><span class="nm">backlogStore.items / modules</span><span class="vb reuse">REUSE</span></div>
+        <div class="reuse-row" data-r="navreg"><span class="nm">ContentHost + NavDrawer</span><span class="vb extend">EXTEND</span></div>
+        <div class="reuse-row" data-r="payload"><span class="nm">scope-context endpoint</span><span class="vb new">NEW</span></div>
+      </div>
+    </div>
+    <div class="reuse-detail" id="reuseDetail"><span class="hint" style="color:var(--muted);font-style:italic">Select a surface on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ SCOPE-CONTEXT API ============ -->
+<section id="api">
+  <h2>Agent scope-context payload — backend</h2>
+  <div class="lede">Deliverable B. A read-only endpoint a subagent calls when it picks up a task, so it knows its fixed slice: what must land first, what waits on it, and what is already <b>owned elsewhere</b>. Derived entirely from existing edges + the <span class="m">assignees</span> M2M — <b>no new field, no migration</b>.</div>
+
+  <div class="contract">
+    <h3>Route — worktracker/api.py</h3>
+    <div class="sect"><span class="sk">GET /work-items/{id}/scope-context</span><span class="sv"><b>New, read-only.</b> Resolve the issue (404 if missing). Walk <span class="m">blocked_by</span> (depends-on, direct) and <span class="m">blocks</span> (depended-by, direct). Mark any neighbor with a non-empty <span class="m">assignees</span> set as <span class="m">owned_elsewhere</span>. Reuse <span class="m">prefetch_related("blocked_by","blocks","assignees")</span> to keep it a couple of queries. No writes, no state change.</span></div>
+    <div class="sect"><span class="sk">direction</span><span class="sv">Edges are <b>direct</b> in v1 — exactly mirroring <span class="m">blocked_by_ids</span>/<span class="m">blocks_ids</span> so there is one source of truth. The same <span class="m">_blocker_would_cycle</span> BFS makes transitive (full upstream chain) a trivial later toggle; flagged as an open item, not built now.</span></div>
+    <div class="sect"><span class="sk">delivery</span><span class="sv">REST is the contract. An MCP tool that wraps this endpoint (so the coding agent reaches it via the existing tool surface) is a thin follow-on in the host layer — noted, out of this subtask.</span></div>
+  </div>
+
+  <div class="contract">
+    <h3>Schema — worktracker/schemas.py</h3>
+    <div class="sect"><span class="sk">ScopeRef</span><span class="sv"><span class="m">id</span>, <span class="m">key</span>, <span class="m">name</span>, <span class="m">state_group</span> (str | null), <span class="m">resolved</span> (bool — group ∈ completed/cancelled), <span class="m">assignees</span> (List[str] names). Compact, agent-readable.</span></div>
+    <div class="sect"><span class="sk">ScopeContextOut</span><span class="sv"><span class="m">task</span>: ScopeRef · <span class="m">depends_on</span>: List[ScopeRef] · <span class="m">depended_by</span>: List[ScopeRef] · <span class="m">owned_elsewhere</span>: List[ScopeRef] (subset of the union with non-empty assignees) · <span class="m">advisory</span>: str (e.g. "2 of 3 blockers unresolved — stay within this task; T-19 is owned by another assignee").</span></div>
+  </div>
+
+  <pre class="code"><span class="c"># GET /work-items/{id}/scope-context  →  ScopeContextOut</span>
+{
+  <span class="s">"task"</span>: { <span class="s">"key"</span>: <span class="s">"CODIN-31"</span>, <span class="s">"name"</span>: <span class="s">"Session store"</span>, <span class="s">"state_group"</span>: <span class="s">"started"</span>, <span class="s">"resolved"</span>: false },
+  <span class="s">"depends_on"</span>:    [ { <span class="s">"key"</span>: <span class="s">"CODIN-19"</span>, <span class="s">"resolved"</span>: false, <span class="s">"assignees"</span>: [<span class="s">"agent-b"</span>] } ],
+  <span class="s">"depended_by"</span>:   [ { <span class="s">"key"</span>: <span class="s">"CODIN-42"</span>, <span class="s">"resolved"</span>: false, <span class="s">"assignees"</span>: [] } ],
+  <span class="s">"owned_elsewhere"</span>:[ { <span class="s">"key"</span>: <span class="s">"CODIN-19"</span>, <span class="s">"assignees"</span>: [<span class="s">"agent-b"</span>] } ],
+  <span class="s">"advisory"</span>: <span class="s">"1 unresolved blocker (CODIN-19) is owned by agent-b — do not implement it; deliver only this task."</span>
+}</pre>
+
+  <div class="contract">
+    <h3>SDK parity — worktracker-sdk/worktracker_sdk/</h3>
+    <div class="sect"><span class="sk">models.py</span><span class="sv">Add <span class="m">ScopeRef</span> + <span class="m">ScopeContext</span> output models (mandatory under the SDK's <span class="m">extra="forbid"</span> base, same caveat #629/#665 hit).</span></div>
+    <div class="sect"><span class="sk">resources.py</span><span class="sv"><span class="m">WorkItemsResource.scope_context(id)</span> → GET wrapper. Mirrors the existing resource call pattern; gives the agent SDK a typed entry point.</span></div>
+  </div>
+</section>
+
+<!-- ============ VIEW FLOW ============ -->
+<section id="seq">
+  <h2>View flow — open → scope → build → render</h2>
+  <div class="lede">Click a numbered step. The view is pure-derive over already-loaded data; the only network call is optional (the scope-context payload is its own endpoint, used by agents, not required to render the graph).</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 700 250" width="100%">
+      <g font-size="12" font-weight="700">
+        <text x="80" y="20" text-anchor="middle" fill="#3556d4">NavDrawer</text>
+        <text x="270" y="20" text-anchor="middle" fill="#6b3fb8">DependencyView</text>
+        <text x="470" y="20" text-anchor="middle" fill="#9a6700">graph.ts</text>
+        <text x="640" y="20" text-anchor="middle" fill="#1d7a4f">SVG</text>
+      </g>
+      <g stroke="#e3e7ee" stroke-width="1.5">
+        <line x1="80" y1="30" x2="80" y2="230"/>
+        <line x1="270" y1="30" x2="270" y2="230"/>
+        <line x1="470" y1="30" x2="470" y2="230"/>
+        <line x1="640" y1="30" x2="640" y2="230"/>
+      </g>
+      <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker></defs>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="80" y1="58" x2="266" y2="58" marker-end="url(#a1)"/>
+        <line x1="270" y1="100" x2="270" y2="100"/>
+        <line x1="270" y1="142" x2="466" y2="142" marker-end="url(#a1)"/>
+        <line x1="470" y1="184" x2="636" y2="184" marker-end="url(#a1)"/>
+        <line x1="640" y1="216" x2="84" y2="216" marker-end="url(#a1)"/>
+      </g>
+      <g font-size="11" fill="#5b6478">
+        <text x="173" y="48" text-anchor="middle">/projects/:id/dependencies</text>
+        <text x="270" y="124" text-anchor="middle">pick scope + target</text>
+        <text x="370" y="134" text-anchor="middle">buildGraph(items, spec)</text>
+        <text x="553" y="174" text-anchor="middle">{nodes, edges} w/ x,y</text>
+        <text x="360" y="210" text-anchor="middle">click node → navigate /issues/:key</text>
+      </g>
+      <g class="step" data-c="1"><circle cx="80" cy="58" r="13" fill="#e8edfb" stroke="#3556d4"/><text x="80" y="62.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3556d4">1</text></g>
+      <g class="step" data-c="2"><circle cx="270" cy="100" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="270" y="104.5" text-anchor="middle" font-size="12" font-weight="800" fill="#6b3fb8">2</text></g>
+      <g class="step" data-c="3"><circle cx="470" cy="142" r="13" fill="#fbf0d8" stroke="#9a6700"/><text x="470" y="146.5" text-anchor="middle" font-size="12" font-weight="800" fill="#9a6700">3</text></g>
+      <g class="step" data-c="4"><circle cx="640" cy="184" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="640" y="188.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">4</text></g>
+      <g class="step" data-c="5"><circle cx="80" cy="216" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="80" y="220.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">5</text></g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a numbered step.</span></div>
+  </div>
+</section>
+
+<!-- ============ RELATIONSHIP <-> STATE ============ -->
+<section id="state">
+  <h2>Relationship ↔ state — advisory only</h2>
+  <p class="note">Locked at refinement: this feature <b>never writes state</b>. It reuses the existing amber "unresolved blocker" signal as a visual cue and stops there. The #629 "Blocked" state stays a manual board column. No auto-derivation, no nudge that mutates data.</p>
+  <table>
+    <thead><tr><th style="width:240px">Concern</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td>Auto-set Blocked from edges</td><td><b>No.</b> Out of scope (#629 owns Blocked as a manual column). The graph reads state; it does not write it.</td></tr>
+      <tr><td>Unresolved indicator</td><td>A node whose <span class="m">state.group ∉ {completed, cancelled}</span> and that blocks an in-scope node renders with the amber border + ⚠, identical semantics to <span class="m">BlockerChipView</span>. Visual only.</td></tr>
+      <tr><td>Editing edges from the graph</td><td><b>Not in v1.</b> The canvas is read-only; edges are still created/removed in <span class="m">IssueSidebar</span> via <span class="m">BlockerPicker</span>. Clicking a node navigates to that issue, where editing already lives.</td></tr>
+      <tr><td>Suggest "mark Blocked" nudge</td><td>Considered and declined for v1 (advisory-only path chosen). Could be a later additive hint; no data model impact either way.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ EDGE MATRIX ============ -->
+<section id="failures">
+  <h2>Edge &amp; failure matrix</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Behavior</th><th style="width:120px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Target has no edges in scope</td><td>Empty-graph state: the focus node alone (or a "no dependencies in this scope" message), not a blank canvas.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Edge crosses the scope boundary</td><td>Hidden in v1 (strictly in-scope). A small footer count ("3 edges to other modules hidden") keeps it honest without rendering external nodes.</td><td><span class="sev ok">by design</span></td></tr>
+      <tr><td>Stale loaded set (edge to an id not in <span class="m">items</span>)</td><td>Treated as out-of-scope and dropped, same as cross-boundary. The server stays the source of truth; the scope-context endpoint resolves real neighbors regardless.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Cycle in the data</td><td>Impossible — server <span class="m">_blocker_would_cycle</span> guard prevents it. Layering needs no cycle-breaking; a defensive visited-set still bounds the DFS.</td><td><span class="sev ok">structural</span></td></tr>
+      <tr><td>Very large scope (broad module)</td><td>Above a soft node cap, render a "narrow the scope" notice instead of an unreadable hairball. Logged, not silently truncated.</td><td><span class="sev warn">guarded</span></td></tr>
+      <tr><td>Archived items</td><td>Excluded from nodes (mirrors backlogStore dropping <span class="m">is_archived</span>), so edges to them vanish like any out-of-scope edge.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>scope-context on missing id</td><td>404 (resolve-or-404), same as <span class="m">GET /work-items/{id}</span>.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Cross-project edges</td><td>Out of scope — #624 never created them; the view and payload stay within the project.</td><td><span class="sev def">out of scope</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ TEST PLAN ============ -->
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">Pure functions carry most of the weight — <span class="m">graph.ts</span> is store-free and exhaustively unit-testable. The final gate is your live e2e.</div>
+  <table>
+    <thead><tr><th style="width:250px">Suite</th><th>Cases</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">studio: graph.ts</span> (new)</td><td>Module scope = module + descendants only, cross-module edges dropped; sprint scope = sprint members only; task-ego = N-hop set, hops honored (hop&gt;maxHops excluded); layering puts pure-prerequisite at layer 0 and longest-chain leaf at max layer; unresolved flag matches <span class="m">RESOLVED_GROUPS</span>; <span class="m">ownedElsewhere</span> true iff assignees non-empty; archived excluded; empty-scope returns just the focus node.</td></tr>
+      <tr><td><span class="m">studio: DependencyView / Svg</span> (new)</td><td>Scope selector switches mode and target; node click navigates to <span class="m">/issues/:key</span>; amber border on unresolved nodes; hidden-edge footer count renders; over-cap notice shown above the soft cap.</td></tr>
+      <tr><td><span class="m">studio: NavDrawer / ContentHost</span> (extend)</td><td>"Dependencies" entry appears under PLAN; <span class="m">view === "dependencies"</span> dispatches <span class="m">DependencyView</span>; deep link <span class="m">/projects/:id/dependencies</span> resolves.</td></tr>
+      <tr><td><span class="m">worktracker: test_scope_context</span> (new)</td><td><span class="m">depends_on</span>/<span class="m">depended_by</span> equal the direct edge sets; <span class="m">owned_elsewhere</span> = neighbors with assignees; <span class="m">resolved</span> reflects state group; advisory string non-empty when unresolved blockers exist; 404 on missing id; query count bounded (prefetch works).</td></tr>
+      <tr><td><span class="m">worktracker-sdk: tests</span> (extend)</td><td><span class="m">ScopeContext</span> parses; <span class="m">WorkItemsResource.scope_context</span> issues GET and deserializes.</td></tr>
+      <tr><td>Live e2e (user)</td><td>Open Dependencies → Module: see the module's tasks wired by their blockers, amber on open blockers, cross-module edges hidden with a footer count; switch to a Task → ego graph to 2 hops; switch to a Sprint; click a node → lands on the issue; hit the scope-context endpoint for a task and read a sensible advisory.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Five steps; each green before the next. The pure graph core comes first so the view renders against tested logic; the agent payload is an independent track.</div>
+  <div class="steps">
+    <div class="bstep"><span class="n">1</span><b>Graph core</b><span class="m">graph.ts</span>: ScopeSpec, in-scope selection (all 3 modes), layered layout; lift the shared blocked-reach walker. Unit tests.</div>
+    <div class="bstep"><span class="n">2</span><b>Render</b><span class="m">DependencyGraphSvg</span> (nodes via stateColor + amber, directed edges, node click) + <span class="m">DependencyView</span> scope selector + <span class="m">dependencyStore</span> selection state.</div>
+    <div class="bstep"><span class="n">3</span><b>Wire-in</b>Add <span class="m">"dependencies"</span> to the View union; <span class="m">ContentHost</span> dispatch; <span class="m">NavDrawer</span> PLAN entry + icon. Deep-link works.</div>
+    <div class="bstep"><span class="n">4</span><b>Agent payload</b>BE <span class="m">ScopeRef</span>/<span class="m">ScopeContextOut</span> + <span class="m">GET …/scope-context</span>; SDK parity; backend tests. Independent of FE.</div>
+    <div class="bstep"><span class="n">5</span><b>Live e2e</b>Real module/task/sprint walk, node navigation, payload read. Your validation gates Done.</div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section>
+  <h2>Acceptance</h2>
+  <div class="accept">
+    Every refinement decision is mapped: a read-only dependency-graph view scoped by <b>module</b> (the driving ask), <b>task-ego</b>, and <b>sprint</b> on one canvas; <b>strictly in-scope</b> rendering defined per mode (membership sets hide cross-boundary edges; ego scope is the N-hop neighborhood); built on the <b>existing #624 edges</b> with no edge writes and no migration; <b>advisory-only</b> reuse of the amber unresolved signal with the #629 Blocked state left manual; a separate read-only <b>scope-context payload</b> (<span class="m">depends_on</span> / <span class="m">depended_by</span> / <span class="m">owned_elsewhere</span> + advisory) derived from edges + assignees for a subagent to stay in scope; cross-project explicitly out; and a <b>hand-rolled layered SVG</b> that adds <b>no new dependency</b>.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    models: { t: 'worktracker/worktracker/models.py', k: 'READ-ONLY (no change)', items: [
+      'Issue.blocked_by self-M2M (symmetrical=False, related_name="blocks") — the edge we visualize.',
+      'Issue.assignees M2M → drives owned_elsewhere in the payload.',
+      'Issue.parent (tree) and Issue.sprint FK → drive module and sprint scoping.'
+    ], no: ['No model edits.', 'No migration — every needed field exists.'] },
+    schemas: { t: 'worktracker/worktracker/schemas.py', k: 'MODIFIED', items: [
+      'NEW ScopeRef (id, key, name, state_group, resolved, assignees[]).',
+      'NEW ScopeContextOut (task, depends_on[], depended_by[], owned_elsewhere[], advisory).'
+    ], no: ['No change to WorkItemOut — blocked_by_ids/blocks_ids/assignees already present.'] },
+    api: { t: 'worktracker/worktracker/api.py', k: 'MODIFIED', items: [
+      'NEW GET /work-items/{id}/scope-context: resolve-or-404, walk blocked_by + blocks (direct), flag assignee-owned neighbors, build advisory.',
+      'prefetch_related("blocked_by","blocks","assignees") to bound queries.',
+      'Reuses the _blocker_would_cycle walker pattern (transitive is a later toggle).'
+    ], no: ['No writes.', 'No change to the existing PATCH blocker guard.'] },
+    sdkmodels: { t: 'worktracker-sdk/worktracker_sdk/models.py', k: 'MODIFIED', items: [
+      'Add ScopeRef + ScopeContext output models (mandatory under extra="forbid").'
+    ], no: ['No change to WorkItem/Project models.'] },
+    sdkres: { t: 'worktracker-sdk/worktracker_sdk/resources.py', k: 'MODIFIED', items: [
+      'WorkItemsResource.scope_context(id) → GET wrapper, existing call pattern.'
+    ], no: ['No mutation methods added.'] },
+    types: { t: 'studio/src/lib/types.ts', k: 'MODIFIED', items: [
+      'Add "dependencies" to the View union.',
+      'Add ScopeContext / ScopeRef types mirroring the payload (for api.ts).'
+    ], no: ['No change to WorkItem — fields already present.'] },
+    apits: { t: 'studio/src/lib/api.ts', k: 'MODIFIED', items: [
+      'fetchScopeContext(id) → GET /work-items/{id}/scope-context, via the existing request<T> helper.'
+    ], no: ['Graph view needs NO new fetch — it derives from loaded items.'] },
+    display: { t: 'studio/src/lib/display.ts', k: 'READ-ONLY (reused)', items: [
+      'stateColor(state) reused for node fill.',
+      'formatDate etc. untouched.'
+    ], no: ['No change.'] },
+    backlog: { t: 'studio/src/stores/backlog/backlogStore.ts', k: 'READ-ONLY (reused)', items: [
+      'items + modules + children topology are the graph data source.',
+      'Already drops is_archived — graph inherits that.'
+    ], no: ['No change.'] },
+    issuestore: { t: 'studio/src/stores/issue/issueStore.ts', k: 'READ-ONLY (reused)', items: [
+      'RESOLVED_GROUPS = {completed, cancelled} reused for the unresolved flag.',
+      'resolveBlockerChips semantics mirrored in graph node mapping.'
+    ], no: ['No change — logic reused, not edited.'] },
+    depstore: { t: 'studio/src/stores/dependency/dependencyStore.ts', k: 'NEW', items: [
+      'Zustand store for view selection only: scope kind, target id/sprint id, maxHops.',
+      'No data of its own — reads backlogStore.items at render.'
+    ], no: ['No edge mutation — read-only view state.'] },
+    view: { t: 'studio/src/views/Dependencies/DependencyView.tsx', k: 'NEW', items: [
+      'Scope selector (Module | Task | Sprint) + target picker + hops control (ego).',
+      'Calls buildGraph(items, spec), renders DependencyGraphSvg, shows hidden-edge footer + over-cap notice.'
+    ], no: ['No fetch to render; no edge editing.'] },
+    graphlib: { t: 'studio/src/views/Dependencies/graph.ts', k: 'NEW', items: [
+      'Pure: ScopeSpec → {nodes, edges} with layered x/y.',
+      'In-scope selection per mode + strictly-in-scope edge filter.',
+      'Longest-path layering (acyclic guaranteed) + stable within-layer stacking.',
+      'Houses the shared both-direction reach walker (generalized blocksReach).'
+    ], no: ['No React, no store import — unit-testable in isolation.'] },
+    svg: { t: 'studio/src/views/Dependencies/DependencyGraphSvg.tsx', k: 'NEW', items: [
+      'Renders nodes (stateColor fill, amber border + ⚠ when unresolved, focus ring) and directed edges (markers).',
+      'Node click → navigate(/issues/:key); owned-elsewhere gets an assignee badge.'
+    ], no: ['No external graph/canvas library — plain SVG.'] },
+    content: { t: 'studio/src/shell/ContentHost.tsx', k: 'MODIFIED', items: [
+      'Add a branch: view === "dependencies" → <DependencyView/>.'
+    ], no: ['No change to existing view branches.'] },
+    nav: { t: 'studio/src/shell/NavDrawer.tsx', k: 'MODIFIED', items: [
+      'Add { view: "dependencies", label: "Dependencies", Icon } to the PLAN group.',
+      'Routes to /projects/:id/dependencies like the other views.'
+    ], no: ['No change to TRACK group or Settings pin.'] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    const col = d.k.startsWith('NEW') ? 'var(--green)' : d.k.startsWith('READ') ? 'var(--accent)' : 'var(--amber)';
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + col + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  const SCOPE = {
+    module: { t: 'Module scope', p: 'Node set = the selected module (Epic) plus its descendant tasks via the parent_id tree. The driving use case — see how a module\'s work depends on itself.', e: 'Boundary: edges to tasks in OTHER modules are hidden; a footer counts them.' },
+    task: { t: 'Task ego graph', p: 'BFS out from one task following blocked_by (upstream) and blocks (downstream) to maxHops (default 2). The reached neighborhood IS the scope — so "strictly in-scope" does not truncate the thing you came to see.', e: 'Boundary: stop at the hop limit; nodes beyond maxHops are not added.' },
+    sprint: { t: 'Sprint scope', p: 'Node set = items whose sprint_id matches the selected sprint. Useful for sequencing a sprint\'s work.', e: 'Boundary: edges to non-sprint items are hidden, like module scope.' },
+    preview: { t: 'Reading the graph', p: 'Blocker → blocked arrows flow left→right: prerequisites on the left, dependents on the right. Fill = state color; amber border + ⚠ = an unresolved blocker.', e: 'Dashed "hidden ext" box is illustrative — in v1 external nodes are NOT drawn; only the hidden-edge count is shown.' }
+  };
+  const scopeInfo = document.getElementById('scopeInfo');
+  document.querySelectorAll('.step[data-g]').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step[data-g]').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = SCOPE[s.dataset.g];
+    scopeInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const REUSE = {
+    edges: { t: 'blocked_by_ids / blocks_ids', v: 'REUSE', c: 'var(--green)',
+      fit: ['Directed edges already on WorkItemOut, kept current by the store.', 'No new field, no migration — the graph is a pure read.'], miss: [] },
+    walk: { t: 'blocksReach walker', v: 'EXTEND', c: 'var(--amber)',
+      fit: ['BlockerPicker already walks blocks_ids transitively to pre-hide cyclic candidates.'],
+      miss: ['Ego scope needs both directions and a hop bound — generalize the walker and lift it into graph.ts so both callers share it.'] },
+    resolved: { t: 'RESOLVED_GROUPS', v: 'REUSE', c: 'var(--green)',
+      fit: ['{completed, cancelled} already defines "resolved" in issueStore.', 'Reused verbatim for the node unresolved flag — identical semantics to the chip.'], miss: [] },
+    color: { t: 'display.stateColor', v: 'REUSE', c: 'var(--green)',
+      fit: ['Single source of state colour across Board / chips — node fill reuses it.'], miss: [] },
+    svglib: { t: 'graph viz library', v: 'NEW', c: 'var(--violet)',
+      fit: ['Hand-rolled layered SVG: the graph is acyclic and small, so a longest-path layout is a few dozen lines.', 'Keeps package.json lean — no d3/cytoscape/mermaid.'],
+      miss: ['We own layout + rendering; mitigated by the acyclic guarantee and tiny graphs.'] },
+    amber: { t: 'amber unresolved signal', v: 'REUSE', c: 'var(--green)',
+      fit: ['Same lifecycle-attention token + ⚠ as BlockerChipView.', 'Consistent meaning across surfaces; advisory-only — no state write.'], miss: [] },
+    store: { t: 'backlogStore.items / modules', v: 'REUSE', c: 'var(--green)',
+      fit: ['Already loaded for Backlog/Board; the graph derives from it with no extra fetch.', 'Archived filtering inherited.'], miss: [] },
+    navreg: { t: 'ContentHost + NavDrawer', v: 'EXTEND', c: 'var(--amber)',
+      fit: ['View dispatch + nav grouping (TRACK/PLAN) are the established pattern.'],
+      miss: ['Add a "dependencies" view to the union, a dispatch branch, and a PLAN nav entry.'] },
+    payload: { t: 'scope-context endpoint', v: 'NEW', c: 'var(--violet)',
+      fit: ['Read-only GET deriving depends_on / depended_by / owned_elsewhere from edges + assignees.', 'No migration; reuses prefetch + the cycle-walker pattern.'],
+      miss: ['New route + schema + SDK parity — but additive and independent of the FE view.'] }
+  };
+  const rdet = document.getElementById('reuseDetail');
+  document.querySelectorAll('.reuse-row').forEach(r => r.addEventListener('click', () => {
+    document.querySelectorAll('.reuse-row').forEach(x => x.classList.remove('sel'));
+    r.classList.add('sel');
+    const d = REUSE[r.dataset.r];
+    let h = '<h4>' + d.t + '</h4><div class="meta" style="color:' + d.c + '">' + d.v + '</div>';
+    h += '<div class="grp">Why</div><ul>' + d.fit.map(x => '<li class="fit">' + x + '</li>').join('') + '</ul>';
+    if (d.miss && d.miss.length) h += '<div class="grp">Gap to close</div><ul>' + d.miss.map(x => '<li class="miss">' + x + '</li>').join('') + '</ul>';
+    rdet.innerHTML = h;
+  }));
+
+  const CSTEPS = {
+    1: { t: '1 · Open the view', p: 'NavDrawer PLAN entry routes to /projects/:id/dependencies; ContentHost dispatches DependencyView.', e: 'Deep-linkable like every other view.' },
+    2: { t: '2 · Pick scope + target', p: 'dependencyStore holds the scope kind + target (module / task / sprint) and ego maxHops. Defaults to the current context where sensible (e.g. the open module).', e: 'Switching mode rebuilds synchronously — no fetch.' },
+    3: { t: '3 · Build graph', p: 'buildGraph(items, spec) selects the in-scope node set, drops cross-boundary edges, then layers (longest-path) and assigns x/y.', e: 'Above the soft node cap it returns an over-cap signal instead of nodes.' },
+    4: { t: '4 · Render', p: 'DependencyGraphSvg draws nodes (stateColor + amber unresolved + focus ring) and directed edges; a footer reports hidden cross-boundary edge count.', e: 'Empty scope → focus node only / "no dependencies" message.' },
+    5: { t: '5 · Navigate', p: 'Clicking a node calls navigate(/issues/:key) — editing edges still happens there via BlockerPicker. The canvas itself never mutates.', e: 'Read-only by design; no drag, no edge creation in v1.' }
+  };
+  const seqInfo = document.getElementById('seqInfo');
+  document.querySelectorAll('.step[data-c]').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step[data-c]').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = CSTEPS[s.dataset.c];
+    seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

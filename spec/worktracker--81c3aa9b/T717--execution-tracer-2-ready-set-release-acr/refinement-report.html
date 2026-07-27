@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CODIN-717 · Ready-set refinement</title>
+<style>
+  :root{--bg:#f7f8fa;--panel:#fff;--ink:#1a1d21;--muted:#667085;--line:#e4e7ec;--accent:#2563eb;--accent-soft:#e8f0fe;--green:#16a34a;--green-soft:#e7f6ec;--amber:#d97706;--amber-soft:#fdf1e0;--violet:#7c3aed;--violet-soft:#f0e9fd;--red:#dc2626;--red-soft:#fdeaea;--mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  header{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}.crumb{padding-top:16px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+  h1{margin:5px 0 3px;font-size:23px}.sub{margin:0 0 12px;color:var(--muted);font-size:14px}.chips{display:flex;gap:7px;flex-wrap:wrap;padding-bottom:12px}
+  .chip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:800}.blue{background:var(--accent-soft);color:#1a3f9e}.green{background:var(--green-soft);color:#14622f}.amber{background:var(--amber-soft);color:#8a4d00}
+  nav{display:flex;gap:2px;flex-wrap:wrap;border-top:1px solid var(--line)}nav a{padding:10px 12px;color:var(--muted);text-decoration:none;font-size:13px;border-bottom:2px solid transparent}nav a.active,nav a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+  section{padding:30px 0;border-bottom:1px solid var(--line)}h2{font-size:18px;margin:0 0 4px}.lede{margin:0 0 18px;color:var(--muted);font-size:14px;max-width:82ch}
+  .grid{display:grid;grid-template-columns:1.35fr .9fr;gap:18px}@media(max-width:850px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}.card h3{margin:0 0 8px;font-size:15px}
+  svg{width:100%;height:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}.node{cursor:pointer}.node rect,.node ellipse{fill:#fff;stroke:var(--accent);stroke-width:2}.node.dashed rect{stroke:var(--amber);stroke-dasharray:6 5}.node.sel rect,.node.sel ellipse{fill:var(--accent-soft);stroke-width:3}.edge{stroke:#98a2b3;stroke-width:1.8;fill:none;marker-end:url(#arr)}.edge.dashed{stroke-dasharray:6 5;stroke:var(--amber)}
+  text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:var(--ink)}.mono{font-family:var(--mono);font-size:12px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:10px 12px;font-size:13px}th{background:#fbfcfd;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}tr:last-child td{border-bottom:0}
+  .pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800}.p-in{background:var(--green-soft);color:#14622f}.p-out{background:var(--red-soft);color:#8a1f1f}.p-defer{background:var(--amber-soft);color:#8a4d00}
+  code{font-family:var(--mono);font-size:12.5px;background:#eef0f3;border-radius:4px;padding:1px 5px}.panel ul{margin:8px 0 0;padding-left:18px}.panel li{font-size:13px;margin:4px 0}.accept{background:var(--green-soft);border:1px solid #bfe6cc;border-radius:8px;padding:16px;color:#14622f}.note{color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="crumb">worktracker · CODIN-717 · refinement report</div>
+  <h1>Execution tracer 2: ready-set release across a blocked_by chain</h1>
+  <p class="sub">Backlog refinement based on the CODIN-700 build playbook, CODIN-716 LLD/code, and the live WorkTracker dependency slice.</p>
+  <div class="chips"><span class="chip blue">requirements clear</span><span class="chip amber">blocked by CODIN-716</span><span class="chip green">move to Todo for LLD/spec</span></div>
+  <nav id="nav"><a href="#proposal">Proposal</a><a href="#diagram">Graph</a><a href="#decisions">Decisions</a><a href="#scope">Scope</a><a href="#accept">Acceptance</a></nav>
+</div></header>
+<main class="wrap">
+<section id="proposal">
+  <h2>Strongest Version</h2>
+  <p class="lede">CODIN-717 should be the narrow implement-phase graph slice: build a pure ready-set core plus driver glue that starts all currently-ready task runs and releases dependents when blockers enter the completed group.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>Current facts</h3>
+      <table><tr><th>Input</th><th>Finding</th></tr>
+        <tr><td>CODIN-716</td><td>Single-task execution app exists in <code>../server/apps/execution</code>: process-local registry, pure reducer, spawn seam, and <code>issue_state_changed</code> observation.</td></tr>
+        <tr><td>CODIN-700 playbook</td><td>The #717 section is decision-complete: <code>graph.py</code>, subtree selection, in-graph edges, ready-set sort order, driver deltas, and tests are specified.</td></tr>
+        <tr><td>WorkTracker scope</td><td>CODIN-717 depends on CODIN-716 and blocks CODIN-718. CODIN-718 owns failure propagation and durable idempotency.</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Hard question answered</h3>
+      <p class="note">What is the smallest slice that proves graph execution without stealing CODIN-718?</p>
+      <p>Answer: launch/release only. CODIN-717 may include a minimal in-memory re-invoke guard, but no live-run adoption, restart recovery, halted status, retries, or failure propagation.</p>
+    </div>
+  </div>
+</section>
+
+<section id="diagram">
+  <h2>Clickable Graph Shape</h2>
+  <p class="lede">Click a node for responsibilities and non-responsibilities. Dashed items are deferred to CODIN-718 or later.</p>
+  <div class="grid">
+    <svg viewBox="0 0 760 430" role="img" aria-label="CODIN-717 ready-set component diagram">
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#98a2b3"/></marker></defs>
+      <path class="edge" d="M130 98 C210 98 225 98 295 98"/><path class="edge" d="M460 98 C535 98 545 98 620 98"/>
+      <path class="edge" d="M380 138 C380 185 380 198 380 242"/><path class="edge" d="M380 310 C380 342 380 354 380 382"/>
+      <path class="edge dashed" d="M620 128 C585 205 550 260 505 302"/>
+      <g class="node" data-node="root" transform="translate(35 64)"><ellipse cx="72" cy="34" rx="72" ry="34"/><text x="72" y="39" text-anchor="middle">root task</text></g>
+      <g class="node" data-node="driver" transform="translate(295 56)"><rect width="170" height="84" rx="8"/><text x="85" y="34" text-anchor="middle">execute_graph</text><text x="85" y="55" text-anchor="middle" class="mono">driver.py</text></g>
+      <g class="node" data-node="spawn" transform="translate(620 64)"><rect width="120" height="68" rx="8"/><text x="60" y="31" text-anchor="middle">spawn_run</text><text x="60" y="50" text-anchor="middle" class="mono">mocked tests</text></g>
+      <g class="node" data-node="pure" transform="translate(270 242)"><rect width="220" height="68" rx="8"/><text x="110" y="30" text-anchor="middle">ready-set core</text><text x="110" y="50" text-anchor="middle" class="mono">graph.py</text></g>
+      <g class="node" data-node="seam" transform="translate(260 382)"><rect width="240" height="40" rx="8"/><text x="120" y="26" text-anchor="middle">issue_state_changed</text></g>
+      <g class="node dashed" data-node="deferred" transform="translate(540 270)"><rect width="180" height="64" rx="8"/><text x="90" y="29" text-anchor="middle">failure/idempotency</text><text x="90" y="48" text-anchor="middle" class="mono">CODIN-718</text></g>
+    </svg>
+    <div class="card panel" id="panel"><h3>execute_graph</h3><ul><li>Builds and seeds graph state from tracker rows.</li><li>Applies pure launch actions through the existing spawn seam.</li><li class="no">Does not dedupe against durable AgentRun rows.</li></ul></div>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>Clarified Decisions</h2>
+  <p class="lede">These are ready to carry into LLD without reopening requirements.</p>
+  <table><tr><th>Decision</th><th>Requirement</th></tr>
+    <tr><td>Phase</td><td>Graph execution applies to <code>implement</code> only. Planning phases remain single-task.</td></tr>
+    <tr><td>Graph nodes</td><td>All non-archived strict descendant issues of root with <code>type="task"</code>, found by BFS over <code>parent</code>.</td></tr>
+    <tr><td>Edges</td><td>Keep only <code>blocked_by</code> edges where both endpoints are in the selected node set. External blocker edges are ignored for readiness in this slice and should be logged for visibility.</td></tr>
+    <tr><td>Readiness</td><td>An idle node is ready when every in-graph blocker node has status <code>done</code>. Seed tracker <code>state.group == "completed"</code> as done; all other groups seed idle.</td></tr>
+    <tr><td>Parallelism</td><td>When several nodes become ready at once, emit one launch action per node. Sort by <code>sequence_id</code>, falling back to task id, for stable tests.</td></tr>
+    <tr><td>Registry</td><td>Add a root-keyed graph registry beside the existing single-task registry. <code>clear_registry()</code> clears both.</td></tr>
+    <tr><td>Minimal guard</td><td>Calling <code>execute_graph</code> for a root already in the graph registry returns existing graph state and launches nothing. CODIN-718 replaces this with durable idempotency.</td></tr>
+  </table>
+</section>
+
+<section id="scope">
+  <h2>Scope Boundaries</h2>
+  <p class="lede">The split from CODIN-718 is now explicit.</p>
+  <table><tr><th>In CODIN-717</th><th>Out of CODIN-717</th></tr>
+    <tr><td><span class="pill p-in">in</span> Pure <code>ready_set</code> and <code>decide_graph</code> unit tests.</td><td><span class="pill p-out">out</span> Failure propagation, <code>halted</code> status, cancelled-group failure semantics.</td></tr>
+    <tr><td><span class="pill p-in">in</span> Driver graph loading, seeding, launch action application, and seam release.</td><td><span class="pill p-out">out</span> Durable restart recovery and live <code>AgentRun</code> adoption.</td></tr>
+    <tr><td><span class="pill p-in">in</span> Chain, fan-out, diamond, pre-completed seed, ignored event, and stable order tests.</td><td><span class="pill p-out">out</span> Public HTTP routes, MCP tool, Dependency-view button, retries, cancellation, and migrations.</td></tr>
+    <tr><td><span class="pill p-in">in</span> Preserve the execution test guards that block real <code>spawn_run</code> and detach the seam receiver in driver tests.</td><td><span class="pill p-defer">later</span> CODIN-721 owns trigger surfaces; CODIN-744 owns durable internal lifecycle states.</td></tr>
+  </table>
+</section>
+
+<section id="accept">
+  <h2>Acceptance Signal</h2>
+  <div class="accept"><b>Requirements are clear.</b> CODIN-717 can move from Backlog to Todo for LLD/spec work. Implementation remains blocked by CODIN-716 until its upstream slice is accepted/available, and CODIN-718 remains the boundary for failure/idempotency.</div>
+</section>
+</main>
+<script>
+const data={
+  root:["Root task","Input only. Must be a task with module ancestry.","Does not itself have to run unless it is one of the strict descendants."],
+  driver:["execute_graph","Loads root descendants, builds graph state, applies launch actions, observes completions.","Does not own durable idempotency or user-facing triggers."],
+  spawn:["spawn_run","Existing programmatic launch primitive; launches implement runs for ready nodes.","No dedup here; tests must mock it."],
+  pure:["graph.py","Pure frozen graph state, ready_set, decide_graph, sorted launch actions.","No Django imports, no database, no tmux."],
+  seam:["issue_state_changed","Completed-group events mark matching running nodes done and release new ready nodes.","Non-completed transitions are ignored in this slice."],
+  deferred:["CODIN-718","Failure propagation, halted dependents, cancelled-as-failed, live-run adoption, restart-safe re-invoke.","Not part of CODIN-717."]
+};
+let sel=null;const panel=document.getElementById("panel");
+document.querySelectorAll(".node").forEach(n=>n.addEventListener("click",()=>{if(sel)sel.classList.remove("sel");sel=n;n.classList.add("sel");const d=data[n.dataset.node];panel.innerHTML=`<h3>${d[0]}</h3><ul><li>${d[1]}</li><li class="no">${d[2]}</li></ul>`}));
+const links=[...document.querySelectorAll("nav a")],secs=links.map(a=>document.querySelector(a.getAttribute("href")));
+new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const id="#"+e.target.id;links.forEach(a=>a.classList.toggle("active",a.getAttribute("href")===id))}}),{rootMargin:"-45% 0px -50% 0px"}).observe(secs[0]);secs.slice(1).forEach(s=>s&&new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const id="#"+e.target.id;links.forEach(a=>a.classList.toggle("active",a.getAttribute("href")===id))}}),{rootMargin:"-45% 0px -50% 0px"}).observe(s));
+</script>
+</body>
+</html>

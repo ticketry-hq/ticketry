@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T604 · Where to Surface Sprints — Decision</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: 26px 40px 0; position: sticky; top: 0; z-index: 30;
+  }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 960px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 20px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; }
+  nav a {
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted);
+    text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 150px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 4px; }
+
+  /* problem strip */
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .scell {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .scell .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); }
+  .scell .val { font-size: 14px; font-weight: 700; margin-top: 4px; }
+  .scell.no .val { color: var(--red); }
+  .scell.ok .val { color: var(--green); }
+  .callout-r { background: var(--red-soft); border-left: 4px solid var(--red); border-radius: 8px; padding: 14px 18px; margin-top: 18px; font-size: 13.5px; }
+  .callout-r b { color: var(--red); }
+
+  /* diagram */
+  .diagram-wrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px;
+  }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .32; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 2px; color: var(--accent); }
+  #nodeInfo .rank { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--muted); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo .does { margin-top: 10px; font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); }
+  #nodeInfo .doesnot { margin-top: 10px; font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--red); }
+  #nodeInfo ul { list-style: none; margin-top: 4px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li.d::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  #nodeInfo li.x::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 700; }
+  .leg { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .leg span::before { content: "■ "; }
+  .leg .lg::before { color: var(--green); } .leg .la::before { color: var(--amber); }
+  .leg .lr::before { color: var(--red); } .leg .lm::before { color: var(--muted); }
+
+  /* rank table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13px; border-bottom: 1px solid var(--line); }
+  th { background: var(--bg); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  tbody tr { cursor: pointer; transition: background .12s; }
+  tbody tr:hover, tbody tr.active { background: var(--accent-soft); }
+  tbody tr:last-child td { border-bottom: none; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; white-space: nowrap; }
+  .pill.now { background: var(--green-soft); color: var(--green); }
+  .pill.first { background: var(--accent-soft); color: var(--accent); }
+  .pill.next { background: var(--amber-soft); color: var(--amber); }
+  .pill.later { background: var(--violet-soft); color: var(--violet); }
+  .pill.drop { background: var(--red-soft); color: var(--red); }
+  .ve { font-family: var(--mono); font-size: 12px; }
+
+  /* decision cards */
+  .pillars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .pillar {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px; border-top: 4px solid var(--accent);
+  }
+  .pillar.p2 { border-top-color: var(--green); }
+  .pillar.p3 { border-top-color: var(--violet); }
+  .pillar.p4 { border-top-color: var(--amber); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar p + p { margin-top: 8px; }
+
+  /* relationship */
+  .rel { display: grid; grid-template-columns: 1fr 36px 1fr; gap: 12px; align-items: stretch; }
+  .rel .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .rel .box.this { border: 2px solid var(--green); }
+  .rel .box .h { font-size: 12px; font-weight: 800; letter-spacing: .06em; margin-bottom: 6px; }
+  .rel .box.this .h { color: var(--green); }
+  .rel .box p { font-size: 12.5px; color: var(--muted); }
+  .rel .arr { align-self: center; text-align: center; color: var(--violet); font-size: 22px; font-weight: 700; }
+
+  /* change-map tree */
+  .tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; font-family: var(--mono); font-size: 13px; }
+  .trow { padding: 8px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  .trow:hover { background: var(--bg); }
+  .trow .badge { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 4px; letter-spacing: .04em; font-family: -apple-system, sans-serif; }
+  .badge.new { background: var(--green-soft); color: var(--green); }
+  .badge.mod { background: var(--amber-soft); color: var(--amber); }
+  .badge.tic { background: var(--accent-soft); color: var(--accent); }
+  .trow .path { flex: 1; }
+  .trow .delta { display: none; color: var(--muted); font-family: -apple-system, sans-serif; font-size: 12px; padding: 0 12px 10px 44px; }
+  .titem.open .delta { display: block; }
+  .titem.open .trow { background: var(--bg); }
+  .indent { padding-left: 24px; }
+
+  /* acceptance */
+  .accept { background: var(--green-soft); border: 1px solid var(--green); border-radius: 12px; padding: 22px 26px; }
+  .accept h3 { color: var(--green); font-size: 16px; margin-bottom: 10px; }
+  .accept ul { list-style: none; }
+  .accept li { padding: 5px 0 5px 24px; position: relative; font-size: 13.5px; }
+  .accept li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">WorkTracker · Sprints · T604</div>
+  <h1>Where &amp; How to Surface Sprints</h1>
+  <p class="sub">Sprints (#602) shipped backend-only — model, migration, 5 routes, SDK resource — and are invisible to the human eye. This spike decides <b>what to display, where, and in what order</b>, ranked by value/effort. Output is a decision, not code.</p>
+  <div class="chips">
+    <span class="chip">SPIKE</span>
+    <span class="chip violet">Decision Doc</span>
+    <span class="chip green">Recommendation: DetailsTab field first</span>
+    <span class="chip red">Blocker found: WorkItemOut omits sprint_id</span>
+  </div>
+  <nav id="nav">
+    <a href="#problem">Problem</a>
+    <a href="#map">Surface Map</a>
+    <a href="#rank">Ranking</a>
+    <a href="#decision">Decision</a>
+    <a href="#r603">vs #603</a>
+    <a href="#tickets">Follow-ups</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<section id="problem">
+  <h2>The problem: sprints have no eyes-on surface</h2>
+  <p class="lede">Everything to <i>operate</i> sprints exists at the API/data layer. Nothing renders them. Click a cell for its state.</p>
+  <div class="strip">
+    <div class="scell ok"><div class="lbl">SPRINT MODEL + 5 ROUTES</div><div class="val">Exists ✓</div></div>
+    <div class="scell ok"><div class="lbl">SDK <code>client.sprints</code></div><div class="val">Exists ✓</div></div>
+    <div class="scell no"><div class="lbl">FRONTEND / TUI / ADMIN</div><div class="val">Nothing renders</div></div>
+    <div class="scell no"><div class="lbl">MCP TOOLS (agents)</div><div class="val">None</div></div>
+  </div>
+  <div class="callout-r">
+    <b>Key finding — the one real blocker.</b> <code>WorkItemPatch</code> already <i>accepts</i> <code>sprint_id</code> (<code>schemas.py:193</code>), so you can assign a sprint today — but <code>WorkItemOut</code> (<code>schemas.py:53–92</code>) does <b>not</b> return it. You can set a sprint and never read it back. Exposing <code>sprint_id</code> on <code>WorkItemOut</code> is the hard precondition for <b>any</b> per-task display and for #603.
+  </div>
+</section>
+
+<section id="map">
+  <h2>Surface map — where could a sprint live?</h2>
+  <p class="lede">Our UI is a 4-pane drill-down: Projects → Modules → Tasks → TicketWorkspace. Sprints are <b>orthogonal</b> to that tree — a task <i>property</i>, not a new level. Click any candidate surface for its does / does-not and verdict.</p>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 660 430" width="100%" role="img" aria-label="Surface map">
+      <!-- existing 4-pane spine -->
+      <text x="20" y="24" font-size="11" font-weight="800" fill="#5b6478" letter-spacing="1">EXISTING UI SPINE (orthogonal to sprints)</text>
+      <g class="node spine" data-k="spine">
+        <rect x="20" y="36" width="120" height="40" rx="8" fill="#f6f7f9" stroke="#c4ccda"/>
+        <text x="80" y="60" text-anchor="middle" font-size="12" fill="#5b6478">Projects pane</text>
+      </g>
+      <g class="node spine"><rect x="160" y="36" width="120" height="40" rx="8" fill="#f6f7f9" stroke="#c4ccda"/><text x="220" y="60" text-anchor="middle" font-size="12" fill="#5b6478">Modules pane</text></g>
+      <g class="node spine"><rect x="300" y="36" width="120" height="40" rx="8" fill="#f6f7f9" stroke="#c4ccda"/><text x="360" y="60" text-anchor="middle" font-size="12" fill="#5b6478">Tasks pane</text></g>
+      <g class="node spine"><rect x="440" y="36" width="180" height="40" rx="8" fill="#f6f7f9" stroke="#c4ccda"/><text x="530" y="60" text-anchor="middle" font-size="12" fill="#5b6478">TicketWorkspace (tabs)</text></g>
+      <line x1="140" y1="56" x2="160" y2="56" stroke="#c4ccda"/>
+      <line x1="280" y1="56" x2="300" y2="56" stroke="#c4ccda"/>
+      <line x1="420" y1="56" x2="440" y2="56" stroke="#c4ccda"/>
+
+      <text x="20" y="116" font-size="11" font-weight="800" fill="#5b6478" letter-spacing="1">CANDIDATE SPRINT SURFACES</text>
+
+      <!-- DetailsTab field : recommended -->
+      <g class="node" data-k="details">
+        <rect x="440" y="128" width="180" height="56" rx="10" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="530" y="152" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d2433">DetailsTab field</text>
+        <text x="530" y="170" text-anchor="middle" font-size="11" fill="#1d7a4f">★ first build</text>
+      </g>
+      <line x1="530" y1="76" x2="530" y2="128" stroke="#1d7a4f" stroke-width="2"/>
+
+      <!-- admin -->
+      <g class="node" data-k="admin">
+        <rect x="20" y="128" width="170" height="56" rx="10" fill="#e3f3ea" stroke="#1d7a4f"/>
+        <text x="105" y="152" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d2433">Django admin</text>
+        <text x="105" y="170" text-anchor="middle" font-size="11" fill="#1d7a4f">stop-gap now</text>
+      </g>
+
+      <!-- sprint list -->
+      <g class="node" data-k="list">
+        <rect x="210" y="128" width="180" height="56" rx="10" fill="#fbf0d8" stroke="#9a6700"/>
+        <text x="300" y="152" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d2433">Sprint list / detail</text>
+        <text x="300" y="170" text-anchor="middle" font-size="11" fill="#9a6700">next step</text>
+      </g>
+
+      <!-- planning map 603 -->
+      <g class="node" data-k="map603">
+        <rect x="210" y="206" width="180" height="56" rx="10" fill="#f0e9fb" stroke="#6b3fb8" stroke-dasharray="5 4"/>
+        <text x="300" y="230" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d2433">Planning map #603</text>
+        <text x="300" y="248" text-anchor="middle" font-size="11" fill="#6b3fb8">later (aggregate)</text>
+      </g>
+
+      <!-- mcp -->
+      <g class="node" data-k="mcp">
+        <rect x="440" y="206" width="180" height="56" rx="10" fill="#ffffff" stroke="#c4ccda" stroke-dasharray="5 4"/>
+        <text x="530" y="230" text-anchor="middle" font-size="12.5" font-weight="700" fill="#5b6478">MCP tools</text>
+        <text x="530" y="248" text-anchor="middle" font-size="11" fill="#5b6478">defer</text>
+      </g>
+
+      <!-- TUI dropped -->
+      <g class="node" data-k="tui">
+        <rect x="20" y="206" width="170" height="56" rx="10" fill="#fbe7e7" stroke="#b03030" stroke-dasharray="2 3"/>
+        <text x="105" y="230" text-anchor="middle" font-size="12.5" font-weight="700" fill="#b03030">TUI</text>
+        <text x="105" y="248" text-anchor="middle" font-size="11" fill="#b03030">dropped (#537)</text>
+      </g>
+
+      <!-- backend precondition -->
+      <text x="20" y="306" font-size="11" font-weight="800" fill="#5b6478" letter-spacing="1">BACKEND PRECONDITION</text>
+      <g class="node" data-k="schema">
+        <rect x="20" y="318" width="600" height="48" rx="10" fill="#fbe7e7" stroke="#b03030" stroke-width="2"/>
+        <text x="320" y="340" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1d2433">Expose sprint_id on WorkItemOut — unblocks DetailsTab field AND #603</text>
+        <text x="320" y="357" text-anchor="middle" font-size="11" fill="#b03030">schemas.py:53–92 · do first</text>
+      </g>
+      <line x1="320" y1="318" x2="320" y2="262" stroke="#b03030" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <line x1="530" y1="318" x2="530" y2="184" stroke="#b03030" stroke-width="1.5" stroke-dasharray="4 3"/>
+    </svg>
+    <div id="nodeInfo">
+      <h4>Click a surface</h4>
+      <p class="hint">Dashed = deferred / seam-only. Red = blocked or dropped.</p>
+      <div class="leg">
+        <span class="lg">do now / first</span>
+        <span class="la">next</span>
+        <span class="lm">defer</span>
+        <span class="lr">blocker / dropped</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="rank">
+  <h2>Ranking — value vs effort</h2>
+  <p class="lede">Hover a row to highlight it on the map. The order below is the recommended sequence.</p>
+  <table id="rankTable">
+    <thead><tr><th>Surface</th><th>What it shows</th><th>Value</th><th>Effort</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr data-k="schema">
+        <td><b>Expose <code>sprint_id</code></b></td>
+        <td>Read shape returns current sprint (precondition, not a surface)</td>
+        <td class="ve">—</td><td class="ve">XS</td>
+        <td><span class="pill now">Do now</span></td>
+      </tr>
+      <tr data-k="admin">
+        <td><b>Django admin</b></td>
+        <td>List/create/edit sprints, see status &amp; dates — eyes-on, no frontend</td>
+        <td class="ve">Med</td><td class="ve">XS (~8 ln)</td>
+        <td><span class="pill now">Do now</span></td>
+      </tr>
+      <tr data-k="details">
+        <td><b>DetailsTab field</b></td>
+        <td>Current sprint on a task + set/move/clear via picker (assignment UX)</td>
+        <td class="ve">High</td><td class="ve">Med</td>
+        <td><span class="pill first">First build</span></td>
+      </tr>
+      <tr data-k="list">
+        <td><b>Sprint list / detail</b></td>
+        <td>Sprints per project + a sprint's progress (total/done/open) &amp; its tasks</td>
+        <td class="ve">Med</td><td class="ve">Med</td>
+        <td><span class="pill next">Next</span></td>
+      </tr>
+      <tr data-k="map603">
+        <td><b>Planning map #603</b></td>
+        <td>Modules × sprints story grid, drag-to-assign (aggregate planning)</td>
+        <td class="ve">High</td><td class="ve">High</td>
+        <td><span class="pill later">Later</span></td>
+      </tr>
+      <tr data-k="mcp">
+        <td><b>MCP tools</b></td>
+        <td>Agents read/set a task's sprint</td>
+        <td class="ve">Low*</td><td class="ve">Med</td>
+        <td><span class="pill later">Defer</span></td>
+      </tr>
+      <tr data-k="tui">
+        <td><b>TUI</b></td>
+        <td>—</td>
+        <td class="ve">—</td><td class="ve">—</td>
+        <td><span class="pill drop">Dropped</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="lede" style="margin-top:12px">* MCP value rises only if agent workflows need sprint awareness; no current driver. TUI was deleted in #537 — not a candidate.</p>
+</section>
+
+<section id="decision">
+  <h2>Decision</h2>
+  <p class="lede">Lead with the cheapest things that unblock everything, then the highest-value human surface.</p>
+  <div class="pillars">
+    <div class="pillar p2">
+      <div class="tag">DO NOW · STOP-GAP</div>
+      <h3>Register Sprint in admin + expose sprint_id</h3>
+      <p>Two tiny, zero-risk changes worth doing immediately regardless of the larger plan. <code>SprintAdmin</code> (~8 lines, mirrors existing classes) gives eyes-on today. Adding <code>sprint_id</code> to <code>WorkItemOut</code> removes the one blocker for all per-task display and for #603.</p>
+    </div>
+    <div class="pillar">
+      <div class="tag">FIRST PRODUCT BUILD</div>
+      <h3>Sprint field in DetailsTab</h3>
+      <p>The natural home: a task's sprint is a property, so it slots after the Parent section, before <code>WorktreeBlock</code>. Reuses the proven Status/Parent pattern — label + button → cursor picker → <code>PATCH /work-items/{id}</code>.</p>
+      <p>This single field is <b>both</b> the first display surface <b>and</b> the assign / move / clear affordance. (See subtask "Display current sprint in the Details tab".)</p>
+    </div>
+    <div class="pillar p4">
+      <div class="tag">NEXT</div>
+      <h3>Lightweight sprint list / detail</h3>
+      <p>Once the data flow is proven on the field, a simple per-project sprint list + single-sprint detail (progress already derived in <code>GET /sprints/{id}</code>, its tasks via <code>/sprints/{id}/work-items</code>) is the better second step than jumping to the full grid.</p>
+    </div>
+    <div class="pillar p3">
+      <div class="tag">LATER</div>
+      <h3>Planning map (#603) feeds from this</h3>
+      <p>The modules × sprints story map is the aggregate planning view. It is more build and is complementary — not the right <i>first</i> view. This spike <b>precedes and unblocks</b> it.</p>
+    </div>
+  </div>
+</section>
+
+<section id="r603">
+  <h2>Relationship to #603</h2>
+  <p class="lede">Per-task vs aggregate — they are complementary, not competing. This spike precedes, feeds, and unblocks #603.</p>
+  <div class="rel">
+    <div class="box this">
+      <div class="h">THIS WORK — per-task view</div>
+      <p>DetailsTab field shows &amp; assigns one task's sprint. Cheap, proves data flow, ships value immediately. Includes the <code>sprint_id</code> read-exposure fix #603 also needs.</p>
+    </div>
+    <div class="arr">→</div>
+    <div class="box">
+      <div class="h">#603 — aggregate view</div>
+      <p>Modules × sprints story grid with drag-to-assign. Inherits the exposed <code>sprint_id</code> and the same <code>PATCH {sprint_id}</code> assignment seam. Build after the field + list prove out.</p>
+    </div>
+  </div>
+</section>
+
+<section id="tickets">
+  <h2>Follow-up tickets filed</h2>
+  <p class="lede">Click a row for the exact delta. Story carries no detail; the detail lives on the subtask.</p>
+  <div class="tree" id="tree">
+    <div class="titem">
+      <div class="trow"><span class="badge tic">STORY</span><span class="path">Sprint Visualization <code>aabe97cf</code></span></div>
+      <div class="delta">Umbrella story for all sprint-display surfaces. Intentionally no detail — each surface becomes a subtask.</div>
+    </div>
+    <div class="titem indent">
+      <div class="trow"><span class="badge tic">SUBTASK</span><span class="path">Display current sprint in the Details tab <code>ef35bab7</code></span></div>
+      <div class="delta">Full LLD-ready detail: precondition (expose <code>sprint_id</code> on <code>WorkItemOut</code>), types.ts + api.ts + tasksStore + DetailsTab field + SetSprint picker modal, assignment UX, acceptance. This is the first build.</div>
+    </div>
+    <div class="titem indent">
+      <div class="trow"><span class="badge mod">RECOMMENDED</span><span class="path">+ Register Sprint in admin (stop-gap)</span></div>
+      <div class="delta">Could be folded into the subtask's precondition or filed separately — ~8 lines in <code>worktracker/admin.py</code>, mirrors StateAdmin. Worth doing immediately.</div>
+    </div>
+    <div class="titem indent">
+      <div class="trow"><span class="badge new">FUTURE</span><span class="path">+ Sprint list / detail view (next)</span></div>
+      <div class="delta">File when the field lands. Per-project sprint list + single-sprint progress &amp; tasks.</div>
+    </div>
+    <div class="titem indent">
+      <div class="trow"><span class="badge tic">EXISTING</span><span class="path">#603 Sprint Planning Map (later, unblocked by this)</span></div>
+      <div class="delta">Already planned. Now unblocked by the <code>sprint_id</code> exposure done in the subtask.</div>
+    </div>
+  </div>
+</section>
+
+<section id="accept">
+  <div class="accept">
+    <h3>Decision accepted when</h3>
+    <ul>
+      <li>Recommended surface order is agreed: admin + <code>sprint_id</code> now → DetailsTab field first → sprint list next → #603 later.</li>
+      <li>The blocker is acknowledged: <code>WorkItemOut</code> must expose <code>sprint_id</code> before any per-task display or #603.</li>
+      <li>Follow-up tickets exist: story "Sprint Visualization" + subtask "Display current sprint in the Details tab" (filed).</li>
+      <li>TUI confirmed out (deleted #537); MCP deferred absent an agent driver.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<script>
+  // node detail data
+  var INFO = {
+    spine: {t:"Existing UI spine", r:"NOT A SPRINT SURFACE", hint:"Projects → Modules → Tasks → TicketWorkspace. Sprints are orthogonal to this tree.", does:["Drives the epic/parent hierarchy"], doesnot:["Hold sprint membership — that's a task property"]},
+    details: {t:"DetailsTab field", r:"★ RECOMMENDED FIRST BUILD", hint:"Per-task view + assignment, all in one.", does:["Show a task's current sprint","Set / move / clear via cursor picker (PATCH {sprint_id})","Reuse the proven Status/Parent field pattern"], doesnot:["Aggregate across tasks (that's #603)","Create sprints (admin / list does that)"]},
+    admin: {t:"Django admin", r:"DO NOW · STOP-GAP", hint:"~8 lines, mirrors StateAdmin.", does:["List/create/edit sprints with status + dates","Give eyes-on with zero frontend work"], doesnot:["Serve end users — it's an internal stop-gap"]},
+    list: {t:"Sprint list / detail", r:"NEXT", hint:"Better second step than the full grid.", does:["List sprints per project","Show a sprint's progress (already derived in GET /sprints/{id})","List the sprint's tasks (/sprints/{id}/work-items)"], doesnot:["Drag-to-plan across modules (that's #603)"]},
+    map603: {t:"Planning map #603", r:"LATER · AGGREGATE", hint:"Complementary, not the first view.", does:["Modules × sprints story grid","Drag card → PATCH {sprint_id}"], doesnot:["Need to be built first — it feeds from this spike","Work until sprint_id is exposed on WorkItemOut"]},
+    mcp: {t:"MCP tools", r:"DEFER", hint:"No current agent driver.", does:["Let agents read/set a task's sprint (if needed)"], doesnot:["Earn its keep yet — no workflow needs it"]},
+    tui: {t:"TUI", r:"DROPPED", hint:"Deleted in #537.", does:[], doesnot:["Exist — not a candidate"]},
+    schema: {t:"Expose sprint_id on WorkItemOut", r:"PRECONDITION · DO FIRST", hint:"schemas.py:53–92. WorkItemPatch already accepts it (:193).", does:["Make the current sprint readable","Unblock the DetailsTab field AND #603"], doesnot:["Require a migration — read-shape change only"]}
+  };
+  var info = document.getElementById('nodeInfo');
+  function renderInfo(k){
+    var d = INFO[k]; if(!d) return;
+    var h = '<h4>'+d.t+'</h4><div class="rank">'+d.r+'</div><p class="hint">'+d.hint+'</p>';
+    if(d.does.length){ h += '<div class="does">DOES</div><ul>'+d.does.map(function(x){return '<li class="d">'+x+'</li>';}).join('')+'</ul>'; }
+    if(d.doesnot.length){ h += '<div class="doesnot">DOES NOT</div><ul>'+d.doesnot.map(function(x){return '<li class="x">'+x+'</li>';}).join('')+'</ul>'; }
+    info.innerHTML = h;
+  }
+  var nodes = document.querySelectorAll('.node');
+  function highlight(k){
+    nodes.forEach(function(n){
+      n.classList.remove('hl'); n.classList.add('dim');
+      if(n.getAttribute('data-k')===k){ n.classList.add('hl'); n.classList.remove('dim'); }
+    });
+  }
+  function clearDim(){ nodes.forEach(function(n){ n.classList.remove('dim','hl'); }); }
+  nodes.forEach(function(n){
+    n.addEventListener('click', function(){ var k=n.getAttribute('data-k'); highlight(k); renderInfo(k); });
+  });
+
+  // rank table ↔ diagram cross-highlight
+  var rows = document.querySelectorAll('#rankTable tbody tr');
+  rows.forEach(function(r){
+    var k = r.getAttribute('data-k');
+    r.addEventListener('mouseenter', function(){ highlight(k); rows.forEach(function(x){x.classList.remove('active');}); r.classList.add('active'); });
+    r.addEventListener('click', function(){ highlight(k); renderInfo(k); document.getElementById('map').scrollIntoView({behavior:'smooth'}); });
+  });
+  document.getElementById('rankTable').addEventListener('mouseleave', function(){ clearDim(); rows.forEach(function(x){x.classList.remove('active');}); });
+
+  // change-map tree expand
+  document.querySelectorAll('#tree .titem').forEach(function(it){
+    it.querySelector('.trow').addEventListener('click', function(){ it.classList.toggle('open'); });
+  });
+
+  // scroll-spy nav
+  var links = document.querySelectorAll('#nav a');
+  var secs = Array.prototype.map.call(links, function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var y = window.scrollY + 170, idx = 0;
+    secs.forEach(function(s,i){ if(s && s.offsetTop <= y) idx = i; });
+    links.forEach(function(a,i){ a.classList.toggle('active', i===idx); });
+  }
+  window.addEventListener('scroll', spy); spy();
+</script>
+</body>
+</html>

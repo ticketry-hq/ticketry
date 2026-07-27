@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T687-7 · Delete web/frontend — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+
+  /* change map */
+  .cm { display: grid; grid-template-columns: 440px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12px; line-height: 1.95; overflow-x: auto; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 7px; font-weight: 700; }
+  .cm-tree .hit.del { background: var(--red-soft); color: var(--red); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.defer { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; align-self: start; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; font-family: var(--mono); }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* deep-link flow */
+  .flow-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: fill .12s; }
+  .node.hl rect, .node.hl ellipse { fill: var(--accent); }
+  .node.hl text { fill: #fff; }
+  #flowInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #flowInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #flowInfo .hint { color: var(--muted); font-style: italic; }
+  #flowInfo p { margin-top: 6px; color: var(--ink); }
+  #flowInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--accent-soft); color: var(--accent); }
+  .sev.no { background: var(--red-soft); color: var(--red); }
+
+  /* build order */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .callout { border-radius: 12px; padding: 18px 22px; font-size: 13.5px; }
+  .callout.amber { background: var(--amber-soft); border: 1px solid #ecd9a8; }
+  .callout.amber b { color: var(--amber); }
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  .rules { list-style: none; }
+  .rules li { font-size: 13px; padding: 7px 0 7px 26px; position: relative; border-bottom: 1px dashed var(--line); }
+  .rules li:last-child { border-bottom: none; }
+  .rules li::before { content: "▸"; position: absolute; left: 4px; color: var(--violet); font-weight: 900; }
+  .rules li b { color: var(--violet); }
+
+  @media (max-width: 900px) {
+    .cm, .flow-wrap { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · worktracker-stack module · Ticket #696 (CODIN-696) · LLD</div>
+  <h1>T687-7 — Delete web/frontend &amp; drop the :5173 dev service</h1>
+  <div class="sub">A deletion-and-cleanup slice: remove the standalone <span class="m">web/frontend</span> Vite app and every <em>operational</em> dangling reference to it — the <span class="m">:5173</span> dev service in <span class="m">scripts/dev.mjs</span>, the workspace + ignore entries, and the external "open in coding app" deep-link — leaving Studio (<span class="m">:5174</span>) as the single frontend. <b>No new behaviour; no migrations; no endpoints.</b> The production Docker static repoint is carved out to sibling <span class="m">#697</span>.</div>
+  <div class="chips">
+    <span class="chip red">1 directory deleted</span>
+    <span class="chip amber">~13 files modified</span>
+    <span class="chip violet">No migrations · no endpoints · no new feature</span>
+    <span class="chip">Blocked: do not implement yet</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#deeplink">Deep-link Retirement</a>
+  <a href="#boundary">Scope Boundary (#697)</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#scope">In / Out of Scope</a>
+  <a href="#readiness">Readiness Gate</a>
+  <a href="#tests">Verification</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map — the dangling-reference inventory</h2>
+  <div class="lede">Every file carrying an <em>operational</em> reference to <span class="m">web/frontend</span> or <span class="m">:5173</span>. Click a highlighted entry for its exact delta. Paths are relative to the <b>Muxed root</b> — note the scripts and workspace files live above <span class="m">worktracker-stack/</span>, even though this ticket's module folder is <span class="m">worktracker-stack/</span>.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">Muxed/</div>
+      <div>├─ <span class="hit del" data-f="webfrontend">web/frontend/</span> <span style="color:#9aa3b8">(whole dir incl. README)</span></div>
+      <div>├─ <span class="hit mod" data-f="workspace">pnpm-workspace.yaml</span></div>
+      <div>├─ <span class="hit mod" data-f="lock">pnpm-lock.yaml</span> <span style="color:#9aa3b8">(regenerated)</span></div>
+      <div class="dir">├─ scripts/</div>
+      <div>│&nbsp;&nbsp;├─ <span class="hit mod" data-f="dev">dev.mjs</span></div>
+      <div>│&nbsp;&nbsp;├─ <span class="hit mod" data-f="stopdev">stop-dev.mjs</span></div>
+      <div class="dir">│&nbsp;&nbsp;└─ __tests__/</div>
+      <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="devtest">dev.test.mjs</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="stoptest">stop-dev.test.mjs</span></div>
+      <div>├─ <span class="hit mod" data-f="dockerignore">.dockerignore</span></div>
+      <div>├─ <span class="hit mod" data-f="gitignore">.gitignore</span></div>
+      <div>├─ <span class="hit mod" data-f="rootreadme">README.md</span></div>
+      <div class="dir">├─ docker/Dockerfile <span style="color:#9aa3b8">→ deferred to #697</span></div>
+      <div class="dir">└─ worktracker-stack/</div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ studio/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit mod" data-f="env">.env.example</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ src/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="viteenv">vite-env.d.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="config">stores/studio/configStore.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="bridge">lib/codingBridge.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="bridgetest">test/codingBridge.test.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="drawer">shell/IssueDrawerHeader.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="shortcut">hooks/useGlobalKeyboardShortcuts.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="wsreadme">README.md</span></div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="claude">CLAUDE.md</span></div>
+      <div>&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="ownership">OWNERSHIP.md</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--red-soft)"></i>deleted</span>
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--accent-soft)"></i>deferred to #697</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail"><span class="hint">Select a file on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ DEEP-LINK RETIREMENT ============ -->
+<section id="deeplink">
+  <h2>Deep-link retirement — external tab → in-app route</h2>
+  <div class="lede">The "open in coding app" affordance opened a new browser window at the standalone <span class="m">:5173</span> frontend. That target is being deleted. Click a node to see what each layer changes. The trigger stays; only the destination changes — to the in-app mounted coding surface, with no external window and no <span class="m">:5173</span> URL anywhere.</div>
+  <div class="flow-wrap">
+    <svg viewBox="0 0 560 300" width="100%">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+      </defs>
+      <!-- BEFORE row -->
+      <text x="14" y="30" font-size="11" font-weight="800" fill="#b03030" letter-spacing=".06em">BEFORE — external window.open</text>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="150" y1="62" x2="206" y2="62" marker-end="url(#ar)"/>
+        <line x1="330" y1="62" x2="386" y2="62" marker-end="url(#ar)"/>
+      </g>
+      <g class="node" data-n="trigger"><rect x="14" y="46" width="136" height="32" rx="7" fill="#f0e9fb" stroke="#6b3fb8"/><text x="82" y="66" text-anchor="middle" font-size="11.5" font-weight="700" fill="#3d2370">trigger (button / w)</text></g>
+      <g class="node" data-n="bridge"><rect x="206" y="46" width="124" height="32" rx="7" fill="#fbf0d8" stroke="#9a6700"/><text x="268" y="66" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a6700">codingBridge.ts</text></g>
+      <g class="node" data-n="ext"><rect x="386" y="46" width="160" height="32" rx="7" fill="#fbe7e7" stroke="#b03030"/><text x="466" y="66" text-anchor="middle" font-size="11.5" font-weight="700" fill="#b03030">window.open :5173</text></g>
+
+      <!-- arrow down -->
+      <line x1="280" y1="98" x2="280" y2="128" stroke="#1d7a4f" stroke-width="2" marker-end="url(#ar)" stroke-dasharray="4 3"/>
+      <text x="292" y="118" font-size="11" fill="#1d7a4f">retire external target</text>
+
+      <!-- AFTER row -->
+      <text x="14" y="168" font-size="11" font-weight="800" fill="#1d7a4f" letter-spacing=".06em">AFTER — in-app navigate</text>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="150" y1="200" x2="206" y2="200" marker-end="url(#ar)"/>
+        <line x1="330" y1="200" x2="386" y2="200" marker-end="url(#ar)"/>
+      </g>
+      <g class="node" data-n="trigger2"><rect x="14" y="184" width="136" height="32" rx="7" fill="#f0e9fb" stroke="#6b3fb8"/><text x="82" y="204" text-anchor="middle" font-size="11.5" font-weight="700" fill="#3d2370">trigger (button / w)</text></g>
+      <g class="node" data-n="path"><rect x="206" y="184" width="124" height="32" rx="7" fill="#e3f3ea" stroke="#1d7a4f"/><text x="268" y="204" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1d7a4f">codingSurfacePath()</text></g>
+      <g class="node" data-n="nav"><rect x="386" y="184" width="160" height="32" rx="7" fill="#e8edfb" stroke="#3556d4"/><text x="466" y="204" text-anchor="middle" font-size="11.5" font-weight="700" fill="#3556d4">navigate(/coding)</text></g>
+
+      <text x="14" y="262" font-size="11" fill="#5b6478">Removed entirely: <tspan font-family="var(--mono)" font-weight="700">VITE_CODING_APP_URL</tspan> env var + its config/vite-env declarations.</text>
+      <text x="14" y="282" font-size="11" fill="#5b6478"><tspan font-family="var(--mono)" font-weight="700">VITE_CODING_API_BASE</tspan> (agent-state badge) is unrelated and stays.</text>
+    </svg>
+    <div id="flowInfo"><span class="hint">Click a node.</span></div>
+  </div>
+</section>
+
+<!-- ============ SCOPE BOUNDARY ============ -->
+<section id="boundary">
+  <h2>Scope boundary with #697 (Docker SPA repoint)</h2>
+  <div class="lede">The #696 ticket text lists a <span class="m">docker/Dockerfile</span> repoint, but sibling <span class="m">#697 (T687-8)</span> — refined the same day and <b>blocked by this ticket</b> — explicitly claims that as <em>its</em> work ("this ticket only ensures the Dockerfile no longer references the old path; [#696] handles the workspace-manifest cleanup"). To avoid double-ownership, this LLD <b>defers all Dockerfile build-logic to #697</b> and keeps only the deletion-coupled cleanup here.</div>
+  <table>
+    <thead><tr><th style="width:330px">Work</th><th style="width:110px">Owner</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr><td>Delete <span class="m">web/frontend/</span>, drop the workspace entry, regenerate the lockfile</td><td><span class="sev ok">#696</span></td><td>The deletion itself; nothing else can build on it until the dir is gone.</td></tr>
+      <tr><td>Remove the <span class="m">:5173</span> dev service from <span class="m">dev.mjs</span> / <span class="m">stop-dev.mjs</span> + tests</td><td><span class="sev ok">#696</span></td><td>Dev supervision — purely operational, no production overlap.</td></tr>
+      <tr><td>Remove <span class="m">web/frontend/dist</span> entries from <span class="m">.dockerignore</span> / <span class="m">.gitignore</span></td><td><span class="sev ok">#696</span></td><td>These ignore the deleted dir's artifacts; they go stale the moment the dir is gone, so they belong with the deletion.</td></tr>
+      <tr><td>Retire the external coding-app deep-link (<span class="m">VITE_CODING_APP_URL</span>, <span class="m">window.open</span>)</td><td><span class="sev ok">#696</span></td><td>The deep-link targeted the deleted frontend; nothing else owns it.</td></tr>
+      <tr><td><span class="m">docker/Dockerfile</span> stage-1 build → <span class="m">@worktracker/studio</span>; copy <span class="m">studio/dist</span> → <span class="m">/app/static</span>; drop orphaned <span class="m">desktop</span>/<span class="m">worktracker-core</span> copies</td><td><span class="sev def">#697</span></td><td>Production single-origin serving is #697's whole subject; it verifies the prod image build green.</td></tr>
+      <tr><td><span class="m">server/studio_server/urls.py</span> SPA catch-all (comment refresh only)</td><td><span class="sev def">#697</span></td><td>Path-agnostic already; #697 owns the wording.</td></tr>
+    </tbody>
+  </table>
+  <div style="margin-top:14px" class="callout amber"><b>Open item for confirmation:</b> #696's own acceptance list still carries a "Dockerfile builds Studio → /app/static; prod image build green" line. Under this boundary that line is <b>satisfied by #697</b>, not re-implemented here. If you prefer #696 to keep the Dockerfile, say so and the change set folds the #697 Dockerfile steps back in.</div>
+</section>
+
+<!-- ============ DECISIONS ============ -->
+<section id="decisions">
+  <h2>Decisions resolved for implementation</h2>
+  <div class="lede">The refinement left two genuinely open choices. Both are resolved here so the slice is decision-complete.</div>
+  <table>
+    <thead><tr><th style="width:240px">Question</th><th style="width:230px">Decision</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Deep-link replacement target: in-app <span class="m">/coding</span> root, per-issue <span class="m">/coding/issues/:key</span>, or remove the trigger?</td>
+        <td><b>Navigate in-app to the project's coding surface root</b> <span class="m">/projects/:projectId/coding</span>; keep the button + <span class="m">w</span> shortcut.</td>
+        <td>Matches the agreed scope ("in-app /coding"). The mounted coding surface's internal per-issue routing belongs to #691 (still unmerged), so a per-issue path would couple this ticket to unfinished internals. Root nav keeps the affordance, drops the external tab, and stays decoupled. A per-issue deep-link is a clean later enhancement once #691's internal router is settled.</td>
+      </tr>
+      <tr>
+        <td>Fate of <span class="m">codingBridge.ts</span> after <span class="m">openInCodingApp</span> / <span class="m">codingAppUrl</span> are removed?</td>
+        <td><b>Slim it to a pure path builder</b> (e.g. <span class="m">codingSurfacePath(projectId)</span>); navigation moves to the call sites via react-router <span class="m">useNavigate</span>.</td>
+        <td>Keeps one testable seam instead of duplicating a path string across two call sites; lets <span class="m">codingBridge.test.ts</span> survive as a rewritten pure-function test (no <span class="m">:5173</span>). The hook/component own <span class="m">useNavigate</span> because it cannot live in a plain module.</td>
+      </tr>
+      <tr>
+        <td>Source of <span class="m">projectId</span> at the call sites?</td>
+        <td>Read the active project id from <span class="m">useStudioStore</span>.</td>
+        <td>The issue drawer is project-scoped — the drawer's issue belongs to the active project, so the active id is the correct target. No new prop threading.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ IN / OUT OF SCOPE ============ -->
+<section id="scope">
+  <h2>In scope / out of scope</h2>
+  <div class="lede">The cut line that keeps this slice tight — especially the references this ticket deliberately leaves alone.</div>
+  <ul class="rules">
+    <li><b>Out — frozen design docs.</b> ~40 <span class="m">spec/**/*.html|.md</span> files mention <span class="m">5173</span> / <span class="m">web/frontend</span> as point-in-time HLD/LLD history. Left untouched by design.</li>
+    <li><b>Out — root inventory note.</b> <span class="m">worktracker_decommission_inventory.md</span> is a point-in-time root inventory, not a live operational doc; left as-is.</li>
+    <li><b>Out — the agent-state badge.</b> <span class="m">VITE_CODING_API_BASE</span> (defaults to <span class="m">/api</span>) drives the lifecycle badge, has nothing to do with <span class="m">:5173</span>, and stays.</li>
+    <li><b>Out — Dockerfile build logic &amp; urls.py.</b> Deferred to #697 (see Scope Boundary).</li>
+    <li><b>Out — the objective-boundary grep string.</b> The <span class="m">grep -rE 'codingBridge|…|VITE_CODING|openInCodingApp' studio/src</span> in CLAUDE.md/OWNERSHIP.md stays non-empty (lifecycleStore, AgentStateBadge, VITE_CODING_API_BASE remain), so the gate command itself needs no edit — only the prose rows describing the now-retired deep-link.</li>
+    <li><b>In — every operational reference</b> to <span class="m">web/frontend</span> / <span class="m">:5173</span> / <span class="m">@Muxed/web-frontend</span> / <span class="m">VITE_CODING_APP_URL</span> across the change map.</li>
+  </ul>
+</section>
+
+<!-- ============ READINESS GATE ============ -->
+<section id="readiness">
+  <h2>Readiness gate — do not implement yet</h2>
+  <div class="lede">Everything <span class="m">web/frontend</span> provided must already live in Studio before deletion. This ticket is blocked on five siblings; as of LLD authoring, several are unmerged or in-progress. Implementation starts only once the blockers below are all merged.</div>
+  <table>
+    <thead><tr><th style="width:120px">Blocker</th><th style="width:150px">Status (2026-06-29)</th><th>What it must land first</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">#690</span> (T687-1)</td><td><span class="sev warn">Todo</span></td><td>Project-scoped <span class="m">/coding</span> nav + route scaffold — the in-app navigation target.</td></tr>
+      <tr><td><span class="m">#691</span> (T687-2)</td><td><span class="sev no">blocked by #690</span></td><td>Wholesale mount of <span class="m">web/frontend</span> → <span class="m">studio/src/coding/</span> under the <span class="m">/coding/*</span> splat. Without this, deletion removes a live surface.</td></tr>
+      <tr><td><span class="m">#692</span> (T687-3)</td><td><span class="sev warn">In Progress</span></td><td>Shared WS wire-contract / single transport client.</td></tr>
+      <tr><td><span class="m">#694</span> (T687-5)</td><td><span class="sev no">not started</span></td><td>Coding-surface REST→SDK migration.</td></tr>
+      <tr><td><span class="m">#695</span> (T687-6)</td><td><span class="sev warn">done, unmerged</span></td><td>Lifecycle-mirror docstring retarget; its "single mirror" AC completes when this ticket deletes <span class="m">web/frontend</span>.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ VERIFICATION ============ -->
+<section id="tests">
+  <h2>Verification</h2>
+  <div class="lede">No new feature tests — the work is removal. Verification is "the absence is clean and nothing regressed." Updated suites plus targeted greps form the gate.</div>
+  <table>
+    <thead><tr><th style="width:260px">Check</th><th>What it asserts</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">scripts/__tests__/dev.test.mjs</span> (update)</td><td>Default service table becomes <span class="m">[studio, backend]</span> (MCP skipped); the <span class="m">frontend</span>-specific listener/env assertions and the <span class="m">frontend.port === 5173</span> checks are removed; the renamed test no longer says "frontend".</td></tr>
+      <tr><td><span class="m">scripts/__tests__/stop-dev.test.mjs</span> (update)</td><td>Supervised ports become <span class="m">[5174, 8787, 8123]</span>.</td></tr>
+      <tr><td><span class="m">test/codingBridge.test.ts</span> (rewrite)</td><td>Asserts the pure in-app path builder output; contains no <span class="m">:5173</span> / <span class="m">VITE_CODING_APP_URL</span> stub.</td></tr>
+      <tr><td>Studio unit suite + typecheck + <span class="m">vite build</span></td><td>Green after the deep-link change and the removed config field — confirms no dangling import of <span class="m">openInCodingApp</span> / <span class="m">codingAppUrl</span> / the removed config key.</td></tr>
+      <tr><td>Grep gate — scripts</td><td>No match for <span class="m">5173</span> or <span class="m">@Muxed/web-frontend</span> anywhere under <span class="m">scripts/</span>.</td></tr>
+      <tr><td>Grep gate — operational tree</td><td>No <span class="m">web/frontend</span>, <span class="m">VITE_CODING_APP_URL</span>, or external <span class="m">:5173</span> reference outside frozen <span class="m">spec/**</span> and the point-in-time root inventory.</td></tr>
+      <tr><td>Live <span class="m">pnpm dev</span> (user)</td><td>Launches exactly one frontend (Studio <span class="m">:5174</span>) + backend (+ optional MCP); the one-time browser-open targets Studio; the in-app "open in coding" trigger and the <span class="m">w</span> shortcut land on <span class="m">/coding</span>.</td></tr>
+      <tr><td>Prod image build (via #697)</td><td>Out of this ticket's gate; #697 verifies <span class="m">docker compose build &amp;&amp; up</span> serves Studio at the single origin.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Five steps, each landing green. Order matters: the deep-link must move in-app <em>before</em> the env var is removed, and the dir is deleted only after Studio fully owns the surface.</div>
+  <div class="steps">
+    <div class="bstep"><span class="n">1</span><b>Retire deep-link</b>Slim <span class="m">codingBridge.ts</span> to a path builder; move <span class="m">useNavigate</span> into the drawer header + <span class="m">w</span> shortcut; rewrite the bridge test.</div>
+    <div class="bstep"><span class="n">2</span><b>Drop env surface</b>Remove <span class="m">VITE_CODING_APP_URL</span> from <span class="m">.env.example</span>, <span class="m">vite-env.d.ts</span>, and the <span class="m">configStore</span> field; grep-confirm no consumers. Studio build green.</div>
+    <div class="bstep"><span class="n">3</span><b>Dev supervision</b>Strip the <span class="m">frontend</span> service + consts from <span class="m">dev.mjs</span>, retarget browser-open to Studio; update <span class="m">stop-dev.mjs</span> + both <span class="m">__tests__</span>.</div>
+    <div class="bstep"><span class="n">4</span><b>Delete + workspace</b>Remove <span class="m">web/frontend/</span>; drop the <span class="m">pnpm-workspace.yaml</span> entry; <span class="m">pnpm install</span> to regenerate the lockfile; clean <span class="m">.dockerignore</span> / <span class="m">.gitignore</span>.</div>
+    <div class="bstep"><span class="n">5</span><b>Docs + gate</b>Update root + worktracker-stack READMEs, CLAUDE.md, OWNERSHIP.md; run the grep gates + full suite + Studio build. Live <span class="m">pnpm dev</span> validates.</div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section>
+  <h2>Acceptance</h2>
+  <div class="accept">
+    <b>web/frontend gone, Studio is the sole frontend, no operational :5173 left.</b> <span class="m">pnpm dev</span> starts one frontend (Studio :5174) + backend; the coding affordance navigates in-app; <span class="m">scripts/</span>, ignores, and live docs carry no <span class="m">web/frontend</span> / <span class="m">:5173</span> reference; frozen <span class="m">spec/</span> history is left intact. Full suite + Studio build green. Production single-origin serving is proven by sibling <b>#697</b>. Gated on the five blockers being merged first.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    webfrontend: { t: 'web/frontend/', k: 'DELETED', items: [
+      'Delete the entire standalone Vite app directory, including its own README.md, package.json (name @Muxed/web-frontend), and vite.config.ts (port 5173).',
+      'This is the surface that #691 wholesale-mounts into studio/src/coding/ — deletion is safe only after that mount is merged.'
+    ], no: ['Do not delete before the readiness gate clears — it removes a live UI otherwise.'] },
+    workspace: { t: 'pnpm-workspace.yaml', k: 'MODIFIED', items: [
+      'Remove the "- web/frontend" package entry; the remaining members are worktracker-stack/studio and worktracker-stack/worktracker-typescript-sdk.'
+    ], no: ['No change to the studio / sdk entries.'] },
+    lock: { t: 'pnpm-lock.yaml', k: 'MODIFIED (regenerated)', items: [
+      'Run pnpm install after the workspace edit so @Muxed/web-frontend and its dev-only deps drop out of the lockfile.'
+    ], no: ['Not hand-edited — regenerated by the package manager.'] },
+    dev: { t: 'scripts/dev.mjs', k: 'MODIFIED', items: [
+      'Remove the FRONTEND_HOST / FRONTEND_PORT / FRONTEND_URL consts (lines ~8–10).',
+      'Remove the entire "frontend" service object in buildServices() (the pnpm --filter @Muxed/web-frontend dev command, lines ~426–445).',
+      'Retarget the browser-open block (lines ~731–743): wait on, and open, the Studio host/port (127.0.0.1:5174) instead of the frontend port — reuse the studio service consts already defined.'
+    ], no: ['No change to the studio or backend service objects, nor to the MCP slot.'] },
+    stopdev: { t: 'scripts/stop-dev.mjs', k: 'MODIFIED', items: [
+      'Drop { name: "frontend", host: "127.0.0.1", port: 5173 } from the SERVICES array (line ~10). Remaining: studio 5174, backend 8787, mcp 8123.'
+    ], no: ['No change to the kill/port-sweep logic.'] },
+    devtest: { t: 'scripts/__tests__/dev.test.mjs', k: 'MODIFIED', items: [
+      'Change the default-table assertion from ["frontend","studio","backend"] to ["studio","backend"].',
+      'Remove the frontend-specific listener/env assertions and the frontend.port === 5173 checks.',
+      'Rename the test names that say "frontend" so they describe the studio + backend table.'
+    ], no: ['Studio + backend assertions stay.'] },
+    stoptest: { t: 'scripts/__tests__/stop-dev.test.mjs', k: 'MODIFIED', items: [
+      'Change the supervised-ports assertion from [5173,5174,8787,8123] to [5174,8787,8123].'
+    ], no: [] },
+    dockerignore: { t: '.dockerignore', k: 'MODIFIED', items: [
+      'Remove the web/frontend/dist and web/frontend/tsconfig.tsbuildinfo lines (~19–21).'
+    ], no: ['Coupled to the deletion, not to the Dockerfile build logic (#697).'] },
+    gitignore: { t: '.gitignore', k: 'MODIFIED', items: [
+      'Remove the "Web frontend build artefacts" block: web/frontend/dist/ and web/frontend/tsconfig.tsbuildinfo (~21–23).'
+    ], no: [] },
+    rootreadme: { t: 'README.md (root)', k: 'MODIFIED', items: [
+      'Drop the `frontend` 127.0.0.1:5173 row from the service-matrix table.',
+      'Remove the "open http://127.0.0.1:5173 manually" line.',
+      'Adjust the supervised-ports phrasing to the studio/backend(/mcp) set.'
+    ], no: ['Service-matrix rows for backend and mcp stay.'] },
+    env: { t: 'studio/.env.example', k: 'MODIFIED', items: [
+      'Remove the VITE_CODING_APP_URL line and its "Deep-link base for the coding app" comment.'
+    ], no: ['Keep VITE_CODING_API_BASE — it drives the agent-state badge, unrelated to :5173.'] },
+    viteenv: { t: 'studio/src/vite-env.d.ts', k: 'MODIFIED', items: [
+      'Remove the `readonly VITE_CODING_APP_URL?: string;` declaration from ImportMetaEnv.'
+    ], no: ['Keep the VITE_CODING_API_BASE declaration.'] },
+    config: { t: 'studio/src/stores/studio/configStore.ts', k: 'MODIFIED', items: [
+      'Remove the `codingAppUrl: import.meta.env.VITE_CODING_APP_URL || ""` field.',
+      'Grep-confirm no remaining consumer reads config.codingAppUrl before deleting the field.'
+    ], no: ['Other config fields untouched.'] },
+    bridge: { t: 'studio/src/lib/codingBridge.ts', k: 'MODIFIED', items: [
+      'Replace codingAppUrl(key) + openInCodingApp(key) (which built a :5173 URL and called window.open) with a pure in-app path builder, e.g. codingSurfacePath(projectId) → /projects/:projectId/coding.',
+      'No window.open; no import.meta.env read.'
+    ], no: ['File is not deleted — kept as the slimmed, testable seam.'] },
+    bridgetest: { t: 'studio/src/test/codingBridge.test.ts', k: 'MODIFIED', items: [
+      'Rewrite to assert the in-app path builder output.',
+      'Remove the VITE_CODING_APP_URL stubs that set http://localhost:5173.'
+    ], no: ['No :5173 anywhere in the rewritten test.'] },
+    drawer: { t: 'studio/src/shell/IssueDrawerHeader.tsx', k: 'MODIFIED', items: [
+      'Replace the onClick={() => openInCodingApp(drawerKey)} with react-router useNavigate to codingSurfacePath(activeProjectId).',
+      'Relabel to an in-app affordance (e.g. "Open in Coding"); the external-link icon becomes cosmetic — swap or keep.',
+      'activeProjectId comes from useStudioStore.'
+    ], no: ['The button stays — only its destination changes.'] },
+    shortcut: { t: 'studio/src/hooks/useGlobalKeyboardShortcuts.ts', k: 'MODIFIED', items: [
+      'In useCodingAppShortcut, replace openInCodingApp(key) with useNavigate to the in-app coding path for the active project.',
+      'The `w` key + drawer-open guard stay; only the action changes.'
+    ], no: ['No new shortcut; no behavioural change beyond the destination.'] },
+    wsreadme: { t: 'worktracker-stack/README.md', k: 'MODIFIED', items: [
+      'Update the line that names VITE_CODING_APP_URL (~line 74) to reflect the retired external deep-link; keep the VITE_CODING_API_BASE / badge description.'
+    ], no: [] },
+    claude: { t: 'worktracker-stack/CLAUDE.md', k: 'MODIFIED', items: [
+      'Adjust the overlay description that lists the "open in coding app" deep-link (~line 6) so it no longer implies an external :5173 target.'
+    ], no: ['The objective-boundary grep command itself is unchanged (still matches the surviving overlay symbols).'] },
+    ownership: { t: 'worktracker-stack/OWNERSHIP.md', k: 'MODIFIED', items: [
+      'Refresh the codingBridge.ts row (no longer a "deep-link bridge to the Coding app" external link) and the .env.example VITE_CODING_APP_URL hunk note.'
+    ], no: ['Inventory structure stays; only the rows describing the retired deep-link change.'] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    const kc = d.k.startsWith('DELETED') ? 'var(--red)' : 'var(--amber)';
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + kc + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  const NODES = {
+    trigger:  { t: 'Trigger (before)', p: 'The "Open in coding app" button in IssueDrawerHeader.tsx and the global `w` shortcut in useGlobalKeyboardShortcuts.ts both call openInCodingApp(key).', e: 'Unchanged conceptually — the trigger survives into the after state.' },
+    bridge:   { t: 'codingBridge.ts (before)', p: 'codingAppUrl(key) reads import.meta.env.VITE_CODING_APP_URL and builds <base>/issues/:key; openInCodingApp opens it in a new tab.', e: 'Both functions are the thing being removed.' },
+    ext:      { t: 'window.open :5173', p: 'Opens a new browser window/tab at the standalone frontend (default http://127.0.0.1:5173) — the surface this ticket deletes.', e: 'Dangling target: deleting web/frontend leaves this pointing at nothing.' },
+    trigger2: { t: 'Trigger (after)', p: 'Same button + same `w` shortcut. The only change is what they do — they now navigate in-app rather than open a window.', e: 'No new affordance, no removed affordance.' },
+    path:     { t: 'codingSurfacePath()', p: 'A pure helper returns the in-app route /projects/:projectId/coding for the active project (id from useStudioStore). Testable without a DOM.', e: 'Replaces codingAppUrl; no env read, no :5173.' },
+    nav:      { t: 'navigate(/coding)', p: 'react-router useNavigate pushes the in-app coding route — same tab, same origin. No window.open, no external URL.', e: 'Per-issue deep-linking is a later enhancement once #691 internal routing settles.' }
+  };
+  const flowInfo = document.getElementById('flowInfo');
+  document.querySelectorAll('.node').forEach(n => n.addEventListener('click', () => {
+    document.querySelectorAll('.node').forEach(x => x.classList.remove('hl'));
+    n.classList.add('hl');
+    const d = NODES[n.dataset.n];
+    flowInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

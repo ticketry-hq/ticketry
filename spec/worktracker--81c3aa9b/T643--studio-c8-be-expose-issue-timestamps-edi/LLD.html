@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-643 · Studio C8 — Timestamps + editable labels — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; margin: 0 -40px; padding: 0 40px; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: #eef1f6; padding: 1px 5px; border-radius: 4px; color: #324; }
+
+  pre { background: #0f1320; color: #e6e9f2; border-radius: 10px; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; margin: 10px 0; }
+  pre .c { color: #7e88a3; } pre .k { color: #c98bdb; } pre .s { color: #9cc98b; } pre .f { color: #7fb5ff; } pre .d { color: #e6b35a; }
+  .codecap { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .card .tag { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); }
+  .card h3 { font-size: 15px; margin: 4px 0 8px; }
+  .card p { font-size: 13px; color: var(--muted); }
+  .card.accent { border-top: 4px solid var(--accent); }
+  .card.green { border-top: 4px solid var(--green); }
+  .card.red { border-top: 4px solid var(--red); }
+  .card.violet { border-top: 4px solid var(--violet); }
+
+  .tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+  .tnode { padding: 12px 14px; border-radius: 9px; cursor: pointer; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tnode:hover { background: #f5f7fb; }
+  .tnode + .tnode { border-top: 1px solid var(--line); border-radius: 0; }
+  .tnode .badge { font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 20px; letter-spacing: .05em; white-space: nowrap; }
+  .tnode.mod  .badge { background: var(--accent-soft); color: var(--accent); }
+  .tnode.new  .badge { background: var(--green-soft);  color: var(--green); }
+  .tnode.done .badge { background: var(--green-soft);  color: var(--green); }
+  .tnode.test .badge { background: #eef1f6;            color: var(--muted); }
+  .tnode .path { color: var(--ink); font-weight: 600; font-size: 14px; font-family: var(--mono); flex: 1; }
+  .tnode .twist { color: var(--muted); font-size: 16px; transition: transform .12s; }
+  .tnode.open .twist { transform: rotate(90deg); }
+  .tnode .delta { display: none; flex-basis: 100%; margin: 8px 0 2px 0; font-size: 13px; color: var(--ink); line-height: 1.55; }
+  .tnode.open .delta { display: block; }
+  .tnode .where { display: block; margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  .seqwrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 330px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step rect { transition: stroke-width .12s, filter .12s; }
+  .step.hl rect { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  #stepInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #stepInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #stepInfo .hint { color: var(--muted); font-style: italic; }
+  #stepInfo ul { list-style: none; margin-top: 8px; }
+  #stepInfo li { padding: 3px 0 3px 16px; position: relative; }
+  #stepInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  #stepInfo li.no { color: var(--red); }
+  #stepInfo li.no::before { content: "✕"; color: var(--red); font-size: 10px; top: 5px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .where { font-family: var(--mono); font-size: 12px; color: var(--violet); }
+  td b.ok { color: var(--green); } td b.warn { color: var(--amber); }
+
+  ol.steps { list-style: none; counter-reset: s; }
+  ol.steps li { counter-increment: s; position: relative; padding: 10px 0 10px 40px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  ol.steps li:last-child { border-bottom: none; }
+  ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 9px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; text-align: center; line-height: 26px; font-size: 13px; }
+  ol.steps li b { color: var(--ink); }
+
+  .accept { background: var(--green-soft); border: 1px solid #bfe3cd; border-radius: 12px; padding: 22px 24px; }
+  .accept h2 { color: var(--green); }
+  .accept ul { list-style: none; margin-top: 10px; }
+  .accept li { padding: 5px 0 5px 26px; position: relative; font-size: 13.5px; }
+  .accept li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+
+  .note { font-size: 12.5px; color: var(--amber); background: var(--amber-soft); border-radius: 8px; padding: 9px 13px; margin-top: 10px; }
+  .out { font-size: 12.5px; color: var(--red); background: var(--red-soft); border-radius: 8px; padding: 9px 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">WorkTracker · Module 81c3aa9b · CODIN-643 · LLD</div>
+  <h1>Studio C8 — timestamps + editable labels — low-level design</h1>
+  <p class="sub">Two additive fields on the out-schema chain (G07) and one name-based label replace-set in <code>patch_work_item</code> (G06), bundled because they share one PATCH route and one drawer section. Columns and the <code>labels</code> M2M already exist, so this ships <strong>no migration</strong>. The label write mirrors the proven <code>blocked_by_ids</code> post-save M2M pattern (#624).</p>
+  <div class="chips">
+    <span class="chip">LLD</span>
+    <span class="chip green">No migration</span>
+    <span class="chip violet">2 timestamps + 1 replace-set</span>
+    <span class="chip amber">SDK co-ship (extra=forbid)</span>
+    <span class="chip">Shares IssueDetail w/ C4 #639</span>
+  </div>
+  <nav id="nav">
+    <a href="#map">Change map</a>
+    <a href="#schema">Schema deltas</a>
+    <a href="#write">Label write</a>
+    <a href="#ts">Timestamps</a>
+    <a href="#fe">Front-end</a>
+    <a href="#seq">Sequence</a>
+    <a href="#edges">Edge matrix</a>
+    <a href="#tests">Test plan</a>
+    <a href="#order">Build order</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<section id="map">
+  <h2>Change map</h2>
+  <p class="lede">Click a file for its exact delta. Blue = modified; green = new; grey = tests. No migration node — every column and the M2M already exist.</p>
+  <div class="tree">
+
+    <div class="tnode mod"><span class="badge">MODIFIED</span><span class="path">worktracker/worktracker/schemas.py</span><span class="twist">›</span>
+      <span class="delta">Three field additions, zero new resolvers. (1) <code>LabelOut</code> gains <code>color: str = ""</code> — auto-serialized from <code>Label.color</code> by the existing <code>resolve_labels</code> (no resolver change). (2) <code>WorkItemOut</code> gains <code>created_at: datetime</code>, <code>updated_at: datetime</code> — ninja reads them straight off the model attrs. (3) <code>WorkItemPatch</code> gains <code>labels: Optional[List[str]] = None</code>.
+      <span class="where">LabelOut :72 · WorkItemOut :78 (+ datetime import) · resolve_labels :130 (unchanged) · WorkItemPatch :243</span></span>
+    </div>
+
+    <div class="tnode mod"><span class="badge">MODIFIED</span><span class="path">worktracker/worktracker/api.py</span><span class="twist">›</span>
+      <span class="delta">Two edits. (1) Import: add <code>Label</code> to the <code>from worktracker.models import (…)</code> block (:13–24) — it is <em>not</em> currently imported. (2) <code>patch_work_item</code>: after the existing <code>issue.save()</code> and beside the <code>blocked_by_ids</code> block (:634–640), add a <code>labels</code> replace-set — normalize names, <code>get_or_create</code> per name (minting the pk), then <code>issue.labels.set([...])</code>. <code>uuid</code> is already imported (:2).
+      <span class="where">import :13 · patch_work_item :590–642 · new labels block after :640</span></span>
+    </div>
+
+    <div class="tnode mod"><span class="badge">MODIFIED</span><span class="path">worktracker-sdk/worktracker_sdk/models.py</span><span class="twist">›</span>
+      <span class="delta"><code>extra="forbid"</code> on <code>OutputModel</code> (:38–41) forces co-ship: <code>WorkItem</code> gains <code>created_at: datetime</code>, <code>updated_at: datetime</code> (:99–125); <code>Label</code> gains <code>color: str = ""</code> (:93–96). Input side (<code>WorkItemUpdate</code>) is <strong>not</strong> touched — the label write goes FE→ninja directly, never through the SDK (the SDK already lacks <code>blocked_by_ids</code> on its update model, same reason).
+      <span class="where">Label :93 · WorkItem :99 (+ datetime import) — Sprint already proves datetime round-trips (:153–163)</span></span>
+    </div>
+
+    <div class="tnode mod"><span class="badge">MODIFIED</span><span class="path">studio/src/lib/types.ts</span><span class="twist">›</span>
+      <span class="delta"><code>Label</code> gains <code>color?: string</code> (:52–55). <code>WorkItem</code> gains <code>created_at: string</code>, <code>updated_at: string</code> (:58–84). <code>WorkItemPatch</code> gains <code>labels?: string[]</code> (:136–145).
+      <span class="where">Label :52 · WorkItem :58 · WorkItemPatch :136</span></span>
+    </div>
+
+    <div class="tnode new"><span class="badge">NEW</span><span class="path">studio/src/fields/LabelPicker.tsx</span><span class="twist">›</span>
+      <span class="delta">Mirrors <code>BlockerPicker.tsx</code>. A typeable add control: text input + Enter commits a trimmed name; suggestions are the distinct label names already present across <code>useBacklogStore().items</code> (minus those already on this issue) — no BE list endpoint. Enter on a novel name is allowed (the server creates it). Pure UI: it computes a name and calls <code>onAdd(name)</code>; it owns no API call.
+      <span class="where">new file · sibling of BlockerPicker.tsx</span></span>
+    </div>
+
+    <div class="tnode mod"><span class="badge">MODIFIED</span><span class="path">studio/src/stores/issueStore.ts</span><span class="twist">›</span>
+      <span class="delta">New <code>patchLabels(names: string[])</code> — a thin wrapper over the existing <code>patchField({ labels: names })</code> (:194), which already does optimistic-set + rollback + <code>applyServerItem</code>. <strong>No reverse write-through</strong> (unlike <code>patchBlockers</code> :211 — labels carry no inverse edge). Keying the patch on <code>labels</code> gives the drawer a <code>saving.labels</code> flag for free.
+      <span class="where">patchLabels (new) → patchField :194</span></span>
+    </div>
+
+    <div class="tnode mod"><span class="badge">MODIFIED</span><span class="path">studio/src/issue/IssueDetail.tsx</span><span class="twist">›</span>
+      <span class="delta">Two touches. (1) Replace the read-only Labels block (:363–376) with editable chips: each chip shows <code>l.name</code> on a background derived from <code>l.color</code> (neutral <code>bg-pane-title</code> when blank) plus a × that calls <code>patchLabels(names.filter(n =&gt; n !== l.name))</code>; append <code>&lt;LabelPicker&gt;</code> whose <code>onAdd</code> calls <code>patchLabels([...names, name])</code>. Chips key by <code>name</code> (the single key across optimistic + server state). (2) Add a read-only Created / Updated metadata row reading <code>task.created_at</code>/<code>task.updated_at</code> (absolute date).
+      <span class="where">Labels block :363–376 → editable · new metadata row</span></span>
+    </div>
+
+    <div class="tnode test"><span class="badge">TESTS</span><span class="path">worktracker tests · worktracker-sdk · studio/src/test</span><span class="twist">›</span>
+      <span class="delta">BE: patch labels add / remove / clear(<code>[]</code>) / absent-noop / get-or-create reuse (same name → same row, no dup) / project-scoped / trim+dedupe+drop-empty / case-sensitive; <code>created_at</code>/<code>updated_at</code> present on <code>WorkItemOut</code>. SDK: <code>WorkItem</code> round-trip with timestamps + <code>Label.color</code> under <code>extra="forbid"</code>. FE: chips render colored, add via picker, remove via ×, timestamps render; <code>tsc</code> stays green.
+      <span class="where">worktracker/.../tests · worktracker-sdk tests · studio/src/test/IssueDetail.test.tsx</span></span>
+    </div>
+
+  </div>
+</section>
+
+<section id="schema">
+  <h2>Schema deltas</h2>
+  <p class="lede">All three layers, mechanically. The only subtlety is that ninja serializes a <code>datetime</code> to ISO automatically — already proven by <code>SprintOut</code>/SDK <code>Sprint</code>.</p>
+  <pre><span class="c"># worktracker/schemas.py — add the import (top of file) and three field edits</span>
+<span class="k">from</span> datetime <span class="k">import</span> datetime          <span class="c"># add alongside the existing `date` import</span>
+
+<span class="k">class</span> <span class="f">LabelOut</span>(Schema):
+    name: <span class="k">str</span>
+    color: <span class="k">str</span> = <span class="s">""</span>                        <span class="c"># NEW (decision 2). Auto-read from Label.color;</span>
+                                       <span class="c"># resolve_labels (:130) already returns Label rows.</span>
+
+<span class="k">class</span> <span class="f">WorkItemOut</span>(Schema):
+    <span class="c"># ... all existing fields unchanged ...</span>
+    created_at: datetime               <span class="c"># NEW (G07) — auto_now_add column (models.py:296)</span>
+    updated_at: datetime               <span class="c"># NEW (G07) — auto_now column      (models.py:297)</span>
+
+<span class="k">class</span> <span class="f">WorkItemPatch</span>(Schema):
+    <span class="c"># ... existing optional fields ...</span>
+    labels: Optional[List[<span class="k">str</span>]] = <span class="k">None</span>    <span class="c"># NEW (G06). Absent = no-op (exclude_unset);</span>
+                                       <span class="c"># [] = clear all. Replace-set of NAMES.</span></pre>
+  <p class="codecap">No <code>resolve_created_at</code>/<code>resolve_updated_at</code> needed — ninja reads the same-named model attributes directly. <code>LabelOut.color</code> likewise needs no resolver; <code>resolve_labels</code> already hands ninja a list of <code>Label</code> instances and each field is read by name.</p>
+  <pre><span class="c"># worktracker-sdk/worktracker_sdk/models.py — co-ship (extra="forbid" forces it)</span>
+<span class="k">class</span> <span class="f">Label</span>(OutputModel):
+    name: <span class="k">str</span>
+    color: <span class="k">str</span> = <span class="s">""</span>                        <span class="c"># NEW</span>
+
+<span class="k">class</span> <span class="f">WorkItem</span>(OutputModel):
+    <span class="c"># ... existing fields ...</span>
+    created_at: datetime               <span class="c"># NEW</span>
+    updated_at: datetime               <span class="c"># NEW</span></pre>
+  <pre><span class="c">// studio/src/lib/types.ts</span>
+<span class="k">export interface</span> Label { name: <span class="k">string</span>; color?: <span class="k">string</span>; }              <span class="c">// + color</span>
+<span class="k">export interface</span> WorkItem { <span class="c">/* … */</span> created_at: <span class="k">string</span>; updated_at: <span class="k">string</span>; }  <span class="c">// + ISO strings</span>
+<span class="k">export interface</span> WorkItemPatch { <span class="c">/* … */</span> labels?: <span class="k">string</span>[]; }                 <span class="c">// + names</span></pre>
+</section>
+
+<section id="write">
+  <h2>The label write block</h2>
+  <p class="lede">Drops in beside the <code>blocked_by_ids</code> replace-set, after <code>issue.save()</code> (M2M edits need a persisted row). The one non-obvious detail: <code>Label.id</code> is a <code>UUIDField(primary_key=True)</code> with <strong>no default</strong>, so the create branch must mint the pk via <code>defaults</code>.</p>
+  <pre><span class="c"># api.py — patch_work_item, after issue.save() and the blocked_by_ids block (:640)</span>
+    <span class="k">if</span> <span class="s">"labels"</span> <span class="k">in</span> data:
+        <span class="c"># Normalize: trim, drop empties, dedupe (preserve order), cap at 255.</span>
+        names, seen = [], <span class="f">set</span>()
+        <span class="k">for</span> raw <span class="k">in</span> (data[<span class="s">"labels"</span>] <span class="k">or</span> []):
+            name = (raw <span class="k">or</span> <span class="s">""</span>).strip()[:<span class="d">255</span>]
+            <span class="k">if</span> name <span class="k">and</span> name <span class="k">not in</span> seen:
+                seen.add(name)
+                names.append(name)
+        <span class="c"># Name-based get-or-create, project-scoped. Mint the pk on create</span>
+        <span class="c"># (Label.id has no default). color defaults "" → neutral chip.</span>
+        labels = [
+            Label.objects.get_or_create(
+                project=issue.project, name=name,
+                defaults={<span class="s">"id"</span>: uuid.uuid4()},
+            )[<span class="d">0</span>]
+            <span class="k">for</span> name <span class="k">in</span> names
+        ]
+        issue.labels.set(labels)            <span class="c"># replace-set; [] clears all</span></pre>
+  <p class="codecap">Match is <code>(project, name)</code>, case-sensitive (Jira semantics — "Backend" ≠ "backend"). Reuse is automatic: the same name on another issue in the same project resolves to the same row, never a duplicate. Orphaned labels (zero issues after <code>.set()</code>) stay in the table — cheap, and they feed the FE autocomplete.</p>
+  <div class="note"><b>No DB-level uniqueness:</b> <code>Label</code> has no <code>unique_together("project","name")</code> (unlike <code>State</code>, models.py:163–164), and adding one would need a migration this ticket forbids. <code>get_or_create</code> is get-then-create, so two truly-concurrent first-writes of the same name <em>could</em> mint two rows. For this single-tenant tracker that race is an accepted residual; a future ticket can add the constraint + dedupe migration if it ever bites.</div>
+</section>
+
+<section id="ts">
+  <h2>Timestamps — nothing to compute</h2>
+  <p class="lede">The columns already populate themselves; C8 only projects them.</p>
+  <div class="cols2">
+    <div class="card green"><div class="tag">MODEL — already done</div><h3><code>auto_now_add</code> / <code>auto_now</code></h3><p><code>Issue.created_at</code> (models.py:296) sets on insert; <code>updated_at</code> (:297) bumps on every <code>save()</code>. The existing <code>patch_work_item</code> already calls <code>issue.save()</code>, so an edit moves <code>updated_at</code> with zero extra work.</p></div>
+    <div class="card accent"><div class="tag">WIRE — this ticket</div><h3>Project two ISO strings</h3><p><code>WorkItemOut</code> → SDK <code>WorkItem</code> → FE type each gain <code>created_at</code>/<code>updated_at</code>. The drawer renders an absolute date row; relative ("2d ago") is explicitly optional polish, deferred.</p></div>
+  </div>
+  <div class="note"><b>Bulk-update caveat (inherited):</b> the #633 cancel-cascade uses <code>.update()</code>, which bypasses <code>save()</code> and so won't bump a cascaded descendant's <code>updated_at</code>. Out of scope here; noted only so the displayed timestamp's semantics are understood.</div>
+</section>
+
+<section id="fe">
+  <h2>Front-end deltas</h2>
+  <p class="lede">One thin store action, one new picker, one drawer section rewrite. Chips key by <code>name</code> throughout — the only key consistent across optimistic and server state (decision 3: no <code>id</code> in the contract).</p>
+  <pre><span class="c">// issueStore.ts — patchLabels: optimistic + rollback for free via patchField</span>
+<span class="k">async</span> <span class="f">patchLabels</span>(names) {
+  <span class="k">await</span> get().patchField({ labels: names });   <span class="c">// reconciles open.task, rolls back on throw</span>
+}                                              <span class="c">// no reverse write-through (labels have no inverse edge)</span></pre>
+  <pre><span class="c">// IssueDetail.tsx — editable Labels block replaces the read-only one (:363–376)</span>
+<span class="k">const</span> names = task.labels.map((l) => l.name);
+&lt;Field label=<span class="s">"Labels"</span>&gt;
+  &lt;div className=<span class="s">"flex flex-wrap justify-end gap-1"</span>&gt;
+    {task.labels.map((l) => (
+      &lt;LabelChip key={l.name} label={l}
+        onRemove={() => <span class="k">void</span> patchLabels(names.filter((n) => n !== l.name))} /&gt;
+    ))}
+    &lt;LabelPicker currentNames={names} saving={Boolean(saving.labels)}
+      onAdd={(name) => <span class="k">void</span> patchLabels([...names, name])} /&gt;
+  &lt;/div&gt;
+&lt;/Field&gt;
+
+<span class="c">// metadata row — read-only, absolute dates</span>
+&lt;Field label=<span class="s">"Created"</span>&gt;{fmtDate(task.created_at)}&lt;/Field&gt;
+&lt;Field label=<span class="s">"Updated"</span>&gt;{fmtDate(task.updated_at)}&lt;/Field&gt;</pre>
+  <p class="codecap"><code>LabelChip</code> renders <code>name</code> on a tint from <code>color</code> (e.g. inline <code>style</code> when <code>color</code> is a hex, else the neutral <code>bg-pane-title</code> class the read-only chip used). The picker's suggestion list is computed from <code>useBacklogStore().items.flatMap(i =&gt; i.labels.map(l =&gt; l.name))</code>, de-duped, minus <code>currentNames</code>.</p>
+  <div class="note"><b>Optimistic gap:</b> a freshly-typed name has no <code>color</code> until the patch returns, so its chip shows neutral for one round-trip, then re-tints from the server's (blank → still neutral) value. This is why chips key by <code>name</code>, not a server id that doesn't exist yet.</div>
+</section>
+
+<section id="seq">
+  <h2>Label-write sequence</h2>
+  <p class="lede">Click a step for its mechanics and what it deliberately does not do.</p>
+  <div class="seqwrap">
+    <svg viewBox="0 0 640 400" width="100%" id="svg">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 Z" fill="#8a93a6"/>
+        </marker>
+      </defs>
+      <line x1="120" y1="66" x2="120" y2="92" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="120" y1="148" x2="120" y2="174" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="120" y1="234" x2="120" y2="260" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="212" y1="288" x2="330" y2="288" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="245" y="282" font-size="10" fill="#5b6478">get_or_create</text>
+      <line x1="120" y1="316" x2="120" y2="342" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+
+      <g class="step" data-k="type">
+        <rect x="28" y="36" width="184" height="30" rx="7" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="120" y="55" text-anchor="middle" font-size="11.5" font-weight="700">1 · type name + Enter / ×</text>
+      </g>
+      <g class="step" data-k="patch">
+        <rect x="28" y="92" width="184" height="56" rx="8" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="1.5"/>
+        <text x="120" y="114" text-anchor="middle" font-size="11.5" font-weight="700">2 · patchLabels → patchField</text>
+        <text x="120" y="130" text-anchor="middle" font-size="10" fill="#5b6478">optimistic open.task.labels</text>
+      </g>
+      <g class="step" data-k="route">
+        <rect x="28" y="174" width="184" height="56" rx="8" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="120" y="196" text-anchor="middle" font-size="11.5" font-weight="700">3 · PATCH /work-items/{id}</text>
+        <text x="120" y="212" text-anchor="middle" font-size="10" fill="#5b6478">{ labels: [...] } · normalize</text>
+      </g>
+      <g class="step" data-k="goc">
+        <rect x="330" y="260" width="184" height="56" rx="8" fill="#fbf0d8" stroke="#9a6700" stroke-width="1.5"/>
+        <text x="422" y="282" text-anchor="middle" font-size="11.5" font-weight="700">4 · get_or_create per name</text>
+        <text x="422" y="298" text-anchor="middle" font-size="10" fill="#5b6478">mint pk on create · labels.set()</text>
+      </g>
+      <g class="step" data-k="resolve">
+        <rect x="28" y="260" width="184" height="56" rx="8" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="120" y="282" text-anchor="middle" font-size="11.5" font-weight="700">5 · _resolve_issue</text>
+        <text x="120" y="298" text-anchor="middle" font-size="10" fill="#5b6478">WorkItemOut.labels (+ color)</text>
+      </g>
+      <g class="step" data-k="reconcile">
+        <rect x="28" y="342" width="184" height="44" rx="8" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="120" y="368" text-anchor="middle" font-size="11.5" font-weight="700">6 · reconcile / rollback</text>
+      </g>
+    </svg>
+    <div id="stepInfo">
+      <h4>Click a step</h4>
+      <p class="hint">Each step lists what it owns and what it leaves alone.</p>
+    </div>
+  </div>
+</section>
+
+<section id="edges">
+  <h2>Edge &amp; failure matrix</h2>
+  <table>
+    <thead><tr><th style="width:30%">Case</th><th>Behaviour</th><th style="width:20%">Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Patch <code>labels: ["A","B"]</code></td><td>get-or-create both; <code>issue.labels.set([A,B])</code>; returns chips with color</td><td><b class="ok">Add</b></td></tr>
+      <tr><td>Patch <code>labels: []</code></td><td><code>set([])</code> clears all labels on the issue</td><td><b class="ok">Clear</b></td></tr>
+      <tr><td>Patch without <code>labels</code> key</td><td><code>"labels" not in data</code> (exclude_unset) → block skipped, labels untouched</td><td><b class="ok">No-op</b></td></tr>
+      <tr><td>Reuse existing name</td><td>same <code>(project, name)</code> → existing row; no duplicate Label minted</td><td><b class="ok">Reused</b></td></tr>
+      <tr><td><code>["  Backend  ", "Backend", ""]</code></td><td>trim + dedupe + drop-empty → one label <code>Backend</code></td><td><b class="ok">Normalized</b></td></tr>
+      <tr><td><code>"Backend"</code> vs <code>"backend"</code></td><td>case-sensitive match → two distinct labels (Jira)</td><td><b class="ok">By design</b></td></tr>
+      <tr><td>Same name, different project</td><td><code>project=issue.project</code> scopes the match → separate row per project</td><td><b class="ok">Scoped</b></td></tr>
+      <tr><td>Name &gt; 255 chars</td><td><code>[:255]</code> truncates before <code>get_or_create</code> (model max)</td><td><b class="ok">Capped</b></td></tr>
+      <tr><td>Concurrent first-write of one name</td><td>no DB unique → get-then-create could mint two rows</td><td><b class="warn">Accepted</b></td></tr>
+      <tr><td>Removed label now orphaned</td><td>stays in table; not deleted; reused for autocomplete</td><td><b class="ok">Intentional</b></td></tr>
+      <tr><td>Optimistic chip color</td><td>neutral for one round-trip, then server <code>color</code> (blank → neutral)</td><td><b class="ok">Tolerated</b></td></tr>
+    </tbody>
+  </table>
+  <div class="out" style="margin-top:16px;"><b>Out of scope:</b> attachment upload (B3/C9) · comments / activity feed (B4/G08) · any label-admin / project label-CRUD UI or list endpoint · id-based label set · color editing · a <code>unique_together</code> migration · relative-time formatting.</div>
+</section>
+
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="cols2">
+    <div class="card accent">
+      <div class="tag">BACKEND — worktracker</div>
+      <h3>patch_work_item + WorkItemOut</h3>
+      <p>① add labels → both on <code>issue.labels</code> &amp; in the response. ② <code>[]</code> clears. ③ absent key is a no-op. ④ reuse: patch issue B with a name already on A → same Label row (<code>Label.objects.count()</code> unchanged). ⑤ project-scoped: same name across two projects → two rows. ⑥ normalize: <code>["  X ","X",""]</code> → one <code>X</code>. ⑦ case-sensitive: <code>"X"</code> ≠ <code>"x"</code>. ⑧ <code>created_at</code>/<code>updated_at</code> present &amp; ISO; <code>updated_at</code> advances after a patch.</p>
+    </div>
+    <div class="card violet">
+      <div class="tag">SDK — worktracker-sdk</div>
+      <h3>strict round-trip</h3>
+      <p>① a <code>WorkItem</code> payload carrying <code>created_at</code>/<code>updated_at</code> parses (extra="forbid" would reject if the fields were missing from the model). ② a <code>Label</code> with <code>color</code> parses; one without <code>color</code> falls back to <code>""</code>.</p>
+    </div>
+    <div class="card accent">
+      <div class="tag">FRONT-END — studio/src/test</div>
+      <h3>IssueDetail</h3>
+      <p>① chips render with color (and neutral when blank). ② picker add → <code>patchLabels([...names, "New"])</code>. ③ × → <code>patchLabels</code> without that name. ④ Created/Updated rows render the formatted dates. ⑤ <code>tsc</code> + <code>build</code> green with the new type fields.</p>
+    </div>
+    <div class="card green">
+      <div class="tag">GATE</div>
+      <h3>green bar</h3>
+      <p>worktracker suite + worktracker-sdk + studio <code>vitest</code> + <code>tsc</code> + <code>build</code> all green. Pre-existing auth/SDK env fails (noted in #624/#629/#633) remain unrelated.</p>
+    </div>
+  </div>
+</section>
+
+<section id="order">
+  <h2>Build order</h2>
+  <ol class="steps">
+    <li><b>Schema + SDK</b> — add the three <code>schemas.py</code> fields (+ <code>datetime</code> import) and the two SDK fields. SDK round-trip test; BE test ⑧ (timestamps present).</li>
+    <li><b>Label write</b> — import <code>Label</code> in <code>api.py</code>; add the normalize + <code>get_or_create</code> (pk-minting) + <code>labels.set()</code> block. BE tests ①–⑦.</li>
+    <li><b>FE types</b> — <code>Label.color</code>, <code>WorkItem.created_at/updated_at</code>, <code>WorkItemPatch.labels</code> (<code>tsc</code> green).</li>
+    <li><b>Store</b> — <code>patchLabels</code> wrapper in <code>issueStore</code>.</li>
+    <li><b>Drawer</b> — <code>LabelPicker.tsx</code> + editable chips + metadata row in <code>IssueDetail</code>. FE tests ①–④.</li>
+    <li><b>Green gate</b> — full suites + build; live e2e: add a label, reuse it on another issue (one row), clear all, confirm Created/Updated render and Updated moves after an edit.</li>
+  </ol>
+  <div class="note"><b>Coordination:</b> <code>IssueDetail.tsx</code> is shared with C4 (#639); C8 edits the Labels block + adds a metadata row — distinct sections from C4's attachments/breadcrumb/keyboard, so the merge surface is small but real. Land whichever is ready and rebase the other.</div>
+</section>
+
+<section id="accept" class="accept">
+  <h2>Acceptance</h2>
+  <ul>
+    <li>Every issue's drawer shows a Created and an Updated date; Updated advances after any edit.</li>
+    <li>Typing a label name + Enter adds a chip and persists it; the same name on another issue in the project resolves to the same <code>Label</code> row — no duplicate.</li>
+    <li><code>PATCH { labels: [] }</code> clears all labels; omitting <code>labels</code> leaves them untouched.</li>
+    <li>Names are trimmed, de-duplicated, empty-dropped, capped at 255, and matched case-sensitively ("Backend" ≠ "backend"); labels are project-scoped.</li>
+    <li>Chips render their <code>color</code>; blank-color (name-created) labels show a neutral chip.</li>
+    <li>No migration. <code>extra="forbid"</code> SDK round-trip passes with the new fields. BE + SDK + Studio suites + <code>tsc</code> + <code>build</code> all green.</li>
+  </ul>
+</section>
+
+</main>
+
+<script>
+  const INFO = {
+    type:      { t: "1 · Type name + Enter / ×", does: ["LabelPicker trims the typed name and calls onAdd(name)", "× on a chip calls patchLabels(names without that name)", "Suggestions come from labels already in the loaded tree"], no: ["Novel names are NOT blocked — the server creates them", "The picker makes no API call itself"] },
+    patch:     { t: "2 · patchLabels → patchField", does: ["patchField({ labels }) sets open.task optimistically", "Chip appears before the round-trip", "saving.labels flag drives a 'saving…' affordance"], no: ["No reverse write-through (labels have no inverse edge, unlike blockers)", "Does NOT normalize — the server is the authority"] },
+    route:     { t: "3 · PATCH /work-items/{id}", does: ["Body { labels: [...] }", "exclude_unset: absent = no-op, [] = clear", "Handler trims / dedupes / drops empties / caps 255"], no: ["Case is NOT folded — exact match (Jira)"] },
+    goc:       { t: "4 · get_or_create + set", does: ["Per name: Label.objects.get_or_create(project=issue.project, name=…)", "Mints id=uuid4() on create (pk has no default)", "issue.labels.set([...]) after issue.save()"], no: ["Does NOT delete orphaned labels", "Does NOT create cross-project labels (scoped by issue.project)", "No id-based set"] },
+    resolve:   { t: "5 · _resolve_issue", does: ["Returns WorkItemOut whose labels now include color", "resolve_labels lists Label rows; color read by name"], no: ["No new resolver added"] },
+    reconcile: { t: "6 · Reconcile / rollback", does: ["Same issue still open → open.task = server truth (keyed by name)", "On a thrown PATCH, open.task reverts to prior labels"], no: ["Orphaned labels stay in the table — feed future autocomplete"] },
+  };
+  const info = document.getElementById('stepInfo');
+  function show(k){
+    const d = INFO[k]; if(!d) return;
+    document.querySelectorAll('.step').forEach(n => n.classList.toggle('hl', n.dataset.k===k));
+    info.innerHTML = '<h4>'+d.t+'</h4><ul>'+
+      d.does.map(x=>'<li>'+x+'</li>').join('')+
+      d.no.map(x=>'<li class="no">'+x+'</li>').join('')+'</ul>';
+  }
+  document.querySelectorAll('.step').forEach(n => n.addEventListener('click', () => show(n.dataset.k)));
+  document.querySelectorAll('.tnode').forEach(t => t.addEventListener('click', () => t.classList.toggle('open')));
+
+  const links = [...document.querySelectorAll('#nav a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href')));
+  const obs = new IntersectionObserver(es => {
+    es.forEach(e => { if(e.isIntersecting){ const i = secs.indexOf(e.target); links.forEach((l,j)=>l.classList.toggle('active', j===i)); }});
+  }, { rootMargin: '-50% 0px -45% 0px' });
+  secs.forEach(s => s && obs.observe(s));
+</script>
+</body>
+</html>

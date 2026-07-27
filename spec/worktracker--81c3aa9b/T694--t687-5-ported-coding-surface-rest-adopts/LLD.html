@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T694 · Ported coding REST adopts the SDK — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+
+  /* change map */
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* cards */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .mcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .mcard h3 { font-size: 15px; margin-bottom: 10px; }
+  .mcard .mrow { display: grid; grid-template-columns: 150px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .mcard .mrow:last-child { border-bottom: none; }
+  .mcard .mk { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--violet); }
+  .mcard .mv { color: var(--ink); }
+  .mcard .mv .opt { color: var(--muted); font-size: 12px; }
+  .rules { list-style: none; }
+  .rules li { font-size: 13px; padding: 6px 0 6px 26px; position: relative; border-bottom: 1px dashed var(--line); }
+  .rules li:last-child { border-bottom: none; }
+  .rules li::before { content: "▸"; position: absolute; left: 4px; color: var(--violet); font-weight: 900; }
+  .rules li b { color: var(--violet); }
+
+  /* sequence */
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  tr.tr-hit td { background: var(--accent-soft); }
+  .map-row { cursor: pointer; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+  .sev.sdk { background: var(--accent-soft); color: var(--accent); }
+
+  /* contract card */
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; }
+  .contract .sect { display: grid; grid-template-columns: 210px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); padding-top: 2px; }
+  .contract .sv { color: var(--ink); }
+
+  /* build order */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  .callout { background: var(--accent-soft); border: 1px solid #c9d6f6; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--ink); margin-top: 14px; }
+  .callout b { color: var(--accent); }
+
+  @media (max-width: 900px) {
+    .cm, .grid2, .seq-wrap { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · worktracker-stack · Ticket #694 (CODIN-694) · T687-5 · LLD</div>
+  <h1>Ported coding-surface REST adopts the generated SDK — Low-Level Design</h1>
+  <div class="sub">Migrate the <b>Family A</b> calls in <span class="m">studio/src/coding/lib/api.ts</span> — the ones hitting <span class="m">/api/work-tracker/*</span> — from raw <span class="m">fetch</span> to the generated <span class="m">@worktracker/typescript-sdk</span> client, so backend contract drift surfaces as TypeScript errors. The host families (B–F) stay on raw fetch, tagged <span class="m">// gated: CODIN-668</span>. Frontend-only; no migrations, no endpoints, no behaviour change for the user.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">1 file rewritten · adapters added</span>
+    <span class="chip violet">No BE · no migrations · no new deps</span>
+    <span class="chip amber">12 fns → SDK · ~21 fns carved out</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#wiring">SDK Client Wiring</a>
+  <a href="#migration">Migration Map</a>
+  <a href="#adapters">Boundary Adapters</a>
+  <a href="#carveout">Carve-out</a>
+  <a href="#seq">Request Lifecycle</a>
+  <a href="#failures">Failure Matrix</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">One file is rewritten. Everything else is a read-only input the rewrite leans on. Click a highlighted entry for its exact delta.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">worktracker-stack/</div>
+      <div class="dir">├─ studio/src/coding/lib/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="codingapi">api.ts</span></div>
+      <div class="dir">│&nbsp;&nbsp;&nbsp;└─ types.ts <span style="color:#9aa3b8">— output shapes, untouched</span></div>
+      <div class="dir">├─ studio/src/coding/stores/</div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit ro" data-f="configstore">configStore.ts</span></div>
+      <div class="dir">├─ studio/src/lib/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit ro" data-f="studioapi">api.ts</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit ro" data-f="studiotypes">types.ts</span></div>
+      <div class="dir">├─ worktracker-typescript-sdk/</div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit ro" data-f="sdk">src/client.ts + generated/</span></div>
+      <div class="dir">├─ studio/src/coding/stores/tasksStore.ts <span style="color:#9aa3b8">— call site, untouched</span></div>
+      <div class="dir">└─ scripts/check-contract-drift.mjs <span style="color:#9aa3b8">— gate, unchanged</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--accent-soft)"></i>read-only input</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail"><span class="hint">Select a file on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ SDK CLIENT WIRING ============ -->
+<section id="wiring">
+  <h2>SDK client wiring — the auth seam</h2>
+  <div class="lede">Studio's <span class="m">studio/src/lib/api.ts</span> builds its client from a static <span class="m">VITE_WT_API_KEY</span>. The coding surface's key is per-profile and resolved <em>asynchronously</em> from <span class="m">configStore</span>. So the coding surface gets its own client built on the same <span class="m">createWorkTrackerClient</span> factory, with a custom <span class="m">fetch</span> that injects the key per request.</div>
+  <div class="grid2">
+    <div class="mcard">
+      <h3>The factory call</h3>
+      <div class="mrow"><span class="mk">factory</span><span class="mv"><span class="m">createWorkTrackerClient</span> from <span class="m">@worktracker/typescript-sdk</span> — the same export Studio uses.</span></div>
+      <div class="mrow"><span class="mk">baseUrl</span><span class="mv"><span class="m">/api/work-tracker</span> — the existing <span class="m">WORKTRACKER_BASE</span> constant; the proxy already routes it.</span></div>
+      <div class="mrow"><span class="mk">apiKey</span><span class="mv"><b>Not</b> passed at construction — the key is dynamic. Left undefined so the SDK's built-in header injection is a no-op.</span></div>
+      <div class="mrow"><span class="mk">fetch</span><span class="mv">A wrapper that, on every request, resolves the active profile's <span class="m">api_key</span> and sets the <span class="m">x-api-key</span> header before delegating to <span class="m">globalThis.fetch</span>.</span></div>
+      <div class="mrow"><span class="mk">instance</span><span class="mv">A module-level singleton. The wrapper reads <span class="m">configStore</span> at call time, so the singleton always tracks the current <span class="m">recentProfileIndex</span> — no rebuild on profile switch.</span></div>
+    </div>
+    <div class="mcard">
+      <h3>Why a custom fetch, not <span class="m">apiKey</span></h3>
+      <ul class="rules">
+        <li>The key today comes from <b>an async path</b> — <span class="m">worktrackerHeaders()</span> dynamically imports <span class="m">configStore</span> and reads <span class="m">profiles[recentProfileIndex].api_key</span>. <span class="m">createWorkTrackerClient</span>'s <span class="m">apiKey</span> option is a sync string captured once.</li>
+        <li>The <b>same auth logic moves verbatim</b> into the fetch wrapper — no new behaviour, just relocated from <span class="m">worktrackerRequest</span>.</li>
+        <li>The wrapper is exactly the SDK's documented extension point (<span class="m">options.fetch</span>); the post/onError middleware that raises <span class="m">WorkTrackerApiError</span> still runs.</li>
+        <li><b>No profile key → no header</b> (same as today: <span class="m">worktrackerHeaders</span> returns <span class="m">{}</span>). The backend decides the 401/403; behaviour is identical.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout"><b>Decision:</b> the coding surface owns its client instance — it does <b>not</b> import Studio's module-level <span class="m">sdk()</span> — because the two surfaces authenticate differently (env key vs. configStore profile). What is reused is the <span class="m">createWorkTrackerClient</span> factory and the null-tightened type aliases from <span class="m">studio/src/lib/types.ts</span>. This is the literal reading of the ticket's "reuse the createWorkTrackerClient wiring."</div>
+</section>
+
+<!-- ============ MIGRATION MAP ============ -->
+<section id="migration">
+  <h2>Migration map — the 12 Family A functions</h2>
+  <div class="lede">Every <span class="m">worktrackerRequest(...)</span> call becomes an SDK method call followed by the same normalizer. The public signature of each exported function is unchanged, so call sites never move. Hover a row to read the per-function note.</div>
+  <table>
+    <thead><tr><th style="width:190px">api.ts function</th><th style="width:300px">SDK method</th><th>Output adapter</th></tr></thead>
+    <tbody id="migBody">
+      <tr class="map-row" data-note="GET /projects. SDK returns Project[]; map each through normalizeProject (slug → identifier)."><td><span class="m">getProjects</span></td><td><span class="m">projects.listProjects()</span></td><td><span class="m">.map(normalizeProject)</span></td></tr>
+      <tr class="map-row" data-note="GET /projects/{id}/modules. SDK Module[] adapted to ModuleSummary (id/name/project_id). last_activity is still merged client-side from getModuleActivity — that call is carved out."><td><span class="m">getModules</span></td><td><span class="m">modules.listModules({projectId})</span></td><td><span class="m">.map(normalizeModule)</span> <span class="sev sdk">new adapter</span></td></tr>
+      <tr class="map-row" data-note="POST /projects/{id}/modules. createModule({projectId, moduleIn:{name}}); adapt the returned Module to ModuleSummary."><td><span class="m">createModule</span></td><td><span class="m">modules.createModule({projectId, moduleIn})</span></td><td><span class="m">normalizeModule</span></td></tr>
+      <tr class="map-row" data-note="Two parallel SDK calls replace two worktrackerRequests; directModuleTasks(moduleId, items) filtering is preserved unchanged. getStates is itself migrated, so the Promise.all reuses the migrated helper."><td><span class="m">getTasks</span></td><td><span class="m">workItems.listModuleWorkItems({moduleId})</span> + <span class="m">states.listStates({projectId})</span></td><td><span class="m">directModuleTasks</span> + states passthrough</td></tr>
+      <tr class="map-row" data-note="GET /projects/{id}/work-items?parent=. Maps to the parent filter on listProjectWorkItems; each item through normalizeTask."><td><span class="m">getSubtasks</span></td><td><span class="m">workItems.listProjectWorkItems({projectId, parent})</span></td><td><span class="m">.map(normalizeTask)</span></td></tr>
+      <tr class="map-row" data-note="GET /work-items/{id}. SDK getWorkItem returns WorkItemDetail; return { task: normalizeTask(detail.task) } — same shape the call site reads today."><td><span class="m">getTaskDetails</span></td><td><span class="m">workItems.getWorkItem({issueId})</span></td><td><span class="m">{ task: normalizeTask(detail.task) }</span></td></tr>
+      <tr class="map-row" data-note="GET /projects/{id}/states. SDK State[] is structurally a TaskState[] (id string|null, name, group, color) — direct passthrough, optional sort_order/is_protected ignored by consumers."><td><span class="m">getStates</span></td><td><span class="m">states.listStates({projectId})</span></td><td>passthrough (State ⊇ TaskState)</td></tr>
+      <tr class="map-row" data-note="PATCH /work-items/{id} with {state_id}. updateWorkItem({issueId, workItemPatch:{state_id}}); normalizeTask the result."><td><span class="m">postTaskStatus</span></td><td><span class="m">workItems.updateWorkItem({issueId, workItemPatch})</span></td><td><span class="m">normalizeTask</span></td></tr>
+      <tr class="map-row" data-note="GET /projects/{id}/sprints. SDK Sprint[] adapted to SprintSummary — nullable start_date/end_date/status coerced to non-null strings the coding UI expects."><td><span class="m">getSprints</span></td><td><span class="m">sprints.listSprints({projectId})</span></td><td><span class="m">.map(normalizeSprint)</span> <span class="sev sdk">new adapter</span></td></tr>
+      <tr class="map-row" data-note="PATCH /work-items/{id} with {sprint_id} (id or null to clear). Same updateWorkItem call; normalizeTask the result."><td><span class="m">updateTaskSprint</span></td><td><span class="m">workItems.updateWorkItem({issueId, workItemPatch})</span></td><td><span class="m">normalizeTask</span></td></tr>
+      <tr class="map-row" data-note="PATCH /work-items/{id} with {parent_id} (task id, module id, or null). Same updateWorkItem call; normalizeTask the result."><td><span class="m">updateTaskParent</span></td><td><span class="m">workItems.updateWorkItem({issueId, workItemPatch})</span></td><td><span class="m">normalizeTask</span></td></tr>
+      <tr class="map-row" data-note="POST /projects/{id}/work-items with {name, parent_id}. createProjectWorkItem({projectId, workItemIn}); normalizeTask the created item."><td><span class="m">createTask</span></td><td><span class="m">workItems.createProjectWorkItem({projectId, workItemIn})</span></td><td><span class="m">normalizeTask</span></td></tr>
+    </tbody>
+  </table>
+  <div id="migNote" class="callout" style="display:none"></div>
+</section>
+
+<!-- ============ BOUNDARY ADAPTERS ============ -->
+<section id="adapters">
+  <h2>Boundary adapters — keep call sites frozen</h2>
+  <div class="lede">The SDK returns the contract types (<span class="m">Project</span>, <span class="m">WorkItem</span>, <span class="m">Module</span>, <span class="m">Sprint</span>, <span class="m">State</span>). The coding surface consumes its own narrower shapes (<span class="m">ProjectSummary</span>, <span class="m">TaskSummary</span>, …). The normalizers are the single translation layer; their <em>inputs</em> change to SDK types, their <em>outputs</em> stay identical, so <span class="m">tasksStore</span> and every other consumer are untouched.</div>
+  <div class="grid2">
+    <div class="mcard">
+      <h3>Adapters — what each one does</h3>
+      <div class="mrow"><span class="mk">normalizeProject</span><span class="mv">Input type changes <span class="m">WorktrackerProject → Project</span>. Body unchanged: <span class="m">{id, name, identifier: p.slug}</span>. <span class="opt">SDK Project has <span class="m">slug</span> — confirmed.</span></span></div>
+      <div class="mrow"><span class="mk">normalizeModule</span><span class="mv"><b>New.</b> <span class="m">Module → ModuleSummary</span>: pick <span class="m">{id, name, project_id}</span>. <span class="opt">Replaces today's raw passthrough; SDK Module carries extra fields (key, sequence_id) the summary drops.</span></span></div>
+      <div class="mrow"><span class="mk">normalizeSprint</span><span class="mv"><b>New.</b> <span class="m">Sprint → SprintSummary</span>: <span class="m">start_date/end_date/status</span> are nullable/optional on the SDK type, coerced to <span class="m">""</span> defaults the coding UI expects.</span></div>
+      <div class="mrow"><span class="mk">normalizeTask</span><span class="mv">Input type changes <span class="m">WorktrackerTask → WorkItem</span>. Body unchanged: spread + null-state fallback to the "No state" default. <span class="opt">WorkItem's extra blocked_by_ids/blocks_ids are simply not surfaced.</span></span></div>
+      <div class="mrow"><span class="mk">directModuleTasks</span><span class="mv">Unchanged: filters items where <span class="m">parent_id === moduleId</span>, then <span class="m">normalizeTask</span>. Operates on SDK <span class="m">WorkItem[]</span> now.</span></div>
+    </div>
+    <div class="mcard">
+      <h3>Error mapping — preserve the throw contract</h3>
+      <ul class="rules">
+        <li>Today's <span class="m">request()</span> throws the coding-local <span class="m">ApiError(status, message, body)</span>; call sites catch it and read <span class="m">.status</span> / <span class="m">.body</span>.</li>
+        <li>The SDK throws <span class="m">WorkTrackerApiError</span> from its middleware. A thin <span class="m">call()</span> wrapper (mirroring Studio's) catches it and re-throws the coding <span class="m">ApiError</span> with the same fields.</li>
+        <li><b>The <span class="m">ApiError</span> class stays exported</b> from <span class="m">coding/lib/api.ts</span> — it is part of the surface; only its <em>producer</em> changes.</li>
+        <li><span class="m">AbortError</span> passes through untouched (SDK <span class="m">onError</span> re-throws it), so abortable call sites keep cancelling.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout"><b>Type source:</b> the migrated functions import the null-tightened aliases (<span class="m">Project, WorkItem, Module, Sprint, State, WorkItemPatch, WorkItemFilters, WorkItemDetail</span>) from <span class="m">studio/src/lib/types.ts</span> — the same aliases Studio's own <span class="m">api.ts</span> uses — so the adapters get the exact shapes the normalizers expect. The coding <span class="m">types.ts</span> output shapes are not edited.</div>
+</section>
+
+<!-- ============ CARVE-OUT ============ -->
+<section id="carveout">
+  <h2>Carve-out — host families stay on raw fetch (gated CODIN-668)</h2>
+  <div class="lede">These families are not in the OpenAPI the SDK is generated from, so they cannot be contract-checked yet. They keep their raw <span class="m">request(...)</span> calls; each block gets an inline <span class="m">// gated: CODIN-668</span> note. The shared <span class="m">request()</span> helper is retained for them — <span class="m">api.ts</span> is slimmed, not removed.</div>
+  <table>
+    <thead><tr><th style="width:160px">Family</th><th>Functions kept on raw fetch</th><th style="width:130px">Route prefix</th></tr></thead>
+    <tbody>
+      <tr><td>Config / profile</td><td><span class="m">getConfig · patchConfig · postProfile · putProfile · deleteProfile</span></td><td><span class="m">/api/config</span></td></tr>
+      <tr><td>Runs</td><td><span class="m">getModuleActivity</span></td><td><span class="m">/api/runs</span></td></tr>
+      <tr><td>Worktrees</td><td><span class="m">getWorktree · createWorktree · discardWorktree</span></td><td><span class="m">/api/worktrees</span></td></tr>
+      <tr><td>Settings</td><td><span class="m">getPanelWidths · putPanelWidths · getExpandedSubtasks · putExpandedSubtasks</span></td><td><span class="m">/api/settings</span></td></tr>
+      <tr><td>Terminals</td><td><span class="m">getTerminals · getScratchTerminals · getRunningAgentCounts · terminateTerminal</span></td><td><span class="m">/api/terminals</span></td></tr>
+      <tr><td>Documents / fs</td><td><span class="m">docUrl · getDocuments · getScratchDocuments · fsComplete</span></td><td><span class="m">/api/docs · /api/documents · /api/fs</span></td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>Removed by the migration:</b> the now-orphaned <span class="m">worktrackerRequest()</span> and <span class="m">worktrackerHeaders()</span> helpers and the <span class="m">WorktrackerProject / WorktrackerTask / WorktrackerTaskDetails</span> local interfaces — their auth logic moves into the SDK fetch wrapper and their types are superseded by the SDK aliases. <b>WS</b> <span class="m">/ws/terminal</span> frames are out of OpenAPI scope entirely (handled by T687-3/T687-4).</div>
+</section>
+
+<!-- ============ REQUEST LIFECYCLE ============ -->
+<section id="seq">
+  <h2>Request lifecycle — one Family A call, before vs. after</h2>
+  <div class="lede">Click a numbered step for its mechanics. The call site (left) and the returned shape (right) are identical before and after; everything in between is what this ticket swaps.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 720 380" width="100%">
+      <g font-size="12" font-weight="700">
+        <text x="80" y="22" text-anchor="middle" fill="#3d2370">tasksStore</text>
+        <text x="250" y="22" text-anchor="middle" fill="#9a6700">coding api.ts fn</text>
+        <text x="420" y="22" text-anchor="middle" fill="#3556d4">SDK client</text>
+        <text x="560" y="22" text-anchor="middle" fill="#1d7a4f">fetch wrapper</text>
+        <text x="668" y="22" text-anchor="middle" fill="#0e4d2f">backend</text>
+      </g>
+      <g stroke="#e3e7ee" stroke-width="1.5">
+        <line x1="80" y1="32" x2="80" y2="360"/>
+        <line x1="250" y1="32" x2="250" y2="360"/>
+        <line x1="420" y1="32" x2="420" y2="360"/>
+        <line x1="560" y1="32" x2="560" y2="360"/>
+        <line x1="668" y1="32" x2="668" y2="360"/>
+      </g>
+      <defs>
+        <marker id="sarr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+      </defs>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="80" y1="60" x2="246" y2="60" marker-end="url(#sarr)"/>
+        <line x1="250" y1="105" x2="416" y2="105" marker-end="url(#sarr)"/>
+        <line x1="420" y1="150" x2="556" y2="150" marker-end="url(#sarr)"/>
+        <line x1="560" y1="195" x2="664" y2="195" marker-end="url(#sarr)"/>
+        <line x1="668" y1="240" x2="424" y2="240" marker-end="url(#sarr)" stroke-dasharray="5 4"/>
+        <line x1="416" y1="290" x2="254" y2="290" marker-end="url(#sarr)"/>
+        <line x1="246" y1="335" x2="84" y2="335" marker-end="url(#sarr)"/>
+      </g>
+      <g font-size="11" fill="#5b6478">
+        <text x="165" y="50" text-anchor="middle">getTasks(projectId, moduleId)</text>
+        <text x="335" y="95" text-anchor="middle">workItems.listModuleWorkItems</text>
+        <text x="490" y="140" text-anchor="middle">x-api-key from configStore</text>
+        <text x="614" y="185" text-anchor="middle">GET /work-tracker/...</text>
+        <text x="545" y="232" text-anchor="end" fill="#b03030">!ok → WorkTrackerApiError</text>
+        <text x="335" y="280" text-anchor="middle">WorkItem[] · or call() → ApiError</text>
+        <text x="165" y="325" text-anchor="middle">directModuleTasks → TaskSummary[]</text>
+      </g>
+      <g class="step" data-s="1"><circle cx="80" cy="60" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="80" y="64.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3d2370">1</text></g>
+      <g class="step" data-s="2"><circle cx="250" cy="105" r="13" fill="#fbf0d8" stroke="#9a6700"/><text x="250" y="109.5" text-anchor="middle" font-size="12" font-weight="800" fill="#9a6700">2</text></g>
+      <g class="step" data-s="3"><circle cx="420" cy="150" r="13" fill="#e8edfb" stroke="#3556d4"/><text x="420" y="154.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3556d4">3</text></g>
+      <g class="step" data-s="4"><circle cx="560" cy="195" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="560" y="199.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">4</text></g>
+      <g class="step" data-s="5"><circle cx="420" cy="240" r="13" fill="#fbe7e7" stroke="#b03030"/><text x="420" y="244.5" text-anchor="middle" font-size="12" font-weight="800" fill="#b03030">5</text></g>
+      <g class="step" data-s="6"><circle cx="250" cy="290" r="13" fill="#fbf0d8" stroke="#9a6700"/><text x="250" y="294.5" text-anchor="middle" font-size="12" font-weight="800" fill="#9a6700">6</text></g>
+      <g class="step" data-s="7"><circle cx="80" cy="335" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="80" y="339.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3d2370">7</text></g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a numbered step.</span></div>
+  </div>
+</section>
+
+<!-- ============ FAILURE MATRIX ============ -->
+<section id="failures">
+  <h2>Failure &amp; edge matrix</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Behavior</th><th style="width:120px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Backend returns non-2xx</td><td>SDK middleware raises <span class="m">WorkTrackerApiError</span>; <span class="m">call()</span> re-throws coding <span class="m">ApiError(status, message, body)</span> — same shape call sites already catch</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>No active profile / missing api_key</td><td>Fetch wrapper sends no <span class="m">x-api-key</span> (identical to today's <span class="m">worktrackerHeaders → {}</span>); backend decides 401/403</td><td><span class="sev ok">identical</span></td></tr>
+      <tr><td>Profile switched mid-session</td><td>Singleton client's wrapper re-reads <span class="m">configStore</span> per request, so the next call uses the new key — no client rebuild</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Aborted request (e.g. drawer closed)</td><td>SDK <span class="m">onError</span> re-throws <span class="m">AbortError</span>; <span class="m">getTaskDetails</span> can still thread a signal if a call site needs it</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Backend contract drifts from the SDK</td><td>The whole point: a renamed/removed field or method becomes a <span class="m">npm run build</span> TypeScript error in the migrated functions</td><td><span class="sev sdk">by design</span></td></tr>
+      <tr><td>SDK shape wider than coding summary (extra fields)</td><td>Adapters drop them explicitly (e.g. Module.key, WorkItem.blocked_by_ids); coding output shapes unchanged</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Host-family route changes (config, terminals, …)</td><td>Still uncovered — those calls remain raw fetch, gated CODIN-668; no TS safety until that ticket</td><td><span class="sev def">deferred</span></td></tr>
+      <tr><td>Model reconciliation (coding vs Studio shapes)</td><td>Out of scope per CODIN-687; the normalizers keep the two models distinct on purpose</td><td><span class="sev def">deferred</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ TEST PLAN ============ -->
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">No new behaviour ships, so the gate is type-level and contract-level rather than new unit suites. Existing coding-surface tests must stay green against the unchanged public signatures.</div>
+  <table>
+    <thead><tr><th style="width:240px">Gate</th><th>What it proves</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">npm run build</span> (studio)</td><td>The migrated functions typecheck against the generated SDK types and the studio/lib aliases — the contract-safety this ticket buys. A drifted backend would fail here.</td></tr>
+      <tr><td><span class="m">npm run contract:check</span></td><td>Family A is already SDK-covered, so the OpenAPI↔SDK diff stays green; this migration adds no new contract surface and regenerates nothing.</td></tr>
+      <tr><td>Existing coding-surface tests</td><td>Whatever currently exercises <span class="m">tasksStore</span> / the coding api functions passes unchanged — public signatures and returned shapes are byte-identical.</td></tr>
+      <tr><td>Adapter unit checks (if a coding api test file exists/added)</td><td><span class="m">normalizeModule</span> and <span class="m">normalizeSprint</span> map SDK shapes to the summary shapes (slug→identifier, null dates→"", extra fields dropped); <span class="m">call()</span> turns a <span class="m">WorkTrackerApiError</span> into a coding <span class="m">ApiError</span> with matching status/body.</td></tr>
+      <tr><td>Live smoke (user)</td><td>In the Coding tab: project list, module list + create, task load, sub-tasks, task detail, status/sprint/parent edits, sprint list, create task all behave exactly as before.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Five steps inside one file; the build stays green at each boundary because public signatures never move.</div>
+  <div class="steps">
+    <div class="bstep"><span class="n">1</span><b>Client + auth seam</b>Add the coding SDK singleton via createWorkTrackerClient with the configStore fetch wrapper; add the call() error mapper.</div>
+    <div class="bstep"><span class="n">2</span><b>Adapters</b>Retype normalizeProject/normalizeTask to SDK inputs; add normalizeModule + normalizeSprint. Import the studio/lib type aliases.</div>
+    <div class="bstep"><span class="n">3</span><b>Migrate the 12</b>Swap each worktrackerRequest body for its SDK method + adapter, per the migration map. Signatures unchanged.</div>
+    <div class="bstep"><span class="n">4</span><b>Slim + tag</b>Delete worktrackerRequest/worktrackerHeaders and the local Worktracker* interfaces; tag the carved-out families with // gated: CODIN-668.</div>
+    <div class="bstep"><span class="n">5</span><b>Gate</b>npm run build + contract:check green; existing tests green; user live-smokes the Coding tab.</div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section>
+  <h2>Acceptance</h2>
+  <div class="accept">
+    Meets the revised criteria: the coding surface's <b>/api/work-tracker/* calls go through the SDK client</b>, the <b>host families stay on raw fetch tagged // gated: CODIN-668</b>, <b>contract:check stays green</b> (Family A already covered, nothing regenerated), <b>Coding-tab behaviour is unchanged</b> (normalizers preserved, call sites untouched), and <b>studio build/typecheck passes</b> — now with backend contract drift surfacing as a TypeScript error.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    codingapi: { t: 'studio/src/coding/lib/api.ts', k: 'MODIFIED — the migration', c: 'var(--amber)', items: [
+      'Add a module-singleton SDK client built with createWorkTrackerClient({ baseUrl: WORKTRACKER_BASE, fetch: <wrapper> }); the wrapper resolves x-api-key from configStore per request.',
+      'Add a call() helper that maps WorkTrackerApiError → the coding ApiError(status, message, body).',
+      'Migrate the 12 Family A functions to SDK methods (see migration map); keep their public signatures and returned shapes identical.',
+      'Retype normalizeProject/normalizeTask to SDK input types; add normalizeModule and normalizeSprint.',
+      'Tag each retained host-family block with // gated: CODIN-668.'
+    ], no: [
+      'Remove worktrackerRequest(), worktrackerHeaders(), and the local Worktracker* interfaces.',
+      'Do NOT change any exported signature, the ApiError class, or the host-family raw fetch calls.'
+    ] },
+    configstore: { t: 'studio/src/coding/stores/configStore.ts', k: 'READ-ONLY INPUT', c: 'var(--accent)', items: [
+      'Source of the active profile: profiles[recentProfileIndex].api_key.',
+      'Read by the fetch wrapper exactly as worktrackerHeaders() reads it today (dynamic import, getState()).'
+    ], no: ['No change — only its read moves into the fetch wrapper.'] },
+    studioapi: { t: 'studio/src/lib/api.ts', k: 'READ-ONLY REFERENCE', c: 'var(--accent)', items: [
+      'The wiring this migration mirrors: createWorkTrackerClient + the call() error-mapping pattern.',
+      'Differs only in auth source (static VITE_WT_API_KEY) — which is why the coding surface gets its own instance.'
+    ], no: ['Not imported by the coding surface; not modified.'] },
+    studiotypes: { t: 'studio/src/lib/types.ts', k: 'READ-ONLY INPUT', c: 'var(--accent)', items: [
+      'Source of the null-tightened SDK aliases the migrated functions import: Project, WorkItem, Module, Sprint, State, WorkItemPatch, WorkItemFilters, WorkItemDetail.',
+      'These give the adapters the exact shapes the normalizers expect (e.g. State.id string|null, Sprint dates string|null).'
+    ], no: ['Not modified.'] },
+    sdk: { t: 'worktracker-typescript-sdk/ (client.ts + generated/)', k: 'READ-ONLY INPUT', c: 'var(--accent)', items: [
+      'createWorkTrackerClient: takes baseUrl, optional apiKey, optional fetch; wraps fetch to inject x-api-key and runs post/onError middleware that raises WorkTrackerApiError.',
+      'Generated ProjectsApi/ModulesApi/StatesApi/SprintsApi/WorkItemsApi methods used by the migration.'
+    ], no: ['Not regenerated by this ticket; contract:check stays green.'] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + d.c + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  // migration row notes
+  const migNote = document.getElementById('migNote');
+  document.querySelectorAll('#migBody .map-row').forEach(r => r.addEventListener('click', () => {
+    document.querySelectorAll('#migBody .map-row').forEach(x => x.classList.remove('tr-hit'));
+    r.classList.add('tr-hit');
+    migNote.style.display = 'block';
+    migNote.innerHTML = '<b>' + r.querySelector('td .m').textContent + '</b> — ' + r.dataset.note;
+  }));
+
+  const STEPS = {
+    1: { t: '1 · Call site', p: 'tasksStore (or any coding consumer) calls an exported api function with the same arguments as today — e.g. getTasks(projectId, moduleId).', e: 'Unchanged: signatures are frozen, so no call site moves.' },
+    2: { t: '2 · api function', p: 'The exported function now calls an SDK method instead of worktrackerRequest. For getTasks it fires listModuleWorkItems + listStates in parallel (Promise.all), as today.', e: 'Edge: getStates is itself migrated, so the Promise.all composes two migrated helpers.' },
+    3: { t: '3 · SDK client', p: 'The module-singleton client dispatches the typed method against baseUrl /api/work-tracker, building the path and query from typed arguments.', e: 'Edge: a backend field/method rename here is a compile-time TypeScript error — the contract-safety this ticket adds.' },
+    4: { t: '4 · Fetch wrapper', p: 'The custom fetch resolves the active profile from configStore and sets x-api-key, then delegates to globalThis.fetch — the auth logic relocated verbatim from worktrackerHeaders.', e: 'Edge: no profile/key → no header, identical to today; backend returns 401/403.' },
+    5: { t: '5 · Error boundary', p: 'On a non-ok response the SDK post-middleware raises WorkTrackerApiError; the call() wrapper converts it to the coding ApiError(status, message, body). AbortError is re-thrown untouched.', e: 'Edge: call sites catching ApiError keep reading .status/.body unchanged.' },
+    6: { t: '6 · Adapter', p: 'The success result (SDK WorkItem[]/Project[]/Module[]/Sprint[]) passes through the normalizer — directModuleTasks/normalizeTask/normalizeProject/normalizeModule/normalizeSprint — into the coding summary shape.', e: 'Edge: SDK-only fields (Module.key, WorkItem.blocked_by_ids) are dropped explicitly.' },
+    7: { t: '7 · Returned shape', p: 'The function returns the exact same ProjectSummary/TaskSummary/ModuleSummary/SprintSummary the call site consumed before — zero downstream change.', e: 'Edge: getTaskDetails still returns { task } so the drawer reads it identically.' }
+  };
+  const seqInfo = document.getElementById('seqInfo');
+  document.querySelectorAll('.step').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = STEPS[s.dataset.s];
+    seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

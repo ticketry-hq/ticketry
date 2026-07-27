@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-839 Refinement - Shared Terminal-Create Launcher</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(255,255,255,.96);
+    border-bottom: 1px solid var(--line);
+    padding: 22px 40px 0;
+  }
+  .crumb { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  h1 { margin: 4px 0; font-size: 24px; line-height: 1.2; }
+  .sub { max-width: 940px; color: var(--muted); font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px; }
+  .chip { border-radius: 999px; padding: 3px 10px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 800; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  nav { display: flex; gap: 2px; overflow-x: auto; margin: 0 -40px; padding: 0 40px; border-top: 1px solid var(--line); }
+  nav a { padding: 9px 14px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 700; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1160px; margin: 0 auto; padding: 34px 40px 70px; }
+  section { margin-bottom: 52px; scroll-margin-top: 142px; }
+  h2 { margin: 0 0 4px; font-size: 18px; }
+  .lede { margin: 0 0 18px; max-width: 900px; color: var(--muted); font-size: 14px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
+  .label { color: var(--violet); font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+  .card h3 { margin: 3px 0 6px; font-size: 15px; }
+  .card p { margin: 0; color: var(--muted); font-size: 13px; }
+  .flow { display: grid; grid-template-columns: 1fr 305px; gap: 18px; align-items: start; }
+  svg { width: 100%; height: auto; display: block; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .node { cursor: pointer; }
+  .node rect { transition: stroke-width .12s, opacity .12s, filter .12s; }
+  .node.hl rect { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.38)); }
+  .node.dim { opacity: .35; }
+  .side h3 { margin: 0 0 6px; color: var(--accent); font-size: 15px; }
+  ul { margin: 8px 0 0; padding: 0; list-style: none; }
+  li { position: relative; padding: 4px 0 4px 18px; color: var(--muted); font-size: 13px; }
+  li:before { content: "."; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  li.no { color: var(--red); }
+  li.no:before { content: "x"; color: var(--red); }
+  table { width: 100%; border-collapse: collapse; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  th, td { padding: 10px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 13px; }
+  th { background: #fbfcfe; color: var(--muted); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  .rid { color: var(--accent); font-family: var(--mono); font-weight: 800; white-space: nowrap; }
+  .map { display: grid; grid-template-columns: 440px 1fr; gap: 16px; }
+  .tree { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; font-family: var(--mono); font-size: 12.5px; line-height: 2; overflow-x: auto; }
+  .hit { cursor: pointer; border-radius: 6px; padding: 1px 7px; font-weight: 800; white-space: nowrap; }
+  .hit.new { background: var(--green-soft); color: var(--green); }
+  .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .hit.sel { outline: 2px solid currentColor; }
+  .detail h3 { margin: 0 0 5px; color: var(--accent); font-size: 15px; }
+  .kind { margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 8px; padding: 18px 20px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    header, main { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+    .grid, .flow, .map { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">WorkTracker / CODIN-839 / Refinement</div>
+  <h1>Shared Terminal-Create Launcher</h1>
+  <div class="sub">Extract only the reusable launcher mechanics from /coding's planning-create path. Studio surface rewires remain in CODIN-840 through CODIN-844.</div>
+  <div class="chips">
+    <span class="chip green">Ready for Todo</span>
+    <span class="chip">No implementation in refinement</span>
+    <span class="chip amber">Generic-relevant Studio code</span>
+  </div>
+  <nav>
+    <a href="#verdict">Verdict</a>
+    <a href="#flow">Flow</a>
+    <a href="#trace">Trace</a>
+    <a href="#files">File Map</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+<main>
+  <section id="verdict">
+    <h2>Refinement Verdict</h2>
+    <p class="lede">The missing scope questions are resolved by the current /coding flow and CODIN-838's LLD. The implementer needs an extraction slice, not a new product flow.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="label">Launcher Contract</div>
+        <h3>Caller supplies module context</h3>
+        <p>Use explicit project/module ids and optional initial prompt. /coding can derive these from stores; Studio will pass them later.</p>
+      </div>
+      <div class="card">
+        <div class="label">Modal Sequence</div>
+        <h3>Prompt optional, agent required</h3>
+        <p>No prompt opens PromptInput. Provided prompt skips PromptInput and goes straight to AgentPicker.</p>
+      </div>
+      <div class="card">
+        <div class="label">Presenter Boundary</div>
+        <h3>Launch and presentation stay separate</h3>
+        <p>/coding still selects the scratch bucket and activates its terminal workspace. Later Studio work gets its own presenter.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2>Clickable Flow</h2>
+    <p class="lede">Click a node to see what belongs to this ticket. Dashed nodes are seams reserved for later Studio subtasks.</p>
+    <div class="flow">
+      <svg viewBox="0 0 900 410" role="img" aria-label="CODIN-839 shared launcher flow">
+        <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#5b6478"></path></marker></defs>
+        <g class="node hl" data-n="caller"><rect x="30" y="54" width="150" height="72" rx="8" fill="#e8edfb" stroke="#3556d4" stroke-width="2"></rect><text x="105" y="86" text-anchor="middle" font-weight="700">Caller</text><text x="105" y="105" text-anchor="middle" font-size="12">/coding now, Studio later</text></g>
+        <path d="M180 90 H250" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <g class="node" data-n="folder"><rect x="250" y="54" width="160" height="72" rx="8" fill="#fbf0d8" stroke="#9a6700" stroke-width="2"></rect><text x="330" y="86" text-anchor="middle" font-weight="700">Module Folder</text><text x="330" y="105" text-anchor="middle" font-size="12">gate if path missing</text></g>
+        <path d="M410 90 H482" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <g class="node" data-n="prompt"><rect x="482" y="54" width="150" height="72" rx="8" fill="#ffffff" stroke="#3556d4" stroke-width="2"></rect><text x="557" y="86" text-anchor="middle" font-weight="700">PromptInput</text><text x="557" y="105" text-anchor="middle" font-size="12">only when empty</text></g>
+        <path d="M632 90 H704" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <g class="node" data-n="agent"><rect x="704" y="54" width="150" height="72" rx="8" fill="#ffffff" stroke="#3556d4" stroke-width="2"></rect><text x="779" y="86" text-anchor="middle" font-weight="700">AgentPicker</text><text x="779" y="105" text-anchor="middle" font-size="12">always required</text></g>
+        <path d="M779 126 V188" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <g class="node" data-n="terminal"><rect x="690" y="188" width="178" height="78" rx="8" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"></rect><text x="779" y="221" text-anchor="middle" font-weight="700">Scratch Planning</text><text x="779" y="241" text-anchor="middle" font-size="12">taskId null / isPlanning true</text></g>
+        <path d="M690 227 H560" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <g class="node" data-n="presenter"><rect x="380" y="188" width="180" height="78" rx="8" fill="#ffffff" stroke="#3556d4" stroke-width="2"></rect><text x="470" y="221" text-anchor="middle" font-weight="700">Presenter</text><text x="470" y="241" text-anchor="middle" font-size="12">/coding scratch bucket</text></g>
+        <path d="M250 126 C230 180 280 220 380 227" stroke="#5b6478" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+        <g class="node" data-n="studio"><rect x="60" y="270" width="230" height="78" rx="8" fill="#f6f7f9" stroke="#6b3fb8" stroke-width="2" stroke-dasharray="7 5"></rect><text x="175" y="303" text-anchor="middle" font-weight="700">Studio Entry Rewire</text><text x="175" y="323" text-anchor="middle" font-size="12">CODIN-840 through CODIN-844</text></g>
+      </svg>
+      <div class="panel side" id="nodeDetail"></div>
+    </div>
+  </section>
+
+  <section id="trace">
+    <h2>Requirement Trace</h2>
+    <p class="lede">Rows highlight matching flow nodes. This ticket proves the shared path exists before Studio surfaces consume it.</p>
+    <table>
+      <thead><tr><th>ID</th><th>Requirement</th><th>Clarified Decision</th><th>Node</th></tr></thead>
+      <tbody>
+        <tr class="trace" data-node="caller"><td class="rid">R1</td><td>/coding user-visible parity</td><td><span class="m">n</span> still gates folder, collects prompt, shows AgentPicker, then opens scratch terminal.</td><td>caller</td></tr>
+        <tr class="trace" data-node="folder"><td class="rid">R2</td><td>Module-folder gate</td><td>Launcher may use current profile module_folders; missing folder pushes ModuleFolder and resumes the same request.</td><td>folder</td></tr>
+        <tr class="trace" data-node="prompt"><td class="rid">R3</td><td>Optional prompt</td><td>PromptInput is shown only when no non-empty initial prompt is supplied by the caller.</td><td>prompt</td></tr>
+        <tr class="trace" data-node="agent"><td class="rid">R4</td><td>Required agent choice</td><td>AgentPicker cannot be skipped by default-agent memory in this slice.</td><td>agent</td></tr>
+        <tr class="trace" data-node="terminal"><td class="rid">R5</td><td>Scratch planning launch</td><td>Launch args are <span class="m">taskId: null</span>, <span class="m">ticketSeq: null</span>, caller module id, <span class="m">isPlanning: true</span>.</td><td>terminal</td></tr>
+        <tr class="trace" data-node="presenter"><td class="rid">R6</td><td>Presentation seam</td><td>/coding presenter selects <span class="m">TEMP_TASK_ID</span> and activates terminal workspace; Studio presentation is deferred.</td><td>presenter</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="files">
+    <h2>File Change Map</h2>
+    <p class="lede">This is a refinement boundary, not a prescribed exact patch. It names the likely ownership split and what must remain untouched.</p>
+    <div class="map">
+      <div class="tree">
+        <div>studio/src/</div>
+        <div>├─ terminal/create/</div>
+        <div>│  ├─ <span class="hit new" data-f="types">types.ts</span></div>
+        <div>│  └─ <span class="hit new" data-f="launcher">launchTerminalCreate.ts</span></div>
+        <div>├─ terminal/</div>
+        <div>│  └─ <span class="hit mod" data-f="index">index.ts</span></div>
+        <div>├─ coding/modals/</div>
+        <div>│  ├─ <span class="hit mod" data-f="plan">PlanFeature.tsx</span></div>
+        <div>│  ├─ <span class="hit ro" data-f="prompt">PromptInput.tsx</span></div>
+        <div>│  └─ <span class="hit ro" data-f="agent">AgentPicker.tsx</span></div>
+        <div>├─ coding/stores/</div>
+        <div>│  ├─ <span class="hit ro" data-f="config">configStore.ts</span></div>
+        <div>│  └─ <span class="hit ro" data-f="tasks">tasksStore.ts</span></div>
+        <div>└─ test/</div>
+        <div>   └─ <span class="hit mod" data-f="tests">coding launcher tests</span></div>
+      </div>
+      <div class="panel detail" id="fileDetail"></div>
+    </div>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance Signal</h2>
+    <div class="accept"><b>Green signal:</b> CODIN-839 is ready when /coding's <span class="m">n</span> flow reaches the same visible modals and scratch planning terminal through the shared launcher, the launcher accepts explicit project/module/prompt context for later Studio callers, and no Studio create affordance is rewired in this slice.</div>
+  </section>
+</main>
+<script>
+const nodes = {
+  caller: { title: "Caller", does: ["Passes projectId, moduleId, optional initialPrompt.", "/coding adapter may read current stores before calling the shared launcher."], no: ["Does not create work items.", "Does not own terminal internals."] },
+  folder: { title: "Module Folder Gate", does: ["Checks whether the selected module has a configured folder.", "Pushes ModuleFolder and resumes the pending launch after save."], no: ["Does not validate Studio epic selection.", "Does not skip existing folder behavior."] },
+  prompt: { title: "PromptInput", does: ["Appears when the caller did not supply prompt text.", "Carries text into the agent step."], no: ["Does not choose the agent.", "Does not launch the terminal."] },
+  agent: { title: "AgentPicker", does: ["Requires explicit agent choice.", "Carries the prompt into terminal launch."], no: ["Does not auto-launch a remembered default.", "Does not bind launch to a real task."] },
+  terminal: { title: "Scratch Planning Terminal", does: ["Calls the existing terminal open path.", "Uses taskId null, ticketSeq null, isPlanning true."], no: ["Does not add backend fields.", "Does not return created issue ids."] },
+  presenter: { title: "Presenter", does: ["For /coding, selects TEMP_TASK_ID.", "Activates the scratch terminal workspace after launch."], no: ["Does not decide Studio panel behavior.", "Does not duplicate sessions."] },
+  studio: { title: "Deferred Studio Rewire", does: ["Consumes the launcher in CODIN-840 through CODIN-844."], no: ["No Studio create affordance changes in CODIN-839.", "No direct-create cleanup in this slice."] }
+};
+const files = {
+  types: ["new", "Public request/result types for the launcher.", ["Define explicit projectId/moduleId/prompt/agent shape.", "Avoid coding-only symbols in the shared type contract."]],
+  launcher: ["new", "Shared orchestration for folder gate, optional prompt, required agent, and scratch planning launch.", ["May accept presenter callbacks for post-launch behavior.", "Does not import Studio work-item surfaces."]],
+  index: ["modified", "Exports the shared launcher surface from the terminal module.", ["Keep session store internals private.", "Do not leak coding overlay helpers."]],
+  plan: ["modified", "Replaces only the plan-mode path with the shared launcher.", ["Keeps instant/open/open-with-prompt behavior out of scope unless needed for compile parity.", "Preserves current /coding user behavior."]],
+  prompt: ["read-only", "Reference for current prompt behavior.", ["Can be wrapped or reused.", "No required visual redesign."]],
+  agent: ["read-only", "Reference for current agent list and launch behavior.", ["Plan launch responsibility should move behind shared path.", "Doc-chat and task-bound open behavior are not part of this ticket."]],
+  config: ["read-only", "Source of current module_folders and profile context.", ["Used by /coding adapter.", "No config schema change."]],
+  tasks: ["read-only", "Source of selected project/module and scratch task selection.", ["Presenter can continue selecting TEMP_TASK_ID.", "No task model change."]],
+  tests: ["modified", "Regression tests for /coding flow through shared path.", ["Cover no-folder, no-prompt, supplied-prompt, and openSession args.", "Do not test Studio entry-point replacement here."]]
+};
+function renderNode(key) {
+  const item = nodes[key];
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("hl", n.dataset.n === key));
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("dim", n.dataset.n !== key));
+  document.querySelectorAll("tr.trace").forEach(r => r.classList.toggle("sel", r.dataset.node === key));
+  document.getElementById("nodeDetail").innerHTML = `<h3>${item.title}</h3><div class="label">Does</div><ul>${item.does.map(x => `<li>${x}</li>`).join("")}</ul><div class="label" style="margin-top:12px">Does Not</div><ul>${item.no.map(x => `<li class="no">${x}</li>`).join("")}</ul>`;
+}
+function renderFile(key) {
+  const item = files[key];
+  document.querySelectorAll(".hit").forEach(h => h.classList.toggle("sel", h.dataset.f === key));
+  document.getElementById("fileDetail").innerHTML = `<div class="kind">${item[0]}</div><h3>${key}</h3><p class="lede">${item[1]}</p><ul>${item[2].map((x, i) => `<li${i === item[2].length - 1 && x.startsWith("Do not") ? " class='no'" : ""}>${x}</li>`).join("")}</ul>`;
+}
+document.querySelectorAll(".node").forEach(n => n.addEventListener("click", () => renderNode(n.dataset.n)));
+document.querySelectorAll("tr.trace").forEach(r => r.addEventListener("click", () => renderNode(r.dataset.node)));
+document.querySelectorAll(".hit").forEach(h => h.addEventListener("click", () => renderFile(h.dataset.f)));
+document.querySelectorAll("nav a").forEach(a => a.addEventListener("click", () => {
+  document.querySelectorAll("nav a").forEach(x => x.classList.remove("active"));
+  a.classList.add("active");
+}));
+renderNode("caller");
+renderFile("launcher");
+</script>
+</body>
+</html>

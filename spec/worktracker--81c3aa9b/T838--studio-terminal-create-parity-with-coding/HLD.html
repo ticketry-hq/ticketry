@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio Terminal Create Parity - HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel);
+    padding: 26px 40px 0;
+  }
+  .crumb {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 930px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px; }
+  .chip {
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    margin: 0 -40px;
+    padding: 0 40px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  nav a {
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+  .evo { display: grid; grid-template-columns: 1fr 28px 1fr 28px 1fr; gap: 10px; align-items: stretch; margin-bottom: 30px; }
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .stage.dead { opacity: .68; }
+  .stage.dead .lbl { color: var(--red); }
+  .stage.mid .lbl { color: var(--amber); }
+  .stage.live { border: 2px solid var(--green); color: var(--ink); }
+  .stage.live .lbl { color: var(--green); }
+  .arr { align-self: center; text-align: center; color: var(--violet); font-size: 18px; font-weight: 700; }
+  .iface { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .icard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+  .icard .ihead { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--violet); }
+  .icard h3 { font-size: 15px; margin: 4px 0 8px; }
+  .icard p { font-size: 13px; color: var(--muted); }
+  .rule { margin-top: 10px; font-size: 12.5px; background: var(--violet-soft); color: var(--violet); border-radius: 8px; padding: 8px 12px; font-weight: 600; }
+  .diagram-wrap {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px;
+    display: grid;
+    grid-template-columns: 1fr 310px;
+    gap: 18px;
+  }
+  svg { width: 100%; height: auto; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li:before { content: "."; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  #nodeInfo li.no { color: var(--red); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: flex; gap: 28px; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 430px; }
+  .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .ro { color: var(--muted); }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; }
+  .tree-notes li { margin-bottom: 8px; list-style: none; }
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 10px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .iface, .diagram-wrap { grid-template-columns: 1fr; }
+    .evo { grid-template-columns: 1fr; }
+    .arr { transform: rotate(90deg); }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+    .tree-wrap { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">Coding · WorkTracker module · parent HLD</div>
+  <h1>Studio Terminal Create Parity</h1>
+  <div class="sub">Replace every Studio direct-create affordance with the same scratch planning terminal mechanics used by /coding. Studio resolves one epic/module first, preserves surface context as advisory prompt text, then launches PromptInput or AgentPicker into the shared planning terminal path.</div>
+  <div class="chips">
+    <span class="chip green">Planning only</span>
+    <span class="chip violet">Extract shared launcher</span>
+    <span class="chip amber">Split later under this ticket</span>
+    <span class="chip">No state-map change</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">Evolution</a>
+    <a href="#contract">Contract</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Trace</a>
+    <a href="#files">Files</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+<main>
+  <section id="evo">
+    <div class="evo">
+      <div class="stage dead">
+        <div class="lbl">TODAY</div>
+        Studio has direct form and inline issue creation paths. /coding has a separate terminal planning flow.
+      </div>
+      <div class="arr">-&gt;</div>
+      <div class="stage mid">
+        <div class="lbl">WRONG DIRECTION</div>
+        Rebuild a Studio-specific terminal create flow, or add new structured terminal args just for Studio.
+      </div>
+      <div class="arr">-&gt;</div>
+      <div class="stage live">
+        <div class="lbl">THIS DESIGN</div>
+        Extract the /coding mechanics into a shared launcher. Studio resolves one epic and passes prompt context into the same scratch planning run.
+      </div>
+    </div>
+  </section>
+
+  <section id="contract">
+    <h2>The Contract</h2>
+    <p class="lede">The shared launcher owns the mechanics; Studio owns target resolution and context text.</p>
+    <div class="iface">
+      <div class="icard">
+        <div class="ihead">INPUT</div>
+        <h3>One epic/module</h3>
+        <p>Normal create opens the existing epic picker. Add-under and surface-specific actions may imply one epic and skip the picker.</p>
+        <div class="rule">One chosen module before launch</div>
+      </div>
+      <div class="icard">
+        <div class="ihead">PROMPT</div>
+        <h3>Typed text plus advisory context</h3>
+        <p>Inline text becomes the initial prompt. Empty button/shortcut entry opens PromptInput. Parent, state, sprint, and source surface are appended as context.</p>
+        <div class="rule">No direct field writes</div>
+      </div>
+      <div class="icard">
+        <div class="ihead">RUN</div>
+        <h3>Same planning terminal</h3>
+        <p>AgentPicker always appears. The launcher opens a no-task scratch session with isPlanning true, using the existing backend planning prompt.</p>
+        <div class="rule">Same /coding mechanics</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="shape">
+    <h2>Clickable System Shape</h2>
+    <p class="lede">Click nodes to inspect responsibility. Dashed nodes are seams or deferred splits.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 880 470" role="img" aria-label="Studio terminal create parity system shape">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L9,3 L0,6 Z" fill="#5b6478"></path>
+          </marker>
+        </defs>
+        <g class="node hl" data-n="entry">
+          <rect x="30" y="48" width="160" height="76" rx="8" fill="#e8edfb" stroke="#3556d4" stroke-width="2"></rect>
+          <text x="110" y="82" text-anchor="middle" font-weight="700">Studio Entries</text>
+          <text x="110" y="102" text-anchor="middle" font-size="12">all create affordances</text>
+        </g>
+        <g class="node" data-n="resolve">
+          <rect x="250" y="48" width="160" height="76" rx="8" fill="#fff" stroke="#6b3fb8" stroke-width="2"></rect>
+          <text x="330" y="82" text-anchor="middle" font-weight="700">Epic Resolver</text>
+          <text x="330" y="102" text-anchor="middle" font-size="12">implied or picker</text>
+        </g>
+        <g class="node" data-n="context">
+          <rect x="470" y="48" width="160" height="76" rx="8" fill="#fff" stroke="#9a6700" stroke-width="2"></rect>
+          <text x="550" y="82" text-anchor="middle" font-weight="700">Context Builder</text>
+          <text x="550" y="102" text-anchor="middle" font-size="12">advisory prompt text</text>
+        </g>
+        <g class="node" data-n="launcher">
+          <rect x="690" y="48" width="160" height="76" rx="8" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"></rect>
+          <text x="770" y="82" text-anchor="middle" font-weight="700">Shared Launcher</text>
+          <text x="770" y="102" text-anchor="middle" font-size="12">coding + Studio</text>
+        </g>
+        <g class="node" data-n="prompt">
+          <rect x="470" y="212" width="160" height="76" rx="8" fill="#fff" stroke="#3556d4" stroke-width="2"></rect>
+          <text x="550" y="246" text-anchor="middle" font-weight="700">PromptInput</text>
+          <text x="550" y="266" text-anchor="middle" font-size="12">only if no text</text>
+        </g>
+        <g class="node" data-n="agent">
+          <rect x="690" y="212" width="160" height="76" rx="8" fill="#fff" stroke="#3556d4" stroke-width="2"></rect>
+          <text x="770" y="246" text-anchor="middle" font-weight="700">AgentPicker</text>
+          <text x="770" y="266" text-anchor="middle" font-size="12">always shown</text>
+        </g>
+        <g class="node" data-n="terminal">
+          <rect x="690" y="354" width="160" height="76" rx="8" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"></rect>
+          <text x="770" y="388" text-anchor="middle" font-weight="700">Scratch Terminal</text>
+          <text x="770" y="408" text-anchor="middle" font-size="12">isPlanning=true</text>
+        </g>
+        <g class="node" data-n="cleanup">
+          <rect x="30" y="354" width="160" height="76" rx="8" fill="#fff" stroke="#b03030" stroke-width="2" stroke-dasharray="6 5"></rect>
+          <text x="110" y="388" text-anchor="middle" font-weight="700">Direct Create</text>
+          <text x="110" y="408" text-anchor="middle" font-size="12">remove when unused</text>
+        </g>
+        <path d="M190 86 H250" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M410 86 H470" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M630 86 H690" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M770 124 V212" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M630 250 H690" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M770 288 V354" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></path>
+        <path d="M110 354 C210 270 330 190 470 118" stroke="#b03030" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrow)"></path>
+      </svg>
+      <aside id="nodeInfo">
+        <h4>Studio Entries</h4>
+        <p>Every place Studio currently creates a work item directly.</p>
+        <ul>
+          <li>Routes all create affordances to one launcher path</li>
+          <li>Includes list, board, story map, empty pane, header, shortcut, and add-under</li>
+          <li class="no">Does not keep a separate direct create fallback</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <section id="trace">
+    <h2>Requirement Trace</h2>
+    <p class="lede">Click a row to highlight the related nodes.</p>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Requirement</th><th>Decision</th><th>Nodes</th></tr>
+      </thead>
+      <tbody>
+        <tr class="trace" data-nodes="entry cleanup"><td><span class="rid">TC-001</span></td><td>Replace all Studio create paths</td><td>Every create affordance launches terminal-create; unused direct create code is deleted.</td><td>entry, cleanup</td></tr>
+        <tr class="trace" data-nodes="resolve"><td><span class="rid">TC-002</span></td><td>Choose one epic before launch</td><td>Use implied epic when available; otherwise open the existing epic picker.</td><td>resolve</td></tr>
+        <tr class="trace" data-nodes="context"><td><span class="rid">TC-003</span></td><td>Preserve UI context</td><td>Parent, state, sprint, source surface, and typed text become advisory prompt context.</td><td>context</td></tr>
+        <tr class="trace" data-nodes="launcher prompt agent terminal"><td><span class="rid">TC-004</span></td><td>Follow /coding mechanics</td><td>PromptInput only when needed, AgentPicker every time, then scratch planning terminal.</td><td>launcher, prompt, agent, terminal</td></tr>
+        <tr class="trace" data-nodes="terminal"><td><span class="rid">TC-005</span></td><td>No special created-key capture</td><td>Studio refreshes normally after terminal activity; v1 does not auto-select created issues.</td><td>terminal</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="files">
+    <h2>Change Map</h2>
+    <p class="lede">The final split will divide these into smaller implementation tickets.</p>
+    <div class="tree-wrap">
+      <div class="tree">
+        studio/src/<br>
+        &nbsp;&nbsp;terminal-create/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="new">launcher.ts</span> <span class="ro">shared extraction from /coding flow</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="new">context.ts</span> <span class="ro">format advisory context text</span><br>
+        &nbsp;&nbsp;coding/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">modals/PlanFeature.tsx</span> <span class="ro">call shared launcher</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">modals/AgentPicker.tsx</span> <span class="ro">extract or wrap shared behavior</span><br>
+        &nbsp;&nbsp;workitems/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">BacklogView.tsx</span> <span class="ro">route create entries to launcher</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">BoardView.tsx</span> <span class="ro">route column quick-add to launcher</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">StoryMap/*</span> <span class="ro">route cell create to launcher</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">backlog/*</span> <span class="ro">inline prompt capture and add-under context</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">CreateIssue.tsx</span> <span class="ro">delete after all call sites are gone</span>
+      </div>
+      <ul class="tree-notes">
+        <li><span class="new">new</span> shared launcher and context utilities.</li>
+        <li><span class="mod">modified</span> Studio and /coding entry points.</li>
+        <li><span class="ro">read-only</span> backend planning prompt and terminal session contract unless LLD proves a bug.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance Signal</h2>
+    <div class="accept">Done means <b>Studio no longer creates WorkTracker issues directly</b>. Every create affordance resolves exactly one epic, preserves relevant UI context as prompt text, shows the same PromptInput or AgentPicker sequence as /coding, opens the same scratch planning terminal, and leaves workflow state defaults untouched.</div>
+  </section>
+</main>
+<script>
+const info = {
+  entry: {
+    t: "Studio Entries",
+    d: "Every place Studio currently creates a work item directly.",
+    yes: ["List inline prompt", "Add-under rows", "Empty pane", "Header/button/shortcut", "Board and story-map create affordances"],
+    no: ["No direct create fallback", "No state-map behavior"]
+  },
+  resolve: {
+    t: "Epic Resolver",
+    d: "Guarantees one module context before launching the planning terminal.",
+    yes: ["Use an action-implied epic", "Otherwise open existing epic picker", "Block add-under when parent has no owning epic"],
+    no: ["No guessing from multiple selections", "No new picker if existing one can be reused"]
+  },
+  context: {
+    t: "Context Builder",
+    d: "Converts Studio surface context into advisory prompt text.",
+    yes: ["Parent key and title", "Board state column", "Sprint/story-map row", "Source surface", "Typed prompt"],
+    no: ["No structured terminal fields", "Agent decides how much context to use"]
+  },
+  launcher: {
+    t: "Shared Launcher",
+    d: "Extracted mechanics used by both /coding and Studio.",
+    yes: ["Module-folder gate", "PromptInput when no typed prompt", "AgentPicker every time", "openSession with taskId null and isPlanning true"],
+    no: ["No Studio-only terminal mechanics", "No duplicate modal stack if avoidable"]
+  },
+  prompt: {
+    t: "PromptInput",
+    d: "Existing modal used only when no prompt text was already entered.",
+    yes: ["Button and shortcut flows collect prompt here", "Inline text can skip this step"],
+    no: ["No forced prompt if inline text exists"]
+  },
+  agent: {
+    t: "AgentPicker",
+    d: "The user chooses the agent for every create session.",
+    yes: ["No remembered-agent shortcut in v1", "Same agent choices as /coding"],
+    no: ["No auto-launch with default agent"]
+  },
+  terminal: {
+    t: "Scratch Terminal",
+    d: "The same no-task planning terminal used by /coding.",
+    yes: ["taskId null", "isPlanning true", "existing backend planning prompt", "refresh-only discovery"],
+    no: ["No created-key capture", "No direct API create by Studio"]
+  },
+  cleanup: {
+    t: "Direct Create",
+    d: "Old form-first create path removed after callers move.",
+    yes: ["Delete unused CreateIssue code", "Delete tests for removed direct behavior", "Replace with terminal-create tests"],
+    no: ["No dead compatibility surface"]
+  }
+};
+function select(nodes) {
+  document.querySelectorAll(".node").forEach((n) => {
+    const on = nodes.includes(n.dataset.n);
+    n.classList.toggle("hl", on);
+    n.classList.toggle("dim", !on);
+  });
+  const x = info[nodes[0]];
+  document.getElementById("nodeInfo").innerHTML =
+    "<h4>" + x.t + "</h4><p>" + x.d + "</p><ul>" +
+    x.yes.map((v) => "<li>" + v + "</li>").join("") +
+    x.no.map((v) => "<li class='no'>" + v + "</li>").join("") +
+    "</ul>";
+}
+document.querySelectorAll(".node").forEach((n) => n.addEventListener("click", () => select([n.dataset.n])));
+document.querySelectorAll("tr.trace").forEach((r) => r.addEventListener("click", () => {
+  document.querySelectorAll("tr.trace").forEach((x) => x.classList.remove("sel"));
+  r.classList.add("sel");
+  select((r.dataset.nodes || "").split(" "));
+}));
+const links = [...document.querySelectorAll("nav a")];
+const secs = links.map((a) => document.querySelector(a.getAttribute("href")));
+addEventListener("scroll", () => {
+  let i = 0;
+  secs.forEach((s, idx) => { if (s.getBoundingClientRect().top < 90) i = idx; });
+  links.forEach((a, idx) => a.classList.toggle("active", idx === i));
+}, { passive: true });
+</script>
+</body>
+</html>

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T682 · Agent skills — one-way port of generic-relevant changes into generic WorkTracker — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb; --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8; --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb; --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 960px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 900px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  p.body { font-size: 14px; max-width: 900px; margin-bottom: 12px; }
+  p.body b { color: var(--ink); }
+
+  .recon { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; border-top: 3px solid var(--accent); }
+  .stat .big { font-size: 26px; font-weight: 800; color: var(--accent); }
+  .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat.red { border-top-color: var(--red); } .stat.red .big { color: var(--red); }
+  .stat.green { border-top-color: var(--green); } .stat.green .big { color: var(--green); }
+  .stat.violet { border-top-color: var(--violet); } .stat.violet .big { color: var(--violet); }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .card h3 { font-size: 14px; margin-bottom: 8px; }
+  .card.deliver { border-left: 3px solid var(--green); }
+  .card.nogo { border-left: 3px solid var(--red); }
+  .card ul { list-style: none; }
+  .card li { padding: 4px 0 4px 18px; position: relative; font-size: 13px; }
+  .card li::before { content: "·"; position: absolute; left: 4px; color: var(--accent); font-weight: 900; }
+  .card.nogo li::before { content: "×"; color: var(--red); }
+  .card .tag { font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+
+  /* anatomy (lib pattern) */
+  .lib { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+  .lib-col { display: flex; flex-direction: column; gap: 14px; }
+  .lib-lane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .lib-lane .role { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .lib-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 6px 8px; border-radius: 7px; }
+  .lib-row:hover { background: #f4f6fa; }
+  .lib-row.sel { background: var(--accent-soft); }
+  .lib-row .nm { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+  .lib-row.sel .nm { color: var(--accent); }
+  .lib-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; align-self: start; }
+  .lib-detail h4 { font-size: 15px; color: var(--accent); font-family: var(--mono); margin-bottom: 6px; }
+  .lib-detail .grp { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+  .lib-detail ul { list-style: none; }
+  .lib-detail li { padding: 3px 0 3px 20px; position: relative; font-size: 13px; line-height: 1.45; }
+  .lib-detail li.fit::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+  .lib-detail li.miss::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 800; }
+
+  /* sequence */
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; } .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); } .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .pill.gen { background: var(--green-soft); color: var(--green); }
+  .pill.code { background: var(--red-soft); color: var(--red); }
+  .pill.shared { background: var(--amber-soft); color: var(--amber); }
+
+  /* doc flip tree */
+  .cm { display: grid; grid-template-columns: 420px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 1.95; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.flip { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.keep { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-legend { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  .callout { background: var(--violet-soft); border: 1px solid #ddd0f2; border-radius: 12px; padding: 16px 20px; font-size: 13.5px; margin-bottom: 18px; }
+  .callout b { color: var(--violet); }
+  .callout.amber { background: var(--amber-soft); border-color: #ecdca6; } .callout.amber b { color: var(--amber); }
+  .callout.red { background: var(--red-soft); border-color: #eecaca; } .callout.red b { color: var(--red); }
+
+  @media (max-width: 900px) {
+    .recon, .steps { grid-template-columns: 1fr 1fr; }
+    .cards, .lib, .cm, .seq-wrap { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">WorkTracker · Module 81c3aa9b · CODIN-682 · Low-Level Design</div>
+  <h1>Agent skills — deliberate one-way port of generic-relevant changes into generic WorkTracker</h1>
+  <p class="sub">A shared, human-gated port procedure exposed as agent-native skills for <b>Claude Code</b>, <b>Codex</b>, and <b>Agy/Antigravity</b>. Each skill lives in the <b>generic</b> repo, surveys tracker work in a local sibling <span class="m">Muxed</span> checkout, classifies generic-relevant vs Coding-overlay, reproduces the generic-relevant gaps adapted to generic's local APIs, and hands the working tree to a human to review and commit. Plus the doc rewrites that flip the governance model in both repos.</p>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">Two deliverables: agent skills + doc flip</span>
+    <span class="chip">Claude · Codex · Agy</span>
+    <span class="chip violet">Coding LEADS · generic trails</span>
+    <span class="chip amber">No code in this phase</span>
+    <span class="chip red">Supersedes CODIN-681 · retires #666 subtree-pull</span>
+  </div>
+</header>
+
+<nav>
+  <a href="#scope">Scope</a>
+  <a href="#anatomy">Skill anatomy</a>
+  <a href="#run">Run sequence</a>
+  <a href="#classify">Classification</a>
+  <a href="#docs">Doc flip map</a>
+  <a href="#trace">Decision trace</a>
+  <a href="#build">Build order</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+
+<section id="scope">
+  <h2>Scope</h2>
+  <p class="lede">Two artifacts ship under #682. Everything the grill rejected stays rejected — listed explicitly so the boundary is unambiguous.</p>
+
+  <div class="recon">
+    <div class="stat"><div class="big">2</div><div class="lbl">deliverables — agent skills + the doc flip</div></div>
+    <div class="stat violet"><div class="big">3</div><div class="lbl">agent surfaces — Claude, Codex, Agy</div></div>
+    <div class="stat red"><div class="big">0</div><div class="lbl">subtree pulls ever run — generic frozen at base <span class="m">20962a7</span></div></div>
+    <div class="stat green"><div class="big">1-way</div><div class="lbl">Coding → generic only; never the reverse</div></div>
+  </div>
+
+  <div class="cards">
+    <div class="card deliver">
+      <div class="tag">Deliverable A — agent-accessible skills (live in the generic repo)</div>
+      <h3><span class="m">port-from-coding</span> for Claude, Codex, and Agy</h3>
+      <ul>
+        <li>One canonical procedure, mirrored into agent-native skill locations so Claude Code, Codex, and Agy can all invoke it.</li>
+        <li>Each skill is invoked <b>manually</b> from inside the generic repo. No network, clone, fetch, or CI.</li>
+        <li>Reads a local sibling <span class="m">Muxed</span> checkout (read-only) to survey tracker features in <span class="m">worktracker-stack/</span>.</li>
+        <li>Classifies each feature generic-relevant vs Coding-overlay using overlay knowledge embedded in the skill text.</li>
+        <li>Re-assesses generic's current state <b>semantically</b> each run — no ledger, no commit-walking.</li>
+        <li>Reproduces selected generic-relevant gaps by editing the generic working tree directly, adapted to generic's local APIs.</li>
+        <li>Stops at a human gate: proposes the port set + shows the working-tree diff; never commits, never merges sibling history.</li>
+      </ul>
+    </div>
+    <div class="card deliver">
+      <div class="tag">Deliverable B — governance doc rewrite (both repos)</div>
+      <h3>Flip the river, retire the subtree recipe</h3>
+      <ul>
+        <li>New model in both repos: <b>Coding leads; generic trails</b>; generic-relevant features flow up deliberately via these skills.</li>
+        <li>Neither repo is a git upstream of the other; independent releases, lockfiles, history; no automated/CI sync.</li>
+        <li>Retire the <span class="m">git subtree pull</span> recipe in Coding's <span class="m">MAINTENANCE.md</span> (added by #666/#678).</li>
+        <li>Resolve the live contradiction between Coding's #666 docs and generic's #664 docs.</li>
+        <li>The <span class="m">worktracker-stack/</span> directory and git history stay as-is — only the policy text changes; no history rewrite.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin-top:16px"></div>
+  <div class="cards">
+    <div class="card nogo">
+      <div class="tag">Explicitly out of scope (rejected at the grill)</div>
+      <h3>Not built here</h3>
+      <ul>
+        <li><b>T631 slot/registry</b> (region/action/route/service, typed context, Radix Slot) — deferred until generic has a named downstream consumer.</li>
+        <li><b>Bidirectional / two-way sync</b> — would make each repo track the other as an upstream.</li>
+        <li><b>CI-driven / automated sync</b> — no clone/fetch/compare of Muxed from CI.</li>
+        <li><b>Git plumbing</b> — no subtree push/split, patch files, ledger, or commit-walking.</li>
+        <li><b>A shared package</b> importing the classification into both repos — overlay knowledge is generic-side only, duplicated as skill text where each agent expects it.</li>
+        <li>Any reverse flow (generic → Coding) or generic → eventual-consumer assistance.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="tag">Transport &amp; guardrails (the invariants)</div>
+      <h3>How features move</h3>
+      <ul>
+        <li><b>Transport = the agent edits a generic working tree directly.</b> No artifacts between the repos.</li>
+        <li>Sibling repo is touched <b>read-only</b> — file reads only; never its git history.</li>
+        <li>The only git the skill runs is on the generic repo's <b>own</b> working tree (status/diff) to present the proposal.</li>
+        <li>Reproduced features must keep the generic forbidden-symbol scan <b>green</b> — no overlay symbol may land.</li>
+        <li>Per-feature granularity; human decides the subset that lands and commits it.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="anatomy">
+  <h2>Skill anatomy</h2>
+  <p class="lede">The deliverable is one canonical port procedure rendered as agent-native skill files. Click a part to see what it contains and what it must <span style="color:var(--red)">never</span> do.</p>
+  <div class="lib">
+    <div class="lib-col">
+      <div class="lib-lane">
+        <div class="role">Frontmatter</div>
+        <div class="lib-row" data-k="fm"><span class="nm">name + description</span></div>
+        <div class="lib-row" data-k="when"><span class="nm">when-to-use trigger</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Agent distribution</div>
+        <div class="lib-row" data-k="claude"><span class="nm">Claude Code skill</span></div>
+        <div class="lib-row" data-k="codex"><span class="nm">Codex skill</span></div>
+        <div class="lib-row" data-k="agy"><span class="nm">Agy / Antigravity skill</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Embedded knowledge</div>
+        <div class="lib-row" data-k="overlay"><span class="nm">overlay-classification rules</span></div>
+        <div class="lib-row" data-k="paths"><span class="nm">repo / path assumptions</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Procedure (the 6 phases)</div>
+        <div class="lib-row" data-k="pre"><span class="nm">1 · preconditions</span></div>
+        <div class="lib-row" data-k="survey"><span class="nm">2 · survey</span></div>
+        <div class="lib-row" data-k="classifyp"><span class="nm">3 · classify</span></div>
+        <div class="lib-row" data-k="gap"><span class="nm">4 · gap analysis</span></div>
+        <div class="lib-row" data-k="repro"><span class="nm">5 · reproduce/adapt</span></div>
+        <div class="lib-row" data-k="gate"><span class="nm">6 · human gate</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Guardrails</div>
+        <div class="lib-row" data-k="rails"><span class="nm">hard constraints block</span></div>
+      </div>
+    </div>
+    <div class="lib-detail" id="libInfo">
+      <h4>Pick a part</h4>
+      <p style="color:var(--muted)">Each row describes a section of the skill set: what it states and its non-responsibilities.</p>
+    </div>
+  </div>
+</section>
+
+<section id="run">
+  <h2>Run sequence</h2>
+  <p class="lede">What any supported agent does, in order, when a human invokes the skill in the generic repo. Click a step.</p>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 760 150" width="100%" height="150">
+      <line x1="60" y1="75" x2="700" y2="75" stroke="#e3e7ee" stroke-width="2"/>
+      <g class="step" data-s="1"><circle cx="60" cy="75" r="20" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/><text x="60" y="80" text-anchor="middle" font-size="15" font-weight="800" fill="#3556d4">1</text><text x="60" y="120" text-anchor="middle" font-size="11" fill="#5b6478">precond</text></g>
+      <g class="step" data-s="2"><circle cx="188" cy="75" r="20" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/><text x="188" y="80" text-anchor="middle" font-size="15" font-weight="800" fill="#3556d4">2</text><text x="188" y="120" text-anchor="middle" font-size="11" fill="#5b6478">survey</text></g>
+      <g class="step" data-s="3"><circle cx="316" cy="75" r="20" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/><text x="316" y="80" text-anchor="middle" font-size="15" font-weight="800" fill="#3556d4">3</text><text x="316" y="120" text-anchor="middle" font-size="11" fill="#5b6478">classify</text></g>
+      <g class="step" data-s="4"><circle cx="444" cy="75" r="20" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/><text x="444" y="80" text-anchor="middle" font-size="15" font-weight="800" fill="#3556d4">4</text><text x="444" y="120" text-anchor="middle" font-size="11" fill="#5b6478">gap</text></g>
+      <g class="step" data-s="5"><circle cx="572" cy="75" r="20" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/><text x="572" y="80" text-anchor="middle" font-size="15" font-weight="800" fill="#3556d4">5</text><text x="572" y="120" text-anchor="middle" font-size="11" fill="#5b6478">reproduce</text></g>
+      <g class="step" data-s="6"><circle cx="700" cy="75" r="20" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/><text x="700" y="80" text-anchor="middle" font-size="15" font-weight="800" fill="#1d7a4f">6</text><text x="700" y="120" text-anchor="middle" font-size="11" fill="#5b6478">human gate</text></g>
+    </svg>
+    <div id="seqInfo">
+      <h4>Click a step</h4>
+      <p class="hint">Each step shows its mechanics and the edge case that step must handle.</p>
+    </div>
+  </div>
+</section>
+
+<section id="classify">
+  <h2>Classification reference</h2>
+  <p class="lede">The rule each skill embeds: a feature is portable unless it touches the Coding overlay surface. Sourced from <span class="m">OWNERSHIP.md</span>'s overlay inventory — restated as generic-side guidance, not imported as shared code.</p>
+  <table>
+    <thead><tr><th>Feature surface</th><th>Class</th><th>Agent action</th></tr></thead>
+    <tbody>
+      <tr><td>Backend models, migrations, API, schemas, ranking, states, sprints, blockers, labels, attachments, scope-context, auth, provision/import</td><td><span class="pill gen">GENERIC</span></td><td>Survey &amp; consider for port (adapt to generic's <span class="m">host/</span> wiring).</td></tr>
+      <tr><td>Python SDK, generated TS SDK, FastMCP agent package</td><td><span class="pill gen">GENERIC</span></td><td>Port; regenerate the TS SDK locally from generic's OpenAPI export.</td></tr>
+      <tr><td>Studio: backlog, board, story map, sprints, drawer, settings, filters, search, selection, ranking, palette, inline/keyboard create, bulk, rich description, dependency graph, planning filters, project CRUD</td><td><span class="pill gen">GENERIC</span></td><td>Port the feature; drop any overlay hunk woven into the file.</td></tr>
+      <tr><td><span class="m">codingBridge.ts</span>, <span class="m">lifecycleStore.ts</span>, <span class="m">AgentStateBadge.tsx</span></td><td><span class="pill code">CODING-ONLY</span></td><td><b>Never ported.</b> Whole-file overlay.</td></tr>
+      <tr><td>The <span class="m">w</span> deep-link / "open in coding app", <span class="m">VITE_CODING_*</span>, <span class="m">codingAppUrl</span>, <span class="m">IconExternalLink</span> use, agent-state badge hunks</td><td><span class="pill code">CODING-ONLY</span></td><td><b>Never ported.</b> Strip these hunks when porting their host SHARED file.</td></tr>
+      <tr><td>SHARED files (e.g. <span class="m">StudioApp.tsx</span>, <span class="m">useGlobalKeyboardShortcuts.ts</span>, <span class="m">IssueDrawerHeader.tsx</span>, <span class="m">configStore.ts</span>, <span class="m">stores/index.ts</span>)</td><td><span class="pill shared">SHARED</span></td><td>Port the generic body; discard the inventoried overlay hunk.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout red" style="margin-top:16px"><b>Hard stop:</b> the post-port forbidden-symbol scan over generic's <span class="m">studio/src</span> must stay <b>empty</b>. If any of <span class="m">codingBridge | lifecycleStore | AgentStateBadge | VITE_CODING | openInCodingApp</span> appears, the port is wrong — back it out before the human gate.</div>
+</section>
+
+<section id="docs">
+  <h2>Doc flip map</h2>
+  <p class="lede">Deliverable B plus the new skill locations. Click a file to see the exact text delta. Both repos currently carry contradictory governance; #682 makes them agree on the new model.</p>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">../worktracker/  <span style="color:var(--green)">(generic — gains agent skills + flipped docs)</span></div>
+      <div>├─ .claude/skills/<span class="hit new" data-f="skill">port-from-coding/SKILL.md</span></div>
+      <div>├─ .codex/skills/<span class="hit new" data-f="codex-skill">port-from-coding/SKILL.md</span></div>
+      <div>├─ .agents/skills/<span class="hit new" data-f="agy-skill">port-from-coding/SKILL.md</span></div>
+      <div>├─ <span class="hit flip" data-f="gen-maint">MAINTENANCE.md</span></div>
+      <div>├─ <span class="hit flip" data-f="gen-fork">FORK.md</span></div>
+      <div>├─ <span class="hit keep" data-f="gen-own">OWNERSHIP.md</span></div>
+      <div>└─ <span class="hit flip" data-f="gen-readme">README.md</span></div>
+      <div style="margin-top:10px" class="dir">worktracker-stack/  <span style="color:var(--amber)">(Coding — retire subtree recipe)</span></div>
+      <div>├─ <span class="hit flip" data-f="cod-maint">MAINTENANCE.md</span></div>
+      <div>├─ <span class="hit flip" data-f="cod-fork">FORK.md</span></div>
+      <div>├─ <span class="hit keep" data-f="cod-own">OWNERSHIP.md</span></div>
+      <div>├─ <span class="hit flip" data-f="cod-readme">README.md</span></div>
+      <div>└─ <span class="hit flip" data-f="cod-claude">CLAUDE.md + AGENTS.md</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--green-soft);border:1px solid var(--green)"></i>new</span>
+        <span><i style="background:var(--amber-soft);border:1px solid var(--amber)"></i>policy flip</span>
+        <span><i style="background:var(--accent-soft);border:1px solid var(--accent)"></i>reframe (kept)</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmInfo">
+      <h4>Pick a file</h4>
+      <p style="color:var(--muted)">Each entry lists the precise wording that changes — no prose rewrite beyond the policy delta.</p>
+    </div>
+  </div>
+</section>
+
+<section id="trace">
+  <h2>Decision trace</h2>
+  <p class="lede">Each refinement constraint mapped to the design choice that satisfies it.</p>
+  <table>
+    <thead><tr><th>Constraint (from the grill)</th><th>Design choice</th></tr></thead>
+    <tbody>
+      <tr><td>One-way only, Coding → generic</td><td>Agent skills live only in generic; survey Muxed read-only; edit only the generic tree. No reverse path exists.</td></tr>
+      <tr><td>Human-gated; agent never auto-merges</td><td>Procedure ends at step 6 with a proposal + working-tree diff; the skill text forbids commit/merge/push.</td></tr>
+      <tr><td>No CI / no automated sync</td><td>Manual invocation only; preconditions assert an interactive run; no network primitives referenced.</td></tr>
+      <tr><td>Access Muxed without "CI never clones"</td><td>Local sibling checkout only, read via file tools; absence → skill instructs the human and stops.</td></tr>
+      <tr><td>Per-feature granularity</td><td>Survey and proposal are organized by feature, not commit or file.</td></tr>
+      <tr><td>No ledger; re-assess each run</td><td>Step 4 compares generic's current state semantically; already-ported features are recognized and skipped.</td></tr>
+      <tr><td>Overlay knowledge not shared code</td><td>Classification rules are prose inside each agent skill, generic-side only; nothing imported by both repos.</td></tr>
+      <tr><td>Codex and Agy must also access it</td><td>Deliverable A creates Claude, Codex, and Agy/Antigravity skill surfaces from the same canonical procedure.</td></tr>
+      <tr><td>Coding leads; docs must stop saying "neither tracks the other"</td><td>Deliverable B flips MAINTENANCE/FORK/README in both repos and retires the subtree recipe.</td></tr>
+      <tr><td>No git-history rewrite</td><td>worktracker-stack/ stays; only policy text changes; subtree machinery simply unused.</td></tr>
+      <tr><td>T631 slot registry deferred</td><td>Listed out of scope; LLD references it only as future work gated on a named consumer.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="build">
+  <h2>Build order</h2>
+  <p class="lede">Implementation sequence for the In Progress phase. The agent skills and docs are independent; docs can land first to stop the live contradiction.</p>
+  <div class="steps">
+    <div class="bstep"><div class="n">1</div><b>Flip generic docs</b>MAINTENANCE/FORK/README → Coding-leads, skill-assisted, no git upstream. Reframe OWNERSHIP as the skills' classification source.</div>
+    <div class="bstep"><div class="n">2</div><b>Flip Coding docs</b>Retire the subtree-pull recipe; rewrite MAINTENANCE/FORK/README/CLAUDE/AGENTS to the same model.</div>
+    <div class="bstep"><div class="n">3</div><b>Author canonical procedure</b>Write the shared skill content: frontmatter, embedded overlay rules, the 6-phase procedure, the guardrails block.</div>
+    <div class="bstep"><div class="n">4</div><b>Publish agent surfaces</b>Mirror the procedure into Claude, Codex, and Agy skill locations with only agent-specific metadata changed.</div>
+    <div class="bstep"><div class="n">5</div><b>Dry-run &amp; verify</b>Invoke at least one supported agent against the live sibling checkout; confirm it proposes a sane port set, edits nothing without the gate, and the forbidden-symbol scan stays green.</div>
+  </div>
+</section>
+
+<section id="accept">
+  <h2>Acceptance</h2>
+  <div class="accept">
+    <p>#682 is done when: <b>(A)</b> <span class="m">../worktracker/.claude/skills/port-from-coding/SKILL.md</span>, <span class="m">../worktracker/.codex/skills/port-from-coding/SKILL.md</span>, and <span class="m">../worktracker/.agents/skills/port-from-coding/SKILL.md</span> exist and expose the same manual one-way port procedure; run against a local sibling Muxed, each skill surveys tracker features, classifies generic vs overlay, semantically gap-checks generic, and edits the generic working tree with adapted generic-relevant features — stopping at a human gate without committing or touching sibling history; <b>(B)</b> both repos' <span class="m">FORK / MAINTENANCE / OWNERSHIP / README</span> (and Coding's <span class="m">CLAUDE.md / AGENTS.md</span>) state the single agreed model — Coding leads, generic trails via these skills, neither a git upstream, no automated sync — and the <span class="m">git subtree pull</span> recipe is gone; <b>(C)</b> a post-port forbidden-symbol scan over generic's <span class="m">studio/src</span> is empty.</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+  const libData = {
+    fm: { h: "name + description", g: "Contains", does: ["A kebab name (port-from-coding) and one-line descriptions each agent can match.","States plainly: one-way Coding→generic port assistant, run in the generic repo."], notg: ["No behaviour — metadata only."] },
+    when: { h: "when-to-use trigger", g: "Contains", does: ["Trigger phrasing: \"sync generic-relevant tracker work from Muxed\", \"port from Coding\".","A precondition reminder that a local sibling Muxed checkout must exist."], notg: ["Must not fire automatically or on a schedule."] },
+    claude: { h: "Claude Code skill", g: "Contains", does: ["Generic repo path: .claude/skills/port-from-coding/SKILL.md.","The canonical procedure in Claude skill format, with Claude-specific trigger metadata only."], notg: ["Does not become the source of truth for the other agents if content drifts."] },
+    codex: { h: "Codex skill", g: "Contains", does: ["Generic repo path: .codex/skills/port-from-coding/SKILL.md.","The same canonical procedure in Codex skill format, including the same one-way guardrails and human gate."], notg: ["Does not add Codex-only behavior, network access, or a different classification rule."] },
+    agy: { h: "Agy / Antigravity skill", g: "Contains", does: ["Generic repo path: .agents/skills/port-from-coding/SKILL.md.","The same canonical procedure for Agy/Antigravity access, with only wrapper metadata adjusted."], notg: ["Does not write to Muxed or create a reverse generic→Coding path."] },
+    overlay: { h: "overlay-classification rules", g: "Contains", does: ["The enumerated Coding-only surface (codingBridge, lifecycleStore, AgentStateBadge, the w deep-link, VITE_CODING_*, openInCodingApp, agent-state).","The principle: portable unless it touches that surface; strip overlay hunks from SHARED files."], notg: ["Not imported from a shared package — this is prose, generic-side only."] },
+    paths: { h: "repo / path assumptions", g: "Contains", does: ["Assert the skill runs from the generic repo root.","Sibling checkout default path (../Muxed), with worktracker-stack/ as the survey target; ask the human if not found."], notg: ["No hard-coded absolute machine paths; no clone/fetch fallback."] },
+    pre: { h: "1 · preconditions", g: "Step does", does: ["Confirm CWD is the generic repo and the working tree is clean enough to show a reviewable diff.","Locate the sibling Muxed checkout; read-only."], notg: ["Does not clone, fetch, or pull anything."] },
+    survey: { h: "2 · survey", g: "Step does", does: ["Enumerate tracker features present in Muxed/worktracker-stack/ (backend, SDKs, agent, studio).","Reason in features, not commits or files."], notg: ["Does not read sibling git history."] },
+    classifyp: { h: "3 · classify", g: "Step does", does: ["Label each surveyed feature GENERIC, SHARED, or CODING-ONLY using the embedded rules.","Drop CODING-ONLY outright."], notg: ["Does not propose any overlay feature for porting."] },
+    gap: { h: "4 · gap analysis", g: "Step does", does: ["Compare generic-relevant features against generic's current state semantically.","Recognize already-ported-and-adapted features and skip them."], notg: ["No ledger, no commit diffing, no re-proposing settled features."] },
+    repro: { h: "5 · reproduce/adapt", g: "Step does", does: ["For the selected gaps, edit the generic working tree to reproduce the feature, adapted to generic's local APIs and host/ wiring.","Keep the forbidden-symbol scan green."], notg: ["Does not copy files verbatim if the API shape differs; does not introduce overlay symbols."] },
+    gate: { h: "6 · human gate", g: "Step does", does: ["Present the proposed port set per feature and the generic working-tree diff for review.","Stop and hand control to the human."], notg: ["Never commits, pushes, or merges sibling history; the human decides what lands."] },
+    rails: { h: "hard constraints block", g: "States", does: ["One-way only; read-only on the sibling; edits only generic's tree.","No network/CI/automation; no git plumbing; no auto-commit; classification stays generic-side."], notg: ["No exception path that would let it write to Muxed or run reverse."] },
+  };
+  document.querySelectorAll(".lib-row").forEach(r => r.addEventListener("click", () => {
+    document.querySelectorAll(".lib-row").forEach(x => x.classList.remove("sel"));
+    r.classList.add("sel");
+    const d = libData[r.dataset.k];
+    document.getElementById("libInfo").innerHTML =
+      `<h4>${d.h}</h4><div class="grp">${d.g}</div><ul>` +
+      d.does.map(x => `<li class="fit">${x}</li>`).join("") +
+      `</ul><div class="grp" style="color:var(--red)">Does not</div><ul>` +
+      d.notg.map(x => `<li class="miss">${x}</li>`).join("") + `</ul>`;
+  }));
+
+  const seqData = {
+    1: { h: "Preconditions", p: "Verify the run is inside the generic repo and interactive. Locate a local sibling Muxed checkout (default ../Muxed), opened read-only.", e: "Edge: sibling absent or ambiguous → state the expected path and stop. Never fetch or clone." },
+    2: { h: "Survey", p: "Walk Muxed/worktracker-stack/ and enumerate tracker features across backend, SDKs, the agent package, and studio — described as features, not as a file list.", e: "Edge: a feature spans many files — keep it as one feature in the proposal." },
+    3: { h: "Classify", p: "Tag each feature GENERIC / SHARED / CODING-ONLY against the embedded overlay rules. CODING-ONLY is discarded immediately.", e: "Edge: a SHARED file carries a generic body + an overlay hunk → port the body, drop the hunk." },
+    4: { h: "Gap analysis", p: "Compare generic-relevant features against generic's current state semantically. Anything already present and adapted is recognized and not re-proposed.", e: "Edge: a feature exists in generic but under a different API shape — treat as present, note divergence, don't duplicate." },
+    5: { h: "Reproduce / adapt", p: "Edit the generic working tree to reproduce the chosen gaps, adapting to generic's local APIs and host/ composition. Regenerate the TS SDK locally where the contract moved.", e: "Edge: a port would drag in an overlay symbol → back it out; the forbidden-symbol scan must stay green." },
+    6: { h: "Human gate", p: "Present the per-feature port set and the generic working-tree diff. Hand control to the human, who reviews, adapts further, and commits.", e: "Edge: the agent must never commit, push, or merge sibling history — only the human commits." },
+  };
+  document.querySelectorAll(".step").forEach(s => s.addEventListener("click", () => {
+    document.querySelectorAll(".step").forEach(x => x.classList.remove("hl"));
+    s.classList.add("hl");
+    const d = seqData[s.dataset.s];
+    document.getElementById("seqInfo").innerHTML =
+      `<h4>${d.h}</h4><p>${d.p}</p><div class="edge">${d.e}</div>`;
+  }));
+
+  const cmData = {
+    "skill": { h: ".claude/skills/port-from-coding/SKILL.md", k: "NEW (generic only)", does: ["Claude Code skill surface for Deliverable A.","Contains the canonical procedure: frontmatter, embedded overlay rules, 6-phase procedure, guardrails block."] },
+    "codex-skill": { h: ".codex/skills/port-from-coding/SKILL.md", k: "NEW (generic only)", does: ["Codex skill surface for Deliverable A.","Same procedure and guardrails as Claude; only Codex-facing metadata/format may differ."] },
+    "agy-skill": { h: ".agents/skills/port-from-coding/SKILL.md", k: "NEW (generic only)", does: ["Agy/Antigravity skill surface for Deliverable A.","Same procedure and guardrails as Claude/Codex; only Agy-facing metadata/format may differ."] },
+    "gen-maint": { h: "generic · MAINTENANCE.md", k: "POLICY FLIP", does: ["Replace \"two independent products / no upstream / Manual ports\" framing.","State: Coding is the one-way upstream for generic-relevant tracker changes, ported deliberately by a human via the skill.","Keep: independent releases/lockfiles/history; neither is a git upstream; no automated/CI sync; the forbidden-symbol scan."] },
+    "gen-fork": { h: "generic · FORK.md", k: "POLICY FLIP", does: ["Keep the one-time fork provenance.","Add: the ongoing relationship is one-way port-down-from-Coding via the skill, not a frozen divergence."] },
+    "gen-own": { h: "generic · OWNERSHIP.md", k: "REFRAME (kept)", does: ["Re-point as the classification source these skills read.","Content of the overlay inventory stays accurate."] },
+    "gen-readme": { h: "generic · README.md", k: "POLICY FLIP", does: ["Update the relationship paragraph + point to the agent skills for keeping in sync with Coding."] },
+    "cod-maint": { h: "Coding · MAINTENANCE.md", k: "RETIRE RECIPE", does: ["Remove the git subtree pull recipe and overlay-conflict resolution added by #666/#678.","State: Coding leads / authors tracker work here; generic trails via the generic-side agent skills; no subtree pull."] },
+    "cod-fork": { h: "Coding · FORK.md", k: "POLICY FLIP", does: ["Drop the \"downstream of generic via subtree, base 20962a7\" framing; keep the directory provenance.","State Coding as the lead; generic trails."] },
+    "cod-own": { h: "Coding · OWNERSHIP.md", k: "REFRAME (kept)", does: ["Keep the CORE/SHARED/CODING-ONLY inventory; drop subtree-pull-conflict phrasing.","Reframe as the boundary the generic-side skills classify against."] },
+    "cod-readme": { h: "Coding · README.md", k: "POLICY FLIP", does: ["Drop \"git subtree of upstream generic\"; state Coding leads, generic trails via the agent skills."] },
+    "cod-claude": { h: "Coding · CLAUDE.md + AGENTS.md", k: "POLICY FLIP", does: ["Remove \"git subtree of the generic, upstream WorkTracker\" + the subtree-pull syncing section.","State the new model so agent guidance stops contradicting the policy docs. Keep AGENTS.md a pointer to CLAUDE.md."] },
+  };
+  document.querySelectorAll(".cm-tree .hit").forEach(el => el.addEventListener("click", () => {
+    document.querySelectorAll(".cm-tree .hit").forEach(x => x.classList.remove("sel"));
+    el.classList.add("sel");
+    const d = cmData[el.dataset.f];
+    document.getElementById("cmInfo").innerHTML =
+      `<h4>${d.h}</h4><div class="kind" style="color:var(--amber)">${d.k}</div><ul>` +
+      d.does.map(x => `<li>${x}</li>`).join("") + `</ul>`;
+  }));
+
+  const secs = [...document.querySelectorAll("section")];
+  const links = [...document.querySelectorAll("nav a")];
+  const obs = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { links.forEach(l => l.classList.toggle("active", l.getAttribute("href") === "#" + e.target.id)); }
+  }), { rootMargin: "-50% 0px -50% 0px" });
+  secs.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>

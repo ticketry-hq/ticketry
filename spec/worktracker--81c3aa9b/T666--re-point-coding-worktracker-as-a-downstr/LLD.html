@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T666 · Re-point Coding WorkTracker as a downstream of Generic — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  p.body { font-size: 14px; max-width: 880px; margin-bottom: 12px; }
+  p.body b { color: var(--ink); }
+
+  /* recon banner */
+  .recon { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; border-top: 3px solid var(--accent); }
+  .stat .big { font-size: 26px; font-weight: 800; color: var(--accent); }
+  .stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat.red { border-top-color: var(--red); }
+  .stat.red .big { color: var(--red); }
+  .stat.green { border-top-color: var(--green); }
+  .stat.green .big { color: var(--green); }
+  .stat.violet { border-top-color: var(--violet); }
+  .stat.violet .big { color: var(--violet); }
+
+  /* change/drift map */
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.gen { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.refac { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.code { background: var(--red-soft); color: var(--red); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .verdict { margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; }
+  .cm-detail .verdict.cross { background: var(--green-soft); color: var(--green); }
+  .cm-detail .verdict.hold { background: var(--red-soft); color: var(--red); }
+  .cm-legend { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* mechanism */
+  .lib { display: grid; grid-template-columns: 372px 1fr; gap: 18px; align-items: start; }
+  .lib-col { display: flex; flex-direction: column; gap: 14px; }
+  .lib-lane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .lib-lane .role { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .lib-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 6px 8px; border-radius: 7px; }
+  .lib-row:hover { background: #f4f6fa; }
+  .lib-row.sel { background: var(--accent-soft); }
+  .lib-row .nm { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+  .lib-row.sel .nm { color: var(--accent); }
+  .vb { font-size: 10px; font-weight: 800; letter-spacing: .04em; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .vb.chosen { background: var(--green-soft); color: var(--green); }
+  .vb.rej { background: var(--red-soft); color: var(--red); }
+  .vb.cons { background: var(--amber-soft); color: var(--amber); }
+  .lib-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; align-self: start; }
+  .lib-detail h4 { font-size: 15px; color: var(--accent); font-family: var(--mono); margin-bottom: 2px; }
+  .lib-detail .meta { font-size: 11px; font-weight: 800; letter-spacing: .05em; margin-bottom: 6px; }
+  .lib-detail .meta .sz { color: var(--muted); font-weight: 600; }
+  .lib-detail .grp { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+  .lib-detail ul { list-style: none; }
+  .lib-detail li { padding: 3px 0 3px 20px; position: relative; font-size: 13px; line-height: 1.45; }
+  .lib-detail li.fit::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+  .lib-detail li.miss::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 800; }
+  .lib-detail .use { margin-top: 14px; padding: 10px 12px; background: var(--accent-soft); border-radius: 8px; font-size: 12.5px; color: var(--ink); }
+  .lib-detail .use b { color: var(--accent); }
+
+  /* sequence */
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .cmd { margin-top: 10px; font-family: var(--mono); font-size: 11.5px; background: #0e1320; color: #d7e0f5; padding: 9px 11px; border-radius: 7px; white-space: pre-wrap; line-height: 1.5; }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+
+  /* contract card */
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; }
+  .contract .sect { display: grid; grid-template-columns: 200px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); padding-top: 2px; }
+  .contract .sv { color: var(--ink); }
+
+  /* build order */
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+  .bstep.done { border-top-color: var(--green); }
+  .bstep.done .n { color: var(--green); }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  .callout { background: var(--violet-soft); border: 1px solid #ddd0f2; border-radius: 12px; padding: 16px 20px; font-size: 13.5px; margin-bottom: 18px; }
+  .callout b { color: var(--violet); }
+  .callout.amber { background: var(--amber-soft); border-color: #ecdca6; }
+  .callout.amber b { color: var(--amber); }
+
+  @media (max-width: 900px) {
+    .cm, .seq-wrap, .lib, .recon { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · WorkTracker · Ticket #666 · LLD (re-point)</div>
+  <h1>Re-point Coding WorkTracker as a downstream of Generic</h1>
+  <div class="sub">The end-state is clean: <b>Generic WorkTracker = the upstream</b> you author shared, project-agnostic work in; <b>Coding (Muxed <span class="m">worktracker-stack/</span>) = the downstream</b> that pulls Generic in and re-applies a thin coding overlay. This LLD specifies the agreed mechanism that gets there — <b>re-audit → rebuild Generic minus overlay (fresh base) → re-point Coding via subtree → docs/policy/close</b> — and the steady-state <span class="m">git subtree pull</span> it unlocks.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">Upstream → downstream re-point</span>
+    <span class="chip violet">Mechanism: rebuild fresh base → subtree add → overlay</span>
+    <span class="chip green">B + C landed on main · D in progress</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#why" class="active">Why this LLD</a>
+  <a href="#endstate">End-state</a>
+  <a href="#mech">Mechanism</a>
+  <a href="#seq">A→B→C→D Sequence</a>
+  <a href="#overlay">Overlay Inventory</a>
+  <a href="#steady">Steady-state Pull</a>
+  <a href="#validate">Green Gates</a>
+  <a href="#failures">Failure Matrix</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ WHY ============ -->
+<section id="why">
+  <h2>Why this LLD reads the way it does</h2>
+  <div class="lede">Two superseded plans preceded this one. The history matters because the disk still carried the wrong plan until this rewrite.</div>
+  <div class="recon">
+    <div class="stat red"><div class="big">#664</div><div class="lbl">forward-fork model — Generic forked <em>from</em> Coding, no sync. <b>Inverted.</b></div></div>
+    <div class="stat red"><div class="big">v1 LLD</div><div class="lbl">"Coding → Generic catch-up merge" — authored, then <b>abandoned</b></div></div>
+    <div class="stat green"><div class="big">agreed</div><div class="lbl">rebuild Generic fresh + re-point Coding (decided with user 2026-06-26)</div></div>
+    <div class="stat green"><div class="big">true</div><div class="lbl"><span class="m">merge-base --is-ancestor 20962a7 HEAD</span> — shared base verified</div></div>
+  </div>
+  <p class="body"><b>The two pivots.</b> #664 set up Generic as a one-time fork of the Coding stack with an explicit <em>no-sync</em> policy. That left Generic frozen and stale while ~6 commits of mostly-generic work (sprint lifecycle, store-split, TypeScript SDK, dependency graph, planning filters, project CRUD, protected states) landed on the Coding side. #666 reverses the arrows: Generic becomes the <b>upstream</b>, Coding the <b>downstream</b>.</p>
+  <p class="body"><b>Why the v1 catch-up-merge LLD was dropped.</b> The first #666 LLD proposed an ancestry-preserving <span class="m">subtree split → merge → re-strip</span> to drag stale Generic forward. It worked on paper but carried merge-history baggage and a fragile re-strip across 216 renamed files. The user and the agent agreed a cleaner path on 2026-06-26: <b>rebuild Generic's content directly from current <span class="m">main</span> minus the overlay as a fresh base commit</b>, then re-point Coding onto it. This document <b>is</b> that rewrite — it replaces the catch-up-merge text that was still on disk.</p>
+  <div class="callout"><b>Status when this LLD was written (2026-06-26):</b> sub-tasks B (#677) and C (#678) have already executed and landed on <span class="m">main</span>; the shared-ancestry invariant is verified. This LLD therefore documents the mechanism <em>as built</em>, and D (#679) — docs, policy flip, this rewrite, and close-out — is the remaining work.</div>
+</section>
+
+<!-- ============ END STATE ============ -->
+<section id="endstate">
+  <h2>The end-state — upstream / downstream</h2>
+  <div class="lede">Click a node for what it owns and what it explicitly does not. Solid = lives in that repo; the dashed edge is the routine <span class="m">subtree pull</span> that carries generic work down.</div>
+  <div class="seq-wrap" style="grid-template-columns: 1fr 320px;">
+    <svg viewBox="0 0 640 320" width="100%">
+      <defs>
+        <marker id="aarr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L9,5 L0,10 z" fill="#1d7a4f"/></marker>
+        <marker id="aarr2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L9,5 L0,10 z" fill="#b03030"/></marker>
+      </defs>
+      <!-- upstream box -->
+      <g class="anode" data-n="up" style="cursor:pointer">
+        <rect x="40" y="60" width="220" height="120" rx="12" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="150" y="92" text-anchor="middle" font-size="13" font-weight="800" fill="#1d7a4f">Generic WorkTracker</text>
+        <text x="150" y="112" text-anchor="middle" font-size="11" fill="#5b6478">../worktracker (UPSTREAM)</text>
+        <text x="150" y="138" text-anchor="middle" font-size="10.5" fill="#5b6478">base 20962a7</text>
+        <text x="150" y="154" text-anchor="middle" font-size="10.5" fill="#5b6478">tag worktracker-generic-base-v2</text>
+      </g>
+      <!-- downstream box -->
+      <g class="anode" data-n="down" style="cursor:pointer">
+        <rect x="380" y="60" width="220" height="120" rx="12" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/>
+        <text x="490" y="92" text-anchor="middle" font-size="13" font-weight="800" fill="#3556d4">Coding stack</text>
+        <text x="490" y="112" text-anchor="middle" font-size="11" fill="#5b6478">Muxed worktracker-stack/</text>
+        <text x="490" y="138" text-anchor="middle" font-size="10.5" fill="#5b6478">subtree + overlay (DOWNSTREAM)</text>
+        <text x="490" y="154" text-anchor="middle" font-size="10.5" fill="#5b6478">on main · ancestor of 20962a7 ✓</text>
+      </g>
+      <!-- pull edge -->
+      <line x1="262" y1="100" x2="378" y2="100" stroke="#1d7a4f" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#aarr)"/>
+      <text x="320" y="92" text-anchor="middle" font-size="10.5" fill="#1d7a4f">subtree pull</text>
+      <!-- overlay self edge -->
+      <g class="anode" data-n="overlay" style="cursor:pointer">
+        <rect x="380" y="220" width="220" height="60" rx="10" fill="#fbe7e7" stroke="#b03030" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <text x="490" y="246" text-anchor="middle" font-size="12" font-weight="800" fill="#b03030">Coding overlay</text>
+        <text x="490" y="264" text-anchor="middle" font-size="10.5" fill="#5b6478">codingBridge · lifecycle · badge</text>
+      </g>
+      <line x1="490" y1="218" x2="490" y2="182" stroke="#b03030" stroke-width="1.5" marker-end="url(#aarr2)"/>
+      <text x="540" y="204" text-anchor="middle" font-size="10" fill="#b03030">re-applied</text>
+    </svg>
+    <div id="nodeInfo"><span class="hint">Click a node.</span></div>
+  </div>
+</section>
+
+<!-- ============ MECHANISM ============ -->
+<section id="mech">
+  <h2>Mechanism — how the re-point was done, and the roads not taken</h2>
+  <div class="lede">Click each candidate for fit, misses, and how the chosen one runs. The deciding constraint: the result must (1) make Generic content-correct = current <span class="m">main</span> minus overlay, and (2) leave a <b>shared base</b> so the steady-state Generic → Coding <span class="m">subtree pull</span> 3-way merges cleanly.</div>
+  <div class="lib">
+    <div class="lib-col">
+      <div class="lib-lane">
+        <div class="role">Re-point mechanism</div>
+        <div class="lib-row" data-l="rebuild"><span class="nm">rebuild fresh base → subtree add → overlay</span><span class="vb chosen">CHOSEN</span></div>
+        <div class="lib-row" data-l="catchup"><span class="nm">Coding → Generic catch-up merge</span><span class="vb rej">SUPERSEDED</span></div>
+        <div class="lib-row" data-l="refork"><span class="nm">keep #664 fork, no sync</span><span class="vb rej">REJECTED</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Overlay driver (what is Coding-only)</div>
+        <div class="lib-row" data-l="ownership"><span class="nm">OWNERSHIP.md inventory</span><span class="vb chosen">CHOSEN</span></div>
+        <div class="lib-row" data-l="grep"><span class="nm">forbidden-symbol scan</span><span class="vb chosen">GATE</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Upstream source</div>
+        <div class="lib-row" data-l="localpath"><span class="nm">local path ../worktracker</span><span class="vb chosen">CHOSEN</span></div>
+        <div class="lib-row" data-l="remote"><span class="nm">hosted remote (GitHub)</span><span class="vb rej">DEFERRED</span></div>
+      </div>
+    </div>
+    <div class="lib-detail" id="libDetail"><span style="color:var(--muted);font-style:italic">Select a mechanism on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ SEQUENCE ============ -->
+<section id="seq">
+  <h2>A → B → C → D sequence</h2>
+  <div class="lede">Four strictly-ordered sub-tasks, one agent each. Click a numbered step for its mechanics, the exact commands, and edge cases. B and C are already green; D is this document's work.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 720 360" width="100%">
+      <g font-size="12" font-weight="700">
+        <text x="120" y="22" text-anchor="middle" fill="#3556d4">Muxed (Coding)</text>
+        <text x="560" y="22" text-anchor="middle" fill="#1d7a4f">../worktracker (Generic)</text>
+      </g>
+      <g stroke="#e3e7ee" stroke-width="1.5">
+        <line x1="120" y1="32" x2="120" y2="340"/>
+        <line x1="560" y1="32" x2="560" y2="340"/>
+      </g>
+      <defs>
+        <marker id="sarr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+      </defs>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="120" y1="70" x2="116" y2="70"/>
+        <line x1="120" y1="130" x2="556" y2="130" marker-end="url(#sarr)"/>
+        <line x1="560" y1="190" x2="124" y2="190" marker-end="url(#sarr)"/>
+        <line x1="120" y1="250" x2="116" y2="250"/>
+        <line x1="120" y1="310" x2="116" y2="310"/>
+      </g>
+      <g font-size="11" fill="#5b6478">
+        <text x="180" y="60" text-anchor="start">A · re-audit overlay vs core</text>
+        <text x="340" y="120" text-anchor="middle">B · rebuild Generic fresh base</text>
+        <text x="340" y="180" text-anchor="middle">C · subtree add 20962a7 → Coding</text>
+        <text x="180" y="240" text-anchor="start">C · re-apply overlay (one commit)</text>
+        <text x="180" y="300" text-anchor="start">D · docs · policy · LLD · close</text>
+      </g>
+      <g class="step" data-s="A"><circle cx="120" cy="70" r="13" fill="#e8edfb" stroke="#3556d4"/><text x="120" y="74.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3556d4">A</text></g>
+      <g class="step" data-s="B"><circle cx="560" cy="130" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="560" y="134.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">B</text></g>
+      <g class="step" data-s="C"><circle cx="120" cy="190" r="13" fill="#e8edfb" stroke="#3556d4"/><text x="120" y="194.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3556d4">C</text></g>
+      <g class="step" data-s="C2"><circle cx="120" cy="250" r="13" fill="#fbe7e7" stroke="#b03030"/><text x="120" y="254.5" text-anchor="middle" font-size="12" font-weight="800" fill="#b03030">C</text></g>
+      <g class="step" data-s="D"><circle cx="120" cy="310" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="120" y="314.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3d2370">D</text></g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a numbered step.</span></div>
+  </div>
+</section>
+
+<!-- ============ OVERLAY INVENTORY ============ -->
+<section id="overlay">
+  <h2>Overlay inventory — exactly what is Coding-only</h2>
+  <div class="lede">The boundary the rebuild stripped and the re-point re-applied. Whole files are deleted upstream / restored downstream; SHARED files keep the generic body and carry one Coding hunk. This is the same inventory the steady-state pull's conflict guidance uses.</div>
+  <table>
+    <thead><tr><th style="width:320px">File</th><th>Class</th><th>Overlay content</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">studio/src/lib/codingBridge.ts</span> (+ <span class="m">test/codingBridge.test.ts</span>)</td><td><span class="sev def">CODING-ONLY</span></td><td>Deep-link bridge to the Coding app. Whole file.</td></tr>
+      <tr><td><span class="m">studio/src/stores/system/lifecycleStore.ts</span> (+ <span class="m">test/lifecycleStore.test.ts</span>)</td><td><span class="sev def">CODING-ONLY</span></td><td>Agent-state poll loop. Whole file.</td></tr>
+      <tr><td><span class="m">studio/src/shell/AgentStateBadge.tsx</span></td><td><span class="sev def">CODING-ONLY</span></td><td>Agent lifecycle badge. Whole file.</td></tr>
+      <tr><td><span class="m">studio/src/app/StudioApp.tsx</span></td><td><span class="sev warn">SHARED</span></td><td>Lifecycle poll effect + store subscription.</td></tr>
+      <tr><td><span class="m">studio/src/hooks/useGlobalKeyboardShortcuts.ts</span></td><td><span class="sev warn">SHARED</span></td><td><span class="m">w</span> deep-link (<span class="m">useCodingAppShortcut</span>) + bridge import.</td></tr>
+      <tr><td><span class="m">studio/src/shell/IssueDrawerHeader.tsx</span></td><td><span class="sev warn">SHARED</span></td><td>Badge + "Open in coding app" (+ <span class="m">openInCodingApp</span> / <span class="m">IconExternalLink</span>).</td></tr>
+      <tr><td><span class="m">studio/src/views/backlog/BacklogRow.tsx</span></td><td><span class="sev warn">SHARED</span></td><td>Badge + <span class="m">descendantIds</span> helper.</td></tr>
+      <tr><td><span class="m">studio/src/stores/index.ts</span></td><td><span class="sev warn">SHARED</span></td><td>Lifecycle store export.</td></tr>
+      <tr><td><span class="m">studio/src/stores/studio/configStore.ts</span></td><td><span class="sev warn">SHARED</span></td><td><span class="m">codingAppUrl</span> field.</td></tr>
+      <tr><td><span class="m">studio/src/lib/icons.tsx</span></td><td><span class="sev warn">SHARED</span></td><td><span class="m">IconExternalLink</span>.</td></tr>
+      <tr><td><span class="m">studio/src/vite-env.d.ts</span> · <span class="m">studio/.env.example</span></td><td><span class="sev warn">SHARED</span></td><td><span class="m">VITE_CODING_APP_URL</span> / <span class="m">VITE_CODING_API_BASE</span>.</td></tr>
+      <tr><td><span class="m">useBacklogCursor.ts</span> · <span class="m">lib/display.ts</span> · <span class="m">main.tsx</span></td><td><span class="sev warn">SHARED</span></td><td>Comment-only coding references.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout" style="margin-top:18px"><b>The objective gate:</b> <span class="m">grep -rE 'codingBridge|lifecycleStore|AgentStateBadge|VITE_CODING|openInCodingApp' studio/src</span> must be <b>NON-empty in Coding</b> (overlay lives here by design) and <b>EMPTY in Generic</b> (upstream is overlay-free). Both verified post-C.</div>
+</section>
+
+<!-- ============ STEADY STATE ============ -->
+<section id="steady">
+  <h2>Steady-state — pulling generic work down</h2>
+  <div class="lede">The re-point's whole payoff: with the shared base in place, syncing future generic work is one command + a mechanical overlay re-apply. This is the recipe the rewritten <span class="m">MAINTENANCE.md</span> carries.</div>
+  <div class="contract">
+    <div class="sect"><span class="sk">PULL</span><span class="sv"><span class="m">git subtree pull --prefix=worktracker-stack ../worktracker &lt;ref&gt; -m "chore: subtree pull generic"</span> — run from the Muxed root with a clean tree. Only the post-base upstream delta merges in.</span></div>
+    <div class="sect"><span class="sk">CONFLICTS</span><span class="sv">Land only on the SHARED files above. Resolve deterministically: <b>keep the generic (incoming) body, re-add the Coding hunk.</b> The overlay is fixed and small — re-applying it is mechanical, not judgement.</span></div>
+    <div class="sect"><span class="sk">VERIFY</span><span class="sv">Run the forbidden-symbol scan in both repos (non-empty here, empty upstream), then the green gates: <span class="m">npm run typecheck</span>, <span class="m">npm run test --workspace @worktracker/studio</span>, <span class="m">(cd studio &amp;&amp; npx vite build)</span>.</span></div>
+    <div class="sect"><span class="sk">AUTHORING</span><span class="sv">Generic features → authored <b>upstream</b> in <span class="m">../worktracker</span>, then pulled. Overlay behaviour → authored <b>here</b>, kept inside the inventory. Never the reverse — a generic feature added only here is lost on the next pull.</span></div>
+    <div class="sect"><span class="sk">SPEC/</span><span class="sv">Coding's <span class="m">spec/</span> design history lives inside the prefix but is downstream-only; upstream carries no <span class="m">spec/</span> there, so it never participates in a pull.</span></div>
+  </div>
+</section>
+
+<!-- ============ GREEN GATES ============ -->
+<section id="validate">
+  <h2>Green gates — post-C validation status</h2>
+  <div class="lede">The re-point is accepted only when Coding builds green with the overlay re-applied and the boundary holds in both repos. Captured by the C agent (#678).</div>
+  <table>
+    <thead><tr><th style="width:170px">Surface</th><th>Result after C</th><th style="width:110px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Studio tsc</td><td>clean across SDK + studio workspaces</td><td><span class="sev ok">green</span></td></tr>
+      <tr><td>TS SDK vitest</td><td>6/6</td><td><span class="sev ok">green</span></td></tr>
+      <tr><td>Studio vitest</td><td>388/389 — the one red (<span class="m">sprintPlanning.test.ts › buildStoryMap</span>) is <b>pre-existing</b>, belongs to the in-flight #672/#674 planning-filter rework, not the re-point</td><td><span class="sev warn">388/389</span></td></tr>
+      <tr><td>vite build</td><td>ok</td><td><span class="sev ok">green</span></td></tr>
+      <tr><td>Forbidden-symbol scan</td><td>NON-empty in Coding <span class="m">studio/src</span> · EMPTY in Generic <span class="m">studio/src</span></td><td><span class="sev ok">boundary held</span></td></tr>
+      <tr><td>Shared ancestry</td><td><span class="m">git merge-base --is-ancestor 20962a7 HEAD</span> → true</td><td><span class="sev ok">invariant</span></td></tr>
+      <tr><td>SDK currency</td><td>Generic's regenerated TS SDK + <span class="m">openapi.json</span> adopted (adds <span class="m">is_protected</span>, #629); Coding's prior SDK was stale — a fix, not a regression</td><td><span class="sev ok">adopted</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ FAILURE MATRIX ============ -->
+<section id="failures">
+  <h2>Failure &amp; edge matrix</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Behavior</th><th style="width:120px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Future subtree pull conflicts on a SHARED file</td><td>Expected — these carry both generic + overlay lines. Keep the generic body, re-add the overlay hunk per the inventory. Deterministic.</td><td><span class="sev ok">by design</span></td></tr>
+      <tr><td>A generic file picks up an overlay symbol upstream</td><td>Forbidden-symbol scan goes red in Generic → reclassify as SHARED, strip the coupling upstream, regenerate. The grep is the backstop.</td><td><span class="sev ok">gated</span></td></tr>
+      <tr><td>Overlay authored only downstream as a "generic" feature</td><td>Lost on the next pull (upstream never saw it). Policy: author generic work upstream, overlay work here — see MAINTENANCE.</td><td><span class="sev warn">policy</span></td></tr>
+      <tr><td>Pre-existing red studio test (<span class="m">buildStoryMap</span>)</td><td>Not a re-point regression — <span class="m">studio/src</span> is byte-identical to old head <span class="m">e38084e</span>; the test has no SDK dependency and belongs to the #672/#674 rework.</td><td><span class="sev warn">unrelated</span></td></tr>
+      <tr><td>Need to roll back the re-point</td><td>Pre-C state preserved at branch <span class="m">backup/pre-t678-repoint</span> (<span class="m">e38084e</span>); old generic base at tag <span class="m">worktracker-generic-base</span>.</td><td><span class="sev ok">recoverable</span></td></tr>
+      <tr><td>Rewriting the shared base (<span class="m">20962a7</span>) after a pull</td><td>Breaks the common ancestor → future merges degrade to flat overwrite. Forbidden: correct forward, never rewrite the shared base.</td><td><span class="sev def">forbidden</span></td></tr>
+      <tr><td>Hosting Generic to a remote (GitHub)</td><td>Out of scope; local path source is sufficient. The mechanism is unchanged if a URL later replaces <span class="m">../worktracker</span>.</td><td><span class="sev def">deferred</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Four strictly-ordered sub-tasks, separate agent each, run through pausing only on validation failure or real ambiguity. A–C are done; D is this work.</div>
+  <div class="steps">
+    <div class="bstep done"><span class="n">A</span><b>#676 · Re-audit</b>Re-inventory shared core vs. Coding overlay against current main. <span class="sev ok">done</span></div>
+    <div class="bstep done"><span class="n">B</span><b>#677 · Rebuild Generic</b>Rebuild upstream base from current main minus overlay → fresh commit <span class="m">20962a7</span>, tag <span class="m">…-base-v2</span>. <span class="sev ok">done</span></div>
+    <div class="bstep done"><span class="n">C</span><b>#678 · Re-point Coding</b><span class="m">git rm</span> → <span class="m">subtree add</span> base-v2 → re-apply overlay as one commit. <span class="sev ok">done</span></div>
+    <div class="bstep"><span class="n">D</span><b>#679 · Docs + close</b>Rewrite README/FORK/OWNERSHIP/MAINTENANCE + this LLD; flip policy to upstream/downstream; close #666 after confirm.</div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section>
+  <h2>Acceptance</h2>
+  <div class="accept">
+    <b>Coding WorkTracker is a clean downstream of Generic:</b> <span class="m">worktracker-stack/</span> is a git subtree of <span class="m">../worktracker</span> at base <span class="m">20962a7</span> (tag <span class="m">worktracker-generic-base-v2</span>) with the Coding overlay re-applied; the forbidden-symbol scan is non-empty here and empty upstream; <span class="m">git merge-base --is-ancestor 20962a7 HEAD</span> is true so future <span class="m">subtree pull</span> merges cleanly; studio tsc / SDK / build are green (the lone red test is pre-existing and unrelated); and the governance docs + this LLD describe the upstream → downstream model with the repeatable pull recipe and overlay-conflict guidance. With D's docs/policy/LLD landed and the user's confirmation, #666 moves to Done.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const NODES = {
+    up: { t: 'Generic WorkTracker (UPSTREAM)', items: [
+      'Owns all generic, project-agnostic functionality: backend, both SDKs, MCP agent, the full studio core.',
+      'Where shared work is authored. Carries no spec/ at the prefix path.',
+      'Base for the subtree: commit 20962a7, tag worktracker-generic-base-v2.'],
+      no: ['Does NOT contain the Coding overlay — the forbidden-symbol scan is empty here.',
+           'Does NOT track Coding as an upstream; nothing flows up.'] },
+    down: { t: 'Coding stack (DOWNSTREAM)', items: [
+      'Muxed worktracker-stack/ — a git subtree of ../worktracker.',
+      'Pulls generic work down via git subtree pull and re-applies the overlay.',
+      'Carries the Coding spec/ design history inside the prefix (downstream-only).'],
+      no: ['Does NOT author generic features only here — they would be lost on the next pull.',
+           'Does NOT push the overlay upstream.'] },
+    overlay: { t: 'Coding overlay', items: [
+      'codingBridge.ts, lifecycleStore.ts, AgentStateBadge.tsx + the SHARED-file hunks.',
+      'Re-applied on top of the subtree as one commit; re-applied again on each pull conflict.'],
+      no: ['Never crosses into Generic. The grep gate enforces this.'] }
+  };
+  const nodeInfo = document.getElementById('nodeInfo');
+  document.querySelectorAll('.anode').forEach(n => n.addEventListener('click', () => {
+    const d = NODES[n.dataset.n];
+    nodeInfo.innerHTML = '<h4>' + d.t + '</h4><ul style="list-style:none;margin-top:8px">' +
+      d.items.map(x => '<li style="padding:4px 0 4px 16px;position:relative"><span style="position:absolute;left:0;color:var(--accent);font-weight:900">·</span>' + x + '</li>').join('') +
+      d.no.map(x => '<li style="padding:4px 0 4px 16px;position:relative;color:var(--red)"><span style="position:absolute;left:0;color:var(--red);font-weight:900">×</span>' + x + '</li>').join('') +
+      '</ul>';
+  }));
+
+  const LIBS = {
+    rebuild: { t: 'rebuild fresh base → subtree add → overlay', v: 'CHOSEN', c: 'var(--green)', sz: 'B: fresh commit 20962a7 · C: subtree add + 1 overlay commit',
+      fit: ['Generic ends content-correct by construction: it IS current main minus the overlay, not stale-plus-a-merge.',
+            'The subtree add gives Coding and Generic a real shared base (20962a7), so the steady-state pull 3-way merges cleanly.',
+            'No merge-history baggage and no fragile re-strip across 216 renamed files — the overlay is re-applied as one clean commit.',
+            'Old lineage/tag (worktracker-generic-base) retained for recovery; nothing is destroyed.'],
+      miss: ['Discards Generic’s old commit lineage as the operating base — acceptable, the content is what matters and the old tag survives.'],
+      use: 'B: rebuild ../worktracker tree = main minus overlay → commit 20962a7 + tag base-v2. C: git rm -rf worktracker-stack → git subtree add --prefix=worktracker-stack ../worktracker worktracker-generic-base-v2 → re-apply overlay (one commit).' },
+    catchup: { t: 'Coding → Generic catch-up merge', v: 'SUPERSEDED', c: 'var(--red)', sz: 'subtree split → merge → re-strip',
+      fit: ['Would have preserved Generic’s old lineage and reached parity-minus-overlay too.'],
+      miss: ['Carried merge-history baggage and a fragile re-strip across 216 renamed files (the store-split moved overlay files).',
+             'The agreed rebuild reaches the same content end-state more directly and with a cleaner base commit. Replaced 2026-06-26.'] },
+    refork: { t: 'keep #664 fork, no sync', v: 'REJECTED', c: 'var(--red)', sz: 'the status quo before #666',
+      fit: ['Zero work.'],
+      miss: ['Leaves Generic permanently frozen/stale while generic work piles up on the Coding side — the exact problem #666 exists to fix.',
+             'No shared base, no pull path; the two products drift forever.'] },
+    ownership: { t: 'OWNERSHIP.md inventory', v: 'CHOSEN', c: 'var(--green)', sz: 'file-by-file overlay list',
+      fit: ['Enumerates exactly which whole files are overlay and which SHARED files carry a hunk.',
+            'Drives both the rebuild’s strip and the steady-state pull’s conflict resolution.'],
+      use: 'Rewritten in D to read as the overlay inventory (downstream perspective), not the #664 fork-strip log.' },
+    grep: { t: 'forbidden-symbol scan', v: 'GATE', c: 'var(--green)', sz: 'grep over studio/src, both repos',
+      fit: ['Objective boundary: non-empty in Coding, empty in Generic.',
+            'Catches any file that picks up overlay coupling the inventory didn’t anticipate.'],
+      use: "grep -rE 'codingBridge|lifecycleStore|AgentStateBadge|VITE_CODING|openInCodingApp' studio/src." },
+    localpath: { t: 'local path ../worktracker', v: 'CHOSEN', c: 'var(--green)', sz: 'relative path, no hosting',
+      fit: ['Generic has no remote and needs none; the local path is the source of truth on disk.',
+            'subtree add / pull work directly against a local path.'],
+      use: 'git subtree add/pull --prefix=worktracker-stack ../worktracker <ref>.' },
+    remote: { t: 'hosted remote (GitHub)', v: 'DEFERRED', c: 'var(--red)', sz: 'out of scope',
+      fit: ['Would enable sharing / CI hosting of Generic.'],
+      miss: ['Explicitly out of scope for #666; the mechanism is identical if a URL later replaces the path.'] }
+  };
+  const libDet = document.getElementById('libDetail');
+  document.querySelectorAll('.lib-row').forEach(r => r.addEventListener('click', () => {
+    document.querySelectorAll('.lib-row').forEach(x => x.classList.remove('sel'));
+    r.classList.add('sel');
+    const d = LIBS[r.dataset.l];
+    let h = '<h4>' + d.t + '</h4><div class="meta" style="color:' + d.c + '">' + d.v + ' &nbsp;<span class="sz">' + d.sz + '</span></div>';
+    h += '<div class="grp">Why it fits</div><ul>' + d.fit.map(x => '<li class="fit">' + x + '</li>').join('') + '</ul>';
+    if (d.miss && d.miss.length) h += '<div class="grp">Why it falls short</div><ul>' + d.miss.map(x => '<li class="miss">' + x + '</li>').join('') + '</ul>';
+    if (d.use) h += '<div class="use"><b>How it runs →</b> ' + d.use + '</div>';
+    libDet.innerHTML = h;
+  }));
+
+  const STEPS = {
+    A: { t: 'A · #676 · Re-audit', p: 'Re-inventory the shared core vs. the Coding overlay against current main, so B knows exactly what to strip and D’s docs reflect reality.', c: "grep -rE 'codingBridge|lifecycleStore|AgentStateBadge|VITE_CODING|openInCodingApp' worktracker-stack/studio/src", e: 'Edge: the store-split moved lifecycleStore → stores/system/, configStore → stores/studio/ — inventory records the post-refactor paths.' },
+    B: { t: 'B · #677 · Rebuild Generic', p: 'Rebuild the upstream base from current main minus the overlay — content-correct, as a FRESH base commit with a new tag. Old lineage discarded as the operating base; old tag kept for recovery.', c: '# in ../worktracker: tree = current main minus overlay\ngit commit  # → 20962a7\ngit tag worktracker-generic-base-v2', e: 'Edge: Generic was more current on the SDK — it carries the regenerated TS SDK + openapi.json (is_protected, #629); Coding adopts it in C.' },
+    C: { t: 'C · #678 · Re-point Coding (subtree add)', p: 'In Muxed, remove the plain tracked worktracker-stack/ and re-add it as a subtree of Generic at the new base. This is what establishes the shared ancestry.', c: 'git rm -rf worktracker-stack            # ae19e18\ngit subtree add --prefix=worktracker-stack \\\n  ../worktracker worktracker-generic-base-v2   # f370d6e', e: 'Edge: must be on a clean tree; pre-C state saved at backup/pre-t678-repoint (e38084e).' },
+    C2: { t: 'C · #678 · Re-apply overlay', p: 'Restore the Coding overlay on top of the subtree as ONE commit, and preserve the Coding spec/ history inside the prefix.', c: 'git add studio/src/lib/codingBridge.ts ...  # + SHARED hunks\ngit commit  # a6be808 (overlay + spec, one commit)', e: 'Verify: forbidden-symbol scan non-empty here, empty in Generic; merge-base --is-ancestor 20962a7 HEAD → true.' },
+    D: { t: 'D · #679 · Docs + policy + LLD + close', p: 'Rewrite README/FORK/OWNERSHIP/MAINTENANCE for the upstream→downstream model with the subtree-pull recipe + overlay-conflict guidance; rewrite this LLD (it still described the abandoned catch-up merge); move #666 → Done after the user confirms.', c: '# rewrite worktracker-stack/{README,FORK,OWNERSHIP,MAINTENANCE}.md\n# rewrite T666 LLD.html (this file)\n# write T679 REPORT.html', e: 'Edge: governance docs are downstream-perspective; upstream keeps its own — expect (benign) conflicts on these on future pulls.' }
+  };
+  const seqInfo = document.getElementById('seqInfo');
+  document.querySelectorAll('.step').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = STEPS[s.dataset.s];
+    seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="cmd">' + d.c + '</div><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

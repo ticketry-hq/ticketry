@@ -1,0 +1,65 @@
+name: WorkTracker contract
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Python packages
+        run: |
+          uv sync --project backend --extra dev
+          uv sync --project surfaces/worktracker-sdk --extra dev
+
+      - name: Install JavaScript packages
+        run: npm ci
+
+      - name: Check generated contract drift
+        env:
+          WORKTRACKER_PYTHON: backend/.venv/bin/python
+        run: npm run contract:check
+
+      - name: Backend tests
+        working-directory: backend
+        env:
+          MUXED_SKIP_LOCAL_STATE_MIGRATION: "1"
+          MUXED_DATA_DIR: ${{ runner.temp }}/ticketry-contract-data
+          MUXED_STATE_DB: ${{ runner.temp }}/ticketry-contract-state.db
+        run: uv run --extra dev pytest -q
+
+      - name: Python SDK tests
+        working-directory: surfaces/worktracker-sdk
+        run: uv run --extra dev pytest -q
+
+      - name: TypeScript SDK validation
+        run: |
+          npm run test --workspace @worktracker/typescript-sdk
+          npm run typecheck --workspace @worktracker/typescript-sdk
+          npm run build --workspace @worktracker/typescript-sdk
+
+      - name: Studio validation
+        run: |
+          npm run test --workspace @worktracker/studio
+          npm run typecheck --workspace @worktracker/studio
+          npm run build --workspace @worktracker/studio

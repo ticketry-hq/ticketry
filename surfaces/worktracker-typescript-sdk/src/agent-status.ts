@@ -1,0 +1,190 @@
+import type { FetchAPI } from "./generated/index.js";
+import type { StateOut } from "./generated/models/StateOut.js";
+import { WorkTrackerApiError } from "./errors.js";
+import { createAuthenticatedFetch } from "./client.js";
+
+export type RawLifecycleState =
+  | "starting"
+  | "working"
+  | "needs_input"
+  | "permission_required"
+  | "turn_complete"
+  | "quiet"
+  | "reconnecting"
+  | "exited"
+  | "lost"
+  | "error"
+  | "unknown";
+
+export type AgentRunScope = "task" | "plan" | "instant" | "docchat";
+
+export interface RunRecord {
+  agent_run_id: string;
+  task_id: string | null;
+  module_id: string;
+  scope: AgentRunScope;
+  state: RawLifecycleState;
+  updated_at: string;
+}
+
+export interface AgentStatusScope {
+  project_id: string;
+  task_id: string | null;
+}
+
+export interface AgentStatusSnapshot {
+  scope: AgentStatusScope;
+  runs: RunRecord[];
+  automation_attempts: AutomationAttemptRecord[];
+  at: string;
+}
+
+export type AutomationAttemptStatus = "pending" | "succeeded" | "failed";
+
+export interface AutomationAttemptRecord {
+  attempt_id: string;
+  root_attempt_id: string;
+  retry_of_attempt_id: string | null;
+  work_item_id: string;
+  status: AutomationAttemptStatus;
+  error: string | null;
+  agent_run_id: string | null;
+  updated_at: string;
+}
+
+export interface AutomationAttemptFrame {
+  v: 1;
+  type: "automation_attempt";
+  project_id: string;
+  attempt: AutomationAttemptRecord;
+}
+
+export interface StatusSnapshotFrame extends AgentStatusSnapshot {
+  v: 1;
+  type: "snapshot";
+  /** Present on socket snapshots; omitted by synthetic HTTP snapshots. */
+  work_item_cursor?: number;
+  /** Present on socket snapshots so reconnect repairs catalog metadata. */
+  workflow_states?: WorkItemState[];
+}
+
+export interface AgentLifecycleFrame {
+  v: 1;
+  type: "agent_lifecycle";
+  at: string;
+  run: RunRecord;
+}
+
+export interface BackendSessionFrame {
+  v: 1;
+  type: "backend_session";
+  agent_run_id: string;
+  status: "exited" | "lost";
+  at: string;
+}
+
+export type WorkItemState = Omit<StateOut, "id" | "group" | "color"> & {
+  id: string;
+  group: string;
+  color: string | null;
+};
+
+/** One committed work-item state projection on the project status feed. */
+export interface WorkItemStateFrame {
+  v: 1;
+  type: "work_item_state";
+  project_id: string;
+  work_item_id: string;
+  state: WorkItemState | null;
+  revision: number;
+  updated_at: string;
+}
+
+/** One authoritative workflow-state catalog row on the project status feed. */
+export interface WorkflowStateFrame {
+  v: 1;
+  type: "workflow_state";
+  project_id: string;
+  state: WorkItemState;
+  updated_at: string;
+}
+
+export interface StatusCursorFrame {
+  v: 1;
+  type: "cursor";
+  project_id: string;
+  revision: number;
+}
+
+export interface StatusDocumentFrame {
+  v: 1;
+  type: "document";
+  at: string;
+  task_id: string;
+  module_id?: string;
+  event?: "created" | "updated";
+  doc: {
+    id: string;
+    rel_path?: string;
+    [key: string]: unknown;
+  };
+}
+
+export type AgentStatusFrame =
+  | StatusSnapshotFrame
+  | AgentLifecycleFrame
+  | BackendSessionFrame
+  | AutomationAttemptFrame
+  | WorkItemStateFrame
+  | WorkflowStateFrame
+  | StatusCursorFrame
+  | StatusDocumentFrame;
+
+export interface GetAgentStatusRequest {
+  projectId: string;
+  taskId?: string;
+  signal?: AbortSignal;
+}
+
+export interface AgentStatusClientOptions {
+  baseUrl: string;
+  apiKey?: string;
+  fetch?: FetchAPI;
+}
+
+export interface AgentStatusClient {
+  getAgentStatus(request: GetAgentStatusRequest): Promise<AgentStatusSnapshot>;
+  retryAutomationAttempt(request: {
+    attemptId: string;
+  }): Promise<AutomationAttemptRecord>;
+}
+
+export function createAgentStatusClient(
+  options: AgentStatusClientOptions,
+): AgentStatusClient {
+  const basePath = options.baseUrl.replace(/\/+$/, "");
+  const fetchApi = createAuthenticatedFetch(options);
+
+  return {
+    async getAgentStatus({ projectId, taskId, signal }) {
+      const query = new URLSearchParams({ project_id: projectId });
+      if (taskId !== undefined) query.set("task_id", taskId);
+      const headers = new Headers({ Accept: "application/json" });
+      const response = await fetchApi(
+        `${basePath}/runs/agent-status?${query.toString()}`,
+        { headers, signal },
+      );
+      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
+      return (await response.json()) as AgentStatusSnapshot;
+    },
+    async retryAutomationAttempt({ attemptId }) {
+      const headers = new Headers({ Accept: "application/json" });
+      const response = await fetchApi(
+        `${basePath}/automation-attempts/${encodeURIComponent(attemptId)}/retry`,
+        { method: "POST", headers },
+      );
+      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
+      return (await response.json()) as AutomationAttemptRecord;
+    },
+  };
+}

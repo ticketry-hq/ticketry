@@ -1,0 +1,100 @@
+"""One-time import of legacy profile prompts into project launch bindings."""
+
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+from pathlib import Path
+
+from worktracker.launch_seeds import DEFAULT_AGENT_PROMPTS
+from worktracker.workflow_seeds import DEFAULT_WORKFLOW_TEMPLATES
+
+
+def _atomic_write(path: Path, value: dict) -> None:
+    fd, temporary = tempfile.mkstemp(
+        prefix=f"{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary_path = Path(temporary)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(value, handle, indent=4)
+        os.replace(temporary_path, path)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
+def migrate_profile_prompts(
+    config_file: Path,
+    *,
+    Workspace,
+    LaunchBinding,
+) -> int:
+    """Move current profile prompt overrides to existing project bindings.
+
+    A profile historically applied across its workspace, so its prompt values
+    are copied to every existing canonical type/state binding in that
+    workspace.  No binding is created here: custom types and states remain
+    unconfigured.  Successfully imported prompt fields are then removed from
+    the profile document so they cannot remain a second source of authority.
+    """
+
+    if not config_file.exists():
+        return 0
+    payload = json.loads(config_file.read_text())
+    profiles = payload.get("profiles")
+    if not isinstance(profiles, list):
+        return 0
+
+    migrated_bindings = 0
+    changed_file = False
+    canonical_types = tuple(DEFAULT_WORKFLOW_TEMPLATES)
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        state_prompts = profile.get("agent_prompts")
+        state_prompts = state_prompts if isinstance(state_prompts, dict) else {}
+        default_prompt = profile.get("agent_prompt")
+        if not state_prompts and not default_prompt:
+            profile.pop("agent_prompt", None)
+            profile.pop("agent_prompts", None)
+            changed_file = True
+            continue
+
+        workspace = Workspace.objects.filter(
+            slug=profile.get("workspace_slug", "")
+        ).first()
+        if workspace is None or not workspace.projects.exists():
+            continue
+
+        prompts_by_state = {
+            str(name).casefold(): prompt
+            for name, prompt in state_prompts.items()
+            if isinstance(prompt, str) and prompt
+        }
+        bindings = LaunchBinding.objects.filter(
+            issue_type__project__workspace=workspace,
+            issue_type__name__in=canonical_types,
+            issue_type__level="task",
+        ).select_related("state")
+        for binding in bindings:
+            seeded_prompt = DEFAULT_AGENT_PROMPTS.get(
+                binding.state.name, DEFAULT_AGENT_PROMPTS["default"]
+            )
+            if binding.prompt != seeded_prompt:
+                continue
+            prompt = prompts_by_state.get(binding.state.name.casefold()) or default_prompt
+            if not isinstance(prompt, str) or not prompt or binding.prompt == prompt:
+                continue
+            binding.prompt = prompt
+            binding.save(update_fields=["prompt"])
+            migrated_bindings += 1
+
+        profile.pop("agent_prompt", None)
+        profile.pop("agent_prompts", None)
+        changed_file = True
+
+    if changed_file:
+        _atomic_write(config_file, payload)
+    return migrated_bindings

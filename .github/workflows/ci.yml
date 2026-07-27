@@ -1,0 +1,60 @@
+name: Desktop CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  desktop:
+    name: Desktop and sidecar
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install JavaScript packages
+        run: npm ci
+
+      - name: Studio typecheck, tests, and build
+        run: |
+          npm run typecheck
+          npm run test --workspace @worktracker/studio
+          npm run build
+
+      - name: Backend sidecar tests
+        working-directory: backend
+        env:
+          MUXED_SKIP_LOCAL_STATE_MIGRATION: "1"
+          MUXED_DATA_DIR: ${{ runner.temp }}/ticketry-ci-data
+          MUXED_STATE_DB: ${{ runner.temp }}/ticketry-ci-state.db
+        run: uv run --extra dev pytest -q
+
+      - name: Build and verify desktop sidecar
+        run: |
+          sidecar="$(bash backend/packaging/build-sidecar.sh | tail -n 1)"
+          bash backend/packaging/test-built-sidecar.sh "$sidecar"
+
+      - name: Prepare native terminal renderer
+        run: npm run libghostty:prepare --workspace @worktracker/studio
+
+      - name: Python SDK tests
+        working-directory: surfaces/worktracker-sdk
+        run: uv run --extra dev pytest -q
+
+      - name: Desktop Rust tests
+        run: cargo test --manifest-path studio/src-tauri/Cargo.toml --features native-libghostty
+
+      - name: Release contract tests
+        run: |
+          npm run release:test --workspace @worktracker/studio
+          npm run release:validate --workspace @worktracker/studio

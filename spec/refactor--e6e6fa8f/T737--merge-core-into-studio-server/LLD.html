@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T737 · Merge Muxed-core into the server — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  p.note { font-size: 13.5px; color: var(--ink); max-width: 880px; margin-top: 12px; }
+
+  /* change map */
+  .cm { display: grid; grid-template-columns: 460px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 1.95; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.del { background: var(--red-soft); color: var(--red); text-decoration: line-through; }
+  .cm-tree .hit.move { background: var(--violet-soft); color: var(--violet); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* dataflow diagram */
+  .flow-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 330px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: fill .12s; }
+  .node.hl rect, .node.hl ellipse { fill: var(--accent); }
+  .node.hl text { fill: #fff; }
+  #flowInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #flowInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #flowInfo .hint { color: var(--muted); font-style: italic; }
+  #flowInfo .does { margin-top: 8px; }
+  #flowInfo ul { list-style: none; margin-top: 4px; }
+  #flowInfo li { padding: 3px 0 3px 18px; position: relative; font-size: 12.5px; line-height: 1.45; }
+  #flowInfo li.y::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+  #flowInfo li.n::before { content: "×"; position: absolute; left: 0; color: var(--red); font-weight: 800; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  tr.rw td:first-child .m { color: var(--green); }
+  .tbl-wrap { overflow-x: auto; }
+
+  /* contract card */
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; }
+  .contract .sect { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; padding-top: 2px; }
+  .contract .sk.rm { color: var(--red); }
+  .contract .sk.keep { color: var(--green); }
+  .contract .sk.chg { color: var(--amber); }
+  .contract .sv { color: var(--ink); }
+
+  /* parity rules */
+  .rules { list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 22px; }
+  .rules li { font-size: 13.5px; padding: 9px 0 9px 26px; position: relative; border-bottom: 1px dashed var(--line); }
+  .rules li:last-child { border-bottom: none; }
+  .rules li::before { content: "▸"; position: absolute; left: 4px; color: var(--violet); font-weight: 900; }
+  .rules li b { color: var(--violet); }
+
+  /* build order */
+  .steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  @media (max-width: 900px) {
+    .cm, .flow-wrap { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · Refactor module e6e6fa8f · Ticket #737 · LLD</div>
+  <h1>Merge <span class="m">Muxed-core</span> into the <span class="m">Muxed-server</span> package</h1>
+  <div class="sub">Fold the standalone <span class="m">core/</span> distribution into <span class="m">server/</span>, decomposed <b>by function</b> into the consuming apps and the <span class="m">studio_server</span> composition package. A pure packaging + import-path move: zero behavior change, loopback HTTP preserved as-is (its removal is <b>#738</b>). <b><span class="m">worktracker_gateway</span> is NOT created</b> — <b>#739</b> rejected the WorkTracker/WorkTracker bridge premise: WorkTracker is the owned backend, so the former config/DTO/<span class="m">worktracker_client</span> cluster lands in <span class="m">studio_server</span> named for its <b>WorkTracker-adapter responsibility</b>, not as a swappable-backend bridge. Grounded in the 20 live import sites and the real <span class="m">core/core/*</span> dependency graph.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">No new package · 2 new subtrees · 20 files rewritten · core/ deleted</span>
+    <span class="chip violet">No migrations · no endpoint changes · no frontend · no DTO changes</span>
+    <span class="chip amber">worktracker_gateway rejected → #739 · loopback removal → #738</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <a href="#goal">Objective</a>
+  <a href="#map">Module → home</a>
+  <a href="#dag">Dependency graph</a>
+  <a href="#imports">Import rewrites</a>
+  <a href="#tests">Tests</a>
+  <a href="#pkg">Packaging</a>
+  <a href="#changemap">Change map</a>
+  <a href="#order">Build order</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+
+<section id="goal">
+  <h2>1 · Objective</h2>
+  <div class="lede">Retire the separately-installed <span class="m">Muxed-core</span> distribution by relocating its modules into their real consumers and the <span class="m">studio_server</span> composition package, with a clean break (no compatibility shim) since there are no external consumers.</div>
+  <ul class="rules">
+    <li><b>By function, not wholesale.</b> The launcher goes to <span class="m">terminals</span> (its sole consumer), the design-doc path contract to <span class="m">documents</span>, and the tracker-backend integration cluster (config + DTOs + adapter) into the <span class="m">studio_server</span> composition package — its consumers span 4 apps, no single existing app owns it, and <b>#739</b> forbids a dedicated bridge package.</li>
+    <li><b>Zero behavior change.</b> Loopback HTTP, SDK calls, agent-launch command strings, and design-doc paths are byte-identical. The only thing that disappears is the <span class="m">core</span> distribution.</li>
+    <li><b>No backend switchability (#739).</b> WorkTracker is the owned backend. The relocated adapter/config/DTOs are named and placed for the <b>WorkTracker-adapter</b> responsibility, NOT to keep WorkTracker swappable. <span class="m">worktracker_gateway</span> is <b>not created</b> — no package, no <span class="m">INSTALLED_APPS</span> entry, no <span class="m">worktracker_gateway*</span> discovery glob, no backend selector. A regression check fails if a <span class="m">worktracker_gateway</span> package or import reappears.</li>
+    <li><b>Out of scope:</b> removing the loopback → <b>#738</b>; the bridge-rejection decision itself → <b>#739</b> (locked); the framework-neutral service-error contract → <b>#735</b>; <span class="m">WorkTrackerRepository</span> / profile cleanup → <b>#741</b>; any DTO/route/behavior change.</li>
+  </ul>
+</section>
+
+<section id="map">
+  <h2>2 · Module → home mapping</h2>
+  <div class="lede">Five <span class="m">core/core/</span> modules land in four homes — <span class="m">models.py</span> splits in two. Click a destination node in §3 for its responsibilities.</div>
+  <div class="tbl-wrap"><table>
+    <tr><th>core module</th><th>New home</th><th>Why</th></tr>
+    <tr><td><span class="m">agents/launcher.py</span> + <span class="m">agents/hooks/*</span></td><td><span class="m">terminals/agents/</span></td><td>terminals is the sole consumer; it launches agents. Hooks move adjacent so the <span class="m">dirname(__file__)/hooks/</span> path still resolves.</td></tr>
+    <tr><td><span class="m">design_docs.py</span></td><td><span class="m">documents/design_docs.py</span></td><td>spec/HLD/LLD design-doc path contract; documents owns document concerns.</td></tr>
+    <tr><td><span class="m">config.py</span></td><td><span class="m">studio_server/worktracker_config.py</span></td><td>Local profile/connection config; loaded by <span class="m">settings.py</span> + 4 apps, owned by no single app → server composition package.</td></tr>
+    <tr><td><span class="m">models.py</span> <span class="chip violet" style="padding:1px 7px">DTOs</span></td><td><span class="m">studio_server/worktracker_dtos.py</span></td><td>The adapter's pydantic return types; co-located with the adapter it serves.</td></tr>
+    <tr><td><span class="m">models.py</span> <span class="chip" style="padding:1px 7px">reducer</span></td><td><span class="m">runs/lifecycle.py</span></td><td><span class="m">LifecycleEvent</span> + <span class="m">reduce_lifecycle</span> — a lifecycle reducer; <span class="m">runs/api.py</span> is its only consumer.</td></tr>
+    <tr><td><span class="m">worktracker_client.py</span></td><td><span class="m">studio_server/worktracker_adapter.py</span></td><td>The in-process WorkTracker adapter (#738); consumers span terminals/documents/worktrees/studio_server.</td></tr>
+  </table></div>
+  <p class="note"><b>Split + rename rationale (#739):</b> <span class="m">core/models.py</span> is <b>split</b>, not just renamed — the pydantic DTOs go to <span class="m">worktracker_dtos.py</span> beside the adapter, and the independent <span class="m">LifecycleEvent</span>/<span class="m">reduce_lifecycle</span> reducer goes to <span class="m">runs/lifecycle.py</span> beside its only consumer. <span class="m">worktracker_client.py</span>→<span class="m">worktracker_adapter.py</span> and <span class="m">config.py</span>→<span class="m">worktracker_config.py</span> are renamed to name the WorkTracker-adapter responsibility, dropping the "worktracker"/"core" framing without implying a swappable backend. None of these is a Django app — no ORM models/migrations/admin, no <span class="m">INSTALLED_APPS</span> entry.</p>
+</section>
+
+<section id="dag">
+  <h2>3 · Dependency graph stays acyclic</h2>
+  <div class="lede">The intra-core DAG is acyclic today and stays so after the move. Click any node.</div>
+  <div class="flow-wrap">
+    <svg viewBox="0 0 640 320" width="100%">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8893a8"/></marker>
+      </defs>
+      <!-- edges: worktracker_gateway <- design_docs <- launcher ; worktracker_gateway <- adapter ; documents -> terminals -->
+      <line x1="180" y1="90" x2="180" y2="150" stroke="#8893a8" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="180" y1="200" x2="180" y2="250" stroke="#8893a8" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="430" y1="90" x2="320" y2="158" stroke="#8893a8" stroke-width="1.5" marker-end="url(#ar)"/>
+      <line x1="430" y1="200" x2="290" y2="262" stroke="#8893a8" stroke-width="1.5" marker-end="url(#ar)"/>
+      <text x="332" y="128" font-size="10" fill="#8893a8">schemas</text>
+      <text x="300" y="235" font-size="10" fill="#8893a8">schemas/config</text>
+
+      <g class="node" data-n="pb">
+        <rect x="70" y="40" width="220" height="50" rx="9" fill="var(--violet-soft)" stroke="var(--violet)"/>
+        <text x="180" y="62" text-anchor="middle" font-size="13" font-weight="700" fill="var(--violet)">config + DTOs (leaf)</text>
+        <text x="180" y="79" text-anchor="middle" font-size="10.5" fill="var(--muted)">studio_server.worktracker_{config,dtos}</text>
+      </g>
+      <g class="node" data-n="dd">
+        <rect x="70" y="150" width="220" height="50" rx="9" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="180" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)">documents.design_docs</text>
+        <text x="180" y="189" text-anchor="middle" font-size="10.5" fill="var(--muted)">spec/HLD/LLD path contract</text>
+      </g>
+      <g class="node" data-n="lr">
+        <rect x="70" y="260" width="220" height="48" rx="9" fill="#eef1f6" stroke="#8893a8"/>
+        <text x="180" y="281" text-anchor="middle" font-size="13" font-weight="700">terminals.agents.launcher</text>
+        <text x="180" y="298" text-anchor="middle" font-size="10.5" fill="var(--muted)">+ hooks/ (file-path launched)</text>
+      </g>
+      <g class="node" data-n="ad">
+        <rect x="430" y="40" width="180" height="50" rx="9" fill="var(--violet-soft)" stroke="var(--violet)"/>
+        <text x="520" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--violet)">worktracker_adapter</text>
+        <text x="520" y="79" text-anchor="middle" font-size="10.5" fill="var(--muted)">studio_server · loopback→#738</text>
+      </g>
+      <g class="node" data-n="tm">
+        <rect x="430" y="175" width="180" height="50" rx="9" fill="#eef1f6" stroke="#8893a8"/>
+        <text x="520" y="197" text-anchor="middle" font-size="13" font-weight="700">terminals app</text>
+        <text x="520" y="214" text-anchor="middle" font-size="10.5" fill="var(--muted)">consumers · launch · api</text>
+      </g>
+    </svg>
+    <div id="flowInfo">
+      <h4>Click a node</h4>
+      <p class="hint">Each node lists what it owns and what it must not do after the move.</p>
+    </div>
+  </div>
+  <p class="note"><b>Invariant:</b> config+DTOs (leaf) ← <span class="m">documents.design_docs</span> ← <span class="m">terminals.agents.launcher</span>; and <span class="m">terminals</span>/<span class="m">documents</span> ← <span class="m">studio_server</span> (adapter + config + DTOs). <span class="m">studio_server</span>'s composition modules import nothing from <span class="m">terminals</span>/<span class="m">documents</span>, so the graph stays acyclic. Apps importing the project package's shared composition modules is the accepted tradeoff for not standing up a dedicated bridge package (#739) — the DTO module is pure pydantic and the config module is Django-free, so both stay safe to import at settings load.</p>
+</section>
+
+<section id="imports">
+  <h2>4 · Import rewrites</h2>
+  <div class="lede">One translation table drives every site. Internal imports inside moved files first, then the 20 consumer files.</div>
+  <div class="contract" style="margin-bottom:20px">
+    <div class="sect"><span class="sk chg">core.config</span><span class="sv m">→ studio_server.worktracker_config</span></div>
+    <div class="sect"><span class="sk chg">core.models</span> <span class="chip violet" style="padding:1px 7px">DTOs</span><span class="sv m">→ studio_server.worktracker_dtos</span></div>
+    <div class="sect"><span class="sk chg">core.models</span> <span class="chip" style="padding:1px 7px">reducer</span><span class="sv m">→ runs.lifecycle &nbsp;(LifecycleEvent, reduce_lifecycle)</span></div>
+    <div class="sect"><span class="sk chg">core.worktracker_client</span><span class="sv m">→ studio_server.worktracker_adapter</span></div>
+    <div class="sect"><span class="sk chg">core.design_docs</span><span class="sv m">→ documents.design_docs</span></div>
+    <div class="sect"><span class="sk chg">core.agents.launcher</span><span class="sv m">→ terminals.agents.launcher</span></div>
+  </div>
+  <p class="note" style="margin-bottom:14px"><b>Inside the moved files:</b> <span class="m">worktracker_adapter.py</span> (was <span class="m">worktracker_client.py</span>) rewrites <span class="m">core.config</span>→<span class="m">.worktracker_config</span> and <span class="m">core.models</span>→<span class="m">.worktracker_dtos</span> (DTOs only); <span class="m">design_docs.py</span> rewrites <span class="m">core.models</span> (<span class="m">ModuleSummary, TaskSummary</span>) → <span class="m">studio_server.worktracker_dtos</span>; <span class="m">launcher.py</span> rewrites all three — <span class="m">config</span>→<span class="m">worktracker_config</span>, <span class="m">design_docs</span>→<span class="m">documents.design_docs</span>, <span class="m">models</span> (DTOs)→<span class="m">worktracker_dtos</span>. <span class="m">worktracker_config.py</span>, <span class="m">worktracker_dtos.py</span>, <span class="m">runs/lifecycle.py</span> and the hook scripts have no internal core imports — moved/split verbatim (the DTOs and the reducer don't reference each other, so the split is clean).</p>
+  <div class="tbl-wrap"><table>
+    <tr><th>Consumer file (production)</th><th>References rewritten</th></tr>
+    <tr><td><span class="m">documents/api.py</span></td><td>worktracker_client → worktracker_adapter</td></tr>
+    <tr><td><span class="m">studio_server/api.py</span></td><td>worktracker_client → worktracker_adapter (intra-package)</td></tr>
+    <tr><td><span class="m">studio_server/settings.py</span></td><td>config → worktracker_config (intra-package; module is Django-free, safe at settings load)</td></tr>
+    <tr><td><span class="m">runs/api.py</span></td><td>models → <span class="m">runs.lifecycle</span> (<span class="m">LifecycleEvent</span>, <span class="m">reduce_lifecycle</span>) — now intra-app</td></tr>
+    <tr><td><span class="m">runs/management/commands/validate_worktracker_refs.py</span></td><td>config → worktracker_config <b>and</b> design_docs (<span class="m">SPEC_ROOT</span>)</td></tr>
+    <tr><td><span class="m">settings_store/api.py</span></td><td>config → worktracker_config</td></tr>
+    <tr><td><span class="m">terminals/api.py</span></td><td>worktracker_client → worktracker_adapter</td></tr>
+    <tr><td><span class="m">terminals/consumers.py</span></td><td>config + agents.launcher + worktracker_client → worktracker_config + terminals.agents.launcher + worktracker_adapter</td></tr>
+    <tr><td><span class="m">terminals/launch.py</span></td><td>agents.launcher → terminals.agents.launcher</td></tr>
+    <tr><td><span class="m">worktrees/api.py</span></td><td>config + worktracker_client → worktracker_config + worktracker_adapter</td></tr>
+  </table></div>
+  <p class="note">Plus 6 in-place test files rewritten (not relocated): <span class="m">documents/tests/{conftest,test_docs}</span>, <span class="m">studio_server/tests/worktracker/{test_out_shapes</span> (DTOs→<span class="m">worktracker_dtos</span>)<span class="m">,test_selection</span> (config+adapter)<span class="m">}</span>, <span class="m">runs/tests/test_lifecycle_stream</span> (→<span class="m">runs.lifecycle</span>), <span class="m">settings_store/tests/conftest</span> — and the 4 terminals test files (<span class="m">conftest, test_api, test_consumers, test_worktree_launch</span>) that reference core. These DTO/adapter tests are the "models/worktracker_client tests" the ticket alludes to: they already live in <span class="m">server/</span>, so they are rewritten in place, not moved.</p>
+</section>
+
+<section id="tests">
+  <h2>5 · Test relocation</h2>
+  <div class="lede"><span class="m">core/tests/</span> holds <span class="m">__init__.py</span> + 7 test modules — there is <b>no</b> <span class="m">test_models.py</span>/<span class="m">test_worktracker_client.py</span> there. Each relocated test is Django-free and runs under <span class="m">pytest-django</span> with the existing settings; no DB.</div>
+  <div class="tbl-wrap"><table>
+    <tr><th>core/tests file</th><th>New location</th></tr>
+    <tr class="rw"><td><span class="m">test_launcher.py</span></td><td><span class="m">terminals/tests/</span></td></tr>
+    <tr class="rw"><td><span class="m">test_claude_hook.py</span></td><td><span class="m">terminals/tests/</span></td></tr>
+    <tr class="rw"><td><span class="m">test_codex_hook.py</span></td><td><span class="m">terminals/tests/</span></td></tr>
+    <tr class="rw"><td><span class="m">test_gemini_hook.py</span></td><td><span class="m">terminals/tests/</span></td></tr>
+    <tr class="rw"><td><span class="m">test_agy_hook.py</span></td><td><span class="m">terminals/tests/</span></td></tr>
+    <tr class="rw"><td><span class="m">test_design_docs.py</span></td><td><span class="m">documents/tests/</span></td></tr>
+    <tr class="rw"><td><span class="m">test_config_atomic.py</span></td><td><span class="m">studio_server/tests/</span> (config's new home) — <b>not</b> <span class="m">worktracker_gateway/tests/</span> (#739)</td></tr>
+    <tr><td><span class="m">__init__.py</span></td><td>discarded — destinations already have one</td></tr>
+  </table></div>
+  <p class="note">Imports inside each relocated test get the §4 translation. No filename collides with an existing test in its destination dir (verified against current listings). <b>No <span class="m">worktracker_gateway/tests/</span> directory is created</b> — the bridge package is rejected (#739).</p>
+</section>
+
+<section id="pkg">
+  <h2>6 · Packaging &amp; wiring</h2>
+  <div class="lede">Three files plus the lockfile, then the directory deletion.</div>
+  <div class="contract">
+    <div class="sect"><span class="sk chg">server/pyproject.toml</span><span class="sv">Remove <span class="m">"Muxed-core"</span> dep + its <span class="m">[tool.uv.sources]</span> line. Add core's runtime deps: <span class="m">python-dotenv</span>, <span class="m">worktracker-sdk</span>, <span class="m">httpx</span>, <span class="m">pydantic</span>. <b>No new <span class="m">packages.find</span> entry</b> — <span class="m">studio_server*</span>/<span class="m">terminals*</span>/<span class="m">documents*</span>/<span class="m">runs*</span> are already present, so the new modules + <span class="m">terminals.agents</span> subpackage auto-include. <b>Do not add any <span class="m">"worktracker_gateway*"</span> glob</b> (#739).</span></div>
+    <div class="sect"><span class="sk chg">docker/Dockerfile</span><span class="sv">Drop <span class="m">COPY core core</span>; drop <span class="m">./core</span> from the <span class="m">uv pip install</span> line; fix the line-44 comment naming "core".</span></div>
+    <div class="sect"><span class="sk chg">server/uv.lock</span><span class="sv">Regenerate (<span class="m">uv lock</span>) so the removed source/dependency drops out.</span></div>
+    <div class="sect"><span class="sk rm">core/ (whole dir)</span><span class="sv">Delete <span class="m">pyproject.toml</span>, <span class="m">uv.lock</span>, <span class="m">README.md</span>, <span class="m">*.egg-info</span>, and the <span class="m">core/core/</span> + <span class="m">core/tests/</span> trees — last, after all imports resolve.</span></div>
+  </div>
+</section>
+
+<section id="changemap">
+  <h2>7 · Change map</h2>
+  <div class="lede">Click an entry. New = green · moved = violet · modified = amber · deleted = red.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">server/</div>
+      <div class="dir">├─ studio_server/ &nbsp;<span style="color:var(--muted)">(composition; existing project pkg)</span></div>
+      <div class="dir">│&nbsp;&nbsp;├─ <span class="hit move" data-f="wtadapter">worktracker_adapter.py</span> &nbsp;<span style="color:var(--muted)">← core/worktracker_client.py</span></div>
+      <div class="dir">│&nbsp;&nbsp;├─ <span class="hit move" data-f="wtconfig">worktracker_config.py</span> &nbsp;<span style="color:var(--muted)">← core/config.py</span></div>
+      <div class="dir">│&nbsp;&nbsp;├─ <span class="hit move" data-f="wtdto">worktracker_dtos.py</span> &nbsp;<span style="color:var(--muted)">← core/models.py (DTOs)</span></div>
+      <div class="dir">│&nbsp;&nbsp;├─ <span class="hit mod" data-f="psmod">api.py · settings.py</span></div>
+      <div class="dir">│&nbsp;&nbsp;└─ tests/<span class="hit move" data-f="catomic">test_config_atomic.py</span> · <span class="hit mod" data-f="pstests">worktracker/{test_out_shapes,test_selection}</span></div>
+      <div class="dir">├─ terminals/</div>
+      <div class="dir">│&nbsp;&nbsp;├─ <span class="hit new" data-f="agents">agents/</span> (launcher + hooks/)</div>
+      <div class="dir">│&nbsp;&nbsp;├─ <span class="hit mod" data-f="tcons">consumers.py · launch.py · api.py</span></div>
+      <div class="dir">│&nbsp;&nbsp;└─ tests/<span class="hit move" data-f="thooks">test_launcher + 4 hook tests</span></div>
+      <div class="dir">├─ documents/</div>
+      <div class="dir">│&nbsp;&nbsp;├─ <span class="hit move" data-f="dd">design_docs.py</span></div>
+      <div class="dir">│&nbsp;&nbsp;└─ tests/<span class="hit move" data-f="tdd">test_design_docs.py</span></div>
+      <div class="dir">├─ runs/</div>
+      <div class="dir">│&nbsp;&nbsp;├─ <span class="hit move" data-f="lifecycle">lifecycle.py</span> &nbsp;<span style="color:var(--muted)">← core/models.py (reducer)</span></div>
+      <div class="dir">│&nbsp;&nbsp;└─ <span class="hit mod" data-f="runsmod">api.py · validate_worktracker_refs · tests</span></div>
+      <div class="dir">├─ <span class="hit mod" data-f="othermod">{settings_store,worktrees} *.py</span></div>
+      <div class="dir">├─ <span class="hit mod" data-f="pyproj">pyproject.toml · uv.lock</span></div>
+      <div class="dir"></div>
+      <div class="dir">docker/<span class="hit mod" data-f="docker">Dockerfile</span></div>
+      <div class="dir"><span class="hit del" data-f="core">core/ &nbsp;(entire directory)</span></div>
+    </div>
+    <div class="cm-detail" id="cmDetail">
+      <h4>Select a file</h4>
+      <p class="hint">Each entry reveals its exact delta.</p>
+    </div>
+  </div>
+  <div class="cm-legend">
+    <span><i style="background:var(--green-soft)"></i>new</span>
+    <span><i style="background:var(--violet-soft)"></i>moved (git mv)</span>
+    <span><i style="background:var(--amber-soft)"></i>modified (imports)</span>
+    <span><i style="background:var(--red-soft)"></i>deleted</span>
+  </div>
+</section>
+
+<section id="order">
+  <h2>8 · Build order</h2>
+  <div class="lede">Steps 1–2 land together before the suite can pass — clean break, no <span class="m">core</span> shim.</div>
+  <div class="steps">
+    <div class="bstep"><div class="n">1</div><b>Move + split files</b><span class="m">git mv</span> into studio_server / terminals.agents / documents; split models.py → worktracker_dtos + runs/lifecycle; rewrite the moved files' internal imports.</div>
+    <div class="bstep"><div class="n">2</div><b>Rewrite 20 consumers</b>Apply the §4 translation — production first, then in-place tests.</div>
+    <div class="bstep"><div class="n">3</div><b>Relocate 7 tests</b>Move per §5; test_config_atomic → <span class="m">studio_server/tests/</span> (no worktracker_gateway/tests).</div>
+    <div class="bstep"><div class="n">4</div><b>Packaging</b>Edit pyproject + Dockerfile; reinstall editable server; <span class="m">uv lock</span>.</div>
+    <div class="bstep"><div class="n">5</div><b>Delete core/</b>Remove the whole directory + egg-info.</div>
+    <div class="bstep"><div class="n">6</div><b>Validate</b>Grep-clean (incl. no-<span class="m">worktracker_gateway</span> fence), full suite green, docker build.</div>
+  </div>
+</section>
+
+<section id="accept">
+  <h2>9 · Acceptance</h2>
+  <div class="accept">
+    <b>Done when:</b> a repo-wide grep for <span class="m">from core.</span> / <span class="m">import core</span> / <span class="m">muxed_core</span> returns <b>zero</b> hits and <span class="m">core/</span> is gone · <b>no <span class="m">server/worktracker_gateway</span> package or <span class="m">worktracker_gateway</span> import exists</b>, no <span class="m">worktracker_gateway*</span> in <span class="m">packages.find</span>, no <span class="m">worktracker_gateway/tests/</span> dir — a regression check fences this (#739) · the full <span class="m">server/</span> pytest suite is green including the 7 relocated tests · <span class="m">docker build</span> succeeds with no <span class="m">COPY core</span> / <span class="m">./core</span> steps · no behavioral change to agent launch (hook file paths recomputed from <span class="m">dirname(__file__)</span>), design-doc paths (<span class="m">SPEC_ROOT</span>, <span class="m">module_dir_name</span>), or owned/WorkTracker API calls · no backend selector/switch is introduced — WorkTracker stays the owned backend (#739) · the loopback HTTP is untouched (deferred to <b>#738</b>).
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    wtadapter: { t: 'studio_server/worktracker_adapter.py', k: 'MOVED + RENAMED', c: 'var(--violet)', items: [
+      'From core/core/worktracker_client.py; WorkTrackerRepository + WorktrackerRepository + get_repo/repository_for/resolve_profile*.',
+      'Internal imports rewritten: core.config→.worktracker_config, core.models→.worktracker_dtos (DTOs only).',
+      'Renamed for its WorkTracker-adapter responsibility (#739) — NOT a swappable-backend bridge.'
+    ], no: ['Loopback httpx transport untouched — that removal is #738.', 'WorkTrackerRepository / profile resolution untouched — that cleanup is #741.'] },
+    wtconfig: { t: 'studio_server/worktracker_config.py', k: 'MOVED + RENAMED', c: 'var(--violet)', items: [
+      'From core/core/config.py; CONFIG_DIR/CONFIG_FILE/Config/Profile/config singleton.',
+      'Django-free leaf — no internal core imports to rewrite. Current callers: settings.py + terminals + settings_store + worktrees + runs.'
+    ], no: ['No content change beyond the path it now lives at.'] },
+    wtdto: { t: 'studio_server/worktracker_dtos.py', k: 'MOVED + RENAMED', c: 'var(--violet)', items: [
+      'The pydantic DTO half of core/core/models.py (ProjectSummary/ModuleSummary/TaskState/TaskSummary/TaskDetails/Assignee/Label/ProfileSummary).',
+      'Pure-pydantic leaf, co-located with the adapter that returns them. Current caller: the adapter + test_out_shapes.'
+    ], no: ['No DTO field/shape change.', 'Does NOT carry LifecycleEvent/reduce_lifecycle — those split out to runs/lifecycle.py.'] },
+    lifecycle: { t: 'runs/lifecycle.py', k: 'MOVED (split)', c: 'var(--violet)', items: [
+      'The reducer half of core/core/models.py: LifecycleEvent + reduce_lifecycle (+ LifecycleState).',
+      'Lands beside its sole consumer, runs/api.py — no longer a cross-package import.'
+    ], no: ['No reducer logic change.', 'Independent of the DTOs — clean split, no cross-import.'] },
+    catomic: { t: 'studio_server/tests/test_config_atomic.py', k: 'RELOCATED', c: 'var(--violet)', items: [
+      'From core/tests/; imports rewritten to studio_server.worktracker_config.',
+      'Lands where config now lives — NOT under a worktracker_gateway/tests/ dir (#739).'
+    ], no: ['Django-free; runs under pytest-django, no DB.'] },
+    psmod: { t: 'studio_server/{api,settings}.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'api.py: worktracker_client→worktracker_adapter. settings.py: config→worktracker_config.',
+      'Both intra-package; settings.py import is safe — worktracker_config is Django-free, no cycle at settings load.'
+    ], no: ['No logic change — imports only.'] },
+    pstests: { t: 'studio_server/tests/worktracker/', k: 'MODIFIED (in place)', c: 'var(--amber)', items: [
+      'test_out_shapes: core.models DTOs → worktracker_dtos.',
+      'test_selection: core.config + core.worktracker_client → worktracker_config + worktracker_adapter.'
+    ], no: ['Already in server/ — rewritten in place, not moved.'] },
+    agents: { t: 'server/terminals/agents/', k: 'NEW subtree', c: 'var(--green)', items: [
+      'launcher.py (imports rewritten: config→worktracker_config, design_docs→documents.design_docs, models→worktracker_dtos).',
+      'hooks/{claude,codex,gemini,agy}_hook.py moved adjacent — verbatim.'
+    ], no: ['Hooks must stay beside launcher.py so dirname(__file__)/hooks/ resolves; no code change inside hook scripts.'] },
+    tcons: { t: 'terminals/{consumers,launch,api}.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'consumers.py: config→worktracker_config, agents.launcher→terminals.agents.launcher, worktracker_client→worktracker_adapter.',
+      'launch.py: agents.launcher rewrite. api.py: worktracker_client→worktracker_adapter.'
+    ], no: ['No logic change — imports only.'] },
+    thooks: { t: 'terminals/tests/ (relocated)', k: 'RELOCATED', c: 'var(--violet)', items: [
+      'test_launcher + test_{claude,codex,gemini,agy}_hook moved from core/tests/.',
+      'Imports rewritten; the in-place terminals test files (conftest/test_api/test_consumers/test_worktree_launch) also get the import rewrite.'
+    ], no: ['No assertion-content change — same behavior verified.'] },
+    dd: { t: 'documents/design_docs.py', k: 'MOVED', c: 'var(--violet)', items: [
+      'From core/core/design_docs.py; SPEC_ROOT, module_dir_name, the design-doc path contract.',
+      'Internal import rewritten: core.models (ModuleSummary, TaskSummary) → studio_server.worktracker_dtos.'
+    ], no: ['No path-resolution change — byte-identical behavior.'] },
+    tdd: { t: 'documents/tests/test_design_docs.py', k: 'RELOCATED', c: 'var(--violet)', items: [
+      'From core/tests/; imports rewritten to documents.design_docs + studio_server.worktracker_dtos.'
+    ], no: ['Django-free.'] },
+    runsmod: { t: 'runs/{api, validate_worktracker_refs, tests}', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'api.py: core.models → runs.lifecycle (LifecycleEvent, reduce_lifecycle) — now intra-app.',
+      'validate_worktracker_refs.py: config → worktracker_config + documents.design_docs. tests/test_lifecycle_stream → runs.lifecycle.'
+    ], no: ['Imports only.'] },
+    othermod: { t: 'settings_store · worktrees', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'settings_store/api.py + tests/conftest → worktracker_config.',
+      'worktrees/api.py → worktracker_config + worktracker_adapter.'
+    ], no: ['Imports only.'] },
+    pyproj: { t: 'server/pyproject.toml + uv.lock', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Drop Muxed-core dep + [tool.uv.sources] entry; add python-dotenv/worktracker-sdk/httpx/pydantic.',
+      'No new packages.find entry — existing app/project globs auto-include the new modules. Regenerate uv.lock.'
+    ], no: ['No "worktracker_gateway*" glob (#739).', 'worktracker / worktracker-sdk path deps stay.'] },
+    docker: { t: 'docker/Dockerfile', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Drop COPY core core; drop ./core from the uv pip install line; fix the comment.'
+    ], no: ['worktracker-stack + server copy/install steps unchanged.'] },
+    core: { t: 'core/ (entire directory)', k: 'DELETED', c: 'var(--red)', items: [
+      'core/core/ + core/tests/ + pyproject.toml + uv.lock + README.md + *.egg-info.',
+      'Deleted last, after every import resolves to its new home.'
+    ], no: ['No external consumer exists — clean break, no compatibility shim.'] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + d.c + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  const NODES = {
+    pb: { t: 'config + DTOs (leaf)', does: ['studio_server.worktracker_config — local profile/connection config', 'studio_server.worktracker_dtos — pure pydantic adapter return types', 'Django-free + import-light — safe to import at settings load'], no: ['NOT a Django app, NOT in INSTALLED_APPS — no ORM models/migrations/admin', 'NOT a worktracker_gateway package — no backend-switch abstraction (#739)', 'does not import documents or terminals'] },
+    dd: { t: 'documents.design_docs', does: ['own SPEC_ROOT + module_dir_name + design-doc path resolution', 'import only studio_server.worktracker_dtos (ModuleSummary, TaskSummary)'], no: ['no edge back to terminals — keeps the DAG acyclic'] },
+    lr: { t: 'terminals.agents.launcher', does: ['build agent-launch command strings', 'compute hook paths from dirname(__file__)/hooks/ at launch', 'import worktracker_config/worktracker_dtos + documents.design_docs'], no: ['no persisted module-path that a move could break'] },
+    ad: { t: 'worktracker_adapter', does: ['the in-process WorkTracker adapter — WorktrackerRepository + (until #741) WorkTrackerRepository', 'map worktracker data to worktracker_dtos DTOs', 'live in studio_server, consumed by terminals/documents/worktrees/studio_server'], no: ['NOT a WorkTracker/WorkTracker swappable bridge — WorkTracker is the owned backend (#739)', 'loopback httpx untouched — its removal is #738'] },
+    tm: { t: 'terminals app', does: ['consume studio_server (adapter + config) + documents + its own agents subpackage'], no: ['does not export anything back up the graph'] }
+  };
+  const flowInfo = document.getElementById('flowInfo');
+  document.querySelectorAll('.node').forEach(n => n.addEventListener('click', () => {
+    document.querySelectorAll('.node').forEach(x => x.classList.remove('hl'));
+    n.classList.add('hl');
+    const d = NODES[n.dataset.n];
+    flowInfo.innerHTML = '<h4>' + d.t + '</h4><div class="does"><ul>' +
+      d.does.map(x => '<li class="y">' + x + '</li>').join('') +
+      d.no.map(x => '<li class="n">' + x + '</li>').join('') + '</ul></div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

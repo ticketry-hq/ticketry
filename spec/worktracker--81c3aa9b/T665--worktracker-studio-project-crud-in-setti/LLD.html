@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T665 · Studio Project CRUD — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  .marker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .mcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .mcard h3 { font-size: 15px; margin-bottom: 10px; }
+  .mcard .mrow { display: grid; grid-template-columns: 160px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .mcard .mrow:last-child { border-bottom: none; }
+  .mcard .mk { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--violet); }
+  .mcard .mv { color: var(--ink); }
+  .mcard .mv .opt { color: var(--muted); font-size: 12px; }
+  .rules { list-style: none; }
+  .rules li { font-size: 13px; padding: 6px 0 6px 26px; position: relative; border-bottom: 1px dashed var(--line); }
+  .rules li:last-child { border-bottom: none; }
+  .rules li::before { content: "▸"; position: absolute; left: 4px; color: var(--violet); font-weight: 900; }
+  .rules li b { color: var(--violet); }
+
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  .step[data-s] rect { transition: stroke .12s, stroke-width .12s; }
+  .step[data-s].hl rect { stroke: var(--accent); stroke-width: 2.5; }
+  .step[data-s].hl text { fill: inherit; }
+  #seqInfo, #seqInfo2 { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4, #seqInfo2 h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint, #seqInfo2 .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p, #seqInfo2 p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge, #seqInfo2 .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; margin-bottom: 18px; }
+  .contract h3 { font-size: 14px; margin-bottom: 10px; color: var(--accent); font-family: var(--mono); }
+  .contract .sect { display: grid; grid-template-columns: 210px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); padding-top: 2px; font-family: var(--mono); }
+  .contract .sv { color: var(--ink); }
+
+  .reuse { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
+  .reuse-col { display: flex; flex-direction: column; gap: 12px; }
+  .reuse-lane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .reuse-lane .role { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .reuse-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 6px 8px; border-radius: 7px; }
+  .reuse-row:hover { background: #f4f6fa; }
+  .reuse-row.sel { background: var(--accent-soft); }
+  .reuse-row .nm { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+  .reuse-row.sel .nm { color: var(--accent); }
+  .vb { font-size: 10px; font-weight: 800; letter-spacing: .04em; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .vb.reuse { background: var(--green-soft); color: var(--green); }
+  .vb.extend { background: var(--amber-soft); color: var(--amber); }
+  .vb.new { background: var(--violet-soft); color: var(--violet); }
+  .reuse-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; align-self: start; }
+  .reuse-detail h4 { font-size: 15px; color: var(--accent); font-family: var(--mono); margin-bottom: 2px; }
+  .reuse-detail .meta { font-size: 11px; font-weight: 800; letter-spacing: .05em; margin-bottom: 8px; }
+  .reuse-detail .grp { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+  .reuse-detail ul { list-style: none; }
+  .reuse-detail li { padding: 3px 0 3px 20px; position: relative; font-size: 13px; line-height: 1.45; }
+  .reuse-detail li.fit::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+  .reuse-detail li.miss::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 800; }
+
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  @media (max-width: 900px) {
+    .cm, .marker-grid, .seq-wrap, .reuse { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · Studio · Ticket #665 · LLD</div>
+  <h1>Project CRUD in Settings — Low-Level Design</h1>
+  <div class="sub">List, create, edit, and permanently delete projects from Studio for the local single-user setup. Three schema fields, one new backend route, SDK parity, a recent-project memory that drives startup and post-delete redirect, and a typed-key delete gate — grounded in the live code of <span class="m">schemas.py</span>, <span class="m">api.py</span>, <span class="m">studioStore.ts</span>, <span class="m">routes.tsx</span>, and <span class="m">SettingsView.tsx</span>.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip amber">3 backend files · 2 SDK files · 8 frontend files</span>
+    <span class="chip green">No migration · reuses #640 markdown stack</span>
+    <span class="chip violet">No new dependencies</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#reuse">Reuse Decisions</a>
+  <a href="#api">API Contract</a>
+  <a href="#recent">Recent-Project Memory</a>
+  <a href="#seq">Create / Delete Flows</a>
+  <a href="#reach">Settings Layout</a>
+  <a href="#failures">Failure Matrix</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Click a highlighted file for its exact delta. Everything else in the tree is untouched. <b>No migration</b> — <span class="m">Project.description</span> already exists on the model.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">worktracker-stack/</div>
+      <div class="dir">├─ worktracker/worktracker/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit ro" data-f="models">models.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="schemas">schemas.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="api">api.py</span></div>
+      <div class="dir">├─ worktracker-sdk/worktracker_sdk/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="sdkmodels">models.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="sdkres">resources.py</span></div>
+      <div class="dir">└─ studio/src/</div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ lib/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit mod" data-f="types">types.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit mod" data-f="apits">api.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ <span class="hit new" data-f="recentlib">recentProjects.ts</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ stores/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit mod" data-f="store">studioStore.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit mod" data-f="dialog">dialogStore.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ <span class="dir">selectionStore.ts — clear() reused</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ shell/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit mod" data-f="settings">SettingsView.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit new" data-f="panel">ProjectsView.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;├─ <span class="hit new" data-f="form">ProjectFormDialog.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ <span class="dir">DialogHost.tsx — +typed variant</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ issue/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ <span class="hit mod" data-f="desc">DescriptionEditor.tsx</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;└─ app/</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="routes">routes.tsx</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--accent-soft)"></i>read-only input</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail"><span class="hint">Select a file on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ REUSE DECISIONS ============ -->
+<section id="reuse">
+  <h2>Reuse decisions — what we build vs. what already exists</h2>
+  <div class="lede">This slice adds <b>zero new dependencies</b>. The markdown stack and dialog infrastructure already shipped (#640, #638). Click each surface for whether we reuse as-is, extend, or build new, and why.</div>
+  <div class="reuse">
+    <div class="reuse-col">
+      <div class="reuse-lane">
+        <div class="role">Markdown description</div>
+        <div class="reuse-row" data-r="editor"><span class="nm">DescriptionEditor (#640)</span><span class="vb extend">EXTEND</span></div>
+        <div class="reuse-row" data-r="mdlib"><span class="nm">lib/markdown helpers</span><span class="vb reuse">REUSE</span></div>
+      </div>
+      <div class="reuse-lane">
+        <div class="role">Destructive delete</div>
+        <div class="reuse-row" data-r="typed"><span class="nm">dialogStore.confirmTyped</span><span class="vb extend">EXTEND</span></div>
+        <div class="reuse-row" data-r="confirm"><span class="nm">dialog.confirm (#638)</span><span class="vb reuse">REUSE</span></div>
+      </div>
+      <div class="reuse-lane">
+        <div class="role">Create / edit form</div>
+        <div class="reuse-row" data-r="modal"><span class="nm">Modal (#638)</span><span class="vb reuse">REUSE</span></div>
+        <div class="reuse-row" data-r="projform"><span class="nm">ProjectFormDialog</span><span class="vb new">NEW</span></div>
+      </div>
+      <div class="reuse-lane">
+        <div class="role">Recent-project memory</div>
+        <div class="reuse-row" data-r="recent"><span class="nm">recentProjects.ts</span><span class="vb new">NEW</span></div>
+        <div class="reuse-row" data-r="uipat"><span class="nm">uiStore localStorage pattern</span><span class="vb reuse">REUSE</span></div>
+      </div>
+    </div>
+    <div class="reuse-detail" id="reuseDetail"><span class="hint" style="color:var(--muted);font-style:italic">Select a surface on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ API CONTRACT ============ -->
+<section id="api">
+  <h2>Backend &amp; SDK contract</h2>
+  <div class="lede">Three schema edits, one new route, and SDK parity. Described by obligation; field names are the contract, exact code is implementation detail.</div>
+
+  <div class="contract">
+    <h3>Schema deltas — worktracker/schemas.py</h3>
+    <div class="sect"><span class="sk">ProjectOut</span><span class="sv">Add <span class="m">description: str</span> (defaults to empty string for existing rows; the model field is <span class="m">blank=True</span>). Required because the SDK <span class="m">OutputModel</span> base is <span class="m">extra="forbid"</span> — exposing the field on the API without adding it to the SDK model breaks deserialization.</span></div>
+    <div class="sect"><span class="sk">ProjectIn (create)</span><span class="sv">Add <span class="m">description: Optional[str] = None</span>. Keep <span class="m">name</span>, <span class="m">slug</span>, <span class="m">workspace_slug</span> as they are. A missing description persists as empty string.</span></div>
+    <div class="sect"><span class="sk">ProjectPatch (edit)</span><span class="sv">Add <span class="m">description: Optional[str] = None</span>. <b>Slug stays absent</b> — key is immutable after creation. Patch remains partial: only provided fields are written.</span></div>
+  </div>
+
+  <div class="contract">
+    <h3>Routes — worktracker/api.py</h3>
+    <div class="sect"><span class="sk">POST /projects</span><span class="sv">Extend <span class="m">create_project</span> to read <span class="m">payload.description</span> onto the new row. <b>Preserve</b> the existing duplicate-slug guard (explicit <span class="m">Project.objects.filter(workspace, slug).exists()</span> → 409) and the <span class="m">IntegrityError</span> fallback. Default-state seeding unchanged.</span></div>
+    <div class="sect"><span class="sk">PATCH /projects/{id}</span><span class="sv">Extend <span class="m">patch_project</span> to apply <span class="m">description</span> when present; add <span class="m">"description"</span> to the <span class="m">update_fields</span> list alongside <span class="m">name</span>/<span class="m">updated_at</span>. Slug is never read from the patch payload.</span></div>
+    <div class="sect"><span class="sk">DELETE /projects/{id}</span><span class="sv"><b>New route.</b> Permanent, <b>no child-count guard</b> (unlike module/work-item delete which 409 on children). Resolve the project (404 if missing) and call <span class="m">.delete()</span> → <b>204</b>. Cascade is automatic: State / IssueType / Label / Sprint / Issue / Attachment all declare <span class="m">on_delete=CASCADE</span> on the project (or issue) FK.</span></div>
+  </div>
+
+  <div class="contract">
+    <h3>SDK parity — worktracker-sdk/worktracker_sdk/</h3>
+    <div class="sect"><span class="sk">models.py · Project</span><span class="sv">Add <span class="m">description: str</span> to the <span class="m">Project</span> output model (mandatory — see ProjectOut note above).</span></div>
+    <div class="sect"><span class="sk">models.py · inputs</span><span class="sv">Add input models <span class="m">ProjectCreate</span> (name, slug, optional workspace_slug, optional description) and <span class="m">ProjectUpdate</span> (optional name, optional description; no slug).</span></div>
+    <div class="sect"><span class="sk">resources.py · ProjectsResource</span><span class="sv">Add <span class="m">create</span>, <span class="m">update</span>, and <span class="m">delete</span> methods mirroring the three routes, following the existing resource call pattern. Required for CRUD parity even though Studio talks to the ninja API directly and no current consumer uses SDK mutations.</span></div>
+  </div>
+</section>
+
+<!-- ============ RECENT-PROJECT MEMORY ============ -->
+<section id="recent">
+  <h2>Recent-project memory</h2>
+  <div class="lede">A small persisted ordered list of project ids drives both startup selection and post-delete redirect, replacing today's <span class="m">projects[0]</span> default.</div>
+  <div class="marker-grid">
+    <div class="mcard">
+      <h3>Store: <span class="m">localStorage["studio.recentProjects"]</span></h3>
+      <div class="mrow"><span class="mk">shape</span><span class="mv">JSON array of project-id strings, <b>most-recently-used first</b>. Mirrors the try/catch read-write pattern of <span class="m">uiStore</span> (navCollapsed / groupByEpic).</span></div>
+      <div class="mrow"><span class="mk">module</span><span class="mv">New <span class="m">lib/recentProjects.ts</span> exporting read, and a <span class="m">touch(id)</span> that moves an id to the front, and a <span class="m">resolveStartProject(projects)</span> helper. Keeps the persistence shape in one place.</span></div>
+      <div class="mrow"><span class="mk">"used" def</span><span class="mv">Updated on <b>every</b> project switch/selection — <span class="m">touch(id)</span> is called from <span class="m">studioStore.selectProject</span> when a project becomes selected.</span></div>
+      <div class="mrow"><span class="mk">hygiene</span><span class="mv">Reads filter to ids that still exist in the loaded <span class="m">projects</span>; stale ids (deleted projects) are dropped on next write. No separate cleanup pass.</span></div>
+    </div>
+    <div class="mcard">
+      <h3>Consumers</h3>
+      <ul class="rules">
+        <li><b>Startup</b> — <span class="m">RootRedirect</span> opens the first surviving id from the MRU list; if none survive (e.g. fresh localStorage), falls back to <span class="m">projects[0]</span>; if no projects exist at all, renders the create-project screen.</li>
+        <li><b>Project switch</b> — <span class="m">selectProject(id)</span> calls <span class="m">touch(id)</span> so the order reflects real usage and survives reload.</li>
+        <li><b>Post-delete</b> — after a successful delete of the <em>selected</em> project, redirect to the first surviving MRU id (excluding the deleted one); if none remain, the create-project screen.</li>
+        <li><b>Non-selected delete</b> — deleting a project that is not currently open removes it from the list and stays on the current project; no redirect.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SEQUENCES ============ -->
+<section id="seq">
+  <h2>Create &amp; delete flows</h2>
+  <div class="lede">Click a numbered step for its mechanics and edge cases. The delete flow is the one with real recovery semantics.</div>
+
+  <h3 style="font-size:14px;margin:6px 0 10px;color:var(--muted)">Create project (Settings → Projects → New)</h3>
+  <div class="seq-wrap" style="margin-bottom:24px">
+    <svg viewBox="0 0 700 230" width="100%">
+      <g font-size="12" font-weight="700">
+        <text x="80" y="20" text-anchor="middle" fill="#3556d4">ProjectsPanel</text>
+        <text x="280" y="20" text-anchor="middle" fill="#6b3fb8">studioStore</text>
+        <text x="470" y="20" text-anchor="middle" fill="#9a6700">api.ts</text>
+        <text x="640" y="20" text-anchor="middle" fill="#1d7a4f">ninja API</text>
+      </g>
+      <g stroke="#e3e7ee" stroke-width="1.5">
+        <line x1="80" y1="30" x2="80" y2="210"/>
+        <line x1="280" y1="30" x2="280" y2="210"/>
+        <line x1="470" y1="30" x2="470" y2="210"/>
+        <line x1="640" y1="30" x2="640" y2="210"/>
+      </g>
+      <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker></defs>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="80" y1="60" x2="276" y2="60" marker-end="url(#a1)"/>
+        <line x1="280" y1="100" x2="466" y2="100" marker-end="url(#a1)"/>
+        <line x1="470" y1="140" x2="636" y2="140" marker-end="url(#a1)"/>
+        <line x1="640" y1="180" x2="84" y2="180" marker-end="url(#a1)"/>
+      </g>
+      <g font-size="11" fill="#5b6478">
+        <text x="178" y="50" text-anchor="middle">submit form</text>
+        <text x="373" y="90" text-anchor="middle">createProject(body)</text>
+        <text x="553" y="130" text-anchor="middle">POST /projects</text>
+        <text x="360" y="172" text-anchor="middle">append + select + touch</text>
+      </g>
+      <g class="step" data-c="1"><circle cx="80" cy="60" r="13" fill="#e8edfb" stroke="#3556d4"/><text x="80" y="64.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3556d4">1</text></g>
+      <g class="step" data-c="2"><circle cx="280" cy="100" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="280" y="104.5" text-anchor="middle" font-size="12" font-weight="800" fill="#6b3fb8">2</text></g>
+      <g class="step" data-c="3"><circle cx="470" cy="140" r="13" fill="#fbf0d8" stroke="#9a6700"/><text x="470" y="144.5" text-anchor="middle" font-size="12" font-weight="800" fill="#9a6700">3</text></g>
+      <g class="step" data-c="4"><circle cx="80" cy="180" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="80" y="184.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">4</text></g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a numbered step.</span></div>
+  </div>
+
+  <h3 style="font-size:14px;margin:6px 0 10px;color:var(--muted)">Delete selected project (typed-key gate + recovery)</h3>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 700 280" width="100%">
+      <g font-size="12" font-weight="700">
+        <text x="80" y="20" text-anchor="middle" fill="#3556d4">ProjectsPanel</text>
+        <text x="270" y="20" text-anchor="middle" fill="#b03030">confirmTyped</text>
+        <text x="460" y="20" text-anchor="middle" fill="#6b3fb8">studioStore</text>
+        <text x="640" y="20" text-anchor="middle" fill="#1d7a4f">API + nav</text>
+      </g>
+      <g stroke="#e3e7ee" stroke-width="1.5">
+        <line x1="80" y1="30" x2="80" y2="260"/>
+        <line x1="270" y1="30" x2="270" y2="260"/>
+        <line x1="460" y1="30" x2="460" y2="260"/>
+        <line x1="640" y1="30" x2="640" y2="260"/>
+      </g>
+      <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker></defs>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="80" y1="58" x2="266" y2="58" marker-end="url(#a2)"/>
+        <line x1="270" y1="100" x2="84" y2="100" marker-end="url(#a2)"/>
+        <line x1="80" y1="142" x2="456" y2="142" marker-end="url(#a2)"/>
+        <line x1="460" y1="184" x2="636" y2="184" marker-end="url(#a2)"/>
+        <line x1="640" y1="226" x2="84" y2="226" marker-end="url(#a2)"/>
+      </g>
+      <g font-size="11" fill="#5b6478">
+        <text x="173" y="48" text-anchor="middle">open dialog (expects KEY)</text>
+        <text x="175" y="90" text-anchor="middle">type exact key → enable</text>
+        <text x="268" y="132" text-anchor="middle">confirm → deleteProject(id)</text>
+        <text x="550" y="174" text-anchor="middle">DELETE /projects/{id}</text>
+        <text x="360" y="218" text-anchor="middle">remove + clear selection + MRU redirect</text>
+      </g>
+      <g class="step" data-d="1"><circle cx="80" cy="58" r="13" fill="#e8edfb" stroke="#3556d4"/><text x="80" y="62.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3556d4">1</text></g>
+      <g class="step" data-d="2"><circle cx="270" cy="100" r="13" fill="#fbe7e7" stroke="#b03030"/><text x="270" y="104.5" text-anchor="middle" font-size="12" font-weight="800" fill="#b03030">2</text></g>
+      <g class="step" data-d="3"><circle cx="460" cy="142" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="460" y="146.5" text-anchor="middle" font-size="12" font-weight="800" fill="#6b3fb8">3</text></g>
+      <g class="step" data-d="4"><circle cx="640" cy="184" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="640" y="188.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">4</text></g>
+      <g class="step" data-d="5"><circle cx="80" cy="226" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="80" y="230.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">5</text></g>
+    </svg>
+    <div id="seqInfo2"><span class="hint">Click a numbered step.</span></div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS REACHABILITY ============ -->
+<section id="reach">
+  <h2>Settings layout — dedicated Projects sub-section</h2>
+  <div class="lede">Settings gains an <b>inner left nav</b>. <span class="m">Projects</span> is the first entry and the default sub-section — reachable with no project selected; the project-scoped sections sit beside it and keep their existing gate.</div>
+
+  <div class="seq-wrap" style="grid-template-columns:1fr 320px;margin-bottom:18px">
+    <svg viewBox="0 0 520 230" width="100%">
+      <!-- settings frame -->
+      <rect x="20" y="20" width="480" height="190" rx="10" fill="none" stroke="#e3e7ee" stroke-width="1.5"/>
+      <text x="36" y="44" font-size="12" font-weight="800" fill="#5b6478" letter-spacing="1">SETTINGS</text>
+      <!-- inner nav -->
+      <g class="step" data-s="projects">
+        <rect x="32" y="58" width="130" height="30" rx="7" fill="#e8edfb" stroke="#3556d4"/>
+        <text x="46" y="77" font-size="12" font-weight="700" fill="#3556d4">Projects</text>
+      </g>
+      <g class="step" data-s="types">
+        <rect x="32" y="94" width="130" height="30" rx="7" fill="#fbfcfe" stroke="#e3e7ee"/>
+        <text x="46" y="113" font-size="12" font-weight="600" fill="#5b6478">Issue Types</text>
+      </g>
+      <g class="step" data-s="states">
+        <rect x="32" y="130" width="130" height="30" rx="7" fill="#fbfcfe" stroke="#e3e7ee"/>
+        <text x="46" y="149" font-size="12" font-weight="600" fill="#5b6478">Workflow States</text>
+      </g>
+      <!-- divider -->
+      <line x1="178" y1="58" x2="178" y2="190" stroke="#e3e7ee" stroke-width="1.5"/>
+      <!-- panel content -->
+      <g class="step" data-s="panel">
+        <rect x="196" y="58" width="288" height="132" rx="8" fill="#f6f7f9" stroke="#e3e7ee"/>
+        <text x="212" y="80" font-size="11" font-weight="800" fill="#1d7a4f">+ NEW PROJECT</text>
+        <text x="212" y="106" font-size="11" font-weight="700" fill="#6b3fb8">ENG</text><text x="246" y="106" font-size="11" fill="#1d2433">Engineering</text>
+        <text x="212" y="128" font-size="11" font-weight="700" fill="#6b3fb8">DES</text><text x="246" y="128" font-size="11" fill="#1d2433">Design</text>
+        <text x="212" y="150" font-size="11" font-weight="700" fill="#6b3fb8">OPS</text><text x="246" y="150" font-size="11" fill="#1d2433">Operations</text>
+      </g>
+    </svg>
+    <div id="settInfo"><span class="hint">Click a nav entry or the panel.</span></div>
+  </div>
+
+  <table>
+    <thead><tr><th style="width:230px">Situation</th><th>Resolution</th></tr></thead>
+    <tbody>
+      <tr><td>Projects sub-section</td><td>The first inner-nav entry and the <b>default</b> selection when Settings opens. The dedicated <span class="m">ProjectsView</span> does <b>not</b> depend on <span class="m">selectedProjectId</span> — it lists every project from <span class="m">studioStore.projects</span> and offers create / edit / delete inline. Reachable even when no project is open.</td></tr>
+      <tr><td>Project-scoped sections</td><td>IssueTypes / WorkflowStates are sibling nav entries that keep their existing "select a project" gate unchanged. Selecting one when no project is open shows the same gate prompt; only Projects renders unconditionally.</td></tr>
+      <tr><td>At least one project exists</td><td>A project is always selected, so <span class="m">/settings</span> renders and lands on the Projects sub-section by default. All three nav entries are usable.</td></tr>
+      <tr><td>Zero projects (fresh install or last one deleted)</td><td><span class="m">RootRedirect</span> renders a <b>create-project screen</b> (replacing today's "No projects found" dead-end). Submitting it runs the same create path, then navigates into the new project. This is the create-from-empty entry point — no Settings route needed when there is nothing to select.</td></tr>
+      <tr><td>Decision</td><td><b>No new global Settings route.</b> Settings becomes a small <b>inner left-nav layout</b> with Projects as the default sub-section, IssueTypes / WorkflowStates as gated siblings, plus the RootRedirect create screen for bootstrap. The nav state is local view state — no router change. Smallest surface that gives Projects a dedicated home while staying reachable.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ FAILURE MATRIX ============ -->
+<section id="failures">
+  <h2>Failure &amp; edge matrix</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Behavior</th><th style="width:120px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Duplicate key on create</td><td>Backend 409 (existing guard preserved); <span class="m">api.ts</span> surfaces it as an <span class="m">ApiError</span>; ProjectFormDialog shows inline message and an error toast — form stays open with values intact.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Delete confirm text mismatch</td><td>Confirm button stays disabled until the typed value exactly equals the project key (case-sensitive). No accidental delete possible.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Delete of the currently selected project</td><td>After 204: remove from <span class="m">projects</span>, <span class="m">selectionStore.clear()</span> (not auto-cleared today), redirect to MRU survivor; backlog / settings / lifecycle reload via the project-switch effect.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Delete the last remaining project</td><td>No survivor → navigate to root → create-project screen.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Delete request fails (network / server)</td><td>Optimistic removal is rolled back (project restored to list), error toast shown, no redirect.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>localStorage unavailable / corrupt JSON</td><td>recentProjects read returns empty list inside try/catch; startup falls back to <span class="m">projects[0]</span> — same as today.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Stale MRU id (project deleted in another tab)</td><td>Reads filter against live <span class="m">projects</span>; non-existent ids are skipped and dropped on next write.</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Project description as plain markdown vs issue HTML</td><td>Projects persist raw markdown text; DescriptionEditor is extended with a format flag so the same component emits markdown for projects and HTML for issues. Render/sanitize is frontend-only via reused <span class="m">lib/markdown</span>.</td><td><span class="sev ok">by design</span></td></tr>
+      <tr><td>Slug edit attempt</td><td>Not offered in the edit form; ProjectPatch omits slug; backend never reads it.</td><td><span class="sev ok">structural</span></td></tr>
+      <tr><td>Permissions / roles / soft-delete / restore</td><td>Out of scope — single-user local setup; delete is permanent.</td><td><span class="sev def">out of scope</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ TEST PLAN ============ -->
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">Unit suites follow the homes of the code they test; the final gate is your live e2e.</div>
+  <table>
+    <thead><tr><th style="width:250px">Suite</th><th>Cases</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">worktracker: test_projects</span> (extend)</td><td>Create with description persists it and returns it on <span class="m">ProjectOut</span>; patch updates description while slug stays immutable; duplicate-slug create still 409s; <b>DELETE cascades</b> — after delete, the project and all its States / IssueTypes / Labels / Sprints / Issues / Attachments are gone (assert counts drop to zero); delete of a missing id 404s.</td></tr>
+      <tr><td><span class="m">worktracker-sdk: tests</span> (extend)</td><td><span class="m">Project</span> model deserializes the new <span class="m">description</span> field; <span class="m">ProjectsResource.create / update / delete</span> issue the right verbs and parse responses.</td></tr>
+      <tr><td><span class="m">studio: studioStore</span> (new cases)</td><td>create appends + selects + touches MRU; update replaces in list; delete removes, clears selection, and resolves the MRU redirect target (selected vs non-selected, last-project cases); failed delete rolls back.</td></tr>
+      <tr><td><span class="m">studio: recentProjects</span> (new)</td><td><span class="m">touch</span> moves id to front and dedupes; read survives missing / corrupt storage; <span class="m">resolveStartProject</span> picks first survivor, falls back to <span class="m">projects[0]</span>, returns null when empty.</td></tr>
+      <tr><td><span class="m">studio: SettingsView / ProjectsView / RootRedirect</span> (new)</td><td>Settings defaults to the Projects sub-section and renders it with no project selected; the scoped nav entries keep their gate; ProjectsView lists projects and typed-key delete enables confirm only on exact match; RootRedirect navigates to MRU survivor and shows the create screen when projects are empty.</td></tr>
+      <tr><td>Live e2e (user)</td><td>Create a project with markdown description → it appears and opens; duplicate key rejected with feedback; edit name + description; delete the selected project via typed-key gate → redirects to MRU survivor and its data is gone; delete the last project → create screen; reload → startup opens the most-recently-used project.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Five steps; each lands green before the next. Backend + SDK first so the frontend builds against a real contract.</div>
+  <div class="steps">
+    <div class="bstep"><span class="n">1</span><b>Backend contract</b>schemas description on Out/In/Patch; create + patch wiring; new DELETE cascade route; backend tests.</div>
+    <div class="bstep"><span class="n">2</span><b>SDK parity</b>Project.description; ProjectCreate / ProjectUpdate; create / update / delete on ProjectsResource; SDK tests.</div>
+    <div class="bstep"><span class="n">3</span><b>Frontend plumbing</b>types.ts shapes; api.ts create / update / delete; recentProjects.ts + studioStore actions; selectProject touches MRU; unit tests.</div>
+    <div class="bstep"><span class="n">4</span><b>UI surfaces</b>SettingsView inner-nav layout; ProjectsView + ProjectFormDialog (DescriptionEditor markdown mode); dialogStore.confirmTyped + DialogHost; RootRedirect MRU + create screen.</div>
+    <div class="bstep"><span class="n">5</span><b>Live e2e</b>Real create / edit / delete / redirect / reload loop. Your validation gates Done.</div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section>
+  <h2>Acceptance</h2>
+  <div class="accept">
+    Every ticket criterion is mapped: a Projects section reachable with or without a selected project; create with markdown description and duplicate-key feedback; edit name + description with id/key/workspace/counters/timestamps read-only; a typed-key delete gate; permanent cascading delete verified by the backend test; post-delete redirect and startup both driven by persisted recent-project order; the empty state replaced by a create-project screen; and backend, SDK, types, stores, routing, and tests moved in lockstep — <b>with no migration and no new dependency</b>.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    models: { t: 'worktracker/worktracker/models.py', k: 'READ-ONLY (no change)', items: [
+      'Project.description already exists (TextField, blank=True) — no migration for the field.',
+      'State / IssueType / Label / Sprint / Issue all declare on_delete=CASCADE on the project FK; Attachment cascades on its issue FK — the delete route relies on this.',
+      'unique_together (workspace, slug) backs the duplicate-key guard.'
+    ], no: ['No model edits.', 'No migration.'] },
+    schemas: { t: 'worktracker/worktracker/schemas.py', k: 'MODIFIED', items: [
+      'ProjectOut += description: str (defaults empty for blank rows).',
+      'ProjectIn += description: Optional[str] = None.',
+      'ProjectPatch += description: Optional[str] = None.'
+    ], no: ['Slug stays absent from ProjectPatch — key immutable.'] },
+    api: { t: 'worktracker/worktracker/api.py', k: 'MODIFIED', items: [
+      'create_project writes payload.description; existing duplicate-slug 409 + IntegrityError guard preserved.',
+      'patch_project applies description and adds it to update_fields.',
+      'NEW DELETE /projects/{id}: resolve-or-404, unconditional .delete() (no child guard), 204; cascade is automatic.'
+    ], no: ['No child-count 409 on project delete (unlike module/work-item delete).', 'No new state seeding logic.'] },
+    sdkmodels: { t: 'worktracker-sdk/worktracker_sdk/models.py', k: 'MODIFIED', items: [
+      'Project output model += description: str (mandatory under extra="forbid").',
+      'New ProjectCreate (name, slug, optional workspace_slug, optional description).',
+      'New ProjectUpdate (optional name, optional description; no slug).'
+    ], no: ['No change to State / IssueType models.'] },
+    sdkres: { t: 'worktracker-sdk/worktracker_sdk/resources.py', k: 'MODIFIED', items: [
+      'ProjectsResource gains create / update / delete mirroring the three routes.',
+      'Follows the existing resource call pattern.'
+    ], no: ['list() unchanged.', 'No Studio consumer uses these yet — added for CRUD parity.'] },
+    types: { t: 'studio/src/lib/types.ts', k: 'MODIFIED', items: [
+      'Project += description: string.',
+      'New ProjectCreate { slug; name; description? } and ProjectPatch { name?; description? }.'
+    ], no: ['ProjectPatch has no slug field.'] },
+    apits: { t: 'studio/src/lib/api.ts', k: 'MODIFIED', items: [
+      'createProject(body) → POST /projects.',
+      'updateProject(id, patch) → PATCH /projects/{id}.',
+      'deleteProject(id) → DELETE /projects/{id}.',
+      'Reuses the existing request<T> helper (x-api-key headers, ApiError parsing).'
+    ], no: ['No change to the request helper itself.'] },
+    recentlib: { t: 'studio/src/lib/recentProjects.ts', k: 'NEW', items: [
+      'localStorage key "studio.recentProjects": JSON array of ids, MRU first.',
+      'touch(id): move id to front, dedupe, persist (try/catch like uiStore).',
+      'read(): parse safely, [] on missing/corrupt.',
+      'resolveStartProject(projects): first surviving MRU id, else projects[0]?.id, else null.'
+    ], no: ['No React/store coupling — pure helpers.'] },
+    store: { t: 'studio/src/stores/studioStore.ts', k: 'MODIFIED', items: [
+      'createProject(body): POST, append to projects, select new, touch MRU.',
+      'updateProject(id, patch): PATCH, replace row in projects.',
+      'deleteProject(id): optimistic remove + rollback on failure; if it was selected, selectionStore.clear() and compute MRU redirect target.',
+      'selectProject(id) additionally calls recentProjects.touch(id).'
+    ], no: ['No change to module/backlog loading internals.'] },
+    dialog: { t: 'studio/src/stores/dialogStore.ts', k: 'MODIFIED', items: [
+      'New confirmTyped variant: ConfirmOptions + a required confirmText the user must type to enable confirm.',
+      'Returns Promise<boolean> like confirm(); exposed via the imperative dialog.* helper.'
+    ], no: ['Existing confirm() / reassign() unchanged.'] },
+    settings: { t: 'studio/src/shell/SettingsView.tsx', k: 'MODIFIED', items: [
+      'Becomes an inner left-nav layout: Projects | Issue Types | Workflow States, with Projects as the default active entry.',
+      'Active sub-section is local view state (useState), default "projects" — no router change.',
+      'Projects entry renders <ProjectsView/> unconditionally; the two scoped entries keep the existing "select a project" gate.'
+    ], no: ['No new route added.', 'No change to the IssueTypes / WorkflowStates panel internals — only relocated under nav entries.'] },
+    panel: { t: 'studio/src/shell/ProjectsView.tsx', k: 'NEW', items: [
+      'Dedicated Projects sub-section rendered inside the Settings inner nav.',
+      'Lists all projects from studioStore.projects with name + key.',
+      'New / Edit open ProjectFormDialog; Delete opens the typed-key confirm.',
+      'Independent of selectedProjectId so it is reachable with no project open.'
+    ], no: ['No project-scoped data fetching of its own.', 'Not a route — a view rendered by SettingsView when the Projects nav entry is active.'] },
+    form: { t: 'studio/src/shell/ProjectFormDialog.tsx', k: 'NEW', items: [
+      'Create mode: editable key (slug) + name + markdown description.',
+      'Edit mode: name + markdown description; key/id/workspace/counters/timestamps read-only.',
+      'Uses the reused Modal shell and the extended DescriptionEditor in markdown mode.',
+      'Surfaces duplicate-key 409 inline + toast; keeps values on error.'
+    ], no: ['No slug field in edit mode.'] },
+    desc: { t: 'studio/src/issue/DescriptionEditor.tsx', k: 'MODIFIED', items: [
+      'Add a format prop: "html" (issue, existing default — persists description_html) vs "markdown" (project — emits/accepts raw markdown text).',
+      'Markdown mode skips the markdown→HTML conversion on output; preview still renders via lib/markdown (markdownToHtml + sanitizeHtml).'
+    ], no: ['Default behavior for issues is unchanged.', 'No new dependency — reuses lib/markdown.'] },
+    routes: { t: 'studio/src/app/routes.tsx', k: 'MODIFIED', items: [
+      'RootRedirect opens resolveStartProject(projects) instead of projects[0].',
+      'When projects is empty, render a create-project screen (replaces "No projects found"); on create, navigate into the new project.'
+    ], no: ['useRouteSync selectProject wiring unchanged.'] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    const col = d.k.startsWith('NEW') ? 'var(--green)' : d.k.startsWith('READ') ? 'var(--accent)' : 'var(--amber)';
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + col + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  const REUSE = {
+    editor: { t: 'DescriptionEditor', v: 'EXTEND', c: 'var(--amber)',
+      fit: ['Already ships the markdown edit surface + preview toggle from #640.', 'Lives at studio/src/issue/DescriptionEditor.tsx with lib/markdown helpers.'],
+      miss: ['Persists description_html (issue contract); projects store plain markdown text.', 'Needs a format prop to emit markdown instead of HTML.'] },
+    mdlib: { t: 'lib/markdown', v: 'REUSE', c: 'var(--green)',
+      fit: ['markdownToHtml + sanitizeHtml already power issue rendering.', 'Used as-is for the project description preview — no new deps (marked / turndown / dompurify already installed).'], miss: [] },
+    typed: { t: 'dialogStore.confirmTyped', v: 'EXTEND', c: 'var(--amber)',
+      fit: ['Builds on the existing dialogStore + DialogHost + Modal infra from #638.'],
+      miss: ['Existing confirm() has no typed-input gate; a new variant adds a required confirmText the user must type.'] },
+    confirm: { t: 'dialog.confirm (#638)', v: 'REUSE', c: 'var(--green)',
+      fit: ['Promise-based imperative dialog already wired into the Shell.', 'confirmTyped follows the same resolve pattern.'], miss: [] },
+    modal: { t: 'Modal (#638)', v: 'REUSE', c: 'var(--green)',
+      fit: ['Focus-trap / Esc / backdrop already solved.', 'ProjectFormDialog renders inside it.'], miss: [] },
+    projform: { t: 'ProjectFormDialog', v: 'NEW', c: 'var(--violet)',
+      fit: ['Single component serving create + edit modes.', 'Thin: Modal + name input + key input (create only) + DescriptionEditor.'], miss: [] },
+    recent: { t: 'recentProjects.ts', v: 'NEW', c: 'var(--violet)',
+      fit: ['Isolates the MRU persistence shape (read / touch / resolveStartProject).', 'Pure helpers — easy to unit test.'], miss: [] },
+    uipat: { t: 'uiStore localStorage pattern', v: 'REUSE', c: 'var(--green)',
+      fit: ['Same try/catch read-write idiom as navCollapsed / groupByEpic.', 'New key studio.recentProjects follows the studio.* convention.'], miss: [] }
+  };
+  const rdet = document.getElementById('reuseDetail');
+  document.querySelectorAll('.reuse-row').forEach(r => r.addEventListener('click', () => {
+    document.querySelectorAll('.reuse-row').forEach(x => x.classList.remove('sel'));
+    r.classList.add('sel');
+    const d = REUSE[r.dataset.r];
+    let h = '<h4>' + d.t + '</h4><div class="meta" style="color:' + d.c + '">' + d.v + '</div>';
+    h += '<div class="grp">Why</div><ul>' + d.fit.map(x => '<li class="fit">' + x + '</li>').join('') + '</ul>';
+    if (d.miss && d.miss.length) h += '<div class="grp">Gap to close</div><ul>' + d.miss.map(x => '<li class="miss">' + x + '</li>').join('') + '</ul>';
+    rdet.innerHTML = h;
+  }));
+
+  const CSTEPS = {
+    1: { t: '1 · Submit form', p: 'ProjectFormDialog validates that key + name are present and submits { slug, name, description }.', e: 'Edge: empty key or name keeps the submit disabled.' },
+    2: { t: '2 · Store action', p: 'studioStore.createProject calls api.createProject, then appends the returned Project, selects it, and touches the MRU list.', e: 'Edge: 409 duplicate key rejects the promise — caught and surfaced inline + toast, no append.' },
+    3: { t: '3 · POST /projects', p: 'Backend create_project seeds default states and persists the description; duplicate-slug guard returns 409 before any write.', e: 'Edge: IntegrityError fallback also maps to 409.' },
+    4: { t: '4 · Append + select', p: 'On success the new project is in the list and opened; navigation lands on its backlog. From the empty-state create screen this is also the bootstrap entry.', e: 'Edge: from RootRedirect create screen, navigate into the new project id.' }
+  };
+  const seqInfo = document.getElementById('seqInfo');
+  document.querySelectorAll('.step[data-c]').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step[data-c]').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = CSTEPS[s.dataset.c];
+    seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const DSTEPS = {
+    1: { t: '1 · Open typed dialog', p: 'ProjectsPanel calls dialog.confirmTyped with the project key as confirmText and a danger style. The dialog shows the exact key the user must type.', e: 'Edge: cancel / Esc resolves false — nothing happens.' },
+    2: { t: '2 · Typed-key gate', p: 'Confirm stays disabled until the typed value exactly equals the project key (case-sensitive). This is the only guard — there is no child-count check.', e: 'Edge: trailing whitespace or wrong case keeps confirm disabled.' },
+    3: { t: '3 · Delete action', p: 'studioStore.deleteProject optimistically removes the row, calls api.deleteProject (DELETE → 204). If it was the selected project, selectionStore.clear() runs.', e: 'Edge: request fails → restore the row, error toast, no redirect.' },
+    4: { t: '4 · Cascade', p: 'Backend permanently deletes the project; States / IssueTypes / Labels / Sprints / Issues / Attachments cascade automatically via their FKs.', e: 'Edge: missing id → 404 (already gone) — treat as success on the client.' },
+    5: { t: '5 · Recovery', p: 'Resolve the MRU survivor (excluding the deleted id) and navigate there; backlog / settings / lifecycle reload through the project-switch effect. No survivors → create-project screen.', e: 'Edge: deleting a non-selected project skips the redirect and stays put.' }
+  };
+  const seqInfo2 = document.getElementById('seqInfo2');
+  document.querySelectorAll('.step[data-d]').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step[data-d]').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = DSTEPS[s.dataset.d];
+    seqInfo2.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const SETT = {
+    projects: { t: 'Projects (default)', p: 'First inner-nav entry and the active sub-section when Settings opens. Renders ProjectsView, which lists all projects independent of selectedProjectId.', e: 'Reachable with no project selected — this is the entry that satisfies the ticket\'s reachability ask.' },
+    types: { t: 'Issue Types', p: 'Sibling nav entry. Keeps its existing "select a project" gate — project-scoped configuration unchanged.', e: 'Selecting it with no project open shows the same gate prompt as today.' },
+    states: { t: 'Workflow States', p: 'Sibling nav entry. Same project-scoped gate as Issue Types; only relocated under the inner nav.', e: 'Gate behavior unchanged from today.' },
+    panel: { t: 'ProjectsView content', p: '+ New Project plus a row per project (key + name) with Edit / Delete affordances. Create / Edit open ProjectFormDialog; Delete opens the typed-key confirm.', e: 'Edge: zero projects here is rare — the empty install hits the RootRedirect create screen first.' }
+  };
+  const settInfo = document.getElementById('settInfo');
+  document.querySelectorAll('.step[data-s]').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step[data-s]').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = SETT[s.dataset.s];
+    settInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

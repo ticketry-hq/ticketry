@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>#639 · Studio C4 — Issue-detail completeness — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; margin: 0 -40px; padding: 0 40px; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  code, .m { font-family: var(--mono); font-size: 12.5px; }
+
+  /* pillar cards */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .pillar { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent); cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .pillar:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .pillar.p2 { border-top-color: var(--green); }
+  .pillar.p3 { border-top-color: var(--violet); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .pillar.open .more { display: block; }
+  .pillar ul { list-style: none; }
+  .pillar li { font-size: 13px; padding: 3px 0 3px 20px; position: relative; }
+  .pillar li.in::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .pillar li.no::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 700; }
+  .pillar li.prep::before { content: "◌"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+
+  /* interface contract strip */
+  .iface { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .icard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .icard .ihead { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--violet); }
+  .icard h3 { font-size: 15px; margin: 4px 0 8px; }
+  .icard p { font-size: 13px; color: var(--muted); }
+  .icard .rule { margin-top: 10px; font-size: 12.5px; background: var(--green-soft); color: var(--green); border-radius: 8px; padding: 8px 12px; font-weight: 600; }
+
+  /* diagram */
+  .diagram-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+
+  /* sequence steps */
+  .steps { display: grid; grid-template-columns: 1fr 320px; gap: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .steplist { list-style: none; }
+  .steplist li { padding: 10px 12px 10px 40px; position: relative; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; cursor: pointer; font-size: 13.5px; }
+  .steplist li .n { position: absolute; left: 10px; top: 10px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; display: grid; place-items: center; }
+  .steplist li.sel { background: var(--accent-soft); border-color: var(--accent); }
+  #stepInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; color: var(--muted); }
+  #stepInfo h4 { font-size: 14px; color: var(--accent); margin-bottom: 6px; }
+  #stepInfo .edge { margin-top: 8px; color: var(--amber); font-size: 12.5px; }
+
+  /* trace table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 1px 2px; }
+  .pill.b1 { background: var(--accent-soft); color: var(--accent); }
+  .pill.b2 { background: var(--green-soft); color: var(--green); }
+  .pill.b3 { background: var(--violet-soft); color: var(--violet); }
+
+  /* repo tree */
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; gap: 30px; flex-wrap: wrap; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 420px; }
+  .tree .dir { color: var(--accent); font-weight: 700; }
+  .tree .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .ro { color: var(--muted); }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; max-width: 380px; }
+  .tree-notes li { margin-bottom: 8px; list-style: none; padding-left: 16px; position: relative; }
+  .tree-notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+  /* scope grid */
+  .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--red); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--red); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 12.5px; color: var(--muted); }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  .scroll { overflow-x: auto; }
+  @media (max-width: 900px) {
+    .pillars, .qgrid, .iface { grid-template-columns: 1fr; }
+    .diagram-wrap, .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · Studio module · Ticket #639 · Jira-parity C4 · HLD</div>
+  <h1>Issue-detail completeness — High-Level Design</h1>
+  <div class="sub">Three presentation gaps in the issue drawer — attachments aren't shown, there's no way to share or place an issue, and the drawer is mouse-only. All three are rendered from data the backend already returns. This is a pure-frontend slice in two files; the backend and stores are untouched.</div>
+  <div class="chips">
+    <span class="chip">Phase: HLD</span>
+    <span class="chip green">Zero backend change</span>
+    <span class="chip green">No new store / route / migration</span>
+    <span class="chip violet">3 gaps · G02 / G03 / G04</span>
+    <span class="chip amber">2 files modified</span>
+  </div>
+  <nav id="nav">
+    <a href="#why" class="active">Premise</a>
+    <a href="#gaps">The Three Gaps</a>
+    <a href="#data">Data Already Flows</a>
+    <a href="#shape">System Shape</a>
+    <a href="#walk">Walk Order</a>
+    <a href="#trace">Requirement Trace</a>
+    <a href="#repo">Change Map</a>
+    <a href="#scope">Boundaries</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ PREMISE ============ -->
+<section id="why">
+  <h2>Premise — completeness, not capability</h2>
+  <div class="lede">The S2 drawer (#615) already loads the full issue detail. <code>issueStore.open</code> is a <code>WorkItemDetail&nbsp;{ task, attachments[] }</code>, fetched by <code>getWorkItem()</code> from <code>GET /work-items/{id}</code>. The drawer renders the task and its children but ignores <code>attachments</code>, offers no share/placement affordance, and has no keyboard path. C4 closes those three presentation gaps. Nothing is fetched that isn't already in memory.</div>
+  <div class="iface">
+    <div class="icard">
+      <div class="ihead">ALREADY LOADED</div>
+      <h3><code>open.attachments[]</code></h3>
+      <p>Each <code>Attachment</code> carries <code>id · filename · mime_type · size · url</code> (<code>types.ts:86–93</code>). The drawer never reads the array today.</p>
+      <div class="rule">G02 renders it — display only</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">ALREADY DERIVABLE</div>
+      <h3>owning epic + KEY</h3>
+      <p><code>deriveEpic()</code> (<code>issueStore.ts:24–43</code>) walks the parent chain to the module; <code>open.task.key</code> is the stable deep-link target.</p>
+      <div class="rule">G03 surfaces both — no new lookups</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">ALREADY ORDERED</div>
+      <h3><code>groupBacklog()</code> · <code>boardColumns()</code></h3>
+      <p>The selectors that paint BacklogList and BoardView already define what the user sees: the backlog's Epic→Story→Sub-task line and the board's rank-sorted state-column grid (<code>backlogStore.ts</code>). C4 walks those — it invents no order.</p>
+      <div class="rule">G04 reads them — line + grid</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ THE THREE GAPS ============ -->
+<section id="gaps">
+  <h2>The three gaps</h2>
+  <div class="lede">Click a card to expand its boundary — what it does, and what it deliberately leaves to a later slice.</div>
+  <div class="pillars">
+    <div class="pillar" data-k="g02">
+      <div class="tag">G02 · IssueDetail.tsx · left column</div>
+      <h3>Attachments display</h3>
+      <p>A new section below Description listing <code>open.attachments[]</code> — one row per file, linking out to <code>attachment.url</code>.</p>
+      <div class="more"><ul>
+        <li class="in">Row = type icon + <code>filename</code> + human size (<i>"12 KB"</i>; <code>—</code> when <code>size</code> is null)</li>
+        <li class="in">Link opens in a new tab: <code>target="_blank" rel="noopener"</code></li>
+        <li class="in">Whole section <b>hidden</b> when <code>attachments.length === 0</code></li>
+        <li class="no">No empty-state, no upload control — upload is backend gap B3/C9</li>
+        <li class="no">No image thumbnails this slice</li>
+      </ul></div>
+    </div>
+    <div class="pillar p2" data-k="g03">
+      <div class="tag">G03 · drawer header + left column</div>
+      <h3>Copy-link + breadcrumb</h3>
+      <p>A share control in the header and a <code>Project › Epic</code> context line above the issue name.</p>
+      <div class="more"><ul>
+        <li class="in">Copy-link beside <i>"Open in coding app"</i> → <code>navigator.clipboard.writeText(`${origin}/issues/${KEY}`)</code></li>
+        <li class="in">Brief <i>"Copied"</i> affordance on success; silent no-op if clipboard API absent</li>
+        <li class="in">Breadcrumb: <b>Project</b> → backlog; <b>Epic</b> reuses existing <code>goEpic()</code> (sets epic filter + navigates)</li>
+        <li class="in">Epic via <code>deriveEpic()</code>; when none, show <b>Project only</b> (no trailing <code>›</code>)</li>
+      </ul></div>
+    </div>
+    <div class="pillar p3" data-k="g04">
+      <div class="tag">G04 · IssueDrawerHost.tsx · keydown</div>
+      <h3>Keyboard navigation — TUI-style</h3>
+      <p>A document-level keydown listener: Esc closes; ↑/↓ move within a column, ←/→ jump across columns — the geometry follows the surface, all focus-guarded.</p>
+      <div class="more"><ul>
+        <li class="in"><b>Esc</b> closes the drawer (navigate to backlog)</li>
+        <li class="in"><b>Over the board</b> — a 2-D cursor like the TUI: <b>↑/↓</b> step within the focused state-column, <b>←/→</b> move to the adjacent column, landing on its nearest card</li>
+        <li class="in"><b>Over the backlog</b> — <b>↑/↓</b> step the flattened Epic→Story→Sub-task line; ←/→ are no-ops (no columns)</li>
+        <li class="in">Geometry = the same <code>boardColumns()</code> / <code>groupBacklog()</code> the surface already renders; move by <code>item.key</code> via <code>/issues/</code></li>
+        <li class="in">Clamp at every edge (no wrap); ←/→ skip empty columns; no-op when the current key isn't in the loaded set</li>
+        <li class="prep">Guard: bail when <code>activeElement</code> is input / textarea / contenteditable</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DATA ALREADY FLOWS ============ -->
+<section id="data">
+  <h2>Why this is zero-backend</h2>
+  <div class="lede">A single existing read serves all three gaps. The drawer mount already triggers it; C4 just consumes more of the payload and reads one selector.</div>
+  <div class="iface">
+    <div class="icard">
+      <div class="ihead">READ · once, on mount</div>
+      <h3><code>GET /work-items/{key|id}</code></h3>
+      <p><code>getWorkItem()</code> (<code>api.ts:137–139</code>) → <code>WorkItemDetail</code>. Stored at <code>issueStore.open</code> on <code>openIssue()</code> (<code>issueStore.ts:142–173</code>). Resolves by KEY-N <i>or</i> UUID server-side.</p>
+      <div class="rule">No new endpoint · no payload change</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">DERIVE · in memory</div>
+      <h3>epic + line/grid order</h3>
+      <p><code>deriveEpic(...)</code>, <code>groupBacklog(...)</code> and <code>boardColumns(...)</code> already run against state the backlog hydrates — the backlog line and the board grid both fall out for free. No round-trips.</p>
+      <div class="rule">Pure client selectors</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">BROWSER · platform APIs</div>
+      <h3>clipboard + router</h3>
+      <p><code>navigator.clipboard</code> for copy-link; <code>react-router</code> <code>useNavigate()</code> for ↑/↓ and breadcrumb jumps — both already in use across Studio.</p>
+      <div class="rule">No new dependency</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SYSTEM SHAPE ============ -->
+<section id="shape">
+  <h2>System shape</h2>
+  <div class="lede">Click any box for its responsibility and boundary. Amber stroke = touched by C4. Blue = existing Studio machinery, read-only. Dashed = browser platform surface. Every data path already exists; C4 adds the two amber consumers and the keyboard edge.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 760 470" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/></marker>
+      </defs>
+
+      <!-- backend -->
+      <g class="node" data-n="be">
+        <rect x="40" y="200" width="170" height="70" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="125" y="228" text-anchor="middle" font-size="13" font-weight="700">WorkTracker API</text>
+        <text x="125" y="247" text-anchor="middle" font-size="10.5" fill="#5b6478">GET /work-items/{id}</text>
+        <text x="125" y="261" text-anchor="middle" font-size="10.5" fill="#3556d4">unchanged</text>
+      </g>
+
+      <!-- issueStore -->
+      <g class="node" data-n="store">
+        <rect x="280" y="195" width="190" height="80" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="375" y="222" text-anchor="middle" font-size="13" font-weight="700">issueStore.open</text>
+        <text x="375" y="241" text-anchor="middle" font-size="10.5" fill="#5b6478">{ task, attachments[] }</text>
+        <text x="375" y="256" text-anchor="middle" font-size="10.5" fill="#5b6478">deriveEpic()</text>
+      </g>
+
+      <!-- backlogStore -->
+      <g class="node" data-n="backlog">
+        <rect x="280" y="40" width="190" height="74" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="375" y="66" text-anchor="middle" font-size="13" font-weight="700">backlogStore</text>
+        <text x="375" y="85" text-anchor="middle" font-size="10.5" fill="#5b6478">groupBacklog · boardColumns</text>
+        <text x="375" y="99" text-anchor="middle" font-size="10.5" fill="#5b6478">(visible line + grid)</text>
+      </g>
+
+      <!-- drawer host -->
+      <g class="node" data-n="host">
+        <rect x="540" y="40" width="190" height="120" rx="10" fill="#fff" stroke="#9a6700" stroke-width="2.5"/>
+        <text x="635" y="66" text-anchor="middle" font-size="13" font-weight="700" fill="#7a5200">IssueDrawerHost</text>
+        <text x="635" y="85" text-anchor="middle" font-size="10.5" fill="#9a6700">+ copy-link control</text>
+        <text x="635" y="100" text-anchor="middle" font-size="10.5" fill="#9a6700">+ keydown listener</text>
+        <text x="635" y="115" text-anchor="middle" font-size="10.5" fill="#5b6478">Esc · ↑↓ · ←→ (guarded)</text>
+        <text x="635" y="135" text-anchor="middle" font-size="10.5" fill="#5b6478">close → backlog</text>
+      </g>
+
+      <!-- issue detail -->
+      <g class="node" data-n="detail">
+        <rect x="540" y="210" width="190" height="120" rx="10" fill="#fff" stroke="#9a6700" stroke-width="2.5"/>
+        <text x="635" y="236" text-anchor="middle" font-size="13" font-weight="700" fill="#7a5200">IssueDetail</text>
+        <text x="635" y="255" text-anchor="middle" font-size="10.5" fill="#9a6700">+ attachments section</text>
+        <text x="635" y="270" text-anchor="middle" font-size="10.5" fill="#9a6700">+ Project › Epic crumb</text>
+        <text x="635" y="290" text-anchor="middle" font-size="10.5" fill="#5b6478">name · state · desc</text>
+        <text x="635" y="305" text-anchor="middle" font-size="10.5" fill="#5b6478">children · goEpic()</text>
+      </g>
+
+      <!-- router -->
+      <g class="node" data-n="router">
+        <rect x="280" y="360" width="190" height="70" rx="10" fill="#f7f3fb" stroke="#6b3fb8" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text x="375" y="388" text-anchor="middle" font-size="13" font-weight="700" fill="#4d2a85">react-router</text>
+        <text x="375" y="407" text-anchor="middle" font-size="10.5" fill="#6b3fb8">/issues/:key</text>
+        <text x="375" y="421" text-anchor="middle" font-size="10.5" fill="#6b3fb8">navigate()</text>
+      </g>
+
+      <!-- clipboard -->
+      <g class="node" data-n="clip">
+        <rect x="540" y="360" width="190" height="64" rx="10" fill="#f7f3fb" stroke="#6b3fb8" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text x="635" y="388" text-anchor="middle" font-size="13" font-weight="700" fill="#4d2a85">navigator.clipboard</text>
+        <text x="635" y="406" text-anchor="middle" font-size="10.5" fill="#6b3fb8">writeText(deep-link)</text>
+      </g>
+
+      <!-- edges -->
+      <line x1="210" y1="235" x2="278" y2="235" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="214" y="226" font-size="10" fill="#8a93a8">detail+attachments</text>
+
+      <line x1="470" y1="240" x2="538" y2="265" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="476" y="252" font-size="10" fill="#8a93a8">open</text>
+
+      <line x1="470" y1="86" x2="538" y2="90" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="476" y="80" font-size="10" fill="#8a93a8">line + grid order</text>
+
+      <path d="M635 160 L635 208" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+      <text x="642" y="188" font-size="10" fill="#8a93a8">mounts</text>
+
+      <line x1="600" y1="160" x2="430" y2="358" stroke="#6b3fb8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+      <text x="470" y="300" font-size="10" fill="#6b3fb8">↑↓ ←→ → /issues/KEY</text>
+
+      <line x1="595" y1="160" x2="640" y2="358" stroke="#6b3fb8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+      <text x="548" y="345" font-size="10" fill="#6b3fb8">copy KEY url</text>
+
+      <line x1="540" y1="300" x2="472" y2="380" stroke="#6b3fb8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+      <text x="486" y="350" font-size="10" fill="#6b3fb8">crumb → backlog</text>
+    </svg>
+    <div id="nodeInfo"><span class="hint">Click a box to see its responsibility, what it owns, and what it explicitly does not do.</span></div>
+  </div>
+</section>
+
+<!-- ============ WALK ORDER ============ -->
+<section id="walk">
+  <h2>The keyboard walk — line vs grid</h2>
+  <div class="lede">Navigation moves through issues in the <b>exact order behind the drawer</b>. The host resolves the surface and picks geometry: a 1-D line over the backlog, a 2-D grid over the board — the same cursor model as the TUI kanban. Click a step for mechanics and edge cases.</div>
+  <div class="steps">
+    <ol class="steplist" id="steplist">
+      <li data-s="0"><span class="n">1</span>Resolve the originating surface — the board or backlog the drawer was opened over — and read the same store inputs it renders from.</li>
+      <li data-s="1"><span class="n">2</span><b>Board:</b> <code>boardColumns(items, states, modules, filters)</code> → <code>BoardColumn[]</code>, one column per state, each <code>items[]</code> rank-sorted. This <i>is</i> the grid.</li>
+      <li data-s="2"><span class="n">3</span><b>Backlog:</b> <code>groupBacklog(...)</code> flattened depth-first → a single line of <code>key</code>s (sub-tasks included).</li>
+      <li data-s="3"><span class="n">4</span>Locate the open issue: on the grid → <code>(col, row)</code>; on the line → one index.</li>
+      <li data-s="4"><span class="n">5</span><b>↑/↓</b> = row∓1 within the column (index∓1 on the line). <b>←/→</b> = nearest non-empty column, row clamped to its length. All clamped, no wrap.</li>
+      <li data-s="5"><span class="n">6</span><code>navigate(`/issues/${nextKey}`)</code> — the route swap re-opens the drawer on the next issue.</li>
+    </ol>
+    <div id="stepInfo"><span style="font-style:italic">Click a step.</span></div>
+  </div>
+</section>
+
+<!-- ============ REQUIREMENT TRACE ============ -->
+<section id="trace">
+  <h2>Requirement → component trace</h2>
+  <div class="lede">Click a row to highlight where each gap lands in the system-shape diagram.</div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th style="width:90px">Gap</th><th>Requirement</th><th>Where it lands</th><th style="width:160px">Touches</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-nodes="detail,store"><td><span class="rid">G02</span></td><td>Attachments rows (icon · name · size · new-tab link); hide when empty</td><td>New section in <code>IssueDetail</code> left column reading <code>open.attachments[]</code></td><td><span class="pill b2">IssueDetail</span><span class="pill b1">issueStore</span></td></tr>
+      <tr class="trace" data-nodes="host,clip"><td><span class="rid">G03a</span></td><td>Copy Studio deep-link to clipboard with "Copied" feedback</td><td>Header control in <code>IssueDrawerHost</code> → <code>navigator.clipboard</code></td><td><span class="pill b3">DrawerHost</span><span class="pill b3">clipboard</span></td></tr>
+      <tr class="trace" data-nodes="detail,store,router"><td><span class="rid">G03b</span></td><td><code>Project › Epic</code> breadcrumb; epic-absent → Project only</td><td><code>IssueDetail</code> via <code>deriveEpic()</code> + existing <code>goEpic()</code> / navigate</td><td><span class="pill b2">IssueDetail</span><span class="pill b1">router</span></td></tr>
+      <tr class="trace" data-nodes="host,router"><td><span class="rid">G04a</span></td><td>Esc closes drawer, focus-guarded</td><td>Document keydown in <code>IssueDrawerHost</code>; bail on text focus</td><td><span class="pill b3">DrawerHost</span><span class="pill b3">router</span></td></tr>
+      <tr class="trace" data-nodes="host,backlog,router"><td><span class="rid">G04b</span></td><td>↑/↓ prev/next within the focused column (board) or the flattened line (backlog), clamped</td><td><code>IssueDrawerHost</code> reads <code>boardColumns</code> / <code>groupBacklog</code> → navigate by <code>key</code></td><td><span class="pill b3">DrawerHost</span><span class="pill b1">backlogStore</span></td></tr>
+      <tr class="trace" data-nodes="host,backlog,router"><td><span class="rid">G04c</span></td><td>←/→ move to the adjacent board column, landing on the nearest card (board only)</td><td><code>IssueDrawerHost</code> steps the <code>boardColumns</code> grid by column → navigate by <code>key</code></td><td><span class="pill b3">DrawerHost</span><span class="pill b1">backlogStore</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="repo">
+  <h2>Change map</h2>
+  <div class="lede">Amber = modified. Everything else is read-only: the backend, the SDK, the stores, the types, and the selectors all stand as-is. A small flatten helper rides alongside <code>groupBacklog</code>.</div>
+  <div class="tree-wrap">
+    <div class="tree">
+      <div><span class="dir">studio/src/</span></div>
+      <div>├─ <span class="dir">issue/</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="mod">IssueDetail.tsx</span> <span class="ro">— + attachments section, + Project › Epic crumb</span></div>
+      <div>├─ <span class="dir">shell/</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="mod">IssueDrawerHost.tsx</span> <span class="ro">— + copy-link, + keydown (Esc/↑/↓)</span></div>
+      <div>├─ <span class="dir">stores/</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="ro">backlogStore.ts — groupBacklog / boardColumns read-only (+ flatten helper)</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="ro">issueStore.ts — open / deriveEpic read-only</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="ro">settingsStore.ts — states read-only (board axis)</span></div>
+      <div>├─ <span class="dir">lib/</span> <span class="ro">— types.ts / api.ts untouched</span></div>
+      <div>└─ <span class="dir">test/</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="mod">IssueDetail.test.tsx</span> <span class="ro">— + attachments / crumb / copy-link / keyboard</span></div>
+    </div>
+    <ul class="tree-notes">
+      <li>No backend, SDK, migration, route, or new dependency.</li>
+      <li>The host resolves the originating surface — board grid (<code>boardColumns</code>) vs backlog line (<code>groupBacklog</code>) — to pick geometry; how that origin is threaded (router location state / a uiStore origin field) is LLD, and a cold deep-link with no origin defaults to the backlog line.</li>
+      <li>The flatten helper is a few lines beside <code>groupBacklog</code> (or inline in the host) — deterministic depth-first over <code>EpicGroup.rows</code>; exact placement is LLD scope.</li>
+      <li>The keydown guard <b>extends</b> the Popover pattern: Popover closes on Esc unconditionally; the drawer listener additionally bails when <code>activeElement</code> is input/textarea/contenteditable, so an open inline name/description editor keeps its own Escape.</li>
+      <li>Human-readable size formatting (B/KB/MB) is a tiny local utility; <code>null</code> → <code>—</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ BOUNDARIES ============ -->
+<section id="scope">
+  <h2>Boundaries &amp; open points</h2>
+  <div class="lede">Explicitly out of this slice, and the few decisions deferred to the LLD.</div>
+  <div class="qgrid">
+    <div class="qcard"><div class="qid">OUT · upload</div><h4>Attachment upload</h4><p>Display only. Upload is backend gap <b>B3/C9</b> — no add/remove affordance here.</p></div>
+    <div class="qcard"><div class="qid">OUT · thumbnails</div><h4>Image previews</h4><p>Rows only this slice; inline image/file previews are a later enhancement.</p></div>
+    <div class="qcard"><div class="qid">OUT · wrap &amp; story-map</div><h4>Wrap-around / story-map grid</h4><p>Every axis clamps at the ends — no wrap. The board grid and the backlog line are in; the story-map's epic×sprint grid is not a drawer-walk surface this slice.</p></div>
+    <div class="qcard"><div class="qid">LLD · placement &amp; geometry</div><h4>Crumb, section &amp; surface origin</h4><p>Crumb above the issue name; attachments below Description. Exact spacing/icon set, flatten-helper location, how the origin surface is threaded, and how ↑/↓ traverse swimlane (#632) lanes are LLD detail.</p></div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance signal</h2>
+  <div class="accept">
+    The slice is done when, in the issue drawer: an issue that has attachments shows a <b>rows list</b> (icon · name · size · new-tab link) that <b>disappears</b> when there are none; the header offers a <b>copy-link</b> that puts <code>${origin}/issues/${KEY}</code> on the clipboard with a brief <b>"Copied"</b>; a <b>Project › Epic</b> crumb sits above the name and both segments navigate (Project-only when there's no epic); and the keyboard works like the TUI — <b>Esc</b> closes; over the board <b>↑/↓</b> step within the focused state-column and <b>←/→</b> move to the adjacent column's nearest card; over the backlog <b>↑/↓</b> step the <b>visible, filtered line</b>; every axis is clamped (no wrap) and an open inline editor keeps its own typing and Escape. <b>tsc + vitest + build</b> stay green, with new coverage in <code>IssueDetail.test.tsx</code> and a drawer keyboard test.
+  </div>
+</section>
+
+</main>
+
+<script>
+  document.querySelectorAll('.pillar').forEach(p => p.addEventListener('click', () => p.classList.toggle('open')));
+
+  const INFO = {
+    be: { t: 'WorkTracker API (unchanged)', does: ['Serves GET /work-items/{key|id} → { task, attachments[] }', 'Resolves KEY-N or UUID server-side'], not: ['No new endpoint', 'No payload or schema change for C4'] },
+    store: { t: 'issueStore.open', does: ['Holds the WorkItemDetail fetched on openIssue()', 'Exposes attachments[] (already populated)', 'deriveEpic() walks parent chain to the owning module'], not: ['Not modified — C4 only reads it', 'No new fields'] },
+    backlog: { t: 'backlogStore — groupBacklog / boardColumns', does: ['groupBacklog builds the filtered Epic→Story→Sub-task line shown in BacklogList', 'boardColumns buckets the same items into rank-sorted state columns shown in BoardView', 'Both already honor the active epic / sprint / priority filters'], not: ['Logic unchanged — read-only for C4', 'A thin flatten helper rides alongside groupBacklog'] },
+    host: { t: 'IssueDrawerHost (MODIFIED)', does: ['Adds the copy-link control to the header', 'Adds a document-level keydown listener: Esc close, ↑/↓ within column, ←/→ across columns', 'Resolves the surface (board vs backlog) and walks boardColumns / groupBacklog by key, clamped'], not: ['Guard bails when focus is in a text field / inline editor', 'No wrap-around; ←/→ are no-ops on the backlog; no-op if current key not loaded'] },
+    detail: { t: 'IssueDetail (MODIFIED)', does: ['Renders attachments[] as a rows section below Description', 'Hides the section entirely when empty', 'Adds the Project › Epic breadcrumb above the name (deriveEpic + goEpic)'], not: ['No upload affordance', 'No thumbnails', 'Project-only when no owning epic'] },
+    router: { t: 'react-router (platform)', does: ['navigate(`/issues/${key}`) re-opens the drawer for ↑/↓', 'Backs out to /projects/{id}/backlog on close and crumb jumps'], not: ['No route additions — /issues/:key already exists'] },
+    clip: { t: 'navigator.clipboard (platform)', does: ['writeText(`${origin}/issues/${KEY}`) on copy-link'], not: ['Silent no-op when the clipboard API is unavailable', 'No fallback prompt this slice'] }
+  };
+  const nodes = document.querySelectorAll('.node');
+  const info = document.getElementById('nodeInfo');
+  function showNode(key) {
+    nodes.forEach(n => { n.classList.toggle('hl', n.dataset.n === key); n.classList.remove('dim'); });
+    const d = INFO[key]; if (!d) return;
+    info.innerHTML = '<h4>' + d.t + '</h4><ul>' + d.does.map(x => '<li>' + x + '</li>').join('') +
+      '</ul><ul style="margin-top:10px">' + d.not.map(x => '<li style="color:var(--red)">' + x + '</li>').join('') + '</ul>';
+  }
+  nodes.forEach(n => n.addEventListener('click', e => { e.stopPropagation(); showNode(n.dataset.n); }));
+
+  const STEPS = [
+    { t: 'Resolve the surface', d: 'The drawer overlays a surface; the host resolves which one (board vs backlog) and reads the same items / states / modules / filters that surface renders, so the cursor never drifts from what is on screen. How the origin surface is threaded — router location state or a uiStore origin field — is LLD detail.', e: 'Edge: cold deep-link with no origin → default to the backlog line; if the backlog has not hydrated yet, the set is empty and every key is a no-op.' },
+    { t: 'Board → grid', d: 'boardColumns(items, states, modules, filters) buckets items into one column per workflow state (frozen group order), each column rank-sorted (#626). Cancelled is hidden (#633); a leading "No State" lane appears only when non-empty.', e: 'Edge: the state filter is intentionally ignored on the board — state is the axis. Swimlanes (#632) keep the same columns; in-lane traversal is LLD detail.' },
+    { t: 'Backlog → line', d: 'groupBacklog flattened pre-order (node before children) across all epic groups, collecting item.key — exactly top-to-bottom visual order, sub-tasks included.', e: 'Edge: a row collapsed in the UI does not change the walk — navigation is over the data tree, not the expanded view. ←/→ are no-ops here.' },
+    { t: 'Locate the open issue', d: 'On the grid, find (col, row) of open.task.key; on the line, indexOf(open.task.key).', e: 'Edge: not found (−1) → the whole keypress is a no-op (cold deep-link before hydrate).' },
+    { t: 'Step and clamp', d: '↑/↓ = row∓1 inside the focused column (index∓1 on the line); ←/→ = move to the nearest non-empty column in that direction, clamping the row to its length. Everything clamps to its bounds — no wrap.', e: 'Edge: at the first/last row ↑/↓ is a no-op; at the leftmost/rightmost non-empty column ←/→ is a no-op; an empty target column is skipped.' },
+    { t: 'Navigate by key', d: 'navigate(`/issues/${nextKey}`); the route sync re-runs openIssue() and the drawer shows the next issue.', e: 'Edge: same focus guard as Esc — arrows inside a focused text field keep moving the caret instead.' }
+  ];
+  const stepInfo = document.getElementById('stepInfo');
+  document.querySelectorAll('#steplist li').forEach(li => li.addEventListener('click', () => {
+    document.querySelectorAll('#steplist li').forEach(x => x.classList.remove('sel'));
+    li.classList.add('sel');
+    const s = STEPS[+li.dataset.s];
+    stepInfo.innerHTML = '<h4>' + s.t + '</h4><p>' + s.d + '</p><div class="edge">' + s.e + '</div>';
+  }));
+
+  document.querySelectorAll('tr.trace').forEach(tr => tr.addEventListener('click', () => {
+    document.querySelectorAll('tr.trace').forEach(r => r.classList.remove('sel'));
+    tr.classList.add('sel');
+    const keys = tr.dataset.nodes.split(',');
+    nodes.forEach(n => { n.classList.toggle('hl', keys.includes(n.dataset.n)); n.classList.toggle('dim', !keys.includes(n.dataset.n)); });
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

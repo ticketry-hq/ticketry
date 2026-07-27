@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T650 · Decompose BacklogList — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel);
+    padding: 26px 40px 0;
+  }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 20px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    display: flex; gap: 2px; overflow-x: auto;
+    margin: 0 -40px; padding: 0 40px;
+    position: sticky; top: 0; z-index: 30;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  nav a {
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted);
+    text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+
+  /* evolution strip */
+  .evo { display: grid; grid-template-columns: 1fr 28px 1fr; gap: 10px; align-items: stretch; margin-bottom: 40px; }
+  .evo .stage {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; font-size: 12.5px; color: var(--muted);
+  }
+  .evo .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .evo .stage.dead { opacity: .65; }
+  .evo .stage.dead .lbl { color: var(--red); }
+  .evo .stage.live { border: 2px solid var(--green); color: var(--ink); }
+  .evo .stage.live .lbl { color: var(--green); }
+  .evo .arr { align-self: center; text-align: center; color: var(--violet); font-size: 18px; font-weight: 700; }
+
+  /* pillar cards */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .pillar {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px; border-top: 4px solid var(--accent); cursor: pointer;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .pillar:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .pillar.p2 { border-top-color: var(--green); }
+  .pillar.p3 { border-top-color: var(--violet); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .pillar.open .more { display: block; }
+  .pillar ul { list-style: none; }
+  .pillar li { font-size: 13px; padding: 3px 0 3px 20px; position: relative; }
+  .pillar li.in::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .pillar li.done::before { content: "✓✓"; position: absolute; left: -4px; color: var(--accent); font-weight: 700; font-size: 11px; top: 7px; }
+  .pillar li.prep::before { content: "◌"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+  .legend { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend b { font-weight: 700; }
+  .legend .g { color: var(--green); } .legend .a { color: var(--amber); } .legend .b { color: var(--accent); }
+
+  /* interface contract strip */
+  .iface { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .icard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .icard .ihead { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--violet); }
+  .icard h3 { font-size: 15px; margin: 4px 0 8px; }
+  .icard p { font-size: 13px; color: var(--muted); }
+  .icard .rule { margin-top: 10px; font-size: 12.5px; background: var(--violet-soft); color: var(--violet); border-radius: 8px; padding: 8px 12px; font-weight: 600; }
+
+  /* diagram */
+  .diagram-wrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px;
+  }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+
+  /* trace table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 1px 2px; }
+  .pill.b1 { background: var(--accent-soft); color: var(--accent); }
+  .pill.b2 { background: var(--green-soft); color: var(--green); }
+  .pill.b3 { background: var(--violet-soft); color: var(--violet); }
+
+  /* question board */
+  .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--red); }
+  .qcard.ans { border-left-color: var(--green); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--red); }
+  .qcard.ans .qid { color: var(--green); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 12.5px; color: var(--muted); }
+  .qcard p b { color: var(--green); }
+  .qcard .dref { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 6px; display: inline-block; }
+  .qcard.openq p b { color: var(--red); }
+
+  /* repo tree */
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; gap: 30px; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 380px; }
+  .tree .dir { color: var(--accent); font-weight: 700; }
+  .tree .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .ex { color: var(--muted); }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; }
+  .tree-notes li { margin-bottom: 8px; list-style: none; padding-left: 16px; position: relative; }
+  .tree-notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+  .accept {
+    background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px;
+    padding: 20px 24px; font-size: 14px;
+  }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .pillars, .qgrid, .iface { grid-template-columns: 1fr; }
+    .diagram-wrap { grid-template-columns: 1fr; }
+    .evo { grid-template-columns: 1fr; }
+    .evo .arr { transform: rotate(90deg); }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · Studio module · Ticket #650 · HLD</div>
+  <h1>Decompose BacklogList — High-Level Design</h1>
+  <div class="sub">Refactor the monolithic BacklogList view into domain-isolated subcomponents, creating a new Views subfolder structure modeled after the Sprints view.</div>
+  <div class="chips">
+    <span class="chip">Phase: Backlog Refinement</span>
+    <span class="chip violet">Components Identified</span>
+    <span class="chip green">Zero functional regression</span>
+    <span class="chip amber">2 questions open</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">Evolution</a>
+    <a href="#iface">Inter-Component Contracts</a>
+    <a href="#slice">Decomposition Pillars</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Requirement Trace</a>
+    <a href="#questions">Question Board</a>
+    <a href="#repo">Repo Shape</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ EVOLUTION ============ -->
+<section id="evo">
+  <div class="evo">
+    <div class="stage dead">
+      <div class="lbl">BEFORE REFACTOR</div>
+      Monolithic <span style="font-family:var(--mono)">BacklogList.tsx</span> owning group logic, row drag/drop/reorder, quick-add input, selection event listeners, and cursor wiring in one place.
+    </div>
+    <div class="arr">⟶</div>
+    <div class="stage live">
+      <div class="lbl">THIS REFACTOR (R3)</div>
+      Orchestrator container delegates to <span style="font-family:var(--mono)">BacklogInlineCreate</span>, <span style="font-family:var(--mono)">BacklogGroupSection</span>, and recursive <span style="font-family:var(--mono)">BacklogRow</span>. Files organized in a dedicated <span style="font-family:var(--mono)">views/backlog/</span> folder.
+    </div>
+  </div>
+</section>
+
+<!-- ============ INTER-COMPONENT CONTRACTS ============ -->
+<section id="iface">
+  <h2>Component Interfaces & State Contracts</h2>
+  <div class="lede">Keeping the orchestrator lean while extracting presenters. Drag-and-drop handles list reordering directly through back-end actions, while local state (like dragging tags and inputs) stays small.</div>
+  <div class="iface">
+    <div class="icard">
+      <div class="ihead">ORCHESTRATOR · BacklogList</div>
+      <h3>State & Selection Context</h3>
+      <p>Holds the collapsed sets (epics and subtask rows) because the cursor calculations must know which elements are visible. Mounts the escape key selection-clear listener.</p>
+      <div class="rule">Maintains visibility & selections</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">GROUP PRESENTER · BacklogGroupSection</div>
+      <h3>Epic Sections</h3>
+      <p>Renders the epic headers, completion progress, and "Add story" actions. Receives epic detail props, collapsed sets, and forwards drag target bindings.</p>
+      <div class="rule">Pure rendering wrapper</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">ROW PRESENTER · BacklogRow</div>
+      <h3>Issue row representation</h3>
+      <p>Binds Atlaskit pragmatic drag adapter. Recursively mounts child backlog rows. Performs selection modifier checks and key triggers.</p>
+      <div class="rule">Recursive drag & selection handler</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DECOMPOSITION PILLARS ============ -->
+<section id="slice">
+  <h2>Decomposition, in three pillars</h2>
+  <div class="lede">Click a pillar to expand its details.</div>
+  <div class="pillars">
+    <div class="pillar" data-k="extraction">
+      <div class="tag">PILLAR 1 · COMPONENT EXTRACTION</div>
+      <h3>Extract View Subcomponents</h3>
+      <p>Move InlineCreateRow and Row components out of the monolithic file into domain-named presenters.</p>
+      <div class="more"><ul>
+        <li class="prep">Create <b>BacklogInlineCreate.tsx</b> for name-only quick add</li>
+        <li class="prep">Create <b>BacklogRow.tsx</b> to handle recursive issue row rendering, selection clicks, and Pragmatic DnD hooks</li>
+        <li class="prep">Create <b>BacklogGroupSection.tsx</b> to handle rendering individual epic groups, bars, and action links</li>
+      </ul></div>
+    </div>
+    <div class="pillar p2 open" data-k="state">
+      <div class="tag">PILLAR 2 · SCOPED STATE LOCATION</div>
+      <h3>Minimize State Distribution</h3>
+      <p>Keep state at the lowest possible level. Leave list-global values (like collapse maps and selection maps) inside the orchestrator.</p>
+      <div class="more"><ul>
+        <li class="prep">Keep `collapsed` and `collapsedRows` sets in the container as they drive `flattenVisible`</li>
+        <li class="prep">Keep `name` in `BacklogInlineCreate`</li>
+        <li class="prep">Keep DnD dragging indicators inside `BacklogRow`</li>
+      </ul></div>
+    </div>
+    <div class="pillar p3" data-k="organization">
+      <div class="tag">PILLAR 3 · DIRECTORY STRUCTURE</div>
+      <h3>Subfolder Scoping</h3>
+      <p>Group all backlog list components together under a dedicated `views/backlog/` folder, matching the style of Sprints and StoryMap.</p>
+      <div class="more"><ul>
+        <li class="prep">Create folder <b>studio/src/views/backlog/</b></li>
+        <li class="prep">Move and update imports of <b>BacklogList.tsx</b></li>
+        <li class="prep">Ensure external test suites still import `BacklogList` and `flattenVisible` cleanly</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="legend"><span><b class="b">✓✓ already done</b> — completed</span><span><b class="g">✓ built</b> — implemented</span><span><b class="a">◌ prepared-for</b> — refactor target</span></div>
+</section>
+
+<!-- ============ SYSTEM SHAPE ============ -->
+<section id="shape">
+  <h2>System shape</h2>
+  <div class="lede">Click any box for its responsibility and boundary. Green stroke = extracted components. Blue = existing views and routers.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 760 500" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+          <path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/>
+        </marker>
+      </defs>
+      <!-- BacklogView -->
+      <g class="node" data-n="backlogview">
+        <rect x="50" y="30" width="180" height="70" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="140" y="64" text-anchor="middle" font-size="14" font-weight="700">BacklogView</text>
+        <text x="140" y="82" text-anchor="middle" font-size="11" fill="#muted">Mounts BacklogList</text>
+      </g>
+      <!-- BacklogList -->
+      <g class="node" data-n="backloglist">
+        <rect x="290" y="30" width="220" height="90" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="400" y="60" text-anchor="middle" font-size="14" font-weight="700" fill="#0e4d2f">BacklogList (Container)</text>
+        <text x="400" y="80" text-anchor="middle" font-size="11" fill="#5b6478">Orchestrator, holds states</text>
+        <text x="400" y="96" text-anchor="middle" font-size="11" fill="#5b6478">Binds keyboard cursor hook</text>
+      </g>
+      <!-- BacklogInlineCreate -->
+      <g class="node" data-n="inlinecreate">
+        <rect x="570" y="40" width="160" height="70" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="650" y="66" text-anchor="middle" font-size="12" font-weight="700" fill="#0e4d2f">BacklogInlineCreate</text>
+        <text x="650" y="84" text-anchor="middle" font-size="10.5" fill="#5b6478">Quick add row input</text>
+      </g>
+      <!-- BacklogGroupSection -->
+      <g class="node" data-n="groupsection">
+        <rect x="290" y="200" width="220" height="75" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="400" y="226" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">BacklogGroupSection</text>
+        <text x="400" y="244" text-anchor="middle" font-size="10.5" fill="#5b6478">Renders Epic Groups / No-Epic</text>
+        <text x="400" y="258" text-anchor="middle" font-size="10.5" fill="#5b6478">Progress indicators</text>
+      </g>
+      <!-- BacklogRow -->
+      <g class="node" data-n="backlogrow">
+        <rect x="290" y="360" width="220" height="90" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="400" y="386" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">BacklogRow (Recursive)</text>
+        <text x="400" y="404" text-anchor="middle" font-size="10.5" fill="#5b6478">Drag and drop element hooks</text>
+        <text x="400" y="418" text-anchor="middle" font-size="10.5" fill="#5b6478">Renders sub-tasks recursively</text>
+        <text x="400" y="432" text-anchor="middle" font-size="10.5" fill="#5b6478">Modifier click selections</text>
+      </g>
+      <!-- BulkActionBar -->
+      <g class="node" data-n="bulkaction">
+        <rect x="50" y="200" width="160" height="70" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="130" y="234" text-anchor="middle" font-size="13" font-weight="700">BulkActionBar</text>
+        <text x="130" y="252" text-anchor="middle" font-size="11" fill="#5b6478">Rendered at the bottom</text>
+      </g>
+      <!-- lines -->
+      <line x1="230" y1="65" x2="280" y2="65" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="510" y1="75" x2="560" y2="75" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="400" y1="120" x2="400" y2="190" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="400" y1="275" x2="400" y2="350" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="290" y1="410" x2="210" y2="245" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+    </svg>
+    <div id="nodeInfo"><span class="hint">Click a box to see its responsibility, what it owns, and what it explicitly does not do.</span></div>
+  </div>
+</section>
+
+<!-- ============ REQUIREMENT TRACE ============ -->
+<section id="trace">
+  <h2>Decision & Scope Trace</h2>
+  <div class="lede">Click a row to highlight where each decided requirement lives in the system.</div>
+  <table>
+    <thead><tr><th style="width:110px">ID</th><th>Requirement</th><th>Where it lives</th><th style="width:150px">Pillar</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-nodes="backloglist,groupsection,backlogrow"><td><span class="rid">R3-1</span></td><td>Keep orchestrator focus on composition and states</td><td>BacklogList.tsx imports and orchestrates sections and inline creates</td><td><span class="pill b1">Orchestration</span></td></tr>
+      <tr class="trace" data-nodes="inlinecreate"><td><span class="rid">R3-2</span></td><td>Domain-specific InlineCreateRow extraction</td><td>BacklogInlineCreate.tsx renders quick-add input with local name state</td><td><span class="pill b2">Presenter</span></td></tr>
+      <tr class="trace" data-nodes="groupsection"><td><span class="rid">R3-3</span></td><td>Domain-specific Group Header extraction</td><td>BacklogGroupSection.tsx renders epic titles, completion meter, toggle button</td><td><span class="pill b2">Presenter</span></td></tr>
+      <tr class="trace" data-nodes="backlogrow"><td><span class="rid">R3-4</span></td><td>Domain-specific Row extraction with recursive children</td><td>BacklogRow.tsx renders issue, registers pragmatic drag/drop listeners, mounts subtask rows</td><td><span class="pill b2">Presenter</span></td></tr>
+      <tr class="trace" data-nodes="backloglist"><td><span class="rid">R3-5</span></td><td>Maintain existing keyboard and click selections</td><td>BacklogList uses useBacklogCursor, holds orderedIds and selection wiring callbacks</td><td><span class="pill b3">State</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ QUESTION BOARD ============ -->
+<section id="questions">
+  <h2>Question board</h2>
+  <div class="lede">Open architectural/refactor details for the user.</div>
+  <div class="qgrid">
+    <div class="qcard openq"><div class="qid">OPEN · Q1</div><h4>Should we move `flattenVisible` to `backlogStore.ts`?</h4><p>Currently `flattenVisible` lives in `BacklogList.tsx`. The drawer navigation (#639) also imports it. Moving it to `backlogStore.ts` or keeping it exported from `views/backlog/BacklogList.tsx` is an open choice. Keep it in the view file to avoid unnecessary churn unless requested.</p></div>
+    <div class="qcard openq"><div class="qid">OPEN · Q2</div><h4>Are prop-drilling collapse-toggle handlers acceptable?</h4><p>We are drilling `collapsed` sets and toggle callbacks to group headers and row items. An alternative is lifting these to a shared store or React Context. To preserve the original implementation closely and prevent regressions, simple prop-drilling is recommended.</p></div>
+  </div>
+</section>
+
+<!-- ============ REPO SHAPE ============ -->
+<section id="repo">
+  <h2>Target Repo Shape — views/backlog/</h2>
+  <div class="lede">Target layout inside worktracker-stack.</div>
+  <div class="tree-wrap">
+    <div class="tree">
+      <div><span class="dir">studio/src/</span></div>
+      <div>├─ <span class="dir mod">views/</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="dir new">backlog/</span> <span class="ex">— new directory</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├─ <span class="new">BacklogList.tsx</span> <span class="ex">— moved, refactored into orchestrator</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├─ <span class="new">BacklogGroupSection.tsx</span> <span class="ex">— epic header & status meter</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├─ <span class="new">BacklogInlineCreate.tsx</span> <span class="ex">— quick add row input</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└─ <span class="new">BacklogRow.tsx</span> <span class="ex">— recursive issue row presenter with drag & select bindings</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="mod">BacklogView.tsx</span> <span class="ex">— update import of BacklogList</span></div>
+      <div>└─ <span class="dir mod">test/</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="mod">backlogCursor.test.tsx</span> <span class="ex">— update import path</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="mod">selectionWiring.test.tsx</span> <span class="ex">— update import path</span></div>
+    </div>
+    <ul class="tree-notes">
+      <li>Organizing views/backlog/ keeps components organized and aligned with sprints and storymaps.</li>
+      <li>Tests will remain green by maintaining functional equivalence and exporting `flattenVisible`.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance signal</h2>
+  <div class="accept">
+    The refactoring is complete when <b>BacklogList.tsx</b> has been reduced to orchestration/layout, the subcomponents are fully extracted into <b>BacklogGroupSection.tsx</b>, <b>BacklogInlineCreate.tsx</b>, and <b>BacklogRow.tsx</b> under <b>views/backlog/</b>, and the existing backlog-related tests (backlog cursor, selection wiring, board, etc.) continue to run and pass successfully.
+  </div>
+</section>
+
+</main>
+
+<script>
+  // pillar expand/collapse
+  document.querySelectorAll('.pillar').forEach(p => {
+    p.addEventListener('click', () => p.classList.toggle('open'));
+  });
+
+  // diagram node info
+  const INFO = {
+    backlogview: { t: 'BacklogView', does: ['Mounts BacklogList', 'Triggers issue drawer open state'], not: ['Does not handle backlog rows or groups directly'] },
+    backloglist: { t: 'BacklogList', does: ['Orchestrates backlog subcomponents', 'Fetches backlog items/sprints/filters from stores', 'Holds collapsed state set maps', 'Mounts useBacklogCursor hook', 'Exports flattenVisible helper'], not: ['Does not render epic headers directly', 'Does not handle row-specific drag callbacks'] },
+    inlinecreate: { t: 'BacklogInlineCreate', does: ['Renders name input element', 'Triggers createIssue store action on Enter', 'Maintains local name string state'], not: ['Does not render priority/assignee fields'] },
+    groupsection: { t: 'BacklogGroupSection', does: ['Renders group headers (Epic Name, No Epic)', 'Computes and displays completion bar indicators', 'Renders add-story trigger action link'], not: ['Does not render individual issue details or rows directly'] },
+    backlogrow: { t: 'BacklogRow', does: ['Renders issue details (badge color, keys, titles, priority)', 'Registers Atlaskit pragmatic drag hooks', 'Maintains subtask collapse button', 'Recursively renders child rows for subtasks'], not: ['Does not manage list-wide keyboard indices'] },
+    bulkaction: { t: 'BulkActionBar', does: ['Renders selected row counts', 'Applies bulk edits (state, priority, sprints)'], not: ['Does not list rows itself'] }
+  };
+  const nodes = document.querySelectorAll('.node');
+  const info = document.getElementById('nodeInfo');
+  function showNode(key) {
+    nodes.forEach(n => { n.classList.toggle('hl', n.dataset.n === key); n.classList.remove('dim'); });
+    const d = INFO[key]; if (!d) return;
+    info.innerHTML = '<h4>' + d.t + '</h4><ul>' +
+      d.does.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
+      '<ul style="margin-top:10px">' + d.not.map(x => '<li style="color:var(--red)">' + x + '</li>').join('') + '</ul>';
+  }
+  nodes.forEach(n => n.addEventListener('click', e => { e.stopPropagation(); showNode(n.dataset.n); }));
+
+  // trace rows highlight diagram
+  document.querySelectorAll('tr.trace').forEach(tr => {
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('tr.trace').forEach(r => r.classList.remove('sel'));
+      tr.classList.add('sel');
+      const keys = tr.dataset.nodes.split(',');
+      nodes.forEach(n => {
+        n.classList.toggle('hl', keys.includes(n.dataset.n));
+        n.classList.toggle('dim', !keys.includes(n.dataset.n));
+      });
+    });
+  });
+
+  // nav active state on scroll
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

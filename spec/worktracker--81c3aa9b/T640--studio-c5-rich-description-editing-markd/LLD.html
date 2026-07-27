@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkTracker · Studio C5 Rich Description — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .sub b { color: var(--ink); }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  code { font-family: var(--mono); font-size: 12px; background: #f0f2f6; padding: 1px 5px; border-radius: 4px; }
+
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  .api { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; }
+  .api .sig { font-family: var(--mono); font-size: 13px; color: var(--violet); font-weight: 700; background: var(--violet-soft); display: inline-block; padding: 3px 9px; border-radius: 6px; margin-bottom: 6px; }
+  .api .row { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+  .api .row:last-child { border-bottom: none; }
+  .api .row p { font-size: 13px; color: var(--ink); margin-top: 4px; }
+  .api .row p .opt { color: var(--muted); }
+
+  .code { background: #1d2433; color: #dfe5f1; border-radius: 12px; padding: 18px 22px; font-family: var(--mono); font-size: 12.5px; line-height: 1.75; overflow-x: auto; white-space: pre; }
+  .code .k { color: #c792ea; } .code .s { color: #c3e88d; } .code .c { color: #7c869c; font-style: italic; } .code .f { color: #82aaff; } .code .a { color: #ffcb6b; }
+
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  td .kbd, .kbd { font-family: var(--mono); font-size: 11px; background: #eef1f6; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+
+  .tb-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .tbcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; border-left: 4px solid var(--accent); }
+  .tbcard.line { border-left-color: var(--green); }
+  .tbcard.link { border-left-color: var(--violet); }
+  .tbcard h4 { font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tbcard .btn { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; background: #fff; }
+  .tbcard p { font-size: 12.5px; color: var(--muted); }
+  .tbcard .m { color: var(--ink); }
+
+  .qgrid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--green); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--green); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 13px; color: var(--muted); }
+  .qcard p b { color: var(--ink); }
+
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  .lib { display: grid; grid-template-columns: 372px 1fr; gap: 18px; align-items: start; }
+  .lib-col { display: flex; flex-direction: column; gap: 14px; }
+  .lib-lane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .lib-lane .role { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .lib-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 6px 8px; border-radius: 7px; }
+  .lib-row:hover { background: #f4f6fa; }
+  .lib-row.sel { background: var(--accent-soft); }
+  .lib-row .nm { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+  .lib-row.sel .nm { color: var(--accent); }
+  .vb { font-size: 10px; font-weight: 800; letter-spacing: .04em; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .vb.chosen { background: var(--green-soft); color: var(--green); }
+  .vb.rej { background: var(--red-soft); color: var(--red); }
+  .vb.cons { background: var(--amber-soft); color: var(--amber); }
+  .lib-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; align-self: start; }
+  .lib-detail h4 { font-size: 15px; color: var(--accent); font-family: var(--mono); margin-bottom: 2px; }
+  .lib-detail .meta { font-size: 11px; font-weight: 800; letter-spacing: .05em; margin-bottom: 6px; }
+  .lib-detail .meta .sz { color: var(--muted); font-weight: 600; }
+  .lib-detail .grp { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+  .lib-detail ul { list-style: none; }
+  .lib-detail li { padding: 3px 0 3px 20px; position: relative; font-size: 13px; line-height: 1.45; }
+  .lib-detail li.fit::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+  .lib-detail li.miss::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 800; }
+  .lib-detail .use { margin-top: 14px; padding: 10px 12px; background: var(--accent-soft); border-radius: 8px; font-size: 12.5px; color: var(--ink); }
+  .lib-detail .use b { color: var(--accent); }
+
+  @media (max-width: 900px) {
+    .cm, .seq-wrap, .tb-grid, .lib { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · Studio · Issue Drawer · Ticket #640 · LLD</div>
+  <h1>Rich Description Editing — Low-Level Design</h1>
+  <div class="sub">Implements the C5 HLD: rewrites <b>DescriptionEditor</b> in <span class="m">studio/src/issue/IssueDetail.tsx</span> into a markdown editor with a toolbar and an Edit ⇄ Preview toggle, behind one new pure-function module <span class="m">lib/markdown.ts</span> wrapping <b>marked · turndown · isomorphic-dompurify</b>. <b>description_html</b> stays the only persisted field; the patch route (<span class="m">worktracker/api.py:611</span>) and SDK are untouched. Resolves the HLD's three open questions: marked/dompurify config (Q1), toolbar insertion (Q2), bundle handling (Q3).</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip amber">2 files modified · 1 new module</span>
+    <span class="chip violet">3 new Studio deps</span>
+    <span class="chip green">Zero backend / schema / migration</span>
+    <span class="chip red">Fixes unsanitized render</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#libs">Library Exploration</a>
+  <a href="#module">markdown.ts API</a>
+  <a href="#config">Config &amp; Allow-list</a>
+  <a href="#toolbar">Toolbar Mechanics</a>
+  <a href="#seq">Editor States</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#failures">Edge Matrix</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Click a highlighted file for its exact delta. The backend tree is absent — nothing there changes.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">worktracker-stack/studio/</div>
+      <div>├─ <span class="hit mod" data-f="pkg">package.json</span></div>
+      <div class="dir">└─ src/</div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ issue/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="issue">IssueDetail.tsx</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ lib/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└─ <span class="hit new" data-f="md">markdown.ts</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ stores/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└─ <span class="hit ro" data-f="store">issueStore.ts</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;└─ test/</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="test">IssueDetail.test.tsx</span></div>
+      <div class="dir" style="margin-top:6px">worktracker/ <span style="color:#9aa3b8">— zero changes (api.py, schemas, models, migrations)</span></div>
+      <div class="dir">sdk/ <span style="color:#9aa3b8">— zero changes</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--accent-soft)"></i>read-only / reused</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail"><span class="hint">Select a file on the left.</span></div>
+  </div>
+</section>
+
+<section id="libs">
+  <h2>Library exploration — why these three, and the road not taken</h2>
+  <div class="lede">The job splits into three roles: <b>parse</b> markdown → HTML, <b>convert</b> stored HTML → markdown, and <b>sanitize</b> before render. We picked the smallest pure-JS library that owns each role cleanly — and deliberately rejected an all-in-one editor that would have taken over the data model. Click any candidate for its fit, misses, and how we use it.</div>
+  <div class="lib">
+    <div class="lib-col">
+      <div class="lib-lane">
+        <div class="role">Role 1 · Markdown → HTML (parse)</div>
+        <div class="lib-row" data-l="marked"><span class="nm">marked</span><span class="vb chosen">CHOSEN</span></div>
+        <div class="lib-row" data-l="markdownit"><span class="nm">markdown-it</span><span class="vb cons">CONSIDERED</span></div>
+        <div class="lib-row" data-l="reactmd"><span class="nm">react-markdown / remark</span><span class="vb rej">REJECTED</span></div>
+        <div class="lib-row" data-l="showdown"><span class="nm">showdown</span><span class="vb rej">REJECTED</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Role 2 · HTML → Markdown (convert)</div>
+        <div class="lib-row" data-l="turndown"><span class="nm">turndown</span><span class="vb chosen">CHOSEN</span></div>
+        <div class="lib-row" data-l="nhm"><span class="nm">node-html-markdown</span><span class="vb cons">CONSIDERED</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Role 3 · Sanitize HTML (trust boundary)</div>
+        <div class="lib-row" data-l="isodom"><span class="nm">isomorphic-dompurify</span><span class="vb chosen">CHOSEN</span></div>
+        <div class="lib-row" data-l="dompurify"><span class="nm">dompurify (raw)</span><span class="vb cons">CONSIDERED</span></div>
+        <div class="lib-row" data-l="sanitizehtml"><span class="nm">sanitize-html</span><span class="vb cons">CONSIDERED</span></div>
+      </div>
+      <div class="lib-lane">
+        <div class="role">Road not taken · all-in-one editor</div>
+        <div class="lib-row" data-l="uiwmd"><span class="nm">@uiw/react-md-editor</span><span class="vb cons">CONSIDERED</span></div>
+        <div class="lib-row" data-l="tiptap"><span class="nm">TipTap / ProseMirror</span><span class="vb rej">REJECTED</span></div>
+        <div class="lib-row" data-l="lexical"><span class="nm">Lexical</span><span class="vb rej">REJECTED</span></div>
+      </div>
+    </div>
+    <div class="lib-detail" id="libDetail"><span class="hint" style="color:var(--muted);font-style:italic">Select a library on the left.</span></div>
+  </div>
+</section>
+
+<section id="module">
+  <h2>The chokepoint module — <span class="m">lib/markdown.ts</span></h2>
+  <div class="lede">The only place <b>marked</b>, <b>turndown</b>, and <b>dompurify</b> are imported. Three pure functions; every render — read view <em>and</em> Preview tab — passes through one sanitize call, so there is exactly one trust boundary.</div>
+  <div class="api">
+    <div class="row">
+      <span class="sig">toHtml(md: string): string</span>
+      <p>marked-parses markdown → HTML, then <b>sanitizes</b> the result. Used on <b>Save</b> (the value handed to <code>patchField</code>) and in the <b>Preview</b> tab. <span class="opt">Synchronous — <code>async: false</code> so the return is a string, not a Promise.</span></p>
+    </div>
+    <div class="row">
+      <span class="sig">toMarkdown(html: string | null): string</span>
+      <p>turndown-converts stored <code>description_html</code> → markdown to seed the textarea when the editor opens. <span class="opt">Best-effort / lossy by design; <code>null</code> or <code>""</code> → <code>""</code>. Legacy hand-HTML or plain-text descriptions convert approximately on first edit.</span></p>
+    </div>
+    <div class="row">
+      <span class="sig">sanitize(html: string): string</span>
+      <p>Bare DOMPurify pass against the explicit allow-list (§ Config). Exported and called directly by the <b>read view</b> before <code>dangerouslySetInnerHTML</code> — the line that fixes today's unsanitized render. <code>toHtml</code> reuses it internally.</p>
+    </div>
+  </div>
+  <div class="code" style="margin-top:18px"><span class="c">// studio/src/lib/markdown.ts — the whole module (~30 lines)</span>
+<span class="k">import</span> { marked } <span class="k">from</span> <span class="s">"marked"</span>;
+<span class="k">import</span> TurndownService <span class="k">from</span> <span class="s">"turndown"</span>;
+<span class="k">import</span> DOMPurify <span class="k">from</span> <span class="s">"isomorphic-dompurify"</span>;
+
+<span class="k">const</span> ALLOWED_TAGS = [<span class="s">"p"</span>,<span class="s">"br"</span>,<span class="s">"strong"</span>,<span class="s">"em"</span>,<span class="s">"b"</span>,<span class="s">"i"</span>,<span class="s">"s"</span>,<span class="s">"h1"</span>,<span class="s">"h2"</span>,<span class="s">"h3"</span>,<span class="s">"ul"</span>,<span class="s">"ol"</span>,<span class="s">"li"</span>,<span class="s">"a"</span>,<span class="s">"code"</span>,<span class="s">"pre"</span>,<span class="s">"blockquote"</span>,<span class="s">"hr"</span>];
+<span class="k">const</span> ALLOWED_ATTR = [<span class="s">"href"</span>,<span class="s">"target"</span>,<span class="s">"rel"</span>];
+
+<span class="c">// Force external-link safety on every sanitized anchor (idempotent global hook).</span>
+DOMPurify.<span class="f">addHook</span>(<span class="s">"afterSanitizeAttributes"</span>, (node) => {
+  <span class="k">if</span> (node.tagName === <span class="s">"A"</span>) {
+    node.<span class="f">setAttribute</span>(<span class="s">"target"</span>, <span class="s">"_blank"</span>);
+    node.<span class="f">setAttribute</span>(<span class="s">"rel"</span>, <span class="s">"noopener noreferrer"</span>);
+  }
+});
+
+<span class="k">const</span> turndown = <span class="k">new</span> <span class="f">TurndownService</span>({ headingStyle: <span class="s">"atx"</span>, bulletListMarker: <span class="s">"-"</span>, codeBlockStyle: <span class="s">"fenced"</span> });
+
+<span class="k">export function</span> <span class="f">sanitize</span>(html) { <span class="k">return</span> DOMPurify.<span class="f">sanitize</span>(html, { ALLOWED_TAGS, ALLOWED_ATTR }); }
+<span class="k">export function</span> <span class="f">toHtml</span>(md) { <span class="k">return</span> <span class="f">sanitize</span>(marked.<span class="f">parse</span>(md, { gfm: <span class="k">false</span>, breaks: <span class="k">true</span>, async: <span class="k">false</span> })); }
+<span class="k">export function</span> <span class="f">toMarkdown</span>(html) { <span class="k">return</span> html ? turndown.<span class="f">turndown</span>(html) : <span class="s">""</span>; }</div>
+</section>
+
+<section id="config">
+  <h2>Q1 resolved — marked config &amp; the sanitizer allow-list</h2>
+  <div class="lede">Basic CommonMark-ish, GFM off. The allow-list is the contract: anything outside it is stripped, so a stored <code>&lt;script&gt;</code> or <code>onerror=</code> never reaches the DOM.</div>
+  <table>
+    <thead><tr><th style="width:230px">Knob</th><th>Value</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">marked.gfm</span></td><td><span class="m">false</span></td><td>Scope is basic CommonMark — no tables / checkboxes / autolink / strikethrough-by-tilde surprises.</td></tr>
+      <tr><td><span class="m">marked.breaks</span></td><td><span class="m">true</span></td><td>A single newline in the textarea becomes <code>&lt;br&gt;</code> — matches what a non-markdown user expects from a plain text box.</td></tr>
+      <tr><td><span class="m">marked.async</span></td><td><span class="m">false</span></td><td>Guarantees a synchronous <code>string</code> return; keeps <code>toHtml</code> usable inline in render.</td></tr>
+      <tr><td><span class="m">ALLOWED_TAGS</span></td><td class="m">p, br, strong, em, b, i, s, h1–h3, ul, ol, li, a, code, pre, blockquote, hr</td><td>Exactly the tags the basic toolbar + marked can emit. Headings capped at h3 (drawer context). No <code>img</code>/<code>iframe</code>/<code>table</code>/<code>style</code>.</td></tr>
+      <tr><td><span class="m">ALLOWED_ATTR</span></td><td class="m">href, target, rel</td><td>Only links carry attributes. No <code>style</code>, <code>class</code>, or <code>on*</code> handlers (DOMPurify drops event handlers regardless).</td></tr>
+      <tr><td>Link scheme safety</td><td><span class="m">javascript:</span> / <span class="m">data:</span> blocked</td><td>DOMPurify's built-in URI policy rejects dangerous schemes on <code>href</code> by default — no extra config.</td></tr>
+      <tr><td>Link hardening</td><td><span class="m">target=_blank rel=noopener noreferrer</span></td><td>The <code>afterSanitizeAttributes</code> hook forces it on every anchor — safe external nav, no reverse-tabnabbing.</td></tr>
+      <tr><td>turndown options</td><td class="m">atx headings · "-" bullets · fenced code</td><td>Round-trips cleanly with the markdown the toolbar produces, so edit → save → re-edit is stable for tool-authored content.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="toolbar">
+  <h2>Q2 resolved — toolbar insertion mechanics</h2>
+  <div class="lede">Two primitives over the textarea's <code>selectionStart/selectionEnd</code>. Every button is a thin call to one of them; an empty selection inserts a selectable placeholder so the next keystroke replaces it. No <code>window.prompt</code> — links use an inline <code>(url)</code> placeholder.</div>
+  <div class="tb-grid">
+    <div class="tbcard">
+      <h4><span class="btn"><b>B</b></span> <span class="btn"><i>I</i></span> <span class="btn">&lt;/&gt;</span> &nbsp;wrap — <span class="m">surround(pre, suf, ph)</span></h4>
+      <p><b>Bold</b> <span class="m">**…**</span> · <b>Italic</b> <span class="m">*…*</span> · <b>Code</b> <span class="m">`…`</span>. Selection present → wrap it, keep it selected. Empty → insert <span class="m">pre+ph+suf</span> and select <span class="m">ph</span> (e.g. <code>"bold text"</code>).</p>
+    </div>
+    <div class="tbcard line">
+      <h4><span class="btn">H</span> <span class="btn">• —</span> &nbsp;line-prefix — <span class="m">linePrefix(token)</span></h4>
+      <p><b>Heading</b> <span class="m">"## "</span> · <b>Bullet list</b> <span class="m">"- "</span>. Prepends the token to the start of each line the selection touches. Cursor lands after the inserted token.</p>
+    </div>
+    <div class="tbcard link">
+      <h4><span class="btn">🔗</span> &nbsp;link — <span class="m">surround("[", "](url)")</span></h4>
+      <p>Wraps the selection as <span class="m">[text](url)</span> and selects the literal <code>url</code> so the user types the destination immediately. Empty selection → <span class="m">[text](url)</span> with <code>text</code> selected first.</p>
+    </div>
+    <div class="tbcard">
+      <h4>cursor restoration</h4>
+      <p>Each primitive sets <code>value</code> via React state, then restores <code>selectionStart/End</code> on the textarea ref in a <code>useLayoutEffect</code> keyed by a pending-selection ref — so React's re-render never clobbers the caret.</p>
+    </div>
+  </div>
+  <div class="lede" style="margin-top:16px">Keyboard, on the textarea (mirrors <span class="m">NameEditor</span>): <span class="kbd">⌘/Ctrl+B</span> bold · <span class="kbd">⌘/Ctrl+I</span> italic · <span class="kbd">⌘/Ctrl+Enter</span> Save · <span class="kbd">Esc</span> Cancel. The toolbar renders only on the <b>Edit</b> tab; Preview has no toolbar.</div>
+</section>
+
+<section id="seq">
+  <h2>DescriptionEditor — state &amp; data flow</h2>
+  <div class="lede">Click a numbered node for its mechanics and edge cases. The component holds three bits of state: <span class="m">editing</span>, <span class="m">tab</span> (edit|preview), and <span class="m">value</span> (markdown).</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 700 380" width="100%">
+      <defs>
+        <marker id="sarr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+      </defs>
+      <g class="step" data-s="1">
+        <rect x="40" y="40" width="200" height="64" rx="10" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <circle cx="62" cy="62" r="12" fill="#fff" stroke="#3556d4"/><text x="62" y="66" text-anchor="middle" font-size="11" font-weight="800" fill="#3556d4">1</text>
+        <text x="150" y="68" text-anchor="middle" font-size="12.5" font-weight="700">Read view</text>
+        <text x="150" y="86" text-anchor="middle" font-size="10.5" fill="#5b6478">sanitize(html) → render</text>
+      </g>
+      <g class="step" data-s="2">
+        <rect x="40" y="160" width="200" height="64" rx="10" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="1.5"/>
+        <circle cx="62" cy="182" r="12" fill="#fff" stroke="#1d7a4f"/><text x="62" y="186" text-anchor="middle" font-size="11" font-weight="800" fill="#1d7a4f">2</text>
+        <text x="150" y="188" text-anchor="middle" font-size="12.5" font-weight="700">Open editor</text>
+        <text x="150" y="206" text-anchor="middle" font-size="10.5" fill="#1d7a4f">value = toMarkdown(html)</text>
+      </g>
+      <g class="step" data-s="3">
+        <rect x="300" y="160" width="180" height="64" rx="10" fill="#fff" stroke="#3556d4" stroke-width="1.5"/>
+        <circle cx="322" cy="182" r="12" fill="#e8edfb" stroke="#3556d4"/><text x="322" y="186" text-anchor="middle" font-size="11" font-weight="800" fill="#3556d4">3</text>
+        <text x="390" y="188" text-anchor="middle" font-size="12.5" font-weight="700">Edit tab</text>
+        <text x="390" y="206" text-anchor="middle" font-size="10.5" fill="#5b6478">toolbar + keys → value</text>
+      </g>
+      <g class="step" data-s="4">
+        <rect x="300" y="50" width="180" height="64" rx="10" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="1.5"/>
+        <circle cx="322" cy="72" r="12" fill="#fff" stroke="#6b3fb8"/><text x="322" y="76" text-anchor="middle" font-size="11" font-weight="800" fill="#6b3fb8">4</text>
+        <text x="390" y="78" text-anchor="middle" font-size="12.5" font-weight="700">Preview tab</text>
+        <text x="390" y="96" text-anchor="middle" font-size="10.5" fill="#6b3fb8">toHtml(value) → render</text>
+      </g>
+      <g class="step" data-s="5">
+        <rect x="300" y="270" width="180" height="64" rx="10" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/>
+        <circle cx="322" cy="292" r="12" fill="#fff" stroke="#1d7a4f"/><text x="322" y="296" text-anchor="middle" font-size="11" font-weight="800" fill="#1d7a4f">5</text>
+        <text x="390" y="298" text-anchor="middle" font-size="12.5" font-weight="700">Save</text>
+        <text x="390" y="316" text-anchor="middle" font-size="10.5" fill="#1d7a4f">onSave(toHtml(value))</text>
+      </g>
+      <g class="step" data-s="6">
+        <rect x="540" y="270" width="130" height="64" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <circle cx="560" cy="292" r="12" fill="#e8edfb" stroke="#3556d4"/><text x="560" y="296" text-anchor="middle" font-size="11" font-weight="800" fill="#3556d4">6</text>
+        <text x="605" y="290" text-anchor="middle" font-size="11.5" font-weight="700">patchField</text>
+        <text x="605" y="307" text-anchor="middle" font-size="10" fill="#5b6478">description_html</text>
+      </g>
+      <g stroke="#5b6478" stroke-width="1.5" fill="none">
+        <line x1="140" y1="104" x2="140" y2="156" marker-end="url(#sarr)"/>
+        <line x1="240" y1="192" x2="296" y2="192" marker-end="url(#sarr)"/>
+        <line x1="390" y1="160" x2="390" y2="118" marker-end="url(#sarr)"/>
+        <line x1="430" y1="118" x2="430" y2="156" marker-end="url(#sarr)"/>
+        <line x1="390" y1="224" x2="390" y2="266" marker-end="url(#sarr)"/>
+        <line x1="480" y1="302" x2="536" y2="302" marker-end="url(#sarr)"/>
+      </g>
+      <g font-size="10" fill="#8a93a8">
+        <text x="150" y="132" text-anchor="middle">click → edit</text>
+        <text x="268" y="184">seed</text>
+        <text x="340" y="142" text-anchor="middle">toggle</text>
+        <text x="400" y="248" text-anchor="middle">⌘↵ / button</text>
+      </g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a numbered node.</span></div>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>Decisions resolved at LLD</h2>
+  <div class="lede">The HLD left three questions to settle here. All resolved; none changes the HLD shape.</div>
+  <div class="qgrid">
+    <div class="qcard"><div class="qid">Q1 · RESOLVED — config &amp; allow-list</div><h4>marked basic CommonMark; explicit DOMPurify tag/attr allow-list</h4><p><b>gfm:false, breaks:true, async:false.</b> Tags limited to the basic set (h-levels capped at h3); attrs to <code>href/target/rel</code>; links forced to <code>target=_blank rel="noopener noreferrer"</code> and dangerous schemes blocked by DOMPurify defaults. Full table in § Config.</p></div>
+    <div class="qcard"><div class="qid">Q2 · RESOLVED — insertion mechanics</div><h4>Two primitives: wrap &amp; line-prefix; inline link placeholder</h4><p><b>Empty selection inserts a selectable placeholder</b> ("bold text", <code>url</code>) so the next keystroke replaces it; non-empty wraps and keeps selection. Caret restored via <code>useLayoutEffect</code> + ref. No <code>window.prompt</code>. Detail in § Toolbar.</p></div>
+    <div class="qcard"><div class="qid">Q3 · RESOLVED — bundle handling</div><h4>Eager import; ~45&nbsp;KB gzip added; revisit only if build warns</h4><p>marked + turndown + dompurify add roughly <b>~45&nbsp;KB gzip</b> — small against the existing @atlaskit DnD + fontsource deps. Import eagerly in <code>lib/markdown.ts</code>; Vite <code>optimizeDeps</code> picks them up. <b>Lazy-loading the editor chunk is deferred</b> — adopted only if <code>vite build</code> flags the chunk-size budget.</p></div>
+  </div>
+</section>
+
+<section id="failures">
+  <h2>Edge &amp; failure matrix</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Behavior</th><th style="width:120px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Stored HTML has <code>&lt;script&gt;</code> / <code>onerror=</code> / <code>&lt;img&gt;</code></td><td><code>sanitize</code> strips it before render and before Preview — nothing executes, no broken tag survives</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Empty / null <code>description_html</code></td><td>Read view keeps the dashed "Add a description…" placeholder; <code>toMarkdown(null)</code> → <code>""</code></td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Legacy hand-HTML / plain-text description</td><td>turndown converts best-effort to markdown on first edit; lossy is accepted (HLD)</td><td><span class="sev warn">accepted</span></td></tr>
+      <tr><td>Save produces HTML identical to stored</td><td>No-op guard: compare <code>toHtml(value)</code> to current <code>html</code>; skip <code>onSave</code> if equal (mirrors today's check)</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Round-trip drift (md → html → md not byte-identical)</td><td>Expected; toolbar output round-trips cleanly, arbitrary HTML may not. Not a correctness gate</td><td><span class="sev warn">accepted</span></td></tr>
+      <tr><td>Toolbar clicked with no selection</td><td>Inserts a selectable placeholder so the next keystroke replaces it</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Patch fails (network)</td><td>Existing optimistic <code>patchField</code> rollback + error surface — unchanged by this slice</td><td><span class="sev ok">existing</span></td></tr>
+      <tr><td>GFM tables / checkboxes / images typed by user</td><td>Out of scope: GFM off, tags not in allow-list → rendered as plain text / stripped</td><td><span class="sev def">by design</span></td></tr>
+      <tr><td>Other description surfaces (board / backlog / story-map)</td><td>Untouched — this slice is the issue drawer only</td><td><span class="sev def">deferred</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">All three libs are pure-JS and run under jsdom, so tests exercise the <b>real</b> md ⇄ html round-trip — no mocking. Extends <span class="m">studio/src/test/IssueDetail.test.tsx</span>; the final gate is live e2e.</div>
+  <table>
+    <thead><tr><th style="width:300px">Case</th><th>Assertion</th></tr></thead>
+    <tbody>
+      <tr><td>Read renders <b>sanitized</b> HTML</td><td>Set <code>description_html</code> to <code>&lt;b&gt;hi&lt;/b&gt;&lt;script&gt;…&lt;/script&gt;</code> → bold text shows, <code>&lt;script&gt;</code> absent from the DOM</td></tr>
+      <tr><td>Open editor seeds markdown</td><td>Click the description with <code>&lt;p&gt;&lt;strong&gt;hi&lt;/strong&gt;&lt;/p&gt;</code> → textarea value is <code>**hi**</code></td></tr>
+      <tr><td>Toolbar Bold wraps selection</td><td>Select text, click Bold → textarea contains <code>**…**</code> around the selection</td></tr>
+      <tr><td>Save converts md → html &amp; patches</td><td>Type <code># Title</code>, click Save → <code>patchWorkItem</code> called with <code>description_html</code> containing <code>&lt;h1&gt;Title&lt;/h1&gt;</code></td></tr>
+      <tr><td>Preview matches the saved render</td><td>Toggle Preview on typed markdown → rendered output equals <code>toHtml(value)</code></td></tr>
+      <tr><td>Keyboard: ⌘+Enter saves, Esc cancels</td><td><code>keyDown</code> ⌘+Enter → patch fired; Esc → editor closes, value reset, no patch</td></tr>
+      <tr><td>Empty description placeholder</td><td><code>description_html=null</code> → "Add a description…" remains; clicking opens an empty textarea</td></tr>
+      <tr><td>Live e2e (user)</td><td>Real issue: type markdown + toolbar, Save → rendered &amp; sanitized; reopen → markdown source returns; stored <code>&lt;script&gt;</code> does not execute. <code>tsc</code> + <code>vitest</code> + <code>build</code> green.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Five steps; each lands green before the next. Step 1 is a pure module testable in isolation.</div>
+  <div class="steps">
+    <div class="bstep"><span class="n">1</span><b>Deps + markdown.ts</b>Add 3 deps to package.json; write the pure-function module with the config from § Config.</div>
+    <div class="bstep"><span class="n">2</span><b>Read path</b>Swap the raw <code>dangerouslySetInnerHTML</code> for <code>sanitize(html)</code>; placeholder unchanged.</div>
+    <div class="bstep"><span class="n">3</span><b>Edit seed + tabs</b>Seed via <code>toMarkdown</code>; add Edit ⇄ Preview tabs; Preview = <code>toHtml(value)</code>.</div>
+    <div class="bstep"><span class="n">4</span><b>Toolbar + keys</b>Two insertion primitives + buttons + ⌘B/⌘I/⌘↵/Esc; caret restoration.</div>
+    <div class="bstep"><span class="n">5</span><b>Tests + e2e</b>Extend IssueDetail.test.tsx; tsc + vitest + build green; live validation gates Done.</div>
+  </div>
+</section>
+
+<section id="accept">
+  <h2>Acceptance</h2>
+  <div class="accept">
+    Matches the HLD acceptance, now measurable: in the issue drawer the description edits as <b>markdown with a toolbar and an Edit ⇄ Preview toggle</b>; typing markdown + Save <b>persists rendered HTML to <code>description_html</code></b> via the unchanged <code>patchField</code> path, and reopening shows the markdown source again; <b>toolbar buttons insert correct markdown and Preview matches the saved render</b>; the rendered description is <b>sanitized</b> (a stored <code>&lt;script&gt;</code> does not execute); <span class="kbd">⌘B</span>/<span class="kbd">⌘I</span>, <span class="kbd">⌘↵</span>=Save, <span class="kbd">Esc</span>=Cancel work and the Save/Cancel buttons remain; all with <b>zero backend, schema, or migration change</b> — <code>tsc</code> + <code>vitest</code> + <code>build</code> green.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    pkg: { t: 'studio/package.json', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Add dependencies: marked, turndown, isomorphic-dompurify.',
+      'Add @types/turndown to devDependencies (marked & isomorphic-dompurify ship their own types).'
+    ], no: ['No script, build, or config change.'] },
+    issue: { t: 'studio/src/issue/IssueDetail.tsx', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Read path: dangerouslySetInnerHTML now receives sanitize(html) instead of the raw string.',
+      'DescriptionEditor rewritten: markdown textarea seeded via toMarkdown(html); Edit ⇄ Preview tabs; Preview renders toHtml(value).',
+      'Toolbar (Bold/Italic/Heading/List/Link/Code) with two insertion primitives + caret restoration.',
+      'Keyboard: ⌘/Ctrl+B, +I, ⌘/Ctrl+Enter=Save, Esc=Cancel; Save/Cancel buttons retained.',
+      'Save calls onSave(toHtml(value)) with a no-op guard against the current html.'
+    ], no: ['No change to NameEditor, the Details panel, blockers, or child-issue rows.'] },
+    md: { t: 'studio/src/lib/markdown.ts', k: 'NEW', c: 'var(--green)', items: [
+      'toHtml(md): marked → sanitize. toMarkdown(html): turndown. sanitize(html): DOMPurify against the allow-list.',
+      'The single import site for marked / turndown / dompurify — one sanitize chokepoint.',
+      'Global afterSanitizeAttributes hook forces target=_blank rel=noopener on anchors.'
+    ], no: ['Persists nothing; touches no store; never writes description / description_stripped.'] },
+    store: { t: 'studio/src/stores/issueStore.ts', k: 'REUSED (read-only)', c: 'var(--accent)', items: [
+      'patchField({ description_html }) is the existing optimistic path — called unchanged.',
+      'Receives converted HTML only; markdown never reaches the store.'
+    ], no: ['No new action, no signature change.'] },
+    test: { t: 'studio/src/test/IssueDetail.test.tsx', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'New cases: sanitized read, markdown seed on open, toolbar wrap, md→html save patch, Preview parity, ⌘↵/Esc keys.',
+      'Real round-trip — marked/turndown/dompurify run under jsdom, no mocking.'
+    ], no: ['Existing IssueDetail cases unchanged.'] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + d.c + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  const LIBS = {
+    marked: { t: 'marked', v: 'CHOSEN', c: 'var(--green)', sz: '~10 KB gzip · 0 deps',
+      fit: ['Synchronous parse (async:false) returns a plain string — we pipe it straight into our own sanitizer, no Promise plumbing in render.',
+            'Tiny and dependency-free; CommonMark-correct for the basic scope we ship.',
+            'Flat option surface (gfm / breaks) — exactly the two knobs we toggle in § Config.'],
+      miss: ['Emits raw HTML with no sanitization — but that step is ours on purpose, giving one DOMPurify chokepoint we fully control.'],
+      use: 'toHtml(md) = sanitize(marked.parse(md)). Drives both Save and the Preview tab.' },
+    markdownit: { t: 'markdown-it', v: 'CONSIDERED', c: 'var(--amber)', sz: '~30 KB gzip · plugin-based',
+      fit: ['CommonMark-strict, very robust, large plugin ecosystem.'],
+      miss: ['Bigger and plugin-oriented — configuration overhead we do not need for a basic toolbar.',
+             'Still emits raw HTML we must sanitize ourselves, so no security edge over marked at this scope.'] },
+    reactmd: { t: 'react-markdown / remark', v: 'REJECTED', c: 'var(--red)', sz: '~45 KB+ gzip · remark/unified graph',
+      fit: ['Renders markdown to React elements (no dangerouslySetInnerHTML) with rehype-sanitize.'],
+      miss: ['Render-only — gives Preview but no HTML→markdown seed, so it cannot replace turndown.',
+             'Produces React nodes, not a stored HTML string, so it cannot feed description_html — we would still need a separate parser.',
+             'Pulls the whole remark/unified plugin graph: the heaviest option for the least fit to our persistence model.'] },
+    showdown: { t: 'showdown', v: 'REJECTED', c: 'var(--red)', sz: '~25 KB gzip',
+      fit: ['Straightforward markdown → HTML converter.'],
+      miss: ['Older, larger, and less actively maintained than marked, with no feature we need.'] },
+    turndown: { t: 'turndown', v: 'CHOSEN', c: 'var(--green)', sz: '~6 KB gzip',
+      fit: ['The de-facto HTML→Markdown converter; reverses stored description_html so the editor opens as editable markdown, not raw tags.',
+            'Configurable to match what the toolbar emits (atx headings, "-" bullets, fenced code) → clean edit → save → re-edit round-trip.'],
+      miss: ['Lossy on arbitrary legacy HTML — accepted by the HLD; toolbar-authored content round-trips cleanly.'],
+      use: 'toMarkdown(html) seeds the editor textarea when the editor opens.' },
+    nhm: { t: 'node-html-markdown', v: 'CONSIDERED', c: 'var(--amber)', sz: 'Node-tuned',
+      fit: ['Faster on bulk server-side conversion.'],
+      miss: ['Optimized for Node throughput, not browser round-trip ergonomics; turndown’s option surface fits our emit style better, and perf is moot at one-description scale.'] },
+    isodom: { t: 'isomorphic-dompurify', v: 'CHOSEN', c: 'var(--green)', sz: '~20 KB gzip · wraps DOMPurify',
+      fit: ['Same DOMPurify API in the browser AND under jsdom — one import, no window / SSR guard in our code.',
+            'Lets vitest (jsdom) run the real sanitize path with zero environment branching.',
+            'Keeps DOMPurify’s maintained URI policy + addHook — we use afterSanitizeAttributes for link hardening.'],
+      use: 'sanitize(html) — the single trust boundary every render (read view and Preview) passes through.' },
+    dompurify: { t: 'dompurify (raw)', v: 'CONSIDERED', c: 'var(--amber)', sz: '~15 KB gzip · needs a DOM',
+      fit: ['The XSS-sanitizer gold standard; identical core to what we chose.'],
+      miss: ['Needs a real window — would force an env guard or jsdom wiring in tests; the isomorphic wrapper removes that branch for free.'] },
+    sanitizehtml: { t: 'sanitize-html', v: 'CONSIDERED', c: 'var(--amber)', sz: '~50 KB gzip · pure JS',
+      fit: ['Pure-JS allow-list sanitizer, no DOM dependency.'],
+      miss: ['Heavier, and DOMPurify is the better-audited XSS defense with a stricter default URI policy and the hook API we rely on.'] },
+    uiwmd: { t: '@uiw/react-md-editor', v: 'CONSIDERED', c: 'var(--amber)', sz: 'Large · bundles CodeMirror',
+      fit: ['Drop-in markdown editor with toolbar + live preview — almost exactly our target UI, out of the box.'],
+      miss: ['Bundles its own CodeMirror + preview + theme (large) and is opinionated styling-wise — hard to match Studio’s tokens.',
+             'Still needs our own sanitize + HTML-persistence bridge, so it adds weight without removing a dependency.',
+             'Our textarea + toolbar is ~one small component and keeps full control plus the single sanitize chokepoint.'] },
+    tiptap: { t: 'TipTap / ProseMirror', v: 'REJECTED', c: 'var(--red)', sz: '100 KB+ gzip',
+      fit: ['Best-in-class WYSIWYG editing UX.'],
+      miss: ['Owns its own JSON document model — would move persistence away from the description_html contract this slice preserves.',
+             'Large integration surface; overkill for "basic markdown in a drawer."'] },
+    lexical: { t: 'Lexical', v: 'REJECTED', c: 'var(--red)', sz: 'Framework + node packages',
+      fit: ['Modern, extensible editor framework (Meta).'],
+      miss: ['Same cost shape as TipTap — heavy, its own model, large surface — for UX we do not need at this tier.'] }
+  };
+  const libDet = document.getElementById('libDetail');
+  document.querySelectorAll('.lib-row').forEach(r => r.addEventListener('click', () => {
+    document.querySelectorAll('.lib-row').forEach(x => x.classList.remove('sel'));
+    r.classList.add('sel');
+    const d = LIBS[r.dataset.l];
+    let h = '<h4>' + d.t + '</h4><div class="meta" style="color:' + d.c + '">' + d.v + ' &nbsp;<span class="sz">' + d.sz + '</span></div>';
+    h += '<div class="grp">Why it fits</div><ul>' + d.fit.map(x => '<li class="fit">' + x + '</li>').join('') + '</ul>';
+    if (d.miss && d.miss.length) h += '<div class="grp">Why it falls short</div><ul>' + d.miss.map(x => '<li class="miss">' + x + '</li>').join('') + '</ul>';
+    if (d.use) h += '<div class="use"><b>How we use it →</b> ' + d.use + '</div>';
+    libDet.innerHTML = h;
+  }));
+
+  const STEPS = {
+    1: { t: '1 · Read view', p: 'Not editing: render sanitize(description_html) through dangerouslySetInnerHTML. This is the line that fixes today’s unsanitized injection. Empty html keeps the dashed "Add a description…" placeholder.', e: 'Edge: a stored <script> or onerror= is stripped by the allow-list before it ever hits the DOM.' },
+    2: { t: '2 · Open editor', p: 'Clicking the read view sets editing=true and seeds value = toMarkdown(description_html) so the textarea shows markdown, not raw HTML.', e: 'Edge: legacy hand-HTML / plain text converts best-effort (lossy, accepted); null → empty textarea.' },
+    3: { t: '3 · Edit tab', p: 'The markdown textarea with the toolbar. Toolbar buttons and ⌘B/⌘I mutate value via the wrap / line-prefix primitives; the caret is restored after each React re-render.', e: 'Edge: empty selection inserts a selectable placeholder so the next keystroke replaces it.' },
+    4: { t: '4 · Preview tab', p: 'Toggling Preview renders toHtml(value) — the exact md → HTML → sanitize pipeline used at Save — so what you preview is what gets stored and later shown.', e: 'Edge: no toolbar on Preview; switching back to Edit preserves value and caret.' },
+    5: { t: '5 · Save', p: 'Save (button or ⌘/Ctrl+Enter) computes toHtml(value); a no-op guard skips the call if it equals the current html, otherwise onSave(html) fires. Esc cancels and resets value.', e: 'Edge: identical-output save is a no-op — no needless patch.' },
+    6: { t: '6 · patchField', p: 'onSave is the drawer’s existing issueStore.patchField({ description_html }) — optimistic update with rollback on failure. Unchanged by this slice; it only ever receives converted HTML.', e: 'Edge: network failure → existing rollback + error surface, no new handling.' }
+  };
+  const seqInfo = document.getElementById('seqInfo');
+  document.querySelectorAll('.step').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = STEPS[s.dataset.s];
+    seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

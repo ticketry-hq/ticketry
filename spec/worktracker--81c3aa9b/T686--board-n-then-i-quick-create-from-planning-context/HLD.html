@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkTracker · Board N then I Quick Create — HLD</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --panel:#fff; --ink:#1d2433; --muted:#5b6478; --line:#e3e7ee;
+    --accent:#3556d4; --accent-soft:#e8edfb; --green:#1d7a4f; --green-soft:#e3f3ea;
+    --amber:#9a6700; --amber-soft:#fbf0d8; --violet:#6b3fb8; --violet-soft:#f0e9fb;
+    --red:#b03030; --red-soft:#fbe7e7; --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+  header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);padding:24px 40px 0}
+  .crumb{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+  h1{font-size:24px;margin:6px 0 4px}.sub{max-width:920px;color:var(--muted);font-size:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 14px}.chip{border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700;background:var(--accent-soft);color:var(--accent)}
+  .chip.green{background:var(--green-soft);color:var(--green)}.chip.amber{background:var(--amber-soft);color:var(--amber)}.chip.violet{background:var(--violet-soft);color:var(--violet)}
+  nav{display:flex;gap:2px;overflow:auto;margin:0 -40px;padding:0 40px}nav a{white-space:nowrap;text-decoration:none;color:var(--muted);font-size:13px;font-weight:700;padding:9px 14px;border-bottom:2px solid transparent}
+  nav a.active,nav a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+  main{max-width:1160px;margin:0 auto;padding:34px 40px 70px}section{margin-bottom:50px;scroll-margin-top:150px}h2{font-size:18px;margin:0 0 4px}.lede{color:var(--muted);font-size:14px;margin:0 0 18px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
+  .card h3{font-size:15px;margin:0 0 6px}.card p,.card li{font-size:13px;color:var(--muted)}.card ul{margin:8px 0 0;padding-left:18px}
+  .diagram{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px}
+  svg{width:100%;height:auto}.node{cursor:pointer}.node rect,.node ellipse{transition:.12s}.node.active rect,.node.active ellipse{stroke-width:3;filter:drop-shadow(0 0 6px rgba(53,86,212,.35))}.node.dim{opacity:.32}
+  #info{border-left:1px solid var(--line);padding-left:18px;font-size:13px}#info h3{font-size:15px;color:var(--accent);margin:0 0 6px}#info ul{padding-left:18px;margin:8px 0}.no{color:var(--red)}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:10px 12px;font-size:13px}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:#fbfcfe}.rid{font-family:var(--mono);font-weight:800;color:var(--accent)}
+  tr.trace{cursor:pointer}tr.trace:hover,tr.trace.sel{background:var(--accent-soft)}
+  .tree{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;font-family:var(--mono);font-size:13px;line-height:1.9}.mod{background:var(--amber-soft);padding:1px 6px;border-radius:4px}.new{background:var(--green-soft);padding:1px 6px;border-radius:4px}.ro{color:var(--muted)}
+  .accept{background:var(--green-soft);border:1px solid #cde7d8;border-radius:8px;padding:18px}.accept b{color:var(--green)}
+  @media(max-width:850px){header,main{padding-left:18px;padding-right:18px}nav{margin:0 -18px;padding:0 18px}.grid,.diagram{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">WorkTracker · Studio Board · HLD</div>
+  <h1>Board N then I Quick Create</h1>
+  <div class="sub">Replicate WorkTracker's board-mode <b>N then I</b> quick-create flow in WorkTracker, dependent on #683's shared planning filters. The shortcut opens the existing issue composer from Board mode and seeds only unambiguous planning context.</div>
+  <div class="chips">
+    <span class="chip amber">Depends on #683</span>
+    <span class="chip green">Frontend-only</span>
+    <span class="chip violet">Board mode only</span>
+    <span class="chip">No backend change</span>
+  </div>
+  <nav id="nav">
+    <a class="active" href="#scope">Scope</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Trace</a>
+    <a href="#files">Files</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p class="lede">Board gets the planning shortcut; every other surface keeps its current create behavior.</p>
+    <div class="grid">
+      <div class="card"><h3>Shortcut</h3><p>When the active view is Board and focus is not in a text-entry control, pressing <b>N</b> then <b>I</b> opens create issue.</p><ul><li>Case-insensitive keys</li><li>Short timeout between keys</li><li>Esc cancels the chord</li></ul></div>
+      <div class="card"><h3>Planning Context</h3><p>Seed fields only when #683 planning filters are singular.</p><ul><li>One epic: parent_id</li><li>One sprint: sprint_id</li><li>One visible state: state_id</li></ul></div>
+      <div class="card"><h3>Guardrails</h3><p>Do not guess through ambiguous filters.</p><ul><li>Multi epic/sprint/state stays blank</li><li>No epic sentinel means parent blank</li><li>Backlog sprint sentinel means sprint blank</li></ul></div>
+    </div>
+  </section>
+
+  <section id="shape">
+    <h2>Clickable Shape</h2>
+    <p class="lede">Click a node to inspect responsibilities and explicit non-responsibilities.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 820 430" role="img" aria-label="Board shortcut flow">
+        <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L9,3 L0,6 Z" fill="#5b6478"/></marker></defs>
+        <g class="node active" data-n="keys"><ellipse cx="95" cy="86" rx="78" ry="38" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/><text x="95" y="82" text-anchor="middle" font-weight="700">N then I</text><text x="95" y="100" text-anchor="middle" font-size="12">Board chord</text></g>
+        <g class="node" data-n="guard"><rect x="230" y="48" width="150" height="76" rx="8" fill="#fff" stroke="#3556d4" stroke-width="2"/><text x="305" y="82" text-anchor="middle" font-weight="700">Shortcut Guard</text><text x="305" y="101" text-anchor="middle" font-size="12">view + typing checks</text></g>
+        <g class="node" data-n="ctx"><rect x="455" y="36" width="170" height="100" rx="8" fill="#fff" stroke="#6b3fb8" stroke-width="2"/><text x="540" y="72" text-anchor="middle" font-weight="700">Planning Context</text><text x="540" y="94" text-anchor="middle" font-size="12">epic/sprint/state axes</text><text x="540" y="112" text-anchor="middle" font-size="12">from #683 store</text></g>
+        <g class="node" data-n="modal"><rect x="665" y="48" width="130" height="76" rx="8" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/><text x="730" y="82" text-anchor="middle" font-weight="700">CreateIssue</text><text x="730" y="101" text-anchor="middle" font-size="12">existing modal</text></g>
+        <g class="node" data-n="api"><rect x="660" y="255" width="140" height="74" rx="8" fill="#fff" stroke="#1d7a4f" stroke-width="2"/><text x="730" y="286" text-anchor="middle" font-weight="700">createIssue()</text><text x="730" y="305" text-anchor="middle" font-size="12">same POST path</text></g>
+        <g class="node" data-n="board"><rect x="60" y="240" width="260" height="105" rx="8" fill="#fff" stroke="#9a6700" stroke-width="2"/><text x="190" y="274" text-anchor="middle" font-weight="700">BoardView</text><text x="190" y="296" text-anchor="middle" font-size="12">owns quick-add open state</text><text x="190" y="314" text-anchor="middle" font-size="12">flat + swimlane compatible</text></g>
+        <path d="M173 86 H230" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"/><path d="M380 86 H455" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"/><path d="M625 86 H665" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"/><path d="M730 124 V255" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"/>
+        <path d="M305 124 C280 190 245 220 210 240" stroke="#5b6478" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#arrow)"/><text x="305" y="186" font-size="12" fill="#5b6478">opens in Board only</text>
+      </svg>
+      <aside id="info"><h3>N then I</h3><p>Board-local keyboard chord that opens issue create.</p><ul><li>Checks active view is Board</li><li>Ignores typing targets and open inputs</li><li class="no">Does not implement WorkTracker plain-I assign-to-me</li></ul></aside>
+    </div>
+  </section>
+
+  <section id="trace">
+    <h2>Decision Trace</h2>
+    <p class="lede">Rows highlight the related diagram nodes.</p>
+    <table>
+      <thead><tr><th>ID</th><th>Requirement</th><th>Decision</th><th>Node</th></tr></thead>
+      <tbody>
+        <tr class="trace" data-nodes="keys guard"><td><span class="rid">NI-01</span></td><td>Replicate WorkTracker-style quick create</td><td>Implement the N then I chord, scoped to Board mode.</td><td>keys, guard</td></tr>
+        <tr class="trace" data-nodes="ctx"><td><span class="rid">NI-02</span></td><td>Depend on #683 planning filters</td><td>Read planningFilterStore for epic/sprint/state context after #683 lands.</td><td>ctx</td></tr>
+        <tr class="trace" data-nodes="ctx modal"><td><span class="rid">NI-03</span></td><td>Avoid accidental misfiled issues</td><td>Seed only singular selections; ambiguous or sentinel selections stay editable/blank.</td><td>ctx, modal</td></tr>
+        <tr class="trace" data-nodes="modal api"><td><span class="rid">NI-04</span></td><td>No backend work</td><td>Extend existing CreateIssue props to include sprint_id and reuse createIssue().</td><td>modal, api</td></tr>
+        <tr class="trace" data-nodes="board"><td><span class="rid">NI-05</span></td><td>Board layouts stay consistent</td><td>Shortcut opens the same composer in flat Board and swimlane mode.</td><td>board</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="files">
+    <h2>Change Map</h2>
+    <p class="lede">Planned frontend-only deltas; exact names can settle in LLD.</p>
+    <div class="tree">
+      studio/src/<br>
+      &nbsp;&nbsp;hooks/<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">useGlobalKeyboardShortcuts.ts</span> <span class="ro">- add reusable two-key chord helper or board quick-create hook</span><br>
+      &nbsp;&nbsp;views/<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">BoardView.tsx</span> <span class="ro">- open create modal from shortcut; derive context from planning axes</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="mod">CreateIssue.tsx</span> <span class="ro">- accept optional defaultSprintId and POST sprint_id when present</span><br>
+      &nbsp;&nbsp;test/<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="new">boardShortcut.test.tsx</span> <span class="ro">- chord, guards, singular/multi context, sprint payload</span>
+    </div>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance Signal</h2>
+    <div class="accept">Done means: from <b>Board mode</b>, pressing <b>N then I</b> opens the existing create issue modal, prefilled from exactly one selected epic/state/sprint when present, never guessing across multi-select planning filters, and creating through the same WorkTracker API path with tests for the chord and seeded payload.</div>
+  </section>
+</main>
+<script>
+const info={
+  keys:{t:'N then I',d:'Board-local keyboard chord that opens issue create.',yes:['Case-insensitive sequence','Short timeout between keys','Disabled while typing'],no:['No global create outside Board','No plain-I assign-to-me in this slice']},
+  guard:{t:'Shortcut Guard',d:'Prevents the chord from stealing text input or firing on other WorkTracker surfaces.',yes:['Requires active Board view','Bails on input, textarea, select, contenteditable','Cancels on Escape'],no:['Does not change command palette shortcuts','Does not run in Backlog or Story Map']},
+  ctx:{t:'Planning Context',d:'Uses #683 planning axes as the source of create defaults.',yes:['One epic becomes parent_id','One real sprint becomes sprint_id','One state becomes state_id'],no:['No guessing for multiple selected values','No parent for No epic','No sprint for Backlog sentinel']},
+  modal:{t:'CreateIssue',d:'Existing modal gets small default-prop expansion.',yes:['Shows existing editable fields','Submits sprint_id when default is present','Keeps state and parent editable'],no:['No new create surface','No modal redesign']},
+  api:{t:'createIssue()',d:'Same frontend store action and backend route.',yes:['POST work item with optional sprint_id','Append returned issue to store'],no:['No schema, migration, or SDK change']},
+  board:{t:'BoardView',d:'Coordinator for flat and swimlane Board quick-create.',yes:['Holds modal open state','Derives defaults from active planning axes','Works with flat and group-by-epic layouts'],no:['No drag/drop behavior change','No rank behavior change']}
+};
+function select(nodes){document.querySelectorAll('.node').forEach(n=>{const on=nodes.includes(n.dataset.n);n.classList.toggle('active',on);n.classList.toggle('dim',!on)});const k=nodes[0],x=info[k];document.getElementById('info').innerHTML=`<h3>${x.t}</h3><p>${x.d}</p><ul>${x.yes.map(v=>`<li>${v}</li>`).join('')}${x.no.map(v=>`<li class="no">${v}</li>`).join('')}</ul>`}
+document.querySelectorAll('.node').forEach(n=>n.addEventListener('click',()=>select([n.dataset.n])));
+document.querySelectorAll('tr.trace').forEach(r=>r.addEventListener('click',()=>{document.querySelectorAll('tr.trace').forEach(x=>x.classList.remove('sel'));r.classList.add('sel');select((r.dataset.nodes||'').split(' '))}));
+const links=[...document.querySelectorAll('nav a')],secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+addEventListener('scroll',()=>{let i=0;secs.forEach((s,idx)=>{if(s.getBoundingClientRect().top<160)i=idx});links.forEach((a,idx)=>a.classList.toggle('active',idx===i))},{passive:true});
+</script>
+</body>
+</html>

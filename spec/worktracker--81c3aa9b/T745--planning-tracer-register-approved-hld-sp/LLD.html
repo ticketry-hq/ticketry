@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T745 · Register approved HLD split — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  p.body { font-size: 13.5px; max-width: 880px; margin-bottom: 10px; }
+
+  .cm { display: grid; grid-template-columns: 460px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; font-family: var(--mono); }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 340px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: fill .12s; }
+  .node.hl rect, .node.hl ellipse { fill: var(--accent); }
+  .node.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); font-family: var(--mono); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; }
+  .contract .sect { display: grid; grid-template-columns: 200px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); padding-top: 2px; }
+  .contract .sv { color: var(--ink); }
+  .contract .sv .m { color: var(--violet); }
+
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  .accept ul { margin: 10px 0 0 20px; font-size: 13.5px; }
+
+  @media (max-width: 900px) {
+    .cm, .seq-wrap { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · worktracker-stack · CODIN-745 · Slice of #700 · LLD</div>
+  <h1>Register approved HLD split — the <span class="m">register</span> phase</h1>
+  <div class="sub">Add a fourth phase <span class="m">register</span> to the process-local execution tracer (<span class="m">apps/execution</span>). When an approved root task moves into the <span class="m">LLD</span> state, the same signal that completes the <span class="m">split</span> phase now <b>chains directly into a <span class="m">register</span> run</b> — no second human gate — that launches an agent to read the approved HLD and create the split tree in WorkTracker. The engine owns only the <b>launch</b> and its <b>relaunch guard</b>; the create/edge side effects live inside the agent (Fork B). This is a pure-reducer + thin-driver change: one new phase, one new recipe, one new reducer branch, and the observe path learns to apply a launch action. <b>No models, no migration, no endpoints, no frontend.</b></div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">4 files modified · 0 new source files · 2 test files extended</span>
+    <span class="chip violet">No migrations · no models · no endpoints · no frontend</span>
+    <span class="chip amber">Agent-driven side effects · engine never marks register done</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#flow">Reducer Flow</a>
+  <a href="#reducer">Reducer Contract</a>
+  <a href="#recipe">register Recipe</a>
+  <a href="#reuse">What It Reuses</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Four existing files in <span class="m">apps/execution</span> gain small deltas; two test files grow. No new source file, no model, no migration. The <span class="m">split→LLD</span> plumbing already exists (that is how <span class="m">split</span> completes today) — #745 changes only <i>what happens</i> on that transition. Click a highlighted file for its exact delta.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">server/apps/execution/</div>
+      <div>├─ <span class="hit mod" data-f="state">state.py</span> <span style="color:#9aa3b8">— add "register" to Phase</span></div>
+      <div>├─ <span class="hit mod" data-f="reducer">reducer.py</span> <span style="color:#9aa3b8">— split→register chain branch</span></div>
+      <div>├─ <span class="hit mod" data-f="driver">driver.py</span> <span style="color:#9aa3b8">— observe applies launch action</span></div>
+      <div>├─ <span class="hit mod" data-f="recipes">recipes.py</span> <span style="color:#9aa3b8">— add _register_prompt</span></div>
+      <div>├─ <span class="hit ro" data-f="signals">signals.py</span> <span style="color:#9aa3b8">— UNTOUCHED (already forwards to_state_id)</span></div>
+      <div>├─ apps.py <span style="color:#9aa3b8">— UNTOUCHED</span></div>
+      <div>└─ tests/</div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="treducer">test_reducer.py</span> <span style="color:#9aa3b8">— register branch cases</span></div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="tdriver">test_driver.py</span> <span style="color:#9aa3b8">— observe launch + guard + fail</span></div>
+      <div>&nbsp;&nbsp;&nbsp;└─ test_signals.py <span style="color:#9aa3b8">— UNTOUCHED</span></div>
+      <div class="dir" style="margin-top:8px">apps/terminals/launch.py <span style="color:#9aa3b8">— spawn_run reused (#715)</span></div>
+      <div class="dir">worktracker/signals.py <span style="color:#9aa3b8">— issue_state_changed seam reused (#704)</span></div>
+      <div class="dir">worktracker Issue.blocked_by <span style="color:#9aa3b8">— M2M + cycle guard used by agent (#624/#699)</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--accent-soft)"></i>read-only / reused</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail">
+      <h4>reducer.py</h4>
+      <div class="kind" style="color:var(--amber)">MODIFIED</div>
+      <p class="hint">Click a file in the tree.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ REDUCER FLOW ============ -->
+<section id="flow">
+  <h2>The flow: one signal, one new branch — <span class="m">split</span> completes by chaining into <span class="m">register</span></h2>
+  <div class="lede">Everything hangs off a single <span class="m">issue_state_changed</span> event reaching the task's <span class="m">EngineState</span> in the process-local registry. Today, a <span class="m">running split</span> observing <span class="m">to_state=="LLD"</span> is marked <span class="m">done</span>. #745 replaces that leaf with a chain: mark the split complete by advancing the same <span class="m">EngineState</span>'s <span class="m">phase</span> to <span class="m">register</span> and emit a <span class="m">register LaunchAction</span>; the driver applies it via <span class="m">spawn_run</span>. Click a node for its mechanics and edge cases.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 540 470" width="100%" height="auto" role="img" aria-label="register decision flow">
+      <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b8"/></marker></defs>
+      <rect x="8" y="8" width="524" height="454" rx="12" fill="none" stroke="#e3e7ee"/>
+      <text x="20" y="28" font-size="11" fill="#9aa3b8" font-weight="700">decide(state, issue_state_changed) — reducer.py [pure]</text>
+
+      <g class="node" data-n="event" tabindex="0">
+        <rect x="40" y="40" width="300" height="34" rx="8" fill="#e8edfb" stroke="#3556d4"/>
+        <text x="54" y="61" font-size="11.5" fill="#1d2433">issue_state_changed(to_state) for this task</text>
+      </g>
+
+      <g class="node" data-n="chain" tabindex="0">
+        <rect x="40" y="92" width="300" height="70" rx="8" fill="#f0e9fb" stroke="#6b3fb8"/>
+        <text x="54" y="112" font-size="11" fill="#6b3fb8" font-weight="800">phase=="split" ∧ running ∧ to_state=="LLD"?</text>
+        <text x="54" y="130" font-size="10.5" fill="#1d2433">→ next = phase→register, status→idle</text>
+        <text x="54" y="146" font-size="10.5" fill="#1d2433">→ actions = [LaunchAction(recipe="register")]</text>
+        <text x="54" y="158" font-size="10" fill="#5b6478">split completes by advancing phase (no "done" leaf)</text>
+      </g>
+      <g class="node" data-n="guard" tabindex="0">
+        <rect x="370" y="96" width="150" height="62" rx="8" fill="#fbf0d8" stroke="#9a6700"/>
+        <text x="445" y="116" text-anchor="middle" font-size="10" fill="#9a6700" font-weight="800">phase already</text>
+        <text x="445" y="130" text-anchor="middle" font-size="10" fill="#9a6700" font-weight="800">"register" →</text>
+        <text x="445" y="146" text-anchor="middle" font-size="9.5" fill="#9a6700">no chain · relaunch guard</text>
+      </g>
+
+      <g class="node" data-n="apply" tabindex="0">
+        <rect x="40" y="180" width="300" height="66" rx="8" fill="#e3f3ea" stroke="#1d7a4f"/>
+        <text x="54" y="200" font-size="11" fill="#1d7a4f" font-weight="800">driver.observe applies the action</text>
+        <text x="54" y="218" font-size="10.5" fill="#1d2433">_apply_launch → async_to_sync(spawn_run)(</text>
+        <text x="54" y="232" font-size="10.5" fill="#1d2433">&nbsp;&nbsp;recipe="register", initial_prompt=register)</text>
+      </g>
+
+      <g class="node" data-n="started" tabindex="0">
+        <rect x="40" y="264" width="300" height="44" rx="8" fill="#e8edfb" stroke="#3556d4"/>
+        <text x="54" y="284" font-size="11" fill="#1d2433">run_started → status="running",</text>
+        <text x="54" y="300" font-size="11" fill="#1d2433">agent_run_id = register run · store</text>
+      </g>
+      <g class="node" data-n="failed" tabindex="0">
+        <rect x="370" y="266" width="150" height="42" rx="8" fill="#fbe7e7" stroke="#b03030"/>
+        <text x="445" y="286" text-anchor="middle" font-size="10.5" fill="#b03030" font-weight="800">spawn raises →</text>
+        <text x="445" y="300" text-anchor="middle" font-size="9.5" fill="#b03030">run_failed → status="failed"</text>
+      </g>
+
+      <g class="node" data-n="fall" tabindex="0">
+        <rect x="40" y="326" width="300" height="52" rx="8" fill="#e8edfb" stroke="#3556d4"/>
+        <text x="54" y="346" font-size="10.5" fill="#1d2433">else: _is_complete(implement | refine)?</text>
+        <text x="54" y="362" font-size="10.5" fill="#1d2433">→ status="done" · else no-op</text>
+      </g>
+
+      <g class="node" data-n="never" tabindex="0">
+        <rect x="40" y="396" width="480" height="48" rx="8" fill="#fbe7e7" stroke="#b03030"/>
+        <text x="54" y="416" font-size="10.5" fill="#b03030" font-weight="800">register is NOT in _is_complete — never auto-"done"</text>
+        <text x="54" y="432" font-size="10" fill="#1d2433">completeness/halt owned by the agent run; engine never silently marks it complete</text>
+      </g>
+
+      <line x1="190" y1="74" x2="190" y2="92" stroke="#9aa3b8" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="190" y1="162" x2="190" y2="180" stroke="#9aa3b8" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="190" y1="246" x2="190" y2="264" stroke="#9aa3b8" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="340" y1="127" x2="370" y2="127" stroke="#9a6700" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a)"/>
+      <line x1="340" y1="287" x2="370" y2="287" stroke="#b03030" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a)"/>
+      <line x1="445" y1="158" x2="445" y2="326" stroke="#9a6700" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <line x1="445" y1="326" x2="340" y2="345" stroke="#9a6700" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/>
+    </svg>
+    <div id="seqInfo">
+      <h4>Click a step</h4>
+      <p class="hint">Violet = the new split→register chain. Green = the driver launch apply. Blue = existing reducer transitions. Amber = the relaunch guard. Red = the never-silently-complete invariant.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ REDUCER CONTRACT ============ -->
+<section id="reducer">
+  <h2>Reducer contract — the new <span class="m">issue_state_changed</span> branch</h2>
+  <div class="lede">The reducer stays pure: same <span class="m">decide(state, event) → Decision(next, actions)</span> shape. #745 adds one branch <i>before</i> the existing completion check and removes <span class="m">split</span> from <span class="m">_is_complete</span> (it now chains instead of completing to <span class="m">done</span>). No new event kind, no new <span class="m">LaunchAction</span> field — <span class="m">recipe</span> already carries the phase.</div>
+  <div class="contract">
+    <div class="sect"><div class="sk">PHASE VOCAB</div><div class="sv"><span class="m">Phase = Literal["implement", "refine", "split", "register"]</span> in <span class="m">state.py</span>. Adding the string is the whole type change; <span class="m">LaunchAction.recipe: Phase</span> and <span class="m">EngineState.phase: Phase</span> both widen for free.</div></div>
+    <div class="sect"><div class="sk">CHAIN BRANCH</div><div class="sv">Inside <span class="m">if event.kind == "issue_state_changed":</span>, first: <span class="m">if state.status == "running" and state.phase == "split" and event.to_state == "LLD":</span> return <span class="m">Decision(next=replace(state, phase="register", status="idle", agent_run_id=None, error=None), actions=[LaunchAction(task_id=state.task_id, project_id=state.project_id, module_id=state.module_id, agent=state.agent, recipe="register")])</span>.</div></div>
+    <div class="sect"><div class="sk">WHY status→idle</div><div class="sv">Mirrors the <span class="m">execute_requested</span> pattern: the launch action is emitted while <span class="m">next</span> is not-yet-running; the driver applies it and feeds <span class="m">run_started</span> to flip <span class="m">running</span> (or <span class="m">run_failed</span>). Keeps a single code path for "emit action → apply → observe result".</div></div>
+    <div class="sect"><div class="sk">REMOVE FROM _is_complete</div><div class="sv">Delete the <span class="m">if state.phase == "split": return event.to_state == "LLD"</span> case. <span class="m">split</span> no longer terminates in <span class="m">done</span>; the chain branch above handles it. <span class="m">_is_complete</span> now covers only <span class="m">implement</span> (<span class="m">to_group=="completed"</span>) and <span class="m">refine</span> (<span class="m">backlog→unstarted</span>).</div></div>
+    <div class="sect"><div class="sk">RELAUNCH GUARD</div><div class="sv">After the first chain, <span class="m">state.phase == "register"</span>. A replayed <span class="m">to_state=="LLD"</span> fails the chain condition (<span class="m">phase != "split"</span>) and falls to <span class="m">_is_complete</span>, which has no <span class="m">register</span> case → <span class="m">Decision(next=state)</span>, <b>no action</b>. The engine's contribution to idempotency is exactly this phase check.</div></div>
+    <div class="sect"><div class="sk">NEVER-COMPLETE</div><div class="sv"><span class="m">register</span> is absent from <span class="m">_is_complete</span>, so no <span class="m">issue_state_changed</span> ever flips it to <span class="m">done</span>. Registration completeness (and any partial-failure halt) is owned by the agent run and its terminal output. A durable <span class="m">HLD Approved → Split Registered</span> state is future work (#744).</div></div>
+    <div class="sect"><div class="sk">UNCHANGED</div><div class="sv"><span class="m">execute_requested</span> / <span class="m">run_started</span> / <span class="m">run_failed</span> branches are untouched. Task-id mismatch still short-circuits. The <span class="m">Decision</span> and <span class="m">SeamEvent</span> shapes are unchanged.</div></div>
+  </div>
+</section>
+
+<!-- ============ RECIPE ============ -->
+<section id="recipe">
+  <h2><span class="m">register</span> recipe — the agent-prompt contract (decisions 1–4)</h2>
+  <div class="lede">Because registration is agent-driven (Fork B), decisions 2–4 live in the <span class="m">register</span> prompt, not in engine ports. <span class="m">initial_prompt_for("register", issue)</span> in <span class="m">recipes.py</span> returns a <span class="m">_register_prompt(issue)</span> string; the driver threads it into <span class="m">spawn_run(initial_prompt=…)</span> exactly as it does the <span class="m">refine</span>/<span class="m">split</span> prompts. The prompt instructs:</div>
+  <table>
+    <thead><tr><th>Instruction</th><th>Encodes</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>Read the approved HLD from the task's spec directory and extract the proposed leaves + intended <span class="m">blocked_by</span> edges.</td><td><span class="sev ok">Decision 1</span></td><td>Source of truth is the visual HTML HLD the #720 splitter wrote (prose split tree). The agent parses it; the engine never parses the HLD.</td></tr>
+      <tr><td>Create each <b>missing</b> leaf as a <span class="m">type=task</span> child of the root, tagged with its stable slug; <b>skip</b> if a child with that slug already exists.</td><td><span class="sev ok">Decision 2</span></td><td>Slug embedded deterministically (e.g. in the child key/title/description marker). Idempotent-on-slug replay convergence — no duplicate leaves across relaunches.</td></tr>
+      <tr><td>Create leaves in the <b>Todo</b> state (not the project-default Backlog).</td><td><span class="sev ok">Decision 4</span></td><td>Leaves skip #719 refinement and are directly eligible for #743 leaf-LLD generation.</td></tr>
+      <tr><td>Wire each <b>missing</b> directed <span class="m">blocked_by</span> edge (<span class="m">A blocks B</span> / <span class="m">B blocked_by A</span>); <b>skip</b> if <span class="m">B.blocked_by</span> already contains <span class="m">A</span>; respect the existing <span class="m">blocker_would_cycle</span> guard.</td><td><span class="sev ok">Decision 2</span></td><td>Uses the #624/#699 <span class="m">blocked_by</span> M2M + cycle guard via the WorkTracker blocker tools. Idempotent-on-edge.</td></tr>
+      <tr><td><b>Stop on the first</b> create-or-wire failure; report the partial state clearly (what was created, what failed, why); do <b>not</b> claim registration complete.</td><td><span class="sev def">Decision 3</span></td><td>Surface-and-halt. No automatic multi-item resume within a run. Visible via the agent run's terminal output.</td></tr>
+      <tr><td>Do <b>not</b> generate leaf LLDs and do <b>not</b> implement code.</td><td><span class="sev warn">Scope fence</span></td><td>Leaf LLDs are #743; implementation is later. Registration is create + wire only.</td></tr>
+    </tbody>
+  </table>
+  <p class="body" style="margin-top:14px">The prompt embeds task identity (<span class="m">issue.id</span>, <span class="m">issue.key</span>, <span class="m">issue.name</span>, <span class="m">issue.project_id</span>, <span class="m">issue.project.slug</span>) the same way <span class="m">_split_prompt</span> does, so the agent has the root context it needs to look up existing children and create under the correct project.</p>
+</section>
+
+<!-- ============ REUSE ============ -->
+<section id="reuse">
+  <h2>What it reuses — and why nothing new is built</h2>
+  <div class="lede">#745 is composition over parts that already exist and already point one way. The launch primitive, the state-change seam, and the <span class="m">blocked_by</span> M2M + cycle guard are all reused read-only; the agent reaches WorkTracker through the MCP tools it already has.</div>
+  <table>
+    <thead><tr><th>Symbol / seam</th><th>Home</th><th>Role for register</th><th>Safety</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">spawn_run</span></td><td><span class="m">apps.terminals.launch</span> (#715)</td><td>Launches the register agent headless (detached tmux, no WS), keyed by <span class="m">task_id</span>; returns <span class="m">agent_run_id</span> or raises.</td><td><span class="sev ok">already the driver's spawn dep</span></td></tr>
+      <tr><td><span class="m">issue_state_changed</span></td><td><span class="m">worktracker.signals</span> (#704)</td><td>The <span class="m">→LLD</span> transition that both completes <span class="m">split</span> and triggers <span class="m">register</span> — <b>the same signal</b>, so no new seam.</td><td><span class="sev ok">signals.py already forwards to_state_id</span></td></tr>
+      <tr><td><span class="m">initial_prompt_for</span></td><td><span class="m">apps.execution.recipes</span></td><td>Gains a <span class="m">register</span> route returning <span class="m">_register_prompt(issue)</span>; same call the driver already makes.</td><td><span class="sev ok">additive branch</span></td></tr>
+      <tr><td><span class="m">Issue.blocked_by</span> M2M · <span class="m">blocker_would_cycle</span></td><td>worktracker (#624/#699)</td><td>The agent wires edges through the WorkTracker blocker tools, which already enforce the cycle guard. No engine-side ports.</td><td><span class="sev ok">agent-side; read-only to engine</span></td></tr>
+      <tr><td><span class="m">_registry</span> · <span class="m">get_state</span> · <span class="m">_store</span></td><td><span class="m">apps.execution.driver</span></td><td>The single per-task <span class="m">EngineState</span> whose <span class="m">phase</span> advances <span class="m">split→register</span>; holds the relaunch guard in memory.</td><td><span class="sev ok">unchanged shape</span></td></tr>
+    </tbody>
+  </table>
+  <p class="body" style="margin-top:14px"><b>No engine-side create/edge ports.</b> The original scope's "emit subtask-create and edge-wire actions as reducer data … mock side-effect ports" is retired by decision 1: those side effects live inside the agent. The engine's only action is the <span class="m">register LaunchAction</span>, so the only thing tests mock is <span class="m">spawn_run</span>.</p>
+</section>
+
+<!-- ============ DECISIONS ============ -->
+<section id="decisions">
+  <h2>Decisions resolved in this LLD</h2>
+  <div class="lede">Implementation-level calls the refined ticket left open, decided here so the slice is decision-complete.</div>
+  <table>
+    <thead><tr><th>Question</th><th>Decision</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>How does <span class="m">split</span> "complete AND launch register" in a pure reducer?</td><td><span class="sev ok">One chain branch; advance phase, emit action</span></td><td>On <span class="m">split</span>+running+<span class="m">→LLD</span>, return <span class="m">next</span> with <span class="m">phase="register"</span> and a <span class="m">register LaunchAction</span> in one <span class="m">Decision</span>. Split "completion" = phase advanced past split; no separate <span class="m">done</span> leaf, no second event round-trip. Keeps the reducer pure and the driver's apply path single.</td></tr>
+      <tr><td>Keep a durable "split done" record?</td><td><span class="sev warn">No — single EngineState, phase advances</span></td><td>The tracer holds one <span class="m">EngineState</span> per task in <span class="m">_registry</span>. Advancing its <span class="m">phase</span> to <span class="m">register</span> is the completion signal. A durable per-phase lifecycle model is explicitly #744.</td></tr>
+      <tr><td>Where does the observe path get <span class="m">spawn</span> and the <span class="m">Issue</span> for the prompt?</td><td><span class="sev ok">observe gains <span class="m">spawn=spawn_run</span> param + loads Issue</span></td><td><span class="m">observe_issue_state_changed</span> already does an ORM lookup to resolve <span class="m">to_state_id → name</span>; it also fetches the <span class="m">Issue</span> to build the register prompt. The injectable <span class="m">spawn</span> default keeps the signal receiver call unchanged while letting tests mock the launch.</td></tr>
+      <tr><td>Share the launch-apply code between <span class="m">execute()</span> and <span class="m">observe()</span>?</td><td><span class="sev ok">Extract <span class="m">_apply_launch(state, action, issue)</span></td></td><td><span class="m">execute()</span> already applies a launch action (spawn → feed <span class="m">run_started</span>/<span class="m">run_failed</span>). Lift that into one helper both paths call, so register launch behaves identically to an <span class="m">execute_requested</span> launch, including <span class="m">run_failed</span> on spawn error.</td></tr>
+      <tr><td>Does the observe path re-validate phase preconditions (backlog/Todo gates)?</td><td><span class="sev warn">No — the <span class="m">→LLD</span> transition is the gate</span></td><td>The refine/split state-group gates live in <span class="m">execute()</span>'s setup, not in <span class="m">_apply_launch</span>. Register is triggered by an already-approved transition, so no extra gate; the relaunch guard prevents duplicates.</td></tr>
+      <tr><td>Which agent runs registration?</td><td><span class="sev ok">The task's <span class="m">EngineState.agent</span> (the split run's)</span></td><td><span class="m">replace()</span> preserves <span class="m">agent</span>; the <span class="m">register LaunchAction.agent = state.agent</span>. One consistent agent across the task's phases.</td></tr>
+      <tr><td>Does <span class="m">LaunchAction</span> need a new field for the HLD path or slugs?</td><td><span class="sev ok">No</span></td><td>The agent reads the spec dir and derives slugs itself (decision 1/2). The engine passes only <span class="m">recipe="register"</span>; the recipe prompt carries the rest.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ TESTS ============ -->
+<section id="tests">
+  <h2>Test plan — extend <span class="m">test_reducer.py</span> + <span class="m">test_driver.py</span> (mock <span class="m">spawn_run</span>; no real agent/tmux)</h2>
+  <div class="lede">Reducer cases are pure (no Django). Driver cases reuse the existing <span class="m">_successful_spawn</span>/<span class="m">_failing_spawn</span> fakes and seed an <span class="m">EngineState</span> into <span class="m">_registry</span> (via <span class="m">execute()</span> for split, or directly) before firing <span class="m">observe_issue_state_changed</span>. Nothing spawns a real process.</div>
+  <table>
+    <thead><tr><th>Test</th><th>Setup</th><th>Asserts (acceptance criterion)</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">test_split_running_into_LLD_chains_register_launch_action</span></td><td>Pure: <span class="m">_state(phase="split", status="running")</span>; event <span class="m">issue_state_changed(to_state="LLD")</span>.</td><td><span class="m">decision.next.phase == "register"</span>, <span class="m">status == "idle"</span>; exactly one action with <span class="m">recipe == "register"</span> and the task's ids/agent. <b>(AC 1, 2)</b></td></tr>
+      <tr><td><span class="m">test_register_phase_never_completes_on_state_change</span></td><td>Pure: <span class="m">_state(phase="register", status="running")</span>; any <span class="m">issue_state_changed</span> (incl. <span class="m">to_state="LLD"</span>, <span class="m">to_group="completed"</span>).</td><td><span class="m">decision.next.status == "running"</span> (never <span class="m">done</span>); <span class="m">decision.actions == []</span>. <b>(AC 5, relaunch guard)</b></td></tr>
+      <tr><td><span class="m">test_split_into_LLD_ignored_when_not_running</span></td><td>Pure: <span class="m">_state(phase="split", status="idle" | "failed")</span>; <span class="m">to_state="LLD"</span>.</td><td>No action; state unchanged — only a <i>running</i> split approves. <b>(AC 2)</b></td></tr>
+      <tr><td><span class="m">test_is_complete_still_handles_implement_and_refine</span></td><td>Pure: running <span class="m">implement</span>+<span class="m">to_group="completed"</span>; running <span class="m">refine</span>+<span class="m">backlog→unstarted</span>.</td><td>Both flip to <span class="m">done</span> — proves removing <span class="m">split</span> from <span class="m">_is_complete</span> didn't regress the others.</td></tr>
+      <tr><td><span class="m">test_observe_LLD_launches_register_run</span></td><td>Django: <span class="m">execute(task, phase="split", spawn=_successful_spawn)</span> to seed running split; then <span class="m">observe_issue_state_changed(issue_id=task, to_state_id=LLD_state, spawn=_successful_spawn)</span>.</td><td>A <b>second</b> spawn call with <span class="m">initial_prompt</span> containing the register instructions and <span class="m">scope="task"</span>; final state <span class="m">phase=="register"</span>, <span class="m">status=="running"</span>, <span class="m">agent_run_id</span> = register run. <b>(AC 2, launch action)</b></td></tr>
+      <tr><td><span class="m">test_observe_LLD_relaunch_guard_no_second_register</span></td><td>Django: after the test above, fire the <b>same</b> <span class="m">observe_issue_state_changed(to_state_id=LLD)</span> again.</td><td>No additional spawn call (<span class="m">_successful_spawn.calls</span> count unchanged); state stays <span class="m">phase=="register"</span>, <span class="m">running</span>. <b>(AC 3, relaunch guard)</b></td></tr>
+      <tr><td><span class="m">test_observe_register_launch_failure_marks_failed</span></td><td>Django: seed running split; <span class="m">observe_issue_state_changed(to_state_id=LLD, spawn=_failing_spawn)</span>.</td><td>Final state <span class="m">phase=="register"</span>, <span class="m">status=="failed"</span>, <span class="m">error</span> set, <span class="m">agent_run_id is None</span>; engine did not mark register done. <b>(AC 6, run_failed)</b></td></tr>
+      <tr><td><span class="m">test_register_recipe_prompt_encodes_decisions</span></td><td>Django/pure: <span class="m">initial_prompt_for("register", issue)</span>.</td><td>Prompt mentions reading the approved HLD from the spec dir, slug-idempotent leaf creation into <b>Todo</b>, idempotent <span class="m">blocked_by</span> wiring + cycle guard, stop-on-first-failure, and "do not write leaf LLDs / do not implement". <b>(AC 4)</b></td></tr>
+    </tbody>
+  </table>
+  <p class="body" style="margin-top:14px">Run: <span class="m">pytest server/apps/execution/tests/</span> — all three test files stay green (<span class="m">test_signals.py</span> unchanged proves the seam is untouched).</p>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Type → reducer → recipe → driver → tests. Each step is small; the reducer and recipe are independently unit-testable before the driver wiring.</div>
+  <div class="steps">
+    <div class="bstep"><div class="n">1</div><b>Widen Phase</b>Add <span class="m">"register"</span> to <span class="m">Phase</span> in <span class="m">state.py</span>. <span class="m">EngineState.phase</span> / <span class="m">LaunchAction.recipe</span> widen automatically.</div>
+    <div class="bstep"><div class="n">2</div><b>Reducer branch</b>Add the <span class="m">split→register</span> chain branch in <span class="m">decide()</span>; remove <span class="m">split</span> from <span class="m">_is_complete</span>. Unit-test pure cases (chain, guard, never-complete, non-running).</div>
+    <div class="bstep"><div class="n">3</div><b>register recipe</b>Add <span class="m">_register_prompt(issue)</span> + route <span class="m">"register"</span> in <span class="m">initial_prompt_for</span>. Encode decisions 1–4 + scope fences.</div>
+    <div class="bstep"><div class="n">4</div><b>Driver apply</b>Extract <span class="m">_apply_launch(state, action, issue)</span>; call it from <span class="m">execute()</span> and from <span class="m">observe_issue_state_changed</span> (which gains <span class="m">spawn=spawn_run</span> + loads the Issue).</div>
+    <div class="bstep"><div class="n">5</div><b>Verify</b>Extend <span class="m">test_driver.py</span> (launch, guard, fail) + <span class="m">test_reducer.py</span>. Run <span class="m">apps/execution/tests/</span> green; confirm <span class="m">signals.py</span> diff empty.</div>
+  </div>
+</section>
+
+<section>
+  <div class="accept">
+    <b>Acceptance signal.</b> The slice is done when:
+    <ul>
+      <li>The execution engine has a fourth phase <span class="m">register</span> with a split-registration recipe (<span class="m">_register_prompt</span>).</li>
+      <li>An approved root moving into <span class="m">LLD</span> completes <span class="m">split</span> (phase advances) and, in the same observe, launches the <span class="m">register</span> run for that task — no second human gate.</li>
+      <li>A replayed <span class="m">→LLD</span> transition launches no second registration run (phase-check relaunch guard); the recipe's slug/edge dedup prevents duplicate leaves/edges even across launches.</li>
+      <li>The recipe instructs slug-idempotent leaf creation into <b>Todo</b> under the root, idempotent directed <span class="m">blocked_by</span> wiring respecting the cycle guard, and stop-on-first-failure with a clear partial-state report; it does not write leaf LLDs or implement code.</li>
+      <li>The engine never marks <span class="m">register</span> <span class="m">done</span> (absent from <span class="m">_is_complete</span>); partial/failed registration stays visible via the agent run, and a launch failure yields <span class="m">status="failed"</span>.</li>
+      <li><span class="m">test_reducer.py</span> + <span class="m">test_driver.py</span> cover the <span class="m">register</span> launch action, the relaunch guard, and <span class="m">run_failed</span> on launch failure (mocking <span class="m">spawn_run</span>); <span class="m">test_signals.py</span> stays green unchanged.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<script>
+  const secs = [...document.querySelectorAll('section[id]')];
+  const links = [...document.querySelectorAll('#nav a')];
+  const obs = new IntersectionObserver((es) => {
+    es.forEach(e => { if (e.isIntersecting) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+    }});
+  }, { rootMargin: '-45% 0px -50% 0px' });
+  secs.forEach(s => obs.observe(s));
+
+  const CM = {
+    state: { t: 'state.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Add "register" to the Phase Literal: Literal["implement","refine","split","register"].',
+      'EngineState.phase and LaunchAction.recipe widen automatically — no other field changes.',
+      'No new dataclass, no new field on Decision/SeamEvent/LaunchAction.' ] },
+    reducer: { t: 'reducer.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'In the issue_state_changed branch, add a FIRST check: if status=="running" and phase=="split" and to_state=="LLD" → next=phase→register/status→idle, actions=[LaunchAction(recipe="register")].',
+      'Remove the split case from _is_complete — split no longer terminates in "done"; it chains.',
+      '_is_complete now covers only implement (to_group=="completed") and refine (backlog→unstarted).',
+      'register is intentionally absent from _is_complete → never auto-"done" (never silently complete).',
+      'The phase!="split" fall-through on a replayed →LLD is the engine relaunch guard.' ] },
+    driver: { t: 'driver.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Extract _apply_launch(state, action, issue): async_to_sync(spawn)(...) → feed run_started; on exception feed run_failed. Called by execute() and observe.',
+      'observe_issue_state_changed gains spawn: SpawnRun = spawn_run and now APPLIES any launch action decide() returns (today it ignores actions).',
+      'observe loads the Issue (it already does an ORM lookup for to_state name) to build the register prompt via initial_prompt_for.',
+      'No phase-precondition re-validation in the observe path — the →LLD transition is the gate.' ] },
+    recipes: { t: 'recipes.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Add _register_prompt(issue) and route phase=="register" in initial_prompt_for.',
+      'Prompt encodes decisions 1–4: read approved HLD from spec dir; slug-idempotent leaf create into Todo; idempotent blocked_by wiring + cycle guard; stop-on-first-failure partial report.',
+      'Scope fences: do NOT write leaf LLDs, do NOT implement code.',
+      'Embeds task identity (id/key/name/project_id/project.slug) like _split_prompt.' ] },
+    signals: { t: 'signals.py', k: 'READ-ONLY · UNTOUCHED', c: 'var(--accent)', items: [
+      'The receiver already forwards issue_id/from_group/to_group/to_state_id to driver.observe_issue_state_changed.',
+      'observe\'s new spawn param defaults to spawn_run, so the receiver call is unchanged.',
+      'test_signals.py stays green — proof the seam is untouched.' ] },
+    treducer: { t: 'tests/test_reducer.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Add: split-running+→LLD chains a register launch action; register never completes; split+→LLD ignored when not running.',
+      'Add regression: implement/refine still complete via _is_complete after the split case is removed.',
+      'Pure — no Django, no mocking.' ] },
+    tdriver: { t: 'tests/test_driver.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      'Add: observe →LLD launches a second (register) spawn with the register prompt; state → register/running.',
+      'Add: replayed →LLD launches no second register run (relaunch guard).',
+      'Add: register launch failure → status="failed" (run_failed), no orphan, not "done".',
+      'Add: initial_prompt_for("register", issue) prompt-contract assertions.',
+      'Reuses _successful_spawn / _failing_spawn fakes.' ] },
+  };
+  const detail = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(el => el.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(h => h.classList.remove('sel'));
+    el.classList.add('sel');
+    const d = CM[el.dataset.f]; if (!d) return;
+    detail.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + d.c + '">' + d.k + '</div><ul>' +
+      d.items.map(i => '<li>' + i + '</li>').join('') + '</ul>';
+  }));
+
+  const SEQ = {
+    event: { h: 'issue_state_changed arrives', p: 'The worktracker post_save seam (#704) fires issue_state_changed with from_group/to_group/to_state_id whenever the root task\'s state changes. signals.py forwards it to driver.observe_issue_state_changed, which resolves to_state_id → name and calls decide(). Only the task whose id is in _registry is active.' },
+    chain: { h: 'split → register chain (NEW)', p: 'The new first check inside the issue_state_changed branch: a RUNNING SPLIT observing to_state=="LLD" returns next with phase advanced to "register" (status reset to idle) and a single LaunchAction(recipe="register"). This both completes split (phase moves past it) and requests the register launch — one Decision, no separate "done" leaf.' },
+    guard: { h: 'relaunch guard', p: 'Once phase=="register", a replayed to_state=="LLD" fails the chain condition (phase != "split") and falls through to _is_complete, which has no register case. Result: Decision(next=state) with no action — no second registration run. This is the engine\'s half of idempotency; the recipe\'s slug/edge dedup is the agent\'s half.', e: 'Both layers exist by design — the engine guard stops a duplicate LAUNCH; the slug/edge dedup stops duplicate leaves/edges within a launch.' },
+    apply: { h: 'driver applies the launch', p: 'observe_issue_state_changed now applies any action decide() returns via the shared _apply_launch(state, action, issue): async_to_sync(spawn_run)(agent=state.agent, project_id, module_id, task_id, initial_prompt=initial_prompt_for("register", issue), scope="task"). It loads the Issue for the prompt; spawn is injectable (defaults to spawn_run) so tests can mock it.' },
+    started: { h: 'run_started → running', p: 'On a returned run id, _apply_launch feeds decide() a run_started event → status="running", agent_run_id = register run, error cleared. Stored in _registry. The register agent is now live in a detached tmux session keyed by task_id.' },
+    failed: { h: 'run_failed → failed', p: 'If spawn_run raises (NoProfileSelected / ValueError / LaunchUnavailable), _apply_launch feeds run_failed → status="failed", error=str(exc), agent_run_id=None.', e: 'The engine never marks register "done"; a launch failure is surfaced as failed and stays visible.' },
+    fall: { h: 'else: implement / refine completion', p: 'When the chain condition is false, decide() falls to the existing _is_complete check — implement completes on to_group=="completed", refine on backlog→unstarted. Removing split from _is_complete leaves these two untouched.' },
+    never: { h: 'register never auto-completes', p: 'register is deliberately absent from _is_complete, so no issue_state_changed ever flips it to "done". Registration completeness — and any surface-and-halt on partial failure — is owned by the agent run and its terminal output, so the engine can never SILENTLY mark registration complete.', e: 'A durable HLD Approved → Split Registered internal state is future work (#744).' },
+  };
+  const info = document.getElementById('seqInfo');
+  document.querySelectorAll('.node').forEach(n => {
+    const act = () => {
+      document.querySelectorAll('.node').forEach(x => x.classList.remove('hl'));
+      n.classList.add('hl');
+      const d = SEQ[n.dataset.n]; if (!d) return;
+      info.innerHTML = '<h4>' + d.h + '</h4><p>' + d.p + '</p>' + (d.e ? '<div class="edge">⚠ ' + d.e + '</div>' : '');
+    };
+    n.addEventListener('click', act);
+    n.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
+  });
+</script>
+</body>
+</html>

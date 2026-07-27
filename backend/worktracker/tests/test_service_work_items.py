@@ -1,0 +1,401 @@
+"""Service-level tests for the framework-neutral work item boundary."""
+
+import uuid
+
+import pytest
+
+from worktracker.models import (
+    Issue,
+    IssueType,
+    Label,
+    Project,
+    State,
+)
+from worktracker.services.errors import ServiceError, ValidationError
+from worktracker.services.work_items import (
+    create_module_work_item,
+    create_project_work_item,
+    delete_work_item,
+    reorder_work_item,
+    update_work_item,
+)
+from worktracker.workflow import InvalidTransition
+
+
+@pytest.mark.django_db
+def test_create_project_work_item_uses_project_defaults(project):
+    backlog = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
+    )
+    issue = create_project_work_item(project.id, name="New")
+
+    assert issue.project_id == project.id
+    assert issue.sequence_id == 1
+    assert issue.rank != ""
+    assert issue.state_id == backlog.id
+    assert issue.issue_type is None
+
+
+@pytest.mark.django_db
+def test_create_project_work_item_honors_explicit_state_and_type(project):
+    backlog = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
+    )
+    task_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Task",
+        level="task",
+    )
+
+    issue = create_project_work_item(
+        project.id,
+        name="New",
+        state_id=backlog.id,
+        issue_type_id=task_type.id,
+        description="hello",
+    )
+
+    assert issue.state_id == backlog.id
+    assert issue.issue_type_id == task_type.id
+    assert issue.description == "hello"
+    # #775: readers surface description_html, so create must fill it too.
+    assert issue.description_html == "hello"
+
+
+@pytest.mark.django_db
+def test_create_project_work_item_missing_project_raises():
+    with pytest.raises(ServiceError) as excinfo:
+        create_project_work_item(uuid.uuid4(), name="New")
+
+    assert excinfo.value.status_code == 404
+
+
+@pytest.mark.django_db
+def test_create_project_work_item_rejects_wrong_level(project):
+    module_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Epic",
+        level="module",
+    )
+
+    with pytest.raises(ValidationError) as excinfo:
+        create_project_work_item(
+            project.id,
+            name="New",
+            issue_type_id=module_type.id,
+        )
+
+    assert excinfo.value.status_code == 422
+
+
+@pytest.mark.django_db
+def test_create_gated_type_rejects_foreign_birth_state(project):
+    """#870: a Story cannot be *born* in Done — birth is gated like the move."""
+
+    idea = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Idea", group="backlog"
+    )
+    done = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Done", group="completed"
+    )
+    story_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Story",
+        level="task",
+        start_state=idea,
+        workflow_revision=1,
+    )
+    with pytest.raises(InvalidTransition) as excinfo:
+        create_project_work_item(
+            project.id, name="New", issue_type_id=story_type.id, state_id=done.id
+        )
+
+    assert excinfo.value.code == "illegal_birth"
+    assert not Issue.objects.filter(project=project, name="New").exists()
+
+
+@pytest.mark.django_db
+def test_create_module_implementation_born_ready_not_default(project):
+    """#870: module-scoped create resolves the type before the state, so an
+    Implementation is born Ready instead of stranded in the Idea default."""
+
+    State.objects.create(
+        id=uuid.uuid4(), project=project, name="Idea", group="backlog"
+    )
+    ready = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Ready", group="unstarted"
+    )
+    impl_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Implementation",
+        level="task",
+        start_state=ready,
+        workflow_revision=1,
+    )
+    module = Issue.objects.create(
+        id=uuid.uuid4(), project=project, type="module", name="M", sequence_id=999
+    )
+
+    issue = create_module_work_item(
+        module.id, name="Child", issue_type_id=impl_type.id
+    )
+
+    assert issue.state_id == ready.id
+
+
+@pytest.mark.django_db
+def test_reorder_work_item_allocates_rank_between_neighbors(project):
+    issue_a = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="A",
+        sequence_id=1,
+        rank="a",
+    )
+    issue_b = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="B",
+        sequence_id=2,
+        rank="c",
+    )
+    moving = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="M",
+        sequence_id=3,
+        rank="z",
+    )
+
+    updated = reorder_work_item(moving.id, before_id=issue_a.id, after_id=issue_b.id)
+
+    assert issue_a.rank < updated.rank < issue_b.rank
+    updated.refresh_from_db()
+    assert updated.rank != "z"
+
+
+@pytest.mark.django_db
+def test_reorder_work_item_rejects_foreign_neighbor(project):
+    other_project = Project.objects.create(
+        id=uuid.uuid4(),
+        workspace=project.workspace,
+        name="Other",
+    )
+    moving = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="M",
+        sequence_id=1,
+        rank="b",
+    )
+    foreign = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=other_project,
+        type="task",
+        name="F",
+        sequence_id=1,
+        rank="c",
+    )
+
+    with pytest.raises(ValidationError) as excinfo:
+        reorder_work_item(moving.id, before_id=foreign.id)
+
+    assert excinfo.value.status_code == 422
+
+
+@pytest.mark.django_db
+def test_delete_work_item_rejects_children(project):
+    parent = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        name="Parent",
+        sequence_id=1,
+    )
+    Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Child",
+        sequence_id=2,
+        parent=parent,
+        rank="a",
+    )
+
+    with pytest.raises(ServiceError) as excinfo:
+        delete_work_item(parent.id)
+
+    assert excinfo.value.status_code == 409
+
+
+@pytest.mark.django_db
+def test_delete_work_item_deletes_empty_issue(project):
+    issue = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="A",
+        sequence_id=1,
+        rank="a",
+    )
+
+    delete_work_item(issue.id)
+
+    assert not Issue.objects.filter(pk=issue.id).exists()
+
+
+@pytest.mark.django_db
+def test_update_work_item_archives_on_cancelled_and_cascades_descendants(project):
+    backlog = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
+    )
+    cancelled = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Cancelled", group="cancelled"
+    )
+    parent = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Parent",
+        sequence_id=1,
+        state=backlog,
+    )
+    child = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Child",
+        sequence_id=2,
+        parent=parent,
+        state=backlog,
+    )
+
+    issue = update_work_item(parent.id, state_id=cancelled.id)
+
+    parent.refresh_from_db()
+    child.refresh_from_db()
+    assert issue.is_archived is True
+    assert parent.is_archived is True
+    assert child.is_archived is True
+
+
+@pytest.mark.django_db
+def test_update_work_item_unarchives_only_moved_issue(project):
+    cancelled = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Cancelled", group="cancelled"
+    )
+    backlog = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
+    )
+    parent = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Parent",
+        sequence_id=1,
+        state=cancelled,
+        is_archived=True,
+    )
+    child = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Child",
+        sequence_id=2,
+        parent=parent,
+        state=cancelled,
+        is_archived=True,
+    )
+
+    update_work_item(parent.id, state_id=backlog.id)
+
+    parent.refresh_from_db()
+    child.refresh_from_db()
+    assert parent.is_archived is False
+    assert child.is_archived is True
+
+
+@pytest.mark.django_db
+def test_update_work_item_replaces_labels_and_preserves_existing_when_omitted(project):
+    issue = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Task",
+        sequence_id=1,
+    )
+    keep = Label.objects.create(id=uuid.uuid4(), project=project, name="keep")
+    issue.labels.add(keep)
+
+    update_work_item(issue.id, labels=["x", "x", " tidy "])
+    issue.refresh_from_db()
+    assert sorted(label.name for label in issue.labels.all()) == ["tidy", "x"]
+
+    update_work_item(issue.id, name="renamed")
+    issue.refresh_from_db()
+    assert sorted(label.name for label in issue.labels.all()) == ["tidy", "x"]
+
+
+@pytest.mark.django_db
+def test_update_work_item_rejects_self_block_and_cycles(project):
+    a = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="A",
+        sequence_id=1,
+    )
+    b = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="B",
+        sequence_id=2,
+    )
+    c = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="C",
+        sequence_id=3,
+    )
+
+    with pytest.raises(ValidationError):
+        update_work_item(a.id, blocked_by_ids=[a.id])
+
+    update_work_item(a.id, blocked_by_ids=[b.id])
+    update_work_item(b.id, blocked_by_ids=[c.id])
+    with pytest.raises(ValidationError):
+        update_work_item(c.id, blocked_by_ids=[a.id])
+
+
+@pytest.mark.django_db
+def test_update_work_item_omitted_blockers_do_not_clear(project):
+    blocker = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Blocker",
+        sequence_id=1,
+    )
+    issue = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Task",
+        sequence_id=2,
+    )
+    issue.blocked_by.add(blocker)
+
+    update_work_item(issue.id, name="Renamed")
+
+    issue.refresh_from_db()
+    assert list(issue.blocked_by.values_list("id", flat=True)) == [blocker.id]

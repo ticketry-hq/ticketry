@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T634 · Sprint Lifecycle — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+
+  /* change map */
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* pillar cards */
+  .marker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .mcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .mcard h3 { font-size: 15px; margin-bottom: 10px; }
+  .mcard h3 .m { color: var(--violet); }
+  .mcard .mrow { display: grid; grid-template-columns: 140px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .mcard .mrow:last-child { border-bottom: none; }
+  .mcard .mk { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--violet); }
+  .mcard .mv { color: var(--ink); }
+  .mcard .mv .opt { color: var(--muted); font-size: 12px; }
+
+  /* sequence */
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .step { cursor: pointer; }
+  .step circle { transition: r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+  .code { display: inline-block; background: var(--accent-soft); color: var(--accent); font-family: var(--mono); font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 6px; }
+  .code.r { background: var(--red-soft); color: var(--red); }
+  .code.g { background: var(--green-soft); color: var(--green); }
+
+  /* build order */
+  .steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+
+  @media (max-width: 900px) {
+    .cm, .marker-grid, .seq-wrap { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · Sprints · Ticket #634 · LLD</div>
+  <h1>Sprint Lifecycle — Low-Level Design</h1>
+  <div class="sub">Builds the delta on the surfaces that already ship (#602 model/CRUD/SDK, #617 Now/Later/History lens + single-active guard, #608 sprint-in-details). Four behaviors land: server-minted auto-names, a sprint goal, an explicit Start op (duration&nbsp;→&nbsp;dates), and an atomic Complete-with-carryover. Absorbs #604's deferred close-as-advance. Grounded in the live code of <span class="m">models.py</span>, <span class="m">api.py</span>, <span class="m">schemas.py</span>, the SDK <span class="m">resources.py</span>, and the Studio <span class="m">backlog/</span> store.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip amber">BE +2 fields · +2 routes · migration 0007</span>
+    <span class="chip green">SDK co-ship · 2 new Studio dialogs</span>
+    <span class="chip violet">No new view · no story points</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#pillars">Four Behaviors</a>
+  <a href="#model">Model &amp; Schemas</a>
+  <a href="#routes">Routes</a>
+  <a href="#seq">Complete Sequence</a>
+  <a href="#fe">Frontend Flow</a>
+  <a href="#failures">Failure Matrix</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Click a highlighted file for its exact delta. Everything else in the tree is untouched. The Studio store lives under <span class="m">stores/backlog/</span> after the #649 refactor — the ticket's <span class="m">backlogStore.ts</span> maps here.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">worktracker-stack/</div>
+      <div class="dir">├─ worktracker/worktracker/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="models">models.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="schemas">schemas.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="api">api.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ migrations/<span class="hit new" data-f="mig">0007_sprint_lifecycle.py</span></div>
+      <div class="dir">├─ worktracker-sdk/worktracker_sdk/</div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="sdkmodels">models.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="sdkres">resources.py</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="sdkinit">__init__.py</span></div>
+      <div class="dir">└─ studio/src/</div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ lib/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="types">types.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="apits">api.ts</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;├─ stores/backlog/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="sprintact">backlogSprintActions.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="store">backlogStore.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="sel">backlogSelectors.ts</span></div>
+      <div class="dir">&nbsp;&nbsp;&nbsp;└─ views/Sprints/</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit new" data-f="startdlg">StartSprintDialog.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit new" data-f="completedlg">CompleteSprintDialog.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="newsprint">NewSprint.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="lens">SprintsLens.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="card">SprintCard.tsx</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--green-soft)"></i>new</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail"><span class="hint">Select a file on the left.</span></div>
+  </div>
+</section>
+
+<!-- ============ PILLARS ============ -->
+<section id="pillars">
+  <h2>The four behaviors</h2>
+  <div class="lede">Each is a thin delta on an existing surface — never a rewrite. Nothing here adds story points, velocity, or a new view.</div>
+  <div class="marker-grid">
+    <div class="mcard">
+      <h3>1 · Auto-incrementing names</h3>
+      <div class="mrow"><span class="mk">where</span><span class="mv">New <span class="m">Project.sprint_seq</span> counter; mint in <span class="m">create_sprint</span>.</span></div>
+      <div class="mrow"><span class="mk">rule</span><span class="mv">Blank/omitted name → <span class="m">sprint_seq += 1</span>, name = <span class="m">Sprint N</span>. A supplied name is honored and never touches the counter.</span></div>
+      <div class="mrow"><span class="mk">parity</span><span class="mv">Counter is <b>never decremented</b> on delete — Jira board-counter behavior. <span class="opt">Distinct from the existing issue <span class="m">seq_counter</span>.</span></span></div>
+    </div>
+    <div class="mcard">
+      <h3>2 · Sprint goal</h3>
+      <div class="mrow"><span class="mk">where</span><span class="mv">New <span class="m">Sprint.goal</span> TextField; round-trips model → <span class="m">SprintOut</span> → SDK → Studio.</span></div>
+      <div class="mrow"><span class="mk">gotcha</span><span class="mv">SDK <span class="m">OutputModel</span> is <span class="m">extra="forbid"</span> — shipping <span class="m">goal</span> on the response without the SDK field rejects every sprint (same as #629). Co-ship is mandatory.</span></div>
+      <div class="mrow"><span class="mk">ui</span><span class="mv">Optional input on Create / Start; one muted line on <span class="m">SprintCard</span>.</span></div>
+    </div>
+    <div class="mcard">
+      <h3>3 · Explicit Start</h3>
+      <div class="mrow"><span class="mk">where</span><span class="mv">New <span class="m">POST /sprints/{id}/start</span>; <span class="m">StartSprintDialog</span>.</span></div>
+      <div class="mrow"><span class="mk">rule</span><span class="mv">status → active; <span class="m">start = start or today</span>; <span class="m">end = end or start + duration_days</span> (default <b>14</b>). Reuses the single-active guard → <span class="code r">409</span>.</span></div>
+      <div class="mrow"><span class="mk">ui</span><span class="mv">Duration presets 1/2/3/4 wk (default 2 wk) or explicit dates; goal field.</span></div>
+    </div>
+    <div class="mcard">
+      <h3>4 · Complete-with-carryover</h3>
+      <div class="mrow"><span class="mk">where</span><span class="mv">New <span class="m">POST /sprints/{id}/complete</span>; <span class="m">CompleteSprintDialog</span>.</span></div>
+      <div class="mrow"><span class="mk">rule</span><span class="mv">In one transaction: status → completed; re-point only <b>unfinished</b> members (group not completed/cancelled) to a target sprint or Backlog. Done/cancelled stay as history.</span></div>
+      <div class="mrow"><span class="mk">returns</span><span class="mv"><span class="m">{ sprint, moved_count }</span>. Absorbs #604's close-as-advance.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MODEL & SCHEMAS ============ -->
+<section id="model">
+  <h2>Model &amp; schema deltas</h2>
+  <div class="lede">Two additive columns and the schema shapes that carry them. Inputs mirror the SDK and Studio bodies 1:1.</div>
+  <table>
+    <thead><tr><th style="width:230px">Symbol</th><th>Definition</th><th style="width:150px">Layer</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">Sprint.goal</span></td><td><span class="m">TextField(blank=True, default="")</span> — optional one-line objective.</td><td>model + migration</td></tr>
+      <tr><td><span class="m">Project.sprint_seq</span></td><td><span class="m">PositiveIntegerField(default=0)</span> — monotonic per-project sprint counter, never decremented. Documented beside the issue <span class="m">seq_counter</span> so the two are not confused.</td><td>model + migration</td></tr>
+      <tr><td><span class="m">SprintOut.goal</span></td><td><span class="m">goal: str = ""</span> added to the response envelope.</td><td>schema</td></tr>
+      <tr><td><span class="m">SprintIn</span></td><td><span class="m">name</span> becomes <span class="m">Optional[str] = None</span> (blank ≡ omitted ⇒ mint path); add <span class="m">goal: str = ""</span>.</td><td>schema</td></tr>
+      <tr><td><span class="m">SprintPatch.goal</span></td><td>Add <span class="m">goal: Optional[str] = None</span>; present-key applies (back-compat PATCH keeps rename/recolor/re-date/bare-flip).</td><td>schema</td></tr>
+      <tr><td><span class="m">SprintStartIn</span> (new)</td><td><span class="m">duration_days: int|None = 14</span>, <span class="m">start_date: date|None</span>, <span class="m">end_date: date|None</span>, <span class="m">goal: str|None</span>.</td><td>schema</td></tr>
+      <tr><td><span class="m">SprintCompleteIn</span> (new)</td><td><span class="m">carryover: Literal["backlog","sprint"]</span>, <span class="m">target_sprint_id: UUID|None</span>.</td><td>schema</td></tr>
+      <tr><td><span class="m">SprintCompleteOut</span> (new)</td><td><span class="m">sprint: SprintOut</span>, <span class="m">moved_count: int</span>.</td><td>schema</td></tr>
+    </tbody>
+  </table>
+  <div class="lede" style="margin-top:18px;margin-bottom:6px"><b>Migration 0007</b> — 0006 (rank, #626) already landed; take the next free number, rebase if a sibling lands first.</div>
+  <table>
+    <thead><tr><th style="width:230px">Operation</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td>AddField ×2</td><td><span class="m">Sprint.goal</span> (default <span class="m">""</span>), <span class="m">Project.sprint_seq</span> (default <span class="m">0</span>).</td></tr>
+      <tr><td>RunPython backfill</td><td><span class="m">sprint_seq</span> per project = max trailing integer parsed from existing <span class="m">Sprint N</span> names (non-matching names contribute nothing), else 0. <b>Rerun-safe</b>: recomputing max-from-names is idempotent. Reverse = no-op. <span class="m">goal</span> needs no backfill beyond the field default.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ ROUTES ============ -->
+<section id="routes">
+  <h2>Route behavior &amp; validation</h2>
+  <div class="lede">Two new lifecycle verbs plus the mint branch in create. <span class="m">PATCH /sprints/{id}</span> is unchanged — still the path for rename/recolor/re-date and bare status flips.</div>
+  <table>
+    <thead><tr><th style="width:220px">Route</th><th>Behavior</th><th style="width:130px">Errors</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="m">POST /projects/{id}/sprints</span><br><span class="code">create (mint branch)</span></td>
+        <td>If <span class="m">name</span> blank/omitted: in a txn, <span class="m">sprint_seq += 1</span>, save, name = <span class="m">Sprint {sprint_seq}</span>. Supplied name honored verbatim, counter untouched. Pass <span class="m">goal</span> through.</td>
+        <td>404 project</td>
+      </tr>
+      <tr>
+        <td><span class="m">POST /sprints/{id}/start</span><br><span class="code g">new</span></td>
+        <td>status → <span class="m">active</span>; <span class="m">start = body.start or today</span>; <span class="m">end = body.end or (start + duration_days||14)</span>. Both dates given ⇒ honored as-is, duration ignored. Apply <span class="m">goal</span> if present. Single-active guard (exclude self) reused — canonical query, no drift. Self already active ⇒ idempotent re-stamp.</td>
+        <td><span class="code r">409</span> other active<br>404 sprint</td>
+      </tr>
+      <tr>
+        <td><span class="m">POST /sprints/{id}/complete</span><br><span class="code g">new</span></td>
+        <td><b>Validate first (pre-write):</b> already-completed ⇒ 409; <span class="m">carryover=="sprint"</span> needs a <span class="m">target_sprint_id</span> that is not self, exists, same project, not completed. <b>Then</b> <span class="m">transaction.atomic()</span>: status → completed; re-point members with <span class="m">state__group NOT IN (completed, cancelled)</span> (null state ⇒ unfinished, moves) to target (sprint) or NULL (backlog); capture <span class="m">moved_count</span>; done/cancelled untouched. Return <span class="m">{sprint, moved_count}</span>.</td>
+        <td><span class="code r">409</span> re-complete<br><span class="code r">422</span> bad target<br>(full rollback)</td>
+      </tr>
+      <tr>
+        <td><span class="m">PATCH /sprints/{id}</span><br><span class="code">unchanged</span></td>
+        <td>Existing apply-present-fields; gains a <span class="m">goal</span> passthrough so the PATCH surface stays complete. Lifecycle ops do not replace it (script back-compat).</td>
+        <td>409 active guard</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ SEQUENCE ============ -->
+<section id="seq">
+  <h2>Complete-with-carryover — the sequence</h2>
+  <div class="lede">Click a numbered step for its mechanics and edge cases. Lanes are the real modules. The whole server side is one transaction; the client is optimistic with full rollback.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 720 430" width="100%">
+      <g font-size="11.5" font-weight="700">
+        <text x="78" y="22" text-anchor="middle" fill="#3d2370">Complete Dialog</text>
+        <text x="232" y="22" text-anchor="middle" fill="#9a6700">backlog store</text>
+        <text x="392" y="22" text-anchor="middle" fill="#3556d4">api.ts → HTTP</text>
+        <text x="548" y="22" text-anchor="middle" fill="#1d7a4f">complete route</text>
+        <text x="668" y="22" text-anchor="middle" fill="#0e4d2f">DB (txn)</text>
+      </g>
+      <g stroke="#e3e7ee" stroke-width="1.5">
+        <line x1="78" y1="32" x2="78" y2="410"/>
+        <line x1="232" y1="32" x2="232" y2="410"/>
+        <line x1="392" y1="32" x2="392" y2="410"/>
+        <line x1="548" y1="32" x2="548" y2="410"/>
+        <line x1="668" y1="32" x2="668" y2="410"/>
+      </g>
+      <defs>
+        <marker id="sarr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+        <marker id="sarrR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#b03030"/></marker>
+      </defs>
+      <g stroke="#5b6478" stroke-width="1.5">
+        <line x1="78" y1="60" x2="228" y2="60" marker-end="url(#sarr)"/>
+        <line x1="232" y1="110" x2="388" y2="110" marker-end="url(#sarr)"/>
+        <line x1="392" y1="160" x2="544" y2="160" marker-end="url(#sarr)"/>
+        <line x1="548" y1="210" x2="664" y2="210" marker-end="url(#sarr)"/>
+        <line x1="548" y1="260" x2="396" y2="260" marker-end="url(#sarr)"/>
+        <line x1="392" y1="310" x2="236" y2="310" marker-end="url(#sarr)"/>
+      </g>
+      <g stroke="#b03030" stroke-width="1.5" stroke-dasharray="5 4">
+        <line x1="548" y1="360" x2="84" y2="360" marker-end="url(#sarrR)"/>
+      </g>
+      <g font-size="10.5" fill="#5b6478">
+        <text x="155" y="50" text-anchor="middle">carryover choice</text>
+        <text x="310" y="100" text-anchor="middle">snapshot + optimistic move</text>
+        <text x="468" y="150" text-anchor="middle">POST /complete</text>
+        <text x="612" y="200" text-anchor="middle">validate → atomic</text>
+        <text x="472" y="250" text-anchor="middle">{sprint, moved_count}</text>
+        <text x="314" y="300" text-anchor="middle">reconcile sprint, keep moves</text>
+        <text x="312" y="350" text-anchor="middle" fill="#b03030">non-2xx → roll back board</text>
+      </g>
+      <g class="step" data-s="1"><circle cx="78" cy="60" r="13" fill="#f0e9fb" stroke="#6b3fb8"/><text x="78" y="64.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3d2370">1</text></g>
+      <g class="step" data-s="2"><circle cx="232" cy="110" r="13" fill="#fbf0d8" stroke="#9a6700"/><text x="232" y="114.5" text-anchor="middle" font-size="12" font-weight="800" fill="#9a6700">2</text></g>
+      <g class="step" data-s="3"><circle cx="392" cy="160" r="13" fill="#e8edfb" stroke="#3556d4"/><text x="392" y="164.5" text-anchor="middle" font-size="12" font-weight="800" fill="#3556d4">3</text></g>
+      <g class="step" data-s="4"><circle cx="548" cy="210" r="13" fill="#e3f3ea" stroke="#1d7a4f"/><text x="548" y="214.5" text-anchor="middle" font-size="12" font-weight="800" fill="#1d7a4f">4</text></g>
+      <g class="step" data-s="5"><circle cx="668" cy="260" r="13" fill="#e3f3ea" stroke="#0e4d2f"/><text x="668" y="264.5" text-anchor="middle" font-size="12" font-weight="800" fill="#0e4d2f">5</text></g>
+      <g class="step" data-s="6"><circle cx="232" cy="310" r="13" fill="#fbf0d8" stroke="#9a6700"/><text x="232" y="314.5" text-anchor="middle" font-size="12" font-weight="800" fill="#9a6700">6</text></g>
+      <g class="step" data-s="7"><circle cx="78" cy="360" r="13" fill="#fbe7e7" stroke="#b03030"/><text x="78" y="364.5" text-anchor="middle" font-size="12" font-weight="800" fill="#b03030">7</text></g>
+    </svg>
+    <div id="seqInfo"><span class="hint">Click a numbered step.</span></div>
+  </div>
+</section>
+
+<!-- ============ FRONTEND FLOW ============ -->
+<section id="fe">
+  <h2>Frontend flow &amp; store contract</h2>
+  <div class="lede">Rides the existing stores and components — no new view. Optimistic apply, server-as-source-of-truth on reconcile, total rollback on any non-2xx.</div>
+  <div class="marker-grid">
+    <div class="mcard">
+      <h3><span class="m">backlogSprintActions.ts</span></h3>
+      <div class="mrow"><span class="mk">startSprint</span><span class="mv">Optimistic flip status → active + apply goal/dates locally; client single-active pre-check (mirror existing). Call <span class="m">api.startSprint</span>, reconcile from response; non-2xx ⇒ roll sprints back to snapshot + toast.</span></div>
+      <div class="mrow"><span class="mk">completeSprint</span><span class="mv">Snapshot <b>both</b> sprints + items; flip status → completed and move unfinished cards locally (same predicate as <span class="m">sprintProgress</span>). Call <span class="m">api.completeSprint</span>, reconcile sprint, keep moves. non-2xx ⇒ roll back <b>both</b> snapshots + toast.</span></div>
+    </div>
+    <div class="mcard">
+      <h3>Views</h3>
+      <div class="mrow"><span class="mk">NewSprint</span><span class="mv">Prefill name with <span class="m">nextSprintName(sprints)</span> (optional ⇒ server mints); add optional goal field.</span></div>
+      <div class="mrow"><span class="mk">StartSprintDialog</span><span class="mv">New. Prefilled name, goal, duration presets 1/2/3/4 wk (default 2 wk) or explicit dates; blocked with a clear message when another sprint is active (server 409 backstop).</span></div>
+      <div class="mrow"><span class="mk">CompleteSprintDialog</span><span class="mv">New. Done/unfinished split from <span class="m">sprintProgress</span>; carryover = Backlog or a planned sprint (dropdown excludes the completing sprint + all completed; "+ new sprint" inline). 0 unfinished ⇒ skip picker.</span></div>
+      <div class="mrow"><span class="mk">Lens / Card</span><span class="mv"><span class="m">SprintsLens</span> verbs open the dialogs (keep <span class="m">start-{id}</span>/<span class="m">complete-{id}</span> testids); <span class="m">SprintCard</span> renders goal.</span></div>
+    </div>
+  </div>
+  <div class="lede" style="margin-top:16px"><span class="m">nextSprintName</span> is client prefill only — the <b>server is authoritative</b> on the real number at create time, so raced concurrent creates can't collide.</div>
+</section>
+
+<!-- ============ FAILURE MATRIX ============ -->
+<section id="failures">
+  <h2>Failure &amp; edge matrix</h2>
+  <table>
+    <thead><tr><th>Situation</th><th>Behavior</th><th style="width:120px">Status</th></tr></thead>
+    <tbody>
+      <tr><td>Create with blank name</td><td>Mints <span class="m">Sprint {seq+1}</span>, counter incremented</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Create with explicit name</td><td>Honored verbatim, counter untouched</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Delete highest sprint, then create blank</td><td>Number not reused — counter never decremented</td><td><span class="sev ok">by design</span></td></tr>
+      <tr><td>Start with no dates</td><td><span class="m">start = today</span>, <span class="m">end = today + 14</span></td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Start while another sprint active</td><td><span class="code r">409</span>, no state change; UI pre-blocks too</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Complete, carryover = backlog</td><td>Unfinished → <span class="m">sprint_id = null</span>; done/cancelled stay; <span class="m">moved_count</span> exact</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Complete, carryover = sprint</td><td>Unfinished → target sprint; same retention</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Complete on an already-completed sprint</td><td><span class="code r">409</span></td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Bad / missing / foreign / self / completed target</td><td><span class="code r">422</span>, whole transaction rolls back — no partial move observable</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Complete with zero unfinished members</td><td>Succeeds, <span class="m">moved_count = 0</span>, picker skipped in UI</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>Member with NULL state during complete</td><td>Treated as unfinished and moved (nothing is "done" without a completed/cancelled group)</td><td><span class="sev ok">by design</span></td></tr>
+      <tr><td>Studio op fails mid-flight</td><td>Board + sprint roll back to snapshots cleanly; error toast</td><td><span class="sev ok">handled</span></td></tr>
+      <tr><td>SDK <span class="m">start_date/end_date</span> required vs <span class="m">SprintOut</span> Optional; <span class="m">get</span> parses an envelope the API never returns</td><td>Pre-existing mismatch, left as-is — server-side progress envelope is out of scope</td><td><span class="sev def">deferred</span></td></tr>
+      <tr><td>Story points / velocity / burndown; configurable name format; cross-project / per-item carryover; MCP exposure</td><td>Out of scope; progress stays client-computed and count-based</td><td><span class="sev def">deferred</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ TEST PLAN ============ -->
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">Unit suites live with the code they test; all three go green before Done.</div>
+  <table>
+    <thead><tr><th style="width:230px">Suite</th><th>Cases</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">worktracker</span> BE</td><td>Counter monotonic across create/delete/create; blank vs explicit name (counter untouched on explicit); start derives <span class="m">end_date</span> from duration; start 409 on 2nd active; complete moves only unfinished; carryover→backlog nulls <span class="m">sprint_id</span>; carryover→sprint re-points; 409 on re-complete; 422 + rollback on bad target; atomicity (no partial move observable on a forced failure); migration backfill rerun-safe.</td></tr>
+      <tr><td><span class="m">worktracker-sdk/tests</span></td><td><span class="m">Sprint</span>/<span class="m">SprintCreate</span>/<span class="m">SprintUpdate</span> parse <span class="m">goal</span> (no <span class="m">extra=forbid</span> rejection); <span class="m">start()</span>/<span class="m">complete()</span> hit <span class="m">sprints/{id}/start|complete</span> and parse <span class="m">Sprint</span>/<span class="m">SprintCompleteResult</span>.</td></tr>
+      <tr><td><span class="m">studio/src/test</span></td><td>NewSprint prefills next name + goal; Start/Complete dialogs render and dispatch; carryover dropdown excludes the completing sprint + completed sprints; optimistic rollback on a simulated failure; goal renders on the card. Extend <span class="m">sprintsLens.test.tsx</span>.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Six steps; each lands green before the next. BE + SDK first so Studio rides a real contract.</div>
+  <div class="steps">
+    <div class="bstep"><span class="n">1</span><b>Model + migration</b><span class="m">goal</span>, <span class="m">sprint_seq</span>, 0007 with rerun-safe backfill.</div>
+    <div class="bstep"><span class="n">2</span><b>Schemas + routes</b>Mint branch, <span class="m">start</span>, <span class="m">complete</span>, validation; BE suite green.</div>
+    <div class="bstep"><span class="n">3</span><b>SDK co-ship</b><span class="m">goal</span> on 3 models, new inputs/result, <span class="m">start()</span>/<span class="m">complete()</span>; SDK green.</div>
+    <div class="bstep"><span class="n">4</span><b>Types + api + store</b>Clients, <span class="m">nextSprintName</span>, two store actions with rollback.</div>
+    <div class="bstep"><span class="n">5</span><b>Dialogs + wiring</b>Start/Complete dialogs, NewSprint prefill+goal, Lens verbs, Card goal.</div>
+    <div class="bstep"><span class="n">6</span><b>Tests + live e2e</b>All suites green; create/start/complete-carryover exercised in Studio.</div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section>
+  <h2>Acceptance</h2>
+  <div class="accept">
+    <b>Auto-named sprint in → goal round-trips → explicit Start stamps dates → Complete moves exactly the unfinished work, atomically</b> — counter never reused, 409 on re-complete / second-active, 422 + full rollback on a bad target, and a failed Studio op rolls the board back cleanly, with all three suites green.
+  </div>
+</section>
+
+</main>
+
+<script>
+  const FILES = {
+    models: { t: 'worktracker/worktracker/models.py', k: 'MODIFIED', items: [
+      'Sprint.goal = TextField(blank=True, default="").',
+      'Project.sprint_seq = PositiveIntegerField(default=0) — monotonic per-project sprint counter, never decremented on delete.',
+      'Document sprint_seq beside the existing issue seq_counter so the two allocators are not confused.'
+    ], no: ['No change to status choices (planned/active/completed) or any FK.'] },
+    schemas: { t: 'worktracker/worktracker/schemas.py', k: 'MODIFIED', items: [
+      'goal added to SprintOut / SprintIn / SprintPatch.',
+      'SprintIn.name becomes Optional[str] = None (blank ≡ omitted ⇒ mint).',
+      'New SprintStartIn { duration_days=14, start_date, end_date, goal }.',
+      'New SprintCompleteIn { carryover: Literal["backlog","sprint"], target_sprint_id }.',
+      'New SprintCompleteOut { sprint, moved_count }.'
+    ], no: ['No SprintProgress / SprintDetail response envelope (deferred).'] },
+    api: { t: 'worktracker/worktracker/api.py', k: 'MODIFIED', items: [
+      'create_sprint: blank/omitted name → sprint_seq += 1 (save) and mint Sprint N; supplied name honored, counter untouched; pass goal through.',
+      'POST /sprints/{id}/start: status=active, start=start or today, end=end or start+duration (14), apply goal, reuse single-active 409.',
+      'POST /sprints/{id}/complete: validate (409 completed, 422 bad target) then transaction.atomic() re-point unfinished members; return {sprint, moved_count}.',
+      'patch_sprint gains a goal passthrough; otherwise unchanged.'
+    ], no: ['No change to the existing single-active query shape — reuse it, do not fork it.'] },
+    mig: { t: 'worktracker/worktracker/migrations/0007_sprint_lifecycle.py', k: 'NEW', items: [
+      'AddField Sprint.goal (default "") and Project.sprint_seq (default 0).',
+      'RunPython backfill: sprint_seq = max trailing int parsed from existing "Sprint N" names per project, else 0.',
+      'Rerun-safe (idempotent recompute); reverse is a no-op. 0006 (rank) already landed — take the next free number, rebase if a sibling lands first.'
+    ], no: ['goal needs no backfill beyond the field default.'] },
+    sdkmodels: { t: 'worktracker-sdk/worktracker_sdk/models.py', k: 'MODIFIED', items: [
+      'goal: str = "" on Sprint (OutputModel — mandatory, extra="forbid"), SprintCreate, SprintUpdate.',
+      'SprintCreate.name → Optional to mirror the mint path.',
+      'New SprintStart, SprintComplete inputs; new SprintCompleteResult(OutputModel) { sprint, moved_count }.'
+    ], no: ['Pre-existing start_date/end_date-required and SprintDetail get-envelope mismatches left as-is (out of scope).'] },
+    sdkres: { t: 'worktracker-sdk/worktracker_sdk/resources.py', k: 'MODIFIED', items: [
+      'start(sprint_id, SprintStart) -> Sprint → POST sprints/{id}/start.',
+      'complete(sprint_id, SprintComplete) -> SprintCompleteResult → POST sprints/{id}/complete.',
+      'Both dump with model_dump(mode="json", exclude_unset=True), mirroring update().'
+    ], no: ['get()/list() left unchanged.'] },
+    sdkinit: { t: 'worktracker-sdk/worktracker_sdk/__init__.py', k: 'MODIFIED', items: [
+      'Export SprintStart, SprintComplete, SprintCompleteResult (and keep existing sprint exports).'
+    ], no: [] },
+    types: { t: 'studio/src/lib/types.ts', k: 'MODIFIED', items: [
+      'goal: string on Sprint; goal?: string on SprintCreate / SprintPatch; SprintCreate.name optional.',
+      'New SprintStart, SprintComplete bodies and SprintCompleteResult.'
+    ], no: [] },
+    apits: { t: 'studio/src/lib/api.ts', k: 'MODIFIED', items: [
+      'startSprint(id, body) -> Sprint → POST /sprints/{id}/start.',
+      'completeSprint(id, body) -> SprintCompleteResult → POST /sprints/{id}/complete.',
+      'Follow the existing patchSprint request shape (JSON body, UUID id).'
+    ], no: [] },
+    sprintact: { t: 'studio/src/stores/backlog/backlogSprintActions.ts', k: 'MODIFIED', items: [
+      'startSprint: optimistic status flip + apply goal/dates; client single-active pre-check; reconcile from response; non-2xx ⇒ roll sprints back + toast.',
+      'completeSprint: snapshot sprints AND items; optimistic flip + move unfinished cards (same predicate as sprintProgress); reconcile sprint, keep moves; non-2xx ⇒ roll back both + toast.',
+      'createSprint signature carries goal alongside dates.'
+    ], no: ['setSprintStatus kept for any bare non-dialog flip.'] },
+    store: { t: 'studio/src/stores/backlog/backlogStore.ts', k: 'MODIFIED', items: [
+      'Declare startSprint(id, body) / completeSprint(id, body) in BacklogState and wire to sprintActions.*.'
+    ], no: [] },
+    sel: { t: 'studio/src/stores/backlog/backlogSelectors.ts', k: 'MODIFIED', items: [
+      'nextSprintName(sprints): parse trailing int from "Sprint N" names, return Sprint {max+1} (min Sprint 1). Client prefill only — server is authoritative on create.'
+    ], no: [] },
+    startdlg: { t: 'studio/src/views/Sprints/StartSprintDialog.tsx', k: 'NEW', items: [
+      'Prefilled name (display), optional goal (from sprint.goal), duration presets 1/2/3/4 wk (default 2 wk) OR explicit start/end dates.',
+      'Blocked with a clear message when another sprint is active; server 409 is the backstop (toast + rollback).',
+      'Confirm → startSprint(id, { duration_days | start+end, goal }); close on success.'
+    ], no: [] },
+    completedlg: { t: 'studio/src/views/Sprints/CompleteSprintDialog.tsx', k: 'NEW', items: [
+      'Show done/unfinished split from sprintProgress(items, sprint.id).',
+      'Carryover: Backlog OR a planned sprint — dropdown excludes the completing sprint AND all completed sprints; "+ new sprint" inline shortcut creates then selects.',
+      'Unfinished == 0 ⇒ skip the picker entirely (complete still valid, moved_count=0).',
+      'Confirm → completeSprint(id, { carryover, target_sprint_id }); on failure stay open (board already rolled back).'
+    ], no: [] },
+    newsprint: { t: 'studio/src/views/Sprints/NewSprint.tsx', k: 'MODIFIED', items: [
+      'Prefill name input with nextSprintName(sprints) on open (name now optional).',
+      'Add an optional one-line goal input; pass { goal } through createSprint.'
+    ], no: [] },
+    lens: { t: 'studio/src/views/Sprints/SprintsLens.tsx', k: 'MODIFIED', items: [
+      'Start/Complete buttons open StartSprintDialog / CompleteSprintDialog instead of calling setSprintStatus directly.',
+      'Keep existing data-testid hooks (start-{id}, complete-{id}) on the triggers.'
+    ], no: [] },
+    card: { t: 'studio/src/views/Sprints/SprintCard.tsx', k: 'MODIFIED', items: [
+      'Render sprint.goal as one muted line under the dates when non-empty.'
+    ], no: [] }
+  };
+  const det = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(h => h.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(x => x.classList.remove('sel'));
+    h.classList.add('sel');
+    const d = FILES[h.dataset.f];
+    const kc = d.k === 'NEW' ? 'var(--green)' : 'var(--amber)';
+    det.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + kc + '">' + d.k + '</div><ul>' +
+      d.items.map(x => '<li>' + x + '</li>').join('') +
+      d.no.map(x => '<li class="no">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  const STEPS = {
+    1: { t: '1 · Carryover choice', p: 'CompleteSprintDialog shows the done/unfinished split (from sprintProgress) and a single carryover choice: Backlog or a planned sprint (dropdown excludes the completing sprint and every completed sprint; "+ new sprint" creates one inline).', e: 'Edge: zero unfinished members → the picker is skipped entirely and confirm completes with moved_count 0.' },
+    2: { t: '2 · Optimistic apply', p: 'The store snapshots BOTH sprints and items, flips the sprint status to completed, and moves every unfinished member locally (state group not completed/cancelled) to the target or null — exactly what the server will do.', e: 'Edge: the snapshot is the rollback token; nothing is committed to the user as final until step 6.' },
+    3: { t: '3 · POST /complete', p: 'api.completeSprint sends { carryover, target_sprint_id } to POST /sprints/{id}/complete by UUID.', e: 'Edge: network failure surfaces as a non-2xx and routes straight to step 7.' },
+    4: { t: '4 · Validate then transact', p: 'The route validates BEFORE any write: already-completed → 409; carryover=="sprint" requires a target that is not self, exists, same project, not completed → else 422. Then transaction.atomic() sets status=completed and re-points only unfinished members.', e: 'Edge: a 422 raised inside the block rolls the whole transaction back — no partial move is ever observable.' },
+    5: { t: '5 · Atomic re-point', p: 'Within the transaction, members with state group NOT IN (completed, cancelled) — null state counts as unfinished — update sprint_id to the target (carryover=sprint) or NULL (carryover=backlog). Done/cancelled members stay on the completed sprint as history. moved_count is captured.', e: 'Edge: concurrent completes are serialized by the row-level transaction; the second sees status=completed and 409s.' },
+    6: { t: '6 · Reconcile', p: 'On 2xx the store reconciles the sprint from result.sprint (server source of truth) and keeps the optimistic item moves; moved_count is informational (optional "Moved N items" toast).', e: 'Edge: server count and optimistic count agree by construction — they apply the identical predicate.' },
+    7: { t: '7 · Rollback', p: 'Any non-2xx (409 re-complete, 422 bad target, network) restores BOTH the sprints and items snapshots — no partial board — and toasts the error. The dialog stays open.', e: 'Edge: this is the same rollback discipline as moveItemToSprint, extended to cover the sprint status flip too.' }
+  };
+  const seqInfo = document.getElementById('seqInfo');
+  document.querySelectorAll('.step').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.step').forEach(x => x.classList.remove('hl'));
+    s.classList.add('hl');
+    const d = STEPS[s.dataset.s];
+    seqInfo.innerHTML = '<h4>' + d.t + '</h4><p>' + d.p + '</p><div class="edge">' + d.e + '</div>';
+  }));
+
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section[id]')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+graph TD
+  A["studio/src/terminal/create/*"] --> B["shared launcher + modal host"]
+  B --> C["studio/src/coding/modals/PlanFeature.tsx"]
+  B --> D["studio/src/workitems/BacklogView.tsx"]
+  B --> E["studio/src/workitems/BoardView.tsx"]
+  B --> F["studio/src/workitems/StoryMap/*"]
+  B --> G["studio/src/workitems/Sprints/*"]
+  B --> H["studio/src/shell/ContentHost.tsx"]
+  D --> I["BacklogInlineCreate removed"]
+  D --> J["CreateIssue removed"]
+  E --> J
+  C --> K["/coding behavior unchanged"]
+  H --> L["StudioScratchTerminalPanel"]

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-636 · Studio Search & Quick-Filter Parity — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    display: flex; gap: 2px; overflow-x: auto;
+    margin: 0 -40px; padding: 0 40px;
+    position: sticky; top: 0; z-index: 30;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+
+  /* evolution strip */
+  .evo { display: grid; grid-template-columns: 1fr 28px 1fr; gap: 10px; align-items: stretch; margin-bottom: 40px; }
+  .evo .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); }
+  .evo .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .evo .stage.dead { opacity: .7; }
+  .evo .stage.dead .lbl { color: var(--red); }
+  .evo .stage.live { border: 2px solid var(--green); color: var(--ink); }
+  .evo .stage.live .lbl { color: var(--green); }
+  .evo .arr { align-self: center; text-align: center; color: var(--violet); font-size: 18px; font-weight: 700; }
+
+  /* pillar cards */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .pillar { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent); cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .pillar:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .pillar.p2 { border-top-color: var(--green); }
+  .pillar.p3 { border-top-color: var(--violet); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .pillar.open .more { display: block; }
+  .pillar ul { list-style: none; }
+  .pillar li { font-size: 13px; padding: 3px 0 3px 20px; position: relative; }
+  .pillar li.in::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .pillar li.reuse::before { content: "↻"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+  .pillar li.prep::before { content: "◌"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+  .legend { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend b { font-weight: 700; }
+  .legend .g { color: var(--green); } .legend .a { color: var(--amber); } .legend .b { color: var(--accent); }
+
+  /* filter model matrix */
+  .iface { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .icard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .icard .ihead { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--violet); }
+  .icard h3 { font-size: 15px; margin: 4px 0 8px; }
+  .icard p { font-size: 13px; color: var(--muted); }
+  .icard code, .mono { font-family: var(--mono); font-size: 12px; }
+  .icard .rule { margin-top: 10px; font-size: 12.5px; background: var(--violet-soft); color: var(--violet); border-radius: 8px; padding: 8px 12px; font-weight: 600; }
+  .icard .rule.g { background: var(--green-soft); color: var(--green); }
+
+  /* diagram */
+  .diagram-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .leg-row { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* trace table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 1px 2px; }
+  .pill.b1 { background: var(--accent-soft); color: var(--accent); }
+  .pill.b2 { background: var(--green-soft); color: var(--green); }
+  .pill.b3 { background: var(--violet-soft); color: var(--violet); }
+
+  /* question board */
+  .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--red); }
+  .qcard.ans { border-left-color: var(--green); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--red); }
+  .qcard.ans .qid { color: var(--green); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 12.5px; color: var(--muted); }
+  .qcard p b { color: var(--green); }
+  .qcard.openq p b { color: var(--amber); }
+
+  /* repo tree */
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; gap: 30px; flex-wrap: wrap; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 420px; }
+  .tree .dir { color: var(--accent); font-weight: 700; }
+  .tree .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .ex { color: var(--muted); }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; max-width: 380px; }
+  .tree-notes li { margin-bottom: 8px; list-style: none; padding-left: 16px; position: relative; }
+  .tree-notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .pillars, .qgrid, .iface { grid-template-columns: 1fr; }
+    .diagram-wrap { grid-template-columns: 1fr; }
+    .evo { grid-template-columns: 1fr; }
+    .evo .arr { transform: rotate(90deg); }
+    .tree { min-width: 0; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker Studio · Slice C1 · CODIN-636 · HLD</div>
+  <h1>Search & Quick-Filter Parity — High-Level Design</h1>
+  <div class="sub">Three Jira-muscle-memory affordances over the <i>already-loaded</i> item set: an inline search box that narrows Backlog and Board by key or name, a composable <b>+ Add filter</b> chip bar that replaces the fixed State/Sprint dropdowns, and a ⌘K / “/” palette to jump straight to an issue. Pure frontend, client-side, zero new endpoint. Closes gaps G10 / G11 / G18.</div>
+  <div class="chips">
+    <span class="chip">Phase: HLD</span>
+    <span class="chip green">Zero backend · no new endpoint</span>
+    <span class="chip amber">Breaking: filters shape change</span>
+    <span class="chip violet">Shared multi-agent tree (#637 · #642)</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">Reframe</a>
+    <a href="#slice">Three Pillars</a>
+    <a href="#model">Filter Model</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Gap Trace</a>
+    <a href="#questions">Decisions</a>
+    <a href="#repo">Change Map</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ REFRAME ============ -->
+<section id="evo">
+  <h2>What changed in refinement</h2>
+  <div class="lede">G11 asked for a priority quick-filter. In refinement the user reframed it: not one more dropdown, but a composable filter model. That reshapes the store, so it is recorded here up front.</div>
+  <div class="evo">
+    <div class="stage dead">
+      <div class="lbl">TICKET AS FILED</div>
+      A single-select <b>Priority</b> dropdown sitting beside the existing State and Sprint dropdowns on the Backlog filter bar. Minimal, but three fixed controls that don't compose.
+    </div>
+    <div class="arr">⟶</div>
+    <div class="stage live">
+      <div class="lbl">THIS DESIGN</div>
+      A Linear-style <b>+ Add filter</b> bar: pick a field, pick value(s), each active filter becomes a removable chip. Multi-value per field. The fixed State/Sprint dropdowns are <b>replaced</b>, not extended — so <span class="mono">filters</span> moves from single ids to id <i>arrays</i>.
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLICE ============ -->
+<section id="slice">
+  <h2>The slice, in three pillars</h2>
+  <div class="lede">All three read the item set the store already loaded — none refetches. Click a pillar to expand its boundary.</div>
+  <div class="pillars">
+    <div class="pillar open" data-k="search">
+      <div class="tag">PILLAR 1 · G10 · Backlog + Board</div>
+      <h3>Inline search box</h3>
+      <p>An always-visible field in the toolbar of both surfaces. Type to narrow what's on screen.</p>
+      <div class="more"><ul>
+        <li class="in">Matches <span class="mono">key</span> OR <span class="mono">name</span> — case-insensitive substring (<span class="mono">auth</span>, <span class="mono">609</span>, <span class="mono">studio</span>)</li>
+        <li class="in">New <span class="mono">query: string</span> on the shared <span class="mono">backlogStore.filters</span> — set on one surface, carries to the other</li>
+        <li class="reuse">Backlog keeps matching rows <b>and their ancestors</b> via the existing <span class="mono">matches()</span> scaffolding rule</li>
+        <li class="reuse">Board narrows each column via <span class="mono">boardColumns()</span></li>
+      </ul></div>
+    </div>
+    <div class="pillar p2" data-k="chips">
+      <div class="tag">PILLAR 2 · G11 (reframed) · Backlog + Board</div>
+      <h3>Composable filter chips</h3>
+      <p>A <span class="mono">+ Add filter</span> control: pick a field → pick value(s); each active filter is a removable chip.</p>
+      <div class="more"><ul>
+        <li class="in">Backlog fields: <b>Priority · State · Sprint</b></li>
+        <li class="in">Board fields: <b>Priority · Sprint</b> — State excluded, it is the column axis</li>
+        <li class="in">Multi-value: <b>within a field = OR</b>, <b>across fields = AND</b></li>
+        <li class="in">Priority values are the frozen enum from <span class="mono">lib/display.ts</span> (urgent…none)</li>
+        <li class="prep">Replaces the two fixed dropdowns → <span class="mono">stateId/sprintId</span> become <span class="mono">stateIds/sprintIds</span></li>
+      </ul></div>
+    </div>
+    <div class="pillar p3" data-k="palette">
+      <div class="tag">PILLAR 3 · G18 · global</div>
+      <h3>Quick-jump palette</h3>
+      <p>⌘K / Ctrl+K anywhere, or “/” when not typing. A modal to jump to an issue without the mouse.</p>
+      <div class="more"><ul>
+        <li class="in">Lists the current project's loaded issues; substring match on key + name</li>
+        <li class="in">↑↓ move · Enter opens the issue · Esc closes</li>
+        <li class="reuse">“Open” navigates to <span class="mono">/issues/KEY-N</span> — the existing route → drawer path</li>
+        <li class="reuse">“/” suppression reuses the <span class="mono">useCodingAppShortcut</span> typing-target guard</li>
+        <li class="in">It navigates; it does <b>not</b> touch <span class="mono">filters</span></li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><b class="g">✓ new</b> — built in this slice</span>
+    <span><b class="b">↻ reuse</b> — existing seam, unchanged</span>
+    <span><b class="a">◌ breaking</b> — store-shape change with blast radius</span>
+  </div>
+</section>
+
+<!-- ============ FILTER MODEL ============ -->
+<section id="model">
+  <h2>The filter model</h2>
+  <div class="lede">One shared <span class="mono">backlogStore.filters</span> object backs every surface (D1). Search, chips, and the surface-render predicates all read it. The model is the contract; the widgets are interchangeable.</div>
+  <div class="iface">
+    <div class="icard">
+      <div class="ihead">STATE · the shared shape</div>
+      <h3><span class="mono">BacklogFilters</span> (breaking)</h3>
+      <p><span class="mono">query: string</span> &nbsp;·&nbsp; <span class="mono">priorities: string[]</span> &nbsp;·&nbsp; <span class="mono">stateIds: string[]</span> &nbsp;·&nbsp; <span class="mono">sprintIds: string[]</span> &nbsp;·&nbsp; <span class="mono">epicIds: string[]</span> (unchanged, #627) &nbsp;·&nbsp; <span class="mono">showSubtasks?: boolean</span>.</p>
+      <div class="rule">Singular <span class="mono">stateId/sprintId</span> → plural arrays. Touches <span class="mono">matches()</span>, <span class="mono">boardColumns()</span>, <span class="mono">EMPTY_FILTERS</span>, both filter bars, and their tests.</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">SEMANTICS · how a row passes</div>
+      <h3>OR within, AND across</h3>
+      <p>An item passes when, for every <i>active</i> field, its value is in that field's set. <span class="mono">query</span> is a case-insensitive substring on key + name. An empty set = field inactive = matches all.</p>
+      <div class="rule g">Example: <span class="mono">priorities=[high,urgent]</span> AND <span class="mono">query="auth"</span> → high-or-urgent issues whose key/name contains “auth”.</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">SCOPE · per surface</div>
+      <h3>Same state, different fields exposed</h3>
+      <p><b>Backlog</b> exposes Priority/State/Sprint chips + search. <b>Board</b> exposes Priority/Sprint chips + search (State is the column axis, so it is never a chip there). Epic/module stays where #627 put it — the epic rail on Backlog, the Module dropdown on Board — <b>not</b> folded into chips.</p>
+      <div class="rule">A field a surface doesn't expose simply isn't offered there; it is not cleared from the shared object.</div>
+    </div>
+    <div class="icard">
+      <div class="ihead">LIFECYCLE · reset & persistence</div>
+      <h3>Cleared on project switch</h3>
+      <p>All fields reset to <span class="mono">EMPTY_FILTERS</span> on project change (today's behavior, extended to the new fields), so stale ids never leak across projects. Filters are <b>not</b> persisted to localStorage.</p>
+      <div class="rule">No refetch anywhere — every narrowing is a pure recompute over the loaded items.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SYSTEM SHAPE ============ -->
+<section id="shape">
+  <h2>System shape</h2>
+  <div class="lede">Click any box for its responsibility and boundary. <span style="color:var(--green);font-weight:700">Green</span> = new in this slice, <span style="color:var(--amber);font-weight:700">amber</span> = existing but shape-changed, <span style="color:var(--accent);font-weight:700">blue</span> = existing and reused untouched. Two lanes: the filter→render flow (left/centre) and the palette→drawer flow (right).</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 780 560" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/></marker>
+        <marker id="arrg" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#1d7a4f"/></marker>
+      </defs>
+
+      <!-- actor -->
+      <g class="node" data-n="you">
+        <ellipse cx="120" cy="48" rx="85" ry="30" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="1.5"/>
+        <text x="120" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#3d2370">You</text>
+        <text x="120" y="61" text-anchor="middle" font-size="10.5" fill="#6b3fb8">type · pick · ⌘K</text>
+      </g>
+
+      <!-- NEW controls row -->
+      <g class="node" data-n="search">
+        <rect x="40" y="118" width="200" height="64" rx="10" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="140" y="144" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">SearchBox · NEW</text>
+        <text x="140" y="162" text-anchor="middle" font-size="10.5" fill="#1d7a4f">key | name substring</text>
+        <text x="140" y="176" text-anchor="middle" font-size="10.5" fill="#5b6478">Backlog + Board toolbar</text>
+      </g>
+      <g class="node" data-n="chips">
+        <rect x="290" y="118" width="200" height="64" rx="10" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="390" y="144" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">FilterChips · NEW</text>
+        <text x="390" y="162" text-anchor="middle" font-size="10.5" fill="#1d7a4f">+ Add filter · removable</text>
+        <text x="390" y="176" text-anchor="middle" font-size="10.5" fill="#5b6478">replaces fixed dropdowns</text>
+      </g>
+      <g class="node" data-n="palette">
+        <rect x="540" y="118" width="200" height="64" rx="10" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="640" y="144" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">CommandPalette · NEW</text>
+        <text x="640" y="162" text-anchor="middle" font-size="10.5" fill="#1d7a4f">⌘K / “/” jump-to-issue</text>
+        <text x="640" y="176" text-anchor="middle" font-size="10.5" fill="#5b6478">global · mounted at root</text>
+      </g>
+
+      <!-- shared filters hub -->
+      <g class="node" data-n="filters">
+        <rect x="170" y="238" width="240" height="84" rx="10" fill="#fff" stroke="#9a6700" stroke-width="2"/>
+        <text x="290" y="264" text-anchor="middle" font-size="13" font-weight="700" fill="#7a5200">backlogStore.filters</text>
+        <text x="290" y="283" text-anchor="middle" font-size="10.5" fill="#9a6700">+query +priorities[]</text>
+        <text x="290" y="298" text-anchor="middle" font-size="10.5" fill="#9a6700">stateId→stateIds[] · sprintId→sprintIds[]</text>
+        <text x="290" y="314" text-anchor="middle" font-size="10.5" fill="#5b6478">SHARED · shape-changed</text>
+      </g>
+
+      <!-- predicate -->
+      <g class="node" data-n="predicate">
+        <rect x="170" y="360" width="240" height="64" rx="10" fill="#fff" stroke="#9a6700" stroke-width="2"/>
+        <text x="290" y="386" text-anchor="middle" font-size="13" font-weight="700" fill="#7a5200">matches() · boardColumns()</text>
+        <text x="290" y="404" text-anchor="middle" font-size="10.5" fill="#9a6700">+ query + multi-value predicates</text>
+        <text x="290" y="418" text-anchor="middle" font-size="10.5" fill="#5b6478">pure selectors · recompute</text>
+      </g>
+
+      <!-- surfaces -->
+      <g class="node" data-n="backlog">
+        <rect x="40" y="464" width="200" height="64" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="140" y="490" text-anchor="middle" font-size="13" font-weight="700">Backlog tree</text>
+        <text x="140" y="508" text-anchor="middle" font-size="10.5" fill="#5b6478">rows + kept ancestors</text>
+        <text x="140" y="522" text-anchor="middle" font-size="10.5" fill="#3556d4">EXISTING render</text>
+      </g>
+      <g class="node" data-n="board">
+        <rect x="290" y="464" width="200" height="64" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="390" y="490" text-anchor="middle" font-size="13" font-weight="700">Board columns</text>
+        <text x="390" y="508" text-anchor="middle" font-size="10.5" fill="#5b6478">narrowed per column</text>
+        <text x="390" y="522" text-anchor="middle" font-size="10.5" fill="#3556d4">EXISTING render</text>
+      </g>
+
+      <!-- right lane: router + drawer -->
+      <g class="node" data-n="router">
+        <rect x="540" y="238" width="200" height="64" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="640" y="264" text-anchor="middle" font-size="13" font-weight="700">/issues/:key route</text>
+        <text x="640" y="282" text-anchor="middle" font-size="10.5" fill="#5b6478">routes.tsx → uiStore.drawerKey</text>
+        <text x="640" y="296" text-anchor="middle" font-size="10.5" fill="#3556d4">EXISTING</text>
+      </g>
+      <g class="node" data-n="drawer">
+        <rect x="540" y="360" width="200" height="64" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="640" y="386" text-anchor="middle" font-size="13" font-weight="700">IssueDrawerHost</text>
+        <text x="640" y="404" text-anchor="middle" font-size="10.5" fill="#5b6478">opens the issue detail</text>
+        <text x="640" y="418" text-anchor="middle" font-size="10.5" fill="#3556d4">EXISTING</text>
+      </g>
+
+      <!-- edges: you -> controls -->
+      <line x1="100" y1="76" x2="120" y2="114" stroke="#8a93a8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="150" y1="74" x2="330" y2="114" stroke="#8a93a8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="175" y1="64" x2="600" y2="114" stroke="#8a93a8" stroke-width="1.4" marker-end="url(#arr)"/>
+
+      <!-- search/chips -> filters -->
+      <line x1="150" y1="184" x2="240" y2="236" stroke="#1d7a4f" stroke-width="1.6" marker-end="url(#arrg)"/>
+      <line x1="380" y1="184" x2="330" y2="236" stroke="#1d7a4f" stroke-width="1.6" marker-end="url(#arrg)"/>
+      <!-- filters -> predicate -> surfaces -->
+      <line x1="290" y1="324" x2="290" y2="357" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="240" y1="420" x2="150" y2="462" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="340" y1="426" x2="390" y2="462" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+      <!-- palette lane -->
+      <line x1="640" y1="184" x2="640" y2="235" stroke="#1d7a4f" stroke-width="1.6" marker-end="url(#arrg)"/>
+      <line x1="640" y1="304" x2="640" y2="357" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- palette reads loaded items (dashed, informational) -->
+      <path d="M540 150 q-70 30 -130 90" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="5 4" fill="none" marker-end="url(#arr)"/>
+
+      <!-- labels -->
+      <text x="156" y="214" font-size="10" fill="#1d7a4f">query</text>
+      <text x="338" y="214" font-size="10" fill="#1d7a4f" text-anchor="end">priorities/ids</text>
+      <text x="296" y="345" font-size="10" fill="#8a93a8">read</text>
+      <text x="648" y="214" font-size="10" fill="#1d7a4f">open</text>
+      <text x="648" y="335" font-size="10" fill="#8a93a8">drawerKey</text>
+      <text x="430" y="210" font-size="10" fill="#8a93a8">reads loaded items</text>
+    </svg>
+    <div id="nodeInfo"><span class="hint">Click a box to see what it owns and what it explicitly does not do.</span></div>
+  </div>
+  <div class="leg-row">
+    <span><span class="sw" style="background:var(--green-soft);border:1.5px solid var(--green)"></span>new this slice</span>
+    <span><span class="sw" style="background:#fff;border:1.5px solid var(--amber)"></span>existing · shape-changed</span>
+    <span><span class="sw" style="background:#fbfcfe;border:1.5px solid var(--accent)"></span>existing · reused untouched</span>
+    <span><span class="sw" style="background:var(--violet-soft);border:1.5px solid var(--violet)"></span>actor</span>
+  </div>
+</section>
+
+<!-- ============ GAP TRACE ============ -->
+<section id="trace">
+  <h2>Gap & decision → slice trace</h2>
+  <div class="lede">Click a row to highlight where each gap or decision lives in the diagram.</div>
+  <table>
+    <thead><tr><th style="width:120px">Gap / Decision</th><th>What it requires</th><th>Where the slice honors it</th><th style="width:150px">Pillar</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-nodes="search,filters,predicate,backlog,board"><td><span class="rid">G10</span></td><td>Text search box on Backlog + Board, by key or name</td><td>SearchBox writes <span class="mono">filters.query</span>; <span class="mono">matches()</span>/<span class="mono">boardColumns()</span> apply the substring; both surfaces re-render</td><td><span class="pill b2">Search</span></td></tr>
+      <tr class="trace" data-nodes="chips,filters,predicate,backlog"><td><span class="rid">G11</span></td><td>Priority quick-filter on the Backlog</td><td>Priority is one field of the composable chip bar, written into <span class="mono">filters.priorities</span></td><td><span class="pill b2">Chips</span></td></tr>
+      <tr class="trace" data-nodes="palette,router,drawer"><td><span class="rid">G18</span></td><td>⌘K / “/” jump-to-issue across the loaded set</td><td>CommandPalette matches loaded items, navigates <span class="mono">/issues/KEY-N</span> → drawer</td><td><span class="pill b3">Palette</span></td></tr>
+      <tr class="trace" data-nodes="filters,search,backlog,board"><td><span class="rid">D1</span></td><td>One shared filter object across surfaces</td><td>All controls read/write the single <span class="mono">backlogStore.filters</span>; a query set on one surface shows on the other</td><td><span class="pill b1">Search</span><span class="pill b2">Chips</span></td></tr>
+      <tr class="trace" data-nodes="chips,filters"><td><span class="rid">D2</span></td><td>Composable “+ Add filter”, not fixed dropdowns (user reframe)</td><td>Chip bar replaces the State/Sprint dropdowns; <span class="mono">stateId/sprintId</span> become arrays; OR-within / AND-across</td><td><span class="pill b2">Chips</span></td></tr>
+      <tr class="trace" data-nodes="filters,predicate"><td><span class="rid">D3</span></td><td>Client-side only over loaded items</td><td>Pure recompute in the selectors — no new endpoint, no refetch</td><td><span class="pill b1">Search</span><span class="pill b2">Chips</span></td></tr>
+      <tr class="trace" data-nodes="chips,board"><td><span class="rid">D4</span></td><td>Board excludes State from chips</td><td>State is the column axis; the Board chip set is Priority + Sprint only</td><td><span class="pill b2">Chips</span></td></tr>
+      <tr class="trace" data-nodes="palette,router,drawer"><td><span class="rid">D5</span></td><td>Palette navigates, does not filter</td><td>Selecting a result opens the issue; it never writes <span class="mono">filters</span></td><td><span class="pill b3">Palette</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ DECISIONS ============ -->
+<section id="questions">
+  <h2>Decisions & open LLD points</h2>
+  <div class="lede">Green = settled with the user in refinement. Amber = deliberately deferred to LLD; none gates the shape of this slice.</div>
+  <div class="qgrid">
+    <div class="qcard ans"><div class="qid">ANSWERED · search vs palette</div><h4>One affordance or two?</h4><p><b>Two, distinct.</b> The inline search box narrows the list in place (G10); the ⌘K/“/” palette is a separate modal that jumps/navigates (G18). Different mental models, matching Jira.</p></div>
+    <div class="qcard ans"><div class="qid">ANSWERED · the G11 reframe</div><h4>Fixed priority dropdown or composable?</h4><p><b>Composable chips.</b> A “+ Add filter” bar replacing the fixed State/Sprint dropdowns, multi-value per field — the user's explicit ask over a single dropdown.</p></div>
+    <div class="qcard ans"><div class="qid">ANSWERED · match scope</div><h4>What does search match?</h4><p><b>Key + name</b>, case-insensitive substring, for both the inline box and the palette. Type a title word or the number.</p></div>
+    <div class="qcard ans"><div class="qid">ANSWERED · board chip set</div><h4>Does Priority filter the Board too?</h4><p><b>Yes, via its own chips.</b> Board exposes Priority + Sprint chips (State is the axis). Module stays in its existing control, not in the chips (#627 owns epic filtering).</p></div>
+    <div class="qcard openq"><div class="qid">LLD · palette state home</div><h4>Where does palette open/close live?</h4><p><b>To decide in LLD:</b> a <span class="mono">uiStore</span> flag (symmetric with <span class="mono">drawerKey</span>, easy to test) vs. local state in a root-mounted component. Leaning <span class="mono">uiStore</span>.</p></div>
+    <div class="qcard openq"><div class="qid">LLD · chip widget mechanics</div><h4>Add-filter menu & value picker UX</h4><p><b>To detail in LLD:</b> the exact dropdown/menu interaction, reuse of existing pickers, and empty/“no matches” copy. The <i>model</i> (this doc) is fixed; the <i>widget</i> is not.</p></div>
+  </div>
+</section>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="repo">
+  <h2>Change map — studio/src</h2>
+  <div class="lede"><span class="new" style="padding:0 6px">Green</span> = new file. <span class="mod" style="padding:0 6px">Amber</span> = modified. Plain = read-only / reused. All frontend; no backend, no SDK, no migration.</div>
+  <div class="tree-wrap">
+    <div class="tree">
+      <div><span class="dir">studio/src/</span></div>
+      <div>├─ <span class="dir">stores/</span></div>
+      <div>│&nbsp;&nbsp;├─ <span class="mod">backlogStore.ts</span> <span class="ex">— filters shape, matches(), boardColumns(), EMPTY_FILTERS, setFilter</span></div>
+      <div>│&nbsp;&nbsp;└─ <span class="mod">uiStore.ts</span> <span class="ex">— palette open/close (if chosen here, LLD)</span></div>
+      <div>├─ <span class="dir">views/</span></div>
+      <div>│&nbsp;&nbsp;├─ <span class="new">SearchBox.tsx</span> <span class="ex">— shared toolbar field → filters.query</span></div>
+      <div>│&nbsp;&nbsp;├─ <span class="new">FilterChips.tsx</span> <span class="ex">— + Add filter + chip row</span></div>
+      <div>│&nbsp;&nbsp;├─ <span class="mod">FilterBar.tsx</span> <span class="ex">— dropdowns → SearchBox + FilterChips</span></div>
+      <div>│&nbsp;&nbsp;└─ <span class="mod">BoardFilterBar.tsx</span> <span class="ex">— + SearchBox + FilterChips (Priority/Sprint)</span></div>
+      <div>├─ <span class="dir">app/</span></div>
+      <div>│&nbsp;&nbsp;├─ <span class="new">CommandPalette.tsx</span> <span class="ex">— ⌘K/“/” modal, jump-to-issue</span></div>
+      <div>│&nbsp;&nbsp;├─ <span class="new">useCommandPalette.ts</span> <span class="ex">— global key handler (mirrors useCodingAppShortcut)</span></div>
+      <div>│&nbsp;&nbsp;└─ <span class="mod">StudioApp.tsx</span> <span class="ex">— mount palette + hook at root</span></div>
+      <div>├─ lib/<span class="ex">display.ts</span> <span class="ex">— PRIORITIES reused, read-only</span></div>
+      <div>└─ <span class="dir">test/</span> <span class="mod">backlogStore · board · FilterBar</span> + <span class="new">palette · chips</span></div>
+    </div>
+    <ul class="tree-notes">
+      <li>The amber <span class="mono">backlogStore.ts</span> is the blast radius: every reader of <span class="mono">stateId/sprintId</span> moves to arrays, and the matching tests update with it.</li>
+      <li>Shared multi-agent tree: C2 #637 (bulk) reuses pickers not the filter bar; C7 #642 shares the typing-guard. The <span class="mono">filters</span> shape change is the main merge surface — land deliberately.</li>
+      <li>No new dependency. The palette is hand-rolled to stay self-contained, consistent with the existing keyboard-hook pattern.</li>
+      <li>Story-map and Sprints views are untouched (<span class="mono">buildStoryMap</span> does not read <span class="mono">filters</span>).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance signal</h2>
+  <div class="accept">
+    The slice is done when, on both Backlog and Board, typing in the toolbar <b>search box</b> narrows the visible items by key or name with no refetch; a <b>+ Add filter</b> control lets you stack Priority / State / Sprint (Board: Priority / Sprint) as removable chips that combine <b>OR within a field, AND across fields</b>; pressing <b>⌘K or “/”</b> (when not typing) opens a palette that finds a loaded issue by key or name and <b>Enter jumps straight into it</b>; switching projects <b>clears all filters</b>; and the whole thing ships with <b>zero backend change</b> and a green <span class="mono">tsc</span> + vitest + build.
+  </div>
+</section>
+
+</main>
+
+<script>
+  // pillar expand/collapse
+  document.querySelectorAll('.pillar').forEach(p => {
+    p.addEventListener('click', () => p.classList.toggle('open'));
+  });
+
+  // diagram node info
+  const INFO = {
+    you: { t: 'You', does: ['Type into the search box', 'Add/remove filter chips', 'Press ⌘K or “/” to jump'], not: ['Never waits on a network round-trip — every action is client-side'] },
+    search: { t: 'SearchBox (NEW)', does: ['Shared toolbar field on Backlog and Board', 'Writes filters.query (case-insensitive substring on key + name)'], not: ['Does not navigate — it only narrows', 'Not a second copy of state; both surfaces read the same query'] },
+    chips: { t: 'FilterChips (NEW)', does: ['“+ Add filter”: pick a field, pick value(s)', 'Renders each active filter as a removable chip', 'Backlog: Priority/State/Sprint · Board: Priority/Sprint'], not: ['Does not own epic/module filtering (#627 rail / Module dropdown)', 'State is never offered on the Board (it is the column axis)'] },
+    palette: { t: 'CommandPalette (NEW)', does: ['Opens on ⌘K/Ctrl+K, or “/” when not typing in a field', 'Lists the loaded items, substring-matched on key + name', '↑↓ to move, Enter to open, Esc to close'], not: ['Does NOT write filters — it navigates', 'Does not search beyond the loaded set (no fetch)'] },
+    filters: { t: 'backlogStore.filters (shape-changed)', does: ['Single shared object behind every surface', 'Gains query + priorities[]; stateId/sprintId become stateIds/sprintIds[]', 'Reset to EMPTY_FILTERS on project change'], not: ['Not persisted to localStorage', 'Not per-surface — one object, surfaces expose different fields'] },
+    predicate: { t: 'matches() · boardColumns() (modified)', does: ['Pure selectors that recompute the visible set', 'Gain the query substring + multi-value (OR within / AND across) predicates', 'Backlog keeps ancestors of matches; Board narrows each column'], not: ['No I/O — pure functions over the items array', 'Board still ignores State as a filter (it is the axis)'] },
+    backlog: { t: 'Backlog tree (existing render)', does: ['Re-renders from groupBacklog over the filtered set', 'Keeps matching rows and their ancestor scaffolding'], not: ['No structural change to row rendering'] },
+    board: { t: 'Board columns (existing render)', does: ['Re-renders from boardColumns over the filtered set'], not: ['Column axis unchanged; sub-task toggle unchanged'] },
+    router: { t: '/issues/:key route (existing)', does: ['URL drives uiStore.drawerKey (routes.tsx)', 'The palette navigates here to open an issue'], not: ['No new route added by this slice'] },
+    drawer: { t: 'IssueDrawerHost (existing)', does: ['Opens the issue detail overlay when drawerKey is set'], not: ['Untouched by this slice — reused as the jump target'] }
+  };
+  const nodes = document.querySelectorAll('.node');
+  const info = document.getElementById('nodeInfo');
+  function showNode(key) {
+    nodes.forEach(n => { n.classList.toggle('hl', n.dataset.n === key); n.classList.remove('dim'); });
+    const d = INFO[key]; if (!d) return;
+    info.innerHTML = '<h4>' + d.t + '</h4><ul>' +
+      d.does.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
+      '<ul style="margin-top:10px">' + d.not.map(x => '<li style="color:var(--red)">' + x + '</li>').join('') + '</ul>';
+  }
+  nodes.forEach(n => n.addEventListener('click', e => { e.stopPropagation(); showNode(n.dataset.n); }));
+
+  // trace rows highlight diagram
+  document.querySelectorAll('tr.trace').forEach(tr => {
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('tr.trace').forEach(r => r.classList.remove('sel'));
+      tr.classList.add('sel');
+      const keys = tr.dataset.nodes.split(',');
+      nodes.forEach(n => {
+        n.classList.toggle('hl', keys.includes(n.dataset.n));
+        n.classList.toggle('dim', !keys.includes(n.dataset.n));
+      });
+    });
+  });
+
+  // nav active state on scroll
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

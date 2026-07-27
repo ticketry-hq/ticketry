@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CODIN-718 - Failure Propagation Refinement</title>
+<style>
+  :root{--bg:#f7f8fa;--panel:#fff;--ink:#1a1d21;--muted:#667085;--line:#e4e7ec;--accent:#2563eb;--accent-soft:#e8f0fe;--green:#16a34a;--green-soft:#e7f6ec;--amber:#d97706;--amber-soft:#fdf1e0;--violet:#7c3aed;--violet-soft:#f0e9fd;--red:#dc2626;--red-soft:#fdeaea;--mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  header{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}.crumb{padding-top:16px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+  h1{margin:5px 0 3px;font-size:23px}.sub{margin:0 0 12px;color:var(--muted);font-size:14px}.chips{display:flex;gap:7px;flex-wrap:wrap;padding-bottom:12px}
+  .chip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:800}.blue{background:var(--accent-soft);color:#1a3f9e}.green{background:var(--green-soft);color:#14622f}.amber{background:var(--amber-soft);color:#8a4d00}
+  nav{display:flex;gap:2px;flex-wrap:wrap;border-top:1px solid var(--line)}nav a{padding:10px 12px;color:var(--muted);text-decoration:none;font-size:13px;border-bottom:2px solid transparent}nav a.active,nav a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+  section{padding:30px 0;border-bottom:1px solid var(--line)}h2{font-size:18px;margin:0 0 4px}.lede{margin:0 0 18px;color:var(--muted);font-size:14px;max-width:82ch}
+  .grid{display:grid;grid-template-columns:1.35fr .9fr;gap:18px}@media(max-width:850px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}.card h3{margin:0 0 8px;font-size:15px}
+  svg{width:100%;height:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}.node{cursor:pointer}.node rect,.node ellipse{fill:#fff;stroke:var(--accent);stroke-width:2}.node.fail rect{stroke:var(--red)}.node.halt rect{stroke:var(--amber);stroke-dasharray:6 5}.node.sel rect,.node.sel ellipse{fill:var(--accent-soft);stroke-width:3}.edge{stroke:#98a2b3;stroke-width:1.8;fill:none;marker-end:url(#arr)}.edge.bad{stroke:var(--red);stroke-width:2.2}.edge.hold{stroke:var(--amber);stroke-dasharray:6 5}
+  text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;fill:var(--ink)}.mono{font-family:var(--mono);font-size:12px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:10px 12px;font-size:13px}th{background:#fbfcfd;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}tr:last-child td{border-bottom:0}
+  .pill{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800}.p-in{background:var(--green-soft);color:#14622f}.p-out{background:var(--red-soft);color:#8a1f1f}.p-next{background:var(--amber-soft);color:#8a4d00}
+  code{font-family:var(--mono);font-size:12.5px;background:#eef0f3;border-radius:4px;padding:1px 5px}.panel ul{margin:8px 0 0;padding-left:18px}.panel li{font-size:13px;margin:4px 0}.accept{background:var(--green-soft);border:1px solid #bfe6cc;border-radius:8px;padding:16px;color:#14622f}.note{color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="crumb">worktracker - CODIN-718 - refinement report</div>
+  <h1>Execution tracer 3: failure propagation + idempotency</h1>
+  <p class="sub">Backlog refinement from CODIN-700 build playbook, CODIN-717 refinement, and current execution/runs code.</p>
+  <div class="chips"><span class="chip green">requirements clear</span><span class="chip amber">blocked by CODIN-717</span><span class="chip blue">move to Todo for LLD/spec</span></div>
+  <nav id="nav"><a href="#proposal">Proposal</a><a href="#graph">Failure graph</a><a href="#decisions">Decisions</a><a href="#scope">Scope</a><a href="#accept">Acceptance</a></nav>
+</div></header>
+<main class="wrap">
+<section id="proposal">
+  <h2>Strongest Version</h2>
+  <p class="lede">CODIN-718 should extend the CODIN-717 implement-phase graph engine only: failed nodes halt their transitive dependents, independent branches keep draining, and re-invocation reconstructs reality from tracker state plus live AgentRun rows.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>Current facts</h3>
+      <table><tr><th>Input</th><th>Finding</th></tr>
+        <tr><td>CODIN-717</td><td>Owns <code>graph.py</code>, <code>execute_graph</code>, ready-set release, in-memory graph registry, and the minimal re-invoke guard.</td></tr>
+        <tr><td>Execution app</td><td>Current local code is still one-task reducer/driver. CODIN-718 must layer on the graph shape after CODIN-717, not rewrite planning phases.</td></tr>
+        <tr><td>Runs model</td><td><code>agent_runs.status="running"</code> is the durable live launch record. Failed launches delete orphan rows; no new model or migration is needed.</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Hard question answered</h3>
+      <p class="note">What exactly counts as failure before durable lifecycle states exist?</p>
+      <p>Two signals only: <code>run_failed</code> from launch failure, and a running node's task moving into the <code>cancelled</code> state group. The stall case is any run ending without the task reaching the phase completion gate; it does not release dependents and must be logged/observable.</p>
+    </div>
+  </div>
+</section>
+
+<section id="graph">
+  <h2>Clickable Failure Graph</h2>
+  <p class="lede">Click a node for responsibilities and non-responsibilities. Dashed amber nodes are held back, not launched.</p>
+  <div class="grid">
+    <svg viewBox="0 0 760 430" role="img" aria-label="CODIN-718 failure propagation graph">
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#98a2b3"/></marker></defs>
+      <path class="edge" d="M150 105 C230 105 235 105 305 105"/><path class="edge bad" d="M450 105 C510 105 520 165 560 218"/>
+      <path class="edge hold" d="M610 268 C610 315 570 330 510 344"/><path class="edge" d="M150 270 C230 270 235 270 305 270"/>
+      <path class="edge" d="M450 270 C510 270 520 270 600 270"/>
+      <g class="node" data-node="root" transform="translate(40 72)"><ellipse cx="72" cy="34" rx="72" ry="34"/><text x="72" y="39" text-anchor="middle">root</text></g>
+      <g class="node fail" data-node="failed" transform="translate(305 64)"><rect width="145" height="82" rx="8"/><text x="72" y="33" text-anchor="middle">B failed</text><text x="72" y="54" text-anchor="middle" class="mono">run_failed/cancelled</text></g>
+      <g class="node halt" data-node="halted" transform="translate(540 210)"><rect width="145" height="58" rx="8"/><text x="72" y="28" text-anchor="middle">D halted</text><text x="72" y="47" text-anchor="middle" class="mono">dependent</text></g>
+      <g class="node" data-node="independent" transform="translate(305 229)"><rect width="145" height="82" rx="8"/><text x="72" y="33" text-anchor="middle">C drains</text><text x="72" y="54" text-anchor="middle" class="mono">independent branch</text></g>
+      <g class="node" data-node="idem" transform="translate(600 236)"><ellipse cx="72" cy="34" rx="72" ry="34"/><text x="72" y="30" text-anchor="middle">re-invoke</text><text x="72" y="50" text-anchor="middle" class="mono">adopt live run</text></g>
+    </svg>
+    <div class="card panel" id="panel"><h3>Pick a node</h3><ul><li>Failure propagates only through transitive dependents.</li><li>Ready independent work still launches.</li><li>Re-entry launches only genuinely idle ready nodes.</li></ul></div>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2>Clarified Decisions</h2>
+  <p class="lede">These decisions are stable enough for LLD without reopening Backlog refinement.</p>
+  <table><tr><th>Decision</th><th>Requirement</th></tr>
+    <tr><td>Status vocabulary</td><td>Graph node status becomes <code>idle | running | done | failed | halted</code>. <code>halted</code> is terminal for this invocation and never enters the ready-set.</td></tr>
+    <tr><td>Failure propagation</td><td>When a node becomes <code>failed</code>, <code>decide_graph</code> marks every still-idle transitive dependent <code>halted</code>. Running/done/failed nodes are not rewritten.</td></tr>
+    <tr><td>Independent branches</td><td>Branches not descending from the failed node continue to launch and complete using CODIN-717 ready-set rules.</td></tr>
+    <tr><td>Failure signals</td><td>Support <code>run_failed</code> and running task move to <code>cancelled</code> group. Durable lifecycle-state failure semantics remain deferred to CODIN-744.</td></tr>
+    <tr><td>Stall semantics</td><td>If a run ends without the issue reaching the phase completion gate, keep the node not-done, do not release dependents, and log/surface it. Do not silently mark done.</td></tr>
+    <tr><td>Durable idempotency</td><td>No new model. Seed <code>done</code> from tracker <code>completed</code> group; adopt the newest live <code>AgentRun</code> with <code>status="running"</code> for the task as <code>running</code>; launch only idle ready nodes with no live run.</td></tr>
+    <tr><td>Restart recovery</td><td>After <code>clear_registry()</code> or process restart, <code>execute_graph</code> rebuilds graph state from DB facts and resumes without duplicate launches.</td></tr>
+  </table>
+</section>
+
+<section id="scope">
+  <h2>Scope Boundaries</h2>
+  <p class="lede">The split from CODIN-717, CODIN-721, and CODIN-744 is explicit.</p>
+  <table><tr><th>In CODIN-718</th><th>Out of CODIN-718</th></tr>
+    <tr><td><span class="pill p-in">in</span> Pure graph failure propagation, <code>halted</code> status, and reducer tests.</td><td><span class="pill p-out">out</span> Building the base graph engine and ready-set release owned by CODIN-717.</td></tr>
+    <tr><td><span class="pill p-in">in</span> Live-run adoption from existing <code>AgentRun</code> rows and restart-safe re-entry.</td><td><span class="pill p-out">out</span> New database tables, migrations, retry UX, or durable internal state model.</td></tr>
+    <tr><td><span class="pill p-in">in</span> Cancelled-group interim failure and stall observability.</td><td><span class="pill p-next">later</span> Public execute endpoint, MCP tool, and Dependency-view action owned by CODIN-721.</td></tr>
+  </table>
+</section>
+
+<section id="accept">
+  <h2>Acceptance Signal</h2>
+  <div class="accept"><b>Requirements are clear.</b> CODIN-718 can move from Backlog to Todo for LLD/spec work. It remains blocked by CODIN-717 for implementation sequencing, but no requirement question needs to keep it in Backlog.</div>
+</section>
+</main>
+<script>
+const data={
+  root:["root","Execution root selects the CODIN-717 graph subtree.","Does not change planning phases."],
+  failed:["B failed","Launch failure or cancelled-group transition marks this running node failed.","Does not automatically stop independent branches."],
+  halted:["D halted","Still-idle transitive dependent is held back and excluded from ready-set.","Does not represent a launched or failed run."],
+  independent:["C drains","Ready branch outside the failed subtree keeps launching and can complete.","Does not wait for unrelated failed nodes."],
+  idem:["re-invoke","Seeds done from tracker and running from live AgentRun rows, then launches only idle ready nodes.","Does not create a new durable execution model."]
+};
+let sel=null;const panel=document.getElementById("panel");
+document.querySelectorAll(".node").forEach(n=>n.addEventListener("click",()=>{if(sel)sel.classList.remove("sel");sel=n;n.classList.add("sel");const d=data[n.dataset.node];panel.innerHTML=`<h3>${d[0]}</h3><ul><li>${d[1]}</li><li>${d[2]}</li></ul>`}));
+const links=[...document.querySelectorAll("nav a")],secs=links.map(a=>document.querySelector(a.getAttribute("href")));
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const id="#"+e.target.id;links.forEach(a=>a.classList.toggle("active",a.getAttribute("href")===id))}}),{rootMargin:"-45% 0px -50% 0px"});
+secs.forEach(s=>s&&io.observe(s));
+</script>
+</body>
+</html>

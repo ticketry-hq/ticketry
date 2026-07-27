@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "release_version": "0.1.0",
+  "product": "muxed-studio",
+  "artifacts": {
+    "frontend": {
+      "command": ["npm", "run", "build"],
+      "required_outputs": ["dist/index.html"]
+    },
+    "tauri": {
+      "command": ["npx", "tauri", "build"],
+      "binary_name": "muxed-studio",
+      "bundle_formats": ["app", "dmg"]
+    },
+    "sidecar": {
+      "build_script": "../backend/packaging/build-sidecar.sh",
+      "migration_directories": [
+        "../backend/worktracker/migrations",
+        "../backend/apps/documents/migrations",
+        "../backend/apps/execution/migrations",
+        "../backend/apps/runs/migrations",
+        "../backend/apps/settings_store/migrations",
+        "../backend/apps/terminals/migrations",
+        "../backend/apps/worktrees/migrations"
+      ],
+      "dependency_policy": {
+        "python_lock": "../backend/uv.lock",
+        "python_project": "../backend/pyproject.toml",
+        "node_lock": "../package-lock.json"
+      }
+    },
+    "runtime_resources": [
+      "src-tauri/tauri.conf.json",
+      "src-tauri/capabilities/studio-main.json",
+      "src-tauri/icons/icon.icns"
+    ]
+  },
+  "release_policy": {
+    "macos": {
+      "signing": {
+        "identity_environment": "APPLE_SIGNING_IDENTITY",
+        "hardened_runtime": true,
+        "entitlements": "src-tauri/entitlements.plist"
+      },
+      "notarization": {
+        "required": true,
+        "authentication": [
+          "APPLE_ID,APPLE_PASSWORD,APPLE_TEAM_ID",
+          "APPLE_API_KEY,APPLE_API_ISSUER,APPLE_API_KEY_PATH"
+        ]
+      }
+    },
+    "update": {
+      "delivery": "verified-manual-installer",
+      "compatibility": ["app_version", "sidecar_version", "runtime_protocol", "database_schema"],
+      "automatic_updates": false
+    },
+    "rollback": {
+      "strategy": "retain-previous-launchable-app-until-post-install-acceptance",
+      "recovery_document": "release/OPERATIONS.md"
+    },
+    "retention": {
+      "previous_installer_versions": 2
+    },
+    "data": {
+      "location": "platform-app-data-outside-installed-bundle",
+      "uninstall": "preserve",
+      "preserve": ["WorkTracker data", "preferences", "approved executable paths", "compatible agent login state"]
+    }
+  },
+  "targets": [
+    {
+      "id": "macos-aarch64",
+      "platform": "macos",
+      "architecture": "aarch64",
+      "build_architecture": "arm64",
+      "rust_target": "aarch64-apple-darwin",
+      "sidecar": {
+        "target_triple": "aarch64-apple-darwin",
+        "bundle_binary_name": "muxed-backend"
+      },
+      "compatibility": {
+        "minimum_os": "11.0",
+        "tmux": "external-prerequisite",
+        "runtime_protocol": "1",
+        "database_schema": "forward-migrations-required",
+        "app_version": "0.1.0",
+        "sidecar_version": "0.1.0"
+      }
+    },
+    {
+      "id": "macos-x86_64",
+      "platform": "macos",
+      "architecture": "x86_64",
+      "build_architecture": "x86_64",
+      "rust_target": "x86_64-apple-darwin",
+      "sidecar": {
+        "target_triple": "x86_64-apple-darwin",
+        "bundle_binary_name": "muxed-backend"
+      },
+      "compatibility": {
+        "minimum_os": "11.0",
+        "tmux": "external-prerequisite",
+        "runtime_protocol": "1",
+        "database_schema": "forward-migrations-required",
+        "app_version": "0.1.0",
+        "sidecar_version": "0.1.0"
+      }
+    }
+  ]
+}

@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-838 Studio Terminal Create Parity - LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel);
+    padding: 26px 40px 16px;
+  }
+  .crumb { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 960px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px; }
+  .chip { border-radius: 20px; padding: 3px 10px; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30;
+    background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px;
+  }
+  nav a {
+    padding: 9px 14px; font-size: 13px; font-weight: 700; color: var(--muted);
+    text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  h3 { font-size: 15px; margin-bottom: 8px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 900px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; overflow-x: auto; }
+  .dir { color: var(--muted); }
+  .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 800; white-space: nowrap; }
+  .hit.new { background: var(--green-soft); color: var(--green); }
+  .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .hit.del { background: var(--red-soft); color: var(--red); }
+  .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .kind { font-size: 11px; font-weight: 900; letter-spacing: .07em; margin-bottom: 10px; text-transform: uppercase; }
+  .cm-detail ul, .node-info ul { list-style: none; margin-top: 8px; }
+  .cm-detail li, .node-info li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li:before, .node-info li:before { content: "."; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no:before, .node-info li.no:before { content: "x"; color: var(--red); }
+  .cm-detail li.no, .node-info li.no { color: var(--red); }
+  .hint { color: var(--muted); font-style: italic; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .card .label { color: var(--violet); font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+  .card p { color: var(--muted); font-size: 13px; margin-top: 5px; }
+  .rule { margin-top: 10px; background: var(--violet-soft); color: var(--violet); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; font-weight: 700; }
+  .flow-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 310px; gap: 18px; }
+  svg { width: 100%; height: auto; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect { transition: stroke-width .12s, filter .12s, opacity .12s; }
+  .node.hl rect { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .35; }
+  .node-info { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  .node-info h4 { font-size: 14px; color: var(--accent); margin-bottom: 6px; }
+  .img-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .img-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .img-card img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; color: var(--muted); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  .rid { color: var(--accent); font-family: var(--mono); font-weight: 800; white-space: nowrap; }
+  .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 800; }
+  .pill.ok { background: var(--green-soft); color: var(--green); }
+  .pill.warn { background: var(--amber-soft); color: var(--amber); }
+  .pill.no { background: var(--red-soft); color: var(--red); }
+  .steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 10px; padding: 14px 16px; color: var(--muted); font-size: 12.5px; }
+  .step .n { color: var(--accent); font-size: 18px; font-weight: 900; }
+  .step b { display: block; color: var(--ink); margin: 2px 0 4px; font-size: 13px; }
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .cm, .cards, .flow-wrap { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">Coding · WorkTracker module · CODIN-838 · LLD</div>
+  <h1>Studio Terminal Create Parity</h1>
+  <div class="sub">Replace Studio direct issue creation with the same create-by-agent path as /coding: resolve one epic/module, optionally collect a prompt, choose an agent every time, and launch a scratch planning terminal. Field context is advisory prompt text only.</div>
+  <div class="chips">
+    <span class="chip green">No backend change</span>
+    <span class="chip violet">Shared terminal-create host</span>
+    <span class="chip amber">Direct create UI removed</span>
+    <span class="chip">State map out of scope</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#contracts">Contracts</a>
+  <a href="#flow">Flow</a>
+  <a href="#diagrams">Rendered Diagrams</a>
+  <a href="#rules">Rules</a>
+  <a href="#surfaces">Surfaces</a>
+  <a href="#tests">Tests</a>
+  <a href="#order">Build Order</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+<main>
+  <section id="map">
+    <h2>Change Map</h2>
+    <p class="lede">Click a highlighted file group for its exact responsibility. New shared terminal-create code is isolated under the terminal module; work-item surfaces only resolve context and request launch.</p>
+    <div class="cm">
+      <div class="cm-tree">
+        <div class="dir">studio/src/</div>
+        <div class="dir">├─ terminal/</div>
+        <div>│  ├─ <span class="hit mod" data-f="terminal-index">index.ts</span></div>
+        <div>│  └─ create/</div>
+        <div>│     ├─ <span class="hit new" data-f="create-types">types.ts</span></div>
+        <div>│     ├─ <span class="hit new" data-f="launcher">launchTerminalCreate.ts</span></div>
+        <div>│     ├─ <span class="hit new" data-f="flow-store">terminalCreateStore.ts</span></div>
+        <div>│     ├─ <span class="hit new" data-f="host">TerminalCreateHost.tsx</span></div>
+        <div>│     ├─ <span class="hit new" data-f="prompt-agent">TerminalCreatePromptDialog.tsx / TerminalCreateAgentPicker.tsx</span></div>
+        <div>│     ├─ <span class="hit new" data-f="epic-picker">SingleEpicPickerModal.tsx</span></div>
+        <div>│     ├─ <span class="hit new" data-f="context">targetResolver.ts / promptContext.ts</span></div>
+        <div>│     └─ <span class="hit new" data-f="scratch-panel">StudioScratchTerminalPanel.tsx</span></div>
+        <div class="dir">├─ app/</div>
+        <div>│  └─ <span class="hit mod" data-f="routes">routes.tsx</span></div>
+        <div class="dir">├─ coding/</div>
+        <div>│  ├─ <span class="hit mod" data-f="plan-feature">modals/PlanFeature.tsx</span></div>
+        <div>│  └─ <span class="hit ro" data-f="coding-modals">modals/PromptInput.tsx / AgentPicker.tsx</span></div>
+        <div class="dir">├─ workitems/</div>
+        <div>│  ├─ <span class="hit del" data-f="create-issue">CreateIssue.tsx</span></div>
+        <div>│  ├─ <span class="hit mod" data-f="backlog">BacklogView.tsx / backlog/*.tsx</span></div>
+        <div>│  ├─ <span class="hit del" data-f="inline">backlog/BacklogInlineCreate.tsx</span></div>
+        <div>│  ├─ <span class="hit mod" data-f="board">BoardView.tsx / BoardColumnHeader.tsx</span></div>
+        <div>│  ├─ <span class="hit mod" data-f="map-sprint">StoryMap/*.tsx / Sprints/*.tsx</span></div>
+        <div>│  └─ <span class="hit mod" data-f="backlog-store">internal/backlogIssueActions.ts / backlogStore.ts</span></div>
+        <div class="dir">├─ issue/</div>
+        <div>│  ├─ <span class="hit mod" data-f="issue-subtask">IssueDetail.tsx / ChildIssues.tsx</span></div>
+        <div>│  └─ <span class="hit mod" data-f="issue-store">internal/issueStore.ts</span></div>
+        <div class="dir">└─ test/</div>
+        <div>   └─ <span class="hit mod" data-f="tests">create-flow tests</span></div>
+        <div class="legend">
+          <span><i style="background:var(--green-soft)"></i>new</span>
+          <span><i style="background:var(--amber-soft)"></i>modified</span>
+          <span><i style="background:var(--red-soft)"></i>deleted</span>
+          <span><i style="background:var(--accent-soft)"></i>read-only reference</span>
+        </div>
+      </div>
+      <div class="cm-detail" id="cmDetail"><span class="hint">Select a file group on the left.</span></div>
+    </div>
+  </section>
+
+  <section id="contracts">
+    <h2>Contracts</h2>
+    <p class="lede">The implementation boundary is small: surfaces provide intent, the launcher owns modal/terminal mechanics, the agent owns actual issue creation.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="label">Launch request</div>
+        <h3><span class="m">TerminalCreateRequest</span></h3>
+        <p>Project id, one module id, optional typed prompt, source surface, and advisory context lines.</p>
+        <div class="rule">No state_id, sprint_id, or parent_id is written by Studio.</div>
+      </div>
+      <div class="card">
+        <div class="label">Target result</div>
+        <h3><span class="m">CreateTarget</span></h3>
+        <p>Exactly one epic/module before launch. If none or many are possible, the single-select epic picker must run first.</p>
+        <div class="rule">No guessing across multiple selected epics.</div>
+      </div>
+      <div class="card">
+        <div class="label">Terminal session</div>
+        <h3><span class="m">openSession</span></h3>
+        <p>The shared agent picker opens <span class="m">taskId: null</span>, <span class="m">ticketSeq: null</span>, <span class="m">isPlanning: true</span>.</p>
+        <div class="rule">Same scratch planning terminal path as /coding.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2>Clickable Flow</h2>
+    <p class="lede">Click a node to inspect what it owns. Dashed stroke marks a seam where later stories can split code without changing behavior.</p>
+    <div class="flow-wrap">
+      <svg viewBox="0 0 900 520" role="img" aria-label="Terminal create low-level flow">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L9,3 L0,6 Z" fill="#5b6478"></path>
+          </marker>
+        </defs>
+        <g class="node hl" data-n="surface">
+          <rect x="28" y="50" width="158" height="72" rx="8" fill="#e8edfb" stroke="#3556d4" stroke-width="2"></rect>
+          <text x="107" y="82" text-anchor="middle" font-weight="700">Create Surface</text>
+          <text x="107" y="102" text-anchor="middle" font-size="12">button, inline, add-under</text>
+        </g>
+        <g class="node" data-n="target">
+          <rect x="246" y="50" width="158" height="72" rx="8" fill="#fff" stroke="#6b3fb8" stroke-width="2"></rect>
+          <text x="325" y="82" text-anchor="middle" font-weight="700">Target Resolver</text>
+          <text x="325" y="102" text-anchor="middle" font-size="12">one epic/module</text>
+        </g>
+        <g class="node" data-n="picker">
+          <rect x="246" y="178" width="158" height="72" rx="8" fill="#fff" stroke="#6b3fb8" stroke-width="2"></rect>
+          <text x="325" y="210" text-anchor="middle" font-weight="700">Single Picker</text>
+          <text x="325" y="230" text-anchor="middle" font-size="12">when ambiguous</text>
+        </g>
+        <g class="node" data-n="context">
+          <rect x="464" y="50" width="158" height="72" rx="8" fill="#fff" stroke="#9a6700" stroke-width="2"></rect>
+          <text x="543" y="82" text-anchor="middle" font-weight="700">Prompt Context</text>
+          <text x="543" y="102" text-anchor="middle" font-size="12">advisory only</text>
+        </g>
+        <g class="node" data-n="launcher">
+          <rect x="682" y="50" width="158" height="72" rx="8" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"></rect>
+          <text x="761" y="82" text-anchor="middle" font-weight="700">Shared Launcher</text>
+          <text x="761" y="102" text-anchor="middle" font-size="12">flow store</text>
+        </g>
+        <g class="node" data-n="prompt">
+          <rect x="464" y="214" width="158" height="72" rx="8" fill="#fff" stroke="#3556d4" stroke-width="2"></rect>
+          <text x="543" y="246" text-anchor="middle" font-weight="700">Prompt Dialog</text>
+          <text x="543" y="266" text-anchor="middle" font-size="12">only if no text</text>
+        </g>
+        <g class="node" data-n="agent">
+          <rect x="682" y="214" width="158" height="72" rx="8" fill="#fff" stroke="#3556d4" stroke-width="2"></rect>
+          <text x="761" y="246" text-anchor="middle" font-weight="700">Agent Picker</text>
+          <text x="761" y="266" text-anchor="middle" font-size="12">always</text>
+        </g>
+        <g class="node" data-n="terminal">
+          <rect x="682" y="364" width="158" height="72" rx="8" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"></rect>
+          <text x="761" y="396" text-anchor="middle" font-weight="700">Scratch Terminal</text>
+          <text x="761" y="416" text-anchor="middle" font-size="12">taskId null</text>
+        </g>
+        <g class="node" data-n="present">
+          <rect x="464" y="364" width="158" height="72" rx="8" fill="#fff" stroke="#9a6700" stroke-width="2" stroke-dasharray="6 5"></rect>
+          <text x="543" y="396" text-anchor="middle" font-weight="700">Presenter</text>
+          <text x="543" y="416" text-anchor="middle" font-size="12">coding row or Studio panel</text>
+        </g>
+        <line x1="186" y1="86" x2="246" y2="86" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+        <line x1="325" y1="122" x2="325" y2="178" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+        <line x1="404" y1="214" x2="464" y2="92" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+        <line x1="404" y1="86" x2="464" y2="86" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+        <line x1="622" y1="86" x2="682" y2="86" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+        <line x1="761" y1="122" x2="761" y2="214" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+        <line x1="622" y1="250" x2="682" y2="250" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+        <line x1="761" y1="286" x2="761" y2="364" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+        <line x1="682" y1="400" x2="622" y2="400" stroke="#5b6478" stroke-width="2" marker-end="url(#arrow)"></line>
+      </svg>
+      <aside class="node-info" id="nodeInfo"><span class="hint">Select a node.</span></aside>
+    </div>
+  </section>
+
+  <section id="diagrams">
+    <h2>Rendered Diagrams</h2>
+    <p class="lede">Generated with <span class="m">mermaid-cli</span> from source files in <span class="m">assets/</span>.</p>
+    <div class="img-grid">
+      <div class="img-card">
+        <h3>Component topology</h3>
+        <img src="assets/studio_terminal_create_component.png" alt="Studio terminal create component diagram">
+      </div>
+      <div class="img-card">
+        <h3>Create sequence</h3>
+        <img src="assets/studio_terminal_create_sequence.png" alt="Studio terminal create sequence diagram">
+      </div>
+      <div class="img-card">
+        <h3>File map diagram</h3>
+        <img src="assets/studio_terminal_create_file_map.png" alt="Studio terminal create file map diagram">
+      </div>
+    </div>
+  </section>
+
+  <section id="rules">
+    <h2>Target And Prompt Rules</h2>
+    <p class="lede">These rules are the product contract from the planning discussion.</p>
+    <table>
+      <thead><tr><th>Case</th><th>Target behavior</th><th>Prompt behavior</th><th>Forbidden</th></tr></thead>
+      <tbody>
+        <tr><td>Exactly one selected epic</td><td>Use that module directly.</td><td>Include selected epic name/key.</td><td>Do not show picker.</td></tr>
+        <tr><td>Multiple or zero selected epics</td><td>Show single-select epic picker.</td><td>Continue only after one epic is picked.</td><td>Do not ask the agent to guess the epic before launch.</td></tr>
+        <tr><td>Add-under epic header</td><td>Parent epic is the module.</td><td>Include "create under epic".</td><td>Do not allow add-under for No Epic.</td></tr>
+        <tr><td>Add-under work item</td><td>Resolve owning epic from parent tree.</td><td>Include parent key/title as advisory context.</td><td>Do not write parent_id directly.</td></tr>
+        <tr><td>Board column/swimlane</td><td>Use lane epic if one exists; otherwise picker.</td><td>Include column state and lane context.</td><td>Do not write state_id directly.</td></tr>
+        <tr><td>Sprint or Story Map cell</td><td>Resolve one epic/module from cell or picker.</td><td>Include sprint row/cell context.</td><td>Do not write sprint_id directly.</td></tr>
+        <tr><td>Typed inline text</td><td>Use resolved module.</td><td>Text becomes initial prompt; skip prompt dialog.</td><td>Do not POST create API.</td></tr>
+        <tr><td>Button/shortcut with no text</td><td>Use resolved module.</td><td>Show prompt dialog, then agent picker.</td><td>Do not skip agent picker.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="surfaces">
+    <h2>Surface Mapping</h2>
+    <p class="lede">Every current Studio create entry either launches terminal-create or disappears when it has no valid parent epic.</p>
+    <table>
+      <thead><tr><th>Story</th><th>Surface</th><th>Implementation note</th><th>Refresh</th></tr></thead>
+      <tbody>
+        <tr class="trace" data-node="launcher"><td class="rid">CODIN-839</td><td>Shared launcher</td><td>Extract neutral terminal-create host and keep /coding plan behavior unchanged.</td><td><span class="pill ok">existing</span></td></tr>
+        <tr class="trace" data-node="target"><td class="rid">CODIN-840</td><td>Normal Studio create</td><td>Route buttons/shortcuts/empty states through target resolver and single picker.</td><td><span class="pill ok">refresh after run activity</span></td></tr>
+        <tr class="trace" data-node="surface"><td class="rid">CODIN-841</td><td>Backlog inline, pane, add-under, drawer subtask add</td><td>Text is prompt; parent context is advisory; no direct create fallback remains.</td><td><span class="pill ok">refresh only</span></td></tr>
+        <tr class="trace" data-node="context"><td class="rid">CODIN-842</td><td>Board column and swimlane create</td><td>Column state and lane epic become context text; lane-less paths pick one epic.</td><td><span class="pill ok">refresh only</span></td></tr>
+        <tr class="trace" data-node="context"><td class="rid">CODIN-843</td><td>Story Map and sprint contexts</td><td>Cell/sprint context is prompt text; sprint assignment is left to the agent.</td><td><span class="pill ok">refresh only</span></td></tr>
+        <tr class="trace" data-node="surface"><td class="rid">CODIN-844</td><td>Cleanup</td><td>Delete stale direct-create components/actions/tests after replacement tests pass.</td><td><span class="pill warn">search gate</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tests">
+    <h2>Test Plan</h2>
+    <p class="lede">Tests assert launch mechanics, not agent output. The agent may create zero, one, or many issues in the terminal session.</p>
+    <table>
+      <thead><tr><th>Layer</th><th>Test</th><th>Assertion</th></tr></thead>
+      <tbody>
+        <tr><td>Unit</td><td><span class="m">targetResolver</span></td><td>one epic skips picker; multi/none requires picker; parent without owning epic blocks add-under.</td></tr>
+        <tr><td>Unit</td><td><span class="m">promptContext</span></td><td>parent/state/sprint/story-map data is serialized as advisory text only.</td></tr>
+        <tr><td>Component</td><td>Terminal create host</td><td>empty prompt opens PromptDialog then AgentPicker; typed prompt opens AgentPicker directly.</td></tr>
+        <tr><td>Component</td><td>Backlog/Board create paths</td><td>No <span class="m">api.createWorkItem</span> call; <span class="m">openSession</span> receives scratch planning args.</td></tr>
+        <tr><td>Regression</td><td>/coding plan flow</td><td><span class="m">n</span> still opens the same prompt/agent/scratch flow and selects the scratch terminal workspace.</td></tr>
+        <tr><td>Search gate</td><td>Direct create leftovers</td><td>No Studio create affordance imports <span class="m">CreateIssue</span> or calls <span class="m">createIssue</span>.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="order">
+    <h2>Build Order</h2>
+    <p class="lede">The sequence matches the created stories and keeps behavior verifiable after each slice.</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><b>Extract host</b>Build shared terminal-create host and wire /coding plan through it.</div>
+      <div class="step"><div class="n">2</div><b>Normal Studio</b>Mount host in Shell and route normal create through picker/launcher.</div>
+      <div class="step"><div class="n">3</div><b>Backlog</b>Replace inline, pane, add-under, and subtask direct create.</div>
+      <div class="step"><div class="n">4</div><b>Board</b>Replace column and swimlane quick-add with advisory context.</div>
+      <div class="step"><div class="n">5</div><b>Map/Sprints</b>Wire or audit sprint/story-map create surfaces through same path.</div>
+      <div class="step"><div class="n">6</div><b>Cleanup</b>Delete unused direct-create code and rewrite tests.</div>
+    </div>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance Signal</h2>
+    <div class="accept"><b>Green signal:</b> every Studio issue-create affordance opens PromptDialog or AgentPicker, then launches a visible scratch planning terminal with <span class="m">taskId: null</span> and <span class="m">isPlanning: true</span>; no Studio create UI directly calls the work-item create API; /coding plan creation still behaves the same.</div>
+  </section>
+</main>
+
+<script>
+const fileInfo = {
+  "terminal-index": ["modified", "Exports the shared terminal-create launcher, host, and request types.", ["Keeps terminal internals private.", "Does not expose sessionStore mutation details."]],
+  "create-types": ["new", "Defines TerminalCreateRequest, CreateTarget, SurfaceContext, and the shared Agent type.", ["Models advisory context as strings/structured labels.", "Does not add backend request fields."]],
+  "launcher": ["new", "Single public function that starts prompt/agent flow from /coding and Studio.", ["Accepts optional initialPrompt.", "Branches to PromptDialog only when prompt text is absent."]],
+  "flow-store": ["new", "Small store for active terminal-create modal state and pending Studio scratch session.", ["Stores request, prompt draft, picker state, and visible session id.", "Does not own work-item data."]],
+  "host": ["new", "Shell-mounted modal host that renders picker, prompt dialog, agent picker, and scratch panel.", ["Mounted once in routes Shell so non-coding views can launch.", "Does not replace IssueDrawerHost."]],
+  "prompt-agent": ["new", "Neutral prompt and agent dialogs for terminal-create.", ["AgentPicker always appears.", "Calls openSession with taskId null, ticketSeq null, isPlanning true."]],
+  "epic-picker": ["new", "Single-select create picker adapted from the existing epic picker interaction.", ["Does not mutate planning filters.", "Returns exactly one module id."]],
+  "context": ["new", "Resolves epic/module targets and builds advisory prompt text.", ["Uses owningEpic for parent-derived context.", "Blocks/hides add-under when no owning epic exists."]],
+  "scratch-panel": ["new", "Studio-only presenter for launched scratch sessions.", ["Renders the shared Terminal for the launched session.", "Lets /coding keep its scratch row presenter."]],
+  "routes": ["modified", "Mounts TerminalCreateHost inside the common Shell after IssueDrawerHost.", ["Makes create modals available from Backlog, Board, Map, Sprints, and Coding.", "Does not change routes."]],
+  "plan-feature": ["modified", "Replaces plan-mode PromptInput/AgentPicker composition with launchTerminalCreate.", ["Preserves module-folder gate.", "Keeps instant/open flows unless explicitly migrated later."]],
+  "coding-modals": ["read-only", "Reference implementation for current prompt and agent semantics.", ["Can keep serving open/open-with-prompt/doc-chat.", "Not a required deletion target for this ticket."]],
+  "create-issue": ["deleted", "Direct create modal is removed after Backlog and Board no longer depend on it.", ["Its state/parent/sprint writes move into advisory prompt text.", "No fallback direct create path remains."]],
+  "backlog": ["modified", "Backlog normal create, add-under, empty-pane create, and keyboard create call launchTerminalCreate.", ["Exactly one selected epic seeds target.", "Multi/no epic shows single picker."]],
+  "inline": ["deleted", "Inline create component is deleted or replaced by a prompt-only input wrapper.", ["Enter launches terminal-create.", "It no longer imports useBacklogStore.createIssue."]],
+  "board": ["modified", "Board quick-add uses column/lane context as prompt text.", ["State column is advisory.", "Swimlane epic is the module when present."]],
+  "map-sprint": ["modified", "Story Map and sprint contexts route through the same launch helper when create affordances exist.", ["Sprint and cell coordinates are advisory.", "No direct sprint_id write on create."]],
+  "backlog-store": ["modified", "Direct create action is removed if unused after UI migration.", ["Bulk move/reparent/state actions stay.", "api.createWorkItem remains for API tests and non-UI consumers."]],
+  "issue-subtask": ["modified", "Subtask add becomes terminal-create under the parent context.", ["Parent key/title is prompt context.", "If owning epic cannot resolve, hide or block the add affordance."]],
+  "issue-store": ["modified", "Remove direct addSubtask create path after ChildIssues stops calling it.", ["Issue patching/blockers remain.", "No work-item POST from drawer subtask UI."]],
+  "tests": ["modified", "Rewrite direct create assertions into terminal-launch assertions.", ["Keep API createWorkItem tests.", "Add search-gate style coverage for Studio create affordances."]]
+};
+
+const nodeInfo = {
+  surface: { title: "Create Surface", does: ["Collects user intent from button, inline text, shortcut, add-under, board, map, or sprint surface.", "Passes source context to resolver."], no: ["Does not POST work items.", "Does not decide final issue fields."] },
+  target: { title: "Target Resolver", does: ["Returns exactly one module when context is unambiguous.", "Requests picker when zero or multiple epics are possible."], no: ["Does not guess among multiple filters.", "Does not mutate filters."] },
+  picker: { title: "Single Picker", does: ["Lets user choose one epic/module before create.", "Reuses the existing epic-picker interaction pattern."], no: ["Does not support multi-select.", "Does not apply filter state."] },
+  context: { title: "Prompt Context", does: ["Builds advisory lines for parent, state column, sprint row, swimlane, and source.", "Appends context to typed prompt or prompt dialog result."], no: ["Does not write state_id, sprint_id, or parent_id.", "Does not force the agent to create exactly one issue."] },
+  launcher: { title: "Shared Launcher", does: ["Owns prompt/agent modal sequence.", "Receives module context from both /coding and Studio."], no: ["Does not know surface-specific UI layout.", "Does not create work items itself."] },
+  prompt: { title: "Prompt Dialog", does: ["Appears only when no typed prompt was supplied.", "Passes entered text to AgentPicker."], no: ["Does not choose an agent.", "Does not launch terminal directly."] },
+  agent: { title: "Agent Picker", does: ["Always requires a user agent choice.", "Calls openSession with scratch planning args."], no: ["Does not skip for remembered/default agent.", "Does not bind to a real task id."] },
+  terminal: { title: "Scratch Terminal", does: ["Runs the existing no-task planning terminal.", "Allows the agent to create zero, one, or many issues."], no: ["Does not report created keys back to Studio.", "Does not auto-select created issues."] },
+  present: { title: "Presenter Seam", does: ["/coding selects TEMP_TASK_ID and activates its terminal workspace.", "Studio opens a scratch terminal panel for the launched session."], no: ["Does not duplicate the terminal session.", "Does not require backend changes."] }
+};
+
+function renderFile(key) {
+  const data = fileInfo[key];
+  if (!data) return;
+  const [kind, summary, bullets] = data;
+  document.querySelectorAll(".hit").forEach((el) => el.classList.toggle("sel", el.dataset.f === key));
+  document.getElementById("cmDetail").innerHTML =
+    `<div class="kind">${kind}</div><h4>${key}</h4><p>${summary}</p><ul>${bullets.map((b) => `<li>${b}</li>`).join("")}</ul>`;
+}
+
+function renderNode(key) {
+  const data = nodeInfo[key];
+  if (!data) return;
+  document.querySelectorAll(".node").forEach((el) => {
+    el.classList.toggle("hl", el.dataset.n === key);
+    el.classList.toggle("dim", el.dataset.n !== key);
+  });
+  document.getElementById("nodeInfo").innerHTML =
+    `<h4>${data.title}</h4><div class="kind">Does</div><ul>${data.does.map((b) => `<li>${b}</li>`).join("")}</ul><div class="kind" style="margin-top:10px;color:var(--red)">Does not</div><ul>${data.no.map((b) => `<li class="no">${b}</li>`).join("")}</ul>`;
+}
+
+document.querySelectorAll(".hit").forEach((el) => el.addEventListener("click", () => renderFile(el.dataset.f)));
+document.querySelectorAll(".node").forEach((el) => el.addEventListener("click", () => renderNode(el.dataset.n)));
+document.querySelectorAll("tr.trace").forEach((row) => row.addEventListener("mouseenter", () => renderNode(row.dataset.node)));
+
+const sections = [...document.querySelectorAll("main section")];
+const navLinks = [...document.querySelectorAll("nav a")];
+const observer = new IntersectionObserver((entries) => {
+  const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+  if (!visible) return;
+  navLinks.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === `#${visible.target.id}`));
+}, { rootMargin: "-20% 0px -70% 0px", threshold: [0.1, 0.4, 0.8] });
+sections.forEach((section) => observer.observe(section));
+renderFile("launcher");
+renderNode("surface");
+</script>
+</body>
+</html>

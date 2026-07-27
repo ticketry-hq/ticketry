@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T653 · R6: Normalize Reusable Field &amp; Picker Patterns — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel);
+    padding: 26px 40px 0;
+  }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 920px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 20px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    display: flex; gap: 2px; overflow-x: auto;
+    margin: 0 -40px; padding: 0 40px;
+    position: sticky; top: 0; z-index: 30;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  nav a {
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted);
+    text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 860px; }
+
+  /* evolution strip */
+  .evo { display: grid; grid-template-columns: 1fr 28px 1fr; gap: 10px; align-items: stretch; margin-bottom: 40px; }
+  .evo .stage {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; font-size: 12.5px; color: var(--muted);
+  }
+  .evo .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .evo .stage.dead { opacity: .65; }
+  .evo .stage.dead .lbl { color: var(--red); }
+  .evo .stage.live { border: 2px solid var(--green); color: var(--ink); }
+  .evo .stage.live .lbl { color: var(--green); }
+  .evo .arr { align-self: center; text-align: center; color: var(--violet); font-size: 18px; font-weight: 700; }
+
+  /* pillar cards */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .pillar {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px; border-top: 4px solid var(--accent); cursor: pointer;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .pillar:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .pillar.p2 { border-top-color: var(--green); }
+  .pillar.p3 { border-top-color: var(--violet); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .pillar.open .more { display: block; }
+  .pillar ul { list-style: none; }
+  .pillar li { font-size: 13px; padding: 3px 0 3px 20px; position: relative; }
+  .pillar li.in::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .pillar li.done::before { content: "✓✓"; position: absolute; left: -4px; color: var(--accent); font-weight: 700; font-size: 11px; top: 7px; }
+  .pillar li.prep::before { content: "◌"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+  .legend { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .legend b { font-weight: 700; }
+  .legend .g { color: var(--green); } .legend .a { color: var(--amber); } .legend .b { color: var(--accent); }
+
+  /* diagram */
+  .diagram-wrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px;
+  }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+
+  /* trace table */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin: 1px 2px; }
+  .pill.b1 { background: var(--accent-soft); color: var(--accent); }
+  .pill.b2 { background: var(--green-soft); color: var(--green); }
+  .pill.b3 { background: var(--violet-soft); color: var(--violet); }
+
+  /* question board */
+  .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--red); }
+  .qcard.ans { border-left-color: var(--green); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--red); }
+  .qcard.ans .qid { color: var(--green); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 12.5px; color: var(--muted); }
+  .qcard p b { color: var(--green); }
+  .qcard .dref { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 6px; display: inline-block; }
+  .qcard.openq p b { color: var(--red); }
+
+  /* repo tree */
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; gap: 30px; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 380px; }
+  .tree .dir { color: var(--accent); font-weight: 700; }
+  .tree .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .ex { color: var(--muted); }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; }
+  .tree-notes li { margin-bottom: 8px; list-style: none; padding-left: 16px; position: relative; }
+  .tree-notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+  .accept {
+    background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px;
+    padding: 20px 24px; font-size: 14px;
+  }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .pillars, .qgrid, .iface { grid-template-columns: 1fr; }
+    .diagram-wrap { grid-template-columns: 1fr; }
+    .evo { grid-template-columns: 1fr; }
+    .evo .arr { transform: rotate(90deg); }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · Studio module · Ticket #653 · HLD</div>
+  <h1>Normalize Reusable Field &amp; Picker Patterns — HLD</h1>
+  <div class="sub">Refactor the field and picker components under studio/src/fields so that they follow a uniform composition layout, reduce DOM element nesting issues (like buttons inside buttons), extract shared UI patterns (triggers, searches, scrollable containers), and preserve validation and keyboard accessibility contracts.</div>
+  <div class="chips">
+    <span class="chip">Phase: HLD (v1)</span>
+    <span class="chip violet">Decisions 0001–0003 recorded</span>
+    <span class="chip green">Component composition extraction</span>
+    <span class="chip amber">Ready for review</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">Evolution</a>
+    <a href="#slice">Pillars</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Decision Trace</a>
+    <a href="#questions">Question Board</a>
+    <a href="#repo">Repo Shape</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ EVOLUTION ============ -->
+<section id="evo">
+  <div class="evo">
+    <div class="stage dead">
+      <div class="lbl">CURRENT STATE</div>
+      Every inline picker component repeats its own trigger DOM layout, loading indicators, and list search styling, wrapping button-like triggers inside Popover's default outer trigger button tag.
+    </div>
+    <div class="arr">⟶</div>
+    <div class="stage live">
+      <div class="lbl">THIS DESIGN</div>
+      Define clear separation of trigger, content wrapper, search box, and option rows. Define a unified <code>PickerTrigger</code> to handle loading/icons, and wrap <code>Popover</code> trigger correctly to prevent nested HTML buttons.
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLICE ============ -->
+<section id="slice">
+  <h2>The slice, in three pillars</h2>
+  <div class="lede">Click a pillar to expand its details.</div>
+  <div class="pillars">
+    <div class="pillar open" data-k="trigger">
+      <div class="tag">PILLAR 1 · TRIGGER &amp; POPOVER UNIFICATION</div>
+      <h3>Uniform PickerTrigger Component</h3>
+      <p>Consolidate trigger shapes, labels, icon placements, and saving indicators across all popover-based pickers.</p>
+      <div class="more"><ul>
+        <li class="in">Create a new <code>PickerTrigger</code> component supporting normal borders, inline icons, custom labels, variant types, and saving animations.</li>
+        <li class="in">Clean up <code>Popover</code> trigger elements so they do not nest <code>&lt;button&gt;</code> elements (making triggers return styles rather than interactive buttons where appropriate, or accepting React elements directly).</li>
+        <li class="prep">Avoid breaking keyboard activation of popover buttons (using standard button element with appropriate aria attributes).</li>
+      </ul></div>
+    </div>
+    <div class="pillar p2" data-k="search">
+      <div class="tag">PILLAR 2 · POPOVER LAYOUTS &amp; SEARCH</div>
+      <h3>Shared Presentational Helpers</h3>
+      <p>Extract common styling wrapper for popover search bars and scrollable lists without merging their domain models.</p>
+      <div class="more"><ul>
+        <li class="in">Extract a reusable <code>PopoverSearch</code> component to standardize input focusing, borders, padding, and text styles in picker drop-downs.</li>
+        <li class="in">Extract a reusable <code>PopoverContent</code> component defining standard height constraints (<code>max-h-[320px]</code>) and overflow scrolling behavior.</li>
+        <li class="in">Leave candidate selection, filtering arrays, and parent-child cycle checking inside the owning picker components (keeping domain logic distinct).</li>
+      </ul></div>
+    </div>
+    <div class="pillar p3" data-k="accessibility">
+      <div class="tag">PILLAR 3 · ACCESSIBILITY &amp; STABILITY</div>
+      <h3>Accessibility &amp; Keyboard Interaction</h3>
+      <p>Ensure focus states, escape key closures, aria attributes, and unit tests remain robust throughout refactoring.</p>
+      <div class="more"><ul>
+        <li class="in">Verify outside click handlers and Escape closures continue working flawlessly.</li>
+        <li class="in">Ensure Jest/Testing Library tests for <code>ParentPicker</code> and <code>BlockerPicker</code> stay green.</li>
+        <li class="in">Add or preserve specific focus behaviors, e.g., auto-focusing the search input upon opening the popover.</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="legend"><span><b class="b">✓✓ already done</b> — current baseline</span><span><b class="g">✓ built</b> — implemented in this slice</span><span><b class="a">◌ prepared-for</b> — seam only</span></div>
+</section>
+
+<!-- ============ SYSTEM SHAPE ============ -->
+<section id="shape">
+  <h2>System shape</h2>
+  <div class="lede">Click any box for its responsibility and boundary. Green stroke = new/refactored in this slice. Blue = existing elements, preserved.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 760 480" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+          <path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/>
+        </marker>
+      </defs>
+      <!-- Consumers -->
+      <g class="node" data-n="sidebar">
+        <rect x="30" y="40" width="160" height="70" rx="8" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="1.5"/>
+        <text x="110" y="70" text-anchor="middle" font-size="13" font-weight="700" fill="#3d2370">IssueSidebar</text>
+        <text x="110" y="88" text-anchor="middle" font-size="11" fill="#6b3fb8">and other views</text>
+      </g>
+      <!-- Picker components -->
+      <g class="node" data-n="pickers">
+        <rect x="250" y="20" width="220" height="150" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="360" y="46" text-anchor="middle" font-size="14" font-weight="700" fill="#0e4d2f">Picker Components</text>
+        <text x="360" y="68" text-anchor="middle" font-size="11" fill="#5b6478">ParentPicker · BlockerPicker</text>
+        <text x="360" y="86" text-anchor="middle" font-size="11" fill="#5b6478">SprintPicker · StatePicker</text>
+        <text x="360" y="104" text-anchor="middle" font-size="11" fill="#5b6478">PriorityPicker</text>
+        <text x="360" y="128" text-anchor="middle" font-size="11" fill="#1d7a4f">Refactored to compose helpers</text>
+      </g>
+      <!-- Popover wrapper -->
+      <g class="node" data-n="popover">
+        <rect x="530" y="50" width="200" height="90" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="630" y="80" text-anchor="middle" font-size="13" font-weight="700">Popover &amp; PopoverOption</text>
+        <text x="630" y="102" text-anchor="middle" font-size="11" fill="#5b6478">Renders relative panel,</text>
+        <text x="630" y="118" text-anchor="middle" font-size="11" fill="#5b6478">outside-click, escape key</text>
+      </g>
+      <!-- PickerTrigger -->
+      <g class="node" data-n="trigger">
+        <rect x="250" y="240" width="220" height="80" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="360" y="266" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">PickerTrigger (NEW)</text>
+        <text x="360" y="286" text-anchor="middle" font-size="11" fill="#5b6478">Unified trigger button layout</text>
+        <text x="360" y="302" text-anchor="middle" font-size="11" fill="#5b6478">Handles icons, saving indicator</text>
+      </g>
+      <!-- Layout helpers -->
+      <g class="node" data-n="helpers">
+        <rect x="520" y="240" width="220" height="80" rx="10" fill="#fff" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="630" y="266" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">Popover Layout Helpers</text>
+        <text x="630" y="286" text-anchor="middle" font-size="11" fill="#5b6478">PopoverSearch · PopoverContent</text>
+        <text x="630" y="302" text-anchor="middle" font-size="11" fill="#5b6478">Standard scroll/search inputs</text>
+      </g>
+      <!-- Non-popover pickers -->
+      <g class="node" data-n="nonpopover">
+        <rect x="30" y="240" width="160" height="80" rx="8" fill="#fbfcfe" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="110" y="266" text-anchor="middle" font-size="13" font-weight="700">LabelEditor &amp; FilterSelect</text>
+        <text x="110" y="286" text-anchor="middle" font-size="11" fill="#5b6478">Different UX (inline chips,</text>
+        <text x="110" y="302" text-anchor="middle" font-size="11" fill="#5b6478">native select) - reviewed only</text>
+      </g>
+
+      <!-- edges -->
+      <line x1="190" y1="75" x2="246" y2="75" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="470" y1="95" x2="526" y2="95" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="360" y1="170" x2="360" y2="236" stroke="#1d7a4f" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="470" y1="130" x2="610" y2="236" stroke="#1d7a4f" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="110" y1="110" x2="110" y2="236" stroke="#8a93a8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+      <!-- Labels -->
+      <text x="218" y="65" font-size="11" fill="#8a93a8">Render</text>
+      <text x="498" y="85" font-size="11" fill="#8a93a8">Uses</text>
+      <text x="370" y="200" font-size="11" fill="#1d7a4f">Extracts</text>
+      <text x="560" y="190" font-size="11" fill="#1d7a4f">Extracts</text>
+    </svg>
+    <div id="nodeInfo"><span class="hint">Click a box to see its responsibility and boundary.</span></div>
+  </div>
+</section>
+
+<!-- ============ DECISION TRACE ============ -->
+<section id="trace">
+  <h2>Decision → normalization trace</h2>
+  <div class="lede">Click a row to highlight where each decided refactoring lives in the diagram.</div>
+  <table>
+    <thead><tr><th style="width:110px">Decision</th><th>What was decided</th><th>Where the slice honors it</th><th style="width:150px">Pillar</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-nodes="trigger,popover"><td><span class="rid">DEC-001</span></td><td>Eliminate nested button elements in triggers</td><td>Create <code>PickerTrigger</code> as the clickable wrapper, and refactor <code>Popover</code> trigger prop to inject button styles directly without nesting buttons.</td><td><span class="pill b1">Trigger</span></td></tr>
+      <tr class="trace" data-nodes="helpers,pickers"><td><span class="rid">DEC-002</span></td><td>Standardize scroll and search styles</td><td>Extract <code>PopoverSearch</code> and <code>PopoverContent</code> to wrap list search inputs and scrollable boxes.</td><td><span class="pill b2">Search Layout</span></td></tr>
+      <tr class="trace" data-nodes="pickers,nonpopover"><td><span class="rid">DEC-003</span></td><td>Domain validation remains in owning pickers</td><td>Cyclic tree checking (ParentPicker, BlockerPicker), sprint creation states (SprintPicker), and autocomplete suggestions (LabelEditor) stay in owning components to avoid model over-generalization.</td><td><span class="pill b2">Domain Logic</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ QUESTION BOARD ============ -->
+<section id="questions">
+  <h2>Question board</h2>
+  <div class="lede">Decisions/Clarifications required from the user before starting implementation.</div>
+  <div class="qgrid">
+    <div class="qcard openq"><div class="qid">OPEN QUESTION · DOM NESTING</div><h4>How should Popover handle button nesting?</h4><p>Currently, <code>Popover</code> wraps the <code>trigger(open)</code> return value in a <code>&lt;button&gt;</code>. The pickers return `&lt;span&gt;` tags, meaning we get `&lt;button&gt;&lt;span className="border..."&gt;` which passes validation but is redundant. We will clean this up so <code>Popover</code> handles the HTML <code>&lt;button&gt;</code> element directly and the triggers represent the content inside it, or make it fully configurable.</p></div>
+    <div class="qcard openq"><div class="qid">OPEN QUESTION · BlockerPicker Style</div><h4>Should BlockerPicker trigger share PickerTrigger styling?</h4><p>Currently, <code>BlockerPicker</code> is styled differently (dashed border, rounded-full, text-focus-accent) compared to standard fields (solid border, rounded-md). We plan to support a <code>variant="dashed"</code> prop in <code>PickerTrigger</code> to preserve this style difference while standardizing the HTML layout.</p></div>
+  </div>
+</section>
+
+<!-- ============ REPO SHAPE ============ -->
+<section id="repo">
+  <h2>Repo shape — files modified/added</h2>
+  <div class="lede">Green = new files. Amber = modified files. Plain = reviewed only.</div>
+  <div class="tree-wrap">
+    <div class="tree">
+      <div><span class="dir">studio/src/fields/</span></div>
+      <div>├─ <span class="mod">Popover.tsx</span> <span class="ex">— modify trigger markup and option tags</span></div>
+      <div>├─ <span class="new">PickerTrigger.tsx</span> <span class="ex">— new unified picker trigger component</span></div>
+      <div>├─ <span class="new">PopoverSearch.tsx</span> <span class="ex">— new unified popover search input</span></div>
+      <div>├─ <span class="new">PopoverContent.tsx</span> <span class="ex">— new unified popover scrollable content wrapper</span></div>
+      <div>├─ <span class="mod">ParentPicker.tsx</span> <span class="ex">— compose PickerTrigger &amp; PopoverSearch</span></div>
+      <div>├─ <span class="mod">BlockerPicker.tsx</span> <span class="ex">— compose PickerTrigger</span></div>
+      <div>├─ <span class="mod">SprintPicker.tsx</span> <span class="ex">— compose PickerTrigger</span></div>
+      <div>├─ <span class="mod">StatePicker.tsx</span> <span class="ex">— compose PickerTrigger</span></div>
+      <div>├─ <span class="mod">PriorityPicker.tsx</span> <span class="ex">— compose PickerTrigger</span></div>
+      <div>├─ LabelEditor.tsx <span class="ex">— reviewed only (preserves inline datalist behavior)</span></div>
+      <div>└─ FilterSelect.tsx <span class="ex">— reviewed only (preserves native select appearance override)</span></div>
+    </div>
+    <ul class="tree-notes">
+      <li>All unit tests must pass after refactoring.</li>
+      <li>Data contracts (such as <code>onChange</code> values, <code>value</code> formats) are kept intact.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance signal</h2>
+  <div class="accept">
+    The refactoring is successful when <b>all unit tests pass</b>, the visual appearance of all pickers remains intact, DOM element nesting issues in popovers are resolved, and the new shared components are composed correctly.
+  </div>
+</section>
+
+</main>
+
+<script>
+  // pillar expand/collapse
+  document.querySelectorAll('.pillar').forEach(p => {
+    p.addEventListener('click', () => p.classList.toggle('open'));
+  });
+
+  // diagram node info
+  const INFO = {
+    sidebar: { t: 'IssueSidebar / Consumer Views', does: ['Renders the pickers in fields', 'Listens to saving states and handles patch updates'], not: ['Does not deal with popover state or layout directly'] },
+    pickers: { t: 'Picker Components', does: ['Own domain-specific validation (e.g. cyclic checking)', 'Derive search queries and format items'], not: ['Do not repeat popover click/keypress states', 'Do not define duplicate trigger button structures'] },
+    popover: { t: 'Popover & PopoverOption', does: ['Wraps trigger button click handler', 'Maintains open/closed state', 'Listens to Escape key and clicks outside to dismiss'], not: ['Does not hardcode specific search or input elements'] },
+    trigger: { t: 'PickerTrigger (NEW)', does: ['Uniformly renders solid/dashed borders', 'Standardizes loader and icon locations'], not: ['Does not contain popover open state directly'] },
+    helpers: { t: 'Popover Layout Helpers (NEW)', does: ['Standardizes search text input styles (focus, bg)', 'Enforces uniform maximum height (320px) and vertical scrolling'], not: ['Do not inspect which fields are active'] },
+    nonpopover: { t: 'LabelEditor & FilterSelect', does: ['LabelEditor: manages tag suggestions and inline list', 'FilterSelect: customizes native select chevron'], not: ['Do not use Popover wrapper components'] }
+  };
+  const nodes = document.querySelectorAll('.node');
+  const info = document.getElementById('nodeInfo');
+  function showNode(key) {
+    nodes.forEach(n => { n.classList.toggle('hl', n.dataset.n === key); n.classList.remove('dim'); });
+    const d = INFO[key]; if (!d) return;
+    info.innerHTML = '<h4>' + d.t + '</h4><ul>' +
+      d.does.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
+      '<ul style="margin-top:10px">' + d.not.map(x => '<li style="color:var(--red)">' + x + '</li>').join('') + '</ul>';
+  }
+  nodes.forEach(n => n.addEventListener('click', e => { e.stopPropagation(); showNode(n.dataset.n); }));
+
+  // trace rows highlight diagram
+  document.querySelectorAll('tr.trace').forEach(tr => {
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('tr.trace').forEach(r => r.classList.remove('sel'));
+      tr.classList.add('sel');
+      const keys = tr.dataset.nodes.split(',');
+      nodes.forEach(n => {
+        n.classList.toggle('hl', keys.includes(n.dataset.n));
+        n.classList.toggle('dim', !keys.includes(n.dataset.n));
+      });
+    });
+  });
+
+  // nav active state on scroll
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

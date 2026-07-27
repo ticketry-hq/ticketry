@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Epic Lifecycle — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; margin: 0 -40px; padding: 0 40px; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: #eef1f6; padding: 1px 5px; border-radius: 4px; }
+  .evo { display: grid; grid-template-columns: 1fr 28px 1fr 28px 1fr; gap: 10px; align-items: stretch; }
+  .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); }
+  .stage .lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 4px; }
+  .stage.dead .lbl { color: var(--red); }
+  .stage.mid .lbl { color: var(--amber); }
+  .stage.live { border: 2px solid var(--green); color: var(--ink); }
+  .stage.live .lbl { color: var(--green); }
+  .arr { align-self: center; text-align: center; color: var(--violet); font-size: 18px; font-weight: 700; }
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .pillar { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent); cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .pillar:hover { box-shadow: 0 6px 18px rgba(29,36,51,.08); transform: translateY(-2px); }
+  .pillar.p2 { border-top-color: var(--green); }
+  .pillar.p3 { border-top-color: var(--violet); }
+  .pillar .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .pillar h3 { font-size: 16px; margin: 4px 0 8px; }
+  .pillar p { font-size: 13px; color: var(--muted); }
+  .pillar .more { display: none; margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .pillar.open .more { display: block; }
+  .pillar ul { list-style: none; }
+  .pillar li { font-size: 13px; padding: 3px 0 3px 20px; position: relative; }
+  .pillar li::before { content: "+"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+  .diagram-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "."; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  #nodeInfo li.no { color: var(--red); }
+  #nodeInfo li.no::before { content: "x"; color: var(--red); font-size: 10px; top: 5px; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .tree-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; display: flex; gap: 30px; flex-wrap: wrap; }
+  .tree { font-family: var(--mono); font-size: 13px; line-height: 1.9; min-width: 430px; }
+  .tree .new { background: var(--green-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .mod { background: var(--amber-soft); border-radius: 4px; padding: 0 6px; }
+  .tree .dir { color: var(--accent); font-weight: 700; }
+  .tree-notes { font-size: 13px; color: var(--muted); border-left: 1px solid var(--line); padding-left: 24px; max-width: 390px; }
+  .tree-notes li { margin-bottom: 8px; list-style: none; padding-left: 16px; position: relative; }
+  .tree-notes li::before { content: ">"; position: absolute; left: 0; color: var(--accent); }
+  .accept { background: var(--green-soft); border: 1px solid #bfe3cd; border-radius: 12px; padding: 22px 24px; }
+  .accept h2 { color: var(--green); }
+  .accept ul { list-style: none; margin-top: 10px; }
+  .accept li { padding: 5px 0 5px 22px; position: relative; font-size: 13.5px; }
+  .accept li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 800; }
+  @media (max-width: 900px) {
+    .pillars { grid-template-columns: 1fr; }
+    .diagram-wrap { grid-template-columns: 1fr; }
+    .evo { grid-template-columns: 1fr; }
+    .arr { transform: rotate(90deg); }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+    .tree { min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">WorkTracker · Module 81c3aa9b · Planning HLD</div>
+  <h1>Epic Lifecycle — active epics stay visible, closed epics leave active views</h1>
+  <p class="sub">Epics are module rows today. This design gives them their own lifecycle affordance without changing story states: mark an epic not started, in progress, done, or cancelled; hide done/cancelled epics from active planning surfaces by default; keep a deliberate way to review closed epics.</p>
+  <div class="chips">
+    <span class="chip">Phase: HLD</span>
+    <span class="chip green">Generic core</span>
+    <span class="chip violet">Backend + SDK + Studio</span>
+    <span class="chip amber">1 migration</span>
+  </div>
+  <nav id="nav">
+    <a href="#evo" class="active">Context</a>
+    <a href="#pillars">Scope</a>
+    <a href="#shape">System Shape</a>
+    <a href="#trace">Decision Trace</a>
+    <a href="#repo">Change Map</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+<main>
+<section id="evo">
+  <div class="evo">
+    <div class="stage dead">
+      <div class="lbl">TODAY</div>
+      Epics are modules with names and keys. Closed or abandoned epics remain in the rail, board swimlanes, story map columns, and dropdowns forever.
+    </div>
+    <div class="arr">&rarr;</div>
+    <div class="stage mid">
+      <div class="lbl">RELATED WORK</div>
+      #627 made the epic rail the home for epic filtering. #632 added epic swimlanes. #633 made cancelled issues leave active views.
+    </div>
+    <div class="arr">&rarr;</div>
+    <div class="stage live">
+      <div class="lbl">THIS SLICE</div>
+      Add an epic lifecycle to module rows and apply it consistently to active views. Done/cancelled epics are hidden unless a closed-epics filter is enabled.
+    </div>
+  </div>
+</section>
+
+<section id="pillars">
+  <h2>The feature in three pieces</h2>
+  <p class="lede">Click a card to expand the boundary. The important rule: epic lifecycle never mutates child story states.</p>
+  <div class="pillars">
+    <div class="pillar" data-k="model">
+      <div class="tag">P1 · DATA CONTRACT</div>
+      <h3>Lifecycle on epics</h3>
+      <p>Expose lifecycle on `ModuleOut` and `ModulePatch`: not started, in progress, done, cancelled.</p>
+      <div class="more"><ul>
+        <li>Migration adds a project-safe module lifecycle value, or reuses `Issue.state` for type=module with the same external enum.</li>
+        <li>`list_modules` hides closed epics by default and supports an include-closed mode.</li>
+        <li>Changing an epic status does not cascade to stories or sub-tasks.</li>
+      </ul></div>
+    </div>
+    <div class="pillar p2" data-k="views">
+      <div class="tag">P2 · ACTIVE SURFACES</div>
+      <h3>Hide closed epics</h3>
+      <p>Backlog rail, board lanes, story map columns, planning filters, and parent pickers use the same visible epic set.</p>
+      <div class="more"><ul>
+        <li>Active views default to not started + in progress epics.</li>
+        <li>Done/cancelled epics no longer occupy rails, columns, lanes, or dropdown space by default.</li>
+        <li>Stories under a closed epic are not deleted; they can still be found by direct issue search/detail.</li>
+      </ul></div>
+    </div>
+    <div class="pillar p3" data-k="ui">
+      <div class="tag">P3 · AFFORDANCE</div>
+      <h3>Mark and review</h3>
+      <p>Users can mark lifecycle from the epic rail/header and temporarily show closed epics when needed.</p>
+      <div class="more"><ul>
+        <li>Epic rail entries show a compact lifecycle badge and action menu.</li>
+        <li>Closed-epics toggle reveals done/cancelled epics with subdued styling.</li>
+        <li>Creation defaults new epics to not started; first visible transition is in progress.</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="shape">
+  <h2>System shape</h2>
+  <p class="lede">Click a node to see its responsibility and non-responsibility.</p>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 660 380" width="100%" id="svg">
+      <defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8a93a6"/></marker></defs>
+      <line x1="140" y1="80" x2="140" y2="125" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="158" y="108" font-size="10" fill="#5b6478">patch lifecycle</text>
+      <line x1="245" y1="155" x2="390" y2="155" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="284" y="146" font-size="10" fill="#5b6478">ModuleOut</text>
+      <line x1="470" y1="190" x2="470" y2="245" stroke="#8a93a6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="485" y="222" font-size="10" fill="#5b6478">visible set</text>
+      <line x1="390" y1="155" x2="245" y2="255" stroke="#8a93a6" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#arr)"/>
+      <text x="304" y="218" font-size="10" fill="#5b6478">closed lookup</text>
+      <g class="node" data-k="user">
+        <ellipse cx="140" cy="52" rx="98" ry="28" fill="#fff" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="140" y="49" text-anchor="middle" font-size="12" font-weight="700">User</text>
+        <text x="140" y="64" text-anchor="middle" font-size="10" fill="#5b6478">marks epic lifecycle</text>
+      </g>
+      <g class="node" data-k="api">
+        <rect x="36" y="125" width="208" height="64" rx="9" fill="#e8edfb" stroke="#3556d4" stroke-width="1.5"/>
+        <text x="140" y="150" text-anchor="middle" font-size="12" font-weight="700">Modules API</text>
+        <text x="140" y="166" text-anchor="middle" font-size="10" fill="#5b6478">list / create / patch</text>
+      </g>
+      <g class="node" data-k="store">
+        <rect x="390" y="122" width="170" height="68" rx="9" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="1.5"/>
+        <text x="475" y="147" text-anchor="middle" font-size="12" font-weight="700">Studio stores</text>
+        <text x="475" y="163" text-anchor="middle" font-size="10" fill="#5b6478">modules + filters</text>
+      </g>
+      <g class="node" data-k="views">
+        <rect x="354" y="245" width="232" height="72" rx="9" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="470" y="272" text-anchor="middle" font-size="12" font-weight="700">Active views</text>
+        <text x="470" y="288" text-anchor="middle" font-size="10" fill="#5b6478">rail, board, map, pickers</text>
+      </g>
+      <g class="node" data-k="closed">
+        <rect x="40" y="238" width="205" height="64" rx="9" fill="#fbf0d8" stroke="#9a6700" stroke-width="1.5" stroke-dasharray="5 5"/>
+        <text x="142" y="263" text-anchor="middle" font-size="12" font-weight="700">Closed-epics mode</text>
+        <text x="142" y="279" text-anchor="middle" font-size="10" fill="#5b6478">explicit review surface</text>
+      </g>
+    </svg>
+    <aside id="nodeInfo">
+      <h4>Select a node</h4>
+      <p class="hint">The API owns lifecycle persistence; the UI owns visibility.</p>
+    </aside>
+  </div>
+</section>
+
+<section id="trace">
+  <h2>Decision trace</h2>
+  <p class="lede">Rows highlight the matching diagram node.</p>
+  <table>
+    <thead><tr><th>Req</th><th>Decision</th><th>Why</th><th>Node</th></tr></thead>
+    <tbody>
+      <tr class="trace" data-k="api"><td><span class="rid">R1</span></td><td>Persist lifecycle on module/epic records.</td><td>Epics need a lifecycle independent of child story workflow.</td><td>Modules API</td></tr>
+      <tr class="trace" data-k="views"><td><span class="rid">R2</span></td><td>Hide done/cancelled epics by default in active views.</td><td>The user's goal is to stop seeing epics that are no longer active.</td><td>Active views</td></tr>
+      <tr class="trace" data-k="closed"><td><span class="rid">R3</span></td><td>Add explicit closed-epics reveal, not a separate archive app.</td><td>Recovery/review is necessary, but should not pollute daily planning.</td><td>Closed mode</td></tr>
+      <tr class="trace" data-k="store"><td><span class="rid">R4</span></td><td>Centralize visible-epic selection in store/selectors.</td><td>Rail, board, map, filters, and pickers must agree.</td><td>Studio stores</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="repo">
+  <h2>Change map</h2>
+  <p class="lede">Expected files for the implementation ticket. Generated SDK updates are noted but should be regenerated from OpenAPI.</p>
+  <div class="tree-wrap">
+    <div class="tree">
+      <div><span class="dir">worktracker/worktracker/</span></div>
+      <div>  <span class="mod">models.py</span> / <span class="new">migration 0009</span></div>
+      <div>  <span class="mod">schemas.py</span> ModuleOut / ModulePatch</div>
+      <div>  <span class="mod">api.py</span> module list + patch behavior</div>
+      <div>  <span class="mod">tests/</span> module lifecycle API coverage</div>
+      <div><span class="dir">studio/src/</span></div>
+      <div>  <span class="mod">lib/types.ts</span> Module lifecycle type</div>
+      <div>  <span class="mod">stores/studio/</span> visible epic selectors</div>
+      <div>  <span class="mod">views/EpicRail.tsx</span> badge + action</div>
+      <div>  <span class="mod">views/planning/</span> dropdown filtering</div>
+      <div>  <span class="mod">views/BoardSwimlane.tsx</span> closed lane handling</div>
+      <div>  <span class="new">tests</span> rail, selectors, board/map filters</div>
+    </div>
+    <ul class="tree-notes">
+      <li>CORE work: generic-relevant, authored in this repo under the Coding-leads model.</li>
+      <li>Do not touch Coding overlay files unless incidental type exports require it.</li>
+      <li>Regenerate the TypeScript SDK after OpenAPI changes.</li>
+      <li>Closed epics are hidden from active views, not deleted.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="accept" class="accept">
+  <h2>Acceptance signal</h2>
+  <ul>
+    <li>Epics can be marked not started, in progress, done, or cancelled.</li>
+    <li>Done/cancelled epics disappear from active rails, swimlanes, story map columns, and epic dropdowns by default.</li>
+    <li>A closed-epics mode reveals done/cancelled epics with subdued styling.</li>
+    <li>Changing an epic lifecycle never changes child story or sub-task state.</li>
+    <li>Backend, SDK, and Studio tests cover lifecycle transitions and visibility rules.</li>
+  </ul>
+</section>
+</main>
+<script>
+const info = {
+  user: { h: "User", yes: ["Chooses lifecycle from an epic affordance.", "Can reveal closed epics deliberately."], no: ["Does not manage child story states through this control."] },
+  api: { h: "Modules API", yes: ["Persists lifecycle on epic/module records.", "Lists active epics by default.", "Allows include-closed retrieval."], no: ["Does not delete epics.", "Does not cascade lifecycle to children."] },
+  store: { h: "Studio stores", yes: ["Keeps loaded module lifecycle data.", "Computes the visible epic set for consumers.", "Reconciles filters when closed epics disappear."], no: ["Does not invent lifecycle state client-side."] },
+  views: { h: "Active views", yes: ["Use the shared visible epic set.", "Keep done/cancelled epics out by default.", "Show badges where epics are visible."], no: ["Do not create separate behavior per surface."] },
+  closed: { h: "Closed-epics mode", yes: ["Temporarily includes done/cancelled epics.", "Uses subdued styling to separate them from active planning."], no: ["Is not a new archive browser or delete recovery tool."] }
+};
+function selectNode(k) {
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("hl", n.dataset.k === k));
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("dim", k && n.dataset.k !== k));
+  const d = info[k];
+  if (!d) return;
+  document.getElementById("nodeInfo").innerHTML = `<h4>${d.h}</h4><ul>${d.yes.map(x => `<li>${x}</li>`).join("")}${d.no.map(x => `<li class="no">${x}</li>`).join("")}</ul>`;
+}
+document.querySelectorAll(".node").forEach(n => n.addEventListener("click", () => selectNode(n.dataset.k)));
+document.querySelectorAll(".trace").forEach(r => r.addEventListener("click", () => {
+  document.querySelectorAll(".trace").forEach(x => x.classList.remove("sel"));
+  r.classList.add("sel");
+  selectNode(r.dataset.k);
+}));
+document.querySelectorAll(".pillar").forEach(p => p.addEventListener("click", () => p.classList.toggle("open")));
+const links = [...document.querySelectorAll("nav a")];
+const sections = links.map(a => document.querySelector(a.getAttribute("href")));
+addEventListener("scroll", () => {
+  const y = scrollY + 90;
+  let active = links[0];
+  sections.forEach((s, i) => { if (s && s.offsetTop <= y) active = links[i]; });
+  links.forEach(a => a.classList.toggle("active", a === active));
+});
+</script>
+</body>
+</html>

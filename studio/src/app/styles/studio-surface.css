@@ -1,0 +1,11 @@
+/* CODIN-691: plane-tui's global stylesheet sets `body { @apply bg-pane-bg
+   text-text-primary font-mono }` and `html,body,#root { height:100% }`. Studio's
+   body is font-sans (Hanken Grotesk reading chrome), so importing that rule
+   globally would clobber Studio. Instead we re-apply plane-tui's body base rule
+   SCOPED to the studio-tab container, so the ported surface gets its mono
+   default + full height without bleeding into Studio chrome. Utility classes
+   themselves come from Studio's single Tailwind build (palette is identical and
+   its content glob already scans src/**). */
+.studio-surface {
+  @apply h-full w-full bg-pane-bg text-text-primary font-mono;
+}

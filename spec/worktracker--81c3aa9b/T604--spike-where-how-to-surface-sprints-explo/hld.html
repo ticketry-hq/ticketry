@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T604 · Sprints as Now / Later — HLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: 26px 40px 0; position: sticky; top: 0; z-index: 30;
+  }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 20px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { display: flex; gap: 2px; overflow-x: auto; }
+  nav a {
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted);
+    text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 150px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: #eef1f6; border-radius: 4px; padding: 1px 5px; }
+
+  /* the three-bucket model strip */
+  .buckets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .bucket {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; border-top: 5px solid var(--muted);
+  }
+  .bucket.now { border-top-color: var(--green); }
+  .bucket.later { border-top-color: var(--accent); }
+  .bucket.hist { border-top-color: var(--violet); }
+  .bucket .blbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); }
+  .bucket.now .blbl { color: var(--green); }
+  .bucket.later .blbl { color: var(--accent); }
+  .bucket.hist .blbl { color: var(--violet); }
+  .bucket h3 { font-size: 16px; margin: 5px 0 8px; }
+  .bucket p { font-size: 13px; color: var(--muted); }
+  .bucket .tech { margin-top: 10px; font-family: var(--mono); font-size: 11.5px; color: var(--ink); background: #f1f3f8; border-radius: 6px; padding: 6px 9px; }
+  .axislede { display:flex; gap:10px; align-items:center; background: var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin-bottom:20px; font-size:13px; }
+  .axislede b { color: var(--ink); } .axislede .w { color: var(--violet); font-weight:700; } .axislede .when { color: var(--green); font-weight:700; }
+
+  /* sequence steps */
+  .seq { display: grid; grid-template-columns: 300px 1fr; gap: 18px; }
+  .steps { display: flex; flex-direction: column; gap: 8px; }
+  .step {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 11px 14px; cursor: pointer; display: flex; gap: 11px; align-items: flex-start;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  .step:hover { border-color: var(--accent); }
+  .step.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .step .n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 800; font-size: 12px; display: grid; place-items: center; }
+  .step.atomic .n { background: var(--green-soft); color: var(--green); }
+  .step .t { font-size: 13px; font-weight: 600; }
+  .step .t span { display:block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  #stepInfo { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; align-self: start; position: sticky; top: 160px; }
+  #stepInfo h4 { font-size: 15px; color: var(--accent); margin-bottom: 8px; }
+  #stepInfo .mech { font-size: 13px; margin-bottom: 12px; }
+  #stepInfo .edge { font-size: 12.5px; color: var(--red); background: var(--red-soft); border-radius: 8px; padding: 9px 12px; }
+  #stepInfo .edge b { color: var(--red); }
+  #stepInfo .hint { color: var(--muted); font-style: italic; }
+
+  /* diagram */
+  .diagram-wrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; display: grid; grid-template-columns: 1fr 300px; gap: 18px;
+  }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.45)); }
+  .node.dim { opacity: .3; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); }
+  #nodeInfo .hint { color: var(--muted); font-style: italic; }
+  #nodeInfo ul { list-style: none; margin-top: 8px; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  #nodeInfo li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+
+  /* UI mockup */
+  .mock { background: #0f1420; border-radius: 12px; padding: 14px; overflow-x: auto; }
+  .mockgrid { display: grid; grid-template-columns: 130px 190px 1fr 200px; gap: 8px; min-width: 720px; font-size: 12px; }
+  .mp { background: #161c2b; border: 1px solid #232c40; border-radius: 8px; padding: 0; overflow: hidden; }
+  .mp .mph { background: #1d2740; color: #9fb0d0; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 6px 10px; border-bottom: 1px solid #232c40; }
+  .mp .row { padding: 4px 10px; color: #c7d2e6; white-space: nowrap; }
+  .mp .row.sel { background: #24407a; color: #fff; }
+  .mp .row.dim { color: #6b7796; }
+  .mp .row.toggle { display:flex; gap:0; padding:6px 8px; }
+  .mp .row.toggle span { padding: 2px 8px; border-radius: 5px; font-weight: 700; }
+  .mp .row.toggle .on { background: #3556d4; color: #fff; }
+  .mp .row.toggle .off { color: #7e8aa6; }
+  .mp .now { color: #69d39a; font-weight:700; }
+  .mp .later { color: #7fa0ec; }
+  .mp .hist { color: #b79be6; }
+  .mp .chip { display:inline-block; font-size:10px; background:#24407a; color:#bcd0ff; border-radius:8px; padding:0 6px; margin-left:6px; }
+  .mp .btn { background:#1f7a4f33; color:#69d39a; border:1px solid #1d7a4f88; border-radius:6px; padding:3px 8px; font-weight:700; display:inline-block; margin:6px 10px; }
+  .mp .meter { color:#8fa0c0; font-size:10px; }
+  .mockcap { color:#8fa0c0; font-size:11px; margin-top:8px; font-family: var(--mono); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .rid { font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 12.5px; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .tag.new { background: var(--green-soft); color: var(--green); }
+  .tag.reuse { background: var(--accent-soft); color: var(--accent); }
+  .tag.mod { background: var(--amber-soft); color: var(--amber); }
+
+  /* question board */
+  .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .qcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-left: 4px solid var(--amber); }
+  .qcard.ans { border-left-color: var(--green); }
+  .qcard .qid { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--amber); }
+  .qcard.ans .qid { color: var(--green); }
+  .qcard h4 { font-size: 14px; margin: 4px 0 6px; }
+  .qcard p { font-size: 12.5px; color: var(--muted); }
+  .qcard p b { color: var(--green); }
+  .qcard.openq p b { color: var(--amber); }
+
+  .accept {
+    background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px;
+    padding: 20px 24px; font-size: 14px;
+  }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .buckets, .qgrid { grid-template-columns: 1fr; }
+    .diagram-wrap, .seq { grid-template-columns: 1fr; }
+    #stepInfo { position: static; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker · Sprints · Ticket #604 · HLD</div>
+  <h1>Sprints as “Now / Later” — Lifecycle &amp; Surface</h1>
+  <div class="sub">Modules say <i>what</i> a task is; sprints say <i>when</i>. The product need: cleanly separate <b>what I’m working on now</b> from <b>what I’m putting off</b> — without faking it with a throwaway module. This HLD specifies the <b>Now / Later / History</b> model, a <b>start / close sprint</b> lifecycle where closing <b>rolls unfinished work into the next sprint</b>, and the UI lens that makes it visible.</div>
+  <div class="chips">
+    <span class="chip">Phase: HLD</span>
+    <span class="chip green">Reuses the #602 model as-is</span>
+    <span class="chip violet">Close → roll open work forward</span>
+    <span class="chip red">Active advances forward only</span>
+    <span class="chip amber">3 forks on the question board</span>
+  </div>
+  <nav id="nav">
+    <a href="#why" class="active">Why</a>
+    <a href="#model">Model</a>
+    <a href="#lifecycle">Lifecycle</a>
+    <a href="#shape">System Shape</a>
+    <a href="#ui">UI Surface</a>
+    <a href="#backend">Backend Delta</a>
+    <a href="#questions">Question Board</a>
+    <a href="#rel">#602 / #603</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ WHY ============ -->
+<section id="why">
+  <h2>The problem this solves</h2>
+  <div class="lede">A real workflow observation, not a feature wish.</div>
+  <div class="axislede">
+    <span>Today, to separate “work on now” from “later”, a&nbsp;<b>throwaway module</b> gets created — which corrupts the module axis.</span>
+  </div>
+  <div class="buckets">
+    <div class="bucket later">
+      <div class="blbl">THE BUG IN THE WORKFLOW</div>
+      <h3>Modules used as a time bucket</h3>
+      <p>A “stuff for now” module is invented to hold today’s work. But modules are the <b>what</b> (Auth, API, Billing) — overloading them with <b>when</b> pollutes the backbone and the task no longer lives under its real feature.</p>
+    </div>
+    <div class="bucket now">
+      <div class="blbl">THE FIX</div>
+      <h3>Two orthogonal axes</h3>
+      <p>A task keeps its real <span class="w">module (what)</span> and separately carries a <span class="when">sprint (when)</span>. “Now vs later” rides the sprint axis — the module axis stays clean. The data model for this already exists (#602): <code>Issue.sprint</code> is a nullable FK, orthogonal to <code>parent</code>.</p>
+    </div>
+    <div class="bucket hist">
+      <div class="blbl">THE BONUS</div>
+      <h3>History falls out for free</h3>
+      <p>Because a sprint is a time-box, finishing one leaves a <b>frozen record of what got done in that stretch</b> — no extra bookkeeping. Closing a sprint <i>is</i> archiving it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MODEL ============ -->
+<section id="model">
+  <h2>The model — reuse #602, add only “which one is active”</h2>
+  <div class="lede"><b>No new table, no new fields.</b> The existing <code>Sprint.status</code> enum (<code>planned / active / completed</code>) already carries everything: <b>“Now” is simply the one sprint with <code>status = active</code></b>. The only additions are <i>behavioral</i>: exactly one active per project, and the active sprint may only move <i>forward</i>.</div>
+  <div class="buckets">
+    <div class="bucket now">
+      <div class="blbl">NOW</div>
+      <h3>The active sprint</h3>
+      <p>The one sprint with <code>status = active</code>. Its member tasks are “what I’m working on now”, shown across all modules at once.</p>
+      <div class="tech">sprint.status == "active"  (exactly one)</div>
+    </div>
+    <div class="bucket later">
+      <div class="blbl">LATER</div>
+      <h3>The backlog</h3>
+      <p>Tasks with no sprint — “yet to tackle”. You pull from here into Now, or push from Now back to here.</p>
+      <div class="tech">issue.sprint_id IS NULL</div>
+    </div>
+    <div class="bucket hist">
+      <div class="blbl">HISTORY</div>
+      <h3>Closed sprints</h3>
+      <p>Frozen cohorts. Each completed sprint is a record of what shipped in that window. Read-mostly.</p>
+      <div class="tech">sprint.status == "completed"</div>
+    </div>
+  </div>
+  <div class="axislede" style="margin-top:20px;margin-bottom:0">
+    <span><b>Forward-only.</b> Sprints carry an order from existing fields (<code>start_date</code> / <code>created_at</code> — no new “increment” column needed). Setting “active” may only target a sprint <b>ordered after</b> the current one — you can never reactivate a completed or earlier sprint. Now marches monotonically forward.</span>
+  </div>
+</section>
+
+<!-- ============ LIFECYCLE ============ -->
+<section id="lifecycle">
+  <h2>Lifecycle — start, and close-as-advance</h2>
+  <div class="lede">Two user actions. <b>Start</b> bootstraps the first Now. <b>Close</b> is the workhorse: it’s an atomic “advance the iteration” — freeze what’s done, roll what isn’t into the next Now. Close always advances to a <b>later</b> sprint, never back. Click a step for its mechanics and edge cases.</div>
+  <div class="seq">
+    <div class="steps">
+      <div class="step" data-s="start">
+        <div class="n">1</div>
+        <div class="t">Start sprint <span>when no sprint is active yet</span></div>
+      </div>
+      <div class="step" data-s="work">
+        <div class="n">2</div>
+        <div class="t">Work the Now <span>pull from Later, finish tasks</span></div>
+      </div>
+      <div class="step" data-s="click">
+        <div class="n">3</div>
+        <div class="t">Click “Close sprint” <span>confirm the done/open split</span></div>
+      </div>
+      <div class="step atomic" data-s="freeze">
+        <div class="n">4</div>
+        <div class="t">Freeze: active → completed <span>becomes a History cohort</span></div>
+      </div>
+      <div class="step atomic" data-s="open">
+        <div class="n">5</div>
+        <div class="t">Open the next sprint <span>new active = the new Now</span></div>
+      </div>
+      <div class="step atomic" data-s="roll">
+        <div class="n">6</div>
+        <div class="t">Roll open work forward <span>unfinished → next sprint</span></div>
+      </div>
+    </div>
+    <div id="stepInfo"><span class="hint">Click a step. Steps 4–6 (green) are one atomic backend operation — close never half-completes.</span></div>
+  </div>
+</section>
+
+<!-- ============ SYSTEM SHAPE ============ -->
+<section id="shape">
+  <h2>System shape</h2>
+  <div class="lede">Click any box for what it owns and what it does not. Violet = existing #602 storage &amp; routes, reused. Green = new in this feature. Amber = a small additive change to existing code.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 760 460" width="100%">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#8a93a8"/></marker>
+        <marker id="arrg" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#1d7a4f"/></marker>
+      </defs>
+
+      <!-- developer -->
+      <g class="node" data-n="dev">
+        <ellipse cx="80" cy="120" rx="66" ry="34" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="1.5"/>
+        <text x="80" y="116" text-anchor="middle" font-size="14" font-weight="700" fill="#0e4d2f">Developer</text>
+        <text x="80" y="134" text-anchor="middle" font-size="11" fill="#1d7a4f">now vs later</text>
+      </g>
+
+      <!-- UI lens (new) -->
+      <g class="node" data-n="lens">
+        <rect x="240" y="40" width="230" height="92" rx="10" fill="#fbfcfe" stroke="#3556d4" stroke-width="2"/>
+        <text x="355" y="66" text-anchor="middle" font-size="13" font-weight="700">Sprint lens (UI · NEW)</text>
+        <text x="355" y="85" text-anchor="middle" font-size="11" fill="#5b6478">Now / Later / History in Modules pane</text>
+        <text x="355" y="101" text-anchor="middle" font-size="11" fill="#5b6478">filters Tasks · Close button</text>
+        <text x="355" y="118" text-anchor="middle" font-size="11" fill="#3556d4">DetailsTab sprint field</text>
+      </g>
+
+      <!-- close op (new) -->
+      <g class="node" data-n="close">
+        <rect x="240" y="175" width="230" height="80" rx="10" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2.5"/>
+        <text x="355" y="202" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">Close-sprint op (NEW · atomic)</text>
+        <text x="355" y="221" text-anchor="middle" font-size="11" fill="#1d7a4f">complete + open-next + roll-open</text>
+        <text x="355" y="238" text-anchor="middle" font-size="11" fill="#1d7a4f">POST /sprints/{id}/close</text>
+      </g>
+
+      <!-- read shape (amber additive) -->
+      <g class="node" data-n="read">
+        <rect x="240" y="300" width="230" height="74" rx="10" fill="#fbf0d8" stroke="#9a6700" stroke-width="2"/>
+        <text x="355" y="326" text-anchor="middle" font-size="13" font-weight="700" fill="#7a5200">+ sprint_id on reads (MOD)</text>
+        <text x="355" y="345" text-anchor="middle" font-size="11" fill="#9a6700">WorkItemOut · SDK WorkItem</text>
+        <text x="355" y="361" text-anchor="middle" font-size="11" fill="#9a6700">additive · unblocks the lens</text>
+      </g>
+
+      <!-- existing storage + routes (violet) -->
+      <g class="node" data-n="store">
+        <rect x="545" y="120" width="190" height="120" rx="10" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="2"/>
+        <text x="640" y="148" text-anchor="middle" font-size="13" font-weight="700" fill="#3d2370">WorkTracker (#602)</text>
+        <text x="640" y="168" text-anchor="middle" font-size="11" fill="#6b3fb8">Sprint model · status enum</text>
+        <text x="640" y="184" text-anchor="middle" font-size="11" fill="#6b3fb8">Issue.sprint FK</text>
+        <text x="640" y="200" text-anchor="middle" font-size="11" fill="#6b3fb8">5 routes · progress</text>
+        <text x="640" y="220" text-anchor="middle" font-size="11" fill="#6b3fb8">PATCH work-item sprint_id</text>
+      </g>
+
+      <!-- edges -->
+      <line x1="146" y1="110" x2="238" y2="86" stroke="#8a93a8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <line x1="470" y1="100" x2="543" y2="150" stroke="#8a93a8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <text x="478" y="112" font-size="10.5" fill="#8a93a8">list / filter</text>
+      <line x1="470" y1="210" x2="543" y2="195" stroke="#1d7a4f" stroke-width="1.6" marker-end="url(#arrg)"/>
+      <text x="478" y="230" font-size="10.5" fill="#1d7a4f">writes status + sprint_id</text>
+      <line x1="470" y1="332" x2="560" y2="238" stroke="#9a6700" stroke-width="1.4" marker-end="url(#arr)"/>
+      <text x="486" y="320" font-size="10.5" fill="#9a6700">reads</text>
+      <!-- lens triggers close -->
+      <line x1="355" y1="132" x2="355" y2="173" stroke="#8a93a8" stroke-width="1.4" marker-end="url(#arr)"/>
+      <text x="362" y="158" font-size="10.5" fill="#8a93a8">Close click</text>
+      <!-- read feeds lens -->
+      <path d="M240 320 q-60 -10 -75 -190" stroke="#9a6700" stroke-width="1.3" stroke-dasharray="6 4" fill="none" marker-end="url(#arr)"/>
+    </svg>
+    <div id="nodeInfo"><span class="hint">Click a box for its responsibilities and explicit non-responsibilities.</span></div>
+  </div>
+</section>
+
+<!-- ============ UI SURFACE ============ -->
+<section id="ui">
+  <h2>UI surface — a lens, not a new app</h2>
+  <div class="lede">The 2nd pane toggles <b>Modules ⇄ Sprints</b>. The Sprints lens is just three selectable rows — <b>Now</b>, <b>Later</b>, <b>History</b> — that filter the existing Tasks pane across all modules. Reuses the exact select→filter machinery modules already use; no new route, no new screen.</div>
+  <div class="mock">
+    <div class="mockgrid">
+      <div class="mp">
+        <div class="mph">Projects</div>
+        <div class="row sel">📁 WorkTracker</div>
+        <div class="row dim">📁 Design module</div>
+      </div>
+      <div class="mp">
+        <div class="mph">Modules ｜ <span style="color:#69d39a">Sprints</span></div>
+        <div class="row toggle"><span class="off">Modules</span><span class="on">Sprints</span></div>
+        <div class="row sel"><span class="now">● Now</span> — Sprint 7 <span class="chip">3/8</span></div>
+        <div class="row"><span class="btn">⊘ Close sprint</span></div>
+        <div class="row"><span class="later">▾ Later</span> — Backlog <span class="chip">12</span></div>
+        <div class="row dim"><span class="hist">▸ History</span></div>
+        <div class="row dim" style="padding-left:22px">Sprint 6 · done</div>
+        <div class="row dim" style="padding-left:22px">Sprint 5 · done</div>
+      </div>
+      <div class="mp">
+        <div class="mph">Tasks — Now (Sprint 7) · across modules</div>
+        <div class="row" style="color:#8fa0c0">▸ In Progress</div>
+        <div class="row sel">T-21 OAuth refresh <span class="chip" style="background:#3a2a55;color:#c9b2f0">📦 Auth</span></div>
+        <div class="row">T-34 Rate limiter <span class="chip" style="background:#3a2a55;color:#c9b2f0">📦 API</span></div>
+        <div class="row" style="color:#8fa0c0">▸ Todo</div>
+        <div class="row">T-40 Webhook retry <span class="chip" style="background:#3a2a55;color:#c9b2f0">📦 API</span></div>
+        <div class="row meter" style="padding-top:6px">3 done · 5 open</div>
+      </div>
+      <div class="mp">
+        <div class="mph">Details — T-21</div>
+        <div class="row">State: In Progress</div>
+        <div class="row">Module: Auth</div>
+        <div class="row"><span class="now">Sprint: Now (S7)</span></div>
+        <div class="row"><span class="btn" style="color:#7fa0ec;background:#24407a33;border-color:#3556d488">→ Move to Later</span></div>
+        <div class="row dim">Priority: high</div>
+      </div>
+    </div>
+    <div class="mockcap">Now = active sprint, filtered across modules · module shown as a chip · DetailsTab toggles a task Now↔Later</div>
+  </div>
+  <div class="lede" style="margin-top:18px">Two assignment affordances, both reusing <code>PATCH /work-items/{id}</code> with <code>sprint_id</code> (set = Now’s id, clear = Later):</div>
+  <table>
+    <thead><tr><th style="width:200px">Affordance</th><th>Where</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td><span class="rid">Now ↔ Later toggle</span></td><td>DetailsTab sprint field (mirrors the existing status / parent modals)</td><td>Pull a task into Now, or push it back to Later — one PATCH</td></tr>
+      <tr><td><span class="rid">Close sprint</span></td><td>Button on the “Now” row of the lens</td><td>Fires the atomic close op (steps 4–6); drag-to-plan stays out of scope (that’s #603)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BACKEND DELTA ============ -->
+<section id="backend">
+  <h2>Backend delta vs #602</h2>
+  <div class="lede">#602 shipped the storage and CRUD. This feature adds <b>zero new model fields</b>: one real operation (close), two behavioral rules, and it surfaces one <i>existing</i> field on reads. Everything else is reuse.</div>
+  <table>
+    <thead><tr><th style="width:130px">Change</th><th>What</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag reuse">REUSE</span></td><td>Sprint model + <code>status</code> enum</td><td><b>No new table, no new fields.</b> “Active = Now” reuses the existing <code>status='active'</code>; the order (“increment”) comes from the existing <code>start_date</code>/<code>created_at</code>.</td></tr>
+      <tr><td><span class="tag new">RULE</span></td><td>Single-active + forward-only</td><td>Behavioral, not schema: at most one <code>active</code> sprint per project, and “active” may only advance to a sprint <b>ordered after</b> the current one — never back to an earlier or completed one.</td></tr>
+      <tr><td><span class="tag new">NEW</span></td><td><code>POST /sprints/{id}/close</code></td><td>Atomic advance: set this sprint <code>completed</code>; make the next (later) sprint <code>active</code>; reassign every <b>open</b> member (state group ∉ completed/cancelled — the predicate <code>_sprint_progress</code> already uses) to it. Done/cancelled stay frozen here.</td></tr>
+      <tr><td><span class="tag mod">MOD</span></td><td><code>sprint_id</code> on the work-item read</td><td>Surface the <b>existing</b> <code>Issue.sprint</code> FK in <code>WorkItemOut</code> + SDK <code>WorkItem</code> (additive, read-only; mirrors <code>parent_id</code>). Not a model change — the field exists; the read just omits it today.</td></tr>
+      <tr><td><span class="tag reuse">REUSE</span></td><td><code>PATCH /work-items/{id}</code> <code>{sprint_id}</code></td><td>Now↔Later moves: set = active sprint id, clear (null) = backlog. Already built in #602.</td></tr>
+      <tr><td><span class="tag reuse">REUSE</span></td><td><code>GET /sprints/{id}</code> + <code>/work-items</code></td><td>Progress (total/done/open) and member list — already derived, drive the lens counts and the filtered Tasks pane.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ QUESTION BOARD ============ -->
+<section id="questions">
+  <h2>Question board</h2>
+  <div class="lede">Green = decided in this conversation. Amber = genuine forks to settle in the LLD — none block the model.</div>
+  <div class="qgrid">
+    <div class="qcard ans"><div class="qid">DECIDED · reuse model</div><h4>New model, or fit the existing one?</h4><p><b>Reuse #602 as-is — zero new fields.</b> “Active = Now” is just <code>status='active'</code>; order comes from existing <code>start_date</code>/<code>created_at</code>. The only new state is which sprint is active, and the enum already expresses it.</p></div>
+    <div class="qcard ans"><div class="qid">DECIDED · forward-only</div><h4>Can the active sprint move backward?</h4><p><b>No.</b> Active advances monotonically — only to a sprint ordered after the current one. Reactivating a completed or earlier sprint is rejected.</p></div>
+    <div class="qcard ans"><div class="qid">DECIDED · close behavior</div><h4>Where does unfinished work go on close?</h4><p><b>Rolls forward into the next sprint</b> (not back to backlog). Done work freezes as history. The point of “close as advance”.</p></div>
+    <div class="qcard ans"><div class="qid">DECIDED · surface</div><h4>Where do sprints live in the UI?</h4><p><b>A Now/Later/History lens in the Modules pane</b> that filters the Tasks pane across modules — plus a DetailsTab Now↔Later toggle. Not a separate screen.</p></div>
+    <div class="qcard openq"><div class="qid">FORK · active marker</div><h4>How is “the active one” recorded?</h4><p><b>Lean: reuse <code>status='active'</code></b> + the single-active rule (zero new fields). Alternative if you want it explicit: a single <code>Project.active_sprint</code> pointer — still “one small thing”, but a new column. LLD to pick.</p></div>
+    <div class="qcard openq"><div class="qid">FORK · next-sprint identity</div><h4>Does close advance to an existing sprint, or create one?</h4><p><b>Lean: advance to the next existing <code>planned</code> sprint</b> if one exists (you pre-create the pipeline); else auto-create the next one. Either way it must be ordered after the current (forward-only).</p></div>
+    <div class="qcard openq"><div class="qid">FORK · naming &amp; dates on create</div><h4>If close creates the next sprint, how is it named/dated?</h4><p><b>Lean: prompt in the close dialog, pre-filled</b> (start = today, end = +2 weeks). Sprints require name + start/end dates, so a created next-sprint must supply them. N/A when advancing to a pre-made planned sprint.</p></div>
+  </div>
+</section>
+
+<!-- ============ RELATIONSHIP ============ -->
+<section id="rel">
+  <h2>Relationship to #602 and #603</h2>
+  <div class="lede">This feature sits between the two — it consumes #602 and reframes #603.</div>
+  <div class="buckets">
+    <div class="bucket hist">
+      <div class="blbl">#602 · CONSUMED</div>
+      <h3>Sprint storage &amp; CRUD</h3>
+      <p>Model, status enum, FK, 5 routes, progress, <code>sprint_id</code> patch — all reused as-is. This feature adds the <i>lifecycle</i> on top.</p>
+    </div>
+    <div class="bucket now">
+      <div class="blbl">#604 · THIS</div>
+      <h3>Now/Later lifecycle + lens</h3>
+      <p>The missing <i>verbs</i> (start, close-as-advance, roll-forward) and the <i>first view</i> (the lens). This is the simplest surface that delivers the actual workflow.</p>
+    </div>
+    <div class="bucket later">
+      <div class="blbl">#603 · DEFERRED</div>
+      <h3>Planning map (modules × sprints)</h3>
+      <p>The richer 2-axis story map with drag-to-plan becomes a <b>later</b> view, once you outgrow Now/Later. It depends on the same <code>sprint_id</code>-on-read change. Not first.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ACCEPTANCE ============ -->
+<section id="accept">
+  <h2>Acceptance signal</h2>
+  <div class="accept">
+    The design is settled when: a task carries its <b>real module</b> and, orthogonally, sits in <b>Now</b> (the one active sprint), <b>Later</b> (backlog), or <b>History</b> (a closed sprint); the developer sees <b>Now across all modules</b> from a lens in the Modules pane and flips a task <b>Now↔Later</b> from DetailsTab; pressing <b>Close sprint</b> performs one atomic step — <b>the done work freezes as a history cohort and the unfinished work rolls into the next (later) Now</b>, never backward; the design adds <b>no new model fields</b> — only the <b>close operation</b>, the <b>single-active + forward-only rules</b>, and surfacing the <b>existing <code>sprint_id</code> on the work-item read</b>, with everything else reused from #602 — and the three LLD forks (active marker, next-sprint identity, naming/dates) are answerable without disturbing this model.
+  </div>
+</section>
+
+</main>
+
+<script>
+  // sequence step detail
+  const STEP = {
+    start: { t: '1 · Start sprint', mech: 'When a project has no active sprint, the developer starts one. It is created with status=active and becomes “Now”. Optionally, backlog items are pulled in at start.', edge: 'Offered only when no sprint is active — starting a second would break the one-Now invariant.' },
+    work: { t: '2 · Work the Now', mech: 'Tasks are pulled from Later into Now and worked. Now is shown across all modules; progress (done/open) updates from member task states — already derived by GET /sprints/{id}.', edge: 'A task can leave Now back to Later at any time (DetailsTab toggle); membership is flat, independent of the module tree.' },
+    click: { t: '3 · Click “Close sprint”', mech: 'On the Now row, the developer presses Close. A confirm dialog shows the split: N done (will freeze) vs M open (will roll forward), and collects the next sprint’s name/dates.', edge: 'Pure preview until confirmed — nothing is written; the dialog is also where the naming/dates fork is resolved.' },
+    freeze: { t: '4 · Freeze (atomic)', mech: 'The active sprint flips to the existing status=completed value. Its done/cancelled members stay attached — it is now a History cohort: a record of what shipped this stretch.', edge: 'Steps 4–6 run as one transaction. A failure rolls all of them back; the sprint never ends up half-closed.' },
+    open: { t: '5 · Open next (atomic)', mech: 'The next sprint becomes status=active — the new Now. It is either the next existing planned sprint or a freshly created one, and must be ordered after the one just closed (later start_date / creation).', edge: 'Forward-only: activating an earlier or already-completed sprint is rejected. Active marches monotonically forward — no new "increment" column; order comes from existing date fields.' },
+    roll: { t: '6 · Roll open forward (atomic)', mech: 'Every open member (state group ∉ completed/cancelled — the exact _sprint_progress predicate) is reassigned sprint_id → the new active sprint. Done/cancelled members remain on the completed one.', edge: 'Zero open is fine: the new Now simply starts empty. “Open” includes tasks with no state at all.' },
+  };
+  const steps = document.querySelectorAll('.step');
+  const sinfo = document.getElementById('stepInfo');
+  steps.forEach(s => s.addEventListener('click', () => {
+    steps.forEach(x => x.classList.toggle('sel', x === s));
+    const d = STEP[s.dataset.s];
+    sinfo.innerHTML = '<h4>' + d.t + '</h4><div class="mech">' + d.mech + '</div><div class="edge"><b>Edge:</b> ' + d.edge + '</div>';
+  }));
+
+  // diagram node info
+  const INFO = {
+    dev: { t: 'Developer', does: ['Decides what is Now vs Later', 'Starts and closes sprints', 'Moves tasks Now↔Later'], not: ['Never edits the module to express time', 'Does not manage more than one active sprint'] },
+    lens: { t: 'Sprint lens (UI · NEW)', does: ['Modules⇄Sprints toggle in the 2nd pane', 'Now / Later / History rows that filter the Tasks pane across modules', 'Hosts the Close-sprint button and the DetailsTab Now↔Later field'], not: ['Not a new route or screen — reuses select→filter', 'No drag-to-plan grid (that is #603)'] },
+    close: { t: 'Close-sprint op (NEW · atomic)', does: ['Complete the active sprint', 'Create/open the next active sprint', 'Roll open members forward; freeze done ones'], not: ['Never half-completes (one transaction)', 'Does not touch task state — only sprint membership and sprint status'] },
+    read: { t: '+ sprint_id on reads (MOD)', does: ['Add sprint_id to WorkItemOut and SDK WorkItem', 'Additive — mirrors parent_id'], not: ['Changes no existing field', 'Not needed by the close op itself — needed by the lens to render membership'] },
+    store: { t: 'WorkTracker storage & routes (#602, reused as-is)', does: ['Sprint model + status enum (planned/active/completed) — active=Now reuses this, no new field', 'Issue.sprint nullable FK', '5 CRUD routes + derived progress + sprint_id patch'], not: ['Has no lifecycle verbs (start/close/roll) — this feature adds them as behavior, not schema', 'Reads omit sprint_id today — the MOD surfaces the existing FK', 'No single-active / forward-only enforcement today — the close feature adds those rules'] },
+  };
+  const nodes = document.querySelectorAll('.node');
+  const info = document.getElementById('nodeInfo');
+  nodes.forEach(n => n.addEventListener('click', e => {
+    e.stopPropagation();
+    nodes.forEach(x => x.classList.toggle('hl', x === n));
+    const d = INFO[n.dataset.n]; if (!d) return;
+    info.innerHTML = '<h4>' + d.t + '</h4><ul>' + d.does.map(x => '<li>' + x + '</li>').join('') +
+      '</ul><ul style="margin-top:10px">' + d.not.map(x => '<li style="color:var(--red)">' + x + '</li>').join('') + '</ul>';
+  }));
+
+  // nav active state on scroll
+  const links = document.querySelectorAll('#nav a');
+  const secs = [...document.querySelectorAll('section')];
+  window.addEventListener('scroll', () => {
+    let cur = secs[0].id;
+    for (const s of secs) if (s.getBoundingClientRect().top < 180) cur = s.id;
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  }, { passive: true });
+</script>
+</body>
+</html>

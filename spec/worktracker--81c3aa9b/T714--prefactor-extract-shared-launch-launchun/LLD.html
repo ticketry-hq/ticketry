@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T714 · Extract _launch + LaunchUnavailable — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; padding-bottom: 80px; }
+  header { background: var(--panel); padding: 26px 40px 16px; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 940px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav { display: flex; gap: 2px; overflow-x: auto; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 60px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 880px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  p.body { font-size: 13.5px; max-width: 880px; margin-bottom: 10px; }
+
+  .cm { display: grid; grid-template-columns: 430px 1fr; gap: 18px; }
+  .cm-tree { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2; }
+  .cm-tree .dir { color: var(--muted); }
+  .cm-tree .hit { cursor: pointer; border-radius: 6px; padding: 1px 8px; font-weight: 700; }
+  .cm-tree .hit.new { background: var(--green-soft); color: var(--green); }
+  .cm-tree .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .cm-tree .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .cm-tree .hit.sel { outline: 2px solid currentColor; }
+  .cm-detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; font-size: 13.5px; }
+  .cm-detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; font-family: var(--mono); }
+  .cm-detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; margin-bottom: 10px; }
+  .cm-detail ul { list-style: none; margin-top: 8px; }
+  .cm-detail li { padding: 4px 0 4px 18px; position: relative; }
+  .cm-detail li::before { content: "·"; position: absolute; left: 2px; color: var(--accent); font-weight: 900; }
+  .cm-detail li.no::before { content: "×"; color: var(--red); }
+  .cm-detail .hint { color: var(--muted); font-style: italic; }
+  .cm-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .cm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  .seq-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: fill .12s; }
+  .node.hl rect, .node.hl ellipse { fill: var(--accent); }
+  .node.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; margin-bottom: 6px; color: var(--accent); font-family: var(--mono); }
+  #seqInfo .hint { color: var(--muted); font-style: italic; }
+  #seqInfo p { margin-top: 6px; color: var(--ink); }
+  #seqInfo .edge { margin-top: 10px; font-size: 12.5px; color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fbfcfe; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  td .m { color: var(--violet); font-weight: 600; }
+  .sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .sev.ok { background: var(--green-soft); color: var(--green); }
+  .sev.warn { background: var(--amber-soft); color: var(--amber); }
+  .sev.def { background: var(--red-soft); color: var(--red); }
+
+  .contract { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 26px; }
+  .contract .sect { display: grid; grid-template-columns: 200px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .contract .sect:last-child { border-bottom: none; }
+  .contract .sk { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--green); padding-top: 2px; }
+  .contract .sv { color: var(--ink); }
+  .contract .sv .m { color: var(--violet); }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .scol { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .scol h3 { font-size: 14px; margin-bottom: 10px; }
+  .scol h3 .tag { font-size: 10px; font-weight: 800; letter-spacing: .05em; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: 2px; }
+  .scol h3 .tag.launch { background: var(--green-soft); color: var(--green); }
+  .scol h3 .tag.viewer { background: var(--accent-soft); color: var(--accent); }
+  .scol ol { list-style: none; counter-reset: s; }
+  .scol li { padding: 6px 0 6px 30px; position: relative; font-size: 13px; border-bottom: 1px dashed var(--line); }
+  .scol li:last-child { border-bottom: none; }
+  .scol li::before { counter-increment: s; content: counter(s); position: absolute; left: 0; top: 6px; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 800; text-align: center; line-height: 20px; background: var(--accent-soft); color: var(--accent); }
+
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .bstep { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--muted); border-top: 3px solid var(--accent); }
+  .bstep .n { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .bstep b { color: var(--ink); display: block; margin: 2px 0 4px; font-size: 13px; }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  .accept ul { margin: 10px 0 0 20px; font-size: 13.5px; }
+
+  @media (max-width: 900px) {
+    .cm, .seq-wrap, .split { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">Coding · worktracker-stack · CODIN-714 · Slice 1 of #707 · LLD</div>
+  <h1>Prefactor: extract <span class="m">_launch</span> + <span class="m">LaunchUnavailable</span></h1>
+  <div class="sub">Lift the launch half of <span class="m">consumers.py::_spawn_persisted</span> (≈ lines 806–877) into a reusable module-level <span class="m">async _launch(...)</span> in a new <span class="m">server/terminals/launch.py</span>, with a <span class="m">LaunchUnavailable</span> exception that owns the orphan-row cleanup. The WS consumer calls <span class="m">_launch</span> then attaches its interactive viewer on top, catching <span class="m">LaunchUnavailable</span> to keep today's direct-PTY fallback. <b>Zero behavior change for human-started runs.</b> This is "make the change easy, then make the easy change": it hands Slice 2 (#715, <span class="m">spawn_run</span>) a launch path to call.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">1 new module · 1 file refactored · 0 tests changed</span>
+    <span class="chip violet">No migrations · no endpoints · no frontend · no wire change</span>
+    <span class="chip amber">Pure prefactor — behavior-preserving</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#map" class="active">Change Map</a>
+  <a href="#diagram">Split</a>
+  <a href="#contract">_launch Contract</a>
+  <a href="#failure">Failure &amp; Cleanup</a>
+  <a href="#consumer">Consumer Refactor</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#tests">Test Plan</a>
+  <a href="#order">Build Order</a>
+</nav>
+
+<main>
+
+<!-- ============ CHANGE MAP ============ -->
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Two files touched. Click a highlighted file for its exact delta; everything else is untouched.</div>
+  <div class="cm">
+    <div class="cm-tree">
+      <div class="dir">server/terminals/</div>
+      <div>├─ <span class="hit new" data-f="launch">launch.py</span> <span style="color:#9aa3b8">— NEW</span></div>
+      <div>├─ <span class="hit mod" data-f="consumers">consumers.py</span></div>
+      <div class="dir">├─ tmux.py <span style="color:#9aa3b8">— reused as-is</span></div>
+      <div class="dir">├─ frames.py <span style="color:#9aa3b8">— untouched</span></div>
+      <div class="dir">├─ models.py · dao.py <span style="color:#9aa3b8">— untouched</span></div>
+      <div class="dir">└─ tests/</div>
+      <div>&nbsp;&nbsp;&nbsp;└─ <span class="hit ro" data-f="tests">test_consumers.py</span> <span style="color:#9aa3b8">— must pass unchanged</span></div>
+      <div class="dir">server/runs/ <span style="color:#9aa3b8">— models.AgentRun read-only</span></div>
+      <div class="dir">server/documents/ <span style="color:#9aa3b8">— watch.start_watch reused</span></div>
+      <div class="dir">core/agents/launcher.py <span style="color:#9aa3b8">— inject_* reused</span></div>
+      <div class="cm-legend">
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--accent-soft)"></i>read-only / unchanged</span>
+      </div>
+    </div>
+    <div class="cm-detail" id="cmDetail">
+      <h4>launch.py</h4>
+      <div class="kind" style="color:var(--green)">NEW MODULE</div>
+      <p class="hint">Click a file in the tree.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SPLIT DIAGRAM ============ -->
+<section id="diagram">
+  <h2>The split: launch half vs. viewer half</h2>
+  <div class="lede">The current <span class="m">_spawn_persisted</span> does two jobs in sequence. The launch half (persist the run, start the agent in tmux, watch its docs) becomes <span class="m">_launch</span>; the viewer half (reserve a viewer slot, spawn a PTY, bridge it to the browser) stays in the consumer. Click a node to see what moves and what stays.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 560 360" width="100%" height="auto" role="img" aria-label="Split diagram">
+      <!-- consumer box -->
+      <rect x="8" y="8" width="544" height="344" rx="12" fill="none" stroke="#e3e7ee"/>
+      <text x="20" y="28" font-size="11" fill="#9aa3b8" font-weight="700">TerminalConsumer._spawn_persisted (orchestrator)</text>
+
+      <g class="node" data-n="build" tabindex="0">
+        <rect x="30" y="44" width="200" height="40" rx="8" fill="#f0e9fb" stroke="#6b3fb8"/>
+        <text x="130" y="68" text-anchor="middle" font-size="12" fill="#1d2433">caller: build argv / cwd / dir</text>
+      </g>
+
+      <!-- launch half -->
+      <g class="node" data-n="launch" tabindex="0">
+        <rect x="30" y="108" width="320" height="118" rx="10" fill="#e3f3ea" stroke="#1d7a4f"/>
+        <text x="46" y="128" font-size="11" fill="#1d7a4f" font-weight="800">_launch( ) — launch.py  [NEW]</text>
+        <text x="46" y="150" font-size="11.5" fill="#1d2433">1 · inject lifecycle hooks → command</text>
+        <text x="46" y="170" font-size="11.5" fill="#1d2433">2 · AgentRun.save(force_insert=True)</text>
+        <text x="46" y="190" font-size="11.5" fill="#1d2433">3 · tmux.create_session(...)</text>
+        <text x="46" y="210" font-size="11.5" fill="#1d2433">4 · documents_watch.start_watch(...)</text>
+      </g>
+
+      <g class="node" data-n="fail" tabindex="0">
+        <rect x="372" y="108" width="160" height="60" rx="10" fill="#fbe7e7" stroke="#b03030"/>
+        <text x="452" y="132" text-anchor="middle" font-size="11" fill="#b03030" font-weight="800">on persist/tmux fail</text>
+        <text x="452" y="150" text-anchor="middle" font-size="10.5" fill="#1d2433">delete row → raise</text>
+        <text x="452" y="163" text-anchor="middle" font-size="10.5" fill="#b03030">LaunchUnavailable</text>
+      </g>
+
+      <!-- viewer half -->
+      <g class="node" data-n="viewer" tabindex="0">
+        <rect x="30" y="244" width="320" height="92" rx="10" fill="#e8edfb" stroke="#3556d4"/>
+        <text x="46" y="264" font-size="11" fill="#3556d4" font-weight="800">viewer half — stays in consumer</text>
+        <text x="46" y="286" font-size="11.5" fill="#1d2433">reserve viewer · PtyProcess.spawn(attach)</text>
+        <text x="46" y="306" font-size="11.5" fill="#1d2433">PtySession · refresh_client_size(cols,rows)</text>
+        <text x="46" y="324" font-size="11.5" fill="#1d2433">send "ready" · _pump</text>
+      </g>
+
+      <g class="node" data-n="fallback" tabindex="0">
+        <rect x="372" y="244" width="160" height="60" rx="10" fill="#fbf0d8" stroke="#9a6700"/>
+        <text x="452" y="268" text-anchor="middle" font-size="11" fill="#9a6700" font-weight="800">except branch</text>
+        <text x="452" y="286" text-anchor="middle" font-size="10.5" fill="#1d2433">direct-PTY fallback</text>
+        <text x="452" y="299" text-anchor="middle" font-size="10.5" fill="#1d2433">(today's behavior)</text>
+      </g>
+
+      <!-- edges -->
+      <line x1="130" y1="84" x2="130" y2="108" stroke="#9aa3b8" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="350" y1="138" x2="372" y2="138" stroke="#b03030" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a)"/>
+      <line x1="190" y1="226" x2="190" y2="244" stroke="#1d7a4f" stroke-width="1.5" marker-end="url(#a)"/>
+      <line x1="452" y1="168" x2="452" y2="244" stroke="#9a6700" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#a)"/>
+      <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b8"/></marker></defs>
+    </svg>
+    <div id="seqInfo">
+      <h4>Click a node</h4>
+      <p class="hint">Green = moves into <span class="m">_launch</span>. Blue = stays in the consumer. Red/amber = the failure seam.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTRACT ============ -->
+<section id="contract">
+  <h2><span class="m">_launch</span> contract</h2>
+  <div class="lede">The single shared launch path. Keyword-only scalar inputs — already-built launch facts, no <span class="m">init</span> dict, no <span class="m">self</span>, no <span class="m">profile</span>, no <span class="m">cols</span>/<span class="m">rows</span>. Returns the run id on success; raises on failure.</div>
+  <div class="contract">
+    <div class="sect"><div class="sk">SIGNATURE</div><div class="sv"><span class="m">async def _launch(*, agent, project_id, module_id, task_id, argv, cwd, design_dir, scope, doc_rel_path, workspace_slug, agent_run_id) -> str</span></div></div>
+    <div class="sect"><div class="sk">INPUTS</div><div class="sv">All eleven are plain scalars/lists the caller already computed. <span class="m">agent_run_id</span> is <b>required and non-null</b> — both callers mint it upstream (the WS path mints before <span class="m">_build_prompt</span>; <span class="m">spawn_run</span> mints in Slice 2). <span class="m">argv</span> is the raw agent command <i>before</i> hook injection. <span class="m">workspace_slug</span> replaces today's inline <span class="m">getattr(profile, "workspace_slug", None)</span> — the caller reads it off the profile and passes the value.</div></div>
+    <div class="sect"><div class="sk">STEP 1 — INJECT</div><div class="sv">Read <span class="m">WORKTRACKER_MCP_URL</span> env (default <span class="m">DEFAULT_MCP_URL</span>); run the four <span class="m">inject_*_lifecycle_settings(argv, agent_run_id, …)</span> in the existing order (claude, codex, gemini, agy); <span class="m">command = shlex.join(argv)</span>. Verbatim move of lines 811–816.</div></div>
+    <div class="sect"><div class="sk">STEP 2 — PERSIST</div><div class="sv">Build the <span class="m">AgentRun</span> row (id, project_id, module_id, agent, status="running", <span class="m">started_at</span> minted inside <span class="m">_launch</span> as today, workspace_slug, task_id, cwd, design_dir), then in one <span class="m">asyncio.to_thread</span> worker: <span class="m">run.save(force_insert=True)</span> → <span class="m">tmux.create_session(...)</span>, closing the thread connection in <span class="m">finally</span>. The combined persist-and-create helper moves wholesale.</div></div>
+    <div class="sect"><div class="sk">STEP 3 — WATCH</div><div class="sv">On success, <span class="m">documents_watch.start_watch(agent_run_id, design_dir, module_id, task_id, scope, publish=publish_lifecycle)</span>. Verbatim move of lines 870–877.</div></div>
+    <div class="sect"><div class="sk">RETURNS</div><div class="sv"><span class="m">agent_run_id: str</span> — the persisted, live run.</div></div>
+    <div class="sect"><div class="sk">RAISES</div><div class="sv"><span class="m">LaunchUnavailable</span> when the persist/create thread raises (tmux missing/broken or DB write failed). See Failure &amp; Cleanup.</div></div>
+    <div class="sect"><div class="sk">EXCLUDED</div><div class="sv">No <span class="m">cols</span>/<span class="m">rows</span>, no PTY spawn, no viewer reservation, no <span class="m">PtySession</span>, no <span class="m">_pump</span>, no <span class="m">self.send</span>. Those are the consumer's viewer half. <span class="m">_build_prompt</span>/<span class="m">_worktree_root</span> are <b>not</b> called by <span class="m">_launch</span>.</div></div>
+  </div>
+</section>
+
+<!-- ============ FAILURE ============ -->
+<section id="failure">
+  <h2>Failure &amp; cleanup ownership</h2>
+  <div class="lede">The orphan-row cleanup that today lives inline in the consumer's except branch moves <i>into</i> <span class="m">_launch</span>, so any caller — human or programmatic — gets a clean rollback for free.</div>
+  <table>
+    <thead><tr><th>Concern</th><th>Owner after refactor</th><th>Behavior</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">LaunchUnavailable</span> class</td><td><span class="sev ok">launch.py</span></td><td>New module-level <span class="m">Exception</span> subclass. Importable by the consumer and by Slice 2.</td></tr>
+      <tr><td>Orphan <span class="m">AgentRun</span> delete</td><td><span class="sev ok">_launch</span></td><td>On the persist/create exception, <span class="m">_launch</span> deletes the just-inserted row via the relocated <span class="m">_delete_agent_run</span> helper (best-effort, swallows delete errors as today), then <span class="m">raise LaunchUnavailable(...) from exc</span>.</td></tr>
+      <tr><td><span class="m">_delete_agent_run</span> helper</td><td><span class="sev ok">launch.py</span></td><td>Sole caller is the launch path — relocate it from <span class="m">consumers.py</span> into <span class="m">launch.py</span>. No other consumer reference exists.</td></tr>
+      <tr><td>"falling back to direct PTY" log</td><td><span class="sev warn">consumers.py</span></td><td>This warning is a consumer-only concern (Slice 2 does <b>not</b> fall back), so it stays in the consumer's <span class="m">except LaunchUnavailable</span> branch, preserving today's message and context.</td></tr>
+      <tr><td>Direct-PTY fallback</td><td><span class="sev warn">consumers.py</span></td><td>Unchanged. The consumer catches <span class="m">LaunchUnavailable</span> and returns <span class="m">False</span>, letting the existing fallback spawn run exactly as today.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ CONSUMER REFACTOR ============ -->
+<section id="consumer">
+  <h2>Consumer refactor — <span class="m">_spawn_persisted</span> after the split</h2>
+  <div class="lede">The method keeps its <span class="m">True = handled / False = fall back</span> return contract and its full signature. Its launch half becomes one awaited call to <span class="m">_launch</span>; its viewer half is unchanged.</div>
+  <div class="split">
+    <div class="scol">
+      <h3>Launch half <span class="tag launch">delegated</span></h3>
+      <ol>
+        <li>Read scalars off <span class="m">init</span>/<span class="m">profile</span> (agent, project_id, module_id, workspace_slug).</li>
+        <li><span class="m">try:</span> <span class="m">await _launch(agent=…, project_id=…, module_id=…, task_id=task_id, argv=argv, cwd=cwd, design_dir=design_dir, scope=scope, doc_rel_path=doc_rel_path, workspace_slug=…, agent_run_id=agent_run_id)</span>.</li>
+        <li><span class="m">except LaunchUnavailable as exc:</span> log the existing warning, <span class="m">return False</span> (caller runs the direct-PTY fallback as today).</li>
+      </ol>
+    </div>
+    <div class="scol">
+      <h3>Viewer half <span class="tag viewer">stays verbatim</span></h3>
+      <ol>
+        <li>Mint <span class="m">session_id</span>; <span class="m">_reserve_tmux_viewer</span> → on clash send <span class="m">session_already_attached</span>, <span class="m">return True</span>.</li>
+        <li><span class="m">PtyProcessUnicode.spawn(tmux.attach_argv(...), dimensions=(rows, cols))</span> — the only place <span class="m">cols</span>/<span class="m">rows</span> are used.</li>
+        <li>Build <span class="m">PtySession</span>, register in <span class="m">SESSIONS</span>, <span class="m">refresh_client_size</span>, send <span class="m">ready</span>, <span class="m">_pump</span>; each error path releases the viewer and <span class="m">return True</span>.</li>
+      </ol>
+    </div>
+  </div>
+  <p class="body" style="margin-top:14px"><b>Module-aliasing note (why tests stay green):</b> <span class="m">launch.py</span> does <span class="m">from terminals import tmux</span>, so <span class="m">launch.tmux</span> and <span class="m">consumers.tmux</span> are the <i>same</i> cached module object. The test suite's <span class="m">monkeypatch.setattr(consumers.tmux, "create_session", boom)</span> mutates that shared module, so <span class="m">_launch</span> sees the patched <span class="m">create_session</span> (and <span class="m">tmux.TmuxSessionError</span>) without any test edit. Same reasoning for <span class="m">documents_watch</span> and <span class="m">AgentRun</span>, which the tests reference by import rather than patch.</p>
+</section>
+
+<!-- ============ DECISIONS ============ -->
+<section id="decisions">
+  <h2>Decisions resolved in this LLD</h2>
+  <div class="lede">Open calls the ticket left to the implementer, decided here so the slice is decision-complete.</div>
+  <table>
+    <thead><tr><th>Question</th><th>Decision</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">_build_prompt</span> / <span class="m">_worktree_root</span> placement</td><td><span class="sev ok">Stay in consumers.py</span></td><td><span class="m">_launch</span> takes a pre-built <span class="m">argv</span>/<span class="m">cwd</span>/<span class="m">design_dir</span> and never calls them. Moving them is out of scope and risks churn; Slice 2 (#715) relocates/shares prompt building if <span class="m">spawn_run</span> needs it. No circular import either way.</td></tr>
+      <tr><td>Does <span class="m">launch.py</span> import <span class="m">consumers</span>?</td><td><span class="sev def">Never</span></td><td>Dependency points one way: <span class="m">consumers</span> imports <span class="m">_launch</span>/<span class="m">LaunchUnavailable</span> from <span class="m">launch</span>. <span class="m">launch</span> imports only <span class="m">tmux</span>, <span class="m">runs.models.AgentRun</span>, <span class="m">documents.watch</span>, <span class="m">runs.bus.publish_lifecycle</span>, and the <span class="m">inject_*</span>/<span class="m">DEFAULT_MCP_URL</span> launcher symbols — none touch <span class="m">consumers</span>.</td></tr>
+      <tr><td>Where is <span class="m">started_at</span> minted?</td><td><span class="sev ok">Inside _launch</span></td><td>It is launch state, not viewer state — keeps <span class="m">spawn_run</span> from having to pass a timestamp. Verbatim move.</td></tr>
+      <tr><td>Is <span class="m">agent_run_id</span> minted in <span class="m">_launch</span>?</td><td><span class="sev warn">No — required arg</span></td><td>Both callers already mint it upstream (the WS path embeds it in the prompt; #715 mints before calling). Making it required keeps <span class="m">_launch</span> a pure launch primitive with no hidden id source.</td></tr>
+      <tr><td>Where does the fallback warning log live?</td><td><span class="sev warn">consumers.py</span></td><td>Falling back to a direct PTY is consumer-specific. <span class="m">_launch</span> raises silently after cleanup; the consumer logs at the catch site, preserving today's message.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ TESTS ============ -->
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">No test file changes. The acceptance gate is the existing <span class="m">test_consumers.py</span> passing unchanged — that <i>is</i> the proof of no behavior change.</div>
+  <table>
+    <thead><tr><th>Existing test</th><th>What it guards</th><th>Why it still passes</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">test_task_spawn_creates_persisted_tmux_session</span></td><td>Happy path: row + tmux session created, viewer attaches.</td><td>Launch steps run inside <span class="m">_launch</span> in the same order; viewer half unchanged.</td></tr>
+      <tr><td><span class="m">test_task_spawn_falls_back_to_direct_pty_when_tmux_unavailable</span></td><td>tmux failure → direct-PTY fallback <b>and no orphan <span class="m">AgentRun</span> row</b>.</td><td><span class="m">_launch</span> deletes the row and raises <span class="m">LaunchUnavailable</span>; consumer catches → <span class="m">return False</span> → direct PTY. Row assertion <span class="m">runs == []</span> holds.</td></tr>
+      <tr><td><span class="m">test_instant_spawn_persists_under_scratch_sentinel</span></td><td>scope→scratch task_id wiring.</td><td><span class="m">task_id</span>/<span class="m">scope</span> are pass-through scalars to <span class="m">_launch</span>.</td></tr>
+      <tr><td><span class="m">test_initial_persisted_spawn_reserves_and_releases_agent_run</span> · <span class="m">…_resize_failure_releases_reservation</span></td><td>Viewer reservation + release on resize error.</td><td>Viewer half is untouched and runs after <span class="m">_launch</span> returns.</td></tr>
+      <tr><td>All <span class="m">attach</span> / <span class="m">dimensions</span> / <span class="m">scroll</span> / <span class="m">disconnect</span> tests</td><td>Unrelated paths.</td><td>Not on the spawn launch path; structurally unaffected.</td></tr>
+    </tbody>
+  </table>
+  <p class="body" style="margin-top:14px">Run: <span class="m">pytest server/terminals/tests/test_consumers.py</span> — expect the full file green. No new tests are added in this slice; <span class="m">_launch</span>/<span class="m">LaunchUnavailable</span> get dedicated direct-call tests in #715 alongside <span class="m">spawn_run</span>.</p>
+</section>
+
+<!-- ============ BUILD ORDER ============ -->
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">Four mechanical moves, each behavior-preserving. Verify green after the final step.</div>
+  <div class="steps">
+    <div class="bstep"><div class="n">1</div><b>Create launch.py</b>Add <span class="m">LaunchUnavailable</span>, relocate <span class="m">_delete_agent_run</span>, and write <span class="m">async _launch</span> by lifting lines 806–877 with the contract signature. Import only launcher/runs/documents/tmux symbols.</div>
+    <div class="bstep"><div class="n">2</div><b>Wire failure</b>Inside <span class="m">_launch</span>, wrap the persist/create thread in <span class="m">try/except</span>: delete the row, <span class="m">raise LaunchUnavailable from exc</span>. Move <span class="m">start_watch</span> to the success path; <span class="m">return agent_run_id</span>.</div>
+    <div class="bstep"><div class="n">3</div><b>Refactor consumer</b>Import <span class="m">_launch</span>/<span class="m">LaunchUnavailable</span>; replace the launch half of <span class="m">_spawn_persisted</span> with the awaited call + <span class="m">except LaunchUnavailable</span> (log, <span class="m">return False</span>). Delete the now-dead inline launch/cleanup lines.</div>
+    <div class="bstep"><div class="n">4</div><b>Verify</b>Run <span class="m">test_consumers.py</span> — full file green. Grep <span class="m">consumers.py</span> for any leftover <span class="m">_delete_agent_run</span>/<span class="m">inject_</span> reference on the spawn path.</div>
+  </div>
+</section>
+
+<section>
+  <div class="accept">
+    <b>Acceptance signal.</b> The slice is done when:
+    <ul>
+      <li><span class="m">async _launch(...)</span> in <span class="m">server/terminals/launch.py</span> performs inject → <span class="m">save(force_insert=True)</span> → <span class="m">create_session</span> → <span class="m">start_watch</span> and returns <span class="m">agent_run_id</span>.</li>
+      <li>On persist/tmux failure <span class="m">_launch</span> deletes the run row and raises <span class="m">LaunchUnavailable</span> — no orphan row.</li>
+      <li>The WS consumer calls <span class="m">_launch</span>, attaches the viewer on top, and on <span class="m">LaunchUnavailable</span> falls back to a direct PTY exactly as today.</li>
+      <li>No <span class="m">cols</span>/<span class="m">rows</span> dependency leaks into <span class="m">_launch</span>.</li>
+      <li><span class="m">server/terminals/tests/test_consumers.py</span> passes unchanged.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<script>
+  // nav active on scroll
+  const secs = [...document.querySelectorAll('section[id]')];
+  const links = [...document.querySelectorAll('#nav a')];
+  const obs = new IntersectionObserver((es) => {
+    es.forEach(e => { if (e.isIntersecting) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+    }});
+  }, { rootMargin: '-45% 0px -50% 0px' });
+  secs.forEach(s => obs.observe(s));
+
+  // change map
+  const CM = {
+    launch: { t: 'launch.py', k: 'NEW MODULE', c: 'var(--green)', items: [
+      'async _launch(...) — the shared launch path: hook injection → AgentRun.save(force_insert=True) → tmux.create_session → documents_watch.start_watch; returns agent_run_id.',
+      'LaunchUnavailable — exception raised on persist/tmux failure after the orphan row is deleted.',
+      '_delete_agent_run — relocated from consumers.py (sole caller is the launch path).',
+      'Imports: tmux, runs.models.AgentRun, documents.watch, runs.bus.publish_lifecycle, core.agents.launcher (inject_*, DEFAULT_MCP_URL).',
+      'NO import of consumers — one-way dependency.' ] },
+    consumers: { t: 'consumers.py', k: 'MODIFIED', c: 'var(--amber)', items: [
+      '_spawn_persisted launch half replaced by one awaited _launch(...) call with scalar args read off init/profile.',
+      'New except LaunchUnavailable branch: logs the existing "falling back to direct PTY" warning, returns False.',
+      'Viewer half (reserve → PtyProcess.spawn → PtySession → refresh_client_size → ready → _pump) unchanged — the only cols/rows site.',
+      'Removed: inline inject_* / shlex.join / AgentRun build / _persist_and_create / start_watch / _delete_agent_run.',
+      'Return contract (True handled / False fall back) and method signature preserved.' ] },
+    tests: { t: 'tests/test_consumers.py', k: 'READ-ONLY · MUST PASS UNCHANGED', c: 'var(--accent)', items: [
+      'Not edited. Monkeypatching consumers.tmux.create_session mutates the shared tmux module, so _launch picks up the patch.',
+      'Fallback test asserts no orphan AgentRun row — guaranteed by _launch cleanup.',
+      'Full file green is the no-behavior-change gate.' ] },
+  };
+  const detail = document.getElementById('cmDetail');
+  document.querySelectorAll('.cm-tree .hit').forEach(el => el.addEventListener('click', () => {
+    document.querySelectorAll('.cm-tree .hit').forEach(h => h.classList.remove('sel'));
+    el.classList.add('sel');
+    const d = CM[el.dataset.f]; if (!d) return;
+    detail.innerHTML = '<h4>' + d.t + '</h4><div class="kind" style="color:' + d.c + '">' + d.k + '</div><ul>' +
+      d.items.map(i => '<li>' + i + '</li>').join('') + '</ul>';
+  }));
+
+  // split diagram
+  const SEQ = {
+    build: { h: 'caller builds inputs', p: 'The WS connect path (and, in Slice 2, spawn_run) computes argv, cwd, design_dir, scope, task_id and mints agent_run_id, then calls _launch. Unchanged work — just the call site for the new primitive.' },
+    launch: { h: '_launch( ) — moves to launch.py', p: 'The four steps lifted verbatim from lines 806–877: inject lifecycle hooks and join the command, insert the AgentRun row and create the tmux session in one to_thread worker, then start the design-dir doc watch. Returns agent_run_id on success.' },
+    fail: { h: 'LaunchUnavailable', p: 'If the persist/create worker raises (tmux missing/broken or DB write failed), _launch deletes the just-inserted row and raises LaunchUnavailable from the original exception.', e: 'Owns the cleanup so no caller can leak an orphan AgentRun row.' },
+    viewer: { h: 'viewer half — stays in consumer', p: 'After _launch returns, the consumer reserves a viewer slot, spawns a PTY against tmux.attach_argv at (rows, cols), wraps it in a PtySession, refreshes client size, sends ready, and pumps. This is the only code that touches cols/rows.' },
+    fallback: { h: 'direct-PTY fallback', p: 'The consumer catches LaunchUnavailable, logs the existing warning, and returns False — the caller then spawns a direct ephemeral PTY exactly as today.', e: 'Consumer-only: spawn_run (Slice 2) will let LaunchUnavailable propagate instead.' },
+  };
+  const info = document.getElementById('seqInfo');
+  document.querySelectorAll('.node').forEach(n => {
+    const act = () => {
+      document.querySelectorAll('.node').forEach(x => x.classList.remove('hl'));
+      n.classList.add('hl');
+      const d = SEQ[n.dataset.n]; if (!d) return;
+      info.innerHTML = '<h4>' + d.h + '</h4><p>' + d.p + '</p>' + (d.e ? '<div class="edge">⚠ ' + d.e + '</div>' : '');
+    };
+    n.addEventListener('click', act);
+    n.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
+  });
+</script>
+</body>
+</html>

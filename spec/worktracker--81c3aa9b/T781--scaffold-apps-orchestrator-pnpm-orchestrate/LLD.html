@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-781 · Orchestrator Scaffold · LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  header {
+    background: var(--panel);
+    padding: 26px 40px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .crumb {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 6px 0 4px;
+    font-size: 23px;
+    line-height: 1.2;
+  }
+  .sub {
+    max-width: 1020px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .chip {
+    border-radius: 20px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 800;
+    padding: 4px 10px;
+  }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 0 40px;
+  }
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    white-space: nowrap;
+    padding: 10px 14px 8px;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    font-weight: 800;
+  }
+  nav a.active, nav a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 34px 40px 70px;
+  }
+  section {
+    margin-bottom: 56px;
+    scroll-margin-top: 58px;
+  }
+  h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+  }
+  h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+  }
+  .lede {
+    margin: 0 0 18px;
+    max-width: 940px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .m {
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .card, .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 20px;
+  }
+  .list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .list li {
+    position: relative;
+    padding: 6px 0 6px 20px;
+    border-bottom: 1px dashed var(--line);
+    font-size: 13.5px;
+  }
+  .list li:last-child { border-bottom: 0; }
+  .list li:before {
+    content: "•";
+    position: absolute;
+    left: 3px;
+    color: var(--accent);
+    font-weight: 900;
+  }
+  .list li.no:before {
+    content: "x";
+    color: var(--red);
+  }
+  .diagram {
+    display: grid;
+    grid-template-columns: 1fr 330px;
+    gap: 18px;
+    align-items: stretch;
+  }
+  .scrollx { overflow-x: auto; }
+  svg {
+    width: 100%;
+    min-width: 760px;
+    height: auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  svg text {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 12px;
+    fill: var(--ink);
+  }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse {
+    fill: #fff;
+    stroke: var(--accent);
+    stroke-width: 2;
+  }
+  .node.green rect { stroke: var(--green); fill: #fbfffd; }
+  .node.warn rect { stroke: var(--amber); fill: var(--amber-soft); }
+  .node.bad rect { stroke: var(--red); fill: var(--red-soft); stroke-dasharray: 5 4; }
+  .node.deferred rect { stroke: var(--violet); fill: var(--violet-soft); stroke-dasharray: 5 4; }
+  .node.selected rect, .node.selected ellipse {
+    fill: var(--accent-soft);
+    stroke-width: 3;
+  }
+  .node text { pointer-events: none; }
+  .edge {
+    stroke: #7f8aa3;
+    stroke-width: 1.8;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .edge.dashed { stroke-dasharray: 5 4; }
+  .lane {
+    fill: var(--muted);
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: .05em;
+  }
+  .side h3 {
+    margin: 0 0 6px;
+    color: var(--accent);
+    font-size: 15px;
+  }
+  .side .tag {
+    display: inline-block;
+    margin-bottom: 8px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .side ul {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .side li {
+    position: relative;
+    padding: 4px 0 4px 18px;
+    font-size: 12.5px;
+  }
+  .side li:before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: var(--green);
+    font-weight: 900;
+  }
+  .side li.no:before {
+    content: "x";
+    color: var(--red);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 9px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    font-size: 13px;
+  }
+  th {
+    background: #fbfcfe;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  tr:last-child td { border-bottom: 0; }
+  tr[data-row] { cursor: pointer; }
+  tr[data-row].selected td { background: var(--accent-soft); }
+  .pill {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .pill.new { background: var(--green-soft); color: var(--green); }
+  .pill.mod { background: var(--amber-soft); color: var(--amber); }
+  .pill.ro { background: var(--accent-soft); color: var(--accent); }
+  .pill.no { background: var(--red-soft); color: var(--red); }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .step {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    border-top: 3px solid var(--accent);
+    padding: 13px 14px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .step b {
+    display: block;
+    color: var(--ink);
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+  .step .n {
+    color: var(--accent);
+    font-size: 18px;
+    font-weight: 900;
+    line-height: 1;
+  }
+  .seq {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 14px;
+  }
+  .seq .stepBtn {
+    width: 100%;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: left;
+    cursor: pointer;
+    margin-bottom: 8px;
+    color: var(--ink);
+    font-weight: 800;
+  }
+  .seq .stepBtn.active, .seq .stepBtn:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .seqInfo {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 20px;
+    min-height: 190px;
+  }
+  .seqInfo .k {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+  .seqInfo p {
+    margin: 8px 0 0;
+    font-size: 13.5px;
+  }
+  .accept {
+    background: var(--green-soft);
+    border: 1px solid #cfe5d8;
+    border-radius: 8px;
+    padding: 18px 20px;
+    font-size: 14px;
+  }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    header, nav, main { padding-left: 18px; padding-right: 18px; }
+    .grid2, .grid3, .diagram, .seq { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">Coding · WorkTracker module · Ticket CODIN-781 · LLD</div>
+  <h1>Scaffold Orchestrator App + Launch Path</h1>
+  <div class="sub">Implementation harness for the first Orchestrator slice: create the fresh Django app boundary, add the ASGI-only <span class="m">pnpm orchestrate</span> entry, and prove the WorkTracker signal receiver registers without importing the frozen execution engine.</div>
+  <div class="chips">
+    <span class="chip">Phase: Todo → LLD review</span>
+    <span class="chip green">New Django app scaffold</span>
+    <span class="chip amber">ASGI-only launch path</span>
+    <span class="chip violet">Signal seam smoke test</span>
+    <span class="chip red">No reducer · no routes · no models</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <a href="#scope" class="active">Scope</a>
+  <a href="#model">Boundary</a>
+  <a href="#map">Change Map</a>
+  <a href="#launch">Launch</a>
+  <a href="#sequence">Steps</a>
+  <a href="#tests">Smoke Tests</a>
+  <a href="#risks">Risks</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+
+<main>
+  <section id="scope">
+    <h2>Scope Lock</h2>
+    <div class="lede">This slice establishes the place where orchestration will live. It deliberately avoids the orchestration engine itself.</div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Build</h3>
+        <ul class="list">
+          <li>New <span class="m">server/apps/orchestrator/</span> Django app package.</li>
+          <li>README and docstrings that state the import boundary.</li>
+          <li>Empty <span class="m">models.py</span> with no migrations or tables.</li>
+          <li>No-op receiver connected to <span class="m">worktracker.signals.issue_state_changed</span>.</li>
+          <li><span class="m">pnpm orchestrate</span> root script that starts the backend only.</li>
+          <li>Smoke tests for app load, receiver registration, and import boundary.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Do Not Build</h3>
+        <ul class="list">
+          <li class="no">No reducer, driver, node state, run header, retry, or budget logic.</li>
+          <li class="no">No headless agent launch primitive.</li>
+          <li class="no">No strategy pack loader or default strategy content.</li>
+          <li class="no">No HTTP, MCP, Studio, or frontend trigger surface.</li>
+          <li class="no">No WorkTracker lifecycle states.</li>
+          <li class="no">No import from <span class="m">apps.execution</span> or <span class="m">apps.terminals</span>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="model">
+    <h2>Clickable Boundary Model</h2>
+    <div class="lede">Click a node. Solid boxes are in scope; dashed or red boxes are explicitly excluded from this launch path.</div>
+    <div class="diagram">
+      <div class="scrollx">
+        <svg viewBox="0 0 860 430" role="img" aria-label="Orchestrator scaffold boundary diagram">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#7f8aa3"></path>
+            </marker>
+          </defs>
+          <text class="lane" x="40" y="30">COMMAND</text>
+          <text class="lane" x="245" y="30">ASGI SERVER</text>
+          <text class="lane" x="520" y="30">ALLOWED DOMAIN</text>
+          <text class="lane" x="520" y="275">FROZEN / OUT OF SCOPE</text>
+
+          <path class="edge" d="M165 98 C215 98 225 98 275 98"></path>
+          <path class="edge" d="M405 98 C450 98 460 98 505 98"></path>
+          <path class="edge" d="M615 128 C615 158 615 170 615 205"></path>
+          <path class="edge" d="M505 128 C450 178 430 198 390 220"></path>
+          <path class="edge dashed" d="M390 258 C468 298 510 318 592 335"></path>
+          <path class="edge dashed" d="M275 126 C230 218 210 265 188 322"></path>
+
+          <g class="node green" data-node="cmd" transform="translate(36 62)">
+            <rect width="130" height="72" rx="7"></rect>
+            <text x="65" y="32" text-anchor="middle">pnpm</text>
+            <text x="65" y="50" text-anchor="middle">orchestrate</text>
+          </g>
+          <g class="node" data-node="settings" transform="translate(275 62)">
+            <rect width="130" height="72" rx="7"></rect>
+            <text x="65" y="28" text-anchor="middle">orchestrate</text>
+            <text x="65" y="46" text-anchor="middle">settings</text>
+            <text x="65" y="62" text-anchor="middle">module</text>
+          </g>
+          <g class="node green" data-node="app" transform="translate(505 62)">
+            <rect width="220" height="72" rx="7"></rect>
+            <text x="110" y="31" text-anchor="middle">apps.orchestrator</text>
+            <text x="110" y="51" text-anchor="middle">AppConfig.ready()</text>
+          </g>
+          <g class="node green" data-node="signal" transform="translate(505 205)">
+            <rect width="220" height="70" rx="7"></rect>
+            <text x="110" y="30" text-anchor="middle">worktracker.signals</text>
+            <text x="110" y="50" text-anchor="middle">issue_state_changed</text>
+          </g>
+          <g class="node" data-node="receiver" transform="translate(245 205)">
+            <rect width="145" height="70" rx="7"></rect>
+            <text x="72.5" y="30" text-anchor="middle">orchestrator</text>
+            <text x="72.5" y="50" text-anchor="middle">receiver</text>
+          </g>
+          <g class="node bad" data-node="execution" transform="translate(592 335)">
+            <rect width="150" height="58" rx="7"></rect>
+            <text x="75" y="25" text-anchor="middle">apps.execution</text>
+            <text x="75" y="42" text-anchor="middle">no imports</text>
+          </g>
+          <g class="node bad" data-node="studio" transform="translate(74 322)">
+            <rect width="155" height="58" rx="7"></rect>
+            <text x="77.5" y="25" text-anchor="middle">Studio / tmux</text>
+            <text x="77.5" y="42" text-anchor="middle">not launched</text>
+          </g>
+          <g class="node deferred" data-node="strategies" transform="translate(80 190)">
+            <rect width="122" height="58" rx="7"></rect>
+            <text x="61" y="25" text-anchor="middle">strategies/</text>
+            <text x="61" y="42" text-anchor="middle">placeholder</text>
+          </g>
+        </svg>
+      </div>
+      <div class="panel side" id="nodeInfo">Click a node to see responsibilities and non-responsibilities.</div>
+    </div>
+  </section>
+
+  <section id="map">
+    <h2>File Change Map</h2>
+    <div class="lede">The implementation touches the parent Muxed server and workspace command surface. WorkTracker itself is a dependency, not modified.</div>
+    <table>
+      <thead><tr><th>File</th><th>Kind</th><th>Exact Delta</th></tr></thead>
+      <tbody>
+        <tr data-row="app"><td class="m">server/apps/orchestrator/__init__.py</td><td><span class="pill new">new</span></td><td>Package marker with boundary docstring.</td></tr>
+        <tr data-row="app"><td class="m">server/apps/orchestrator/apps.py</td><td><span class="pill new">new</span></td><td>AppConfig imports only local signal wiring from <span class="m">ready()</span>.</td></tr>
+        <tr data-row="app"><td class="m">server/apps/orchestrator/models.py</td><td><span class="pill new">new</span></td><td>Empty model module; no migration.</td></tr>
+        <tr data-row="receiver"><td class="m">server/apps/orchestrator/signals.py</td><td><span class="pill new">new</span></td><td>No-op or logging-only receiver for <span class="m">issue_state_changed</span>.</td></tr>
+        <tr data-row="app"><td class="m">server/apps/orchestrator/README.md</td><td><span class="pill new">new</span></td><td>Purpose, same-process rationale, and hard import rule.</td></tr>
+        <tr data-row="strategies"><td class="m">server/apps/orchestrator/strategies/</td><td><span class="pill new">new</span></td><td>Documented placeholder only; no loader.</td></tr>
+        <tr data-row="settings"><td class="m">server/studio_server/orchestrate_settings.py</td><td><span class="pill new">new</span></td><td>Backend settings for orchestrator mode; includes <span class="m">worktracker</span> and <span class="m">apps.orchestrator</span>, excludes <span class="m">apps.execution</span>.</td></tr>
+        <tr data-row="settings"><td class="m">server/studio_server/asgi.py</td><td><span class="pill mod">possible</span></td><td>Gate Studio/tmux startup hooks or keep orchestrate on a small ASGI module if needed.</td></tr>
+        <tr data-row="cmd"><td class="m">scripts/orchestrate.mjs</td><td><span class="pill new">new</span></td><td>Runs uvicorn from <span class="m">server/</span> with orchestrator settings.</td></tr>
+        <tr data-row="cmd"><td class="m">package.json</td><td><span class="pill mod">modify</span></td><td>Add root <span class="m">orchestrate</span> script.</td></tr>
+        <tr data-row="receiver"><td class="m">server/apps/orchestrator/tests/</td><td><span class="pill new">new</span></td><td>Smoke tests for app load, receiver, boundary, and launcher contract.</td></tr>
+        <tr data-row="signal"><td class="m">worktracker/worktracker/signals.py</td><td><span class="pill ro">read-only</span></td><td>Canonical signal seam consumed by the new receiver.</td></tr>
+        <tr data-row="execution"><td class="m">server/apps/execution/</td><td><span class="pill ro">read-only</span></td><td>Reference implementation only; no imports.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="launch">
+    <h2>Launch Contract</h2>
+    <div class="lede">The dedicated command is the only entry point that runs the orchestrator app.</div>
+    <div class="grid3">
+      <div class="card">
+        <h3>Must Start</h3>
+        <ul class="list">
+          <li>Django ASGI backend.</li>
+          <li>Orchestrator settings module.</li>
+          <li><span class="m">worktracker</span> app and signal seam.</li>
+          <li><span class="m">apps.orchestrator</span> AppConfig.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Must Avoid</h3>
+        <ul class="list">
+          <li class="no">Studio/Vite dev server.</li>
+          <li class="no">tmux terminal launch or reconciliation.</li>
+          <li class="no"><span class="m">apps.execution</span> receiver registration.</li>
+          <li class="no">Any frontend watcher.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Must Preserve</h3>
+        <ul class="list">
+          <li>Existing local DB defaults.</li>
+          <li>WorkTracker auth env defaults.</li>
+          <li>ASGI HTTP serving shape.</li>
+          <li>No orchestrator routes yet.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="sequence">
+    <h2>Implementation Sequence</h2>
+    <div class="lede">Decision-complete order for the eventual implementation agent. Select a phase to see the guard it enforces.</div>
+    <div class="seq">
+      <div>
+        <button class="stepBtn active" data-step="s1">1. App scaffold</button>
+        <button class="stepBtn" data-step="s2">2. Receiver seam</button>
+        <button class="stepBtn" data-step="s3">3. Orchestrate settings</button>
+        <button class="stepBtn" data-step="s4">4. Root pnpm script</button>
+        <button class="stepBtn" data-step="s5">5. Smoke coverage</button>
+      </div>
+      <div class="seqInfo" id="seqInfo"></div>
+    </div>
+  </section>
+
+  <section id="tests">
+    <h2>Smoke Test Matrix</h2>
+    <div class="lede">Tests prove the boundary and launch wiring, not orchestration behavior.</div>
+    <table>
+      <thead><tr><th>Test</th><th>Proves</th><th>Failure Catches</th></tr></thead>
+      <tbody>
+        <tr><td class="m">Django app load</td><td>Orchestrator settings can run Django setup with <span class="m">apps.orchestrator</span> installed.</td><td>Missing package, bad AppConfig, settings drift.</td></tr>
+        <tr><td class="m">Execution excluded</td><td><span class="m">apps.execution</span> is absent under orchestrate settings.</td><td>Old executor receiver accidentally running.</td></tr>
+        <tr><td class="m">Receiver registration</td><td>Importing local signals connects to <span class="m">issue_state_changed</span> and accepts the WorkTracker payload.</td><td>Broken signal import, wrong payload shape, receiver raising.</td></tr>
+        <tr><td class="m">Boundary scan</td><td>No orchestrator source file imports <span class="m">apps.execution</span>.</td><td>Reference implementation coupling.</td></tr>
+        <tr><td class="m">Launcher contract</td><td>Root <span class="m">pnpm orchestrate</span> invokes ASGI-only backend with orchestrator settings.</td><td>Delegating to <span class="m">pnpm dev</span>, starting Studio, wrong settings module.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="risks">
+    <h2>Risks and Guards</h2>
+    <div class="lede">The main risk is accidental coupling to existing execution or dev-stack startup behavior.</div>
+    <table>
+      <thead><tr><th>Risk</th><th>Guard</th></tr></thead>
+      <tbody>
+        <tr><td>Orchestrator imports the old executor.</td><td>README/docstring rule plus static boundary test.</td></tr>
+        <tr><td>Launch path starts the full dev stack.</td><td>Dedicated launcher script; do not delegate to <span class="m">pnpm dev</span>.</td></tr>
+        <tr><td>Existing ASGI startup imports tmux behavior.</td><td>Gate those hooks by settings or add a small orchestrator ASGI module.</td></tr>
+        <tr><td>Empty app creates migration churn.</td><td>Keep <span class="m">models.py</span> empty and add no migrations.</td></tr>
+        <tr><td>Receiver grows behavior too early.</td><td>No-op/logging-only contract and tests that only assert registration.</td></tr>
+        <tr><td>Strategies placeholder looks implemented.</td><td>Placeholder documentation only; loader remains out of scope.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="accept">
+    <h2>Acceptance Signal</h2>
+    <div class="accept">
+      <b>Accepted when:</b> the plan clearly limits implementation to the orchestrator app scaffold, ASGI-only <span class="m">pnpm orchestrate</span> path, and smoke tests proving app load plus signal receiver registration, while preserving the hard rule that <span class="m">apps.orchestrator</span> never imports <span class="m">apps.execution</span>.
+    </div>
+  </section>
+</main>
+
+<script>
+const nodeInfo = {
+  cmd: {
+    title: "pnpm orchestrate",
+    tag: "launch owner",
+    yes: ["Root workspace command.", "Starts backend ASGI only.", "Sets orchestrator settings."],
+    no: ["Does not start Studio.", "Does not delegate to pnpm dev.", "Does not launch tmux."]
+  },
+  settings: {
+    title: "orchestrate settings",
+    tag: "settings boundary",
+    yes: ["Includes worktracker.", "Includes apps.orchestrator.", "Preserves local DB/auth defaults."],
+    no: ["Excludes apps.execution.", "Does not mount orchestrator routes.", "Does not add state models."]
+  },
+  app: {
+    title: "apps.orchestrator",
+    tag: "new Django app",
+    yes: ["Defines AppConfig.", "Imports local signal wiring in ready().", "Documents standalone-at-app-boundary purpose."],
+    no: ["Does not import apps.execution.", "Does not import apps.terminals.", "Does not implement reducer or driver."]
+  },
+  signal: {
+    title: "worktracker signal seam",
+    tag: "allowed import",
+    yes: ["Provides issue_state_changed.", "Fires inside the server process after commit.", "Carries issue and state-group payload."],
+    no: ["Is not modified by this slice.", "Does not know orchestration semantics."]
+  },
+  receiver: {
+    title: "orchestrator receiver",
+    tag: "smoke-only",
+    yes: ["Registers with a unique dispatch UID.", "Accepts the WorkTracker payload.", "No-op or logging-only."],
+    no: ["Does not mutate Issue state.", "Does not launch agents.", "Does not call execution code."]
+  },
+  execution: {
+    title: "apps.execution",
+    tag: "frozen reference",
+    yes: ["Can be read for pattern context."],
+    no: ["No imports.", "No AppConfig dependency.", "No reducer, driver, recipe, model, or signal reuse."]
+  },
+  studio: {
+    title: "Studio / tmux",
+    tag: "excluded runtime",
+    yes: ["Regular dev stack remains separate."],
+    no: ["Not started by pnpm orchestrate.", "No terminal substrate.", "No frontend watcher."]
+  },
+  strategies: {
+    title: "strategies/",
+    tag: "future placeholder",
+    yes: ["May exist to reserve the future pack location.", "Clearly documented as placeholder."],
+    no: ["No loader.", "No templates.", "No strategy selection behavior."]
+  }
+};
+
+function renderNode(key) {
+  const item = nodeInfo[key];
+  if (!item) return;
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("selected", n.dataset.node === key));
+  const yes = item.yes.map(text => `<li>${text}</li>`).join("");
+  const no = item.no.map(text => `<li class="no">${text}</li>`).join("");
+  document.getElementById("nodeInfo").innerHTML = `<h3>${item.title}</h3><span class="tag">${item.tag}</span><ul>${yes}${no}</ul>`;
+}
+
+document.querySelectorAll(".node").forEach(node => {
+  node.addEventListener("click", () => renderNode(node.dataset.node));
+});
+renderNode("app");
+
+document.querySelectorAll("tr[data-row]").forEach(row => {
+  row.addEventListener("mouseenter", () => {
+    const key = row.dataset.row;
+    document.querySelectorAll("tr[data-row]").forEach(r => r.classList.toggle("selected", r === row));
+    if (nodeInfo[key]) renderNode(key);
+  });
+});
+
+const steps = {
+  s1: {
+    k: "App scaffold",
+    p: "Create the smallest Django package: package marker, AppConfig, empty models module, README, and optional documented strategies placeholder.",
+    e: "Guard: no migrations, routes, reducers, drivers, launch primitives, or strategy loader."
+  },
+  s2: {
+    k: "Receiver seam",
+    p: "Register a receiver against worktracker.signals.issue_state_changed from OrchestratorConfig.ready().",
+    e: "Guard: receiver is no-op/logging-only and never mutates Issue or calls execution code."
+  },
+  s3: {
+    k: "Orchestrate settings",
+    p: "Add a settings module that loads WorkTracker and Orchestrator in the same ASGI process while excluding apps.execution.",
+    e: "Guard: preserve local DB/auth defaults and avoid hidden Studio/tmux startup work."
+  },
+  s4: {
+    k: "Root pnpm script",
+    p: "Add scripts/orchestrate.mjs and the root package.json entry so pnpm orchestrate runs uvicorn from server/.",
+    e: "Guard: command is backend-only and does not call the existing dev script."
+  },
+  s5: {
+    k: "Smoke coverage",
+    p: "Add targeted tests for Django setup, app installation, signal registration, execution exclusion, and source import boundary.",
+    e: "Guard: tests validate scaffold wiring only, not future orchestration semantics."
+  }
+};
+
+function renderStep(key) {
+  const item = steps[key];
+  document.querySelectorAll(".stepBtn").forEach(btn => btn.classList.toggle("active", btn.dataset.step === key));
+  document.getElementById("seqInfo").innerHTML = `<div class="k">${item.k}</div><p>${item.p}</p><p><b>Edge:</b> ${item.e}</p>`;
+}
+
+document.querySelectorAll(".stepBtn").forEach(btn => {
+  btn.addEventListener("click", () => renderStep(btn.dataset.step));
+});
+renderStep("s1");
+
+const sections = [...document.querySelectorAll("main section")];
+const navLinks = [...document.querySelectorAll("nav a")];
+const observer = new IntersectionObserver(entries => {
+  const visible = entries.filter(e => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+  if (!visible) return;
+  navLinks.forEach(a => a.classList.toggle("active", a.getAttribute("href") === `#${visible.target.id}`));
+}, { rootMargin: "-18% 0px -68% 0px", threshold: [0.1, 0.2, 0.4] });
+sections.forEach(section => observer.observe(section));
+</script>
+</body>
+</html>

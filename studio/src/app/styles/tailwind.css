@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  /* Keep pane content scrollable while removing scrollbar chrome. Descendant
+     coverage includes nested work-item details and xterm's viewport. */
+  .hide-scrollbars,
+  .hide-scrollbars * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scrollbars::-webkit-scrollbar,
+  .hide-scrollbars *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    /* F1/F2: proportional sans is the default reading face; mono is opt-in
+       (font-mono) for KEY-N and code. Base lifts off the 11px floor to 14px. */
+    @apply bg-pane-bg text-text-primary font-sans text-base;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  /* CODIN-1040: the Backlog's shared task focus frame — a faint outline with
+     four stronger corner brackets that glides between task rows. Geometry
+     travels on the Graphify ease; opacity fades independently. */
+  .task-focus-frame {
+    --task-frame-outline: rgb(255 255 255 / 0.15);
+    --task-frame-corner: rgb(255 255 255 / 0.6);
+    border: 1px solid var(--task-frame-outline);
+    border-radius: 0.5rem;
+    opacity: 0;
+    transition:
+      left 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      top 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      width 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 180ms ease;
+    will-change: left, top, width, height, opacity;
+  }
+
+  .task-focus-frame[data-visible="true"] {
+    opacity: 1;
+  }
+
+  .task-focus-frame > span {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-color: var(--task-frame-corner);
+  }
+
+  .task-focus-frame > [data-corner="top-left"] {
+    top: -1px;
+    left: -1px;
+    border-top-width: 1px;
+    border-left-width: 1px;
+    border-top-left-radius: inherit;
+  }
+
+  .task-focus-frame > [data-corner="top-right"] {
+    top: -1px;
+    right: -1px;
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-top-right-radius: inherit;
+  }
+
+  .task-focus-frame > [data-corner="bottom-right"] {
+    right: -1px;
+    bottom: -1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-bottom-right-radius: inherit;
+  }
+
+  .task-focus-frame > [data-corner="bottom-left"] {
+    bottom: -1px;
+    left: -1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-bottom-left-radius: inherit;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .task-focus-frame {
+      transition: opacity 120ms ease;
+    }
+  }
+
+  /* C5 (#640): rendered markdown in the issue description. Tailwind's base
+     reset strips heading/list spacing, so re-establish minimal block rhythm. */
+  .md-body > :first-child {
+    @apply mt-0;
+  }
+  .md-body p,
+  .md-body ul,
+  .md-body ol,
+  .md-body pre,
+  .md-body blockquote {
+    @apply my-2;
+  }
+  .md-body h1 {
+    @apply mt-3 mb-1 text-lg font-semibold;
+  }
+  .md-body h2 {
+    @apply mt-3 mb-1 text-base font-semibold;
+  }
+  .md-body h3 {
+    @apply mt-2 mb-1 text-sm font-semibold uppercase tracking-wide text-text-secondary;
+  }
+  .md-body ul {
+    @apply list-disc pl-5;
+  }
+  .md-body ol {
+    @apply list-decimal pl-5;
+  }
+  .md-body a {
+    @apply text-focus-accent hover:underline;
+  }
+  .md-body code {
+    @apply rounded bg-pane-title px-1 py-0.5 font-mono text-sm;
+  }
+  .md-body pre {
+    @apply overflow-x-auto rounded-md bg-pane-title p-2;
+  }
+  .md-body pre code {
+    @apply bg-transparent p-0;
+  }
+  .md-body blockquote {
+    @apply border-l-2 border-pane-border pl-3 text-text-secondary;
+  }
+}

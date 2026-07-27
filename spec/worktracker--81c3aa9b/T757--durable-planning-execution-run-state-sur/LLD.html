@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CODIN-757 · Durable Run-State · LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5b6478; --line: #e3e7ee;
+    --accent: #3556d4; --accent-soft: #e8edfb;
+    --green: #1d7a4f; --green-soft: #e3f3ea;
+    --amber: #9a6700; --amber-soft: #fbf0d8;
+    --red: #b03030; --red-soft: #fbe7e7;
+    --violet: #6b3fb8; --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  header { background: var(--panel); padding: 26px 40px 16px; border-bottom: 1px solid var(--line); }
+  .crumb { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+  h1 { margin: 6px 0 4px; font-size: 23px; line-height: 1.2; }
+  .sub { max-width: 1000px; color: var(--muted); font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip { border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 800; padding: 4px 10px; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  .chip.red { background: var(--red-soft); color: var(--red); }
+  nav { position: sticky; top: 0; z-index: 20; display: flex; gap: 2px; overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 40px; }
+  nav a { color: var(--muted); text-decoration: none; white-space: nowrap; padding: 10px 14px 8px; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 800; }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1200px; margin: 0 auto; padding: 34px 40px 70px; }
+  section { margin-bottom: 56px; scroll-margin-top: 58px; }
+  h2 { margin: 0 0 4px; font-size: 18px; }
+  h3 { margin: 0 0 10px; font-size: 15px; }
+  .lede { margin: 0 0 18px; max-width: 940px; color: var(--muted); font-size: 14px; }
+  .m { font-family: var(--mono); font-size: 12.5px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+  .card p { margin: 0; color: var(--muted); font-size: 13px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { position: relative; padding: 6px 0 6px 20px; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+  .list li:last-child { border-bottom: 0; }
+  .list li:before { content: "•"; position: absolute; left: 3px; color: var(--accent); font-weight: 900; }
+  .list li.no:before { content: "x"; color: var(--red); }
+  .diagram { display: grid; grid-template-columns: 1fr 330px; gap: 18px; align-items: stretch; }
+  .scrollx { overflow-x: auto; }
+  svg { width: 100%; min-width: 760px; height: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; fill: var(--ink); }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { fill: #fff; stroke: var(--accent); stroke-width: 2; }
+  .node.db rect { stroke: var(--green); fill: #fbfffd; }
+  .node.warn rect { stroke: var(--amber); fill: var(--amber-soft); }
+  .node.bad rect { stroke: var(--red); fill: var(--red-soft); stroke-dasharray: 5 4; }
+  .node.selected rect, .node.selected ellipse { fill: var(--accent-soft); stroke-width: 3; }
+  .node text { pointer-events: none; }
+  .edge { stroke: #7f8aa3; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+  .edge.dashed { stroke-dasharray: 5 4; }
+  .lane { fill: var(--muted); font-weight: 800; font-size: 11px; letter-spacing: .05em; }
+  .side h3 { margin: 0 0 6px; color: var(--accent); font-size: 15px; }
+  .side .tag { display: inline-block; margin-bottom: 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); padding: 2px 8px; font-size: 11px; font-weight: 800; }
+  .side ul { margin: 8px 0 0; padding: 0; list-style: none; }
+  .side li { position: relative; padding: 4px 0 4px 18px; font-size: 12.5px; }
+  .side li:before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 900; }
+  .side li.no:before { content: "x"; color: var(--red); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+  th { background: #fbfcfe; color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: 0; }
+  .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+  .pill.new { background: var(--green-soft); color: var(--green); }
+  .pill.mod { background: var(--amber-soft); color: var(--amber); }
+  .pill.ro { background: var(--accent-soft); color: var(--accent); }
+  .pill.no { background: var(--red-soft); color: var(--red); }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; border-top: 3px solid var(--accent); padding: 13px 14px; font-size: 12.5px; color: var(--muted); }
+  .step b { display: block; color: var(--ink); font-size: 13px; margin-bottom: 3px; }
+  .step .n { color: var(--accent); font-size: 18px; font-weight: 900; line-height: 1; }
+  .seq { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
+  .seq .stepBtn { width: 100%; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 10px 12px; text-align: left; cursor: pointer; margin-bottom: 8px; color: var(--ink); font-weight: 800; }
+  .seq .stepBtn.active, .seq .stepBtn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .seqInfo { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; min-height: 190px; }
+  .seqInfo .k { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+  .seqInfo p { margin: 8px 0 0; font-size: 13.5px; }
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 8px; padding: 18px 20px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  @media (max-width: 900px) {
+    header, nav, main { padding-left: 18px; padding-right: 18px; }
+    .grid2, .grid3, .diagram, .seq { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="crumb">Coding · WorkTracker module · Ticket CODIN-757 · LLD</div>
+  <h1>Durable Planning / Execution Run-State</h1>
+  <div class="sub">Implementation harness for persisting the execution engine's private run-state so the one-run-per-task guard survives an ASGI restart. The plan keeps lifecycle semantics in CODIN-744 and failure recovery manual-only.</div>
+  <div class="chips">
+    <span class="chip">Phase: LLD</span>
+    <span class="chip green">EngineRun + GraphRun</span>
+    <span class="chip amber">DB-backed duplicate guard</span>
+    <span class="chip violet">Graph rebuild after cache loss</span>
+    <span class="chip red">No liveness inference</span>
+  </div>
+</header>
+<nav id="nav">
+  <a href="#scope" class="active">Scope</a>
+  <a href="#model">Model</a>
+  <a href="#schema">Schema</a>
+  <a href="#surface">Surface</a>
+  <a href="#map">Change Map</a>
+  <a href="#sequence">Sequence</a>
+  <a href="#tests">Tests</a>
+  <a href="#risks">Risks</a>
+  <a href="#accept">Acceptance</a>
+</nav>
+<main>
+
+<section id="scope">
+  <h2>Scope</h2>
+  <div class="lede">Two implementation slices. S1 fixes the headline duplicate-launch risk; S2 makes graph state restart-durable without storing derived edges.</div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Build</h3>
+      <ul class="list">
+        <li><b>S1:</b> durable single-task <span class="m">EngineRun</span> row keyed by <span class="m">task_id</span>.</li>
+        <li>Planning-run 409 guard reads the durable row, not process memory.</li>
+        <li>Launch success, launch failure, completion observer, and manual release write durable state.</li>
+        <li><b>S2:</b> durable <span class="m">GraphRun</span> header plus node state from <span class="m">EngineRun</span> rows.</li>
+        <li>GET execute-graph rebuilds after <span class="m">_graph_registry</span> loss.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Do Not Build</h3>
+      <ul class="list">
+        <li class="no">No timeout, boot sweep, passive liveness check, or dead-marker inference.</li>
+        <li class="no">No agent-facing failure-report MCP tool.</li>
+        <li class="no">No dependency on CODIN-756.</li>
+        <li class="no">No new phase or lifecycle semantics.</li>
+        <li class="no">No public API or MCP surface beyond retargeting existing routes.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="model">
+  <h2>Clickable Model</h2>
+  <div class="lede">Click a node. Solid boxes are durable or authoritative for this slice; dashed red boxes are explicitly not trusted for correctness.</div>
+  <div class="diagram">
+    <div class="scrollx">
+      <svg viewBox="0 0 820 430" role="img" aria-label="CODIN-757 durable run-state model">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#7f8aa3"></path>
+          </marker>
+        </defs>
+        <text class="lane" x="40" y="28">TRIGGER SURFACES</text>
+        <text class="lane" x="330" y="28">DRIVER BOUNDARY</text>
+        <text class="lane" x="560" y="28">DURABLE TRUTH</text>
+        <text class="lane" x="560" y="280">UNTRUSTED / DERIVED</text>
+
+        <path class="edge" d="M180 78 C245 78 255 78 320 78"></path>
+        <path class="edge" d="M180 170 C245 170 255 132 320 132"></path>
+        <path class="edge" d="M470 78 C510 78 520 78 560 78"></path>
+        <path class="edge" d="M470 132 C510 132 520 145 560 170"></path>
+        <path class="edge" d="M668 118 C668 137 668 148 668 168"></path>
+        <path class="edge dashed" d="M470 132 C565 235 600 260 650 300"></path>
+        <path class="edge dashed" d="M560 210 C445 250 420 300 420 326"></path>
+        <path class="edge" d="M222 260 C280 245 310 220 350 172"></path>
+
+        <g class="node" data-node="planning" transform="translate(40 50)"><rect width="140" height="56" rx="7"></rect><text x="70" y="26" text-anchor="middle">POST</text><text x="70" y="43" text-anchor="middle">planning-run</text></g>
+        <g class="node" data-node="graph" transform="translate(40 142)"><rect width="140" height="56" rx="7"></rect><text x="70" y="26" text-anchor="middle">POST/GET</text><text x="70" y="43" text-anchor="middle">execute-graph</text></g>
+        <g class="node" data-node="manual" transform="translate(40 232)"><rect width="182" height="56" rx="7"></rect><text x="91" y="26" text-anchor="middle">CODIN-755</text><text x="91" y="43" text-anchor="middle">manual release</text></g>
+
+        <g class="node" data-node="driver" transform="translate(320 50)"><rect width="150" height="122" rx="7"></rect><text x="75" y="34" text-anchor="middle">driver.py</text><text x="75" y="56" text-anchor="middle">row mapping</text><text x="75" y="76" text-anchor="middle">guard reads</text><text x="75" y="96" text-anchor="middle">transition writes</text></g>
+
+        <g class="node db" data-node="engine" transform="translate(560 50)"><rect width="216" height="68" rx="7"></rect><text x="108" y="27" text-anchor="middle">EngineRun</text><text x="108" y="47" text-anchor="middle">task_id PK = guard</text></g>
+        <g class="node db" data-node="graphrun" transform="translate(560 168)"><rect width="216" height="56" rx="7"></rect><text x="108" y="25" text-anchor="middle">GraphRun</text><text x="108" y="42" text-anchor="middle">root header only</text></g>
+        <g class="node bad" data-node="registry" transform="translate(320 326)"><rect width="204" height="56" rx="7"></rect><text x="102" y="25" text-anchor="middle">_registry caches</text><text x="102" y="42" text-anchor="middle">optional only</text></g>
+        <g class="node warn" data-node="edges" transform="translate(650 300)"><rect width="130" height="56" rx="7"></rect><text x="65" y="25" text-anchor="middle">blocked_by</text><text x="65" y="42" text-anchor="middle">derived edges</text></g>
+      </svg>
+    </div>
+    <div class="panel side" id="nodeInfo">Click a node to see responsibilities and non-responsibilities.</div>
+  </div>
+</section>
+
+<section id="schema">
+  <h2>Data Model</h2>
+  <div class="lede">Rows store the same facts the engine already carries in memory. Timestamps help debugging only; they are not a liveness signal.</div>
+  <div class="grid2">
+    <div class="card">
+      <h3>engine_runs</h3>
+      <table>
+        <tbody>
+          <tr><td class="m">task_id</td><td>UUID primary key; one row per task.</td></tr>
+          <tr><td class="m">project_id / module_id</td><td>Task context for scoped reads and diagnostics.</td></tr>
+          <tr><td class="m">agent / phase / status</td><td>Existing engine facts; no new phase names.</td></tr>
+          <tr><td class="m">agent_run_id / error</td><td>Detached tmux run binding and launch/release reason.</td></tr>
+          <tr><td class="m">created_at / updated_at</td><td>Audit and debugging only.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>graph_runs</h3>
+      <table>
+        <tbody>
+          <tr><td class="m">root_id</td><td>UUID primary key for the graph root task.</td></tr>
+          <tr><td class="m">project_id / module_id</td><td>Copied from root context.</td></tr>
+          <tr><td class="m">agent</td><td>Default agent used for graph launches.</td></tr>
+          <tr><td class="m">created_at / updated_at</td><td>Header audit fields.</td></tr>
+          <tr><td class="m">edges</td><td>Not stored; derived from current <span class="m">blocked_by</span>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="surface">
+  <h2>API / Service Contract</h2>
+  <div class="lede">Existing surfaces stay stable; the backing source of truth changes from process-local memory to durable rows.</div>
+  <table>
+    <thead><tr><th>Surface</th><th>LLD behavior</th></tr></thead>
+    <tbody>
+      <tr><td class="m">POST /work-items/{id}/planning-run</td><td>Reads <span class="m">EngineRun</span> for duplicate guard; non-terminal row returns existing 409 without spawning.</td></tr>
+      <tr><td class="m">planning-run spawn success</td><td>Persists <span class="m">running</span> with agent, phase, context, and concrete agent run id.</td></tr>
+      <tr><td class="m">planning-run spawn error</td><td>Persists <span class="m">failed</span> with launch error; no fake agent run id.</td></tr>
+      <tr><td class="m">POST /work-items/{id}/execute-graph</td><td>Creates or reads <span class="m">GraphRun</span>, uses node rows, launches only newly ready nodes.</td></tr>
+      <tr><td class="m">GET /work-items/{id}/execute-graph</td><td>Rebuilds from <span class="m">GraphRun</span>, <span class="m">EngineRun</span>, and current <span class="m">blocked_by</span>.</td></tr>
+      <tr><td class="m">observer seam</td><td>Agent-reported completion flips matching durable running row to <span class="m">done</span>.</td></tr>
+      <tr><td class="m">manual release</td><td>Clears or terminally rewrites the durable row per CODIN-755; next launch can proceed.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="map">
+  <h2>File Change Map</h2>
+  <div class="lede">Server-side execution app only. If the integrated repo places execution under another package path, keep these ownership boundaries.</div>
+  <table>
+    <thead><tr><th>File</th><th>Kind</th><th>Delta</th></tr></thead>
+    <tbody>
+      <tr><td class="m">server/apps/execution/models.py</td><td><span class="pill new">new</span></td><td>Add <span class="m">EngineRun</span> and <span class="m">GraphRun</span>.</td></tr>
+      <tr><td class="m">server/apps/execution/migrations/000X_engine_run.py</td><td><span class="pill new">new</span></td><td>Create both tables; no backfill.</td></tr>
+      <tr><td class="m">server/apps/execution/driver.py</td><td><span class="pill mod">modify</span></td><td>Row mapping, durable guard reads, transition writes, graph seeding, optional cache refresh.</td></tr>
+      <tr><td class="m">server/apps/execution/api.py</td><td><span class="pill mod">modify</span></td><td>Planning-run 409 reads DB; GET execute-graph rebuilds from durable rows.</td></tr>
+      <tr><td class="m">server/apps/execution/signals.py</td><td><span class="pill mod">modify</span></td><td>Completion observer persists <span class="m">running</span> to <span class="m">done</span> through driver.</td></tr>
+      <tr><td class="m">server/apps/execution/state.py</td><td><span class="pill ro">read-only</span></td><td>Pure state stays pure unless row mapping exposes a missing constant.</td></tr>
+      <tr><td class="m">server/apps/execution/graph.py</td><td><span class="pill ro">read-only</span></td><td>Pure graph stays pure unless current-edge reconstruction needs a helper.</td></tr>
+      <tr><td class="m">CODIN-755 release files</td><td><span class="pill mod">modify</span></td><td>Release durable row, not just memory.</td></tr>
+      <tr><td class="m">server/apps/execution/tests/*</td><td><span class="pill mod">modify</span></td><td>Restart guard, graph rebuild, manual release, concurrency, and negative liveness coverage.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="sequence">
+  <h2>Implementation Sequence</h2>
+  <div class="lede">Decision-complete build order. Select a phase to see the mechanic and edge case it covers.</div>
+  <div class="seq">
+    <div>
+      <button class="stepBtn active" data-step="locate">1 · Locate execution app</button>
+      <button class="stepBtn" data-step="models">2 · Add tables</button>
+      <button class="stepBtn" data-step="driver">3 · Retarget driver</button>
+      <button class="stepBtn" data-step="guard">4 · Rewire guard</button>
+      <button class="stepBtn" data-step="observer">5 · Persist completion</button>
+      <button class="stepBtn" data-step="graph">6 · Rebuild graph</button>
+      <button class="stepBtn" data-step="release">7 · Manual release</button>
+      <button class="stepBtn" data-step="negative">8 · Prove no inference</button>
+    </div>
+    <div class="seqInfo" id="seqInfo"></div>
+  </div>
+</section>
+
+<section id="tests">
+  <h2>Test Plan</h2>
+  <div class="lede">The key regression is restart simulation: clear memory and prove durable rows still gate launch and rebuild graph state.</div>
+  <div class="grid3">
+    <div class="card"><h3>Guard</h3><p>Seed a running row, clear <span class="m">_registry</span>, POST planning-run, assert 409 and no spawn.</p></div>
+    <div class="card"><h3>Fresh Launch</h3><p>No durable row launches and persists <span class="m">running</span> with run id and context.</p></div>
+    <div class="card"><h3>Spawn Error</h3><p>Launch exception persists <span class="m">failed</span> with the existing error contract.</p></div>
+    <div class="card"><h3>Completion</h3><p>Observer seam flips matching durable running row to <span class="m">done</span>.</p></div>
+    <div class="card"><h3>Manual Release</h3><p>Release clears or rewrites the durable row; the next POST can launch.</p></div>
+    <div class="card"><h3>Concurrency</h3><p>Two same-task launch attempts cannot create two rows; loser follows 409/existing-row path.</p></div>
+    <div class="card"><h3>Graph Restart</h3><p>Clear <span class="m">_graph_registry</span>; GET returns nodes with status, agent run id, and error intact.</p></div>
+    <div class="card"><h3>Derived Edges</h3><p><span class="m">blocked_by</span> changes affect rebuilt graph without stored edge rows.</p></div>
+    <div class="card"><h3>Negative Liveness</h3><p>No timeout, startup sweep, AgentRun status, or missing tmux marker flips <span class="m">running</span> to <span class="m">failed</span>.</p></div>
+  </div>
+</section>
+
+<section id="risks">
+  <h2>Risk Controls</h2>
+  <div class="lede">Each control maps to a failure mode from refinement.</div>
+  <table>
+    <thead><tr><th>Risk</th><th>Control</th></tr></thead>
+    <tbody>
+      <tr><td>Duplicate launch race</td><td>Use <span class="m">EngineRun.task_id</span> primary key/unique constraint, not only a preflight read.</td></tr>
+      <tr><td>Accidental death inference</td><td>Enumerate every mutation site: launch success, launch failure, completion observer, manual release.</td></tr>
+      <tr><td>Lifecycle confusion</td><td>Do not validate board progress from <span class="m">EngineRun.phase</span>; CODIN-744 owns published lifecycle.</td></tr>
+      <tr><td>Graph drift</td><td>Store root/header and node status only; derive edges from current <span class="m">blocked_by</span>.</td></tr>
+      <tr><td>Cache divergence</td><td>Focused tests clear memory and still pass through durable reads.</td></tr>
+      <tr><td>Release mismatch</td><td>CODIN-755 must release the durable row in the same implementation window.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="accept">
+  <h2>Acceptance Signal</h2>
+  <div class="accept">
+    <b>Green signal:</b> after an ASGI restart simulation, an existing running planning run still returns 409 without spawning a duplicate; graph state survives cache loss with no lost agent/error facts; and no server path infers death or flips running to failed except launch failure or manual release.
+  </div>
+</section>
+
+</main>
+<script>
+const nodeInfo = {
+  planning: {
+    title: "POST planning-run", tag: "existing trigger",
+    does: ["Checks durable row before spawning.", "Returns existing 409 when a non-terminal EngineRun exists."],
+    no: ["Does not trust _registry.", "Does not add a new endpoint."]
+  },
+  graph: {
+    title: "execute-graph routes", tag: "existing graph surface",
+    does: ["POST launches newly ready nodes idempotently.", "GET rebuilds graph state from durable rows."],
+    no: ["Does not treat 404 as restart loss.", "Does not store blocked_by edges."]
+  },
+  manual: {
+    title: "CODIN-755 manual release", tag: "recovery hatch",
+    does: ["Clears or terminally rewrites the durable EngineRun row.", "Allows an operator-approved retry."],
+    no: ["Does not kill by inference.", "Does not depend on CODIN-756."]
+  },
+  driver: {
+    title: "driver.py", tag: "I/O boundary",
+    does: ["Maps rows to existing engine state values.", "Writes all current launch/completion/release transitions.", "Keeps reducers and graph logic pure."],
+    no: ["Does not create a second state machine.", "Does not mutate Issue.state directly."]
+  },
+  engine: {
+    title: "EngineRun", tag: "durable guard",
+    does: ["Stores one row per task.", "Holds agent, phase, status, agent_run_id, error, and context.", "Uses task_id PK as the DB-level one-run guard."],
+    no: ["Does not store lifecycle as board authority.", "Does not infer freshness from updated_at."]
+  },
+  graphrun: {
+    title: "GraphRun", tag: "graph header",
+    does: ["Stores one row per root.", "Carries graph agent and root context.", "Combines with EngineRun rows for node status."],
+    no: ["Does not duplicate per-node run state.", "Does not store edges."]
+  },
+  registry: {
+    title: "_registry / _graph_registry", tag: "optional cache",
+    does: ["May speed in-process reads after durable state is loaded.", "Can be cleared to simulate restart."],
+    no: ["Never source of truth.", "Never the duplicate guard."]
+  },
+  edges: {
+    title: "blocked_by edges", tag: "derived",
+    does: ["Provide current graph topology on read.", "Let graph reflect blocker edits without migration/backfill."],
+    no: ["Not copied into GraphRun.", "Not used as a liveness signal."]
+  }
+};
+
+function renderNode(key) {
+  const n = nodeInfo[key];
+  document.querySelectorAll(".node").forEach(el => el.classList.toggle("selected", el.dataset.node === key));
+  document.getElementById("nodeInfo").innerHTML =
+    `<h3>${n.title}</h3><span class="tag">${n.tag}</span><ul>` +
+    n.does.map(x => `<li>${x}</li>`).join("") +
+    n.no.map(x => `<li class="no">${x}</li>`).join("") +
+    `</ul>`;
+}
+document.querySelectorAll(".node").forEach(el => el.addEventListener("click", () => renderNode(el.dataset.node)));
+renderNode("engine");
+
+const steps = {
+  locate: ["Locate execution app", "Confirm the actual checked-in execution package and current names for EngineState, GraphState, registries, driver calls, planning-run API, and observers.", "Edge case: this checkout's stack root does not contain server/apps/execution, but dirty parent-repo files show that path exists in the integrated tree."],
+  models: ["Add tables", "Create EngineRun and GraphRun models plus a no-backfill migration. Keep row fields aligned with current response/state object names.", "Edge case: updated_at is for debugging only; tests must not treat it as liveness."],
+  driver: ["Retarget driver", "Add row mapping helpers and make _store/get_state/_store_graph/get_graph write through or read from durable rows first.", "Edge case: reducers and graph helpers stay pure and DB-free."],
+  guard: ["Rewire guard", "Planning-run duplicate checks read the durable EngineRun row. A running row must 409 after memory is cleared.", "Edge case: race safety relies on the task_id primary key, not only the preflight read."],
+  observer: ["Persist completion", "The existing completion observer flips only matching durable running rows to done.", "Edge case: stale, unrelated, or mismatched-phase events are ignored."],
+  graph: ["Rebuild graph", "Graph GET combines GraphRun, EngineRun rows, current descendants, and blocked_by edges.", "Edge case: halted status is recomputed on read; stored edges are forbidden."],
+  release: ["Manual release", "CODIN-755 release clears or rewrites the durable row so a new launch can proceed.", "Edge case: release is the only post-launch stuck-run recovery."],
+  negative: ["Prove no inference", "Tests/static checks confirm no timeout, boot sweep, marker poll, or AgentRun.status branch marks running as failed.", "Edge case: CODIN-756 remains unrelated."]
+};
+function renderStep(key) {
+  const s = steps[key];
+  document.querySelectorAll(".stepBtn").forEach(b => b.classList.toggle("active", b.dataset.step === key));
+  document.getElementById("seqInfo").innerHTML = `<div class="k">${s[0]}</div><p>${s[1]}</p><p><b>Guard:</b> ${s[2]}</p>`;
+}
+document.querySelectorAll(".stepBtn").forEach(btn => btn.addEventListener("click", () => renderStep(btn.dataset.step)));
+renderStep("locate");
+
+const sections = [...document.querySelectorAll("section")];
+const links = [...document.querySelectorAll("nav a")];
+const io = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    links.forEach(a => a.classList.toggle("active", a.getAttribute("href") === `#${entry.target.id}`));
+  });
+}, { rootMargin: "-45% 0px -50% 0px", threshold: 0.01 });
+sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>

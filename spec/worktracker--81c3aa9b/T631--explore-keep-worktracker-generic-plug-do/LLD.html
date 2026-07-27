@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T631 · Generic WorkTracker + Coding Add-on — LLD</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1d2433;
+    --muted: #5b6478;
+    --line: #e3e7ee;
+    --accent: #3556d4;
+    --accent-soft: #e8edfb;
+    --green: #1d7a4f;
+    --green-soft: #e3f3ea;
+    --amber: #9a6700;
+    --amber-soft: #fbf0d8;
+    --red: #b03030;
+    --red-soft: #fbe7e7;
+    --violet: #6b3fb8;
+    --violet-soft: #f0e9fb;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header { background: var(--panel); padding: 26px 40px 0; }
+  .crumb { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 22px; margin: 6px 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 980px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 14px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .chip.green { background: var(--green-soft); color: var(--green); }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); }
+  .chip.violet { background: var(--violet-soft); color: var(--violet); }
+  nav {
+    display: flex; gap: 2px; overflow-x: auto;
+    margin: 0 -40px; padding: 0 40px;
+    position: sticky; top: 0; z-index: 30;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  nav a {
+    padding: 9px 14px; font-size: 13px; font-weight: 700;
+    color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a.active, nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 36px 40px; }
+  section { margin-bottom: 56px; scroll-margin-top: 64px; }
+  h2 { font-size: 18px; margin-bottom: 4px; }
+  h3 { font-size: 15px; margin-bottom: 8px; }
+  .lede { color: var(--muted); font-size: 14px; margin-bottom: 18px; max-width: 900px; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  code { background: #f0f2f6; border-radius: 4px; padding: 1px 5px; }
+  pre { font-family: var(--mono); font-size: 12px; line-height: 1.55; background: #1d2433; color: #d6def0; border-radius: 8px; padding: 14px; overflow-x: auto; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .panel.accent { border-top: 4px solid var(--accent); }
+  .panel.violet { border-top: 4px solid var(--violet); }
+  .panel.green { border-top: 4px solid var(--green); }
+  .panel.amber { border-top: 4px solid var(--amber); }
+  .panel.red { border-top: 4px solid var(--red); }
+  .panel p, .panel li { font-size: 13px; color: var(--muted); }
+  .panel b { color: var(--ink); }
+  .panel ul { list-style: none; margin-top: 8px; }
+  .panel li { padding: 4px 0 4px 16px; position: relative; }
+  .panel li::before { content: "."; position: absolute; left: 2px; top: 3px; color: var(--accent); font-weight: 900; }
+  .panel li.no::before { content: "x"; color: var(--red); font-weight: 800; }
+  .tag { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+
+  .change { display: grid; grid-template-columns: 410px 1fr; gap: 18px; }
+  .tree {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px; font-family: var(--mono); font-size: 12.5px; line-height: 2;
+  }
+  .tree .dir { color: var(--muted); }
+  .hit { cursor: pointer; border-radius: 6px; padding: 1px 7px; font-weight: 700; }
+  .hit.new { background: var(--green-soft); color: var(--green); }
+  .hit.mod { background: var(--amber-soft); color: var(--amber); }
+  .hit.move { background: var(--violet-soft); color: var(--violet); }
+  .hit.ro { background: var(--accent-soft); color: var(--accent); }
+  .hit.sel { outline: 2px solid currentColor; }
+  .detail {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 24px; font-size: 13.5px; min-height: 220px;
+  }
+  .detail h4 { font-size: 15px; color: var(--accent); margin-bottom: 4px; }
+  .detail .kind { font-size: 11px; font-weight: 800; letter-spacing: .07em; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+  .detail ul { list-style: none; margin-top: 8px; }
+  .detail li { padding: 4px 0 4px 18px; position: relative; }
+  .detail li::before { content: "."; position: absolute; left: 2px; top: 3px; color: var(--accent); font-weight: 900; }
+  .detail .hint { color: var(--muted); font-style: italic; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  .diagram-wrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; display: grid; grid-template-columns: 1fr 310px; gap: 18px;
+  }
+  svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .node { cursor: pointer; }
+  .node rect, .node ellipse { transition: stroke-width .12s, filter .12s, opacity .12s; }
+  .node.hl rect, .node.hl ellipse { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(53,86,212,.4)); }
+  .node.dim { opacity: .34; }
+  #nodeInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #nodeInfo h4 { font-size: 14px; color: var(--accent); margin-bottom: 4px; }
+  #nodeInfo .role { color: var(--muted); margin-bottom: 8px; }
+  #nodeInfo ul { list-style: none; }
+  #nodeInfo li { padding: 3px 0 3px 16px; position: relative; }
+  #nodeInfo li::before { content: "."; position: absolute; left: 2px; top: 2px; color: var(--green); font-weight: 900; }
+  #nodeInfo li.no::before { content: "x"; color: var(--red); font-weight: 800; }
+
+  .slot-row { display: grid; grid-template-columns: 130px 1fr 1fr; gap: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .slot-row + .slot-row { margin-top: 10px; }
+  .slot-row div { padding: 12px 14px; border-right: 1px solid var(--line); font-size: 13px; }
+  .slot-row div:last-child { border-right: 0; }
+  .slot-row .name { font-family: var(--mono); color: var(--violet); font-weight: 800; background: #fbfcfe; }
+  .slot-row .head { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; background: #fbfcfe; }
+
+  .seq-wrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; display: grid; grid-template-columns: 1fr 310px; gap: 18px;
+  }
+  .step { cursor: pointer; }
+  .step circle { transition: fill .12s, r .12s; }
+  .step.hl circle { fill: var(--accent); }
+  .step.hl text { fill: #fff; }
+  #seqInfo { border-left: 1px solid var(--line); padding-left: 18px; font-size: 13px; }
+  #seqInfo h4 { font-size: 14px; color: var(--accent); margin-bottom: 6px; }
+  #seqInfo p { color: var(--muted); margin-bottom: 8px; }
+  #seqInfo .edge { color: var(--red); font-size: 12.5px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13px; }
+  th { background: #fbfcfe; font-size: 12px; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: 0; }
+  tr.trace { cursor: pointer; }
+  tr.trace:hover, tr.trace.sel { background: var(--accent-soft); }
+  .rid { font-family: var(--mono); font-weight: 800; color: var(--accent); white-space: nowrap; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; margin: 1px 2px; }
+  .pill.green { background: var(--green-soft); color: var(--green); }
+  .pill.violet { background: var(--violet-soft); color: var(--violet); }
+  .pill.amber { background: var(--amber-soft); color: var(--amber); }
+  .pill.red { background: var(--red-soft); color: var(--red); }
+
+  .steps { counter-reset: build; display: grid; gap: 12px; }
+  .build {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 18px 14px 54px; position: relative;
+  }
+  .build::before {
+    counter-increment: build; content: counter(build);
+    position: absolute; left: 16px; top: 14px; width: 24px; height: 24px;
+    border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; font-size: 13px;
+    display: grid; place-items: center;
+  }
+  .build h4 { font-size: 14px; margin-bottom: 3px; }
+  .build p { font-size: 12.5px; color: var(--muted); }
+  .build.green::before { background: var(--green); }
+  .build.violet::before { background: var(--violet); }
+
+  .accept { background: var(--green-soft); border: 1px solid #cfe5d8; border-radius: 12px; padding: 20px 24px; font-size: 14px; }
+  .accept b { color: var(--green); }
+  @media (max-width: 900px) {
+    .grid2, .grid3, .change, .diagram-wrap, .seq-wrap { grid-template-columns: 1fr; }
+    .slot-row { grid-template-columns: 1fr; }
+    .slot-row div { border-right: 0; border-bottom: 1px solid var(--line); }
+    .slot-row div:last-child { border-bottom: 0; }
+    main, header { padding-left: 18px; padding-right: 18px; }
+    nav { margin-left: -18px; margin-right: -18px; padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="crumb">WorkTracker Studio · Ticket #631 · Low-Level Design draft</div>
+  <h1>Slot Registry Extraction for Generic WorkTracker</h1>
+  <div class="sub">Convert the current direct coding seam into a first-party extension registry so <code>@worktracker/core</code> owns the tracker composition, while <code>integrations/coding</code> registers agent-driven UI, shortcuts, and services. This LLD is a design artifact only: no implementation code is changed in this phase.</div>
+  <div class="chips">
+    <span class="chip amber">WorkTracker state: Backlog until approved</span>
+    <span class="chip green">Backend: no change</span>
+    <span class="chip violet">Pattern: typed slots + Radix Slot</span>
+    <span class="chip">Scope: frontend extraction path</span>
+  </div>
+  <nav id="nav">
+    <a href="#goal" class="active">Goal</a>
+    <a href="#map">Change Map</a>
+    <a href="#diagram">Runtime Shape</a>
+    <a href="#contract">Contracts</a>
+    <a href="#sequence">Flows</a>
+    <a href="#lint">Boundary</a>
+    <a href="#tests">Tests</a>
+    <a href="#order">Build Order</a>
+    <a href="#accept">Acceptance</a>
+  </nav>
+</header>
+
+<main>
+
+<section id="goal">
+  <h2>Implementation goal</h2>
+  <div class="lede">The LLD turns the HLD decision into a concrete migration harness. The first implementation ticket should add the registry without changing behavior; later tickets move each current coding call-site behind registrations.</div>
+  <div class="grid3">
+    <div class="panel green">
+      <div class="tag">Core owns</div>
+      <h3>Tracker composition</h3>
+      <p>Backlog, board, story map, drawer shell, filtering, ranking, labels, blockers, sprints, search, selection, and routing stay inside the generic core package.</p>
+    </div>
+    <div class="panel violet">
+      <div class="tag">Coding owns</div>
+      <h3>Agent provenance</h3>
+      <p>The badge, lifecycle polling, coding deep-link, <code>w</code> shortcut, terminal launch, loops, and workflow-builder entries live outside core and register into named extension points.</p>
+    </div>
+    <div class="panel accent">
+      <div class="tag">Meml gets</div>
+      <h3>Clean tracker</h3>
+      <p>The future meml app imports the same core package and registers nothing, so no coding API env vars, agent badge, or coding shortcut ship in that consumer.</p>
+    </div>
+  </div>
+</section>
+
+<section id="map">
+  <h2>Change map</h2>
+  <div class="lede">Click a highlighted entry for the intended delta. Paths show the target package shape; the first implementation can stage this inside <code>studio/src</code> before package extraction.</div>
+  <div class="change">
+    <div class="tree">
+      <div class="dir">packages/</div>
+      <div>├─ <span class="hit new" data-f="corepkg">@worktracker/core/</span></div>
+      <div>│&nbsp;&nbsp;└─ src/</div>
+      <div>│&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit new" data-f="registry">extensions/registry.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit new" data-f="slots">extensions/slots.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="app">app/StudioApp.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="keys">hooks/useGlobalKeyboardShortcuts.ts</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="hit mod" data-f="drawer">shell/IssueDrawerHeader.tsx</span></div>
+      <div>│&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="hit mod" data-f="row">views/backlog/BacklogRow.tsx</span></div>
+      <div class="dir">integrations/</div>
+      <div>└─ <span class="hit new" data-f="coding">coding/</span></div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="hit move" data-f="bridge">codingBridge.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="hit move" data-f="life">lifecycleStore.ts</span></div>
+      <div>&nbsp;&nbsp;&nbsp;├─ <span class="hit move" data-f="badge">AgentStateBadge.tsx</span></div>
+      <div>&nbsp;&nbsp;&nbsp;└─ <span class="hit new" data-f="register">registerCodingIntegration.tsx</span></div>
+      <div class="dir">apps/</div>
+      <div>├─ <span class="hit mod" data-f="codingapp">coding-studio/</span></div>
+      <div>└─ <span class="hit new" data-f="meml">meml-studio/</span></div>
+      <div><span class="hit new" data-f="lint">eslint boundary rule</span></div>
+      <div class="legend">
+        <span><i style="background:var(--green-soft)"></i>new</span>
+        <span><i style="background:var(--amber-soft)"></i>modified</span>
+        <span><i style="background:var(--violet-soft)"></i>moved</span>
+        <span><i style="background:var(--accent-soft)"></i>package shell</span>
+      </div>
+    </div>
+    <div class="detail" id="fileDetail"><span class="hint">Select a file or folder on the left.</span></div>
+  </div>
+</section>
+
+<section id="diagram">
+  <h2>Runtime shape</h2>
+  <div class="lede">Core renders named outlets from the registry. The coding app registers fills before the app shell mounts; meml uses the same shell with an empty registry.</div>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 790 450" width="100%" aria-label="Runtime shape diagram">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+      </defs>
+      <g stroke="#5b6478" stroke-width="1.6" fill="none" marker-end="url(#arr)">
+        <path d="M120 110 C195 110 205 110 275 110"/>
+        <path d="M515 110 C580 110 590 110 660 110"/>
+        <path d="M390 140 L390 200"/>
+        <path d="M390 285 L390 330"/>
+        <path d="M210 245 C245 245 265 245 300 245"/>
+        <path d="M480 245 C525 245 548 245 590 245"/>
+        <path d="M515 370 C570 370 590 370 650 370" stroke-dasharray="6 5"/>
+      </g>
+      <g class="node" data-node="coding">
+        <ellipse cx="105" cy="110" rx="80" ry="38" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="2"/>
+        <text x="105" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#3d2370">Coding app</text>
+        <text x="105" y="123" text-anchor="middle" font-size="11" fill="#5b6478">registers add-ons</text>
+      </g>
+      <g class="node" data-node="registry">
+        <rect x="285" y="70" width="230" height="80" rx="10" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/>
+        <text x="400" y="103" text-anchor="middle" font-size="14" font-weight="700" fill="#1d3f9a">ExtensionRegistry</text>
+        <text x="400" y="124" text-anchor="middle" font-size="11" fill="#5b6478">Map by typed slot id</text>
+      </g>
+      <g class="node" data-node="meml">
+        <ellipse cx="680" cy="110" rx="80" ry="38" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="680" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">Meml app</text>
+        <text x="680" y="123" text-anchor="middle" font-size="11" fill="#5b6478">empty registry</text>
+      </g>
+      <g class="node" data-node="core">
+        <rect x="270" y="205" width="240" height="82" rx="10" fill="#ffffff" stroke="#3556d4" stroke-width="2"/>
+        <text x="390" y="234" text-anchor="middle" font-size="14" font-weight="700" fill="#1d3f9a">@worktracker/core</text>
+        <text x="390" y="254" text-anchor="middle" font-size="11" fill="#5b6478">views, stores, shell, routes</text>
+        <text x="390" y="270" text-anchor="middle" font-size="11" fill="#5b6478">no coding imports</text>
+      </g>
+      <g class="node" data-node="slots">
+        <rect x="45" y="205" width="165" height="82" rx="10" fill="#fbfcfe" stroke="#1d7a4f" stroke-width="2"/>
+        <text x="128" y="232" text-anchor="middle" font-size="13" font-weight="700" fill="#0e4d2f">Slot outlets</text>
+        <text x="128" y="252" text-anchor="middle" font-size="11" fill="#5b6478">region/action/route</text>
+      </g>
+      <g class="node" data-node="service">
+        <rect x="590" y="205" width="160" height="82" rx="10" fill="#fbfcfe" stroke="#6b3fb8" stroke-width="2"/>
+        <text x="670" y="232" text-anchor="middle" font-size="13" font-weight="700" fill="#3d2370">Service slots</text>
+        <text x="670" y="252" text-anchor="middle" font-size="11" fill="#5b6478">polling, hotkeys</text>
+      </g>
+      <g class="node" data-node="ui">
+        <rect x="260" y="335" width="260" height="75" rx="10" fill="#fff" stroke="#9a6700" stroke-width="2"/>
+        <text x="390" y="364" text-anchor="middle" font-size="13" font-weight="700" fill="#765000">Rendered tracker UI</text>
+        <text x="390" y="384" text-anchor="middle" font-size="11" fill="#5b6478">same arrangement, optional fills</text>
+      </g>
+      <g class="node" data-node="api">
+        <rect x="650" y="340" width="120" height="60" rx="10" fill="#fbe7e7" stroke="#b03030" stroke-width="2" stroke-dasharray="7 5"/>
+        <text x="710" y="365" text-anchor="middle" font-size="12" font-weight="700" fill="#7d2020">Coding API</text>
+        <text x="710" y="382" text-anchor="middle" font-size="10" fill="#5b6478">not core</text>
+      </g>
+    </svg>
+    <div id="nodeInfo">
+      <h4>Select a node</h4>
+      <div class="role">Click a node to see responsibilities and non-responsibilities.</div>
+    </div>
+  </div>
+</section>
+
+<section id="contract">
+  <h2>Registry contracts</h2>
+  <div class="lede">Core keeps the layout and calls typed slot renderers with a narrow context. Integrations cannot reach into generic stores except through context passed by core or public store APIs.</div>
+  <div class="grid2">
+    <div class="panel accent">
+      <div class="tag">Core API</div>
+      <pre>export interface SlotContext {
+  issue?: WorkItem;
+  projectId: string | null;
+  selection: SelectionSnapshot;
+}
+
+export type RegionSlotId =
+  | "issue.drawer.header.afterTitle"
+  | "backlog.row.afterTitle";
+
+export type ActionSlotId =
+  | "global.shortcuts"
+  | "issue.drawer.actions";
+
+export type RouteSlotId =
+  | "project.nav.extra"
+  | "project.routes.extra";
+
+export type ServiceSlotId =
+  | "app.services";</pre>
+    </div>
+    <div class="panel violet">
+      <div class="tag">Integration API</div>
+      <pre>export function registerRegionSlot(
+  slot: RegionSlotId,
+  render: (ctx: SlotContext) =&gt; ReactNode,
+): ExtensionHandle;
+
+export function registerActionSlot(
+  slot: ActionSlotId,
+  action: ActionContribution,
+): ExtensionHandle;
+
+export function registerServiceSlot(
+  slot: ServiceSlotId,
+  service: ServiceContribution,
+): ExtensionHandle;</pre>
+    </div>
+  </div>
+  <div style="height:16px"></div>
+  <div class="slot-row">
+    <div class="head">Kind</div>
+    <div class="head">Core renders</div>
+    <div class="head">Coding registers</div>
+  </div>
+  <div class="slot-row trace" data-node="slots">
+    <div class="name">region</div>
+    <div>Inline UI inside existing composition: backlog row after title, drawer header after title, drawer sidebar panels.</div>
+    <div><code>AgentStateBadge</code> in backlog rows and drawer header; later terminal status or workflow chips.</div>
+  </div>
+  <div class="slot-row trace" data-node="service">
+    <div class="name">service</div>
+    <div>Lifecycle hooks mounted near the app root, with project context and cleanup on unmount/project switch.</div>
+    <div>Agent lifecycle poll loop currently in <code>lifecycleStore</code>; later loop/workflow background services.</div>
+  </div>
+  <div class="slot-row trace" data-node="service">
+    <div class="name">action</div>
+    <div>Global shortcuts, command palette actions, row/drawer action menus, no fixed coding command names.</div>
+    <div>The <code>w</code> issue deep-link action, plus future launch-terminal action.</div>
+  </div>
+  <div class="slot-row trace" data-node="registry">
+    <div class="name">route+nav</div>
+    <div>Optional pages and nav entries rendered under the app shell, not inside generic route lists.</div>
+    <div>Future loops and workflow-builder pages. No route is needed for the current badge-only seam.</div>
+  </div>
+</section>
+
+<section id="sequence">
+  <h2>Critical flows</h2>
+  <div class="lede">The first flow preserves current behavior; the second proves the empty-registry meml path stays clean.</div>
+  <div class="seq-wrap">
+    <svg viewBox="0 0 760 410" width="100%" aria-label="Sequence flow">
+      <defs>
+        <marker id="sarr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#5b6478"/></marker>
+      </defs>
+      <g font-size="12" font-weight="700">
+        <text x="85" y="24" text-anchor="middle" fill="#3d2370">Coding entry</text>
+        <text x="240" y="24" text-anchor="middle" fill="#1d3f9a">Registry</text>
+        <text x="395" y="24" text-anchor="middle" fill="#1d3f9a">Core shell</text>
+        <text x="555" y="24" text-anchor="middle" fill="#0e4d2f">View outlet</text>
+        <text x="700" y="24" text-anchor="middle" fill="#7d2020">Coding API</text>
+      </g>
+      <g stroke="#e3e7ee" stroke-width="1.5">
+        <line x1="85" y1="36" x2="85" y2="386"/>
+        <line x1="240" y1="36" x2="240" y2="386"/>
+        <line x1="395" y1="36" x2="395" y2="386"/>
+        <line x1="555" y1="36" x2="555" y2="386"/>
+        <line x1="700" y1="36" x2="700" y2="386"/>
+      </g>
+      <g stroke="#5b6478" stroke-width="1.5" marker-end="url(#sarr)">
+        <line x1="85" y1="70" x2="235" y2="70"/>
+        <line x1="240" y1="118" x2="390" y2="118"/>
+        <line x1="395" y1="168" x2="550" y2="168"/>
+        <line x1="555" y1="218" x2="695" y2="218"/>
+        <line x1="700" y1="268" x2="560" y2="268"/>
+        <line x1="555" y1="318" x2="400" y2="318"/>
+      </g>
+      <g class="step" data-step="1"><circle cx="85" cy="70" r="13" fill="#f0e9fb" stroke="#6b3fb8" stroke-width="2"/><text x="85" y="75" text-anchor="middle" font-size="12" font-weight="800" fill="#3d2370">1</text></g>
+      <g class="step" data-step="2"><circle cx="240" cy="118" r="13" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/><text x="240" y="123" text-anchor="middle" font-size="12" font-weight="800" fill="#1d3f9a">2</text></g>
+      <g class="step" data-step="3"><circle cx="395" cy="168" r="13" fill="#e8edfb" stroke="#3556d4" stroke-width="2"/><text x="395" y="173" text-anchor="middle" font-size="12" font-weight="800" fill="#1d3f9a">3</text></g>
+      <g class="step" data-step="4"><circle cx="555" cy="218" r="13" fill="#fff8e8" stroke="#9a6700" stroke-width="2"/><text x="555" y="223" text-anchor="middle" font-size="12" font-weight="800" fill="#765000">4</text></g>
+      <g class="step" data-step="5"><circle cx="700" cy="268" r="13" fill="#fbe7e7" stroke="#b03030" stroke-width="2"/><text x="700" y="273" text-anchor="middle" font-size="12" font-weight="800" fill="#7d2020">5</text></g>
+      <g class="step" data-step="6"><circle cx="395" cy="318" r="13" fill="#e3f3ea" stroke="#1d7a4f" stroke-width="2"/><text x="395" y="323" text-anchor="middle" font-size="12" font-weight="800" fill="#0e4d2f">6</text></g>
+      <g font-size="11" fill="#5b6478">
+        <text x="158" y="62" text-anchor="middle">registerCodingIntegration()</text>
+        <text x="315" y="110" text-anchor="middle">provider value</text>
+        <text x="476" y="160" text-anchor="middle">render slot</text>
+        <text x="628" y="210" text-anchor="middle">service poll</text>
+        <text x="625" y="260" text-anchor="middle">state map</text>
+        <text x="475" y="310" text-anchor="middle">badge render</text>
+      </g>
+      <text x="80" y="374" font-size="12" fill="#1d7a4f" font-weight="700">Meml path: no step 1; registry is empty; steps 4-6 never mount.</text>
+    </svg>
+    <div id="seqInfo">
+      <h4>Select a step</h4>
+      <p>Click a numbered step to see mechanics and edge cases.</p>
+    </div>
+  </div>
+</section>
+
+<section id="lint">
+  <h2>Boundary enforcement</h2>
+  <div class="lede">The migration is only complete when the dependency direction is mechanically enforced. Code review alone is not enough for this seam.</div>
+  <div class="grid2">
+    <div class="panel green">
+      <div class="tag">Allowed</div>
+      <ul>
+        <li><code>apps/coding-studio</code> imports <code>@worktracker/core</code> and <code>integrations/coding</code>.</li>
+        <li><code>integrations/coding</code> imports public core extension types.</li>
+        <li><code>apps/meml-studio</code> imports only <code>@worktracker/core</code> plus generic app config.</li>
+      </ul>
+    </div>
+    <div class="panel red">
+      <div class="tag">Blocked</div>
+      <ul>
+        <li class="no"><code>@worktracker/core</code> importing <code>integrations/coding</code>.</li>
+        <li class="no">Core reading <code>VITE_CODING_APP_URL</code> or <code>VITE_CODING_API_BASE</code>.</li>
+        <li class="no">Core rendering <code>AgentStateBadge</code> by name.</li>
+      </ul>
+    </div>
+  </div>
+  <div style="height:16px"></div>
+  <div class="panel accent">
+    <div class="tag">Lint shape</div>
+    <pre>rules: {
+  "no-restricted-imports": ["error", {
+    "patterns": [
+      {
+        "group": ["integrations/coding/*", "apps/coding-studio/*"],
+        "message": "@worktracker/core must not import coding-layer modules."
+      }
+    ]
+  }]
+}</pre>
+  </div>
+</section>
+
+<section id="tests">
+  <h2>Test plan</h2>
+  <div class="lede">Tests focus on behavior parity and boundary safety. Existing user-facing behavior should remain unchanged until the meml app is introduced.</div>
+  <table>
+    <thead>
+      <tr><th>Area</th><th>Coverage</th><th>Signal</th></tr>
+    </thead>
+    <tbody>
+      <tr class="trace" data-node="registry">
+        <td><span class="rid">Registry</span></td>
+        <td>Register/unregister region, action, route, and service contributions; stable ordering; missing slot renders nothing.</td>
+        <td><span class="pill green">unit</span> <span class="pill violet">contract</span></td>
+      </tr>
+      <tr class="trace" data-node="slots">
+        <td><span class="rid">Core outlets</span></td>
+        <td>Backlog row and drawer header render registered fills with <code>{issue, projectId, selection}</code>; empty registry keeps snapshots clean.</td>
+        <td><span class="pill green">tsx</span> <span class="pill amber">parity</span></td>
+      </tr>
+      <tr class="trace" data-node="service">
+        <td><span class="rid">Coding integration</span></td>
+        <td>Current <code>codingBridge</code>, lifecycle poll loop, <code>w</code> shortcut, and badge behavior move behind registration without changing tests.</td>
+        <td><span class="pill green">existing tests</span></td>
+      </tr>
+      <tr class="trace" data-node="core">
+        <td><span class="rid">Boundary</span></td>
+        <td>Build fails on a synthetic core-to-coding import. Core bundle contains no coding env var references.</td>
+        <td><span class="pill red">lint gate</span></td>
+      </tr>
+      <tr class="trace" data-node="meml">
+        <td><span class="rid">Meml consumer</span></td>
+        <td>Starts with core only; no agent badge, no coding API poll, no <code>w</code> deep-link registration.</td>
+        <td><span class="pill violet">consumer test</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="order">
+  <h2>Build order</h2>
+  <div class="lede">These are follow-up implementation tickets. This LLD intentionally stops before code changes.</div>
+  <div class="steps">
+    <div class="build">
+      <h4>Add registry in place</h4>
+      <p>Create typed registry/context/outlet helpers inside current <code>studio/src</code> first. Do not register anything and do not change behavior.</p>
+    </div>
+    <div class="build">
+      <h4>Move current coding seam behind registrations</h4>
+      <p>Register badge region slots, the app-root lifecycle service, and the <code>w</code> shortcut action from <code>integrations/coding</code>. Remove direct core imports.</p>
+    </div>
+    <div class="build violet">
+      <h4>Package core</h4>
+      <p>Extract the generic tracker into <code>@worktracker/core</code>. Coding Studio becomes a consumer that imports core and calls the coding integration registrar.</p>
+    </div>
+    <div class="build">
+      <h4>Add meml consumer</h4>
+      <p>Stand up <code>apps/meml-studio</code> against the same core package with an empty registry. This is the proof that core is generic.</p>
+    </div>
+    <div class="build green">
+      <h4>Land new coding features as add-ons</h4>
+      <p>Terminal launch, loops, and workflow-builder features enter through new slot registrations, with no core edits unless a genuinely generic slot is missing.</p>
+    </div>
+  </div>
+</section>
+
+<section id="accept">
+  <h2>Acceptance signal</h2>
+  <div class="accept">
+    <b>Ready when approved:</b> the LLD defines the registry files, slot IDs, contribution contracts, current seam migration, lint rule, tests, and build order. The task should remain in Backlog until this design is reviewed; after approval it can move forward for implementation-ticket splitting.
+  </div>
+</section>
+
+</main>
+
+<script>
+const fileDetails = {
+  corepkg: {
+    title: "@worktracker/core",
+    kind: "new package",
+    bullets: [
+      "Owns the full generic tracker, not only primitive components.",
+      "Exports app shell, views, stores, public types, and extension contracts.",
+      "Does not export or import any coding-specific module."
+    ]
+  },
+  registry: {
+    title: "extensions/registry.tsx",
+    kind: "new core file",
+    bullets: [
+      "Defines ExtensionRegistryProvider and useExtensionRegistry.",
+      "Stores typed contributions in Maps keyed by slot id.",
+      "Returns disposable handles for tests and future runtime toggles."
+    ]
+  },
+  slots: {
+    title: "extensions/slots.tsx",
+    kind: "new core file",
+    bullets: [
+      "Defines RegionSlot, ActionSlot, RouteSlot, and ServiceSlot render helpers.",
+      "Uses @radix-ui/react-slot only where prop merging or asChild behavior is required.",
+      "Empty registry renders null and has no side effects."
+    ]
+  },
+  app: {
+    title: "app/StudioApp.tsx",
+    kind: "modified core file",
+    bullets: [
+      "Wraps AppRoutes in ExtensionRegistryProvider supplied by the consumer app.",
+      "Replaces direct lifecycle polling startup with app.services slot mounting.",
+      "Keeps CommandPalette, DialogHost, and ToastHost generic."
+    ]
+  },
+  keys: {
+    title: "hooks/useGlobalKeyboardShortcuts.ts",
+    kind: "modified core file",
+    bullets: [
+      "Keeps generic command palette shortcuts in core.",
+      "Removes direct openInCodingApp import from core.",
+      "Adds an action-slot dispatch point for extension shortcuts such as w."
+    ]
+  },
+  drawer: {
+    title: "shell/IssueDrawerHeader.tsx",
+    kind: "modified core file",
+    bullets: [
+      "Replaces AgentStateBadge import with a region slot after the issue title/key cluster.",
+      "Passes SlotContext with the opened issue and project id.",
+      "Keeps generic copy, close, and drawer navigation controls in core."
+    ]
+  },
+  row: {
+    title: "views/backlog/BacklogRow.tsx",
+    kind: "modified core file",
+    bullets: [
+      "Replaces AgentStateBadge import with a row after-title region slot.",
+      "Passes the row issue plus descendants in a slot-specific context extension.",
+      "Preserves current row layout and click behavior."
+    ]
+  },
+  coding: {
+    title: "integrations/coding/",
+    kind: "new integration package",
+    bullets: [
+      "Contains all code that exists because agents launch to do work.",
+      "Owns coding env vars, coding API client, lifecycle store, badge, and deep-link action.",
+      "Exports a single registerCodingIntegration(registry, options) entrypoint."
+    ]
+  },
+  bridge: {
+    title: "codingBridge.ts",
+    kind: "moved from studio/src/lib",
+    bullets: [
+      "Moves out of core because it calls the coding API and builds coding-app issue URLs.",
+      "Keeps the current lifecycle collapse helpers and tests.",
+      "Can remain private to the coding integration."
+    ]
+  },
+  life: {
+    title: "lifecycleStore.ts",
+    kind: "moved from studio/src/stores",
+    bullets: [
+      "Moves out of core because it polls coding agent lifecycle state.",
+      "Mounts through an app.services contribution keyed by selected project.",
+      "Keeps stale-on-error and visibility-refresh behavior."
+    ]
+  },
+  badge: {
+    title: "AgentStateBadge.tsx",
+    kind: "moved from studio/src/shell",
+    bullets: [
+      "Moves out of core because the badge only exists due to agent provenance.",
+      "Registers into drawer header and backlog row region slots.",
+      "Still renders nothing for idle or absent lifecycle state."
+    ]
+  },
+  register: {
+    title: "registerCodingIntegration.tsx",
+    kind: "new integration entrypoint",
+    bullets: [
+      "Registers badge region fills, lifecycle service, and w-key action.",
+      "Centralizes coding options such as app URL and API base.",
+      "Becomes the only setup call the coding consumer needs."
+    ]
+  },
+  codingapp: {
+    title: "apps/coding-studio",
+    kind: "modified consumer",
+    bullets: [
+      "Imports @worktracker/core and integrations/coding.",
+      "Calls registerCodingIntegration before rendering the core app shell.",
+      "Owns coding-specific env wiring."
+    ]
+  },
+  meml: {
+    title: "apps/meml-studio",
+    kind: "new consumer",
+    bullets: [
+      "Imports @worktracker/core and registers nothing.",
+      "Points at meml's WorkTracker backend/API configuration.",
+      "Serves as the acceptance proof that core is clean."
+    ]
+  },
+  lint: {
+    title: "ESLint boundary rule",
+    kind: "new guard",
+    bullets: [
+      "Fails any @worktracker/core import from integrations/coding or apps/coding-studio.",
+      "Prevents regression to today's core-to-coding dependency direction.",
+      "Runs in the normal typecheck/lint/build verification path."
+    ]
+  }
+};
+
+const nodeDetails = {
+  coding: {
+    title: "Coding app",
+    role: "Consumer that opts into coding-specific behavior.",
+    yes: ["Registers the coding integration.", "Owns coding env vars and API base.", "Can add terminal, loops, and workflow-builder slots."],
+    no: ["Does not fork the tracker layout.", "Does not require core changes for existing coding badge behavior."]
+  },
+  registry: {
+    title: "ExtensionRegistry",
+    role: "Typed first-party contract between core and add-ons.",
+    yes: ["Stores slot contributions by id.", "Preserves stable rendering order.", "Provides no-op empty behavior."],
+    no: ["Does not dynamically load remote code.", "Does not replace TypeScript contracts with stringly plugin APIs."]
+  },
+  meml: {
+    title: "Meml app",
+    role: "Second consumer that proves WorkTracker is generic.",
+    yes: ["Imports core as-is.", "Uses an empty registry.", "Shows the same tracker without agent-specific surfaces."],
+    no: ["Does not ship codingBridge.", "Does not poll the coding API."]
+  },
+  core: {
+    title: "@worktracker/core",
+    role: "The full generic tracker package.",
+    yes: ["Owns views, stores, routes, and shell composition.", "Declares named slots.", "Passes narrow SlotContext objects."],
+    no: ["Does not import coding modules.", "Does not know about agent lifecycle states."]
+  },
+  slots: {
+    title: "Slot outlets",
+    role: "Inline extension points inside core-owned composition.",
+    yes: ["Render optional UI in rows, drawer, nav, menus, and routes.", "Keep core arrangement intact.", "Receive typed context."],
+    no: ["Do not make consumers recompose the whole tracker.", "Do not turn core into headless primitives only."]
+  },
+  service: {
+    title: "Service slots",
+    role: "Background integration hooks with cleanup.",
+    yes: ["Mount project-scoped pollers.", "Register global actions.", "Tear down on unmount or project switch."],
+    no: ["Do not expose coding services to meml.", "Do not add backend state to WorkTracker."]
+  },
+  ui: {
+    title: "Rendered tracker UI",
+    role: "The user-facing result of core composition plus optional fills.",
+    yes: ["Preserves current coding Studio behavior.", "Renders cleanly with no registrations.", "Keeps upstream core restyles centralized."],
+    no: ["Does not duplicate backlog/board/drawer code per consumer."]
+  },
+  api: {
+    title: "Coding API",
+    role: "External domain API reached only by the coding integration.",
+    yes: ["Serves lifecycle states keyed by issue UUID.", "Supports future terminal/loop/workflow features."],
+    no: ["Is not called by @worktracker/core.", "Does not require WorkTracker backend schema changes."]
+  }
+};
+
+const stepDetails = {
+  1: {
+    title: "Register coding integration",
+    text: "The coding consumer calls registerCodingIntegration with the registry and options before the core shell renders.",
+    edge: "Edge case: duplicate registration should either replace by id or throw in development; choose one behavior in implementation and test it."
+  },
+  2: {
+    title: "Registry stores contributions",
+    text: "Region, action, route, and service contributions are stored under typed slot ids. Empty slots are valid.",
+    edge: "Edge case: unregister on test cleanup so one test cannot leak contributions into another."
+  },
+  3: {
+    title: "Core shell mounts slots",
+    text: "Core renders ServiceSlot near the app root and RegionSlot instances inside row/drawer/nav surfaces.",
+    edge: "Edge case: service cleanup must run when selected project changes."
+  },
+  4: {
+    title: "Coding service polls",
+    text: "The lifecycle service keeps the current project-wide {issueId: rawState} poll loop that exists today.",
+    edge: "Edge case: failed polls keep the last good map and do not blank badges."
+  },
+  5: {
+    title: "Coding API responds",
+    text: "The integration receives agent lifecycle states from the coding API, not from the generic WorkTracker backend.",
+    edge: "Edge case: absent or unknown lifecycle values collapse to idle."
+  },
+  6: {
+    title: "Badge renders through slot",
+    text: "The same AgentStateBadge appears in the backlog row and drawer header, but core only sees a region fill.",
+    edge: "Edge case: meml has no registration, so the same outlets render nothing."
+  }
+};
+
+function renderFileDetail(key) {
+  const d = fileDetails[key];
+  const target = document.getElementById("fileDetail");
+  if (!d || !target) return;
+  target.innerHTML = `<h4>${d.title}</h4><div class="kind">${d.kind}</div><ul>${d.bullets.map((b) => `<li>${b}</li>`).join("")}</ul>`;
+  document.querySelectorAll(".hit").forEach((el) => el.classList.toggle("sel", el.dataset.f === key));
+}
+
+function renderNode(key) {
+  const d = nodeDetails[key];
+  const target = document.getElementById("nodeInfo");
+  if (!d || !target) return;
+  target.innerHTML = `<h4>${d.title}</h4><div class="role">${d.role}</div><ul>${d.yes.map((b) => `<li>${b}</li>`).join("")}${d.no.map((b) => `<li class="no">${b}</li>`).join("")}</ul>`;
+  document.querySelectorAll(".node").forEach((el) => {
+    const active = el.dataset.node === key;
+    el.classList.toggle("hl", active);
+    el.classList.toggle("dim", !active);
+  });
+}
+
+function renderStep(key) {
+  const d = stepDetails[key];
+  const target = document.getElementById("seqInfo");
+  if (!d || !target) return;
+  target.innerHTML = `<h4>${d.title}</h4><p>${d.text}</p><div class="edge">${d.edge}</div>`;
+  document.querySelectorAll(".step").forEach((el) => el.classList.toggle("hl", el.dataset.step === String(key)));
+}
+
+document.querySelectorAll(".hit").forEach((el) => el.addEventListener("click", () => renderFileDetail(el.dataset.f)));
+document.querySelectorAll(".node").forEach((el) => el.addEventListener("click", () => renderNode(el.dataset.node)));
+document.querySelectorAll("[data-node].trace, .slot-row[data-node]").forEach((el) => el.addEventListener("click", () => renderNode(el.dataset.node)));
+document.querySelectorAll(".step").forEach((el) => el.addEventListener("click", () => renderStep(el.dataset.step)));
+
+const sections = [...document.querySelectorAll("section")];
+const navLinks = [...document.querySelectorAll("nav a")];
+const observer = new IntersectionObserver((entries) => {
+  const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+  if (!visible) return;
+  navLinks.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === `#${visible.target.id}`));
+}, { rootMargin: "-20% 0px -65% 0px", threshold: [0.1, 0.3, 0.6] });
+sections.forEach((section) => observer.observe(section));
+
+renderFileDetail("registry");
+renderNode("core");
+renderStep(1);
+</script>
+
+</body>
+</html>

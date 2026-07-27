@@ -21,6 +21,9 @@ const GROUP_LABELS: Record<string, string> = {
 
 export function StateCatalog() {
   const states = useWorkflowEditorStore((state) => state.states);
+  const stateWorkItemCounts = useWorkflowEditorStore(
+    (state) => state.stateWorkItemCounts,
+  );
   const action = useWorkflowEditorStore((state) => state.action);
   const createState = useWorkflowEditorStore((state) => state.createState);
   const updateState = useWorkflowEditorStore((state) => state.updateState);
@@ -129,71 +132,62 @@ export function StateCatalog() {
             onStartDrag={() => setDraggedStateId(state.id as string)}
             state={state}
             stateCount={states.length}
+            workItemCount={stateWorkItemCounts[state.id] ?? 0}
             updateState={updateState}
           />
         ) : null)}
       </ul>
 
       {previewStateId ? (
-        <SettingsStatusLine
-          aria-label="State replacement impact"
-          className="mt-3"
-          tone="attention"
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Delete ${previewState?.name ?? "state"}?`}
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
         >
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-lifecycle-attention">
-              Remove {previewState?.name ?? "state"}
-            </h3>
-            <button
-              type="button"
-              onClick={() => {
-                previewGeneration.current += 1;
-                setPreviewStateId(null);
-                setImpact(null);
-                setImpactError(null);
-                setImpactConflict(null);
-              }}
-              className={settingsButtonClass("secondary")}
-            >
-              Close
-            </button>
-          </div>
-          {impactLoading ? <p className="mt-2 text-text-muted">Loading impact…</p> : null}
-          {impactError ? (
-            <SettingsStatusLine className="mt-2" tone="danger">
-              {impactError}
-            </SettingsStatusLine>
-          ) : null}
-          {impactConflict ? (
-            <SettingsStatusLine className="mt-2" tone="danger">
-              <p>{impactConflict}</p>
-              <button
-                type="button"
-                onClick={() => void preview(previewStateId)}
-                className={settingsButtonClass("danger", "mt-2")}
-              >
-                Refresh impact
-              </button>
-            </SettingsStatusLine>
-          ) : null}
-          {impact ? (
-            <div className="mt-3 space-y-3 text-text-primary">
-              <p>
-                {impact.total_work_items} affected work {impact.total_work_items === 1 ? "item" : "items"}
-              </p>
-              {(impact.protection_rules ?? []).length > 0 ? (
-                <ul className="list-disc space-y-1 pl-4 text-lifecycle-attention">
-                  {(impact.protection_rules ?? []).map((rule) => (
-                    <li key={rule.code}>{rule.message}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {replacementRequired && !hardBlocked ? (
-                <>
+          <div className="w-full max-w-md rounded border border-pane-border bg-pane-panel p-5 shadow-xl">
+            <h2 className="text-base font-semibold text-text-primary">
+              Delete {previewState?.name ?? "state"}?
+            </h2>
+            {impactLoading ? <p className="mt-2 text-sm text-text-muted">Loading impact…</p> : null}
+            {impactError ? (
+              <SettingsStatusLine className="mt-3" tone="danger">
+                {impactError}
+              </SettingsStatusLine>
+            ) : null}
+            {impactConflict ? (
+              <SettingsStatusLine className="mt-3" tone="danger">
+                <p>{impactConflict}</p>
+                <button
+                  type="button"
+                  onClick={() => void preview(previewStateId)}
+                  className={settingsButtonClass("danger", "mt-2")}
+                >
+                  Refresh impact
+                </button>
+              </SettingsStatusLine>
+            ) : null}
+            {impact ? (
+              <div className="mt-2 space-y-3 text-sm text-text-primary">
+                <p className="text-text-muted">
+                  {impact.total_work_items === 0
+                    ? "Nothing is in this state. It will be deleted immediately."
+                    : impact.total_work_items === 1
+                      ? "1 work item is in this state. Move it somewhere before the state is deleted."
+                      : `${impact.total_work_items} work items are in this state. Move them somewhere before the state is deleted.`}
+                </p>
+                {(impact.protection_rules ?? []).length > 0 ? (
+                  <ul className="list-disc space-y-1 pl-4 text-lifecycle-attention">
+                    {(impact.protection_rules ?? []).map((rule) => (
+                      <li key={rule.code}>{rule.message}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {replacementRequired && impact.total_work_items > 0 && !hardBlocked ? (
                   <label className="grid gap-1 text-text-muted">
-                    Replacement state
+                    Move work items to
                     <select
-                      aria-label="Replacement state"
+                      aria-label="Move work items to"
                       value={replacementId}
                       onChange={(event) => setReplacementId(event.target.value)}
                       className={SETTINGS_FIELD_CLASS}
@@ -206,31 +200,41 @@ export function StateCatalog() {
                         ) : null)}
                     </select>
                   </label>
-                  <button
-                    type="button"
-                    aria-label={`Replace ${previewState?.name ?? "state"} with ${replacement?.name ?? "selected state"}`}
-                    onClick={() => void confirmRemoval()}
-                    disabled={!replacementId || action !== null || impactConflict !== null}
-                    className={settingsButtonClass("danger")}
-                  >
-                    {action === "remove-state" ? "Replacing…" : "Confirm replacement"}
-                  </button>
-                </>
-              ) : null}
-              {!replacementRequired && !hardBlocked ? (
+                ) : null}
+              </div>
+            ) : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  previewGeneration.current += 1;
+                  setPreviewStateId(null);
+                  setImpact(null);
+                  setImpactError(null);
+                  setImpactConflict(null);
+                }}
+                className={settingsButtonClass("secondary")}
+              >
+                Cancel
+              </button>
+              {impact && !hardBlocked ? (
                 <button
                   type="button"
-                  aria-label={`Delete ${previewState?.name ?? "state"}`}
                   onClick={() => void confirmRemoval()}
-                  disabled={action !== null || impactConflict !== null}
-                  className={settingsButtonClass("danger")}
+                  disabled={
+                    (replacementRequired && !replacementId)
+                    || action !== null
+                    || impactConflict !== null
+                  }
+                  className={settingsButtonClass("danger-filled")}
                 >
-                  {action === "remove-state" ? "Deleting…" : "Confirm deletion"}
+                  {action === "remove-state" ? "Deleting…" : "Delete state"}
                 </button>
               ) : null}
             </div>
-          ) : null}
-        </SettingsStatusLine>
+          </div>
+        </div>
       ) : null}
 
       {adding ? (
@@ -283,7 +287,7 @@ export function StateCatalog() {
           onClick={() => setAdding(true)}
           className={settingsButtonClass("secondary", "mt-3 block w-full border-dashed text-left")}
         >
-          + Add State
+          Add state
         </button>
       )}
     </>
@@ -299,6 +303,7 @@ interface CatalogStateRowProps {
   onStartDrag: () => void;
   state: State;
   stateCount: number;
+  workItemCount: number;
   updateState: (stateId: string, patch: { name?: string; color?: string }) => Promise<void>;
 }
 
@@ -312,18 +317,27 @@ function CatalogStateRow({
   state,
   stateCount,
   updateState,
+  workItemCount,
 }: CatalogStateRowProps) {
   const stateId = state.id as string;
   const [name, setName] = useState(state.name);
 
   return (
     <li
+      aria-label={`${state.name} state`}
       draggable={action === null}
       onDragStart={onStartDrag}
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDropState}
-      className="grid cursor-grab gap-2 border-b border-pane-border p-2 active:cursor-grabbing sm:grid-cols-[minmax(10rem,1fr)_auto_auto_auto] sm:items-center"
+      className="group grid cursor-grab gap-2 border-b border-pane-border p-2 active:cursor-grabbing hover:bg-pane-title/50 sm:grid-cols-[auto_minmax(10rem,1fr)_minmax(5.5rem,1fr)_auto_auto] sm:items-center"
     >
+      <input
+        type="color"
+        aria-label={`State color for ${state.name}`}
+        value={state.color || "#7a8599"}
+        onChange={(event) => void updateState(stateId, { color: event.target.value })}
+        className="size-4 cursor-pointer appearance-none rounded-full border border-pane-border bg-transparent p-0 [&::-moz-color-swatch]:rounded-full [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0"
+      />
       <input
         aria-label={`State name for ${state.name}`}
         value={name}
@@ -332,18 +346,14 @@ function CatalogStateRow({
           const next = name.trim();
           if (next && next !== state.name) void updateState(stateId, { name: next });
         }}
-        className={`${SETTINGS_FIELD_CLASS} font-medium`}
+        className="min-w-0 rounded border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-text-primary outline-none hover:border-pane-border focus:border-focus-accent focus:bg-pane-bg focus:ring-1 focus:ring-focus-accent"
       />
+      <span className="text-right text-xs tabular-nums text-text-muted">
+        {workItemCount} work {workItemCount === 1 ? "item" : "items"}
+      </span>
       <span className="rounded border border-pane-border px-2 py-1 text-sm text-text-secondary">
         {GROUP_LABELS[state.group] ?? state.group}
       </span>
-      <input
-        type="color"
-        aria-label={`State color for ${state.name}`}
-        value={state.color || "#7a8599"}
-        onChange={(event) => void updateState(stateId, { color: event.target.value })}
-        className="h-8 w-10 rounded border border-pane-border bg-pane-bg p-1"
-      />
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -365,12 +375,12 @@ function CatalogStateRow({
         </button>
         <button
           type="button"
-          aria-label={`Review impact for ${state.name}`}
+          aria-label={`Delete ${state.name}`}
           onClick={onRemove}
           disabled={action !== null}
-          className={settingsButtonClass("danger")}
+          className="grid size-8 place-items-center rounded text-sm text-text-muted opacity-0 transition-opacity hover:bg-lifecycle-danger/10 hover:text-lifecycle-danger focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus-accent group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-not-allowed disabled:!opacity-0"
         >
-          Remove
+          ×
         </button>
       </div>
     </li>

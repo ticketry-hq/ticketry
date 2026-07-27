@@ -5,10 +5,11 @@ import { useConfigStore } from "../features/agents/stores/configStore";
 import { SettingsModal } from "../features/studio/modals/SettingsModal";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { ApiError } from "../shared/api/client";
-import type { ScopedWorkflowSettings } from "../shared/api/types";
+import type { ScopedWorkflowSettings, State, WorkItem } from "../shared/api/types";
 
 const workflowApi = vi.hoisted(() => ({
   getStates: vi.fn(),
+  getProjectWorkItems: vi.fn(),
   getIssueTypes: vi.fn(),
   reorderWorkflowStates: vi.fn(),
   createState: vi.fn(),
@@ -39,6 +40,28 @@ const states = [
   { id: "done", name: "Done", group: "completed", color: "#22c55e", sort_order: 2 },
   { id: "idea", name: "Idea", group: "backlog", color: "#8b5cf6", sort_order: 3 },
 ];
+
+function workItem(id: string, state: State): WorkItem {
+  return {
+    id,
+    key: `MEML-${id}`,
+    name: id,
+    project_id: "project-1",
+    sequence_id: 1,
+    state,
+    assignees: [],
+    labels: [],
+    description_html: null,
+    description_stripped: null,
+    description: null,
+    parent_id: null,
+    sub_issues_count: 0,
+    blocked_by_ids: [],
+    blocks_ids: [],
+    created_at: "2026-07-25T00:00:00Z",
+    updated_at: "2026-07-25T00:00:00Z",
+  };
+}
 
 const baseWorkflow: ScopedWorkflowSettings = {
   issue_type_id: "story",
@@ -94,6 +117,11 @@ describe("Studio workflow settings", () => {
       { id: "implementation", name: "Implementation", level: "task", sort_order: 1 },
     ]);
     workflowApi.getStates.mockResolvedValue(states);
+    workflowApi.getProjectWorkItems.mockResolvedValue([
+      workItem("todo-1", states[0]),
+      workItem("review-1", states[1]),
+      workItem("review-2", states[1]),
+    ]);
     workflowApi.getLaunchProviderCapabilities.mockResolvedValue([{
       agent: "claude",
       accepts_model: true,
@@ -205,6 +233,92 @@ describe("Studio workflow settings", () => {
     expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /publish/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /discard/i })).not.toBeInTheDocument();
+  });
+
+  it("shows each state's colour mark and project work-item count", async () => {
+    render(<SettingsModal />);
+
+    const todo = await screen.findByRole("listitem", { name: "Todo state" });
+    const review = screen.getByRole("listitem", { name: "Review state" });
+    const done = screen.getByRole("listitem", { name: "Done state" });
+
+    expect(within(todo).getByRole("textbox", { name: "State name for Todo" }))
+      .toHaveValue("Todo");
+    expect(within(todo).getByLabelText("State color for Todo"))
+      .toHaveValue("#64748b");
+    expect(within(todo).getByText("1 work item")).toBeInTheDocument();
+    expect(within(review).getByText("2 work items")).toBeInTheDocument();
+    expect(within(done).getByText("0 work items")).toBeInTheDocument();
+  });
+
+  it("names an occupied state and requires reassignment in its delete confirmation", async () => {
+    workflowApi.getStateImpact.mockResolvedValue({
+      state_id: "review",
+      total_work_items: 2,
+      protection_rules: [{
+        code: "replacement_required",
+        message: "Choose a replacement state.",
+      }],
+      valid_replacements: [states[2]],
+      impact_token: "impact-review",
+    });
+    render(<SettingsModal />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Review" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Delete Review?" });
+    expect(dialog).toHaveTextContent(
+      "2 work items are in this state. Move them somewhere before the state is deleted.",
+    );
+    expect(within(dialog).getByRole("combobox", { name: "Move work items to" }))
+      .toHaveValue("done");
+    expect(within(dialog).getByRole("button", { name: "Cancel" }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Delete state" }))
+      .toBeInTheDocument();
+  });
+
+  it("omits reassignment when an empty state can be deleted directly", async () => {
+    workflowApi.getStateImpact.mockResolvedValue({
+      state_id: "done",
+      total_work_items: 0,
+      protection_rules: [],
+      valid_replacements: states.slice(0, 2),
+      impact_token: "impact-done",
+    });
+    render(<SettingsModal />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Done" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Delete Done?" });
+    expect(dialog).toHaveTextContent(
+      "Nothing is in this state. It will be deleted immediately.",
+    );
+    expect(within(dialog).queryByRole("combobox", { name: "Move work items to" }))
+      .not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Delete state" }))
+      .toBeInTheDocument();
+  });
+
+  it("keeps protected states blocked in the delete confirmation", async () => {
+    workflowApi.getStateImpact.mockResolvedValue({
+      state_id: "todo",
+      total_work_items: 1,
+      protection_rules: [{
+        code: "protected_state",
+        message: "Todo is protected and cannot be deleted.",
+      }],
+      valid_replacements: [],
+      impact_token: "impact-todo",
+    });
+    render(<SettingsModal />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Todo" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Delete Todo?" });
+    expect(dialog).toHaveTextContent("Todo is protected and cannot be deleted.");
+    expect(within(dialog).queryByRole("button", { name: "Delete state" }))
+      .not.toBeInTheDocument();
   });
 
   it("does not show module issue types in workflow settings", async () => {

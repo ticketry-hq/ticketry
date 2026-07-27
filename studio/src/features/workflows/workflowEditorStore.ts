@@ -9,6 +9,7 @@ import type {
   ScopedWorkflowSettings,
   State,
   StatePatch,
+  WorkItem,
 } from "../../shared/api/types";
 import * as api from "../studio/workflowApi";
 import { fetchLaunchProviderCatalog } from "./launchProviderCatalog";
@@ -44,6 +45,7 @@ interface WorkflowEditorState {
   projectId: string | null;
   issueTypes: IssueType[];
   states: State[];
+  stateWorkItemCounts: Record<string, number>;
   providerCapabilities: ProviderCapabilities[];
   selectedTypeId: string | null;
   workflows: Record<string, ScopedWorkflowSettings>;
@@ -122,6 +124,12 @@ let loadGeneration = 0;
 const bySortOrder = <T extends { sort_order?: number }>(rows: T[]): T[] =>
   [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
+const countWorkItemsByState = (items: WorkItem[]): Record<string, number> =>
+  items.reduce<Record<string, number>>((counts, item) => {
+    if (item.state?.id) counts[item.state.id] = (counts[item.state.id] ?? 0) + 1;
+    return counts;
+  }, {});
+
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.body && typeof error.body === "object") {
     const detail = (error.body as { detail?: unknown }).detail;
@@ -134,6 +142,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
   projectId: null,
   issueTypes: [],
   states: [],
+  stateWorkItemCounts: {},
   providerCapabilities: [],
   selectedTypeId: null,
   workflows: {},
@@ -151,6 +160,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       projectId,
       issueTypes: [],
       states: [],
+      stateWorkItemCounts: {},
       providerCapabilities: [],
       selectedTypeId: null,
       workflows: {},
@@ -162,10 +172,11 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       controlErrors: {},
     });
     try {
-      const [issueTypes, states, providerCapabilities] = await Promise.all([
+      const [issueTypes, states, providerCapabilities, workItems] = await Promise.all([
         api.getIssueTypes(projectId),
         api.getStates(projectId),
         fetchLaunchProviderCatalog(),
+        api.getProjectWorkItems(projectId),
       ]);
       const workflowIssueTypes = issueTypes.filter((type) => type.level !== "module");
       const selectedTypeId = workflowIssueTypes[0]?.id ?? null;
@@ -181,6 +192,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
                 overlayAuthoritativeState(projectId, state))
             : states,
         ),
+        stateWorkItemCounts: countWorkItemsByState(workItems),
         providerCapabilities,
         selectedTypeId,
         workflows: selectedWorkflow
@@ -514,6 +526,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
           states,
           workItems,
         ),
+        stateWorkItemCounts: countWorkItemsByState(workItems),
         workflows: Object.fromEntries(workflowRows.map((row) => [
           row.issue_type_id,
           row,

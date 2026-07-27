@@ -16,6 +16,7 @@ const workflowApi = vi.hoisted(() => ({
   updateState: vi.fn(),
   getStates: vi.fn(),
   getIssueTypes: vi.fn(),
+  getProjectWorkItems: vi.fn(),
   getLaunchProviderCapabilities: vi.fn(),
   getIssueTypeWorkflowSettings: vi.fn(),
   setIssueTypeWorkflowStartState: vi.fn(),
@@ -90,6 +91,7 @@ describe("workflowEditorStore scoped apply", () => {
       { id: "idea", name: "Idea", group: "backlog", sort_order: 1 },
     ]);
     workflowApi.getLaunchProviderCapabilities.mockResolvedValue([]);
+    workflowApi.getProjectWorkItems.mockResolvedValue([]);
     workflowApi.getIssueTypeWorkflowSettings.mockResolvedValue(workflow);
     useTasksStore.setState({
       selectedProjectId: null,

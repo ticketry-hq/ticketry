@@ -177,6 +177,10 @@ describe("Studio workflow settings", () => {
         subtree_run_enabled: true,
       }],
     }));
+    workflowApi.updateState.mockResolvedValue({
+      ...states[0],
+      name: "Ready",
+    });
   });
 
   it("uses one settings rail and one scroll container", async () => {
@@ -218,6 +222,25 @@ describe("Studio workflow settings", () => {
     expect(scrollContainer).toContainElement(
       within(dialog).getByRole("heading", { name: "Models" }),
     );
+  });
+
+  it("shows an empty ledger, then records a confirmed instant-apply edit", async () => {
+    render(<SettingsModal />);
+
+    const ledger = screen.getByRole("log", { name: "Applied changes" });
+    expect(ledger).toHaveTextContent("No changes yet.");
+
+    const name = await screen.findByRole("textbox", {
+      name: "State name for Todo",
+    });
+    fireEvent.change(name, { target: { value: "Ready" } });
+    fireEvent.blur(name);
+
+    await waitFor(() => {
+      expect(ledger).toHaveTextContent("States");
+      expect(ledger).toHaveTextContent("Todo renamed to Ready");
+    });
+    expect(within(ledger).getByText(/\d{2}:\d{2}/)).toHaveClass("font-mono");
   });
 
   it("keeps States as a pure catalog and removes draft lifecycle affordances", async () => {

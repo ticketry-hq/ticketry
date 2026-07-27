@@ -34,6 +34,47 @@
 }
 
 @layer components {
+  @keyframes settings-ledger-entry-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+  }
+
+  @keyframes settings-ledger-entry-commit {
+    50% {
+      transform: translateX(2px);
+    }
+  }
+
+  .settings-ledger-entry-in {
+    animation: settings-ledger-entry-in 180ms ease-out both;
+  }
+
+  .settings-ledger-entry-commit {
+    animation: settings-ledger-entry-commit 220ms ease-out both;
+  }
+
+  .settings-ledger-entry,
+  .settings-ledger-marker {
+    transition:
+      color 220ms ease,
+      background-color 220ms ease,
+      border-color 220ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .settings-ledger-entry-in,
+    .settings-ledger-entry-commit {
+      animation: none;
+    }
+
+    .settings-ledger-entry,
+    .settings-ledger-marker {
+      transition: none;
+    }
+  }
+
   /* CODIN-1040: the Backlog's shared task focus frame — a faint outline with
      four stronger corner brackets that glides between task rows. Geometry
      travels on the Graphify ease; opacity fades independently. */

@@ -58,6 +58,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/documents/WorkspaceDocTab",
   "features/projects",
   "features/projects/store",
+  "features/settings/changeLedger",
   "features/settings/store",
   "features/work-items",
   "features/work-items/issue-detail",

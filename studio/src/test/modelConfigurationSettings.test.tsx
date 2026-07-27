@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useModalStore } from "../app/modal";
 import { ApiError } from "../shared/api/client";
@@ -106,6 +112,8 @@ describe("Model configuration settings", () => {
     expect(
       screen.getByRole("region", { name: "Settings commit actions" }),
     ).toHaveTextContent("2 unsaved changes");
+    expect(screen.getByRole("log", { name: "Applied changes" }))
+      .toHaveTextContent("gemini activation changed from Off to On");
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 
     expect(screen.getByRole("dialog", { name: "Studio settings" })).toBeVisible();
@@ -114,6 +122,8 @@ describe("Model configuration settings", () => {
     ).toHaveTextContent("No unsaved changes");
     expect(screen.getByRole("checkbox", { name: "Activate gemini" })).not.toBeChecked();
     expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("sonnet");
+    expect(screen.getByRole("log", { name: "Applied changes" }))
+      .toHaveTextContent("No changes yet.");
   });
 
   it("saves provider activation and the global default through the catalog endpoint", async () => {
@@ -132,6 +142,11 @@ describe("Model configuration settings", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Reasoning" }), {
       target: { value: "high" },
     });
+    const pendingEntry = within(
+      screen.getByRole("log", { name: "Applied changes" }),
+    ).getByText("launch reasoning changed from not configured to high").closest("li");
+    expect(pendingEntry).toHaveAttribute("data-tone", "pending");
+    expect(pendingEntry).toHaveTextContent("--:--");
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => {
@@ -149,6 +164,28 @@ describe("Model configuration settings", () => {
       screen.getByRole("region", { name: "Settings commit actions" }),
     ).toHaveTextContent("No unsaved changes");
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    expect(pendingEntry).toHaveAttribute("data-tone", "applied");
+    expect(pendingEntry).not.toHaveTextContent("--:--");
+  });
+
+  it("shows only the three newest ledger entries", async () => {
+    await openModelConfiguration();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Activate gemini" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Agent/provider" }), {
+      target: { value: "claude" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
+      target: { value: "sonnet" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Reasoning" }), {
+      target: { value: "high" },
+    });
+
+    expect(
+      within(screen.getByRole("log", { name: "Applied changes" }))
+        .getAllByRole("listitem"),
+    ).toHaveLength(3);
   });
 
   it("refuses to deactivate the provider the global default uses", async () => {

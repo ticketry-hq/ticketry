@@ -26,6 +26,7 @@ import {
   SETTINGS_CHECKBOX_CLASS,
   SettingsSubsection,
 } from "../../shared/ui/SettingsPrimitives";
+import { describeModelConfigurationChanges } from "../settings/changeLedger";
 
 const EMPTY_DEFAULT: LaunchDefaultPickerValue = {
   provider: "",
@@ -121,6 +122,7 @@ function blockedBindingsPrompt(blocked: number): string {
 export interface ModelConfigurationCommitState {
   outstandingCount: number;
   saving: boolean;
+  changes: string[];
 }
 
 export interface ModelConfigurationPanelHandle {
@@ -130,6 +132,7 @@ export interface ModelConfigurationPanelHandle {
 
 interface ModelConfigurationPanelProps {
   onCommitStateChange?: (state: ModelConfigurationCommitState) => void;
+  onChangesApplied?: (changes: string[]) => void;
   onStatusChange?: (status: {
     tone: "success" | "attention" | "danger";
     text: string;
@@ -141,6 +144,7 @@ export const ModelConfigurationPanel = forwardRef<
   ModelConfigurationPanelProps
 >(function ModelConfigurationPanel({
   onCommitStateChange,
+  onChangesApplied,
   onStatusChange,
 }, ref) {
   const providerCapabilities = useWorkflowEditorStore(
@@ -202,6 +206,10 @@ export const ModelConfigurationPanel = forwardRef<
     [activated, launchDefault],
   );
   const outstandingCount = outstandingChangeCount(saved, draft);
+  const changes = useMemo(
+    () => describeModelConfigurationChanges(saved, draft),
+    [draft, saved],
+  );
   // Same mirror validation the launch configuration form runs, so Settings and
   // the per-state form reject the same combinations before the server does.
   const validationError = validateLaunchBindingOptions(
@@ -278,6 +286,8 @@ export const ModelConfigurationPanel = forwardRef<
         return;
       }
       const { value } = await api.putProviderCatalog(draft);
+      const appliedChanges = describeModelConfigurationChanges(saved, value);
+      onChangesApplied?.(appliedChanges);
       setSaved(value);
       setActivated(value.activated_providers);
       setLaunchDefault(pickerValueFrom(value));
@@ -307,8 +317,9 @@ export const ModelConfigurationPanel = forwardRef<
     onCommitStateChange?.({
       outstandingCount,
       saving,
+      changes,
     });
-  }, [onCommitStateChange, outstandingCount, saving]);
+  }, [changes, onCommitStateChange, outstandingCount, saving]);
 
   if (loading) {
     return <p className="text-sm text-text-muted">Loading model configuration…</p>;

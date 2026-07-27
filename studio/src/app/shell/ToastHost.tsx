@@ -1,5 +1,6 @@
 import { useToastStore } from "../stores/toastStore";
 import { IconAlertTriangle, IconCheckCircle, IconX } from "../../shared/ui/icons";
+import { useModalStore } from "../modal/modalStore";
 
 // C3 (#638) toast surface (G16). Mounted once at the app root, above the issue
 // drawer. Stacks the live toasts bottom-right. Success toasts announce politely
@@ -8,8 +9,10 @@ import { IconAlertTriangle, IconCheckCircle, IconX } from "../../shared/ui/icons
 export default function ToastHost() {
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
+  const settingsOpen = useModalStore((state) =>
+    state.modalStack.some((modal) => modal.type === "settings"));
 
-  if (!toasts.length) return null;
+  if (!toasts.length || settingsOpen) return null;
 
   return (
     <div

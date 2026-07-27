@@ -1,4 +1,5 @@
 import {
+  useCallback,
   lazy,
   Suspense,
   useEffect,
@@ -32,6 +33,14 @@ import type {
   ModelConfigurationCommitState,
   ModelConfigurationPanelHandle,
 } from "../../workflows/ModelConfigurationPanel";
+import {
+  commitPendingSettingsChanges,
+  createSettingsChangeLedger,
+  observeConfirmedSettings,
+  syncPendingSettingsChanges,
+  type SettingsChangeLedger,
+  type SettingsLedgerEntry,
+} from "../../settings/changeLedger";
 
 const WorkflowSettingsPanel = lazy(async () => ({
   default: (await import("../../workflows/WorkflowSettingsPanel"))
@@ -136,12 +145,22 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
   const popModal = useModalStore((state) => state.popModal);
   const workflowNotice = useWorkflowEditorStore((state) => state.notice);
   const workflowError = useWorkflowEditorStore((state) => state.error);
+  const ledgerProjectId = useWorkflowEditorStore((state) => state.projectId);
+  const ledgerLoading = useWorkflowEditorStore((state) => state.loading);
+  const ledgerAction = useWorkflowEditorStore((state) => state.action);
+  const ledgerStates = useWorkflowEditorStore((state) => state.states);
+  const ledgerIssueTypes = useWorkflowEditorStore((state) => state.issueTypes);
+  const ledgerWorkflows = useWorkflowEditorStore((state) => state.workflows);
   const [activeSection, setActiveSection] = useState<SettingsSection>("states");
+  const [ledger, setLedger] = useState<SettingsChangeLedger>(
+    createSettingsChangeLedger,
+  );
   const [modelStatus, setModelStatus] = useState<SettingsStatus | null>(null);
   const [modelCommitState, setModelCommitState] =
     useState<ModelConfigurationCommitState>({
       outstandingCount: 0,
       saving: false,
+      changes: [],
     });
   const modelConfigurationRef = useRef<ModelConfigurationPanelHandle>(null);
   const [recording, setRecording] = useState<EffectiveBinding | null>(null);
@@ -156,6 +175,39 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
   const overridden = new Set(overrides.map(bindingKey));
   const platform = runtimePlatform ?? studioRuntime().platform;
   const close = () => popModal();
+
+  useEffect(() => {
+    setLedger((current) =>
+      observeConfirmedSettings(current, {
+        projectId: ledgerProjectId,
+        loading: ledgerLoading,
+        action: ledgerAction,
+        states: ledgerStates,
+        issueTypes: ledgerIssueTypes,
+        workflows: ledgerWorkflows,
+      }));
+  }, [
+    ledgerAction,
+    ledgerIssueTypes,
+    ledgerLoading,
+    ledgerProjectId,
+    ledgerStates,
+    ledgerWorkflows,
+  ]);
+
+  const updateModelCommitState = useCallback(
+    (state: ModelConfigurationCommitState) => {
+      setModelCommitState(state);
+      setLedger((current) =>
+        syncPendingSettingsChanges(current, "Models", state.changes));
+    },
+    [],
+  );
+
+  const commitModelChanges = useCallback((changes: string[]) => {
+    setLedger((current) =>
+      commitPendingSettingsChanges(current, "Models", changes));
+  }, []);
 
   const selectSection = (section: SettingsSection) => {
     if (section === activeSection) return;
@@ -269,12 +321,12 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
   return (
     <SettingsFrame interceptKeyDown={captureRecording} onClose={close}>
       <div className="grid min-h-0 grid-cols-[13rem_minmax(0,1fr)] max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)]">
-        <aside className="min-h-0 border-r border-pane-border bg-pane-bg max-md:border-b max-md:border-r-0">
+        <aside className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] border-r border-pane-border bg-pane-bg max-md:block max-md:border-b max-md:border-r-0">
           <div
             role="tablist"
             aria-label="Settings sections"
             aria-orientation="vertical"
-            className="flex flex-col gap-0.5 p-2 max-md:flex-row max-md:flex-wrap"
+            className="flex min-h-0 flex-col gap-0.5 overflow-y-auto p-2 max-md:flex-row max-md:flex-wrap max-md:overflow-hidden"
           >
             <RailGroup label="Workflow">
               {(["states", "issue-types"] as const).map((section) => (
@@ -294,6 +346,7 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
               />
             </RailGroup>
           </div>
+          <AppliedChangesLedger entries={ledger.entries} />
         </aside>
 
         <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] bg-pane-panel">
@@ -327,7 +380,8 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
                 <Suspense fallback={<p className="text-sm text-text-muted">Loading model configuration…</p>}>
                   <ModelConfigurationPanel
                     ref={modelConfigurationRef}
-                    onCommitStateChange={setModelCommitState}
+                    onChangesApplied={commitModelChanges}
+                    onCommitStateChange={updateModelCommitState}
                     onStatusChange={setModelStatus}
                   />
                 </Suspense>
@@ -397,6 +451,84 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
         </div>
       </div>
     </SettingsFrame>
+  );
+}
+
+function formatLedgerTime(timestamp: number): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(timestamp);
+}
+
+function AppliedChangesLedger({
+  entries,
+}: {
+  entries: SettingsLedgerEntry[];
+}) {
+  const visible = entries.slice(0, 3);
+  return (
+    <div className="border-t border-pane-border px-3.5 pb-3.5 pt-3 max-md:hidden">
+      <div className={SETTINGS_EYEBROW_CLASS}>Applied</div>
+      <div
+        role="log"
+        aria-label="Applied changes"
+        aria-live="polite"
+        className="mt-2.5"
+      >
+        {visible.length === 0 ? (
+          <p className="border-l border-pane-border py-0.5 pl-3 text-xs text-text-muted">
+            No changes yet.
+          </p>
+        ) : (
+          <ul className="relative grid gap-2 pl-3 before:absolute before:bottom-1 before:left-0 before:top-1 before:w-px before:bg-pane-border">
+            {visible.map((entry, index) => (
+              <li
+                key={entry.id}
+                data-tone={entry.tone}
+                className={`settings-ledger-entry relative ${
+                  entry.transition === "commit"
+                    ? "settings-ledger-entry-commit"
+                    : "settings-ledger-entry-in"
+                } ${index === 1 ? "opacity-70" : index === 2 ? "opacity-45" : ""}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`settings-ledger-marker absolute -left-[14px] top-[5px] size-[5px] rounded-full ${
+                    entry.tone === "pending"
+                      ? "border border-lifecycle-attention bg-transparent"
+                      : "bg-lifecycle-success"
+                  }`}
+                />
+                <div className="flex items-baseline gap-1.5">
+                  <time className="font-mono text-xs tabular-nums text-text-muted">
+                    {entry.timestamp === null
+                      ? "--:--"
+                      : formatLedgerTime(entry.timestamp)}
+                  </time>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                    {entry.section}
+                  </span>
+                </div>
+                <p
+                  className={`mt-px [overflow-wrap:anywhere] text-xs ${
+                    entry.tone === "pending"
+                      ? "text-lifecycle-attention"
+                      : "text-text-primary"
+                  }`}
+                >
+                  <span className="sr-only">
+                    {entry.tone === "pending" ? "Pending: " : "Applied: "}
+                  </span>
+                  {entry.summary}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 

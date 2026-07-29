@@ -1,5 +1,6 @@
 """Framework-neutral project mutation services."""
 
+import threading
 import uuid
 
 from django.db import IntegrityError, transaction
@@ -23,6 +24,10 @@ from worktracker.seed import (
 from worktracker.services.errors import ConflictError, NotFoundError
 
 
+_CURRENT_PROJECT_SLUG = "CODING"
+_current_project_lock = threading.Lock()
+
+
 def _resolve_workspace(workspace_slug=None):
     if workspace_slug:
         try:
@@ -34,6 +39,26 @@ def _resolve_workspace(workspace_slug=None):
     if workspace is None:
         raise NotFoundError("No workspace to create the project under.")
     return workspace
+
+
+def resolve_current_project():
+    """Return the installation's implicit project, creating it when absent."""
+
+    # SQLite does not implement row-level SELECT FOR UPDATE locking. Serialize
+    # callers in this sidecar process, while the project uniqueness constraint
+    # and conflict recovery below also protect callers in separate processes.
+    with _current_project_lock:
+        project = Project.objects.filter(slug=_CURRENT_PROJECT_SLUG).first()
+        if project is not None:
+            return project
+
+        try:
+            return create_project(name="coding", slug=_CURRENT_PROJECT_SLUG)
+        except ConflictError:
+            project = Project.objects.filter(slug=_CURRENT_PROJECT_SLUG).first()
+            if project is None:
+                raise
+            return project
 
 
 def create_project(*, name, slug, description=None, workspace_slug=None):

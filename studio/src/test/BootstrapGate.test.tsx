@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   hydratePanelLayout: vi.fn(),
   selectProfile: vi.fn(),
   selectProject: vi.fn(),
+  createProject: vi.fn(),
+  loadProjects: vi.fn(),
+  setSidebarVisible: vi.fn(),
+  setFocusedPane: vi.fn(),
   getWorkspace: vi.fn(),
 }));
 
@@ -19,12 +23,16 @@ vi.mock("../shared/api/client", async () => {
 });
 
 let profiles: Array<{ recent_project_id?: string | null }> = [];
+let features = { projects: true };
+let projects: Array<{ id: string; identifier: string }> = [];
+let selectedProjectId: string | null = null;
 
 vi.mock("../features/studio/stores/configStore", () => ({
   useConfigStore: {
     getState: () => ({
       loadConfig: mocks.studioLoadConfig,
       profiles,
+      features,
       recentProfileIndex: null,
       selectProfile: mocks.selectProfile,
     }),
@@ -40,9 +48,11 @@ vi.mock("../features/agents/stores/configStore", () => ({
 vi.mock("../features/studio/stores/tasksStore", () => ({
   useTasksStore: {
     getState: () => ({
-      selectedProjectId: null,
-      projects: [],
+      selectedProjectId,
+      projects,
       selectProject: mocks.selectProject,
+      createProject: mocks.createProject,
+      loadProjects: mocks.loadProjects,
     }),
   },
 }));
@@ -52,11 +62,23 @@ vi.mock("../features/studio/stores/uiStore", () => ({
     getState: () => ({
       sidebarVisible: true,
       hydratePanelLayout: mocks.hydratePanelLayout,
-      setSidebarVisible: vi.fn(),
-      setFocusedPane: vi.fn(),
+      setSidebarVisible: mocks.setSidebarVisible,
+      setFocusedPane: mocks.setFocusedPane,
     }),
   },
-  visiblePaneOrder: () => ["tasks"],
+  visiblePaneOrder: (
+    sidebarVisible: boolean,
+    hasSelectedProject: boolean,
+    projectsEnabled: boolean,
+  ) => {
+    if (!sidebarVisible) return ["tasks", "details-or-terminal"];
+    return [
+      ...(projectsEnabled ? ["projects"] : []),
+      ...(hasSelectedProject ? ["modules"] : []),
+      "tasks",
+      "details-or-terminal",
+    ];
+  },
 }));
 
 describe("BootstrapGate", () => {
@@ -64,11 +86,18 @@ describe("BootstrapGate", () => {
     vi.restoreAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => {});
     profiles = [];
+    features = { projects: true };
+    projects = [];
+    selectedProjectId = null;
     mocks.studioLoadConfig.mockResolvedValue(undefined);
     mocks.agentLoadConfig.mockResolvedValue(undefined);
     mocks.hydratePanelLayout.mockResolvedValue(null);
     mocks.selectProfile.mockResolvedValue(undefined);
-    mocks.selectProject.mockResolvedValue(undefined);
+    mocks.selectProject.mockImplementation(async (id: string) => {
+      selectedProjectId = id;
+    });
+    mocks.createProject.mockResolvedValue(undefined);
+    mocks.loadProjects.mockResolvedValue(undefined);
     mocks.getWorkspace.mockResolvedValue({
       id: "w1", name: "MEML", slug: "meml", onboarding_required: false,
     });
@@ -140,6 +169,66 @@ describe("BootstrapGate", () => {
     );
 
     expect(await screen.findByText("Studio ready")).toBeInTheDocument();
+  });
+
+  it("selects the resolved project and focuses Modules when Projects is off", async () => {
+    profiles = [{ recent_project_id: "legacy-project" }];
+    features = { projects: false };
+    projects = [{ id: "coding-project", identifier: "CODING" }];
+
+    render(
+      <BootstrapGate>
+        <div>Studio ready</div>
+      </BootstrapGate>,
+    );
+
+    expect(await screen.findByText("Studio ready")).toBeInTheDocument();
+    expect(mocks.selectProject).toHaveBeenCalledWith("coding-project");
+    expect(mocks.setSidebarVisible).toHaveBeenCalledWith(true);
+    expect(mocks.setFocusedPane).toHaveBeenLastCalledWith("modules");
+  });
+
+  it("resolves a missing CODING project through the existing project flow", async () => {
+    profiles = [{}];
+    features = { projects: false };
+    mocks.createProject.mockResolvedValue({
+      id: "created-coding-project",
+      identifier: "CODING",
+    });
+
+    render(
+      <BootstrapGate>
+        <div>Studio ready</div>
+      </BootstrapGate>,
+    );
+
+    expect(await screen.findByText("Studio ready")).toBeInTheDocument();
+    expect(mocks.createProject).toHaveBeenCalledWith({
+      name: "coding",
+      slug: "CODING",
+    });
+    expect(mocks.selectProject).toHaveBeenCalledWith("created-coding-project");
+  });
+
+  it("preserves recent-project bootstrap behavior when Projects is on", async () => {
+    profiles = [{ recent_project_id: "recent-project" }];
+    features = { projects: true };
+    projects = [
+      { id: "coding-project", identifier: "CODING" },
+      { id: "recent-project", identifier: "RECENT" },
+    ];
+
+    render(
+      <BootstrapGate>
+        <div>Studio ready</div>
+      </BootstrapGate>,
+    );
+
+    expect(await screen.findByText("Studio ready")).toBeInTheDocument();
+    expect(mocks.selectProject).toHaveBeenCalledWith("recent-project");
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.setSidebarVisible).not.toHaveBeenCalled();
+    expect(mocks.setFocusedPane).toHaveBeenLastCalledWith("modules");
   });
 
   it("continues automatically retrying while the server is unavailable", async () => {

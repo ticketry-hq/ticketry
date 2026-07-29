@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import importlib
 import io
 import json
@@ -21,6 +22,7 @@ from pathlib import Path
 CREDENTIAL_ENV = "MUXED_SIDECAR_CREDENTIAL"
 DEFAULT_DESKTOP_ORIGIN = "http://tauri.localhost"
 PACKAGED_HOOK_RUNNER_ENV = "MUXED_PACKAGED_HOOK_RUNNER"
+HOOK_SPOOL_DIR_ENV = "MUXED_HOOK_SPOOL_DIR"
 MIGRATION_FAILURE_LINE = "MUXED_FAILURE migration database could not be migrated"
 STARTUP_FAILURE_LINE = "MUXED_FAILURE crash sidecar could not start"
 SNAPSHOT_RETENTION = 3
@@ -34,7 +36,7 @@ HOOK_MODULES = {
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Muxed Studio backend sidecar")
+    parser = argparse.ArgumentParser(description="Ticketry backend sidecar")
     parser.add_argument("--port", required=True, type=int)
     parser.add_argument("--data-dir", required=True, type=Path)
     return parser.parse_args(argv)
@@ -97,8 +99,26 @@ def configure_environment(args: argparse.Namespace) -> None:
     os.environ["MUXED_LIFECYCLE_URL"] = (
         f"http://127.0.0.1:{args.port}/api/lifecycle/events"
     )
+    # Packaged agent hooks execute under provider command sandboxes.  Give the
+    # tiny native hook transport a stable, private temp spool that survives a
+    # backend restart for this installation/worktree.  The backend drains the
+    # files and performs the normal lifecycle ingest outside the sandbox.
+    spool_identity = hashlib.sha256(str(data_dir).encode("utf-8")).hexdigest()[:16]
+    hook_spool_dir = (
+        Path(tempfile.gettempdir()) / f"ticketry-hook-spool-{spool_identity}"
+    )
+    hook_spool_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(hook_spool_dir, 0o700)
+    os.environ[HOOK_SPOOL_DIR_ENV] = str(hook_spool_dir)
     if getattr(sys, "frozen", False):
-        os.environ[PACKAGED_HOOK_RUNNER_ENV] = sys.executable
+        # Re-entering this one-file PyInstaller binary from an agent command
+        # sandbox is not a valid fallback: its bootloader needs a semaphore the
+        # sandbox denies. Fail startup visibly if packaging ever omits the
+        # dedicated native runner instead of launching sessions with hooks that
+        # are guaranteed to fail.
+        packaged_runner = os.environ.get(PACKAGED_HOOK_RUNNER_ENV)
+        if not packaged_runner or not Path(packaged_runner).is_file():
+            raise RuntimeError("packaged hook runner is missing")
 
     credential = os.environ.get(CREDENTIAL_ENV, "")
     if credential:
@@ -245,12 +265,180 @@ def run_mcp() -> int:
     return 0
 
 
+def verify_skill_catalog() -> int:
+    """Verify resources through the same import path used by the frozen app."""
+
+    from apps.terminals.agents.skills import verify_catalog
+
+    lock = verify_catalog()
+    print(
+        json.dumps(
+            {
+                "commit": lock["upstream"]["commit"],
+                "packages": [package["name"] for package in lock["packages"]],
+            },
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def install_skill_catalog() -> int:
+    """Install or safely upgrade pinned skills in provider-native roots."""
+
+    from apps.terminals.agents.skills.installation import install_packaged_skills
+
+    installed = install_packaged_skills()
+    print(
+        json.dumps(
+            {
+                "installed": {
+                    provider: str(path) for provider, path in installed.items()
+                }
+            },
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def verify_skill_installations() -> int:
+    """Verify the persistent provider installations without changing them."""
+
+    from apps.terminals.agents.skills.installation import verify_all_installations
+
+    installed = verify_all_installations()
+    print(
+        json.dumps(
+            {
+                "verified": {
+                    provider: str(path) for provider, path in installed.items()
+                }
+            },
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def smoke_skill_providers() -> int:
+    """Exercise persistent installation and native discovery for every provider."""
+
+    with tempfile.TemporaryDirectory(prefix="ticketry-skill-smoke-") as temporary:
+        smoke_root = Path(temporary)
+        os.environ.setdefault("MUXED_DATA_DIR", str(smoke_root / "data"))
+        os.environ.setdefault("MUXED_STATE_DB", str(smoke_root / "data/state.db"))
+        os.environ.setdefault("MUXED_SKIP_LOCAL_STATE_MIGRATION", "1")
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "studio_server.settings")
+
+        import django
+
+        django.setup()
+
+        from apps.terminals.agents.registry import (
+            cleanup_temporary_artifacts,
+            get_adapter,
+        )
+        from apps.terminals.agents.skills.installation import (
+            install_packaged_skills,
+            provider_skill_root,
+        )
+        from apps.terminals.agents.skills.preflight import resolve_required_skills
+
+        configured_repository = os.environ.get("MUXED_SKILL_SMOKE_REPOSITORY")
+        repository = (
+            Path(configured_repository).resolve()
+            if configured_repository
+            else smoke_root / "repository"
+        )
+        repository.mkdir(parents=True, exist_ok=True)
+        requested = ("grill-with-docs", "to-spec", "to-tickets")
+        discovered: dict[str, list[str]] = {}
+        mcp_configured: dict[str, bool] = {}
+        install_packaged_skills()
+
+        for provider in ("claude", "codex", "agy", "gemini"):
+            adapter = get_adapter(provider)
+            resolved = resolve_required_skills(
+                provider=provider,
+                required_skills=requested,
+                cwd=str(repository),
+                supports_required_skills=adapter.supports_required_skills,
+                available_tools=adapter.available_worktracker_tools,
+            )
+            augmentation = adapter.augment_launch(
+                [provider, "packaged offline smoke"],
+                f"packaged-smoke-{provider}",
+                lifecycle_url="http://127.0.0.1:1/api/lifecycle/events",
+                mcp_url="http://127.0.0.1:1/mcp",
+                skills=resolved,
+            )
+            try:
+                argv = list(augmentation.argv)
+                environment = dict(augmentation.environment)
+                names = {
+                    path.name
+                    for path in provider_skill_root(provider).iterdir()
+                    if path.is_dir()
+                }
+                if provider == "claude":
+                    mcp_configured[provider] = any(
+                        "worktracker-agent" in value for value in argv
+                    )
+                elif provider == "codex":
+                    mcp_configured[provider] = any(
+                        "worktracker-agent" in value for value in argv
+                    )
+                elif provider == "agy":
+                    settings_path = Path(
+                        environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"]
+                    )
+                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                    mcp_configured[provider] = "worktracker-agent" in settings[
+                        "mcpServers"
+                    ]
+                else:
+                    settings_path = Path(
+                        environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"]
+                    )
+                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                    mcp_configured[provider] = "worktracker-agent" in settings[
+                        "mcpServers"
+                    ]
+                if names != set(resolved.names):
+                    raise RuntimeError(
+                        f"{provider} did not expose the complete packaged closure"
+                    )
+                discovered[provider] = sorted(names)
+            finally:
+                cleanup_temporary_artifacts(augmentation.temporary_artifacts)
+
+        print(
+            json.dumps(
+                {
+                    "providers": discovered,
+                    "mcp_configured": mcp_configured,
+                },
+                separators=(",", ":"),
+            )
+        )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["hook"]:
         return run_hook(argv[1:])
     if argv == ["mcp"]:
         return run_mcp()
+    if argv == ["skills", "verify"]:
+        return verify_skill_catalog()
+    if argv == ["skills", "install"]:
+        return install_skill_catalog()
+    if argv == ["skills", "verify-installation"]:
+        return verify_skill_installations()
+    if argv == ["skills", "smoke-providers"]:
+        return smoke_skill_providers()
     args = parse_args(argv)
     if not 0 < args.port < 65536:
         raise SystemExit("--port must be between 1 and 65535")
@@ -260,6 +448,9 @@ def main(argv: list[str] | None = None) -> int:
     # that was never going to succeed. Classify it as ``crash`` instead.
     try:
         configure_environment(args)
+        from apps.terminals.agents.skills.installation import install_packaged_skills
+
+        install_packaged_skills()
     except BaseException as exc:
         if isinstance(exc, KeyboardInterrupt):
             raise

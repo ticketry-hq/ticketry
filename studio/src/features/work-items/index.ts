@@ -6,6 +6,7 @@ export type { EpicGroup, TreeNode } from "./internal/backlogStore";
 export { usePlanningFilterStore } from "./internal/planningFilterStore";
 export { useSelectionStore } from "./stores/selectionStore";
 export type { SelectionSurface } from "./stores/selectionStore";
+export { rankBetween } from "./utilities/rank";
 // The issue-detail UI (IssueDetail, IssueWorkspace, WorkspacePane, …) is
 // deliberately NOT re-exported here: every current consumer of this hub
 // imports stores only, and a UI re-export would drag the whole issue-detail

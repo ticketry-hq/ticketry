@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
+const launchAgent = vi.hoisted(() => vi.fn());
+
+vi.mock("@worktracker/typescript-sdk/agent-status", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@worktracker/typescript-sdk/agent-status")
+  >()),
+  createAgentStatusClient: () => ({ launchAgent }),
+}));
+
 vi.mock("../shared/api/client", async () => {
   const actual = await vi.importActual<typeof import("../shared/api/client")>("../shared/api/client");
   return {
@@ -58,6 +67,7 @@ import { useToastStore } from "../app/stores/toastStore";
 import { useSettingsStore } from "../features/settings/store";
 import { dialog } from "../app/stores/dialogStore";
 import { ApiError } from "../shared/api/client";
+import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
 import type { Attachment, Module, State, WorkItem, WorkItemDetail } from "../shared/api/types";
 
 const patchWorkItem = api.patchWorkItem as ReturnType<typeof vi.fn>;
@@ -142,6 +152,11 @@ beforeEach(() => {
   createWorkItem.mockReset().mockResolvedValue(wi({ id: "c", parent_id: "a", key: "MEML-8" }));
   listProjectWorkItems.mockReset().mockResolvedValue([]);
   getWorktree.mockReset();
+  launchAgent.mockReset().mockResolvedValue({
+    target_id: "a",
+    agent: "codex",
+    agent_run_id: "run-1",
+  });
   deleteIssue.mockReset().mockResolvedValue(undefined);
   confirmDelete.mockReset().mockResolvedValue(false);
   useToastStore.setState({ toasts: [] });
@@ -217,7 +232,7 @@ describe("IssueDetail", () => {
     expect(getWorktree).not.toHaveBeenCalled();
   });
 
-  it("renders Run subtree immediately beside the status picker for an eligible Story", () => {
+  it("orders Run agent, the status picker, and eligible Run subtree", () => {
     setup(wi({
       id: "story",
       issue_type: STORY_TYPE,
@@ -225,12 +240,62 @@ describe("IssueDetail", () => {
     }));
 
     const row = screen.getByTestId("status-row");
+    const runAgent = within(row).getByRole("button", { name: "Run agent" });
     const statePicker = within(row).getByTestId("state-picker");
     const runSubtree = within(row).getByRole("button", { name: "Run subtree" });
 
-    expect(row.children).toHaveLength(2);
-    expect(row.children[0]).toContainElement(statePicker);
-    expect(row.children[1]).toBe(runSubtree);
+    expect(row.children).toHaveLength(3);
+    expect(row.children[0]).toBe(runAgent);
+    expect(row.children[1]).toContainElement(statePicker);
+    expect(row.children[2]).toBe(runSubtree);
+  });
+
+  it("deduplicates an in-flight agent launch and reports success", async () => {
+    let resolveLaunch!: () => void;
+    launchAgent.mockImplementation(
+      () => new Promise<void>((resolve) => { resolveLaunch = resolve; }),
+    );
+    setup(wi({ id: "a" }));
+
+    const button = screen.getByRole("button", { name: "Run agent" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(launchAgent).toHaveBeenCalledTimes(1);
+    expect(launchAgent).toHaveBeenCalledWith({ issueId: "a" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+
+    resolveLaunch();
+    await waitFor(() => {
+      expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
+        kind: "success",
+        message: "Agent run started.",
+      });
+      expect(button).toBeEnabled();
+    });
+  });
+
+  it("reports a failed agent launch and re-enables the action", async () => {
+    launchAgent.mockRejectedValue(
+      new WorkTrackerApiError(
+        503,
+        "HTTP 503",
+        { error: "launch_unavailable" },
+      ),
+    );
+    setup(wi({ id: "a" }));
+
+    const button = screen.getByRole("button", { name: "Run agent" });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
+        kind: "error",
+        message: "Agent run could not be started: launch unavailable",
+      });
+      expect(button).toBeEnabled();
+    });
   });
 
   it("does not render Run subtree for an ineligible work item", () => {

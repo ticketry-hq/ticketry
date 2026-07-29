@@ -8,6 +8,7 @@ import {
 } from "../../../../agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../agents/types";
 import { useTasksStore } from "../../../stores/tasksStore";
+import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
 
 // Warm the description-editor chunk on first row hover so it is already
 // cached when a selected issue's details render. Fired at most once.
@@ -25,6 +26,7 @@ interface TaskRowProps {
   // renders, so React.memo actually skips unchanged rows.
   onClick: (taskId: string) => void;
   onToggleExpand: (taskId: string) => void;
+  dragSourceProps?: DragSourceProps;
 }
 
 export const TaskRow = React.memo(function TaskRow({
@@ -32,6 +34,7 @@ export const TaskRow = React.memo(function TaskRow({
   isSelected,
   onClick,
   onToggleExpand,
+  dragSourceProps,
 }: TaskRowProps) {
   const caret = row.hasChildren ? (row.isExpanded ? "▾" : "▸") : " ";
   const seqStr = formatSequenceId(row.task.sequence_id);
@@ -46,9 +49,10 @@ export const TaskRow = React.memo(function TaskRow({
       aria-selected={isSelected}
       data-task-id={row.task.id}
       tabIndex={-1}
+      {...dragSourceProps}
       onClick={() => onClick(row.task.id)}
       onPointerEnter={preloadDescriptionEditor}
-      className={`flex min-w-0 cursor-pointer items-center px-1 py-0.5 outline-none [content-visibility:auto] [contain-intrinsic-size:auto_1.5rem] ${
+      className={`flex min-w-0 cursor-pointer items-center px-1 py-0.5 outline-none ${
         isSelected
           ? "bg-selection-bg text-text-primary"
           : "text-text-primary hover:bg-pane-title"

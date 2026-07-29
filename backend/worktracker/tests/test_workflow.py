@@ -181,6 +181,9 @@ def test_story_terminals_have_no_exit(sdlc):
 def test_reduced_type_graphs_forbid_foreign_states(sdlc):
     states, types = sdlc
 
+    types["Implementation"].refresh_from_db()
+    assert types["Implementation"].start_state_id == states["Implement"].id
+
     def node_names(type_name):
         issue_type = types[type_name]
         ids = {issue_type.start_state_id}

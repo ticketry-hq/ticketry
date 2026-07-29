@@ -453,6 +453,7 @@ class ScopedWorkflowTransitionOut(Schema):
 class ScopedWorkflowLaunchBindingOut(Schema):
     state_id: uuid.UUID
     prompt: str
+    required_skills: List[str]
     agent: Optional[str] = None
     model: Optional[str] = None
     reasoning: Optional[str] = None
@@ -510,6 +511,7 @@ class SetWorkflowStartStateIn(WorkflowRevisionIn):
 
 class ScopedLaunchBindingIn(WorkflowRevisionIn):
     prompt: Optional[str] = None
+    required_skills: Optional[List[str]] = None
     agent: Optional[str] = None
     model: Optional[str] = None
     reasoning: Optional[str] = None
@@ -525,6 +527,7 @@ class SetWorkflowSubtreeRunIn(WorkflowRevisionIn):
 
 class LaunchBindingIn(Schema):
     prompt: Optional[str] = None
+    required_skills: Optional[List[str]] = None
     agent: Optional[str] = None
     model: Optional[str] = None
     reasoning: Optional[str] = None
@@ -534,6 +537,7 @@ class LaunchBindingOut(Schema):
     issue_type_id: uuid.UUID
     state_id: uuid.UUID
     prompt: str
+    required_skills: List[str]
     agent: Optional[str] = None
     model: Optional[str] = None
     reasoning: Optional[str] = None

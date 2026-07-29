@@ -10,7 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost, useModalStore } from "../app/modal";
 import { Footer } from "../app/studio/Footer";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
-import type { TaskSummary } from "../features/studio/lib/types";
+import type {
+  ModuleSummary,
+  TaskSummary,
+} from "../features/studio/lib/types";
 import type { Row } from "../features/studio/pages/tasks/TasksPane";
 import { useConfigStore as useStudioConfigStore } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
@@ -23,6 +26,11 @@ import {
 } from "../features/agents/terminal";
 import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
 import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
+import {
+  createBrowserRuntime,
+  initializeBrowserRuntime,
+  initializeStudioRuntime,
+} from "../runtime";
 
 const selectedTask: TaskSummary = {
   id: "task-1",
@@ -52,6 +60,18 @@ function taskRow(task: TaskSummary): Row {
 }
 
 const rows: Row[] = [taskRow(selectedTask)];
+const modules: ModuleSummary[] = Array.from({ length: 10 }, (_, index) => ({
+  id: `module-${index + 1}`,
+  name: `Module ${index + 1}`,
+  project_id: "project-1",
+}));
+
+function initializeDesktopTestRuntime(): void {
+  initializeStudioRuntime({
+    ...createBrowserRuntime({ environment: {} }),
+    platform: "desktop",
+  });
+}
 
 function KeymapHarness() {
   useGlobalKeymap(rows);
@@ -103,6 +123,7 @@ describe("Studio task keymap", () => {
     });
     useStudioConfigStore.setState({
       recentProfileIndex: 0,
+      features: { projects: true },
       profiles: [
         {
           name: "Local",
@@ -131,6 +152,7 @@ describe("Studio task keymap", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    initializeBrowserRuntime();
   });
 
   it("keeps one listener pair while routing with the latest task rows", () => {
@@ -806,12 +828,24 @@ describe("Studio task keymap", () => {
 
     fireEvent.keyDown(window, { key: "h" });
     expect(useUIStore.getState().focusedPane).toBe("modules");
+    fireEvent.keyDown(window, { key: "h" });
+    expect(useUIStore.getState().focusedPane).toBe("projects");
 
     unmount();
     useUIStore.setState({ focusedPane: "tasks" });
     render(<KeymapHarness />);
     fireEvent.keyDown(window, { key: "l" });
     expect(useUIStore.getState().focusedPane).toBe("details-or-terminal");
+  });
+
+  it("cannot traverse left from Modules into Projects when the flag is off", () => {
+    useStudioConfigStore.setState({ features: { projects: false } });
+    useUIStore.setState({ focusedPane: "modules" });
+    render(<KeymapHarness />);
+
+    fireEvent.keyDown(window, { key: "h" });
+
+    expect(useUIStore.getState().focusedPane).toBe("modules");
   });
 
   it("closes the active terminal tab on q", () => {
@@ -829,5 +863,137 @@ describe("Studio task keymap", () => {
 
     expect(useTerminalStore.getState().sessions[sessionId]).toBeUndefined();
     expect(useWorkspaceTabsStore.getState().activeByTask["task-1"]).toBeUndefined();
+  });
+
+  it.each([
+    ["1", "module-1"],
+    ["2", "module-2"],
+    ["3", "module-3"],
+    ["4", "module-4"],
+    ["5", "module-5"],
+    ["6", "module-6"],
+    ["7", "module-7"],
+    ["8", "module-8"],
+    ["9", "module-9"],
+    ["0", "module-10"],
+  ])("maps Cmd+%s to %s", (key, moduleId) => {
+    initializeDesktopTestRuntime();
+    useTasksStore.setState({
+      modules,
+      selectedModuleId: "current-module",
+    });
+    const selectModule = vi
+      .spyOn(useTasksStore.getState(), "selectModule")
+      .mockResolvedValue();
+    render(<KeymapHarness />);
+
+    const notCancelled = fireEvent.keyDown(window, { key, metaKey: true });
+
+    expect(selectModule).toHaveBeenCalledOnce();
+    expect(selectModule).toHaveBeenCalledWith(moduleId);
+    expect(notCancelled).toBe(false);
+  });
+
+  it("does not consume a missing or already-selected desktop module position", () => {
+    initializeDesktopTestRuntime();
+    useTasksStore.setState({
+      modules: modules.slice(0, 2),
+      selectedModuleId: "module-2",
+    });
+    const selectModule = vi
+      .spyOn(useTasksStore.getState(), "selectModule")
+      .mockResolvedValue();
+    render(<KeymapHarness />);
+
+    expect(
+      fireEvent.keyDown(window, { key: "2", metaKey: true }),
+    ).toBe(true);
+    expect(
+      fireEvent.keyDown(window, { key: "9", metaKey: true }),
+    ).toBe(true);
+    expect(selectModule).not.toHaveBeenCalled();
+  });
+
+  it("leaves desktop module switching behind modal keyboard ownership", () => {
+    initializeDesktopTestRuntime();
+    useTasksStore.setState({
+      modules,
+      selectedModuleId: "module-1",
+    });
+    useModalStore.setState({
+      modalStack: [{ type: "agent-picker", payload: { mode: "open" } }],
+    });
+    const selectModule = vi
+      .spyOn(useTasksStore.getState(), "selectModule")
+      .mockResolvedValue();
+    render(<KeymapHarness />);
+
+    expect(
+      fireEvent.keyDown(window, { key: "2", metaKey: true }),
+    ).toBe(true);
+    expect(selectModule).not.toHaveBeenCalled();
+  });
+
+  it("handles desktop module switching from editable and terminal focus", () => {
+    initializeDesktopTestRuntime();
+    useTasksStore.setState({
+      modules,
+      selectedModuleId: "current-module",
+    });
+    const selectModule = vi
+      .spyOn(useTasksStore.getState(), "selectModule")
+      .mockResolvedValue();
+    render(
+      <>
+        <KeymapHarness />
+        <textarea aria-label="Task notes" />
+        <div className="xterm" tabIndex={0} />
+      </>,
+    );
+
+    expect(
+      fireEvent.keyDown(screen.getByRole("textbox", { name: "Task notes" }), {
+        key: "2",
+        metaKey: true,
+      }),
+    ).toBe(false);
+    expect(
+      fireEvent.keyDown(document.querySelector(".xterm")!, {
+        key: "3",
+        metaKey: true,
+      }),
+    ).toBe(false);
+    expect(selectModule.mock.calls).toEqual([["module-2"], ["module-3"]]);
+  });
+
+  it("does not expose, handle, or consume module position bindings in browser Studio", () => {
+    useTasksStore.setState({
+      modules,
+      selectedModuleId: "current-module",
+    });
+    const selectModule = vi
+      .spyOn(useTasksStore.getState(), "selectModule")
+      .mockResolvedValue();
+    render(
+      <>
+        <KeymapHarness />
+        <input aria-label="Browser input" />
+      </>,
+    );
+
+    expect(
+      fireEvent.keyDown(screen.getByRole("textbox", { name: "Browser input" }), {
+        key: "2",
+        metaKey: true,
+      }),
+    ).toBe(true);
+    expect(selectModule).not.toHaveBeenCalled();
+    expect(
+      studioKeymapRegistry
+        .getEffectiveBindings()
+        .some((binding) =>
+          binding.actionId.startsWith("modules.select-position-"),
+        ),
+    ).toBe(false);
   });
 });

@@ -15,6 +15,7 @@ class LaunchBinding(models.Model):
         State, on_delete=models.CASCADE, related_name="launch_bindings"
     )
     prompt = models.TextField(blank=True, default="")
+    required_skills = models.JSONField(default=list, blank=True)
     agent = models.CharField(max_length=64, blank=True, null=True)
     model = models.CharField(max_length=255, blank=True, null=True)
     reasoning = models.CharField(max_length=32, blank=True, null=True)
@@ -60,6 +61,7 @@ class LaunchBinding(models.Model):
         from worktracker.services.launch_bindings import (  # avoid import cycle
             LaunchBindingError,
             validate_provider_options,
+            validate_required_skills,
         )
 
         try:
@@ -68,5 +70,12 @@ class LaunchBinding(models.Model):
             )
         except LaunchBindingError as exc:
             errors[exc.field or "agent"] = exc.message
+        try:
+            self.required_skills = validate_required_skills(
+                required_skills=self.required_skills,
+                prompt=self.prompt,
+            )
+        except LaunchBindingError as exc:
+            errors[exc.field or "required_skills"] = exc.message
         if errors:
             raise ValidationError(errors)

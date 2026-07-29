@@ -330,6 +330,13 @@
             ],
             "title": "Reasoning"
           },
+          "required_skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Skills",
+            "type": "array"
+          },
           "state_id": {
             "format": "uuid",
             "title": "State Id",
@@ -339,7 +346,8 @@
         "required": [
           "issue_type_id",
           "state_id",
-          "prompt"
+          "prompt",
+          "required_skills"
         ],
         "title": "LaunchBindingOut",
         "type": "object"
@@ -822,6 +830,20 @@
             ],
             "title": "Reasoning"
           },
+          "required_skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Skills"
+          },
           "workflow_revision": {
             "title": "Workflow Revision",
             "type": "integer"
@@ -973,6 +995,13 @@
             ],
             "title": "Reasoning"
           },
+          "required_skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Skills",
+            "type": "array"
+          },
           "state_id": {
             "format": "uuid",
             "title": "State Id",
@@ -986,6 +1015,7 @@
         "required": [
           "state_id",
           "prompt",
+          "required_skills",
           "auto_start",
           "subtree_run_enabled"
         ],

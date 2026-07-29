@@ -14,7 +14,13 @@ const REQUIRED_SCENARIOS = [
   "missing_dependency_diagnostic",
   "os_permission_diagnostic",
   "durable_agent_terminal_flow",
+  "offline_packaged_skill_matrix",
+  "skill_configuration_unchanged",
+  "skill_overlay_cleanup",
 ];
+
+const REQUIRED_SKILLS = ["grill-with-docs", "to-spec", "to-tickets"];
+const SKILL_PROVIDERS = ["claude", "codex", "agy", "gemini"];
 
 function requireValue(value, label) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -41,9 +47,18 @@ export function sanitizedDesktopEnvironment({ home, dataDirectory, resultPath })
     HOME: home,
     PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
     TMPDIR: path.join(home, "tmp"),
+    NO_PROXY: "127.0.0.1,localhost",
+    HTTP_PROXY: "http://127.0.0.1:1",
+    HTTPS_PROXY: "http://127.0.0.1:1",
+    ALL_PROXY: "http://127.0.0.1:1",
     MUXED_DATA_DIR: dataDirectory,
     MUXED_DESKTOP_ACCEPTANCE_RESULT: resultPath,
+    MUXED_DESKTOP_ACCEPTANCE_NODE: process.execPath,
   };
+}
+
+export function acceptanceDataDirectory(home) {
+  return path.join(home, ".config", "worktracker-studio");
 }
 
 export function assertAcceptanceResult(result) {
@@ -54,6 +69,21 @@ export function assertAcceptanceResult(result) {
     if (result[scenario] !== true) {
       throw new InstalledArtifactAcceptanceError(
         `installed-artifact acceptance scenario failed: ${scenario}`,
+      );
+    }
+  }
+  const providerEvidence = result.packaged_skill_providers;
+  if (!providerEvidence || typeof providerEvidence !== "object") {
+    throw new InstalledArtifactAcceptanceError(
+      "acceptance driver omitted packaged skill provider evidence",
+    );
+  }
+  for (const provider of SKILL_PROVIDERS) {
+    const discovered = providerEvidence[provider];
+    if (!Array.isArray(discovered)
+      || REQUIRED_SKILLS.some((skill) => !discovered.includes(skill))) {
+      throw new InstalledArtifactAcceptanceError(
+        `installed artifact did not discover required packaged skills for ${provider}`,
       );
     }
   }
@@ -83,7 +113,7 @@ export function assertAcceptanceResult(result) {
 
 export async function installArtifact(bundlePath, installationRoot) {
   const source = path.resolve(bundlePath);
-  const destination = path.join(installationRoot, "Applications", "Muxed Studio.app");
+  const destination = path.join(installationRoot, "Applications", "Ticketry.app");
   try {
     await access(path.join(source, "Contents", "MacOS"));
   } catch {
@@ -93,20 +123,17 @@ export async function installArtifact(bundlePath, installationRoot) {
   return destination;
 }
 
-export async function launchFromNativeGui(appPath, environment, run = command) {
-  if (process.platform !== "darwin") {
-    throw new InstalledArtifactAcceptanceError("installed-artifact GUI acceptance must run on the supported macOS target");
-  }
-  // `env -i` ensures LaunchServices receives no checkout/developer variables;
-  // `open` is the native GUI launcher rather than the bundle executable.
-  await run("/usr/bin/env", [
-    "-i",
-    ...Object.entries(environment).map(([key, value]) => `${key}=${value}`),
-    "/usr/bin/open",
-    "-W",
-    "-n",
-    appPath,
-  ], { cwd: environment.HOME, env: environment });
+export async function runDriverAfterColdLaunch({
+  appPath,
+  driverPath,
+  environment,
+  workspace,
+  run = command,
+}) {
+  // The driver owns the clean-install launch, readiness check, and termination.
+  // A preceding `open -W` cannot be a bounded liveness precondition because a
+  // healthy GUI app remains open until something explicitly quits it.
+  await run(driverPath, [appPath], { cwd: workspace, env: environment });
 }
 
 export async function runInstalledArtifactAcceptance({ bundlePath, driverPath, run = command }) {
@@ -117,17 +144,19 @@ export async function runInstalledArtifactAcceptance({ bundlePath, driverPath, r
   }
   const workspace = await mkdtemp(path.join(tmpdir(), "muxed-installed-artifact-"));
   const home = path.join(workspace, "home");
-  const dataDirectory = path.join(home, "Library", "Application Support", "muxed-studio");
+  const dataDirectory = acceptanceDataDirectory(home);
   const resultPath = path.join(workspace, "result.json");
   try {
     const appPath = await installArtifact(bundlePath, workspace);
     await mkdir(path.join(home, "tmp"), { recursive: true });
     const environment = sanitizedDesktopEnvironment({ home, dataDirectory, resultPath });
-    // This cold launch proves the copied application, not the checkout, is
-    // usable through the native launcher. The driver then owns UI automation
-    // for the seven acceptance scenarios and writes its evidence JSON.
-    await launchFromNativeGui(appPath, environment, run);
-    await run(driverPath, [appPath], { cwd: workspace, env: environment });
+    await runDriverAfterColdLaunch({
+      appPath,
+      driverPath,
+      environment,
+      workspace,
+      run,
+    });
     assertAcceptanceResult(JSON.parse(await readFile(resultPath, "utf8")));
   } finally {
     await rm(workspace, { recursive: true, force: true });

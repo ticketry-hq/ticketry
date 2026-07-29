@@ -16,14 +16,25 @@ spec/                                Application design history
 
 ## Local development
 
-Install workspace dependencies here, then provision and start each local
-service when working on it directly:
+Install workspace dependencies here, then provision the development data:
 
 ```bash
 npm install
 scripts/dev.sh bootstrap
+```
 
-# Separate terminals
+Start the complete browser application from the repository root:
+
+```bash
+npm run web
+# or: pnpm run web
+```
+
+This applies pending Django migrations, then starts the backend at
+`127.0.0.1:8787` and Studio at `http://127.0.0.1:5174`; Ctrl+C stops both. To
+run the services separately:
+
+```bash
 scripts/dev.sh backend  # 127.0.0.1:8787
 scripts/dev.sh studio   # 127.0.0.1:5174
 ```

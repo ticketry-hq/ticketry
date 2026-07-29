@@ -19,7 +19,17 @@ from apps.settings_store import config as cfgmod
 from apps.settings_store.config import NoConfigurationSelected
 from apps.runs.models import AgentRun
 from apps.runs.bus import publish_backend_session_sync
-from apps.terminals.agents.registry import UnknownAgent, get_adapter
+from apps.terminals.agents.registry import (
+    UnknownAgent,
+    cleanup_temporary_artifacts_for_run,
+    get_adapter,
+    reconcile_temporary_artifacts,
+)
+from apps.terminals.agents.skills.preflight import (
+    ResolvedSkills,
+    resolve_required_skills,
+    skill_prompt_envelope,
+)
 from apps.terminals.dao import sessions as session_dao
 from apps.terminals.launch import LaunchUnavailable, _launch  # noqa: F401 - public seam
 from apps.terminals.launch_configuration import (
@@ -218,6 +228,18 @@ class TerminalSessionService:
         cwd = module_folder or os.path.expanduser("~")
         agent_run_id = uuid.uuid4().hex
 
+        try:
+            adapter = get_adapter(effective_agent)
+        except UnknownAgent:
+            # Preserve the consumer's error frame: it maps ValueError
+            # "unknown_agent" to the dedicated WS close code.
+            raise ValueError("unknown_agent") from None
+        required_skills = (
+            launch_configuration.required_skills
+            if launch_configuration is not None
+            else ()
+        )
+
         prompt, design_dir, worktree_cwd, err = await _build_prompt(
             profile_index,
             is_planning=intent.scope == "plan",
@@ -244,13 +266,19 @@ class TerminalSessionService:
             raise ValueError(err)
         if worktree_cwd:
             cwd = worktree_cwd
-
-        try:
-            adapter = get_adapter(effective_agent)
-        except UnknownAgent:
-            # Preserve the consumer's error frame: it maps ValueError
-            # "unknown_agent" to the dedicated WS close code.
-            raise ValueError("unknown_agent") from None
+        # Resolve after worktree selection because that directory determines
+        # which repository-owned provider skills are visible to the CLI.
+        resolved_skills = await asyncio.to_thread(
+            resolve_required_skills,
+            provider=effective_agent,
+            required_skills=required_skills,
+            cwd=cwd,
+            supports_required_skills=adapter.supports_required_skills,
+            available_tools=adapter.available_worktracker_tools,
+        )
+        envelope = skill_prompt_envelope(resolved_skills)
+        if envelope:
+            prompt = f"{prompt}\n\n{envelope}"
         argv = adapter.command(
             prompt,
             model=(
@@ -265,7 +293,7 @@ class TerminalSessionService:
         )
 
         return await _launch(
-            agent=effective_agent,
+            adapter=adapter,
             project_id=intent.project_id,
             module_id=intent.module_id,
             task_id=intent.task_id,
@@ -276,6 +304,7 @@ class TerminalSessionService:
             doc_rel_path=intent.doc_rel_path,
             workspace_slug=getattr(profile, "workspace_slug", None),
             agent_run_id=agent_run_id,
+            resolved_skills=resolved_skills,
         )
 
     async def resume(self, agent_run_id: str) -> str:
@@ -318,7 +347,7 @@ class TerminalSessionService:
         )
         new_run_id = uuid.uuid4().hex
         return await _launch(
-            agent=run.agent,
+            adapter=adapter,
             project_id=run.project_id,
             module_id=run.module_id,
             task_id=run.task_id,
@@ -330,6 +359,7 @@ class TerminalSessionService:
             workspace_slug=run.workspace_slug,
             agent_run_id=new_run_id,
             resumed_from=agent_run_id,
+            resolved_skills=ResolvedSkills((), (), frozenset(), ""),
         )
 
     def terminate(self, agent_run_id: str) -> None:
@@ -347,6 +377,7 @@ class TerminalSessionService:
             or AgentRun.objects.filter(id=agent_run_id, ended_at__isnull=True).exists()
         )
         if not active:
+            cleanup_temporary_artifacts_for_run(agent_run_id)
             return
         try:
             tmux_sessions.terminate_session(agent_run_id)
@@ -356,14 +387,21 @@ class TerminalSessionService:
             close_old_connections()
 
         documents_watch.stop_watch(agent_run_id)
+        cleanup_temporary_artifacts_for_run(agent_run_id)
         try:
             AgentTerminalSession.objects.filter(
                 agent_run_id=agent_run_id,
                 terminated_at__isnull=True,
             ).update(terminated_at=ended_at)
+            # Stamp the terminal lifecycle state alongside the terminal status:
+            # process exit is authoritative even when a provider has no reliable
+            # session-end hook, so reload cannot render a dead run in its last
+            # mid-turn state (#1462).
             AgentRun.objects.filter(id=agent_run_id, ended_at__isnull=True).update(
                 status="terminated",
                 ended_at=ended_at,
+                lifecycle_state="exited",
+                lifecycle_updated_at=ended_at,
             )
         finally:
             close_old_connections()
@@ -451,20 +489,30 @@ class TerminalSessionService:
     def reconcile(self) -> tmux_sessions.ReconcileResult:
         result = tmux_sessions.reconcile_sessions()
         try:
-            if result.soft_deleted:
+            ended_run_ids = [*result.soft_deleted, *result.exited]
+            if ended_run_ids:
                 ended_at = datetime.now(timezone.utc).isoformat()
                 projects = dict(
-                    AgentRun.objects.filter(id__in=result.soft_deleted).values_list(
+                    AgentRun.objects.filter(id__in=ended_run_ids).values_list(
                         "id", "project_id"
                     )
                 )
-                for agent_run_id in result.soft_deleted:
+                for agent_run_id in ended_run_ids:
                     documents_watch.stop_watch(agent_run_id)
+                    cleanup_temporary_artifacts_for_run(agent_run_id)
                 try:
+                    # A vanished session or retained dead provider pane is
+                    # authoritative: freeze the lifecycle axis so the run
+                    # cannot keep rendering its last mid-turn hook state.
                     AgentRun.objects.filter(
-                        id__in=result.soft_deleted,
+                        id__in=ended_run_ids,
                         ended_at__isnull=True,
-                    ).update(status="exited", ended_at=ended_at)
+                    ).update(
+                        status="exited",
+                        ended_at=ended_at,
+                        lifecycle_state="exited",
+                        lifecycle_updated_at=ended_at,
+                    )
                 finally:
                     close_old_connections()
                 for agent_run_id in result.soft_deleted:
@@ -473,6 +521,20 @@ class TerminalSessionService:
                         publish_backend_session_sync(
                             project_id, agent_run_id, "lost", at=ended_at
                         )
+                for agent_run_id in result.exited:
+                    project_id = projects.get(agent_run_id)
+                    if project_id:
+                        publish_backend_session_sync(
+                            project_id, agent_run_id, "exited", at=ended_at
+                        )
+            active_run_ids = set(
+                AgentTerminalSession.objects.filter(
+                    terminated_at__isnull=True
+                )
+                .exclude(agent_run_id__in=ended_run_ids)
+                .values_list("agent_run_id", flat=True)
+            )
+            reconcile_temporary_artifacts(active_run_ids)
         finally:
             try:
                 self.reap_idle_sessions()

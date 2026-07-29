@@ -135,6 +135,7 @@ class WorktrackerToolset:
         agent: Optional[str] = None,
         model: Optional[str] = None,
         reasoning: Optional[str] = None,
+        required_skills: Optional[List[str]] = None,
     ) -> Any:
         """Create or replace one state's launch binding at the supplied revision."""
         return self.service.upsert_issue_type_workflow_launch_binding(
@@ -145,6 +146,7 @@ class WorktrackerToolset:
             agent,
             model,
             reasoning,
+            required_skills,
         )
 
     def clear_issue_type_workflow_launch_binding_tool(

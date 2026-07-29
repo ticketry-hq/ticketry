@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tempfile
+import time
 import uuid
 
 import pytest
@@ -33,6 +35,26 @@ def _run_id() -> str:
     # Unique id per test isolates concurrent test sessions on the socket.
 
     return f"test-{uuid.uuid4().hex[:12]}"
+
+
+@pytest.fixture(autouse=True)
+def isolated_tmux_socket(monkeypatch):
+    """Keep real-tmux tests away from a developer's live Ticketry sessions."""
+
+    socket_root = tempfile.mkdtemp(prefix="ticketry-test-tmux-", dir="/private/tmp")
+    monkeypatch.setenv("TMUX_TMPDIR", socket_root)
+    monkeypatch.delenv("TMUX", raising=False)
+    try:
+        yield
+    finally:
+        subprocess.run(
+            ["tmux", "-L", TMUX_SOCKET, "kill-server"],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        shutil.rmtree(socket_root, ignore_errors=True)
 
 
 @pytest.fixture
@@ -194,6 +216,139 @@ def test_create_session_disables_status_line(agent_run_id):
     opts = _parse_show_options(list(res.stdout or []))
 
     assert opts["status"] == "off"
+
+
+def test_create_session_retains_provider_pane_after_exit(agent_run_id):
+    session = tmux.create_session(
+        agent_run_id=agent_run_id,
+        task_id="task-123",
+        module_id="module-456",
+        project_id="project-789",
+        agent="codex",
+        command="sleep 0.1; exit 7",
+        cwd="/tmp",
+    )
+
+    server = _server()
+    options = server.cmd(
+        "show-options", "-wv", "-t", session.name, "remain-on-exit"
+    )
+    assert (options.stdout or []) == ["on"]
+
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        panes = server.cmd(
+            "list-panes", "-t", session.name, "-F", "#{pane_dead}"
+        )
+        if (panes.stdout or []) == ["1"]:
+            break
+        time.sleep(0.02)
+    else:
+        pytest.fail("provider pane did not become dead")
+
+    # The session is still available for reconciliation to classify.
+    assert tmux.get_session(agent_run_id) is not None
+
+
+def test_reconcile_classifies_retained_dead_pane_as_exited(agent_run_id):
+    session = tmux.create_session(
+        agent_run_id=agent_run_id,
+        task_id="task-123",
+        module_id="module-456",
+        project_id="project-789",
+        agent="codex",
+        command="sleep 0.1; exit 7",
+        cwd="/tmp",
+    )
+    server = _server()
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        panes = server.cmd(
+            "list-panes", "-t", session.name, "-F", "#{pane_dead}"
+        )
+        if (panes.stdout or []) == ["1"]:
+            break
+        time.sleep(0.02)
+    else:
+        pytest.fail("provider pane did not become dead")
+
+    result = tmux.reconcile_sessions()
+
+    assert result.exited == [agent_run_id]
+    assert result.soft_deleted == []
+    assert AgentTerminalSession.objects.get(
+        agent_run_id=agent_run_id
+    ).terminated_at is not None
+    assert tmux.get_session(agent_run_id) is None
+
+
+def test_reconcile_graces_new_orphan_before_reaping(monkeypatch):
+    name = f"pt-orphan-{uuid.uuid4().hex[:8]}"
+    subprocess.run(
+        [
+            "tmux",
+            "-L",
+            TMUX_SOCKET,
+            "new-session",
+            "-d",
+            "-s",
+            name,
+            "sleep 60",
+        ],
+        check=True,
+    )
+    try:
+        server = _server()
+        created_at = tmux._live_session_births(server)[name]
+        monkeypatch.setattr(tmux.time, "time", lambda: created_at + 1)
+
+        fresh = tmux.reconcile_sessions()
+
+        assert fresh.killed_orphans == []
+        assert name in tmux._live_session_births(server)
+
+        monkeypatch.setattr(
+            tmux.time,
+            "time",
+            lambda: created_at + tmux.ORPHAN_GRACE_SECONDS + 1,
+        )
+        stale = tmux.reconcile_sessions()
+
+        assert stale.killed_orphans == [name]
+        assert name not in tmux._live_session_births(server)
+    finally:
+        subprocess.run(
+            ["tmux", "-L", TMUX_SOCKET, "kill-session", "-t", name],
+            check=False,
+        )
+
+
+def test_reconcile_preserves_rows_when_tmux_listing_is_uncertain(
+    agent_run_id, monkeypatch
+):
+    _make(agent_run_id)
+
+    class FailedListing:
+        returncode = 1
+        stdout: list[str] = []
+        stderr = ["operation temporarily unavailable"]
+
+    class UncertainServer:
+        def cmd(self, *args):
+            assert args[:2] == (
+                "list-sessions",
+                "-F",
+            )
+            return FailedListing()
+
+    monkeypatch.setattr(tmux, "_server", lambda: UncertainServer())
+
+    with pytest.raises(TmuxSessionError, match="list-sessions failed"):
+        tmux.reconcile_sessions()
+
+    assert AgentTerminalSession.objects.get(
+        agent_run_id=agent_run_id
+    ).terminated_at is None
 
 
 def test_scroll_enters_copy_mode_and_rejects_bad_direction(agent_run_id):

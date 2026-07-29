@@ -139,6 +139,58 @@ describe("Studio module task-tree hydration", () => {
     ).toHaveAttribute("aria-selected", "true");
   });
 
+  it("renders and persists collapse for an empty configured workflow state", async () => {
+    const configuredStates = [
+      ...states,
+      {
+        id: "done",
+        name: "Done",
+        group: "completed",
+        color: null,
+        sort_order: 1,
+      },
+    ];
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/modules/module-1/work-items")) {
+        return Promise.resolve(
+          jsonResponse([workItem("1", "Only Todo story", "module-1", 0)]),
+        );
+      }
+      if (url.endsWith("/projects/project-1/states")) {
+        return Promise.resolve(jsonResponse(configuredStates));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await useTasksStore.getState().loadTasks("project-1", "module-1");
+    render(<TasksPane />);
+
+    const sectionHeaders = screen.getAllByRole("button", {
+      name: /Collapse (Scratch|Todo|Done)/,
+    });
+    expect(
+      sectionHeaders.map((header) => header.getAttribute("aria-label")),
+    ).toEqual(["Collapse Scratch", "Collapse Todo", "Collapse Done"]);
+    expect(
+      screen.getByRole("button", { name: "Collapse Done" }),
+    ).toHaveTextContent("Done0");
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Done" }));
+    expect(
+      screen.getByRole("button", { name: "Expand Done" }),
+    ).toBeInTheDocument();
+    expect(localStorage.getItem("studio.collapsedStates:v1")).toBe(
+      JSON.stringify(["Done"]),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand Done" }));
+    expect(
+      screen.getByRole("button", { name: "Collapse Done" }),
+    ).toBeInTheDocument();
+    expect(localStorage.getItem("studio.collapsedStates:v1")).toBe("[]");
+  });
+
   it("reveals a remembered nested task while preserving other expanded branches", async () => {
     localStorage.setItem(
       "studio.selectedTaskByModule:v1",

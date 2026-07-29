@@ -7,14 +7,17 @@ from django.test import Client
 
 @pytest.fixture
 def tmp_config(tmp_path, monkeypatch):
-    """Redirect profile storage to a temporary file."""
+    """Redirect installation configuration to a temporary directory."""
 
     config_dir = tmp_path / "settings"
     config_file = config_dir / "profiles.json"
+    features_file = config_dir / "features.json"
     from apps.settings_store import config as config_module
 
     monkeypatch.setattr(config_module, "CONFIG_DIR", config_dir)
     monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
+    monkeypatch.setattr(config_module, "FEATURES_FILE", features_file)
+    monkeypatch.setattr(config_module, "features", config_module.load_features())
     return config_file
 
 

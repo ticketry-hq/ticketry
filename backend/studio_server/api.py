@@ -10,7 +10,7 @@ from apps.worktrees.api import router as worktrees_router
 from apps.settings_store.config import NoConfigurationSelected
 
 
-api = NinjaAPI(title="Muxed web backend", urls_namespace="api")
+api = NinjaAPI(title="Ticketry backend", urls_namespace="api")
 api.add_router("", settings_router)
 api.add_router("", runs_router)
 api.add_router("", terminals_router)

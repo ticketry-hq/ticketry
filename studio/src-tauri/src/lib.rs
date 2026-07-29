@@ -29,6 +29,8 @@ pub mod viewer_commands;
 const MAIN_WINDOW_LABEL: &str = "main";
 const SMOKE_EXIT_AFTER_STARTUP: &str = "MUXED_DESKTOP_SMOKE_EXIT_AFTER_STARTUP";
 const SMOKE_SIDECAR_BINARY: &str = "MUXED_DESKTOP_SMOKE_SIDECAR_BINARY";
+const PACKAGED_HOOK_RUNNER_ENV: &str = "MUXED_PACKAGED_HOOK_RUNNER";
+const HOOK_RUNNER_BINARY: &str = "ticketry-hook";
 const DEVELOPMENT_BACKEND_PORT_ENV: &str = "MUXED_DESKTOP_BACKEND_PORT";
 const HEALTH_EVENT: &str = "desktop-service-health";
 const DEVELOPMENT_WEBVIEW_ORIGIN: &str = "http://127.0.0.1:5174";
@@ -75,7 +77,7 @@ fn release_data_directory_ownership(application: &tauri::AppHandle) {
     if let Some(guard) = guard {
         if let Err(error) = guard.release() {
             eprintln!(
-                "Muxed Studio could not release data-directory ownership for {}: {error}",
+                "Ticketry could not release data-directory ownership for {}: {error}",
                 ownership.data_directory.display()
             );
         }
@@ -92,7 +94,7 @@ fn shutdown_packaged_backend(application: &tauri::AppHandle) {
         .take();
     if let Some(mut supervisor) = supervisor {
         if let Err(error) = supervisor.shutdown() {
-            eprintln!("Muxed Studio could not stop its backend sidecar: {error}");
+            eprintln!("Ticketry could not stop its backend sidecar: {error}");
         }
     }
 }
@@ -351,6 +353,26 @@ fn sidecar_runtime_configuration(port: u16, credential: &str) -> RuntimeStartupC
     }
 }
 
+fn packaged_resource_binary(
+    application: &tauri::App,
+    binary: &str,
+    missing_message: &str,
+) -> Result<PathBuf, String> {
+    let resource_dir = application
+        .path()
+        .resource_dir()
+        .map_err(|error| format!("could not locate packaged runtime resources: {error}"))?;
+    // Tauri strips the source sidecar's target-triple suffix when it copies the
+    // executable into app resources.
+    [
+        resource_dir.join(binary),
+        resource_dir.join("binaries").join(binary),
+    ]
+    .into_iter()
+    .find(|path| path.is_file())
+    .ok_or_else(|| missing_message.to_owned())
+}
+
 fn sidecar_binary(application: &tauri::App) -> Result<PathBuf, String> {
     if env::var(SMOKE_EXIT_AFTER_STARTUP).as_deref() == Ok("1") {
         return env::var_os(SMOKE_SIDECAR_BINARY)
@@ -359,21 +381,21 @@ fn sidecar_binary(application: &tauri::App) -> Result<PathBuf, String> {
             .ok_or_else(|| format!("{SMOKE_SIDECAR_BINARY} must name the absolute built sidecar"));
     }
 
-    let resource_dir = application
-        .path()
-        .resource_dir()
-        .map_err(|error| format!("could not locate packaged sidecar resources: {error}"))?;
-    // Tauri strips the source sidecar's target-triple suffix when it copies the
-    // executable into app resources. The remaining basename is declared in the
-    // same manifest that selected the target-specific sidecar during release.
     let binary = release_manifest::packaged_sidecar_name()?;
-    [
-        resource_dir.join(&binary),
-        resource_dir.join("binaries").join(binary),
-    ]
-    .into_iter()
-    .find(|path| path.is_file())
-    .ok_or_else(|| "packaged backend sidecar is missing from application resources".to_owned())
+    packaged_resource_binary(
+        application,
+        &binary,
+        "packaged backend sidecar is missing from application resources",
+    )
+}
+
+fn hook_runner_binary(application: &tauri::App) -> Result<PathBuf, String> {
+    let binary = format!("{HOOK_RUNNER_BINARY}{}", env::consts::EXE_SUFFIX);
+    packaged_resource_binary(
+        application,
+        &binary,
+        "packaged hook runner is missing from application resources",
+    )
 }
 
 fn desktop_webview_origin() -> Result<String, String> {
@@ -428,6 +450,7 @@ fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
     state.publish(application.handle(), ServiceHealth::migrating());
 
     let binary = sidecar_binary(application)?;
+    let hook_runner = hook_runner_binary(application)?;
     let data_dir = established_data_directory().map_err(|error| error.to_string())?;
     let origin = desktop_webview_origin()?;
     let commands = if WORKTRACKER_MCP_REQUIRED {
@@ -436,7 +459,14 @@ fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
         CommandTable::packaged_backend(binary, data_dir, &origin)
     }
     .map_err(|error| error.to_string())?
-    .with_environment(discovery::resolved_tool_environment()?);
+    .with_environment({
+        let mut environment = discovery::resolved_tool_environment()?;
+        environment.push((
+            PACKAGED_HOOK_RUNNER_ENV.to_owned(),
+            hook_runner.to_string_lossy().into_owned(),
+        ));
+        environment
+    });
     let mut supervisor = Supervisor::try_new(commands, development_supervisor_options()?)
         .map_err(|error| error.to_string())?;
     if let Err(error) = supervisor.launch() {
@@ -577,7 +607,7 @@ fn start_supervisor_monitor(application: tauri::AppHandle) {
 
             for event in new_events {
                 if let SupervisorEvent::SidecarLogUnavailable { message } = event {
-                    eprintln!("Muxed Studio sidecar log unavailable: {message}");
+                    eprintln!("Ticketry sidecar log unavailable: {message}");
                 }
             }
             // Publish before releasing the supervisor lock so a retry cannot
@@ -698,7 +728,7 @@ pub fn run() {
     let ownership = match acquire_data_directory_ownership() {
         Ok(ownership) => ownership,
         Err(error) => {
-            eprintln!("Muxed Studio could not acquire data-directory ownership: {error}");
+            eprintln!("Ticketry could not acquire data-directory ownership: {error}");
             std::process::exit(1);
         }
     };
@@ -759,7 +789,7 @@ pub fn run() {
     {
         Ok(application) => application,
         Err(error) => {
-            eprintln!("Muxed Studio failed to initialize: {error}");
+            eprintln!("Ticketry failed to initialize: {error}");
             if let DesktopLifecycleAction::Exit(code) =
                 lifecycle_action(DesktopLifecycleEvent::FatalInitialization)
             {

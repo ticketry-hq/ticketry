@@ -140,6 +140,7 @@ describe("launch configuration bound to a deactivated provider", () => {
         binding={{
           state_id: "implement",
           prompt: "Do the work.",
+          required_skills: [],
           agent,
           model,
           reasoning: null,

@@ -107,6 +107,7 @@ def test_read_returns_live_per_type_policy_and_standing_warnings(
         {
             "state_id": str(states["Build"].id),
             "prompt": "Build the work",
+            "required_skills": [],
             "agent": "codex",
             "model": None,
             "reasoning": None,
@@ -115,6 +116,86 @@ def test_read_returns_live_per_type_policy_and_standing_warnings(
         }
     ]
     assert body["warnings"] == []
+
+
+@pytest.mark.django_db
+def test_launch_binding_revision_round_trip_preserves_required_skill_order(
+    client, scoped_workflow, auth
+):
+    issue_type, states = scoped_workflow
+    url = (
+        f"{BASE}/issue-types/{issue_type.id}/workflow-settings/"
+        f"launch-bindings/{states['Build'].id}"
+    )
+    response = _json_request(
+        client,
+        "put",
+        url,
+        {
+            "prompt": "Build the work",
+            "required_skills": ["to-tickets", "grill-with-docs", "to-spec"],
+            "agent": "codex",
+            "model": None,
+            "reasoning": None,
+            "workflow_revision": 0,
+        },
+        auth,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["workflow_revision"] == 1
+    assert response.json()["launch_bindings"][0]["required_skills"] == [
+        "to-tickets",
+        "grill-with-docs",
+        "to-spec",
+    ]
+    binding = LaunchBinding.objects.get(
+        issue_type=issue_type,
+        state=states["Build"],
+    )
+    assert binding.required_skills == [
+        "to-tickets",
+        "grill-with-docs",
+        "to-spec",
+    ]
+
+    prompt_only_update = _json_request(
+        client,
+        "put",
+        url,
+        {
+            "prompt": "Build the revised work",
+            "agent": "codex",
+            "model": None,
+            "reasoning": None,
+            "workflow_revision": 1,
+        },
+        auth,
+    )
+    assert prompt_only_update.status_code == 200
+    assert prompt_only_update.json()["launch_bindings"][0]["required_skills"] == [
+        "to-tickets",
+        "grill-with-docs",
+        "to-spec",
+    ]
+
+    rejected = _json_request(
+        client,
+        "put",
+        url,
+        {
+            "prompt": "Build the work",
+            "required_skills": ["to-spec", "to-spec"],
+            "agent": "codex",
+            "model": None,
+            "reasoning": None,
+            "workflow_revision": 2,
+        },
+        auth,
+    )
+    assert rejected.status_code == 422
+    issue_type.refresh_from_db()
+    assert issue_type.workflow_revision == 2
 
 
 @pytest.mark.django_db
@@ -593,6 +674,7 @@ def test_subtree_run_can_create_an_empty_binding_and_rejects_stale_revisions(
         {
             "state_id": str(states["Build"].id),
             "prompt": "",
+            "required_skills": [],
             "agent": None,
             "model": None,
             "reasoning": None,
@@ -626,6 +708,7 @@ def test_binding_clear_preserves_subtree_run_and_resets_launch_fields(
         issue_type=issue_type,
         state=states["Build"],
         prompt="Build the work",
+        required_skills=["to-spec"],
         agent="codex",
         auto_start=True,
         subtree_run_enabled=True,
@@ -645,6 +728,7 @@ def test_binding_clear_preserves_subtree_run_and_resets_launch_fields(
         {
             "state_id": str(states["Build"].id),
             "prompt": "",
+            "required_skills": [],
             "agent": None,
             "model": None,
             "reasoning": None,
@@ -656,6 +740,7 @@ def test_binding_clear_preserves_subtree_run_and_resets_launch_fields(
         issue_type=issue_type, state=states["Build"]
     )
     assert binding.prompt == ""
+    assert binding.required_skills == []
     assert binding.agent is None
     assert binding.auto_start is False
     assert binding.subtree_run_enabled is True

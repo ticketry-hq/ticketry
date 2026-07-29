@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import pathlib
 import shlex
 import tomllib
 
@@ -50,6 +51,13 @@ _EXPECTED_RESUME_COMMAND = {
 }
 
 ALL_SLUGS = ("claude", "agy", "codex", "gemini")
+
+_APPROVED_PATH_ENV = {
+    "claude": "MUXED_APPROVED_CLAUDE_PATH",
+    "agy": "MUXED_APPROVED_AGY_PATH",
+    "codex": "MUXED_APPROVED_CODEX_PATH",
+    "gemini": "MUXED_APPROVED_GEMINI_PATH",
+}
 
 
 @pytest.mark.parametrize("slug", ALL_SLUGS)
@@ -182,7 +190,7 @@ async def _launch_and_capture(monkeypatch, slug, argv) -> str:
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
 
     await launch._launch(
-        agent=slug,
+        adapter=get_adapter(slug),
         project_id="p1",
         module_id="m1",
         task_id="t1",
@@ -201,11 +209,12 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
     captured: dict = {}
 
     class RecordingAdapter:
+        slug = "codex"
+
         def inject(self, argv, agent_run_id, *, lifecycle_url, mcp_url):
             captured["injection"] = (agent_run_id, lifecycle_url, mcp_url)
             return argv
 
-    monkeypatch.setattr(launch, "get_adapter", lambda _slug: RecordingAdapter())
     monkeypatch.setattr(
         launch.tmux,
         "create_session",
@@ -219,7 +228,7 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
     monkeypatch.setenv("WORKTRACKER_MCP_URL", "http://127.0.0.1:54322/mcp")
 
     await launch._launch(
-        agent="codex",
+        adapter=RecordingAdapter(),
         project_id="p1",
         module_id="m1",
         task_id="t-runtime-urls",
@@ -237,6 +246,77 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
         "http://127.0.0.1:54321/api/lifecycle/events",
         "http://127.0.0.1:54322/mcp",
     )
+
+
+def _wrapped_settings_path(argv: list[str]) -> pathlib.Path | None:
+    if argv and argv[0] == "env" and argv[1].startswith(
+        f"{_AGY_SYSTEM_SETTINGS_ENV}="
+    ):
+        return pathlib.Path(argv[1].split("=", 1)[1])
+    return None
+
+
+@pytest.mark.parametrize("slug", ALL_SLUGS)
+@pytest.mark.parametrize("resume", (False, True), ids=("launch", "resume"))
+async def test_packaged_absolute_agent_path_keeps_hook_injection(
+    monkeypatch, slug, resume
+):
+    """Compose discovery, adapter routing, and packaged hook dispatch.
+
+    Unit tests for those pieces passed independently while the real desktop
+    composition dropped every hook: executable approval changed ``argv[0]``
+    from a bare slug to an absolute path before legacy injector guards ran.
+    """
+
+    approved = f"/Applications/Ticketry Tools/bin/{slug}"
+    lifecycle_url = "http://127.0.0.1:54321/api/lifecycle/events"
+    hook_runner = "/Applications/Ticketry.app/Contents/MacOS/ticketry-hook"
+    hook_spool = "/tmp/ticketry-hook-spool-test"
+    monkeypatch.setenv(_APPROVED_PATH_ENV[slug], approved)
+    monkeypatch.setenv("MUXED_LIFECYCLE_URL", lifecycle_url)
+    monkeypatch.setenv("MUXED_PACKAGED_HOOK_RUNNER", hook_runner)
+    monkeypatch.setenv("MUXED_HOOK_SPOOL_DIR", hook_spool)
+
+    adapter = get_adapter(slug)
+    argv = (
+        adapter.resume_command("provider-session")
+        if resume
+        else await _command(slug)
+    )
+    command = await _launch_and_capture(monkeypatch, slug, argv)
+    launched = shlex.split(command)
+    settings_path = _wrapped_settings_path(launched)
+
+    try:
+        if slug == "claude":
+            assert launched[0] == approved
+            settings = json.loads(launched[launched.index("--settings") + 1])
+            hook_command = settings["hooks"]["SessionStart"][0]["hooks"][0][
+                "command"
+            ]
+            assert settings["env"]["MUXED_LIFECYCLE_URL"] == lifecycle_url
+        elif slug == "codex":
+            assert launched[0] == approved
+            serialized = next(value for value in launched if value.startswith("hooks="))
+            hooks = tomllib.loads(serialized)["hooks"]
+            hook_command = hooks["SessionStart"][0]["hooks"][0]["command"]
+            assert lifecycle_url in hook_command
+        else:
+            assert launched[0] == "env"
+            assert launched[2] == approved
+            assert settings_path is not None
+            settings = json.loads(settings_path.read_text())
+            hook_command = settings["hooks"]["SessionStart"][0]["hooks"][0][
+                "command"
+            ]
+            assert lifecycle_url in hook_command
+
+        assert hook_runner in hook_command
+        assert f"hook {slug}" in hook_command
+        assert f"--spool-dir {hook_spool}" in hook_command
+    finally:
+        if settings_path is not None:
+            settings_path.unlink(missing_ok=True)
 
 
 async def test_claude_real_injection(monkeypatch):
@@ -305,16 +385,19 @@ async def test_codex_real_injection(monkeypatch):
     assert "--dangerously-bypass-hook-trust" in command
 
 
-async def test_gemini_real_injection_has_no_mcp(monkeypatch):
+async def test_gemini_real_injection_has_authenticated_mcp(monkeypatch):
     command = await _launch_and_capture(
         monkeypatch, "gemini", await _command("gemini")
     )
     assert command.startswith("env GEMINI_CLI_SYSTEM_SETTINGS_PATH=")
     assert "--skip-trust" in command
-    # Recorded asymmetry: Gemini gets lifecycle hooks but no MCP config today.
-    assert "mcp_servers" not in command
-    assert "--mcp-config" not in command
-    assert "mcpServers" not in command
+    launched = shlex.split(command)
+    settings_path = pathlib.Path(launched[1].split("=", 1)[1])
+    settings = json.loads(settings_path.read_text())
+    server = settings["mcpServers"]["worktracker-agent"]
+    assert server["httpUrl"].endswith("/mcp")
+    assert server["trust"] is True
+    assert verify_run_authorization(server["headers"]["Authorization"]) == "deadbeef"
 
 
 async def test_agy_real_injection(monkeypatch):
@@ -387,3 +470,89 @@ def test_get_adapter_unknown_raises():
 def test_valid_agents_tracks_registry():
     assert validation.VALID_AGENTS == set(all_slugs())
     assert isinstance(all_slugs(), tuple)
+
+
+# --- Ingress URL resolution (#1462) --------------------------------------
+
+
+def test_lifecycle_default_is_shared_with_the_hook_reporter():
+    """One definition, so a hook's own fallback matches the launcher's default.
+
+    The reporter owns the port and path; the injectors package re-exports them.
+    Two independent literals would let a hook post to a different port than the
+    launcher believes it configured.
+    """
+
+    from apps.terminals.agents.hooks import _reporter
+    from apps.terminals.agents import injectors
+
+    assert injectors.DEFAULT_LIFECYCLE_URL is _reporter.DEFAULT_LIFECYCLE_URL
+    assert injectors.DEFAULT_LIFECYCLE_URL == (
+        f"http://127.0.0.1:{_reporter.DEFAULT_BACKEND_PORT}/api/lifecycle/events"
+    )
+
+
+def test_default_mcp_port_matches_the_mcp_service_default():
+    """The standalone MCP fallback must address the port the service binds.
+
+    The desktop supervisor injects the reserved port, so this default only ever
+    applies to standalone runs — where a stale value points every launch at a
+    port with no listener.
+    """
+
+    from apps.terminals.agents import injectors
+
+    mcp_main = (
+        pathlib.Path(__file__).resolve().parents[4]
+        / "surfaces/worktracker-agent/mcp/main.py"
+    ).read_text()
+
+    assert f'os.getenv("MCP_PORT", "{injectors.DEFAULT_MCP_PORT}")' in mcp_main
+
+
+def test_explicit_lifecycle_url_wins(monkeypatch):
+    monkeypatch.setenv("MUXED_LIFECYCLE_URL", "http://127.0.0.1:9/api/lifecycle/events")
+    monkeypatch.setenv("MUXED_BACKEND_PORT", "8788")
+
+    assert launch._resolve_lifecycle_url() == "http://127.0.0.1:9/api/lifecycle/events"
+
+
+def test_lifecycle_url_derives_from_the_actual_backend_port(monkeypatch):
+    """A backend on a non-default port must still be addressed correctly."""
+
+    monkeypatch.delenv("MUXED_LIFECYCLE_URL", raising=False)
+    monkeypatch.setenv("MUXED_BACKEND_PORT", "8788")
+
+    assert launch._resolve_lifecycle_url() == (
+        "http://127.0.0.1:8788/api/lifecycle/events"
+    )
+
+
+def test_blank_lifecycle_url_falls_back_instead_of_posting_nowhere(monkeypatch):
+    """An empty override must not become ``--lifecycle-url ''``.
+
+    Claude's env-based hook repairs a blank value with its own fallback, but the
+    argv-based agents would be handed an empty string and post nowhere, with the
+    failure swallowed.
+    """
+
+    monkeypatch.setenv("MUXED_LIFECYCLE_URL", "   ")
+    monkeypatch.setenv("MUXED_BACKEND_PORT", "8790")
+
+    assert launch._resolve_lifecycle_url() == (
+        "http://127.0.0.1:8790/api/lifecycle/events"
+    )
+
+
+def test_lifecycle_url_falls_back_to_the_default_port(monkeypatch):
+    monkeypatch.delenv("MUXED_LIFECYCLE_URL", raising=False)
+    monkeypatch.delenv("MUXED_BACKEND_PORT", raising=False)
+
+    assert launch._resolve_lifecycle_url() == launch.DEFAULT_LIFECYCLE_URL
+
+
+def test_non_numeric_backend_port_is_ignored(monkeypatch):
+    monkeypatch.delenv("MUXED_LIFECYCLE_URL", raising=False)
+    monkeypatch.setenv("MUXED_BACKEND_PORT", "not-a-port")
+
+    assert launch._resolve_lifecycle_url() == launch.DEFAULT_LIFECYCLE_URL

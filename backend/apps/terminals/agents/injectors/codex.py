@@ -115,19 +115,16 @@ def inject_codex_lifecycle_settings(
     its own lifecycle state so auto-review remains visible without claiming the
     agent needs human input.
     ``--dangerously-bypass-hook-trust`` lets the freshly injected hook run
-    non-interactively. Only the Codex command is augmented; any other agent's
-    argv is returned unchanged.
+    non-interactively. The Codex adapter is the sole caller, so agent routing
+    is already complete before this provider-specific transformation runs.
 
     :param argv: The agent launch command from
         :func:`terminals.agents.commands.get_agent_command`.
     :param agent_run_id: Durable id for this run's lifecycle events.
     :param lifecycle_url: Ingress URL the hook posts events to.
     :return: The argv with ``-c hooks=<toml>`` and the trust-bypass flag
-        inserted after ``codex``, or the original argv for non-Codex agents.
+        inserted after the executable.
     """
-
-    if not argv or argv[0] != "codex":
-        return argv
 
     hooks = build_codex_lifecycle_hooks(agent_run_id, lifecycle_url)
     hooks_toml = _to_toml_inline(hooks)

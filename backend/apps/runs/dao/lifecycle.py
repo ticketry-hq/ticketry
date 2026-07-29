@@ -58,12 +58,22 @@ async def set_lifecycle_state(
     *,
     updated_at: str,
 ) -> bool:
-    """Record a run's latest reduced lifecycle state."""
+    """Record a run's latest reduced lifecycle state.
+
+    Only a run that has not ended can move: process exit is authoritative over
+    any hook report (#1462). Without the ``ended_at`` guard a long-lived agent
+    whose process outlived its tmux session keeps posting to the lifecycle
+    ingress — its baked-in ``--lifecycle-url`` is resolved once at launch and
+    never revalidated — and each late event carries a fresh timestamp that
+    clears the monotonicity check, resurrecting a finished run into an active
+    state. Terminal runs are therefore frozen here rather than in the caller,
+    so every ingress path inherits the guard.
+    """
 
     updated_at = normalize_utc_timestamp(updated_at)
 
     updated = (
-        await AgentRun.objects.filter(id=run_id)
+        await AgentRun.objects.filter(id=run_id, ended_at__isnull=True)
         .filter(
             Q(lifecycle_updated_at__isnull=True)
             | Q(lifecycle_updated_at__lt=updated_at)

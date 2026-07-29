@@ -21,7 +21,7 @@ const executable = path.join(
   "src-tauri",
   "target",
   "release",
-  process.platform === "win32" ? "muxed-studio.exe" : "muxed-studio",
+  process.platform === "win32" ? "ticketry.exe" : "ticketry",
 );
 const backendBuildScript = path.join(
   studioRoot,
@@ -38,9 +38,7 @@ const backendSidecarSmoke = path.join(
   "test-built-sidecar.sh",
 );
 const targetTriples = {
-  darwin: process.arch === "arm64"
-    ? "aarch64-apple-darwin"
-    : "x86_64-apple-darwin",
+  darwin: process.arch === "arm64" ? "aarch64-apple-darwin" : null,
   linux: process.arch === "arm64"
     ? "aarch64-unknown-linux-gnu"
     : "x86_64-unknown-linux-gnu",
@@ -49,6 +47,12 @@ const targetTriples = {
     : "x86_64-pc-windows-msvc",
 };
 const targetTriple = targetTriples[process.platform];
+if (process.platform === "darwin" && process.arch !== "arm64") {
+  throw new Error(
+    `desktop smoke does not support macOS host architecture ${process.arch}; `
+      + "Ticketry releases require macOS/arm64",
+  );
+}
 if (!targetTriple) {
   throw new Error(`desktop smoke does not support ${process.platform}/${process.arch}`);
 }

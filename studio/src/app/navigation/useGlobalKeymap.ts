@@ -11,7 +11,10 @@ import {
   routeThreeZoneNavigation,
   routeThreeZoneBodyEngagement,
 } from "./three-zone/threeZoneNavigation";
-import { routeSharedNavigation } from "./sharedNavigation";
+import {
+  routeModulePositionNavigation,
+  routeSharedNavigation,
+} from "./sharedNavigation";
 import type { Row } from "../../features/studio/pages/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
 
@@ -38,9 +41,10 @@ export function useGlobalKeymap(taskRows: Row[] = EMPTY_TASK_ROWS): void {
     function onCaptureKeyDown(event: KeyboardEvent): void {
       const ui = useUIStore.getState();
       if (hasOpenModal(ui)) return;
-      if (!ui.sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
 
       const actionId = studioKeymapRegistry.resolve("capture", event);
+      if (routeModulePositionNavigation(event, actionId)) return;
+      if (!ui.sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       if (ui.sidebarVisible) {
         routeFullSidebarViewCaptureNavigation(
           event,

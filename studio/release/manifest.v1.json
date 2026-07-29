@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "release_version": "0.1.0",
-  "product": "muxed-studio",
+  "product": "ticketry",
   "artifacts": {
     "frontend": {
       "command": ["npm", "run", "build"],
@@ -9,7 +9,7 @@
     },
     "tauri": {
       "command": ["npx", "tauri", "build"],
-      "binary_name": "muxed-studio",
+      "binary_name": "ticketry",
       "bundle_formats": ["app", "dmg"]
     },
     "sidecar": {
@@ -52,7 +52,14 @@
     },
     "update": {
       "delivery": "verified-manual-installer",
-      "compatibility": ["app_version", "sidecar_version", "runtime_protocol", "database_schema"],
+      "compatibility": [
+        "app_version",
+        "sidecar_version",
+        "runtime_protocol",
+        "database_schema",
+        "signed",
+        "notarized"
+      ],
       "automatic_updates": false
     },
     "rollback": {
@@ -77,25 +84,6 @@
       "rust_target": "aarch64-apple-darwin",
       "sidecar": {
         "target_triple": "aarch64-apple-darwin",
-        "bundle_binary_name": "muxed-backend"
-      },
-      "compatibility": {
-        "minimum_os": "11.0",
-        "tmux": "external-prerequisite",
-        "runtime_protocol": "1",
-        "database_schema": "forward-migrations-required",
-        "app_version": "0.1.0",
-        "sidecar_version": "0.1.0"
-      }
-    },
-    {
-      "id": "macos-x86_64",
-      "platform": "macos",
-      "architecture": "x86_64",
-      "build_architecture": "x86_64",
-      "rust_target": "x86_64-apple-darwin",
-      "sidecar": {
-        "target_triple": "x86_64-apple-darwin",
         "bundle_binary_name": "muxed-backend"
       },
       "compatibility": {

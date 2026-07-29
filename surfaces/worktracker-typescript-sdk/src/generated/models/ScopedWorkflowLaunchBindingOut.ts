@@ -22,7 +22,7 @@ import { mapValues } from '../runtime.js';
  */
 export interface ScopedWorkflowLaunchBindingOut {
     /**
-     * 
+     *
      * @type {string}
      * @memberof ScopedWorkflowLaunchBindingOut
      */
@@ -52,6 +52,12 @@ export interface ScopedWorkflowLaunchBindingOut {
      */
     reasoning?: string | null;
     /**
+     *
+     * @type {Array<string>}
+     * @memberof ScopedWorkflowLaunchBindingOut
+     */
+    required_skills: Array<string>;
+    /**
      * 
      * @type {string}
      * @memberof ScopedWorkflowLaunchBindingOut
@@ -71,6 +77,7 @@ export interface ScopedWorkflowLaunchBindingOut {
 export function instanceOfScopedWorkflowLaunchBindingOut(value: object): value is ScopedWorkflowLaunchBindingOut {
     if (!('auto_start' in value) || value['auto_start'] === undefined) return false;
     if (!('prompt' in value) || value['prompt'] === undefined) return false;
+    if (!('required_skills' in value) || value['required_skills'] === undefined) return false;
     if (!('state_id' in value) || value['state_id'] === undefined) return false;
     if (!('subtree_run_enabled' in value) || value['subtree_run_enabled'] === undefined) return false;
     return true;
@@ -91,6 +98,7 @@ export function ScopedWorkflowLaunchBindingOutFromJSONTyped(json: any, ignoreDis
         'model': json['model'] == null ? undefined : json['model'],
         'prompt': json['prompt'],
         'reasoning': json['reasoning'] == null ? undefined : json['reasoning'],
+        'required_skills': json['required_skills'],
         'state_id': json['state_id'],
         'subtree_run_enabled': json['subtree_run_enabled'],
     };
@@ -112,8 +120,8 @@ export function ScopedWorkflowLaunchBindingOutToJSONTyped(value?: ScopedWorkflow
         'model': value['model'],
         'prompt': value['prompt'],
         'reasoning': value['reasoning'],
+        'required_skills': value['required_skills'],
         'state_id': value['state_id'],
         'subtree_run_enabled': value['subtree_run_enabled'],
     };
 }
-

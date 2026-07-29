@@ -34,8 +34,9 @@ class LaunchBindingOut(BaseModel):
     model: Optional[StrictStr] = None
     prompt: StrictStr
     reasoning: Optional[StrictStr] = None
+    required_skills: List[StrictStr]
     state_id: UUID
-    __properties: ClassVar[List[str]] = ["agent", "issue_type_id", "model", "prompt", "reasoning", "state_id"]
+    __properties: ClassVar[List[str]] = ["agent", "issue_type_id", "model", "prompt", "reasoning", "required_skills", "state_id"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -108,6 +109,7 @@ class LaunchBindingOut(BaseModel):
             "model": obj.get("model"),
             "prompt": obj.get("prompt"),
             "reasoning": obj.get("reasoning"),
+            "required_skills": obj.get("required_skills"),
             "state_id": obj.get("state_id")
         })
         return _obj

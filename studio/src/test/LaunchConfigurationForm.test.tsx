@@ -36,6 +36,7 @@ function renderForm(save: ReturnType<typeof vi.fn>) {
       binding={{
         state_id: "ready",
         prompt: "do the thing",
+        required_skills: [],
         agent: "claude",
         model: "opus",
         reasoning: "high",

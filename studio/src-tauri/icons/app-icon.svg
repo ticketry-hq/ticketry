@@ -1,5 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="224" fill="#111827"/>
-  <path d="M220 716V308h104l188 221 188-221h104v408H666V511L512 690 358 511v205H220Z" fill="#f8fafc"/>
-  <circle cx="512" cy="512" r="420" fill="none" stroke="#60a5fa" stroke-width="28"/>
+  <rect width="1024" height="1024" rx="224" fill="#f8fafc"/>
+  <image href="TicketryTemplate.png" x="64" y="64" width="896" height="896"/>
 </svg>

@@ -119,7 +119,7 @@ export function useTaskTree() {
       }
     }
 
-    // Group tasks into buckets sorted by state and reverse bucket order to match TUI parity
+    // Group tasks into state buckets in visible, rank-descending order.
     for (const { state, tasks: ordered } of orderedTaskSections(tasks, states)) {
       const visible = isSearchActive
         ? ordered.filter(
@@ -134,6 +134,7 @@ export function useTaskTree() {
       out.push({
         kind: HEADER,
         key: `header-${state.id ?? state.name}`,
+        stateId: state.id,
         stateName: state.name,
         count: ordered.length,
       });
@@ -142,7 +143,6 @@ export function useTaskTree() {
       // can unfocus a state like Done without losing the at-a-glance tally.
       if (!isSearchActive && collapsedStateNames.has(state.name)) continue;
 
-      // TUI parity: list(reversed(...)) to show newly created tasks at the bottom/top correctly
       for (const t of visible) pushRecursive(t, 0, null);
     }
     return out;

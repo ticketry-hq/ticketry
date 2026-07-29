@@ -10,6 +10,15 @@ ingress/MCP URLs).
 import os
 import sys
 
+# Re-exported, not restated: the hook reporter owns the ingress port and path so
+# the fallback a hook uses on its own is by construction the same URL the
+# launcher defaults to (#1462).
+from apps.terminals.agents.hooks._reporter import (  # noqa: F401
+    DEFAULT_BACKEND_PORT,
+    DEFAULT_LIFECYCLE_URL,
+    lifecycle_url_for_port,
+)
+
 
 # Bundled lifecycle hook scripts live in ``terminals/agents/hooks`` — one level
 # up from this package. Resolved once so each agent module references the same
@@ -17,21 +26,23 @@ import sys
 
 HOOKS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hooks")
 
-# Loopback ingress the lifecycle hooks post to (ticket #499).
+# WorkTracker MCP server URL injected into agent launches when the supervisor
+# does not inject one. The desktop shell always sets ``WORKTRACKER_MCP_URL`` from
+# the port it actually reserved, so this only applies to standalone runs — and it
+# must therefore agree with the MCP service's own default port, which is 8124
+# (``MCP_PORT`` in ``surfaces/worktracker-agent/mcp/main.py``). It previously
+# read 8123, a leftover from the predecessor application, which pointed every
+# standalone launch at a port nothing listens on (#1462).
 
-DEFAULT_LIFECYCLE_URL = "http://127.0.0.1:8787/api/lifecycle/events"
+DEFAULT_MCP_PORT = 8124
 
-# WorkTracker MCP server URL injected into agent launches. Local dev uses the
-# host-mapped port; deployments can override this with their service URL.
+DEFAULT_MCP_URL = f"http://127.0.0.1:{DEFAULT_MCP_PORT}/mcp"
 
-DEFAULT_MCP_URL = "http://127.0.0.1:8123/mcp"
-
-# A frozen PyInstaller process reports the multi-call ``muxed-backend`` binary
-# as ``sys.executable``.  The packaged backend publishes that executable here
-# so hooks can dispatch back into its dedicated ``hook`` mode instead of trying
-# to execute a non-existent source script with the backend CLI.
+# The Tauri shell publishes the absolute sandbox-safe native hook runner here.
+# Source launches leave it unset and execute the bundled Python shim directly.
 
 PACKAGED_HOOK_RUNNER_ENV = "MUXED_PACKAGED_HOOK_RUNNER"
+HOOK_SPOOL_DIR_ENV = "MUXED_HOOK_SPOOL_DIR"
 
 
 def hook_argv(slug: str, script_path: str, *arguments: str) -> list[str]:
@@ -39,5 +50,9 @@ def hook_argv(slug: str, script_path: str, *arguments: str) -> list[str]:
 
     packaged_runner = os.getenv(PACKAGED_HOOK_RUNNER_ENV)
     if packaged_runner:
-        return [packaged_runner, "hook", slug, *arguments]
+        command = [packaged_runner, "hook", slug]
+        hook_spool_dir = os.getenv(HOOK_SPOOL_DIR_ENV)
+        if hook_spool_dir:
+            command.extend(["--spool-dir", hook_spool_dir])
+        return [*command, *arguments]
     return [sys.executable, script_path, *arguments]

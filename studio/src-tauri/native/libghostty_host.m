@@ -230,7 +230,7 @@ void *muxed_ghostty_runtime_new(void) {
   static dispatch_once_t initialized;
   static int initialization_result = -1;
   dispatch_once(&initialized, ^{
-    char *argv[] = {"muxed-studio", NULL};
+    char *argv[] = {"ticketry", NULL};
     initialization_result = ghostty_init(1, argv);
   });
   if (initialization_result != GHOSTTY_SUCCESS) return NULL;

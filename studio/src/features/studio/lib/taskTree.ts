@@ -6,6 +6,26 @@ export interface OrderedTaskSection {
   tasks: TaskSummary[];
 }
 
+interface IndexedTask {
+  task: TaskSummary;
+  index: number;
+}
+
+function compareRankDescending(a: IndexedTask, b: IndexedTask): number {
+  const aHasRank = typeof a.task.rank === "string" && a.task.rank.length > 0;
+  const bHasRank = typeof b.task.rank === "string" && b.task.rank.length > 0;
+  if (aHasRank && bHasRank) {
+    if (a.task.rank === b.task.rank) return b.index - a.index;
+    return a.task.rank! > b.task.rank! ? -1 : 1;
+  }
+  if (aHasRank) return -1;
+  if (bHasRank) return 1;
+  // Older cached summaries have no rank. Their source index is the explicit
+  // fallback that preserves the pre-rank visible order without reversing the
+  // section as an incidental final step.
+  return b.index - a.index;
+}
+
 export function orderedTaskSections(
   tasks: readonly TaskSummary[],
   states: readonly TaskState[],
@@ -16,7 +36,19 @@ export function orderedTaskSections(
   );
   return orderedStates.flatMap((state) => {
     const group = groups[state.name];
-    return group?.length ? [{ state, tasks: [...group].reverse() }] : [];
+    if (!group?.length) {
+      // Real workflow states remain visible as empty destinations. Synthetic
+      // and fallback states have no id and keep their existing task-backed
+      // behaviour (notably Scratch).
+      return state.id === null ? [] : [{ state, tasks: [] }];
+    }
+    return [{
+      state,
+      tasks: group
+        .map((task, index) => ({ task, index }))
+        .sort(compareRankDescending)
+        .map(({ task }) => task),
+    }];
   });
 }
 

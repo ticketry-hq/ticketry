@@ -144,6 +144,116 @@ async def test_state_group_change_is_published_to_active_project_client() -> Non
     await reconnected.disconnect()
 
 
+async def _catalog_project(slug: str) -> Project:
+    workspace = await sync_to_async(Workspace.objects.create)(
+        id=uuid.uuid4(), slug=slug, name=slug
+    )
+    return await sync_to_async(Project.objects.create)(
+        id=uuid.uuid4(), workspace=workspace, name="Catalog", slug=slug.upper()
+    )
+
+
+async def test_state_rename_and_recolor_are_published_to_active_project_client() -> None:
+    """A same-group edit still has to reach peers (#1462).
+
+    Rename and recolor leave ``group`` untouched, so the old group-only
+    comparison dropped them and every other client kept rendering the stale row.
+    """
+
+    project = await _catalog_project("catalog-rename")
+    state = await sync_to_async(State.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        name="Review",
+        group="started",
+        color="#7dcfff",
+        sort_order=2,
+    )
+    socket = await _connect(str(project.id))
+    assert (await socket.connect())[0]
+    await socket.receive_json_from()  # snapshot
+
+    updated = await sync_to_async(workflow_config.update_state)(
+        state.id, {"name": "In review", "color": "#ff9e64"}
+    )
+
+    assert await socket.receive_json_from() == {
+        "v": 1,
+        "type": "workflow_state",
+        "project_id": str(project.id),
+        "state": {
+            "id": str(state.id),
+            "name": "In review",
+            "group": "started",
+            "color": "#ff9e64",
+            "sort_order": 2,
+            "is_protected": False,
+        },
+        "updated_at": updated.updated_at.isoformat(),
+    }
+    await socket.disconnect()
+
+
+async def test_state_reorder_publishes_every_renumbered_row() -> None:
+    project = await _catalog_project("catalog-reorder")
+    first = await sync_to_async(State.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        name="Ready",
+        group="unstarted",
+        color="#7dcfff",
+        sort_order=0,
+    )
+    second = await sync_to_async(State.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        name="Implement",
+        group="started",
+        color="#9ece6a",
+        sort_order=1,
+    )
+    socket = await _connect(str(project.id))
+    assert (await socket.connect())[0]
+    await socket.receive_json_from()  # snapshot
+
+    await sync_to_async(workflow_config.reorder_states)(
+        project.id, [second.id, first.id]
+    )
+
+    frames = [await socket.receive_json_from() for _ in range(2)]
+    assert {(f["state"]["id"], f["state"]["sort_order"]) for f in frames} == {
+        (str(second.id), 0),
+        (str(first.id), 1),
+    }
+    assert all(f["type"] == "workflow_state" for f in frames)
+    assert await socket.receive_nothing()
+    await socket.disconnect()
+
+
+async def test_save_leaving_projection_unchanged_publishes_nothing() -> None:
+    """Only projected fields matter; an idempotent write stays off the feed."""
+
+    project = await _catalog_project("catalog-noop")
+    state = await sync_to_async(State.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        name="Review",
+        group="started",
+        color="#7dcfff",
+        sort_order=2,
+    )
+    socket = await _connect(str(project.id))
+    assert (await socket.connect())[0]
+    await socket.receive_json_from()  # snapshot
+
+    await sync_to_async(workflow_config.update_state)(
+        state.id, {"name": "Review", "group": "started"}
+    )
+
+    assert await socket.receive_nothing()
+    await socket.disconnect()
+
+
 async def test_connect_reconciles_unresolved_automation_attempts() -> None:
     workspace = await sync_to_async(Workspace.objects.create)(
         id=uuid.uuid4(), slug="attempt-status", name="attempt-status"

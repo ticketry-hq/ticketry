@@ -6,8 +6,9 @@ state-driven automation hang off. Importing this module is the only wiring it
 needs: the ``@receiver`` decorators connect every handler at import time, and
 ``WorktrackerConfig.ready()`` performs that import once at app load.
 
-``workflow_state_changed`` carries an authoritative catalog row after its group
-changes, allowing project-scoped clients to repair cached copies.
+``workflow_state_changed`` carries an authoritative catalog row after any of its
+projected fields change — name, group, color, sort order, or protection —
+allowing project-scoped clients to repair cached copies.
 
 The flow, for one ``Issue`` save:
 
@@ -45,10 +46,17 @@ workflow_state_changed = Signal()
 
 @receiver(pre_save, sender=State)
 def _snapshot_old_workflow_state(sender, instance, **kwargs):
-    instance._old_workflow_state_group = (
-        State.objects.filter(pk=instance.pk)
-        .values_list("group", flat=True)
-        .first()
+    """Stash the pre-write projection so ``post_save`` can diff every field.
+
+    Snapshotting the whole projection rather than just ``group`` is what lets a
+    rename, recolor, or reorder reach other clients: those edits leave the group
+    untouched, so a group-only comparison discarded them and left every peer
+    rendering a stale catalog row until it reconnected.
+    """
+
+    committed = State.objects.filter(pk=instance.pk).first()
+    instance._old_workflow_state = (
+        workflow_state_projection(committed) if committed is not None else None
     )
 
 
@@ -56,10 +64,12 @@ def _snapshot_old_workflow_state(sender, instance, **kwargs):
 def _emit_on_workflow_state_change(sender, instance, created, **kwargs):
     if created:
         return
-    old_group = getattr(instance, "_old_workflow_state_group", None)
+    old = getattr(instance, "_old_workflow_state", None)
     committed = State.objects.get(pk=instance.pk)
     current = workflow_state_projection(committed)
-    if old_group == current["group"]:
+    # Any projected field differing is a catalog edit peers must repair. A save
+    # that touches only unprojected columns compares equal and stays silent.
+    if old == current:
         return
     payload = {
         "project_id": str(committed.project_id),

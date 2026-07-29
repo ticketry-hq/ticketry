@@ -9,6 +9,7 @@ functions and maps :class:`IndexOutOfRange` to a 400.
 
 from __future__ import annotations
 
+from apps.settings_store import config as config_module
 from apps.settings_store.config import (
     Config,
     Profile,
@@ -37,7 +38,10 @@ def _require_index(config: Config, index: int) -> None:
 def list_config() -> dict:
     """Return the current connection config as a payload dict."""
 
-    return _config_payload(load_config())
+    return {
+        **_config_payload(load_config()),
+        "features": config_module.features.copy(),
+    }
 
 
 def ensure_local_profile(*, name: str, workspace_slug: str) -> dict:

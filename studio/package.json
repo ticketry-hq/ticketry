@@ -11,7 +11,7 @@
     "desktop:dev": "node scripts/desktop-dev.mjs",
     "release:build": "node scripts/release-build.mjs",
     "release:validate": "node scripts/release-build.mjs --validate",
-    "release:test": "node --test scripts/release-build.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/release-publish.test.mjs",
+    "release:test": "node --test scripts/release-build.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs",
     "release:acceptance": "node scripts/installed-artifact-acceptance.mjs",
     "release:publish": "node scripts/release-publish.mjs",
     "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && cargo test --manifest-path src-tauri/Cargo.toml && node scripts/desktop-smoke.mjs",

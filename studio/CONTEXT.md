@@ -224,6 +224,13 @@ a ticket restores it: Enter from the Stories list dives into its body, Shift+Tab
 lands the tab-strip highlight on it.
 _Avoid_: Current tab, default tab, open tab
 
+**Installation feature flag**:
+A capability switch declared in the installation's own local configuration file
+rather than in tracker data, answering whether a product surface exists for this
+installation at all. It is answerable before any planning data exists, it is read
+once when the application starts, and the application never writes it.
+_Avoid_: user preference, workspace setting, per-profile toggle, remote flag, A/B flag
+
 **First-run onboarding**:
 The welcome-screen-then-guided-tour sequence shown in place of the ordinary
 surface while a workspace's first-run setup is still pending. It runs once per
@@ -231,21 +238,24 @@ workspace and ends only by onboarding acknowledgement.
 _Avoid_: Setup wizard, tutorial mode, getting-started flow
 
 **Welcome screen**:
-The two-pane first-run surface that precedes the guided tour. Its first pane is
+The first-run surface that precedes the guided tour. Its first pane is
 where the user declares which agent subscriptions they hold — declaring one
 activates that provider, and the global launch default is settled here too, so
-first-run onboarding never ends in a workspace that cannot launch an agent. Its
-second pane creates the workspace's first project. Either pane can be skipped,
-which acknowledges onboarding outright.
+first-run onboarding never ends in a workspace that cannot launch an agent. A
+second pane creating the workspace's first project appears only where the
+Projects surface is enabled; otherwise the resolved project stands in and the
+welcome screen is the subscriptions pane alone. Any pane can be skipped, which
+acknowledges onboarding outright.
 _Avoid_: Onboarding welcome modal, provider setup wizard, sign-in screen
 
 **Guided tour**:
 The coach-mark walk that follows the welcome screen, in which the user creates
-their first module and Story in place on the real surface rather than being
-shown a demonstration. It opens on the project affordance the welcome screen
-just exercised and ends at the ticket workspace. It is run-local: a reload never
-resumes a half-finished tour, it restarts from the beginning while onboarding is
-pending.
+their first module — naming it and choosing its module folder in one step — and
+then their first Story, in place on the real surface rather than being shown a
+demonstration. It ends at the ticket workspace. Where the Projects surface is
+enabled it opens on the project affordance the welcome screen just exercised;
+otherwise it opens on module creation. It is run-local: a reload never resumes a
+half-finished tour, it restarts from the beginning while onboarding is pending.
 _Avoid_: Product tour, walkthrough, tutorial steps
 
 **Coach mark**:

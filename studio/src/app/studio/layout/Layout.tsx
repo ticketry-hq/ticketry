@@ -7,13 +7,18 @@ import { WorkArea } from "./WorkArea";
 export function Layout() {
   const {
     layout,
+    projectsEnabled,
     sidebarVisible,
     outerGroupRef,
     workAreaGroupRef,
     handleOuterLayout,
     handleWorkAreaLayout,
   } = useStudioPanelLayout();
-  const outerLayout = outerPanelLayout(layout, sidebarVisible);
+  const outerLayout = outerPanelLayout(
+    layout,
+    sidebarVisible,
+    projectsEnabled,
+  );
   const [tasksSize, workspaceSize] = splitWorkArea(layout);
 
   return (

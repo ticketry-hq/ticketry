@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
+import { useConfigStore } from "../../../features/studio/stores/configStore";
 import { useUIStore } from "../../../features/studio/stores/uiStore";
 import {
   DEFAULT_PANEL_LAYOUT,
@@ -10,6 +11,9 @@ import {
 } from "./layoutMath";
 
 export function useStudioPanelLayout() {
+  const projectsEnabled = useConfigStore(
+    (state) => state.features.projects,
+  );
   const sidebarVisible = useUIStore((state) => state.sidebarVisible);
   const panelLayout = useUIStore((state) => state.panelLayout);
   const setPanelLayout = useUIStore((state) => state.setPanelLayout);
@@ -31,7 +35,7 @@ export function useStudioPanelLayout() {
     skipNextOuterLayout.current = true;
     skipNextWorkAreaLayout.current = true;
     outerGroupRef.current?.setLayout(
-      outerPanelLayout(sizes, isSidebarVisible),
+      outerPanelLayout(sizes, isSidebarVisible, projectsEnabled),
     );
     workAreaGroupRef.current?.setLayout(splitWorkArea(sizes));
   }
@@ -39,7 +43,7 @@ export function useStudioPanelLayout() {
   useEffect(() => {
     previousSidebarVisible.current = sidebarVisible;
     applyLayout(panelLayout ?? DEFAULT_PANEL_LAYOUT, sidebarVisible);
-  }, [sidebarVisible, panelLayout]);
+  }, [sidebarVisible, panelLayout, projectsEnabled]);
 
   function handleOuterLayout(sizes: number[]) {
     if (skipNextOuterLayout.current) {
@@ -52,6 +56,7 @@ export function useStudioPanelLayout() {
     const nextLayout = mergeOuterPanelLayout(
       panelLayout ?? DEFAULT_PANEL_LAYOUT,
       sizes,
+      projectsEnabled,
     );
     if (nextLayout) setPanelLayout(nextLayout);
   }
@@ -65,12 +70,14 @@ export function useStudioPanelLayout() {
     const nextLayout = mergeWorkAreaLayout(
       panelLayout ?? DEFAULT_PANEL_LAYOUT,
       sizes,
+      projectsEnabled,
     );
     if (nextLayout) setPanelLayout(nextLayout);
   }
 
   return {
     layout,
+    projectsEnabled,
     sidebarVisible,
     outerGroupRef,
     workAreaGroupRef,

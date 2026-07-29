@@ -79,6 +79,21 @@ describe("desktop shell security contract", () => {
     expect(JSON.stringify(capability)).not.toContain("dialog:");
   });
 
+  // Tauri defaults `dragDropEnabled` to true, which installs an OS drag
+  // handler that returns `true` unconditionally. wry then never forwards the
+  // drag to the webview, so no dragenter/dragover/drop ever reaches the page
+  // and every in-app HTML5 drag (ticket reordering) silently does nothing —
+  // while jsdom tests, which synthesize their own drag events, still pass.
+  // The app consumes no native file-drop events, so this stays off.
+  it("leaves HTML5 drag and drop to the webview instead of the OS handler", async () => {
+    const configuration = await json("../../src-tauri/tauri.conf.json");
+    const app = configuration.app as { windows: unknown[] };
+
+    expect(app.windows).toEqual([
+      expect.objectContaining({ label: "main", dragDropEnabled: false }),
+    ]);
+  });
+
   it("keeps the service retry command free of webview-supplied values", async () => {
     const rust = await text("../../src-tauri/src/lib.rs");
     const build = await text("../../src-tauri/build.rs");
@@ -124,7 +139,7 @@ describe("desktop shell security contract", () => {
     expect(configuration.bundle).toEqual({
       active: true,
       targets: ["app", "dmg"],
-      externalBin: ["binaries/muxed-backend"],
+      externalBin: ["binaries/muxed-backend", "binaries/ticketry-hook"],
       macOS: {
         minimumSystemVersion: "11.0",
         hardenedRuntime: true,

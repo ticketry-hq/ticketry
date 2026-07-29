@@ -46,7 +46,7 @@ export default function FindingsPanel({ children, onCancel }: FindingsPanelProps
             <div
               key={f.id}
               data-testid="finding-row"
-              className="flex items-center gap-2.5 border-b border-pane-border/60 px-3 py-2 last:border-b-0 hover:bg-pane-title [content-visibility:auto] [contain-intrinsic-size:auto_2.25rem]"
+              className="flex items-center gap-2.5 border-b border-pane-border/60 px-3 py-2 last:border-b-0 hover:bg-pane-title"
             >
               <button
                 type="button"

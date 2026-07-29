@@ -1209,7 +1209,7 @@ async def test_mcp_enabled_instant_prompt_requires_opt_in_before_self_terminatio
     assert "Plan Feature" in rendered
 
 
-async def test_unsupported_provider_instant_prompt_omits_self_termination_guidance(
+async def test_gemini_instant_prompt_includes_self_termination_guidance(
     tmp_config, sample_profile, tmp_path, monkeypatch
 ):
     module_folder = tmp_path / "repo"
@@ -1228,8 +1228,8 @@ async def test_unsupported_provider_instant_prompt_omits_self_termination_guidan
     )
 
     assert err is None
-    assert "May I terminate this run" not in prompt
-    assert "terminate_current_run" not in prompt
+    assert "May I terminate this run" in prompt
+    assert "terminate_current_run" in prompt
     assert "no WorkTracker task is being tracked" in prompt
     assert "Plan Feature" in prompt
 

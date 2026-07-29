@@ -53,6 +53,9 @@ export interface TaskSummary {
   name: string;
   project_id: string;
   sequence_id: number | null;
+  // Canonical fractional rank. Optional for older cached summaries and
+  // synthetic rows such as Scratch.
+  rank?: string;
   state: TaskState;
   // The task tree needs the configured type to distinguish a runnable Story
   // root from its Implementation descendants. Optional while older cached
@@ -68,6 +71,9 @@ export interface TaskSummary {
   // Project-monotonic workflow-state revision (CODIN-1102). Ordering guard for
   // status-feed state deltas; absent on synthetic rows (scratch task).
   state_revision?: number;
+  // Authoritative write timestamp. Rank-only reorders do not advance the
+  // workflow-state revision, so this is the concurrency guard for rank races.
+  updated_at?: string;
 }
 
 export interface TaskDetails {
@@ -126,6 +132,9 @@ export type AgentName = "claude" | "agy" | "codex" | "gemini";
 export interface ConfigPayload {
   recent_profile_index: number | null;
   profiles: Profile[];
+  features: {
+    projects: boolean;
+  };
 }
 
 export type TaskId = string;

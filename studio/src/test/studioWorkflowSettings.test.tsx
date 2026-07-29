@@ -74,6 +74,7 @@ const baseWorkflow: ScopedWorkflowSettings = {
   launch_bindings: [{
     state_id: "done",
     prompt: "Verify the completed work.",
+    required_skills: [],
     agent: "claude",
     model: "sonnet",
     reasoning: "high",
@@ -352,19 +353,31 @@ describe("Studio workflow settings", () => {
     expect(workflowApi.getIssueTypeWorkflowSettings).not.toHaveBeenCalledWith("module");
   });
 
-  it("renders transitions as disclosures under their source states", async () => {
+  it("renders state launch controls separately from transition disclosures", async () => {
     render(<SettingsModal />);
     await openIssueTypes();
 
     expect(screen.getByRole("heading", { name: "Todo" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review" })).toBeInTheDocument();
     expect(screen.getByText("No outgoing transitions.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", {
+      name: /Expand .* launch configuration/,
+    })).toHaveLength(3);
+    expect(screen.queryByRole("button", {
+      name: "Remove Todo from workflow",
+    })).not.toBeInTheDocument();
+    const removeReview = screen.getByRole("button", {
+      name: "Remove Review from workflow",
+    });
+    expect(removeReview).not.toHaveClass("opacity-0");
+
     const transition = screen.getByRole("listitem", {
       name: "Review to Done transition",
     });
     expect(transition).toHaveTextContent("Agents + people");
-    expect(transition).toHaveTextContent("claude · sonnet");
     expect(transition).not.toHaveTextContent("Auto-start");
+    expect(transition).not.toHaveTextContent("Run subtree");
+    expect(transition).not.toHaveTextContent("claude · sonnet");
     expect(screen.queryByText("Edit launch")).not.toBeInTheDocument();
 
     fireEvent.click(within(transition).getByRole("button", {
@@ -373,15 +386,26 @@ describe("Studio workflow settings", () => {
     expect(within(transition).getByRole("region", {
       name: "Review to Done transition properties",
     })).toBeInTheDocument();
-    expect(within(transition).getByRole("region", {
+    expect(within(transition).queryByRole("region", {
       name: "Done on entry",
-    })).toBeInTheDocument();
-    expect(within(transition).getByRole("form", {
-      name: "Story · Done launch configuration",
-    })).toBeInTheDocument();
+    })).not.toBeInTheDocument();
+    expect(within(transition).queryByRole("form")).not.toBeInTheDocument();
     expect(within(transition).getByRole("checkbox", {
       name: "Agents may move Review to Done",
     })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Expand Done launch configuration",
+    }));
+    const doneState = screen.getByRole("listitem", {
+      name: "Done workflow state",
+    });
+    expect(within(doneState).getByRole("region", {
+      name: "Done on entry",
+    })).toBeInTheDocument();
+    expect(within(doneState).getByRole("form", {
+      name: "Story · Done launch configuration",
+    })).toBeInTheDocument();
 
     workflowApi.previewIssueTypeWorkflowImpact.mockResolvedValueOnce({
       workflow_revision: 7,
@@ -472,7 +496,9 @@ describe("Studio workflow settings", () => {
   it("gates auto-start on valid launch configuration and applies launch edits", async () => {
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Todo to Review" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Expand Review launch configuration",
+    }));
 
     expect(screen.getByRole("checkbox", { name: "Auto-start Review" })).toBeDisabled();
     const form = screen.getByRole("form", { name: "Story · Review launch configuration" });
@@ -499,7 +525,9 @@ describe("Studio workflow settings", () => {
   it("sets Run subtree without requiring launch configuration", async () => {
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Todo to Review" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Expand Review launch configuration",
+    }));
 
     const checkbox = screen.getByRole("checkbox", { name: "Run subtree Review" });
     expect(checkbox).toBeEnabled();
@@ -536,9 +564,20 @@ describe("Studio workflow settings", () => {
 
     expect(screen.queryByRole("combobox", { name: "Add state to workflow" }))
       .not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", {
+    const todoState = screen.getByRole("listitem", {
+      name: "Todo workflow state",
+    });
+    const outgoing = within(todoState).getByRole("list", {
+      name: "Todo outgoing transitions",
+    });
+    const addDestination = screen.getByRole("button", {
       name: "Add transition from Todo",
-    }));
+    });
+    expect(
+      outgoing.compareDocumentPosition(addDestination)
+      & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    fireEvent.click(addDestination);
     const picker = screen.getByRole("combobox", {
       name: "Add destination from Todo",
     });
@@ -563,7 +602,7 @@ describe("Studio workflow settings", () => {
     })).toBeInTheDocument());
   });
 
-  it("discloses shared destination launch settings and drops unsupported reasoning", async () => {
+  it("renders one state launch configuration for a shared destination", async () => {
     workflowApi.getLaunchProviderCapabilities.mockResolvedValue([
       {
         agent: "claude",
@@ -601,17 +640,18 @@ describe("Studio workflow settings", () => {
       name: "Todo to Done transition",
     });
     expect(transition).toHaveTextContent("People only");
-    expect(transition).toHaveTextContent("Auto-start");
-    expect(transition).toHaveTextContent("Run subtree");
-    fireEvent.click(within(transition).getByRole("button", {
-      name: "Expand Todo to Done",
+    expect(transition).not.toHaveTextContent("Auto-start");
+    expect(transition).not.toHaveTextContent("Run subtree");
+    fireEvent.click(screen.getByRole("button", {
+      name: "Expand Done launch configuration",
     }));
-    expect(screen.getByRole("note")).toHaveTextContent(
-      "Shared by 2 transitions entering Done.",
-    );
-    const form = screen.getByRole("form", {
+    const forms = screen.getAllByRole("form", {
       name: "Story · Done launch configuration",
     });
+    expect(forms).toHaveLength(1);
+    const form = forms[0];
+    expect(screen.getByRole("checkbox", { name: "Auto-start Done" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Run subtree Done" })).toBeChecked();
     const provider = within(form).getByRole("combobox", {
       name: "Agent/provider",
     });
@@ -654,7 +694,9 @@ describe("Studio workflow settings", () => {
     );
     render(<SettingsModal />);
     await openIssueTypes();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Todo to Review" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Expand Review launch configuration",
+    }));
     const prompt = screen.getByRole("textbox", { name: "Prompt" });
     fireEvent.change(prompt, { target: { value: "Keep this draft text." } });
     fireEvent.blur(prompt);

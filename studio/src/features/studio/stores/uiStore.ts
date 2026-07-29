@@ -7,6 +7,7 @@ import {
   putExpandedSubtasks,
 } from "../lib/api";
 import { taskRevealPath } from "../lib/taskTree";
+import { useConfigStore } from "./configStore";
 import { useTasksStore } from "./tasksStore";
 import { readVersionedItem } from "../../../shared/storage/versioned";
 
@@ -202,18 +203,24 @@ interface UIStoreState {
 export function visiblePaneOrder(
   sidebarVisible: boolean,
   hasSelectedProject: boolean,
+  projectsEnabled: boolean,
 ): FocusedPane[] {
   if (!sidebarVisible) {
     return PANE_ORDER.filter((p) => p !== "projects" && p !== "modules");
   }
-  if (!hasSelectedProject) {
-    return PANE_ORDER.filter((p) => p !== "modules");
-  }
-  return PANE_ORDER;
+  return PANE_ORDER.filter(
+    (pane) =>
+      (projectsEnabled || pane !== "projects") &&
+      (hasSelectedProject || pane !== "modules"),
+  );
 }
 
 function hasProject(): boolean {
   return useTasksStore.getState().selectedProjectId != null;
+}
+
+function projectsEnabled(): boolean {
+  return useConfigStore.getState().features.projects;
 }
 
 export const useUIStore = create<UIStoreState>((set, get) => ({
@@ -236,7 +243,12 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
   focusLeft() {
     const { focusedPane, sidebarVisible } = get();
     const hasProj = hasProject();
-    const order = visiblePaneOrder(sidebarVisible, hasProj);
+    const projectsAreEnabled = projectsEnabled();
+    const order = visiblePaneOrder(
+      sidebarVisible,
+      hasProj,
+      projectsAreEnabled,
+    );
     const idx = order.indexOf(focusedPane);
     if (idx > 0) {
       set({ focusedPane: order[idx - 1] });
@@ -253,14 +265,19 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
       }
       set({
         sidebarVisible: true,
-        focusedPane: hasProj ? "modules" : "projects",
+        focusedPane:
+          hasProj || !projectsAreEnabled ? "modules" : "projects",
       });
     }
   },
 
   focusRight() {
     const { focusedPane, sidebarVisible } = get();
-    const order = visiblePaneOrder(sidebarVisible, hasProject());
+    const order = visiblePaneOrder(
+      sidebarVisible,
+      hasProject(),
+      projectsEnabled(),
+    );
     const idx = order.indexOf(focusedPane);
     if (idx >= 0 && idx < order.length - 1) {
       set({ focusedPane: order[idx + 1] });

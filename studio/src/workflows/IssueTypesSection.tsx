@@ -53,6 +53,9 @@ export function IssueTypesSection() {
   );
   const setAutoStart = useWorkflowEditorStore((state) => state.setAutoStart);
   const setSubtreeRun = useWorkflowEditorStore((state) => state.setSubtreeRun);
+  const [expandedLaunchState, setExpandedLaunchState] = useState<string | null>(
+    null,
+  );
   const [expandedTransition, setExpandedTransition] = useState<string | null>(null);
   const [pendingChange, setPendingChange] = useState<PendingWorkflowChange | null>(
     null,
@@ -93,6 +96,7 @@ export function IssueTypesSection() {
             aria-selected={issueType.id === selectedTypeId}
             disabled={action !== null}
             onClick={() => {
+              setExpandedLaunchState(null);
               setExpandedTransition(null);
               void selectType(issueType.id);
             }}
@@ -146,8 +150,11 @@ export function IssueTypesSection() {
                   key={state.id}
                   action={action}
                   controlErrors={controlErrors}
+                  expandedLaunch={expandedLaunchState === state.id}
                   expandedTransition={expandedTransition}
                   issueType={selectedIssueType}
+                  onToggleLaunch={() => setExpandedLaunchState((current) =>
+                    current === state.id ? null : state.id)}
                   onToggleTransition={(key) => setExpandedTransition((current) =>
                     current === key ? null : key)}
                   providerCapabilities={providerCapabilities}
@@ -237,8 +244,10 @@ interface WorkflowSourceGroupProps {
   action: string | null;
   addTransition: ReturnType<typeof useWorkflowEditorStore.getState>["addTransition"];
   controlErrors: Record<string, string>;
+  expandedLaunch: boolean;
   expandedTransition: string | null;
   issueType: IssueType;
+  onToggleLaunch: () => void;
   onToggleTransition: (key: string) => void;
   providerCapabilities: ReturnType<typeof useWorkflowEditorStore.getState>["providerCapabilities"];
   requestRemoveTransition: ReturnType<
@@ -258,8 +267,10 @@ function WorkflowSourceGroup({
   action,
   addTransition,
   controlErrors,
+  expandedLaunch,
   expandedTransition,
   issueType,
+  onToggleLaunch,
   onToggleTransition,
   providerCapabilities,
   requestRemoveTransition,
@@ -275,6 +286,8 @@ function WorkflowSourceGroup({
   const stateId = state.id as string;
   const outgoing = workflow.transitions.filter((edge) =>
     edge.from_state_id === stateId);
+  const binding = workflow.launch_bindings.find((candidate) =>
+    candidate.state_id === stateId);
 
   return (
     <li
@@ -290,30 +303,41 @@ function WorkflowSourceGroup({
         <h3 className="min-w-0 flex-1 text-base font-semibold text-text-primary">
           {state.name}
         </h3>
-        <AddDestination
-          action={action}
-          addTransition={addTransition}
-          controlErrors={controlErrors}
-          issueType={issueType}
-          outgoing={outgoing}
-          source={state}
-          states={states}
-        />
+        <button
+          type="button"
+          aria-label={`${expandedLaunch ? "Collapse" : "Expand"} ${state.name} launch configuration`}
+          aria-expanded={expandedLaunch}
+          onClick={onToggleLaunch}
+          className={settingsButtonClass("secondary")}
+        >
+          Launch configuration
+        </button>
         {stateId !== workflow.start_state_id ? (
           <button
             type="button"
             aria-label={`Remove ${state.name} from workflow`}
             disabled={action !== null}
             onClick={() => void requestRemoveState(stateId, state.name)}
-            className={settingsButtonClass(
-              "danger",
-              "opacity-0 transition-opacity group-hover/source:opacity-100 group-focus-within/source:opacity-100",
-            )}
+            className={settingsButtonClass("danger")}
           >
             Remove state
           </button>
         ) : null}
       </div>
+
+      {expandedLaunch ? (
+        <StateLaunchConfiguration
+          action={action}
+          binding={binding}
+          controlErrors={controlErrors}
+          issueType={issueType}
+          providerCapabilities={providerCapabilities}
+          setAutoStart={setAutoStart}
+          setSubtreeRun={setSubtreeRun}
+          state={state}
+          upsertLaunchBinding={upsertLaunchBinding}
+        />
+      ) : null}
 
       {outgoing.length > 0 ? (
         <ul
@@ -329,23 +353,15 @@ function WorkflowSourceGroup({
               <TransitionDisclosure
                 key={target.id}
                 action={action}
-                binding={workflow.launch_bindings.find((candidate) =>
-                  candidate.state_id === target.id)}
                 controlErrors={controlErrors}
                 edge={edge}
                 expanded={expandedTransition === transitionKey}
-                incomingCount={workflow.transitions.filter((candidate) =>
-                  candidate.to_state_id === target.id).length}
                 issueType={issueType}
                 onToggle={() => onToggleTransition(transitionKey)}
-                providerCapabilities={providerCapabilities}
                 removeTransition={requestRemoveTransition}
-                setAutoStart={setAutoStart}
-                setSubtreeRun={setSubtreeRun}
                 setTransitionPermission={setTransitionPermission}
                 source={state}
                 target={target}
-                upsertLaunchBinding={upsertLaunchBinding}
               />
             );
           })}
@@ -355,46 +371,46 @@ function WorkflowSourceGroup({
           No outgoing transitions.
         </p>
       )}
+
+      <div className="ml-6 mt-3">
+        <AddDestination
+          action={action}
+          addTransition={addTransition}
+          controlErrors={controlErrors}
+          issueType={issueType}
+          outgoing={outgoing}
+          source={state}
+          states={states}
+        />
+      </div>
     </li>
   );
 }
 
 interface TransitionDisclosureProps {
   action: string | null;
-  binding?: ScopedWorkflowLaunchBinding;
   controlErrors: Record<string, string>;
   edge: ScopedWorkflowSettings["transitions"][number];
   expanded: boolean;
-  incomingCount: number;
   issueType: IssueType;
   onToggle: () => void;
-  providerCapabilities: WorkflowSourceGroupProps["providerCapabilities"];
   removeTransition: WorkflowSourceGroupProps["requestRemoveTransition"];
-  setAutoStart: WorkflowSourceGroupProps["setAutoStart"];
-  setSubtreeRun: WorkflowSourceGroupProps["setSubtreeRun"];
   setTransitionPermission: WorkflowSourceGroupProps["setTransitionPermission"];
   source: State;
   target: State;
-  upsertLaunchBinding: WorkflowSourceGroupProps["upsertLaunchBinding"];
 }
 
 function TransitionDisclosure({
   action,
-  binding,
   controlErrors,
   edge,
   expanded,
-  incomingCount,
   issueType,
   onToggle,
-  providerCapabilities,
   removeTransition,
-  setAutoStart,
-  setSubtreeRun,
   setTransitionPermission,
   source,
   target,
-  upsertLaunchBinding,
 }: TransitionDisclosureProps) {
   const sourceId = source.id as string;
   const targetId = target.id as string;
@@ -410,10 +426,6 @@ function TransitionDisclosure({
     sourceId,
     targetId,
   );
-  const autoControl = controlKey("auto", issueType.id, targetId);
-  const subtreeControl = controlKey("subtree", issueType.id, targetId);
-  const launchControl = controlKey("launch", issueType.id, targetId);
-  const launchIsValid = validLaunchBinding(binding, providerCapabilities);
 
   return (
     <li aria-label={`${source.name} to ${target.name} transition`}>
@@ -426,13 +438,6 @@ function TransitionDisclosure({
       >
         <span className="min-w-24 flex-1 font-medium">{target.name}</span>
         <TransitionTag>{edge.agent_allowed ? "Agents + people" : "People only"}</TransitionTag>
-        {binding?.auto_start ? <TransitionTag>Auto-start</TransitionTag> : null}
-        {binding?.subtree_run_enabled ? <TransitionTag>Run subtree</TransitionTag> : null}
-        {binding?.agent ? (
-          <TransitionTag>
-            {binding.agent}{binding.model ? ` · ${binding.model}` : ""}
-          </TransitionTag>
-        ) : null}
         <span aria-hidden="true" className={expanded ? "rotate-90 text-text-muted" : "text-text-muted"}>
           ›
         </span>
@@ -482,71 +487,101 @@ function TransitionDisclosure({
               controlErrors[permissionControl] || controlErrors[removeControl]
             } />
           </section>
-
-          <section aria-label={`${target.name} on entry`} className="space-y-3">
-            <h4 className={SETTINGS_EYEBROW_CLASS}>On entry · {target.name}</h4>
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  aria-label={`Run subtree ${target.name}`}
-                  checked={binding?.subtree_run_enabled === true}
-                  disabled={action !== null}
-                  className={SETTINGS_CHECKBOX_CLASS}
-                  onChange={(event) => void setSubtreeRun(
-                    issueType.id,
-                    targetId,
-                    event.target.checked,
-                    subtreeControl,
-                  )}
-                />
-                Run subtree
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text-primary">
-                <input
-                  type="checkbox"
-                  aria-label={`Auto-start ${target.name}`}
-                  checked={binding?.auto_start === true}
-                  disabled={action !== null || (!launchIsValid && binding?.auto_start !== true)}
-                  className={SETTINGS_CHECKBOX_CLASS}
-                  onChange={(event) => void setAutoStart(
-                    issueType.id,
-                    targetId,
-                    event.target.checked,
-                    autoControl,
-                  )}
-                />
-                Auto-start
-              </label>
-            </div>
-            <InlineError message={controlErrors[autoControl]} />
-            <InlineError message={controlErrors[subtreeControl]} />
-          </section>
-
-          <section aria-label={`${target.name} launch configuration`}>
-            <h4 className={SETTINGS_EYEBROW_CLASS}>Launch configuration</h4>
-            {incomingCount > 1 ? (
-              <p role="note" className="mt-2 text-sm text-text-muted">
-                Shared by {incomingCount} transitions entering {target.name}.
-              </p>
-            ) : null}
-            <LaunchConfigurationForm
-              binding={binding}
-              error={controlErrors[launchControl]}
-              issueType={issueType}
-              providerCapabilities={providerCapabilities}
-              save={(input) => upsertLaunchBinding(
-                issueType.id,
-                targetId,
-                input,
-                launchControl,
-              )}
-              state={target}
-            />
-          </section>
         </div>
       ) : null}
     </li>
+  );
+}
+
+function StateLaunchConfiguration({
+  action,
+  binding,
+  controlErrors,
+  issueType,
+  providerCapabilities,
+  setAutoStart,
+  setSubtreeRun,
+  state,
+  upsertLaunchBinding,
+}: {
+  action: string | null;
+  binding?: ScopedWorkflowLaunchBinding;
+  controlErrors: Record<string, string>;
+  issueType: IssueType;
+  providerCapabilities: WorkflowSourceGroupProps["providerCapabilities"];
+  setAutoStart: WorkflowSourceGroupProps["setAutoStart"];
+  setSubtreeRun: WorkflowSourceGroupProps["setSubtreeRun"];
+  state: State;
+  upsertLaunchBinding: WorkflowSourceGroupProps["upsertLaunchBinding"];
+}) {
+  const stateId = state.id as string;
+  const autoControl = controlKey("auto", issueType.id, stateId);
+  const subtreeControl = controlKey("subtree", issueType.id, stateId);
+  const launchControl = controlKey("launch", issueType.id, stateId);
+  const launchIsValid = validLaunchBinding(binding, providerCapabilities);
+
+  return (
+    <section
+      aria-label={`${state.name} state launch settings`}
+      className="ml-6 mt-2 space-y-5 rounded border border-pane-border px-3 py-4"
+    >
+      <section aria-label={`${state.name} on entry`} className="space-y-3">
+        <h4 className={SETTINGS_EYEBROW_CLASS}>On entry · {state.name}</h4>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-text-primary">
+            <input
+              type="checkbox"
+              aria-label={`Run subtree ${state.name}`}
+              checked={binding?.subtree_run_enabled === true}
+              disabled={action !== null}
+              className={SETTINGS_CHECKBOX_CLASS}
+              onChange={(event) => void setSubtreeRun(
+                issueType.id,
+                stateId,
+                event.target.checked,
+                subtreeControl,
+              )}
+            />
+            Run subtree
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text-primary">
+            <input
+              type="checkbox"
+              aria-label={`Auto-start ${state.name}`}
+              checked={binding?.auto_start === true}
+              disabled={action !== null || (!launchIsValid && binding?.auto_start !== true)}
+              className={SETTINGS_CHECKBOX_CLASS}
+              onChange={(event) => void setAutoStart(
+                issueType.id,
+                stateId,
+                event.target.checked,
+                autoControl,
+              )}
+            />
+            Auto-start
+          </label>
+        </div>
+        <InlineError message={controlErrors[autoControl]} />
+        <InlineError message={controlErrors[subtreeControl]} />
+      </section>
+
+      <section aria-label={`${state.name} launch configuration`}>
+        <h4 className={SETTINGS_EYEBROW_CLASS}>Launch configuration</h4>
+        <LaunchConfigurationForm
+          binding={binding}
+          error={controlErrors[launchControl]}
+          issueType={issueType}
+          providerCapabilities={providerCapabilities}
+          save={(input) => upsertLaunchBinding(
+            issueType.id,
+            stateId,
+            input,
+            launchControl,
+          )}
+          state={state}
+        />
+      </section>
+    </section>
   );
 }
 

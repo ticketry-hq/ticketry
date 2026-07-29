@@ -9,6 +9,10 @@ from django.db import transaction
 
 from worktracker.launch_capabilities import PROVIDER_CAPABILITIES
 from worktracker.models import IssueType, LaunchBinding, Project, State
+from worktracker.required_skills import (
+    RequiredSkillsValidationError,
+    normalize_required_skills,
+)
 from worktracker.services.errors import ValidationError
 
 if TYPE_CHECKING:
@@ -111,6 +115,28 @@ def validate_provider_options(
     return agent, model, reasoning
 
 
+def validate_required_skills(
+    *,
+    required_skills,
+    prompt: str | None,
+) -> list[str]:
+    try:
+        normalized = normalize_required_skills(required_skills)
+    except RequiredSkillsValidationError as exc:
+        raise LaunchBindingError(
+            "invalid_required_skills",
+            str(exc),
+            field="required_skills",
+        ) from exc
+    if normalized and not (prompt or "").strip():
+        raise LaunchBindingError(
+            "prompt_required_for_skills",
+            "A launch binding with required skills must have a non-empty prompt.",
+            field="prompt",
+        )
+    return normalized
+
+
 def apply_global_launch_default(
     *,
     agent: str | None,
@@ -155,16 +181,27 @@ def upsert_launch_binding(
     agent: str | None,
     model: str | None,
     reasoning: str | None,
+    required_skills=None,
 ) -> LaunchBinding:
     issue_type, state = _project_pair(project_id, issue_type_id, state_id)
     agent, model, reasoning = validate_provider_options(
         agent=agent, model=model, reasoning=reasoning
+    )
+    current = LaunchBinding.objects.filter(
+        issue_type=issue_type, state=state
+    ).first()
+    if required_skills is None:
+        required_skills = current.required_skills if current is not None else []
+    required_skills = validate_required_skills(
+        required_skills=required_skills,
+        prompt=prompt,
     )
     binding, _ = LaunchBinding.objects.update_or_create(
         issue_type=issue_type,
         state=state,
         defaults={
             "prompt": prompt or "",
+            "required_skills": required_skills,
             "agent": agent,
             "model": model,
             "reasoning": reasoning,

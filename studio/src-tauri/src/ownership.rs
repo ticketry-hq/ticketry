@@ -85,7 +85,7 @@ impl std::fmt::Display for OwnershipError {
             ),
             Self::DevelopmentStackUnverified { port } => write!(
                 formatter,
-                "a Muxed backend is listening on 127.0.0.1:{port} without a matching `pnpm dev` data-directory marker; stop it before launching the desktop app"
+                "a Ticketry backend is listening on 127.0.0.1:{port} without a matching `pnpm dev` data-directory marker; stop it before launching the desktop app"
             ),
             Self::InvalidDevelopmentMode(value) => write!(
                 formatter,

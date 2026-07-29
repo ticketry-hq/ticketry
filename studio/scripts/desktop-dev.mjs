@@ -1,11 +1,13 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
+import { createRequire } from "node:module";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
+const require = createRequire(import.meta.url);
 const defaultFrontendPort = 5174;
 const frontendPortCandidates = 10;
 const defaultBackendPort = 8787;
@@ -217,7 +219,7 @@ export function formatDevelopmentIdentity({
   dataDirectory,
 }) {
   return [
-    "Muxed desktop development instance:",
+    "Ticketry desktop development instance:",
     `frontend=${frontendOrigin}`,
     `backend=http://127.0.0.1:${backendPort}`,
     `mcp=http://127.0.0.1:${mcpPort}/mcp`,
@@ -240,20 +242,24 @@ function run(command, args, environment) {
   });
 }
 
+export function resolveTauriCliPath(resolver = require.resolve) {
+  return resolver("@tauri-apps/cli/tauri.js");
+}
+
 export async function main() {
   const mode = parseDesktopDevMode(process.argv.slice(2));
   if (mode === connectMode) {
     const launch = buildConnectLaunch();
     console.log(
       [
-        "Muxed desktop development connection:",
+        "Ticketry desktop development connection:",
         `frontend=${launch.frontendOrigin}`,
         `backend=http://127.0.0.1:${launch.backendPort}`,
         `data=${launch.dataDirectory}`,
       ].join(" "),
     );
     await run(process.execPath, [
-      path.join(studioRoot, "node_modules", "@tauri-apps", "cli", "tauri.js"),
+      resolveTauriCliPath(),
       "dev",
       "--no-watch",
       "--features",
@@ -291,7 +297,7 @@ export async function main() {
     dataDirectory,
   }));
   await run(process.execPath, [
-    path.join(studioRoot, "node_modules", "@tauri-apps", "cli", "tauri.js"),
+    resolveTauriCliPath(),
     "dev",
     "--no-watch",
     "--features",

@@ -22,7 +22,7 @@ import { mapValues } from '../runtime.js';
  */
 export interface LaunchBindingOut {
     /**
-     * 
+     *
      * @type {string}
      * @memberof LaunchBindingOut
      */
@@ -52,6 +52,12 @@ export interface LaunchBindingOut {
      */
     reasoning?: string | null;
     /**
+     *
+     * @type {Array<string>}
+     * @memberof LaunchBindingOut
+     */
+    required_skills: Array<string>;
+    /**
      * 
      * @type {string}
      * @memberof LaunchBindingOut
@@ -65,6 +71,7 @@ export interface LaunchBindingOut {
 export function instanceOfLaunchBindingOut(value: object): value is LaunchBindingOut {
     if (!('issue_type_id' in value) || value['issue_type_id'] === undefined) return false;
     if (!('prompt' in value) || value['prompt'] === undefined) return false;
+    if (!('required_skills' in value) || value['required_skills'] === undefined) return false;
     if (!('state_id' in value) || value['state_id'] === undefined) return false;
     return true;
 }
@@ -84,6 +91,7 @@ export function LaunchBindingOutFromJSONTyped(json: any, ignoreDiscriminator: bo
         'model': json['model'] == null ? undefined : json['model'],
         'prompt': json['prompt'],
         'reasoning': json['reasoning'] == null ? undefined : json['reasoning'],
+        'required_skills': json['required_skills'],
         'state_id': json['state_id'],
     };
 }
@@ -104,7 +112,7 @@ export function LaunchBindingOutToJSONTyped(value?: LaunchBindingOut | null, ign
         'model': value['model'],
         'prompt': value['prompt'],
         'reasoning': value['reasoning'],
+        'required_skills': value['required_skills'],
         'state_id': value['state_id'],
     };
 }
-

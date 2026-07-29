@@ -31,6 +31,7 @@ export type Workspace = GeneratedWorkspace;
 export type LaunchBinding = GeneratedLaunchBinding;
 export interface LaunchBindingInput {
   prompt?: string | null;
+  required_skills?: string[] | null;
   agent?: string | null;
   model?: string | null;
   reasoning?: string | null;
@@ -238,6 +239,7 @@ export interface ScopedWorkflowTransition {
 export interface ScopedWorkflowLaunchBinding extends LaunchBindingInput {
   state_id: string;
   prompt: string;
+  required_skills: string[];
   agent: string | null;
   model: string | null;
   reasoning: string | null;

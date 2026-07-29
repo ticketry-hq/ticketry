@@ -488,10 +488,10 @@ fn missing_diagnostic(tool: SupportedTool) -> ToolDiagnostic {
 fn missing_guidance(tool: SupportedTool) -> String {
     if tool == SupportedTool::Tmux {
         return match env::consts::OS {
-            "macos" => "tmux is a macOS prerequisite; Muxed Studio does not bundle it. Install it with Homebrew (`brew install tmux`) or approve a compatible absolute path.".to_owned(),
+            "macos" => "tmux is a macOS prerequisite; Ticketry does not bundle it. Install it with Homebrew (`brew install tmux`) or approve a compatible absolute path.".to_owned(),
             "linux" => "tmux is a Linux prerequisite; install it through your distribution package manager or approve a compatible absolute path.".to_owned(),
-            "windows" => "Windows is not a supported desktop target because Muxed Studio requires tmux.".to_owned(),
-            _ => "tmux is required by Muxed Studio and must be installed through the supported platform workflow.".to_owned(),
+            "windows" => "Windows is not a supported desktop target because Ticketry requires tmux.".to_owned(),
+            _ => "tmux is required by Ticketry and must be installed through the supported platform workflow.".to_owned(),
         };
     }
     format!(
@@ -554,7 +554,7 @@ fn working_directory_hint() -> AccessHint {
 fn platform_permission_hint() -> Option<String> {
     #[cfg(target_os = "macos")]
     {
-        Some("If the repository is in Desktop, Documents, or another protected location, grant Muxed Studio Files and Folders access in macOS Settings.".to_owned())
+        Some("If the repository is in Desktop, Documents, or another protected location, grant Ticketry Files and Folders access in macOS Settings.".to_owned())
     }
     #[cfg(not(target_os = "macos"))]
     {

@@ -603,8 +603,8 @@ mod imp {
         #[test]
         fn quotes_bridge_paths_for_the_surface_command() {
             assert_eq!(
-                shell_quote("/tmp/Muxed Studio's bridge"),
-                "'/tmp/Muxed Studio'\"'\"'s bridge'"
+                shell_quote("/tmp/Ticketry's bridge"),
+                "'/tmp/Ticketry'\"'\"'s bridge'"
             );
         }
 

@@ -1899,21 +1899,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "muxed-studio"
-version = "0.1.0"
-dependencies = [
- "cc",
- "libc",
- "portable-pty",
- "rand 0.8.7",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
-]
-
-[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3804,6 +3789,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.2",
+]
+
+[[package]]
+name = "ticketry"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libc",
+ "portable-pty",
+ "rand 0.8.7",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
 ]
 
 [[package]]

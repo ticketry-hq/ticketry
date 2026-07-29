@@ -38,8 +38,30 @@ ENV_AGENT_RUN_ID = "MUXED_AGENT_RUN_ID"
 ENV_LIFECYCLE_URL = "MUXED_LIFECYCLE_URL"
 
 # Loopback ingress used when the launcher does not override the URL.
+#
+# This is the one place either the port or the path is written down (#1462).
+# ``apps.terminals.agents.injectors`` imports ``DEFAULT_LIFECYCLE_URL`` from here
+# instead of restating it, so a hook's own fallback and the launcher's default
+# cannot drift apart and start posting to different ports. The constant lives at
+# this leaf rather than beside the launcher because this module is stdlib-only by
+# contract: it may be imported upward, never the reverse.
 
-DEFAULT_LIFECYCLE_URL = "http://127.0.0.1:8787/api/lifecycle/events"
+DEFAULT_BACKEND_PORT = 8787
+LIFECYCLE_PATH = "/api/lifecycle/events"
+
+
+def lifecycle_url_for_port(port: int | str) -> str:
+    """Return the loopback ingress URL for a backend listening on ``port``.
+
+    Lets a caller that knows the real port build the URL without restating the
+    path, so a backend started somewhere other than
+    :data:`DEFAULT_BACKEND_PORT` is still addressed correctly.
+    """
+
+    return f"http://127.0.0.1:{port}{LIFECYCLE_PATH}"
+
+
+DEFAULT_LIFECYCLE_URL = lifecycle_url_for_port(DEFAULT_BACKEND_PORT)
 
 # Quick timeout so a missing/slow listener never stalls an agent turn.
 

@@ -152,8 +152,19 @@ export interface AgentStatusClientOptions {
   fetch?: FetchAPI;
 }
 
+export interface LaunchedAgent {
+  target_id: string;
+  agent: string;
+  agent_run_id: string;
+}
+
+export interface LaunchAgentRequest {
+  issueId: string;
+}
+
 export interface AgentStatusClient {
   getAgentStatus(request: GetAgentStatusRequest): Promise<AgentStatusSnapshot>;
+  launchAgent(request: LaunchAgentRequest): Promise<LaunchedAgent>;
   retryAutomationAttempt(request: {
     attemptId: string;
   }): Promise<AutomationAttemptRecord>;
@@ -176,6 +187,18 @@ export function createAgentStatusClient(
       );
       if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
       return (await response.json()) as AgentStatusSnapshot;
+    },
+    async launchAgent({ issueId }) {
+      const headers = new Headers({
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      });
+      const response = await fetchApi(
+        `${basePath}/work-items/${encodeURIComponent(issueId)}/launch-agent`,
+        { method: "POST", headers, body: JSON.stringify({}) },
+      );
+      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
+      return (await response.json()) as LaunchedAgent;
     },
     async retryAutomationAttempt({ attemptId }) {
       const headers = new Headers({ Accept: "application/json" });

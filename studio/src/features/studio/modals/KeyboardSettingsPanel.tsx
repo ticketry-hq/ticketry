@@ -63,6 +63,9 @@ const CONTEXT_LABELS: Record<EffectiveBinding["context"], string> = {
 };
 
 export function bindingLabel(binding: EffectiveBinding): string {
+  if (binding.actionId.startsWith("modules.select-position-")) {
+    return `Select module ${binding.actionId.slice("modules.select-position-".length)}`;
+  }
   return ACTION_LABELS[binding.actionId] ?? binding.actionId;
 }
 

@@ -29,7 +29,7 @@ export default function ChildIssues({ children, onAddSubtask }: ChildIssuesProps
               key={c.id}
               type="button"
               onClick={() => void selectTask(c.id)}
-              className="flex w-full items-center gap-2.5 border-b border-pane-border/60 px-3 py-2 text-left last:border-b-0 hover:bg-pane-title [content-visibility:auto] [contain-intrinsic-size:auto_2.25rem]"
+              className="flex w-full items-center gap-2.5 border-b border-pane-border/60 px-3 py-2 text-left last:border-b-0 hover:bg-pane-title"
             >
               <span
                 className="h-2 w-2 flex-none rounded-full"

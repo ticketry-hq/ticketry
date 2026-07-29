@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from django.http import JsonResponse
 from ninja import Router
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from apps.settings_store import dao, service
 from apps.settings_store.provider_catalog import (
@@ -42,6 +42,8 @@ class ProviderCatalogSavedBody(ProviderCatalogImpactBody):
 
 
 class ProfileBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     workspace_slug: str
     agent_prompt: Optional[str] = None
@@ -49,6 +51,16 @@ class ProfileBody(BaseModel):
     module_folders: dict = {}
     recent_project_id: Optional[str] = None
     recent_module_ids: dict = {}
+
+
+class FeaturesBody(BaseModel):
+    projects: bool
+
+
+class ConfigBody(BaseModel):
+    recent_profile_index: Optional[int]
+    profiles: list[ProfileBody]
+    features: FeaturesBody
 
 
 class RecentIndexBody(BaseModel):
@@ -138,7 +150,7 @@ async def _count_blocked_launch_bindings(catalog: ProviderCatalog) -> int:
     return await LaunchBinding.objects.filter(agent__in=deactivated).acount()
 
 
-@router.get("/config")
+@router.get("/config", response=ConfigBody)
 async def get_config(request):
     return service.list_config()
 

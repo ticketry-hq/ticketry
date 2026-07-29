@@ -9,7 +9,8 @@ returning. ``agent_runs`` rows are owned elsewhere and never touched here.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -43,6 +44,11 @@ from apps.terminals.tmux.metadata import (
 
 logger = logging.getLogger(__name__)
 
+# A tmux session is created before its mirror row is inserted. Reconciliation
+# may run from a concurrent terminal-list request during that small window.
+# Never reap a row-less session until it has outlived the creation window.
+ORPHAN_GRACE_SECONDS = 10.0
+
 
 @dataclass(frozen=True)
 class ReconcileResult:
@@ -50,12 +56,15 @@ class ReconcileResult:
 
     - ``soft_deleted`` holds the ``agent_run_id`` of every active row whose
       tmux session was gone and was therefore soft-deleted.
+    - ``exited`` holds rows whose tmux session survived with a dead provider
+      pane. Those are cleanly classifiable provider exits, not lost sessions.
     - ``killed_orphans`` holds the tmux session names that were alive on the
       socket with no active DB row and were killed.
     """
 
     soft_deleted: list[str]
     killed_orphans: list[str]
+    exited: list[str] = field(default_factory=list)
 
 
 def create_session(
@@ -107,6 +116,19 @@ def create_session(
         )
     except LibTmuxException as exc:
         raise TmuxSessionError(f"new-session failed for {name!r}: {exc}") from exc
+
+    # Keep the tmux object after its provider command exits. Reconciliation can
+    # then observe pane_dead and publish an ordinary `exited` lifecycle event
+    # instead of discovering a vanished target and reporting `session lost`.
+    res = session.cmd(
+        "set-option", "-w", "-t", name, "remain-on-exit", "on"
+    )
+    if res.returncode != 0:
+        stderr = "\n".join(res.stderr or [])
+        server.cmd("kill-session", "-t", name)
+        raise TmuxSessionError(
+            f"set-option remain-on-exit on failed for {name!r}: {stderr}"
+        )
 
     # Stable detached resizes; libtmux has no typed setter for this.
 
@@ -279,21 +301,69 @@ def terminate_session(agent_run_id: str) -> bool:
     return True
 
 
-def _live_session_names(server: libtmux.Server) -> set[str]:
-    """Return the names of every live ``pt-`` session on the socket.
+def _live_session_births(server: libtmux.Server) -> dict[str, float]:
+    """Return live ``pt-`` session names and their Unix creation times.
 
     Unlike :func:`list_sessions` this ignores metadata entirely: a session
     with missing or corrupt user-options still counts as live so its DB row
-    is never wrongly soft-deleted. No running server means no live sessions.
+    is never wrongly soft-deleted. A definitely absent server means no live
+    sessions; any other listing failure is uncertain and must abort
+    reconciliation rather than soft-delete every active row.
     """
 
-    res = server.cmd("list-sessions", "-F", "#{session_name}")
+    res = server.cmd(
+        "list-sessions", "-F", "#{session_name}\t#{session_created}"
+    )
+    if res.returncode != 0:
+        stderr = "\n".join(res.stderr or [])
+        absent_server = (
+            "no server running on" in stderr.lower()
+            or "no such file or directory" in stderr.lower()
+        )
+        if absent_server:
+            return {}
+        raise TmuxSessionError(
+            f"list-sessions failed while reconciling terminal sessions: {stderr}"
+        )
+    births: dict[str, float] = {}
+    for line in res.stdout or []:
+        try:
+            name, created = line.split("\t", 1)
+            created_at = float(created)
+        except (TypeError, ValueError):
+            logger.warning("skipping malformed tmux session listing: %r", line)
+            continue
+        if name.startswith(SESSION_PREFIX):
+            births[name] = created_at
+    return births
+
+
+def _dead_session_names(server: libtmux.Server) -> set[str]:
+    """Return Ticketry sessions whose provider panes have all exited.
+
+    A failed inspection returns an empty set. Uncertainty must preserve a
+    session; a later reconciliation can classify it once tmux is readable.
+    """
+
+    res = server.cmd(
+        "list-panes", "-a", "-F", "#{session_name}\t#{pane_dead}"
+    )
     if res.returncode != 0:
         return set()
+    pane_states: dict[str, list[bool]] = {}
+    for line in res.stdout or []:
+        try:
+            name, dead = line.split("\t", 1)
+        except ValueError:
+            logger.warning("skipping malformed tmux pane listing: %r", line)
+            continue
+        if not name.startswith(SESSION_PREFIX) or dead not in {"0", "1"}:
+            continue
+        pane_states.setdefault(name, []).append(dead == "1")
     return {
         name
-        for name in (res.stdout or [])
-        if name.startswith(SESSION_PREFIX)
+        for name, states in pane_states.items()
+        if states and all(states)
     }
 
 
@@ -351,7 +421,9 @@ def reconcile_sessions() -> ReconcileResult:
     """
 
     server = _server()
-    live_names = _live_session_names(server)
+    live_births = _live_session_births(server)
+    live_names = set(live_births)
+    dead_names = _dead_session_names(server) & live_names
 
     # Soft-delete dead rows and capture the names still backed by an active
     # row, all with direct sync ORM in this to_thread worker.
@@ -360,7 +432,15 @@ def reconcile_sessions() -> ReconcileResult:
         rows = list(AgentTerminalSession.objects.filter(terminated_at__isnull=True))
         terminated_at = datetime.now(timezone.utc).isoformat()
         soft_deleted: list[str] = []
+        exited: list[str] = []
         for row in rows:
+            if row.tmux_session_name in dead_names:
+                AgentTerminalSession.objects.filter(
+                    agent_run_id=row.agent_run_id,
+                    terminated_at__isnull=True,
+                ).update(terminated_at=terminated_at)
+                exited.append(row.agent_run_id)
+                continue
             if row.tmux_session_name in live_names:
                 continue
             AgentTerminalSession.objects.filter(
@@ -368,16 +448,27 @@ def reconcile_sessions() -> ReconcileResult:
                 terminated_at__isnull=True,
             ).update(terminated_at=terminated_at)
             soft_deleted.append(row.agent_run_id)
-        active_names = {row.tmux_session_name for row in rows}
+        recorded_names = {row.tmux_session_name for row in rows}
     finally:
         django.db.close_old_connections()
 
-    # Orphans: live pt- sessions with no active row. Killing one races a spawn
-    # mid-creation (tmux made, row not yet inserted); the window is tiny and
-    # the kill policy is intentional per #492.
+    # A retained dead pane has now been durably classified. Remove its tmux
+    # shell so it cannot be offered as attachable on the next list.
+    for name in dead_names & recorded_names:
+        res = server.cmd("kill-session", "-t", name)
+        if res.returncode != 0:
+            stderr = "\n".join(res.stderr or [])
+            logger.warning("dead session cleanup failed name=%s: %s", name, stderr)
+
+    # Orphans: live pt- sessions with no DB row. A new session is intentionally
+    # visible to tmux just before its row insert, so give it a bounded grace
+    # period instead of racing launch and killing a valid provider.
     killed_orphans: list[str] = []
-    for name in live_names:
-        if name in active_names:
+    now = time.time()
+    for name, created_at in live_births.items():
+        if name in recorded_names:
+            continue
+        if now - created_at < ORPHAN_GRACE_SECONDS:
             continue
         res = server.cmd("kill-session", "-t", name)
         if res.returncode != 0:
@@ -387,10 +478,15 @@ def reconcile_sessions() -> ReconcileResult:
         logger.info("reaped orphan tmux session name=%s", name)
         killed_orphans.append(name)
 
-    if soft_deleted or killed_orphans:
+    if soft_deleted or exited or killed_orphans:
         logger.info(
-            "reconcile soft_deleted=%d killed_orphans=%d",
+            "reconcile soft_deleted=%d exited=%d killed_orphans=%d",
             len(soft_deleted),
+            len(exited),
             len(killed_orphans),
         )
-    return ReconcileResult(soft_deleted=soft_deleted, killed_orphans=killed_orphans)
+    return ReconcileResult(
+        soft_deleted=soft_deleted,
+        killed_orphans=killed_orphans,
+        exited=exited,
+    )

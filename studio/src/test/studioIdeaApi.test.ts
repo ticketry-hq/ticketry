@@ -122,7 +122,7 @@ describe("Studio idea capture API", () => {
     });
   });
 
-  it("preserves a nested task type and normalizes an absent type to null", () => {
+  it("preserves task rank and type while normalizing an absent type to null", () => {
     const baseTask = {
       id: "task-1",
       key: "CODIN-1",
@@ -148,9 +148,13 @@ describe("Studio idea capture API", () => {
       level: "task",
     };
 
-    expect(normalizeTask({ ...baseTask, issue_type: customType }).issue_type).toEqual(
-      customType,
-    );
+    const normalized = normalizeTask({
+      ...baseTask,
+      rank: "rank-7",
+      issue_type: customType,
+    });
+    expect(normalized.rank).toBe("rank-7");
+    expect(normalized.issue_type).toEqual(customType);
     expect(normalizeTask(baseTask).issue_type).toBeNull();
   });
 

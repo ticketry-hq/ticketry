@@ -16,6 +16,7 @@ import FindingsPanel from "./FindingsPanel";
 import { hasFindingsPanel } from "./internal/findings";
 import IssueSidebar from "./IssueSidebar";
 import IssueActionsMenu from "./IssueActionsMenu";
+import { LaunchAgentAction } from "./LaunchAgentAction";
 import { RunSubtreeAction } from "./RunSubtreeAction";
 import { readVersionedItem } from "../../../shared/storage/versioned";
 
@@ -195,6 +196,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
         />
 
         <div className="mt-4 flex items-center gap-3" data-testid="status-row">
+          <LaunchAgentAction issueId={task.id} />
           <StatePicker
             value={task.state}
             saving={Boolean(saving.state_id)}

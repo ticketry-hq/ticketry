@@ -9,6 +9,7 @@ import {
   formatDevelopmentIdentity,
   parseDesktopDevMode,
   resolveDevelopmentDataDirectory,
+  resolveTauriCliPath,
   selectDevelopmentServicePorts,
 } from "./desktop-dev.mjs";
 import { addLinkedWorktree, createRepository } from "./git-fixtures.mjs";
@@ -101,6 +102,17 @@ test("--connect is the only supported desktop development argument", () => {
   );
 });
 
+test("the Tauri CLI is resolved through the workspace dependency tree", () => {
+  const requests = [];
+  const resolved = resolveTauriCliPath((specifier) => {
+    requests.push(specifier);
+    return "/repository/node_modules/@tauri-apps/cli/tauri.js";
+  });
+
+  assert.equal(resolved, "/repository/node_modules/@tauri-apps/cli/tauri.js");
+  assert.deepEqual(requests, ["@tauri-apps/cli/tauri.js"]);
+});
+
 test("connect mode reuses the established pnpm dev stack without a sidecar command", () => {
   const launch = buildConnectLaunch({
     environment: { HOME: "/tmp/connect-home", PRESERVED: "yes" },
@@ -157,7 +169,7 @@ test("startup identity is one concise non-secret report with all selected resour
 
   assert.equal(
     report,
-    "Muxed desktop development instance: frontend=http://127.0.0.1:5175 backend=http://127.0.0.1:8788 mcp=http://127.0.0.1:8798/mcp data=/tmp/muxed-profile",
+    "Ticketry desktop development instance: frontend=http://127.0.0.1:5175 backend=http://127.0.0.1:8788 mcp=http://127.0.0.1:8798/mcp data=/tmp/muxed-profile",
   );
   assert.equal(report.split("\n").length, 1);
   assert.doesNotMatch(report, /token|credential|secret/i);

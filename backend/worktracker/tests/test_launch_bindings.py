@@ -63,6 +63,67 @@ def test_upsert_edits_one_type_state_binding_and_preserves_opaque_prompt(
 
 
 @pytest.mark.django_db
+def test_upsert_preserves_required_skill_order_and_rejects_invalid_catalog_entries(
+    project, launch_policy
+):
+    issue_type, state = launch_policy
+    binding = upsert_launch_binding(
+        project.id,
+        issue_type.id,
+        state.id,
+        prompt="Refine the work",
+        agent="codex",
+        model=None,
+        reasoning=None,
+        required_skills=["to-tickets", "grill-with-docs", "to-spec"],
+    )
+
+    assert binding.required_skills == [
+        "to-tickets",
+        "grill-with-docs",
+        "to-spec",
+    ]
+
+    for required_skills in (
+        ["to-spec", "to-spec"],
+        ["not-in-the-pinned-snapshot"],
+    ):
+        with pytest.raises(LaunchBindingError) as exc:
+            upsert_launch_binding(
+                project.id,
+                issue_type.id,
+                state.id,
+                prompt="Refine the work",
+                agent="codex",
+                model=None,
+                reasoning=None,
+                required_skills=required_skills,
+            )
+        assert exc.value.code == "invalid_required_skills"
+        assert exc.value.field == "required_skills"
+
+
+@pytest.mark.django_db
+def test_required_skills_need_a_non_empty_prompt(project, launch_policy):
+    issue_type, state = launch_policy
+
+    with pytest.raises(LaunchBindingError) as exc:
+        upsert_launch_binding(
+            project.id,
+            issue_type.id,
+            state.id,
+            prompt=" ",
+            agent="codex",
+            model=None,
+            reasoning=None,
+            required_skills=["to-spec"],
+        )
+
+    assert exc.value.code == "prompt_required_for_skills"
+    assert exc.value.field == "prompt"
+
+
+@pytest.mark.django_db
 def test_resolution_uses_type_and_current_state_not_structural_parent_depth(
     project, launch_policy
 ):
@@ -315,3 +376,13 @@ def test_model_validation_protects_admin_and_other_direct_writes(
     with pytest.raises(ValidationError) as exc:
         invalid_provider_options.full_clean()
     assert "model" in exc.value.message_dict
+
+    invalid_required_skills = LaunchBinding(
+        issue_type=issue_type,
+        state=state,
+        prompt="Nope",
+        required_skills=["to-spec", "to-spec"],
+    )
+    with pytest.raises(ValidationError) as exc:
+        invalid_required_skills.full_clean()
+    assert "required_skills" in exc.value.message_dict

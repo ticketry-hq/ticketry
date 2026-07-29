@@ -1,3 +1,5 @@
+import type { StudioPlatform } from "../../runtime";
+
 export const KEYMAP_CONTEXT_PRECEDENCE = [
   "modal",
   "capture",
@@ -34,6 +36,8 @@ export const MODAL_ACTIONS = {
 export interface BindingDefinition extends EffectiveBinding {
   /** Fixed bindings resolve at runtime but are not exposed to user configuration. */
   configurable?: boolean;
+  /** Restrict a binding to the runtimes that can actually handle it. */
+  platforms?: readonly StudioPlatform[];
   /** Available only while the action uses its default chord. */
   defaultAliases?: readonly KeyChord[];
   /** Available even after a user overrides the primary chord. */
@@ -113,6 +117,16 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   },
   { context: "capture", actionId: "workspace-tab-next", chord: chord("ArrowRight", { meta: true }) },
   { context: "capture", actionId: "workspace-tab-previous", chord: chord("ArrowLeft", { meta: true }) },
+  ...Array.from({ length: 10 }, (_, index): BindingDefinition => {
+    const position = index + 1;
+    return {
+      context: "capture",
+      actionId: `modules.select-position-${position}`,
+      chord: chord(position === 10 ? "0" : String(position), { meta: true }),
+      configurable: false,
+      platforms: ["desktop"],
+    };
+  }),
 
   { context: "modal", actionId: MODAL_ACTIONS.close, chord: chord("Escape") },
   { context: "modal", actionId: MODAL_ACTIONS.next, chord: chord("ArrowDown") },

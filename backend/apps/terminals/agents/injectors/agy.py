@@ -9,6 +9,7 @@ import json
 import os
 import shlex
 import tempfile
+from pathlib import Path
 
 from apps.terminals.agents.injectors import (
     DEFAULT_LIFECYCLE_URL,
@@ -101,6 +102,7 @@ def inject_agy_lifecycle_settings(
     agent_run_id: str,
     lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
     mcp_url: str = DEFAULT_MCP_URL,
+    settings_path: Path | None = None,
 ) -> list[str]:
     """Relocate agy's settings layer to a temp file wiring hooks and MCP.
 
@@ -110,19 +112,15 @@ def inject_agy_lifecycle_settings(
     helper, **no extra CLI flag is added**: the launch already runs with
     ``--dangerously-skip-permissions`` (which covers hook trust), and agy is not
     installed here to confirm a trust flag, so injecting an unknown flag could
-    break the launch. Only the agy command is augmented; any other agent's argv
-    is returned unchanged.
+    break the launch. The agy adapter is the sole caller, so agent routing is
+    already complete before this provider-specific transformation runs.
 
     :param argv: The agent launch command from
         :func:`terminals.agents.commands.get_agent_command`.
     :param agent_run_id: Durable id for this run's lifecycle events.
     :param lifecycle_url: Ingress URL the hook posts events to.
-    :return: The argv prefixed with an ``env <settings-env>=...`` wrapper, or the
-        original argv for non-agy agents.
+    :return: The argv prefixed with an ``env <settings-env>=...`` wrapper.
     """
-
-    if not argv or argv[0] != "agy":
-        return argv
 
     settings = build_agy_lifecycle_settings(agent_run_id, lifecycle_url)
     authorization = issue_run_authorization(agent_run_id)
@@ -131,11 +129,18 @@ def inject_agy_lifecycle_settings(
     # Persist the hooks to a temp settings file for this run; it must outlive
     # this call since agy reads it on startup, so it is not auto-deleted.
 
-    fd, settings_path = tempfile.mkstemp(
-        prefix=f"Muxed-agy-{agent_run_id}-", suffix=".json"
-    )
-    with os.fdopen(fd, "w") as handle:
-        json.dump(settings, handle, separators=(",", ":"))
+    if settings_path is None:
+        fd, raw_settings_path = tempfile.mkstemp(
+            prefix=f"Muxed-agy-{agent_run_id}-", suffix=".json"
+        )
+        settings_path = Path(raw_settings_path)
+        with os.fdopen(fd, "w") as handle:
+            json.dump(settings, handle, separators=(",", ":"))
+    else:
+        settings_path.write_text(
+            json.dumps(settings, separators=(",", ":")), encoding="utf-8"
+        )
+        settings_path.chmod(0o600)
 
     # Relocate the settings layer for this process only; add no CLI flags.
 

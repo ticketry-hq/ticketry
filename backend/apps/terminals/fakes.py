@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from typing import Any, Callable, Optional
 
 from apps.terminals.session import LaunchIntent, SessionNotFound
-from apps.terminals.agents.registry import ResumeUnsupported
+from apps.terminals.agents.registry import LaunchAugmentation, ResumeUnsupported
 
 
 @dataclass
@@ -60,6 +60,35 @@ class FakeAdapter:
     ) -> list[str]:
         self.inject_calls.append((list(argv), agent_run_id, lifecycle_url, mcp_url))
         return argv
+
+    def augment_launch(
+        self,
+        argv: list[str],
+        agent_run_id: str,
+        *,
+        lifecycle_url: str,
+        mcp_url: str,
+        skills,
+    ) -> LaunchAugmentation:
+        del skills
+        return LaunchAugmentation(
+            tuple(
+                self.inject(
+                    argv,
+                    agent_run_id,
+                    lifecycle_url=lifecycle_url,
+                    mcp_url=mcp_url,
+                )
+            )
+        )
+
+    @property
+    def available_worktracker_tools(self) -> frozenset[str]:
+        from apps.terminals.agents.skills.preflight import WORKTRACKER_TOOLS
+
+        return WORKTRACKER_TOOLS if self.supports_worktracker_mcp else frozenset()
+
+    supports_required_skills: bool = True
 
     @property
     def supports_resume(self) -> bool:

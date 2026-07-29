@@ -32,8 +32,9 @@ class ScopedLaunchBindingIn(BaseModel):
     model: Optional[StrictStr] = None
     prompt: Optional[StrictStr] = None
     reasoning: Optional[StrictStr] = None
+    required_skills: Optional[List[StrictStr]] = None
     workflow_revision: StrictInt
-    __properties: ClassVar[List[str]] = ["agent", "model", "prompt", "reasoning", "workflow_revision"]
+    __properties: ClassVar[List[str]] = ["agent", "model", "prompt", "reasoning", "required_skills", "workflow_revision"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -94,6 +95,11 @@ class ScopedLaunchBindingIn(BaseModel):
         if self.reasoning is None and "reasoning" in self.model_fields_set:
             _dict['reasoning'] = None
 
+        # set to None if required_skills (nullable) is None
+        # and model_fields_set contains the field
+        if self.required_skills is None and "required_skills" in self.model_fields_set:
+            _dict['required_skills'] = None
+
         return _dict
 
     @classmethod
@@ -110,6 +116,7 @@ class ScopedLaunchBindingIn(BaseModel):
             "model": obj.get("model"),
             "prompt": obj.get("prompt"),
             "reasoning": obj.get("reasoning"),
+            "required_skills": obj.get("required_skills"),
             "workflow_revision": obj.get("workflow_revision")
         })
         return _obj

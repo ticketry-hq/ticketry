@@ -224,6 +224,10 @@ def test_fake_initial_adopts_existing_database_without_data_change(
             ("runs", "0004_automationattempt"),
             ("runs", "0005_automationattempt_retry"),
             ("runs", "0006_agentrun_scope"),
+            # Data-only, and a no-op for this fixture: the seeded run has no
+            # ended_at, so the terminal-state backfill skips it and the rows
+            # below still survive adoption untouched.
+            ("runs", "0007_backfill_terminal_lifecycle_state"),
             ("settings_store", "0001_initial"),
             ("settings_store", "0002_migrate_profile_prompt_authority"),
             ("terminals", "0001_initial"),

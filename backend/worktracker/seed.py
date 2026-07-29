@@ -14,7 +14,8 @@ from worktracker.models import (
     DEFAULT_STATES,
     PROTECTED_STATE_KEYS,
 )
-from worktracker.launch_seeds import DEFAULT_AGENT_PROMPTS
+from worktracker.launch_seeds import default_agent_prompt
+from worktracker.required_skills import DEFAULT_REQUIRED_SKILLS
 from worktracker.workflow_seeds import DEFAULT_WORKFLOW_TEMPLATES
 
 
@@ -91,18 +92,24 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
         field.name == "subtree_run_enabled"
         for field in LaunchBinding._meta.get_fields()
     )
+    supports_required_skills = any(
+        field.name == "required_skills"
+        for field in LaunchBinding._meta.get_fields()
+    )
     for issue_type in issue_types:
         for state in states:
             defaults = {
-                "prompt": DEFAULT_AGENT_PROMPTS.get(
-                    state.name, DEFAULT_AGENT_PROMPTS["default"]
-                ),
+                "prompt": default_agent_prompt(issue_type.name, state.name),
                 "agent": None,
                 "model": None,
                 "reasoning": None,
             }
             if supports_subtree_run:
                 defaults["subtree_run_enabled"] = issue_type.name == "Story"
+            if supports_required_skills:
+                defaults["required_skills"] = list(
+                    DEFAULT_REQUIRED_SKILLS.get(state.name, ())
+                )
             LaunchBinding.objects.get_or_create(
                 issue_type=issue_type,
                 state=state,

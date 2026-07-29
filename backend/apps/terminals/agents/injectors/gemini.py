@@ -1,4 +1,4 @@
-"""Gemini lifecycle injection (ticket #501).
+"""Gemini lifecycle and WorkTracker MCP injection.
 
 Gemini has no inline settings flag, but it lets the *system* settings layer be
 relocated via ``GEMINI_CLI_SYSTEM_SETTINGS_PATH``. The hooks are written to a
@@ -10,8 +10,11 @@ import json
 import os
 import shlex
 import tempfile
+from pathlib import Path
 
 from apps.terminals.agents.injectors import DEFAULT_LIFECYCLE_URL, HOOKS_DIR, hook_argv
+from apps.terminals.agents.injectors import DEFAULT_MCP_URL
+from apps.terminals.authorization import issue_run_authorization
 
 
 # Absolute path to the bundled Gemini lifecycle hook script.
@@ -72,10 +75,24 @@ def build_gemini_lifecycle_settings(agent_run_id: str, lifecycle_url: str) -> di
     return {"hooks": {event: [hook_group] for event in _GEMINI_HOOK_EVENTS}}
 
 
+def build_gemini_mcp_servers(mcp_url: str, mcp_authorization: str) -> dict:
+    """Build Gemini's authenticated WorkTracker MCP settings entry."""
+
+    return {
+        "worktracker-agent": {
+            "httpUrl": mcp_url,
+            "trust": True,
+            "headers": {"Authorization": mcp_authorization},
+        }
+    }
+
+
 def inject_gemini_lifecycle_settings(
     argv: list[str],
     agent_run_id: str,
     lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
+    mcp_url: str = DEFAULT_MCP_URL,
+    settings_path: Path | None = None,
 ) -> list[str]:
     """Splice an invocation-level lifecycle hooks override into a Gemini command.
 
@@ -87,30 +104,37 @@ def inject_gemini_lifecycle_settings(
     and the hooks still merge in as an additional layer. The system layer is
     admin-managed and not trust-fingerprinted like project hooks; ``--skip-trust``
     additionally lets the freshly wired hooks run in this non-interactive
-    session. Only the Gemini command is augmented; any other agent's argv is
-    returned unchanged.
+    session. The Gemini adapter is the sole caller, so agent routing is already
+    complete before this provider-specific transformation runs.
 
     :param argv: The agent launch command from
         :func:`terminals.agents.commands.get_agent_command`.
     :param agent_run_id: Durable id for this run's lifecycle events.
     :param lifecycle_url: Ingress URL the hook posts events to.
-    :return: The argv prefixed with an ``env GEMINI_CLI_SYSTEM_SETTINGS_PATH=...``
-        wrapper and ``--skip-trust``, or the original argv for non-Gemini agents.
+    :return: The argv prefixed with an
+        ``env GEMINI_CLI_SYSTEM_SETTINGS_PATH=...`` wrapper and
+        ``--skip-trust``.
     """
 
-    if not argv or argv[0] != "gemini":
-        return argv
-
     settings = build_gemini_lifecycle_settings(agent_run_id, lifecycle_url)
+    authorization = issue_run_authorization(agent_run_id)
+    settings["mcpServers"] = build_gemini_mcp_servers(mcp_url, authorization)
 
     # Persist the hooks to a temp settings file for this run; it must outlive
     # this call since Gemini reads it on startup, so it is not auto-deleted.
 
-    fd, settings_path = tempfile.mkstemp(
-        prefix=f"Muxed-gemini-{agent_run_id}-", suffix=".json"
-    )
-    with os.fdopen(fd, "w") as handle:
-        json.dump(settings, handle, separators=(",", ":"))
+    if settings_path is None:
+        fd, raw_settings_path = tempfile.mkstemp(
+            prefix=f"Muxed-gemini-{agent_run_id}-", suffix=".json"
+        )
+        settings_path = Path(raw_settings_path)
+        with os.fdopen(fd, "w") as handle:
+            json.dump(settings, handle, separators=(",", ":"))
+    else:
+        settings_path.write_text(
+            json.dumps(settings, separators=(",", ":")), encoding="utf-8"
+        )
+        settings_path.chmod(0o600)
 
     # Relocate the system settings layer for this process only, then trust the
     # workspace so the wired hooks execute without an interactive prompt.

@@ -22,6 +22,7 @@ class ResolvedLaunchConfiguration:
     agent: str
     model: str | None
     reasoning: str | None
+    required_skills: tuple[str, ...] = ()
 
 
 class LaunchConfigurationError(ValueError):
@@ -110,4 +111,5 @@ def resolve_task_launch_configuration(
         agent=agent,
         model=model,
         reasoning=reasoning,
+        required_skills=tuple(binding.required_skills),
     )

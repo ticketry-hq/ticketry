@@ -20,7 +20,8 @@ from apps.terminals.authorization import verify_run_authorization
 
 
 def test_packaged_hook_runner_replaces_the_frozen_python_executable(monkeypatch):
-    monkeypatch.setenv("MUXED_PACKAGED_HOOK_RUNNER", "/Applications/Muxed/muxed-backend")
+    monkeypatch.setenv("MUXED_PACKAGED_HOOK_RUNNER", "/Applications/Muxed/ticketry-hook")
+    monkeypatch.setenv("MUXED_HOOK_SPOOL_DIR", "/tmp/ticketry-hooks")
 
     hooks = codex_injector.build_codex_lifecycle_hooks(
         "run-xyz",
@@ -29,9 +30,11 @@ def test_packaged_hook_runner_replaces_the_frozen_python_executable(monkeypatch)
     command = shlex.split(hooks["SessionStart"][0]["hooks"][0]["command"])
 
     assert command == [
-        "/Applications/Muxed/muxed-backend",
+        "/Applications/Muxed/ticketry-hook",
         "hook",
         "codex",
+        "--spool-dir",
+        "/tmp/ticketry-hooks",
         "--agent-run-id",
         "run-xyz",
         "--lifecycle-url",
@@ -68,12 +71,6 @@ def test_inject_settings_for_claude():
     # Claude's own flags are preserved after the injected setting.
 
     assert out[5:] == ["--allow-dangerously-skip-permissions", "do it"]
-
-
-def test_claude_inject_settings_leaves_other_agents_untouched():
-    injector = claude_injector
-    argv = ["gemini", "--approval-mode", "yolo", "do it"]
-    assert injector.inject_claude_lifecycle_settings(argv, "r") == argv
 
 
 # --- Codex ----------------------------------------------------------------
@@ -124,12 +121,6 @@ def test_inject_settings_for_codex():
     # Codex's own args are preserved after the injected override.
 
     assert out[8:] == ["do it"]
-
-
-def test_codex_inject_settings_leaves_other_agents_untouched():
-    injector = codex_injector
-    argv = ["claude", "--allow-dangerously-skip-permissions", "do it"]
-    assert injector.inject_codex_lifecycle_settings(argv, "r") == argv
 
 
 def test_codex_inject_settings_places_resume_flags_after_subcommand():
@@ -191,17 +182,18 @@ def test_inject_settings_for_gemini_writes_temp_settings_layer():
         with open(settings_path) as handle:
             written = json.load(handle)
         assert "AfterAgent" in written["hooks"]
-        assert "mcpServers" not in written
+        server = written["mcpServers"]["worktracker-agent"]
+        authorization = server["headers"]["Authorization"]
+        assert server == {
+            "httpUrl": injector.DEFAULT_MCP_URL,
+            "trust": True,
+            "headers": {"Authorization": authorization},
+        }
+        assert verify_run_authorization(authorization) == "run-xyz"
         command = written["hooks"]["AfterAgent"][0]["hooks"][0]["command"]
         assert "run-xyz" in command
     finally:
         os.unlink(settings_path)
-
-
-def test_gemini_inject_settings_leaves_other_agents_untouched():
-    injector = gemini_injector
-    argv = ["codex", "do it"]
-    assert injector.inject_gemini_lifecycle_settings(argv, "r") == argv
 
 
 # --- Antigravity (agy) ----------------------------------------------------
@@ -257,9 +249,3 @@ def test_inject_settings_for_agy_writes_temp_settings_layer():
         assert verify_run_authorization(authorization) == "run-xyz"
     finally:
         os.unlink(settings_path)
-
-
-def test_agy_inject_settings_leaves_other_agents_untouched():
-    injector = agy_injector
-    argv = ["gemini", "do it"]
-    assert injector.inject_agy_lifecycle_settings(argv, "r") == argv

@@ -23,19 +23,29 @@ import asyncio
 import logging
 import os
 import shlex
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from django.db import close_old_connections
 
-from apps.terminals.agents.injectors import DEFAULT_LIFECYCLE_URL, DEFAULT_MCP_URL
-from apps.terminals.agents.registry import get_adapter
+from apps.terminals.agents.injectors import (
+    DEFAULT_LIFECYCLE_URL,
+    DEFAULT_MCP_URL,
+    lifecycle_url_for_port,
+)
+from apps.terminals.agents.registry import (
+    AgentAdapter,
+    LaunchAugmentation,
+    cleanup_temporary_artifacts,
+)
+from apps.terminals.agents.skills.preflight import (
+    RequiredSkillUnavailable,
+    ResolvedSkills,
+)
 from apps.documents import watch as documents_watch
 from apps.runs.bus import publish_document, publish_status
 from apps.runs.models import AgentRun
-from apps.terminals.prompt_builder import _build_prompt, _resolve_profile_index
 from apps.terminals.tmux import sessions as tmux_sessions
 from studio_server.contracts import AgentLifecycleFrame, RunRecord
 
@@ -48,6 +58,39 @@ _APPROVED_AGENT_PATHS = {
     "codex": "MUXED_APPROVED_CODEX_PATH",
     "gemini": "MUXED_APPROVED_GEMINI_PATH",
 }
+
+
+def _env_url(name: str) -> Optional[str]:
+    """Return a configured URL, treating a blank value as unset.
+
+    ``os.getenv(name, default)`` keeps an explicitly empty value, and an empty
+    lifecycle URL is worse than a wrong one: Claude's env-based hook repairs it
+    with its own fallback, but the argv-based agents are handed
+    ``--lifecycle-url ''`` and post nowhere, silently (#1462).
+    """
+
+    value = os.getenv(name)
+    return value.strip() or None if value else None
+
+
+def _resolve_lifecycle_url() -> str:
+    """Resolve the ingress URL this run's hooks should report to.
+
+    Prefers an explicit ``MUXED_LIFECYCLE_URL`` (the packaged sidecar sets it
+    from the port it bound). Failing that, derives the URL from the port the
+    backend was actually started on, so a backend on a non-default port is still
+    addressed correctly rather than silently falling back to the default port.
+    """
+
+    explicit = _env_url("MUXED_LIFECYCLE_URL")
+    if explicit:
+        return explicit
+
+    port = _env_url("MUXED_BACKEND_PORT")
+    if port and port.isdigit():
+        return lifecycle_url_for_port(port)
+
+    return DEFAULT_LIFECYCLE_URL
 
 
 def _approved_agent_argv(agent: str, argv: list[str]) -> list[str]:
@@ -93,7 +136,7 @@ def _delete_agent_run(run_id: str) -> None:
 
 async def _launch(
     *,
-    agent: str,
+    adapter: AgentAdapter,
     project_id: str,
     module_id: str,
     task_id: str,
@@ -105,6 +148,7 @@ async def _launch(
     workspace_slug: Optional[str],
     agent_run_id: str,
     resumed_from: Optional[str] = None,
+    resolved_skills: ResolvedSkills | None = None,
 ) -> str:
     """Persist and start one agent run inside a detached tmux session.
 
@@ -113,8 +157,9 @@ async def _launch(
     launch facts the caller computed; no ``self``, ``profile``, ``init`` dict,
     or ``cols``/``rows`` cross the boundary.
 
-    :param agent: agent kind (``"claude"`` / ``"codex"`` / ``"gemini"`` /
-        ``"agy"``).
+    :param adapter: the already-selected agent adapter. Its slug is the
+        authoritative agent identity for executable approval, injection,
+        persistence, and tmux metadata.
     :param argv: the raw agent command *before* hook injection.
     :param design_dir: absolute design directory to record and watch (#521), or
         ``None`` when the module folder is unset.
@@ -129,18 +174,56 @@ async def _launch(
     """
 
     started_at = datetime.now(timezone.utc).isoformat()
+    agent = adapter.slug
 
     # Wire this run's lifecycle hooks (and MCP config) through the agent's one
-    # adapter. launch.py stays the single URL-resolution point: it reads the
-    # environment here and hands the adapter explicit URLs (adapters are
-    # env-free).
-    lifecycle_url = os.getenv("MUXED_LIFECYCLE_URL", DEFAULT_LIFECYCLE_URL)
-    mcp_url = os.getenv("WORKTRACKER_MCP_URL", DEFAULT_MCP_URL)
+    # already-selected adapter. launch.py stays the single URL-resolution point:
+    # it reads the environment here and hands the adapter explicit URLs
+    # (adapters are env-free). Carrying the adapter itself keeps agent identity
+    # and argv transformation in one route.
+    lifecycle_url = _resolve_lifecycle_url()
+    mcp_url = _env_url("WORKTRACKER_MCP_URL") or DEFAULT_MCP_URL
     argv = _approved_agent_argv(agent, argv)
-    argv = get_adapter(agent).inject(
-        argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-    )
-    command = shlex.join(argv)
+    resolved_skills = resolved_skills or ResolvedSkills((), (), frozenset(), "")
+    try:
+        if hasattr(adapter, "augment_launch"):
+            augmentation = adapter.augment_launch(
+                argv,
+                agent_run_id,
+                lifecycle_url=lifecycle_url,
+                mcp_url=mcp_url,
+                skills=resolved_skills,
+            )
+        else:
+            augmentation = LaunchAugmentation(
+                tuple(
+                    adapter.inject(
+                        argv,
+                        agent_run_id,
+                        lifecycle_url=lifecycle_url,
+                        mcp_url=mcp_url,
+                    )
+                )
+            )
+    except RequiredSkillUnavailable:
+        raise
+    except Exception as exc:
+        if resolved_skills.requested:
+            raise RequiredSkillUnavailable(
+                provider=agent,
+                skill=resolved_skills.requested[0],
+                reason="launch_configuration_failed",
+                message="The provider lifecycle or MCP configuration could not be created.",
+            ) from exc
+        raise
+    final_argv = [str(item) for item in augmentation.argv]
+    if augmentation.environment:
+        final_argv = [
+            "env",
+            *(f"{name}={value}" for name, value in augmentation.environment),
+            *final_argv,
+        ]
+    command = shlex.join(final_argv)
 
     run = AgentRun(
         id=agent_run_id,
@@ -149,6 +232,8 @@ async def _launch(
         agent=agent,
         status="running",
         started_at=started_at,
+        lifecycle_state="starting",
+        lifecycle_updated_at=started_at,
         workspace_slug=workspace_slug,
         task_id=task_id,
         cwd=cwd,
@@ -187,12 +272,14 @@ async def _launch(
             await asyncio.to_thread(_delete_agent_run, agent_run_id)
         except Exception:
             pass
+        cleanup_temporary_artifacts(augmentation.temporary_artifacts)
         raise LaunchUnavailable(str(exc)) from exc
 
     # The run row exists and the agent is live inside tmux: tell connected
     # /ws/status clients about the spawn (or resume — it shares this path)
-    # NOW, instead of leaving them blind until the first hook event or the
-    # next snapshot (#979).
+    # NOW, instead of leaving them blind until the first hook event (#979).
+    # The same state is persisted above so a snapshot or page reload cannot
+    # regress this live run to the deliberately hidden `unknown` state.
     await publish_status(
         project_id,
         AgentLifecycleFrame(

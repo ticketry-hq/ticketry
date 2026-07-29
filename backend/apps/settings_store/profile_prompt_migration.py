@@ -7,7 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from worktracker.launch_seeds import DEFAULT_AGENT_PROMPTS
+from worktracker.launch_seeds import default_agent_prompt
 from worktracker.workflow_seeds import DEFAULT_WORKFLOW_TEMPLATES
 
 
@@ -77,10 +77,11 @@ def migrate_profile_prompts(
             issue_type__project__workspace=workspace,
             issue_type__name__in=canonical_types,
             issue_type__level="task",
-        ).select_related("state")
+        ).select_related("issue_type", "state")
         for binding in bindings:
-            seeded_prompt = DEFAULT_AGENT_PROMPTS.get(
-                binding.state.name, DEFAULT_AGENT_PROMPTS["default"]
+            seeded_prompt = default_agent_prompt(
+                binding.issue_type.name,
+                binding.state.name,
             )
             if binding.prompt != seeded_prompt:
                 continue

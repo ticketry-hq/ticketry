@@ -22,7 +22,7 @@ import { mapValues } from '../runtime.js';
  */
 export interface ScopedLaunchBindingIn {
     /**
-     * 
+     *
      * @type {string}
      * @memberof ScopedLaunchBindingIn
      */
@@ -45,6 +45,12 @@ export interface ScopedLaunchBindingIn {
      * @memberof ScopedLaunchBindingIn
      */
     reasoning?: string | null;
+    /**
+     *
+     * @type {Array<string>}
+     * @memberof ScopedLaunchBindingIn
+     */
+    required_skills?: Array<string> | null;
     /**
      * 
      * @type {number}
@@ -75,6 +81,7 @@ export function ScopedLaunchBindingInFromJSONTyped(json: any, ignoreDiscriminato
         'model': json['model'] == null ? undefined : json['model'],
         'prompt': json['prompt'] == null ? undefined : json['prompt'],
         'reasoning': json['reasoning'] == null ? undefined : json['reasoning'],
+        'required_skills': json['required_skills'] == null ? undefined : json['required_skills'],
         'workflow_revision': json['workflow_revision'],
     };
 }
@@ -94,7 +101,7 @@ export function ScopedLaunchBindingInToJSONTyped(value?: ScopedLaunchBindingIn |
         'model': value['model'],
         'prompt': value['prompt'],
         'reasoning': value['reasoning'],
+        'required_skills': value['required_skills'],
         'workflow_revision': value['workflow_revision'],
     };
 }
-

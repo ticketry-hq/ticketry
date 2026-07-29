@@ -10,6 +10,7 @@ from worktracker.models import IssueType, IssueTypeTransition, LaunchBinding, St
 from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
 from worktracker.services.launch_bindings import (
     validate_provider_options,
+    validate_required_skills,
     validate_unattended_launch_binding,
 )
 
@@ -149,6 +150,7 @@ def _build_impact(
             {
                 "state_id": binding.state_id,
                 "prompt": binding.prompt,
+                "required_skills": binding.required_skills,
                 "agent": binding.agent,
                 "model": binding.model,
                 "reasoning": binding.reasoning,
@@ -342,6 +344,7 @@ def get_workflow(type_id):
             {
                 "state_id": binding.state_id,
                 "prompt": binding.prompt,
+                "required_skills": binding.required_skills,
                 "agent": binding.agent,
                 "model": binding.model,
                 "reasoning": binding.reasoning,
@@ -468,6 +471,7 @@ def upsert_launch_binding(
     model,
     reasoning,
     workflow_revision: int,
+    required_skills=None,
 ):
     issue_type = _locked_issue_type(type_id, workflow_revision)
     state = _state(issue_type, state_id, field="state")
@@ -477,11 +481,18 @@ def upsert_launch_binding(
     current = LaunchBinding.objects.filter(
         issue_type=issue_type, state=state
     ).first()
+    if required_skills is None:
+        required_skills = current.required_skills if current is not None else []
+    required_skills = validate_required_skills(
+        required_skills=required_skills,
+        prompt=prompt,
+    )
     if current is not None and current.auto_start:
         proposed = LaunchBinding(
             issue_type=issue_type,
             state=state,
             prompt=prompt or "",
+            required_skills=required_skills,
             agent=agent,
             model=model,
             reasoning=reasoning,
@@ -493,6 +504,7 @@ def upsert_launch_binding(
         state=state,
         defaults={
             "prompt": prompt or "",
+            "required_skills": required_skills,
             "agent": agent,
             "model": model,
             "reasoning": reasoning,
@@ -511,6 +523,7 @@ def clear_launch_binding(type_id, state_id, *, workflow_revision: int):
     ).first()
     if binding is not None and binding.subtree_run_enabled:
         binding.prompt = ""
+        binding.required_skills = []
         binding.agent = None
         binding.model = None
         binding.reasoning = None
@@ -518,6 +531,7 @@ def clear_launch_binding(type_id, state_id, *, workflow_revision: int):
         binding.save(
             update_fields=[
                 "prompt",
+                "required_skills",
                 "agent",
                 "model",
                 "reasoning",

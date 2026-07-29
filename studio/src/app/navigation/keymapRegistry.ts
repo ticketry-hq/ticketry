@@ -7,6 +7,7 @@ import {
   type KeyChord,
   type KeymapContext,
 } from "./keymapBindings";
+import { studioRuntime, type StudioPlatform } from "../../runtime";
 
 const DEFAULT_BINDINGS_IN_CONTEXT_PRECEDENCE =
   KEYMAP_CONTEXT_PRECEDENCE.flatMap((context) =>
@@ -76,8 +77,10 @@ class KeymapRegistry {
     event: KeyboardEvent,
     actionIds?: ReadonlySet<string>,
   ): string | null {
+    const platform = studioRuntime().platform;
     for (const binding of DEFAULT_BINDINGS_BY_CONTEXT.get(context) ?? []) {
       if (
+        !availableOnPlatform(binding, platform) ||
         actionIds &&
         !actionIds.has(binding.actionId)
       ) {
@@ -104,7 +107,10 @@ class KeymapRegistry {
   }
 
   getEffectiveBindings(): EffectiveBinding[] {
-    return DEFAULT_BINDINGS_IN_CONTEXT_PRECEDENCE.map(
+    const platform = studioRuntime().platform;
+    return DEFAULT_BINDINGS_IN_CONTEXT_PRECEDENCE.filter((binding) =>
+      availableOnPlatform(binding, platform)
+    ).map(
       ({ context, actionId, chord: bindingChord }) => ({
         context,
         actionId,
@@ -174,7 +180,9 @@ class KeymapRegistry {
   ): EffectiveBinding | null {
     const key = bindingKey(context, actionId);
     const binding = DEFAULT_BINDINGS_BY_KEY.get(key);
-    if (!binding) return null;
+    if (!binding || !availableOnPlatform(binding, studioRuntime().platform)) {
+      return null;
+    }
     return {
       context,
       actionId,
@@ -221,6 +229,13 @@ class KeymapRegistry {
 
 function bindingKey(context: KeymapContext, actionId: string): string {
   return `${context}:${actionId}`;
+}
+
+function availableOnPlatform(
+  binding: BindingDefinition,
+  platform: StudioPlatform,
+): boolean {
+  return !binding.platforms || binding.platforms.includes(platform);
 }
 
 const DEFAULT_BINDINGS_BY_CONTEXT = new Map<

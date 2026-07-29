@@ -21,7 +21,7 @@ Once you are done, terminate your run my calling the MCP server.
 This task is in `Refinement`, where an idea is turned into a committed, dependency-ordered plan through agent-driven discovery.
 
 This is what you need to do in this ticket:
-1. Use the /grill-me-with-docs or the $grill-me-with-docs skill to finalize requirements.
+1. Use the /grill-with-docs or the $grill-with-docs skill to finalize requirements.
 2. Use the /to-spec or $to-spec and generate spec, add the link to the spec in the story.
 3. Use to /to-tickets or $to-tickets skill to generated tickets. Create the tickets as Implementation subtasks.
 

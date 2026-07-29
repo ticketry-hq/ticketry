@@ -21,6 +21,8 @@ if os.environ.get("MUXED_SKIP_LOCAL_STATE_MIGRATION") != "1":
 
 
 CONFIG_FILE = CONFIG_DIR / "profiles.json"
+FEATURES_FILE = CONFIG_DIR / "features.json"
+DEFAULT_FEATURES = {"projects": False}
 PROFILE_FIELDS = {
     "name",
     "workspace_slug",
@@ -30,6 +32,24 @@ PROFILE_FIELDS = {
     "recent_project_id",
     "recent_module_ids",
 }
+
+
+def load_features() -> dict[str, bool]:
+    """Read installation feature flags, falling back safely for every error."""
+
+    try:
+        data = json.loads(FEATURES_FILE.read_text())
+    except Exception:
+        return DEFAULT_FEATURES.copy()
+    if not isinstance(data, dict):
+        return DEFAULT_FEATURES.copy()
+    return {
+        "projects": (
+            data["projects"]
+            if isinstance(data.get("projects"), bool)
+            else DEFAULT_FEATURES["projects"]
+        )
+    }
 
 
 class NoConfigurationSelected(Exception):
@@ -151,4 +171,5 @@ def resolve_profile(requested: Optional[int]) -> Profile:
     return config.profiles[resolve_profile_index(config, requested)]
 
 
+features = load_features()
 config = Config()

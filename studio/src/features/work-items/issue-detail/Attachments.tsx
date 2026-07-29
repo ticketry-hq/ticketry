@@ -24,7 +24,7 @@ export default function Attachments({ attachments }: AttachmentsProps) {
             target="_blank"
             rel="noopener noreferrer"
             data-testid="attachment-row"
-            className="flex items-center gap-2.5 border-b border-pane-border/60 px-3 py-2 last:border-b-0 hover:bg-pane-title [content-visibility:auto] [contain-intrinsic-size:auto_2.25rem]"
+            className="flex items-center gap-2.5 border-b border-pane-border/60 px-3 py-2 last:border-b-0 hover:bg-pane-title"
           >
             <IconPaperclip size={14} className="flex-none text-text-muted" />
             <span className="flex-1 truncate text-base text-text-primary">{a.filename}</span>

@@ -27,7 +27,7 @@ fn main() {
             "native_terminal_detach",
         ]),
     ))
-    .expect("failed to build the Muxed Studio Tauri application");
+    .expect("failed to build the Ticketry Tauri application");
 }
 
 fn build_native_libghostty() {

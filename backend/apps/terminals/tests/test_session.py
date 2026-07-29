@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from asgiref.sync import async_to_sync
 
 import apps.terminals.session as session_module
+import apps.terminals.agents.registry as agent_registry
 from apps.runs.models import AgentRun
 from apps.terminals.fakes import InMemorySessionService
 from apps.terminals.models import AgentTerminalSession
@@ -90,10 +92,12 @@ def clear_viewers():
     TMUX_VIEWERS.clear()
 
 
-def test_terminate_is_idempotent_and_marks_run(monkeypatch):
+def test_terminate_is_idempotent_and_marks_run(monkeypatch, tmp_path):
     service = TerminalSessionService()
     _insert_run("run-1")
     _insert_session("run-1")
+    monkeypatch.setattr(agent_registry.tempfile, "tempdir", str(tmp_path))
+    overlay = _create_overlay(tmp_path, "run-1")
     killed: list[str] = []
     stopped: list[str] = []
 
@@ -117,7 +121,37 @@ def test_terminate_is_idempotent_and_marks_run(monkeypatch):
     assert stopped == ["run-1"]
     assert run.status == "terminated"
     assert run.ended_at is not None
+    # The lifecycle axis is stamped too, not left on the last hook report: only
+    # Claude emits a session-end event, so Codex/agy/gemini runs would otherwise
+    # render forever as working or awaiting input (#1462).
+    assert run.lifecycle_state == "exited"
+    assert run.lifecycle_updated_at == run.ended_at
     assert terminal.terminated_at is not None
+    assert not overlay.exists()
+
+
+def _create_overlay(tmp_path: Path, run_id: str) -> Path:
+    overlay = (
+        tmp_path
+        / "ticketry-agent-runs"
+        / run_id
+        / "invocation-test"
+    )
+    overlay.mkdir(parents=True)
+    (overlay / "settings.json").write_bytes(b"temporary")
+    return overlay
+
+
+def test_terminate_removes_overlay_even_when_run_is_already_inactive(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(agent_registry.tempfile, "tempdir", str(tmp_path))
+    overlay = _create_overlay(tmp_path, "run-inactive")
+
+    TerminalSessionService().terminate("run-inactive")
+
+    assert not overlay.exists()
+    assert not (tmp_path / "ticketry-agent-runs" / "run-inactive").exists()
 
 
 def test_reconcile_stops_watchers_and_marks_dead_runs_exited(monkeypatch):
@@ -144,6 +178,63 @@ def test_reconcile_stops_watchers_and_marks_dead_runs_exited(monkeypatch):
     assert stopped == ["run-dead"]
     assert run.status == "exited"
     assert run.ended_at is not None
+    assert run.lifecycle_state == "exited"
+    assert run.lifecycle_updated_at == run.ended_at
+
+
+def test_reconcile_publishes_retained_provider_exit_as_exited(monkeypatch):
+    service = TerminalSessionService()
+    _insert_run("run-complete")
+    _insert_session("run-complete")
+    published: list[tuple[str, str, str]] = []
+
+    monkeypatch.setattr(
+        session_module.tmux_sessions,
+        "reconcile_sessions",
+        lambda: ReconcileResult(
+            soft_deleted=[],
+            killed_orphans=[],
+            exited=["run-complete"],
+        ),
+    )
+    monkeypatch.setattr(session_module.documents_watch, "stop_watch", lambda run_id: None)
+    monkeypatch.setattr(
+        session_module,
+        "publish_backend_session_sync",
+        lambda project_id, run_id, status, **kwargs: published.append(
+            (project_id, run_id, status)
+        ),
+    )
+
+    result = service.reconcile()
+
+    run = AgentRun.objects.get(id="run-complete")
+    assert result.exited == ["run-complete"]
+    assert run.status == "exited"
+    assert run.ended_at is not None
+    assert published == [("proj-1", "run-complete", "exited")]
+
+
+def test_reconcile_removes_stale_overlays_and_preserves_active_ones(
+    monkeypatch, tmp_path
+):
+    service = TerminalSessionService()
+    _insert_run("run-active")
+    _insert_session("run-active")
+    active_overlay = _create_overlay(tmp_path, "run-active")
+    stale_overlay = _create_overlay(tmp_path, "run-stale")
+    monkeypatch.setattr(agent_registry.tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(
+        session_module.tmux_sessions,
+        "reconcile_sessions",
+        lambda: ReconcileResult(soft_deleted=[], killed_orphans=[]),
+    )
+
+    service.reconcile()
+
+    assert active_overlay.exists()
+    assert not stale_overlay.exists()
+    assert not (tmp_path / "ticketry-agent-runs" / "run-stale").exists()
 
 
 def test_reap_idle_sessions_reaps_idle_resumable_unattached(monkeypatch):

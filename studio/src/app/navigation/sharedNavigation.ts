@@ -20,6 +20,31 @@ import {
   createNavigationContext,
   type NavigationContext,
 } from "./navigationContext";
+import { useTasksStore } from "../../features/studio/stores/tasksStore";
+
+const MODULE_POSITION_ACTION_PREFIX = "modules.select-position-";
+
+/**
+ * Routes application-level module selection before focused controls can claim
+ * the event. Returns true only when a different, present module was selected.
+ */
+export function routeModulePositionNavigation(
+  event: KeyboardEvent,
+  actionId: string | null,
+): boolean {
+  if (!actionId?.startsWith(MODULE_POSITION_ACTION_PREFIX)) return false;
+
+  const position = Number(actionId.slice(MODULE_POSITION_ACTION_PREFIX.length));
+  if (!Number.isInteger(position) || position < 1 || position > 10) return false;
+
+  const tasks = useTasksStore.getState();
+  const module = tasks.modules[position - 1];
+  if (!module || module.id === tasks.selectedModuleId) return false;
+
+  event.preventDefault();
+  void tasks.selectModule(module.id);
+  return true;
+}
 
 /** Routes shortcuts shared by both Studio layouts. */
 export function routeSharedNavigation(

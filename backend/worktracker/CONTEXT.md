@@ -127,6 +127,33 @@ or whether a human or an agent moved it. It exists only where a launch
 binding exists, so automation can never be armed without launch configuration.
 _Avoid_: per-edge auto_launch, launch trigger edge
 
+**Resolved project**:
+The single project that owns every module and work item while the Projects
+surface is gated off. It is identified by a fixed key rather than chosen by a
+person, and it is created — fully configured with the standard states, issue
+types, workflows and launch bindings — the first time it is asked for. Other
+project rows continue to exist and remain reachable over the API; they are
+simply not what the surface resolves to.
+_Avoid_: current selection, implicit workspace, hidden project, fallback project
+
+**Work-item change revision**:
+The project-monotonic counter stamped on a work item whenever a committed change
+to it must reach live clients — a field edit, a relationship change, a reorder,
+a creation, or a deletion, not only a workflow-state transition. It keeps the
+name `state_revision`, which records where the counter began rather than what it
+now covers: a work item's revision advances for any published change. It is the
+sole ordering authority for replay and for rejecting a stale read; it is never a
+timestamp, an arrival order, or a global sequence.
+_Avoid_: state-only revision, transition counter, updated_at, arrival order, global sequence
+
+**Work-item change frame**:
+The notification that one work item changed, carrying only its identity and the
+revision at which it changed. It never carries the changed values — a client
+learns *that* an item changed and reads the authoritative item to learn *what*
+changed. A deletion is announced the same way; only the subsequent read
+distinguishes it.
+_Avoid_: field delta, patch frame, change payload, state frame
+
 **Subtree-run capability**:
 The per-issue-type, per-state launch-binding flag that permits a dependency
 subtree run to start from a work item in that cell. Unlike state-entry

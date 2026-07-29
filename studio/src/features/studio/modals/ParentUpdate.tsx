@@ -125,7 +125,7 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
                 setCursor(i);
                 void commit(c);
               }}
-              className={`flex cursor-pointer items-center justify-between rounded px-2 py-1 [content-visibility:auto] [contain-intrinsic-size:auto_2rem] ${
+              className={`flex cursor-pointer items-center justify-between rounded px-2 py-1 ${
                 i === cursor
                   ? "bg-selection-bg text-text-primary"
                   : "hover:bg-pane-title"

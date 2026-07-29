@@ -1,0 +1,10 @@
+{
+  "name": "ticketry-final-review-workbench",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "check": "node --check server.mjs && node --check app.js && node --test server.test.mjs app.test.mjs"
+  }
+}

@@ -4,6 +4,9 @@ import { normalizeTask } from "../lib/api";
 import { sortModulesByRecency } from "../../projects";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { useConfigStore } from "../../agents/stores/configStore";
+import { toast } from "../../../app/stores/toastStore";
+import { apiErrorMessage } from "../../../shared/api/client";
+import { rankBetween } from "../../work-items";
 import type {
   ProjectCreate,
   State,
@@ -86,6 +89,7 @@ interface TasksStoreState {
   // in-flight loadTasks response cannot overwrite a newer feed frame.
   seenStateRevisions: Record<string, number>;
   pendingStateDeltas: Record<string, PendingStateDelta>;
+  pendingReorderTaskIds: Set<string>;
 
   loadProjects: () => Promise<void>;
   createProject: (body: ProjectCreate) => Promise<ProjectSummary>;
@@ -104,6 +108,17 @@ interface TasksStoreState {
   loadSubtasks: (projectId: string, taskId: string) => Promise<void>;
   updateTaskStatus: (projectId: string, taskId: string, stateId: string) => Promise<void>;
   updateTaskParent: (projectId: string, taskId: string, parentId: string | null) => Promise<void>;
+  moveTaskWithinState: (
+    taskId: string,
+    beforeId: string | null,
+    afterId: string | null,
+  ) => Promise<boolean>;
+  moveTaskToState: (
+    taskId: string,
+    destinationState: TaskState,
+    beforeId: string | null,
+    afterId: string | null,
+  ) => Promise<boolean>;
   refreshTasks: () => Promise<void>;
   applyWorkItemStateDelta: (
     workItemId: string,
@@ -234,6 +249,17 @@ function latestTaskRevision(state: TasksStoreState, itemId: string): number {
   );
 }
 
+function latestTaskUpdatedAt(
+  state: TasksStoreState,
+  itemId: string,
+): string | undefined {
+  return findTaskCopies(state, itemId)
+    .map((task) => task.updated_at)
+    .filter((value): value is string => typeof value === "string")
+    .sort()
+    .at(-1);
+}
+
 function patchTaskEverywhere(
   state: TasksStoreState,
   itemId: string,
@@ -258,6 +284,34 @@ function patchTaskEverywhere(
       : state.details;
   if (!found) return null;
   return { tasks, subtasks, details };
+}
+
+function taskRank(state: TasksStoreState, itemId: string | null): string | null {
+  if (itemId === null) return null;
+  return findTaskCopies(state, itemId)[0]?.rank ?? null;
+}
+
+function currentRankNeighbors(
+  state: TasksStoreState,
+  task: TaskSummary,
+): { beforeId: string | null; afterId: string | null } {
+  const canonical = state.tasks
+    .filter(
+      (candidate) =>
+        candidate.id !== TEMP_TASK_ID &&
+        candidate.state.id === task.state.id &&
+        typeof candidate.rank === "string" &&
+        candidate.rank.length > 0,
+    )
+    .sort((a, b) => (a.rank! < b.rank! ? -1 : a.rank! > b.rank! ? 1 : 0));
+  const index = canonical.findIndex((candidate) => candidate.id === task.id);
+  return {
+    beforeId: index > 0 ? canonical[index - 1].id : null,
+    afterId:
+      index >= 0 && index < canonical.length - 1
+        ? canonical[index + 1].id
+        : null,
+  };
 }
 
 // Overlay accepted feed deltas onto a freshly fetched task tree: a row whose
@@ -303,6 +357,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   },
   seenStateRevisions: {},
   pendingStateDeltas: {},
+  pendingReorderTaskIds: new Set(),
 
   async loadProjects() {
     set((s) => ({ loading: { ...s.loading, projects: true } }));
@@ -657,6 +712,192 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
         ? get().loadDetails(projectId, taskId)
         : Promise.resolve(),
     ]);
+  },
+
+  async moveTaskWithinState(taskId, beforeId, afterId) {
+    const task = get().tasks.find((candidate) => candidate.id === taskId);
+    if (!task) return false;
+    return get().moveTaskToState(taskId, task.state, beforeId, afterId);
+  },
+
+  async moveTaskToState(taskId, destinationState, beforeId, afterId) {
+    const snapshot = get();
+    const task = snapshot.tasks.find(
+      (candidate) =>
+        candidate.id === taskId &&
+        candidate.id !== TEMP_TASK_ID &&
+        candidate.parent_id === snapshot.selectedModuleId,
+    );
+    if (
+      !task ||
+      !destinationState.id ||
+      !snapshot.selectedProjectId ||
+      !snapshot.selectedModuleId ||
+      snapshot.pendingReorderTaskIds.has(taskId)
+    ) {
+      return false;
+    }
+    const neighborIds = [beforeId, afterId].filter(
+      (id): id is string => id !== null,
+    );
+    const neighbors = neighborIds.map((id) =>
+      snapshot.tasks.find((candidate) => candidate.id === id),
+    );
+    if (
+      neighbors.some(
+        (neighbor) =>
+          !neighbor ||
+          neighbor.id === taskId ||
+          neighbor.parent_id !== snapshot.selectedModuleId ||
+          neighbor.state.id !== destinationState.id,
+      )
+    ) {
+      return false;
+    }
+    const changesState = task.state.id !== destinationState.id;
+    if (!changesState) {
+      const currentNeighbors = currentRankNeighbors(snapshot, task);
+      if (
+        currentNeighbors.beforeId === beforeId &&
+        currentNeighbors.afterId === afterId
+      ) {
+        return false;
+      }
+    }
+
+    const beforeRank = taskRank(snapshot, beforeId);
+    const afterRank = taskRank(snapshot, afterId);
+    if (
+      (beforeId !== null && beforeRank === null) ||
+      (afterId !== null && afterRank === null)
+    ) {
+      return false;
+    }
+    let optimisticRank: string;
+    try {
+      optimisticRank = rankBetween(beforeRank, afterRank);
+    } catch {
+      return false;
+    }
+
+    const projectId = snapshot.selectedProjectId;
+    const moduleId = snapshot.selectedModuleId;
+    const loadGeneration = tasksLoadGeneration;
+    const baseRevision = latestTaskRevision(snapshot, taskId);
+    const baseUpdatedAt = latestTaskUpdatedAt(snapshot, taskId);
+    const previousRank = task.rank;
+    const previousState = task.state;
+    const optimistic = patchTaskEverywhere(snapshot, taskId, (copy) => ({
+      ...copy,
+      state: destinationState,
+      rank: optimisticRank,
+    }));
+    if (!optimistic) return false;
+    set({
+      ...optimistic,
+      selectedTaskId: taskId,
+      pendingReorderTaskIds: new Set([
+        ...snapshot.pendingReorderTaskIds,
+        taskId,
+      ]),
+    });
+
+    let transitionAccepted = false;
+    try {
+      if (changesState) {
+        const transitioned = await api.postTaskStatus(
+          projectId,
+          taskId,
+          destinationState.id,
+          true,
+        );
+        transitionAccepted = true;
+        const current = get();
+        const stillCurrent =
+          current.selectedProjectId === projectId &&
+          current.selectedModuleId === moduleId &&
+          tasksLoadGeneration === loadGeneration;
+        if (
+          stillCurrent &&
+          latestTaskRevision(current, taskId) <=
+            (transitioned.state_revision ?? baseRevision)
+        ) {
+          const accepted = patchTaskEverywhere(current, taskId, (copy) => ({
+            ...copy,
+            state: transitioned.state,
+            state_revision: transitioned.state_revision,
+            updated_at: transitioned.updated_at,
+            // The transition response still carries the old placement. Keep
+            // the optimistic seam until the reorder response reconciles it.
+            rank: optimisticRank,
+          }));
+          if (accepted) set(accepted);
+        }
+      }
+
+      const authoritative = await api.reorderTask(taskId, beforeId, afterId);
+      const current = get();
+      const stillCurrent =
+        current.selectedProjectId === projectId &&
+        current.selectedModuleId === moduleId &&
+        tasksLoadGeneration === loadGeneration;
+      if (
+        stillCurrent &&
+        latestTaskRevision(current, taskId) <=
+          (authoritative.state_revision ?? baseRevision) &&
+        (!authoritative.updated_at ||
+          !latestTaskUpdatedAt(current, taskId) ||
+          latestTaskUpdatedAt(current, taskId)! <= authoritative.updated_at)
+      ) {
+        const reconciled = patchTaskEverywhere(current, taskId, () => authoritative);
+        if (reconciled) set(reconciled);
+      }
+      return true;
+    } catch (error) {
+      const current = get();
+      const stillCurrent =
+        current.selectedProjectId === projectId &&
+        current.selectedModuleId === moduleId &&
+        tasksLoadGeneration === loadGeneration;
+      const currentUpdatedAt = latestTaskUpdatedAt(current, taskId);
+      const newerRankCopy =
+        currentUpdatedAt !== undefined &&
+        (baseUpdatedAt === undefined || currentUpdatedAt > baseUpdatedAt);
+      if (
+        !transitionAccepted &&
+        stillCurrent &&
+        latestTaskRevision(current, taskId) <= baseRevision &&
+        !newerRankCopy
+      ) {
+        const restored = patchTaskEverywhere(current, taskId, (copy) => ({
+          ...copy,
+          state: previousState,
+          rank: previousRank,
+        }));
+        if (restored) set(restored);
+      }
+      if (transitionAccepted) {
+        try {
+          await get().refreshTasks();
+        } catch {
+          // The accepted transition remains authoritative even when the
+          // follow-up refresh cannot currently recover the server's rank.
+        }
+        toast.error(
+          `Ticket moved, but placement failed: ${apiErrorMessage(error)}`,
+        );
+      } else {
+        toast.error(apiErrorMessage(error));
+      }
+      return false;
+    } finally {
+      set((current) => {
+        if (!current.pendingReorderTaskIds.has(taskId)) return current;
+        const pendingReorderTaskIds = new Set(current.pendingReorderTaskIds);
+        pendingReorderTaskIds.delete(taskId);
+        return { pendingReorderTaskIds };
+      });
+    }
   },
 
   async refreshTasks() {

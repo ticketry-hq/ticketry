@@ -167,6 +167,55 @@ async def test_older_lifecycle_update_is_ignored() -> None:
     assert stored.lifecycle_state == "turn_complete"
 
 
+async def test_lifecycle_update_is_refused_once_a_run_has_ended() -> None:
+    """A finished run is frozen: process exit outranks any hook report (#1462).
+
+    An agent whose process outlives its tmux session keeps POSTing to the
+    lifecycle ingress baked into its launch command. Those late events carry a
+    fresh timestamp, so the monotonicity check alone would happily resurrect a
+    run that ended days earlier.
+    """
+
+    await dao.insert_agent_run(
+        _make_run("run-ended", task_id="task-1", started_at="2026-05-29T10:00:00")
+    )
+    assert await dao.set_lifecycle_state(
+        "run-ended", "permission_required", updated_at="2026-05-29T10:05:00+00:00"
+    ) is True
+
+    await dao.update_agent_run_exit(
+        "run-ended", status="exited", ended_at="2026-05-29T10:06:00+00:00"
+    )
+
+    # Strictly newer than both the last state and the exit, so only the
+    # ended_at guard can reject it.
+    assert await dao.set_lifecycle_state(
+        "run-ended", "working", updated_at="2026-06-12T09:00:00+00:00"
+    ) is False
+
+    stored = await AgentRun.objects.aget(id="run-ended")
+    assert stored.lifecycle_state == "permission_required"
+    assert stored.lifecycle_updated_at == "2026-05-29T10:05:00+00:00"
+
+
+async def test_lifecycle_update_still_applies_while_a_run_is_live() -> None:
+    """The ended_at guard must not freeze a run that is still going."""
+
+    await dao.insert_agent_run(
+        _make_run("run-live", task_id="task-1", started_at="2026-05-29T10:00:00")
+    )
+
+    assert await dao.set_lifecycle_state(
+        "run-live", "working", updated_at="2026-05-29T10:05:00+00:00"
+    ) is True
+    assert await dao.set_lifecycle_state(
+        "run-live", "exited", updated_at="2026-05-29T10:07:00+00:00"
+    ) is True
+
+    stored = await AgentRun.objects.aget(id="run-live")
+    assert stored.lifecycle_state == "exited"
+
+
 async def test_history_filters_task_orders_and_limits() -> None:
     for run_id, task_id, started_at in (
         ("old", "task-1", "2026-05-29T09:00:00"),

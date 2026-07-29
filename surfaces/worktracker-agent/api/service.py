@@ -604,6 +604,7 @@ class WorktrackerService:
         agent: Optional[str] = None,
         model: Optional[str] = None,
         reasoning: Optional[str] = None,
+        required_skills: Optional[List[str]] = None,
     ):
         return self._workflow_request(
             self.sdk.workflows.upsert_issue_type_workflow_launch_binding,
@@ -614,6 +615,7 @@ class WorktrackerService:
                 agent=agent,
                 model=model,
                 reasoning=reasoning,
+                required_skills=required_skills,
                 workflow_revision=workflow_revision,
             ),
         )

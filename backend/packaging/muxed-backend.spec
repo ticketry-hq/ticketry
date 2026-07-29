@@ -21,6 +21,15 @@ def include_source_package(source_root, package_name):
 
 
 repository_root = Path(SPECPATH).parents[1]
+skill_catalog_root = (
+    repository_root / "backend" / "apps" / "terminals" / "agents" / "skills"
+)
+datas.append(
+    (
+        str(skill_catalog_root),
+        "apps/terminals/agents/skills",
+    )
+)
 worktracker_agent_root = repository_root / "surfaces" / "worktracker-agent"
 datas.append(
     (

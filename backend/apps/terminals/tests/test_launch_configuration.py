@@ -55,6 +55,7 @@ def launch_policy():
         agent="claude",
         model="sonnet",
         reasoning="high",
+        required_skills=["to-spec"],
     )
     return issue, binding
 
@@ -159,6 +160,7 @@ def test_explicit_binding_overrides_the_global_default(
     assert resolved.agent == "claude"
     assert resolved.model == "sonnet"
     assert resolved.reasoning == "high"
+    assert resolved.required_skills == ("to-spec",)
 
 
 def test_deactivated_provider_binding_is_blocked_not_substituted(
@@ -327,6 +329,8 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
 
     command = captured["command"]
     assert "Configured workflow prompt" in command
+    assert "Required skills supplied for this invocation: to-spec" in command
+    assert "--plugin-dir" not in command
     assert "LEGACY PROFILE PROMPT" not in command
     assert "--model sonnet" in command
     assert "--effort high" in command

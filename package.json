@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "dev": "npm run desktop:dev",
+    "web": "node scripts/web-dev.mjs",
+    "web:dev": "npm run web",
     "openapi:export": "node scripts/export-openapi.mjs",
     "sdk:generate": "node scripts/generate-typescript-sdk.mjs",
     "python-sdk:generate": "node scripts/generate-python-sdk.mjs",

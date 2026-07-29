@@ -5,7 +5,6 @@ import type {
   PromptInputPayload,
 } from "../../features/agents/terminal";
 import type { ParentUpdatePayload } from "../../features/studio/modals/ParentUpdate";
-import type { AddModulePayload } from "../../features/studio/modals/AddModule";
 import { useModalStore } from "./modalStore";
 
 const AgentPicker = lazy(async () => ({
@@ -93,7 +92,7 @@ export function ModalHost() {
     case "add-module":
       return (
         <Suspense fallback={null}>
-          <AddModule payload={top.payload as AddModulePayload | undefined} />
+          <AddModule />
         </Suspense>
       );
     case "add-project":

@@ -164,6 +164,8 @@ async def test_spawn_happy_path_returns_id_and_persists(tmp_config, tmp_path, mo
     run = await AgentRun.objects.aget(id=run_id)
     assert run.task_id == TASK_ID
     assert run.status == "running"
+    assert run.lifecycle_state == "starting"
+    assert run.lifecycle_updated_at == run.started_at
     assert run.project_id == PROJECT_ID
     assert run.module_id == MODULE_ID
 

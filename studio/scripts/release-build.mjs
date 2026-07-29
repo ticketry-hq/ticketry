@@ -88,14 +88,30 @@ export function validateManifest(manifest) {
   return manifest;
 }
 
-export function validateMacOSReleaseEnvironment(environment = process.env) {
-  const missing = [];
-  if (!environment.APPLE_SIGNING_IDENTITY) missing.push("APPLE_SIGNING_IDENTITY");
+function macOSCredentialState(environment) {
   const passwordAuthentication = ["APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID"];
   const apiKeyAuthentication = ["APPLE_API_KEY", "APPLE_API_ISSUER", "APPLE_API_KEY_PATH"];
   const hasPasswordAuthentication = passwordAuthentication.every((key) => environment[key]);
   const hasApiKeyAuthentication = apiKeyAuthentication.every((key) => environment[key]);
-  if (!hasPasswordAuthentication && !hasApiKeyAuthentication) {
+  return {
+    hasSigningIdentity: Boolean(environment.APPLE_SIGNING_IDENTITY),
+    hasNotarizationAuthentication: hasPasswordAuthentication || hasApiKeyAuthentication,
+  };
+}
+
+export function validateMacOSReleaseEnvironment(environment = process.env, { allowUnsigned = false } = {}) {
+  const { hasSigningIdentity, hasNotarizationAuthentication } = macOSCredentialState(environment);
+  if (allowUnsigned) {
+    if (hasSigningIdentity && hasNotarizationAuthentication) {
+      throw new ReleaseManifestError(
+        "--allow-unsigned cannot be used when complete macOS signing and notarization credentials are present",
+      );
+    }
+    return;
+  }
+  const missing = [];
+  if (!hasSigningIdentity) missing.push("APPLE_SIGNING_IDENTITY");
+  if (!hasNotarizationAuthentication) {
     missing.push("APPLE_ID,APPLE_PASSWORD,APPLE_TEAM_ID or APPLE_API_KEY,APPLE_API_ISSUER,APPLE_API_KEY_PATH");
   }
   if (missing.length > 0) {
@@ -113,8 +129,18 @@ export function validateComponentVersions(manifest, { tauriVersion, cargoVersion
   }
 }
 
-export function macosTauriSigningConfig(manifest, environment = process.env) {
+export function macosTauriSigningConfig(manifest, environment = process.env, { allowUnsigned = false } = {}) {
   const signing = manifest.release_policy.macos.signing;
+  if (allowUnsigned) {
+    return JSON.stringify({
+      bundle: {
+        macOS: {
+          hardenedRuntime: false,
+          entitlements: null,
+        },
+      },
+    });
+  }
   return JSON.stringify({
     bundle: {
       macOS: {
@@ -126,13 +152,18 @@ export function macosTauriSigningConfig(manifest, environment = process.env) {
   });
 }
 
+export function macosTauriBuildEnvironment(environment = process.env, { allowUnsigned = false } = {}) {
+  if (!allowUnsigned) return environment;
+  return { ...environment, CI: "true" };
+}
+
 export function selectTargets(manifest, requestedTarget = "all") {
   validateManifest(manifest);
   if (requestedTarget === "all") return manifest.targets;
   const target = manifest.targets.find(({ id }) => id === requestedTarget);
   if (!target) {
     throw new ReleaseManifestError(
-      `Target "${requestedTarget}" is not declared in ${path.basename(manifestPath)}. `
+      `Unsupported release target "${requestedTarget}" for ${path.basename(manifestPath)}. `
         + `Declared targets: ${manifest.targets.map(({ id }) => id).join(", ")}.`,
     );
   }
@@ -165,7 +196,7 @@ async function requireMigrationDirectory(root, relativePath) {
 export async function validateReleaseInputs(
   manifest,
   root = studioRoot,
-  { includeFrontendOutputs = true } = {},
+  { includeFrontendOutputs = true, allowUnsigned = false } = {},
 ) {
   validateManifest(manifest);
   const { artifacts } = manifest;
@@ -178,7 +209,9 @@ export async function validateReleaseInputs(
       ? artifacts.frontend.required_outputs.map((asset) => requireFile(root, asset, "frontend asset"))
       : []),
     ...artifacts.runtime_resources.map((asset) => requireFile(root, asset, "runtime resource")),
-    requireFile(root, manifest.release_policy.macos.signing.entitlements, "macOS signing entitlements"),
+    ...(allowUnsigned
+      ? []
+      : [requireFile(root, manifest.release_policy.macos.signing.entitlements, "macOS signing entitlements")]),
     requireFile(root, manifest.release_policy.rollback.recovery_document, "rollback recovery document"),
     ...artifacts.sidecar.migration_directories.map((directory) => requireMigrationDirectory(root, directory)),
   ]);
@@ -196,9 +229,9 @@ export async function validateReleaseInputs(
   validateComponentVersions(manifest, { tauriVersion: tauriConfiguration.version, cargoVersion });
 }
 
-async function run(command, args, label) {
+async function run(command, args, label, { environment = process.env } = {}) {
   await new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: studioRoot, stdio: "inherit" });
+    const child = spawn(command, args, { cwd: studioRoot, env: environment, stdio: "inherit" });
     child.once("error", reject);
     child.once("exit", (code, signal) => {
       if (code === 0) resolve();
@@ -271,33 +304,72 @@ async function findFileWithin(directory, basename) {
   return files.find((file) => path.basename(file) === basename);
 }
 
-async function verifyMacOSBundle(manifest, target, artifacts) {
+export async function verifyMacOSBundle(
+  manifest,
+  target,
+  artifacts,
+  {
+    allowUnsigned = false,
+    execute = run,
+    capture = runCapture,
+    log = console.log,
+  } = {},
+) {
   const appExecutable = path.join(artifacts.app, "Contents", "MacOS", manifest.artifacts.tauri.binary_name);
   const embeddedSidecar = await findFileWithin(artifacts.app, target.sidecar.bundle_binary_name);
+  const embeddedHookRunner = await findFileWithin(artifacts.app, "ticketry-hook");
   if (!(await exists(appExecutable))) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing its app executable: ${appExecutable}`);
   }
   if (!embeddedSidecar) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing embedded sidecar ${target.sidecar.bundle_binary_name}`);
   }
-  for (const [label, binary] of [["app", appExecutable], ["embedded sidecar", embeddedSidecar]]) {
-    const architectures = await runCapture("lipo", ["-archs", binary], `${label} architecture check for ${target.id}`);
+  if (!embeddedHookRunner) {
+    throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing embedded hook runner ticketry-hook`);
+  }
+  for (const [label, binary] of [
+    ["app", appExecutable],
+    ["embedded sidecar", embeddedSidecar],
+    ["embedded hook runner", embeddedHookRunner],
+  ]) {
+    const architectures = await capture("lipo", ["-archs", binary], `${label} architecture check for ${target.id}`);
     if (!architectures.split(/\s+/).includes(target.build_architecture)) {
       throw new ReleaseManifestError(
         `${label} in ${target.id} has architectures "${architectures}", expected ${target.build_architecture}`,
       );
     }
   }
-  await run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", artifacts.app], `signature verification for ${target.id}`);
-  await run("spctl", ["--assess", "--type", "execute", "--verbose=4", artifacts.app], `notarization verification for ${target.id}`);
+  if (allowUnsigned) {
+    await execute(
+      "codesign",
+      ["--force", "--deep", "-s", "-", artifacts.app],
+      `ad-hoc signing for ${target.id}`,
+    );
+  }
+  await execute(
+    "codesign",
+    ["--verify", "--deep", "--strict", "--verbose=2", artifacts.app],
+    `signature verification for ${target.id}`,
+  );
+  if (allowUnsigned) {
+    log(`Skipping spctl assessment for ${target.id} because --allow-unsigned was specified.`);
+  } else {
+    await execute(
+      "spctl",
+      ["--assess", "--type", "execute", "--verbose=4", artifacts.app],
+      `notarization verification for ${target.id}`,
+    );
+  }
 }
 
-function releaseMetadata(manifest, target) {
+export function releaseMetadata(manifest, target, { allowUnsigned = false } = {}) {
   return {
     format_version: 1,
     product: manifest.product,
     release_version: manifest.release_version,
     target: target.id,
+    signed: !allowUnsigned,
+    notarized: !allowUnsigned,
     components: {
       app_version: target.compatibility.app_version,
       sidecar_version: target.compatibility.sidecar_version,
@@ -310,8 +382,13 @@ function releaseMetadata(manifest, target) {
   };
 }
 
-async function stageTarget(manifest, target, artifacts) {
-  const destination = path.join(studioRoot, "release-output", manifest.release_version, target.id);
+export async function stageTarget(
+  manifest,
+  target,
+  artifacts,
+  { allowUnsigned = false, root = studioRoot } = {},
+) {
+  const destination = path.join(root, "release-output", manifest.release_version, target.id);
 
   await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
@@ -320,10 +397,14 @@ async function stageTarget(manifest, target, artifacts) {
     await cp(source, destinationPath, options);
   };
   await Promise.all([
-    copyArtifact(artifacts.app, path.join(destination, "Muxed Studio.app"), { recursive: true }),
+    copyArtifact(artifacts.app, path.join(destination, "Ticketry.app"), { recursive: true }),
     copyArtifact(artifacts.dmg, path.join(destination, path.basename(artifacts.dmg)), { recursive: false }),
-    writeFile(path.join(destination, "release-metadata.json"), `${JSON.stringify(releaseMetadata(manifest, target), null, 2)}\n`),
+    writeFile(
+      path.join(destination, "release-metadata.json"),
+      `${JSON.stringify(releaseMetadata(manifest, target, { allowUnsigned }), null, 2)}\n`,
+    ),
   ]);
+  return destination;
 }
 
 async function verifySidecarArchitecture(target) {
@@ -341,11 +422,11 @@ async function verifySidecarArchitecture(target) {
   }
 }
 
-export async function buildRelease(manifest, targets) {
-  validateMacOSReleaseEnvironment();
+export async function buildRelease(manifest, targets, { allowUnsigned = false } = {}) {
+  validateMacOSReleaseEnvironment(process.env, { allowUnsigned });
   const [frontendCommand, ...frontendArgs] = manifest.artifacts.frontend.command;
   await run(frontendCommand, frontendArgs, "frontend build");
-  await validateReleaseInputs(manifest);
+  await validateReleaseInputs(manifest, studioRoot, { allowUnsigned });
   for (const target of targets) {
     await run(
       "arch",
@@ -356,12 +437,19 @@ export async function buildRelease(manifest, targets) {
     const [tauriCommand, ...tauriArgs] = manifest.artifacts.tauri.command;
     await run(
       tauriCommand,
-      [...tauriArgs, "--target", target.rust_target, "--config", macosTauriSigningConfig(manifest)],
+      [
+        ...tauriArgs,
+        "--target",
+        target.rust_target,
+        "--config",
+        macosTauriSigningConfig(manifest, process.env, { allowUnsigned }),
+      ],
       `Tauri build for ${target.id}`,
+      { environment: macosTauriBuildEnvironment(process.env, { allowUnsigned }) },
     );
     const artifacts = await bundleArtifacts(manifest, target);
-    await verifyMacOSBundle(manifest, target, artifacts);
-    await stageTarget(manifest, target, artifacts);
+    await verifyMacOSBundle(manifest, target, artifacts, { allowUnsigned });
+    await stageTarget(manifest, target, artifacts, { allowUnsigned });
   }
 }
 
@@ -374,9 +462,10 @@ export async function loadManifest(filePath = manifestPath) {
   }
 }
 
-function parseArguments(arguments_) {
+export function parseArguments(arguments_) {
   let target = "all";
   let validateOnly = false;
+  let allowUnsigned = false;
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
     if (argument === "--target") {
@@ -384,16 +473,18 @@ function parseArguments(arguments_) {
       index += 1;
     } else if (argument === "--validate") {
       validateOnly = true;
+    } else if (argument === "--allow-unsigned") {
+      allowUnsigned = true;
     } else {
       throw new ReleaseManifestError(`Unknown release build option: ${argument}`);
     }
   }
   if (!target) throw new ReleaseManifestError("--target requires a manifest target id or all");
-  return { target, validateOnly };
+  return { target, validateOnly, allowUnsigned };
 }
 
 async function main() {
-  const { target, validateOnly } = parseArguments(process.argv.slice(2));
+  const { target, validateOnly, allowUnsigned } = parseArguments(process.argv.slice(2));
   const manifest = await loadManifest();
   const targets = selectTargets(manifest, target);
   if (validateOnly) {
@@ -401,7 +492,7 @@ async function main() {
     console.log(`Release manifest is valid for: ${targets.map(({ id }) => id).join(", ")}`);
     return;
   }
-  await buildRelease(manifest, targets);
+  await buildRelease(manifest, targets, { allowUnsigned });
   console.log(`Release ${manifest.release_version} built for: ${targets.map(({ id }) => id).join(", ")}`);
 }
 

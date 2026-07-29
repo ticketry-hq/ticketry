@@ -34,9 +34,10 @@ class ScopedWorkflowLaunchBindingOut(BaseModel):
     model: Optional[StrictStr] = None
     prompt: StrictStr
     reasoning: Optional[StrictStr] = None
+    required_skills: List[StrictStr]
     state_id: UUID
     subtree_run_enabled: StrictBool
-    __properties: ClassVar[List[str]] = ["agent", "auto_start", "model", "prompt", "reasoning", "state_id", "subtree_run_enabled"]
+    __properties: ClassVar[List[str]] = ["agent", "auto_start", "model", "prompt", "reasoning", "required_skills", "state_id", "subtree_run_enabled"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -109,6 +110,7 @@ class ScopedWorkflowLaunchBindingOut(BaseModel):
             "model": obj.get("model"),
             "prompt": obj.get("prompt"),
             "reasoning": obj.get("reasoning"),
+            "required_skills": obj.get("required_skills"),
             "state_id": obj.get("state_id"),
             "subtree_run_enabled": obj.get("subtree_run_enabled")
         })

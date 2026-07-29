@@ -19,7 +19,7 @@ DEFAULT_WORKFLOW_TEMPLATES = {
         },
     },
     "Implementation": {
-        "start": "Ready",
+        "start": "Implement",
         "transitions": {
             "Ready": ("Implement", "Cancelled"),
             "Implement": ("Review", "Cancelled"),

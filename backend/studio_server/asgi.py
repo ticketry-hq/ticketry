@@ -39,6 +39,7 @@ django_asgi_app = get_asgi_application()
 from studio_server.routing import websocket_urlpatterns
 
 from apps.documents import watch as documents_watch
+from apps.runs import hook_spool
 from apps.terminals.session import session as terminal_session
 from apps.worktrees import service as worktrees_service
 
@@ -46,6 +47,8 @@ from apps.worktrees import service as worktrees_service
 # Stop every design-directory watcher on shutdown; rescan re-discovers (#521).
 
 register_shutdown(documents_watch.stop_all)
+register_startup(hook_spool.start)
+register_shutdown(hook_spool.stop)
 
 
 async def _reconcile_worktrees() -> None:

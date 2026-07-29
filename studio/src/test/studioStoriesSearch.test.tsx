@@ -109,12 +109,18 @@ describe("Studio Stories search", () => {
     const search = screen.getByRole("textbox", { name: "Search stories" });
     const ideaEntry = screen.getByRole("textbox", { name: "Capture an idea" });
     expect(
+      screen.getByRole("button", { name: "Collapse Done" }),
+    ).toHaveTextContent("Done0");
+    expect(
       search.compareDocumentPosition(ideaEntry) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
     fireEvent.change(search, { target: { value: "  ALPHA  " } });
     expect(visibleStoryNames()).toEqual([expect.stringMatching(/Alpha launch/)]);
+    expect(
+      screen.queryByRole("button", { name: "Collapse Done" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: "202" } });
     expect(visibleStoryNames()).toEqual([
@@ -123,11 +129,28 @@ describe("Studio Stories search", () => {
 
     fireEvent.change(search, { target: { value: "   " } });
     expect(visibleStoryNames()).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Collapse Done" }),
+    ).toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: "alpha" } });
     fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
     expect(search).toHaveValue("");
     expect(visibleStoryNames()).toHaveLength(2);
+  });
+
+  it("keeps the empty-pane message when there are genuinely no task rows", () => {
+    useTasksStore.setState({
+      tasks: [],
+      states: [TODO, DONE],
+    });
+
+    render(<TasksPane />);
+
+    expect(screen.getByText("No stories")).toBeInTheDocument();
+    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
+    expect(screen.queryByText(TODO.name)).not.toBeInTheDocument();
+    expect(screen.queryByText(DONE.name)).not.toBeInTheDocument();
   });
 
   it("hands keyboard focus between search and only the visible Story rows", () => {

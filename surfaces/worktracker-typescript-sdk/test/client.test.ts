@@ -180,6 +180,28 @@ describe("createWorkTrackerClient", () => {
 });
 
 describe("createAgentStatusClient", () => {
+  it("launches with the current-state default binding and an empty payload", async () => {
+    const launched = {
+      target_id: "task/1",
+      agent: "codex",
+      agent_run_id: "run-1",
+    };
+    const fetch = vi.fn().mockResolvedValue(response(launched, 201));
+    const client = createAgentStatusClient({ baseUrl: "/api/", fetch });
+
+    await expect(client.launchAgent({ issueId: "task/1" }))
+      .resolves.toEqual(launched);
+    expect(fetch.mock.calls[0][0]).toBe(
+      "/api/work-items/task%2F1/launch-agent",
+    );
+    expect(fetch.mock.calls[0][1]).toMatchObject({
+      method: "POST",
+      body: "{}",
+    });
+    expect(new Headers(fetch.mock.calls[0][1].headers).get("content-type"))
+      .toBe("application/json");
+  });
+
   it("returns the typed project snapshot and supports task scope", async () => {
     const snapshot = {
       scope: { project_id: "p1", task_id: "t/1" },

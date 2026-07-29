@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 
 def test_ensure_local_profile_creates_once_and_refreshes_shared_config(
     tmp_config,
@@ -27,7 +29,73 @@ def test_get_config_empty(client):
     body = response.json()
     assert body["recent_profile_index"] is None
     assert body["profiles"] == []
+    assert body["features"] == {"projects": False}
     assert "default_agent_prompts" not in body
+
+
+@pytest.mark.parametrize(
+    ("contents", "expected"),
+    [
+        ('{"projects": true}', True),
+        ('{"projects": false}', False),
+        ("{}", False),
+        ("", False),
+        ("not json", False),
+        ('{"projects": true, "newer_flag": true}', True),
+    ],
+)
+def test_get_config_loads_features_at_process_start(
+    client, tmp_config, contents, expected, monkeypatch
+):
+    from apps.settings_store import config as config_module
+
+    features_file = tmp_config.with_name("features.json")
+    features_file.parent.mkdir(parents=True, exist_ok=True)
+    features_file.write_text(contents)
+    monkeypatch.setattr(config_module, "features", config_module.load_features())
+
+    response = client.get("/api/config")
+
+    assert response.status_code == 200
+    assert response.json()["features"] == {"projects": expected}
+
+
+def test_get_config_defaults_unreadable_features_file(client, tmp_config, monkeypatch):
+    from apps.settings_store import config as config_module
+
+    features_file = tmp_config.with_name("features.json")
+    features_file.parent.mkdir(parents=True, exist_ok=True)
+    features_file.write_text('{"projects": true}')
+    original_read_text = type(features_file).read_text
+
+    def unreadable(path, *args, **kwargs):
+        if path == features_file:
+            raise PermissionError("unreadable")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(features_file), "read_text", unreadable)
+    monkeypatch.setattr(config_module, "features", config_module.load_features())
+
+    response = client.get("/api/config")
+
+    assert response.status_code == 200
+    assert response.json()["features"] == {"projects": False}
+
+
+def test_features_are_unchanged_until_process_restart(client, tmp_config, monkeypatch):
+    from apps.settings_store import config as config_module
+
+    features_file = tmp_config.with_name("features.json")
+    features_file.parent.mkdir(parents=True, exist_ok=True)
+    features_file.write_text('{"projects": false}')
+    monkeypatch.setattr(config_module, "features", config_module.load_features())
+    assert client.get("/api/config").json()["features"] == {"projects": False}
+
+    features_file.write_text('{"projects": true}')
+    assert client.get("/api/config").json()["features"] == {"projects": False}
+
+    monkeypatch.setattr(config_module, "features", config_module.load_features())
+    assert client.get("/api/config").json()["features"] == {"projects": True}
 
 
 def test_round_trip_profile_crud(client, tmp_config, sample_profile):
@@ -83,6 +151,46 @@ def test_round_trip_profile_crud(client, tmp_config, sample_profile):
     assert response.status_code == 200
     assert response.json()["profiles"] == []
     assert response.json()["recent_profile_index"] is None
+
+
+def test_profile_writes_reject_features_and_do_not_disturb_file(
+    client, tmp_config, sample_profile
+):
+    features_file = tmp_config.with_name("features.json")
+    features_contents = '{"projects": true, "newer_flag": false}\n'
+    features_file.parent.mkdir(parents=True, exist_ok=True)
+    features_file.write_text(features_contents)
+
+    response = client.post(
+        "/api/config/profiles",
+        data={**sample_profile, "features": {"projects": False}},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 422
+    assert features_file.read_text() == features_contents
+
+    response = client.post(
+        "/api/config/profiles",
+        data=sample_profile,
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert "features" not in response.json()
+    assert features_file.read_text() == features_contents
+
+    response = client.put(
+        "/api/config/profiles/0",
+        data={**sample_profile, "features": {"projects": False}},
+        content_type="application/json",
+    )
+    assert response.status_code == 422
+    assert features_file.read_text() == features_contents
+
+    response = client.delete("/api/config/profiles/0")
+    assert response.status_code == 200
+    assert "features" not in response.json()
+    assert features_file.read_text() == features_contents
 
 
 def test_profile_optional_fields_use_source_defaults(client):

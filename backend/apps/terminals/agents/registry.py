@@ -1,22 +1,16 @@
 """One door per agent for command construction and lifecycle/MCP injection.
 
-Before this module the launch path knew each agent twice: once in a
-slug -> launch-argv command table (the retired ``commands`` module) and again
-as a chain of four ``inject_<agent>_lifecycle_settings`` calls run
-unconditionally, each a
-no-op for the other three agents (guarded by ``argv[0] != slug``). An
-:class:`AgentAdapter` folds both halves behind a single slug lookup: the
-launch path asks the registry for the one adapter and calls
-``command`` / ``inject`` on it, so cross-agent calling is structurally
-impossible rather than merely idempotent.
+An :class:`AgentAdapter` owns both halves behind a single slug lookup. The
+launch path selects one adapter, carries that exact adapter through executable
+approval, and calls its provider-specific ``command`` / ``inject`` methods.
+Provider injectors therefore transform their input directly; they do not
+repeat agent routing by inspecting ``argv[0]``.
 
 Recorded decisions:
 
-- **Gemini gets no MCP injection today.** Every adapter's :meth:`inject`
-  accepts ``mcp_url`` for a uniform call site, but the Gemini adapter
-  deliberately ignores it — its underlying injector wires lifecycle hooks
-  only, no WorkTracker MCP server. This asymmetry is intentional; changing it is a
-  separate ticket.
+- **Workflow-capable providers get WorkTracker MCP.** Claude, Codex, Agy, and
+  Gemini all receive a run-authorized WorkTracker server. This is required by
+  the pinned ``to-spec`` and ``to-tickets`` skills.
 - **Resume argv mirrors launch argv.** Each adapter now also builds a
   provider-native resume argv from a session id; the interactive launcher
   still injects hooks after the adapter builds that argv. agy resumes via
@@ -36,8 +30,12 @@ Recorded decisions:
 
 from __future__ import annotations
 
+import re
+import shutil
+import tempfile
 from collections.abc import Set
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 from worktracker.launch_capabilities import PROVIDER_CAPABILITIES
@@ -56,6 +54,10 @@ from apps.terminals.agents.injectors.codex import (
     inject_codex_lifecycle_settings,
 )
 from apps.terminals.agents.injectors.gemini import inject_gemini_lifecycle_settings
+from apps.terminals.agents.skills.preflight import (
+    ResolvedSkills,
+    WORKTRACKER_TOOLS,
+)
 
 
 class UnknownAgent(Exception):
@@ -64,6 +66,69 @@ class UnknownAgent(Exception):
 
 class ResumeUnsupported(Exception):
     """No resume builder registered for this agent."""
+
+
+@dataclass(frozen=True)
+class LaunchAugmentation:
+    """One provider's complete, invocation-scoped launch transformation."""
+
+    argv: tuple[str, ...]
+    environment: tuple[tuple[str, str], ...] = ()
+    temporary_artifacts: tuple[Path, ...] = ()
+
+
+def _artifact_root(agent_run_id: str) -> Path:
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", agent_run_id):
+        raise ValueError("agent_run_id is unsafe for a temporary artifact path")
+    parent = Path(tempfile.gettempdir()) / "ticketry-agent-runs"
+    parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    run_root = parent / agent_run_id
+    run_root.mkdir(mode=0o700, exist_ok=True)
+    run_root.chmod(0o700)
+    root = Path(tempfile.mkdtemp(prefix="invocation-", dir=run_root))
+    root.chmod(0o700)
+    return root
+
+
+def cleanup_temporary_artifacts(paths: tuple[Path, ...]) -> None:
+    """Remove only run-scoped paths returned by an adapter."""
+
+    allowed_parent = (Path(tempfile.gettempdir()) / "ticketry-agent-runs").resolve()
+    for path in paths:
+        resolved = path.resolve()
+        if resolved.parent.parent != allowed_parent:
+            continue
+        shutil.rmtree(resolved, ignore_errors=True)
+        try:
+            resolved.parent.rmdir()
+        except OSError:
+            pass
+
+
+def cleanup_temporary_artifacts_for_run(agent_run_id: str) -> None:
+    """Remove the narrowly named temp root owned by one run id."""
+
+    parent = Path(tempfile.gettempdir()) / "ticketry-agent-runs"
+    run_root = (parent / agent_run_id).resolve()
+    if run_root.parent != parent.resolve():
+        return
+    shutil.rmtree(run_root, ignore_errors=True)
+
+
+def reconcile_temporary_artifacts(active_agent_run_ids: Set[str]) -> None:
+    """Remove run overlays that no active terminal metadata still owns."""
+
+    parent = Path(tempfile.gettempdir()) / "ticketry-agent-runs"
+    if not parent.is_dir():
+        return
+    active = set(active_agent_run_ids)
+    for run_root in parent.iterdir():
+        if run_root.is_dir() and run_root.name not in active:
+            cleanup_temporary_artifacts_for_run(run_root.name)
+    try:
+        parent.rmdir()
+    except OSError:
+        pass
 
 
 @dataclass(frozen=True)
@@ -80,6 +145,7 @@ class AgentAdapter:
     _inject: Callable[..., list[str]]
     _resume_command: Callable[[str], list[str]] | None = None
     supports_worktracker_mcp: bool = False
+    supports_required_skills: bool = True
 
     def command(
         self,
@@ -122,10 +188,79 @@ class AgentAdapter:
         """Splice this run's lifecycle hooks (and MCP config) into ``argv``.
 
         Both URLs are required — the caller (``terminals.launch``) resolves
-        them. The Gemini adapter ignores ``mcp_url`` by design (see the module
-        docstring).
+        them before any durable launch state is created.
         """
         return self._inject(argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url)
+
+    @property
+    def available_worktracker_tools(self) -> frozenset[str]:
+        return WORKTRACKER_TOOLS if self.supports_worktracker_mcp else frozenset()
+
+    def augment_launch(
+        self,
+        argv: list[str],
+        agent_run_id: str,
+        *,
+        lifecycle_url: str,
+        mcp_url: str,
+        skills: ResolvedSkills,
+    ) -> LaunchAugmentation:
+        """Return argv, environment, and owned temp artifacts for one launch.
+
+        Required skills are installed persistently during Ticketry startup.
+        Launch augmentation is limited to lifecycle and MCP configuration.
+        """
+        del skills
+
+        if self.slug == "claude":
+            injected = self.inject(
+                argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
+            )
+            return LaunchAugmentation(tuple(injected))
+
+        if self.slug == "codex":
+            injected = self.inject(
+                argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
+            )
+            return LaunchAugmentation(tuple(injected))
+
+        root = _artifact_root(agent_run_id)
+        try:
+            settings_path = root / "settings.json"
+            if self.slug == "agy":
+                injected = inject_agy_lifecycle_settings(
+                    argv,
+                    agent_run_id,
+                    lifecycle_url=lifecycle_url,
+                    mcp_url=mcp_url,
+                    settings_path=settings_path,
+                )
+                environment = {
+                    injected[1].split("=", 1)[0]: injected[1].split("=", 1)[1]
+                }
+                provider_argv = injected[2:]
+            elif self.slug == "gemini":
+                injected = inject_gemini_lifecycle_settings(
+                    argv,
+                    agent_run_id,
+                    lifecycle_url=lifecycle_url,
+                    mcp_url=mcp_url,
+                    settings_path=settings_path,
+                )
+                environment = {
+                    injected[1].split("=", 1)[0]: injected[1].split("=", 1)[1]
+                }
+                provider_argv = injected[2:]
+            else:
+                raise RuntimeError(f"no launch augmenter registered for {self.slug}")
+            return LaunchAugmentation(
+                tuple(provider_argv),
+                tuple(environment.items()),
+                (root,),
+            )
+        except Exception:
+            cleanup_temporary_artifacts((root,))
+            raise
 
     @property
     def supports_resume(self) -> bool:
@@ -163,9 +298,12 @@ def _inject_codex(argv, agent_run_id, *, lifecycle_url, mcp_url):
 
 
 def _inject_gemini(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    # Gemini gets lifecycle hooks only, no MCP — mcp_url is accepted for a
-    # uniform call site and deliberately dropped (recorded asymmetry).
-    return inject_gemini_lifecycle_settings(argv, agent_run_id, lifecycle_url=lifecycle_url)
+    return inject_gemini_lifecycle_settings(
+        argv,
+        agent_run_id,
+        lifecycle_url=lifecycle_url,
+        mcp_url=mcp_url,
+    )
 
 
 def _resume_claude(provider_session_id: str) -> list[str]:
@@ -255,6 +393,7 @@ _REGISTRY: dict[str, AgentAdapter] = {
         _command_gemini,
         _inject_gemini,
         _resume_command=_resume_gemini,
+        supports_worktracker_mcp=True,
     ),
 }
 

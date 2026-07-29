@@ -45,8 +45,10 @@ def _workflow(revision=7):
             ScopedWorkflowLaunchBindingOut(
                 state_id=UUID(BUILD),
                 prompt="Implement the ticket",
+                required_skills=["to-spec", "to-tickets"],
                 agent="codex",
                 auto_start=True,
+                subtree_run_enabled=False,
             )
         ],
         warnings=[
@@ -114,7 +116,16 @@ def test_read_returns_permissions_auto_start_and_standing_warnings():
         ),
         (
             "upsert_issue_type_workflow_launch_binding",
-            (TYPE, BUILD, 7, "Implement", "codex", "gpt-5", "high"),
+            (
+                TYPE,
+                BUILD,
+                7,
+                "Implement",
+                "codex",
+                "gpt-5",
+                "high",
+                ["to-tickets", "to-spec"],
+            ),
             "upsert_issue_type_workflow_launch_binding",
             ScopedLaunchBindingIn,
             {
@@ -122,6 +133,7 @@ def test_read_returns_permissions_auto_start_and_standing_warnings():
                 "agent": "codex",
                 "model": "gpt-5",
                 "reasoning": "high",
+                "required_skills": ["to-tickets", "to-spec"],
                 "workflow_revision": 7,
             },
         ),
@@ -233,6 +245,7 @@ def test_workflow_configuration_tools_are_registered_with_public_signatures():
             "agent",
             "model",
             "reasoning",
+            "required_skills",
         ),
         "clear_issue_type_workflow_launch_binding": (
             "type_id",

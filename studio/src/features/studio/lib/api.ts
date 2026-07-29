@@ -117,8 +117,7 @@ async function call<T>(operation: () => Promise<T>): Promise<T> {
 
 // ---------- Boundary adapters (SDK contract shapes → studio summaries) ----------
 // The single translation layer between the SDK's contract types and the
-// studio surface's narrower shapes. Inputs are SDK types; outputs are byte-
-// identical to before, so tasksStore and every other consumer are untouched.
+// studio surface's narrower shapes.
 function normalizeProject(project: Project): ProjectSummary {
   return {
     id: project.id,
@@ -141,6 +140,7 @@ export function normalizeTask(task: WorkItem): TaskSummary {
     name: task.name,
     project_id: task.project_id,
     sequence_id: task.sequence_id,
+    rank: task.rank,
     state:
       task.state ?? {
         id: null,
@@ -160,8 +160,26 @@ export function normalizeTask(task: WorkItem): TaskSummary {
     parent_id: task.parent_id,
     sub_issues_count: task.sub_issues_count,
     state_revision: task.state_revision,
+    updated_at: task.updated_at,
   };
 }
+
+export const reorderTask = (
+  taskId: string,
+  beforeId: string | null,
+  afterId: string | null,
+) =>
+  call<TaskSummary>(async () =>
+    normalizeTask(
+      (await worktrackerClient().workItems.reorderWorkItem({
+        issueId: taskId,
+        workItemReorderIn: {
+          before_id: beforeId,
+          after_id: afterId,
+        },
+      })) as WorkItem,
+    ),
+  );
 
 function normalizeModuleTaskTree(moduleId: string, tasks: WorkItem[]) {
   const roots: TaskSummary[] = [];

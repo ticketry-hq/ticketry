@@ -4,6 +4,10 @@ import { useModalStore, type ModalDescriptor } from "../../../app/modal/modalSto
 import { useConfigStore as useAgentConfigStore } from "../stores/configStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
+import {
+  ModuleFolderSelection,
+  useModuleFolderSelection,
+} from "./ModuleFolderSelection";
 
 type FolderConfigState = Pick<
   ReturnType<typeof useAgentConfigStore.getState>,
@@ -43,28 +47,14 @@ export function ModuleFolder({
       ? profile.module_folders[moduleId]
       : "";
 
-  // Derive newest unique paths from the active profile.
-
-  const recentFolders = Array.from(
-    new Set(
-      Object.values(profile?.module_folders ?? {})
-        .reverse()
-        .filter((path) => path.trim().length > 0),
-    ),
-  );
-
-  const [value, setValue] = useState(initial);
   const [savedValue, setSavedValue] = useState(initial);
-  const [highlight, setHighlight] = useState<number>(-1);
   const [busy, setBusy] = useState(false);
-
-  async function pickFolder(): Promise<void> {
-    const picked = await runtime.pickFolder();
-    if (picked !== null) {
-      setValue(picked);
-      setHighlight(-1);
-    }
-  }
+  const selection = useModuleFolderSelection({
+    profiles,
+    recentProfileIndex,
+    initialValue: initial,
+    runtime,
+  });
 
   async function save(): Promise<void> {
     if (!moduleId) {
@@ -73,7 +63,7 @@ export function ModuleFolder({
     }
     setBusy(true);
     try {
-      await setModuleFolder(moduleId, value);
+      await setModuleFolder(moduleId, selection.value);
       popModal();
       if (payload?.next) {
         pushModal({ type: payload.next, payload: payload.nextPayload });
@@ -85,27 +75,23 @@ export function ModuleFolder({
 
   function onAction(actionId: string): void {
     if (actionId === MODAL_ACTIONS.next) {
-      if (recentFolders.length === 0) return;
-      setHighlight((h) => (h + 1) % recentFolders.length);
+      selection.moveNext();
       return;
     }
     if (actionId === MODAL_ACTIONS.previous) {
-      if (recentFolders.length === 0) return;
-      setHighlight((h) => (h <= 0 ? recentFolders.length - 1 : h - 1));
+      selection.movePrevious();
       return;
     }
     if (actionId === MODAL_ACTIONS.confirm) {
-      if (highlight >= 0 && highlight < recentFolders.length) {
+      if (selection.commitHighlighted()) {
         // First Enter on highlight: commit highlight to input, no save.
-        setValue(recentFolders[highlight]);
-        setHighlight(-1);
         return;
       }
       // Enter on unchanged value (or no highlight) → save.
-      if (value === savedValue && value === initial) {
+      if (selection.value === savedValue && selection.value === initial) {
         // unchanged from initial; still allow saving (commits same value).
       }
-      setSavedValue(value);
+      setSavedValue(selection.value);
       void save();
     }
   }
@@ -124,50 +110,7 @@ export function ModuleFolder({
       onAction={onAction}
       width="w-[80ch]"
     >
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        spellCheck={false}
-        className="w-full bg-pane-bg px-2 py-1 font-mono text-sm outline-none ring-1 ring-pane-border focus:ring-focus-accent"
-      />
-      {recentFolders.length > 0 && (
-        <div className="mt-3">
-          <div className="mb-1 text-xs font-bold uppercase tracking-wider text-text-muted">
-            Recent folders
-          </div>
-          <ul
-            aria-label="Recent folders"
-            className="border border-pane-border bg-pane-bg"
-          >
-            {recentFolders.map((folder, i) => (
-              <li
-                key={folder}
-                onClick={() => {
-                  setValue(folder);
-                  setHighlight(-1);
-                }}
-                className={`cursor-pointer truncate px-2 py-1 font-mono text-sm ${
-                  i === highlight
-                    ? "bg-selection-bg text-text-primary"
-                    : "hover:bg-pane-title"
-                }`}
-              >
-                {folder}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {runtime.capabilities.nativeFolderPicker && (
-        <button
-          type="button"
-          onClick={() => void pickFolder()}
-          className="mt-3 rounded border border-pane-border bg-pane-bg px-3 py-1"
-        >
-          Pick Folder
-        </button>
-      )}
+      <ModuleFolderSelection selection={selection} autoFocus />
       <div className="mt-3 flex justify-end gap-2">
         <button
           type="button"

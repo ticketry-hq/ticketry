@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Muxed Studio",
+  "productName": "Ticketry",
   "version": "0.1.0",
-  "identifier": "com.muxed.studio",
+  "identifier": "com.ticketry.desktop",
   "build": {
     "beforeDevCommand": "npm run dev -- --host 127.0.0.1",
     "devUrl": "http://127.0.0.1:5174",
@@ -13,13 +13,14 @@
     "windows": [
       {
         "label": "main",
-        "title": "Muxed Studio",
+        "title": "Ticketry",
         "width": 1440,
         "height": 960,
         "minWidth": 1024,
         "minHeight": 700,
         "resizable": true,
-        "zoomHotkeysEnabled": true
+        "zoomHotkeysEnabled": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
@@ -37,7 +38,7 @@
   "bundle": {
     "active": true,
     "targets": ["app", "dmg"],
-    "externalBin": ["binaries/muxed-backend"],
+    "externalBin": ["binaries/muxed-backend", "binaries/ticketry-hook"],
     "macOS": {
       "minimumSystemVersion": "11.0",
       "hardenedRuntime": true,

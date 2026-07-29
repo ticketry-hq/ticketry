@@ -220,3 +220,11 @@ const CHECK_GEOMETRY = (
   </>
 );
 export const IconCheck = (p: IconProps) => <Icon {...p}>{CHECK_GEOMETRY}</Icon>;
+
+// Run — play.
+const PLAY_GEOMETRY = (
+  <>
+    <path d="m6 3 14 9-14 9Z" />
+  </>
+);
+export const IconPlay = (p: IconProps) => <Icon {...p}>{PLAY_GEOMETRY}</Icon>;

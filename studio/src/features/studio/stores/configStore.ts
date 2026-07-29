@@ -5,6 +5,9 @@ import { type Profile } from "../lib/types";
 interface ConfigStoreState {
   profiles: Profile[];
   recentProfileIndex: number | null;
+  features: {
+    projects: boolean;
+  };
 
   loadConfig: () => Promise<void>;
   selectProfile: (index: number) => Promise<void>;
@@ -17,12 +20,14 @@ interface ConfigStoreState {
 export const useConfigStore = create<ConfigStoreState>((set, get) => ({
   profiles: [],
   recentProfileIndex: null,
+  features: { projects: false },
 
   async loadConfig() {
     const cfg = await api.getConfig();
     set({
       profiles: cfg.profiles,
       recentProfileIndex: cfg.recent_profile_index,
+      features: cfg.features,
     });
   },
 

@@ -83,20 +83,16 @@ def inject_claude_lifecycle_settings(
 ) -> list[str]:
     """Splice inline lifecycle and MCP config into a Claude launch command.
 
-    Only the Claude command is augmented; any other agent's argv is returned
-    unchanged, so the helper is safe to call unconditionally per run.
+    The Claude adapter is the sole caller, so agent routing is already complete
+    before this provider-specific transformation runs.
 
     :param argv: The agent launch command from
         :func:`terminals.agents.commands.get_agent_command`.
     :param agent_run_id: Durable id for this run's lifecycle events.
     :param lifecycle_url: Ingress URL the hook posts events to.
     :param mcp_url: WorkTracker MCP HTTP endpoint.
-    :return: The argv with ``--settings <json>`` inserted after ``claude``,
-        or the original argv for non-Claude agents.
+    :return: The argv with ``--settings <json>`` inserted after the executable.
     """
-
-    if not argv or argv[0] != "claude":
-        return argv
 
     settings = build_claude_lifecycle_settings(agent_run_id, lifecycle_url)
     settings_json = json.dumps(settings, separators=(",", ":"))

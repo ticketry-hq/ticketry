@@ -38,6 +38,7 @@
   "bundle": {
     "active": true,
     "targets": ["app", "dmg"],
+    "icon": ["icons/icon.icns", "icons/icon.png"],
     "externalBin": ["binaries/muxed-backend", "binaries/ticketry-hook"],
     "macOS": {
       "minimumSystemVersion": "11.0",

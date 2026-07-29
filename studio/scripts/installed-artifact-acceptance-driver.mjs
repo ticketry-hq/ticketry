@@ -463,9 +463,14 @@ export async function durableAgentTerminalFlowScenario(context) {
       ["-L", "muxed", "has-session", "-t", sessionName],
       { cwd: repository, env: context.environment, allowFailure: true },
     );
-    if (stored !== `${repository}|${sessionName}` || tmuxResult.code !== 0) {
+    if (stored !== `${repository}|${sessionName}`) {
       throw new InstalledArtifactDriverError(
-        "repository, agent run, and terminal did not survive relaunch",
+        "repository, agent run, and terminal database rows did not survive relaunch",
+      );
+    }
+    if (tmuxResult.code !== 0) {
+      throw new InstalledArtifactDriverError(
+        "durable tmux session did not survive relaunch",
       );
     }
     return true;
@@ -618,6 +623,7 @@ export async function runAcceptance(context) {
     durable_agent_terminal_flow: false,
     ...pendingSkillEvidence(),
     diagnostics: context.diagnostics,
+    scenario_failures: {},
   };
   for (const [name, scenario] of AVAILABLE_SCENARIOS) {
     try {
@@ -627,8 +633,12 @@ export async function runAcceptance(context) {
       } else {
         result[name] = evidence === true;
       }
-    } catch {
+    } catch (error) {
       if (name !== "packaged_skill_evidence") result[name] = false;
+      const message = error instanceof Error ? error.message : "unknown scenario failure";
+      result.scenario_failures[name] = CREDENTIAL_PATTERN.test(message)
+        ? "scenario failure details redacted"
+        : message.slice(0, 1_000);
     }
   }
   assertRedactedDiagnostics(result.diagnostics);

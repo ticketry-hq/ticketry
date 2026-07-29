@@ -1330,15 +1330,10 @@ fn parse_control_line(line: &str, expected_port: u16) -> ControlLine {
     // as a crash and keeps its raw class in the message.
     match class {
         "migration" => ControlLine::Failure(FailureKind::Migration, message.to_owned()),
-        "authentication" => {
-            ControlLine::Failure(FailureKind::Authentication, message.to_owned())
-        }
+        "authentication" => ControlLine::Failure(FailureKind::Authentication, message.to_owned()),
         "bind" => ControlLine::Failure(FailureKind::Bind, message.to_owned()),
         "crash" => ControlLine::Failure(FailureKind::Crash, message.to_owned()),
-        _ => ControlLine::Failure(
-            FailureKind::Crash,
-            format!("{class}: {message}"),
-        ),
+        _ => ControlLine::Failure(FailureKind::Crash, format!("{class}: {message}")),
     }
 }
 

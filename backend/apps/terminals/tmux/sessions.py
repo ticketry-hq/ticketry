@@ -16,7 +16,6 @@ from typing import Optional
 
 import django.db
 import libtmux
-from libtmux.exc import LibTmuxException
 
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.tmux._core import (
@@ -107,20 +106,28 @@ def create_session(
     if _has_session(server, name):
         raise TmuxSessionError(f"tmux session {name!r} already exists")
 
-    try:
-        session = server.new_session(
-            session_name=name,
-            detach=True,
-            window_command=command,
-            start_directory=cwd,
-        )
-    except LibTmuxException as exc:
-        raise TmuxSessionError(f"new-session failed for {name!r}: {exc}") from exc
+    # Stay on Ticketry's raw-command seam.  ``libtmux.Server.new_session``
+    # creates the session and then resolves its returned id by parsing a
+    # formatted ``list-sessions`` response.  In a Finder-launched app with no
+    # locale variables, tmux sanitizes libtmux's Unicode record separator,
+    # causing that lookup to fail after the session was already created.
+    res = server.cmd(
+        "new-session",
+        "-d",
+        "-s",
+        name,
+        "-c",
+        cwd,
+        command,
+    )
+    if res.returncode != 0 or res.stderr:
+        stderr = "\n".join(res.stderr or [])
+        raise TmuxSessionError(f"new-session failed for {name!r}: {stderr}")
 
     # Keep the tmux object after its provider command exits. Reconciliation can
     # then observe pane_dead and publish an ordinary `exited` lifecycle event
     # instead of discovering a vanished target and reporting `session lost`.
-    res = session.cmd(
+    res = server.cmd(
         "set-option", "-w", "-t", name, "remain-on-exit", "on"
     )
     if res.returncode != 0:
@@ -132,14 +139,14 @@ def create_session(
 
     # Stable detached resizes; libtmux has no typed setter for this.
 
-    res = session.cmd("set-option", "-t", name, "window-size", "manual")
+    res = server.cmd("set-option", "-t", name, "window-size", "manual")
     if res.returncode != 0:
         stderr = "\n".join(res.stderr or [])
         raise TmuxSessionError(
             f"set-option window-size manual failed for {name!r}: {stderr}"
         )
 
-    res = session.cmd("set-option", "-t", name, "status", "off")
+    res = server.cmd("set-option", "-t", name, "status", "off")
     if res.returncode != 0:
         stderr = "\n".join(res.stderr or [])
         raise TmuxSessionError(f"set-option status off failed for {name!r}: {stderr}")
@@ -165,7 +172,7 @@ def create_session(
     if doc_rel_path:
         values[_OPT_DOC_PATH] = doc_rel_path
     for key, value in values.items():
-        _set_user_option(session, key, value)
+        _set_user_option(server, name, key, value)
 
     logger.info("tmux session created name=%s agent_run_id=%s", name, agent_run_id)
 
@@ -312,7 +319,7 @@ def _live_session_births(server: libtmux.Server) -> dict[str, float]:
     """
 
     res = server.cmd(
-        "list-sessions", "-F", "#{session_name}\t#{session_created}"
+        "list-sessions", "-F", "#{session_name}|#{session_created}"
     )
     if res.returncode != 0:
         stderr = "\n".join(res.stderr or [])
@@ -328,7 +335,7 @@ def _live_session_births(server: libtmux.Server) -> dict[str, float]:
     births: dict[str, float] = {}
     for line in res.stdout or []:
         try:
-            name, created = line.split("\t", 1)
+            name, created = line.split("|", 1)
             created_at = float(created)
         except (TypeError, ValueError):
             logger.warning("skipping malformed tmux session listing: %r", line)
@@ -346,14 +353,14 @@ def _dead_session_names(server: libtmux.Server) -> set[str]:
     """
 
     res = server.cmd(
-        "list-panes", "-a", "-F", "#{session_name}\t#{pane_dead}"
+        "list-panes", "-a", "-F", "#{session_name}|#{pane_dead}"
     )
     if res.returncode != 0:
         return set()
     pane_states: dict[str, list[bool]] = {}
     for line in res.stdout or []:
         try:
-            name, dead = line.split("\t", 1)
+            name, dead = line.split("|", 1)
         except ValueError:
             logger.warning("skipping malformed tmux pane listing: %r", line)
             continue
@@ -375,7 +382,7 @@ def attached_session_names() -> set[str]:
     """
 
     server = _server()
-    res = server.cmd("list-sessions", "-F", "#{session_name}\t#{session_attached}")
+    res = server.cmd("list-sessions", "-F", "#{session_name}|#{session_attached}")
     if res.returncode != 0:
         stderr = "\n".join(res.stderr or [])
         raise TmuxSessionError(f"list-sessions failed while checking attachment state: {stderr}")
@@ -383,7 +390,7 @@ def attached_session_names() -> set[str]:
     attached: set[str] = set()
     for line in res.stdout or []:
         try:
-            name, attached_count = line.split("\t", 1)
+            name, attached_count = line.split("|", 1)
         except ValueError as exc:
             raise TmuxSessionError(
                 f"bad list-sessions output while checking attachment state: {line!r}"

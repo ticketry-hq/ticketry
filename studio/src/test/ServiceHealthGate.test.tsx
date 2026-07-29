@@ -120,7 +120,7 @@ describe("ServiceHealthGate", () => {
     });
 
     expect(
-      screen.getByRole("heading", { name: "Studio could not reconnect" }),
+      screen.getByRole("heading", { name: "Ticketry services could not start" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Pinned port is already in use"))
       .toBeInTheDocument();
@@ -157,7 +157,7 @@ describe("ServiceHealthGate", () => {
     expect(await screen.findByRole("button", { name: "Retry" }))
       .toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Studio could not reconnect" }),
+      screen.getByRole("heading", { name: "Ticketry services could not start" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Studio ready")).not.toBeInTheDocument();
   });

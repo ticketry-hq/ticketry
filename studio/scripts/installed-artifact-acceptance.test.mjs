@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 import {
   InstalledArtifactAcceptanceError,
   acceptanceDataDirectory,
   assertAcceptanceResult,
+  bundledAcceptanceDriverPath,
   runDriverAfterColdLaunch,
   sanitizedDesktopEnvironment,
 } from "./installed-artifact-acceptance.mjs";
@@ -31,6 +33,14 @@ const passingResult = {
   ],
 };
 
+test("acceptance ships with an absolute default driver", () => {
+  assert.equal(path.isAbsolute(bundledAcceptanceDriverPath), true);
+  assert.equal(
+    path.basename(bundledAcceptanceDriverPath),
+    "installed-artifact-acceptance-driver",
+  );
+});
+
 test("acceptance requires every installed-artifact scenario", () => {
   assert.doesNotThrow(() => assertAcceptanceResult(passingResult));
   for (const scenario of [
@@ -50,6 +60,19 @@ test("acceptance requires every installed-artifact scenario", () => {
       new RegExp(scenario),
     );
   }
+});
+
+test("acceptance reports the driver's redacted scenario failure detail", () => {
+  assert.throws(
+    () => assertAcceptanceResult({
+      ...passingResult,
+      durable_agent_terminal_flow: false,
+      scenario_failures: {
+        durable_agent_terminal_flow: "tmux session was not durable",
+      },
+    }),
+    /durable_agent_terminal_flow \(tmux session was not durable\)/,
+  );
 });
 
 test("acceptance requires packaged skill provider evidence", () => {
@@ -98,6 +121,7 @@ test("GUI launches get only the clean desktop environment", () => {
     HOME: "/tmp/acceptance/home",
     PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
     TMPDIR: "/tmp/acceptance/home/tmp",
+    TMUX_TMPDIR: "/tmp/acceptance/home/tmp",
     NO_PROXY: "127.0.0.1,localhost",
     HTTP_PROXY: "http://127.0.0.1:1",
     HTTPS_PROXY: "http://127.0.0.1:1",

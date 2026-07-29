@@ -34,13 +34,14 @@ const HOOK_RUNNER_BINARY: &str = "ticketry-hook";
 const DEVELOPMENT_BACKEND_PORT_ENV: &str = "MUXED_DESKTOP_BACKEND_PORT";
 const HEALTH_EVENT: &str = "desktop-service-health";
 const DEVELOPMENT_WEBVIEW_ORIGIN: &str = "http://127.0.0.1:5174";
-const PACKAGED_WEBVIEW_ORIGIN: &str = "http://tauri.localhost";
+const PACKAGED_WEBVIEW_ORIGIN: &str = "tauri://localhost";
 
 /// Kept in Tauri managed state for the entire lifetime of any backend that
 /// the desktop may start.  `None` is the deliberate `pnpm dev` connect mode.
 struct DesktopDataDirectoryOwnership {
     data_directory: PathBuf,
     guard: Mutex<Option<DataDirectoryGuard>>,
+    startup_error: Option<String>,
 }
 
 fn acquire_data_directory_ownership() -> Result<DesktopDataDirectoryOwnership, String> {
@@ -64,6 +65,19 @@ fn acquire_data_directory_ownership() -> Result<DesktopDataDirectoryOwnership, S
     Ok(DesktopDataDirectoryOwnership {
         data_directory,
         guard: Mutex::new(guard),
+        startup_error: None,
+    })
+}
+
+fn data_directory_ownership_for_startup() -> DesktopDataDirectoryOwnership {
+    acquire_data_directory_ownership().unwrap_or_else(|error| {
+        let data_directory = established_data_directory()
+            .unwrap_or_else(|_| env::temp_dir().join("ticketry-unavailable-data-directory"));
+        DesktopDataDirectoryOwnership {
+            data_directory,
+            guard: Mutex::new(None),
+            startup_error: Some(error),
+        }
     })
 }
 
@@ -353,24 +367,61 @@ fn sidecar_runtime_configuration(port: u16, credential: &str) -> RuntimeStartupC
     }
 }
 
+fn failed_runtime_configuration(health: ServiceHealth) -> RuntimeStartupConfiguration {
+    // The frontend requires a complete, loopback-only runtime contract before
+    // it can render the service-health gate. Port 1 is deliberately unusable;
+    // failed health prevents these placeholders from being consumed as a
+    // functioning backend.
+    let mut configuration = sidecar_runtime_configuration(1, "");
+    configuration.service_health = health;
+    configuration
+}
+
 fn packaged_resource_binary(
     application: &tauri::App,
     binary: &str,
     missing_message: &str,
 ) -> Result<PathBuf, String> {
+    let executable = env::current_exe()
+        .map_err(|error| format!("could not locate the desktop executable: {error}"))?;
+    if let Some(packaged_sibling) = packaged_executable_sibling(&executable, binary) {
+        return Ok(packaged_sibling);
+    }
+
     let resource_dir = application
         .path()
         .resource_dir()
         .map_err(|error| format!("could not locate packaged runtime resources: {error}"))?;
-    // Tauri strips the source sidecar's target-triple suffix when it copies the
-    // executable into app resources.
-    [
+    packaged_binary_candidates(&resource_dir, &executable, binary)
+        .into_iter()
+        .find(|path| path.is_file())
+        .ok_or_else(|| missing_message.to_owned())
+}
+
+fn packaged_executable_sibling(executable: &Path, binary: &str) -> Option<PathBuf> {
+    executable
+        .parent()
+        .map(|parent| parent.join(binary))
+        .filter(|path| path.is_file())
+}
+
+fn packaged_binary_candidates(
+    resource_dir: &Path,
+    executable: &Path,
+    binary: &str,
+) -> Vec<PathBuf> {
+    let mut candidates = Vec::with_capacity(3);
+    // On macOS, Tauri places external binaries beside the main executable in
+    // `Contents/MacOS`, while ordinary resources live in `Contents/Resources`.
+    if let Some(executable_dir) = executable.parent() {
+        candidates.push(executable_dir.join(binary));
+    }
+    // Keep the resource layouts used by other bundle targets and older builds.
+    candidates.extend([
         resource_dir.join(binary),
         resource_dir.join("binaries").join(binary),
-    ]
-    .into_iter()
-    .find(|path| path.is_file())
-    .ok_or_else(|| missing_message.to_owned())
+    ]);
+    candidates
 }
 
 fn sidecar_binary(application: &tauri::App) -> Result<PathBuf, String> {
@@ -470,11 +521,14 @@ fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
     let mut supervisor = Supervisor::try_new(commands, development_supervisor_options()?)
         .map_err(|error| error.to_string())?;
     if let Err(error) = supervisor.launch() {
-        let log_path = supervisor.log_path();
+        let log_path = supervisor.log_path().to_path_buf();
         state.publish(
             application.handle(),
-            ServiceHealth::failed(&error, log_path),
+            ServiceHealth::failed(&error, &log_path),
         );
+        // Preserve the fixed command table so Retry can succeed after the user
+        // resolves a collision or other actionable startup condition.
+        *state.supervisor.lock().expect("supervisor lock poisoned") = Some(supervisor);
         return Err(format!(
             "desktop {} failed to start: {}; logs: {}",
             error.service,
@@ -515,7 +569,7 @@ fn verify_packaged_backend(port: u16, credential: &str, origin: &str) -> Result<
     if valid != 200 {
         return Err(format!("authenticated request returned HTTP {valid}"));
     }
-    let rejected = sidecar_http_status(port, "wrong-credential", "http://tauri.localhost")?;
+    let rejected = sidecar_http_status(port, "wrong-credential", origin)?;
     if rejected != 401 {
         return Err(format!(
             "invalid credential returned HTTP {rejected}, expected 401"
@@ -725,13 +779,10 @@ fn desktop_approve_executable_path(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let ownership = match acquire_data_directory_ownership() {
-        Ok(ownership) => ownership,
-        Err(error) => {
-            eprintln!("Ticketry could not acquire data-directory ownership: {error}");
-            std::process::exit(1);
-        }
-    };
+    let ownership = data_directory_ownership_for_startup();
+    if let Some(error) = ownership.startup_error.as_deref() {
+        eprintln!("Ticketry could not acquire data-directory ownership: {error}");
+    }
     let application = match tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(ownership)
@@ -757,16 +808,64 @@ pub fn run() {
             native_terminal::native_terminal_detach
         ])
         .setup(|application| {
-            let owns_data_directory = application
-                .state::<DesktopDataDirectoryOwnership>()
+            let ownership = application.state::<DesktopDataDirectoryOwnership>();
+            let startup_error = ownership.startup_error.clone();
+            let owns_data_directory = ownership
                 .guard
                 .lock()
                 .expect("data-directory lock poisoned")
                 .is_some();
             let state = application.state::<DesktopServiceState>();
-            if owns_data_directory {
-                launch_packaged_backend(application)?;
-                start_supervisor_monitor(application.handle().clone());
+            if let Some(message) = startup_error {
+                let log_path = supervisor::sidecar_log_path(&ownership.data_directory);
+                let health = ServiceHealth::failed(
+                    &SupervisorError {
+                        service: "backend".to_owned(),
+                        kind: supervisor::FailureKind::Crash,
+                        message,
+                    },
+                    &log_path,
+                );
+                *state
+                    .configuration
+                    .lock()
+                    .expect("runtime configuration lock poisoned") =
+                    Some(failed_runtime_configuration(health.clone()));
+                state.publish(application.handle(), health);
+            } else if owns_data_directory {
+                if let Err(message) = launch_packaged_backend(application) {
+                    eprintln!("Ticketry desktop services failed to initialize: {message}");
+                    let log_path = supervisor::sidecar_log_path(
+                        established_data_directory().map_err(|error| error.to_string())?,
+                    );
+                    let health = {
+                        let existing = state
+                            .health
+                            .lock()
+                            .expect("service health lock poisoned")
+                            .clone();
+                        if existing.state == ServiceHealthState::Failed {
+                            existing
+                        } else {
+                            ServiceHealth::failed(
+                                &SupervisorError {
+                                    service: "backend".to_owned(),
+                                    kind: supervisor::FailureKind::Crash,
+                                    message,
+                                },
+                                &log_path,
+                            )
+                        }
+                    };
+                    *state
+                        .configuration
+                        .lock()
+                        .expect("runtime configuration lock poisoned") =
+                        Some(failed_runtime_configuration(health.clone()));
+                    state.publish(application.handle(), health);
+                } else {
+                    start_supervisor_monitor(application.handle().clone());
+                }
             } else {
                 let configuration = development_runtime_configuration()?;
                 *state
@@ -839,6 +938,88 @@ mod tests {
     use super::*;
 
     const CONFIGURED_PORT_OWNERSHIP_CHILD: &str = "MUXED_CONFIGURED_PORT_OWNERSHIP_CHILD";
+
+    #[test]
+    fn packaged_helpers_include_the_macos_executable_sibling_directory() {
+        let candidates = packaged_binary_candidates(
+            Path::new("/Applications/Ticketry.app/Contents/Resources"),
+            Path::new("/Applications/Ticketry.app/Contents/MacOS/ticketry"),
+            "muxed-backend",
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                PathBuf::from("/Applications/Ticketry.app/Contents/MacOS/muxed-backend"),
+                PathBuf::from("/Applications/Ticketry.app/Contents/Resources/muxed-backend"),
+                PathBuf::from(
+                    "/Applications/Ticketry.app/Contents/Resources/binaries/muxed-backend"
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn packaged_origin_matches_the_macos_tauri_custom_protocol() {
+        assert_eq!(PACKAGED_WEBVIEW_ORIGIN, "tauri://localhost");
+    }
+
+    #[test]
+    fn packaged_helper_sibling_does_not_require_resource_directory_resolution() {
+        let directory = env::temp_dir().join(format!(
+            "ticketry-packaged-helper-sibling-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).expect("create packaged helper test directory");
+        let executable = directory.join("ticketry");
+        let helper = directory.join("muxed-backend");
+        std::fs::write(&helper, b"packaged helper").expect("write packaged helper");
+
+        assert_eq!(
+            packaged_executable_sibling(&executable, "muxed-backend"),
+            Some(helper)
+        );
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn startup_failure_configuration_renders_health_without_a_live_backend() {
+        let health = ServiceHealth::failed(
+            &SupervisorError {
+                service: "backend".to_owned(),
+                kind: supervisor::FailureKind::Crash,
+                message: "packaged skill collision".to_owned(),
+            },
+            Path::new("/tmp/ticketry/sidecar.log"),
+        );
+        let configuration = failed_runtime_configuration(health.clone());
+
+        assert_eq!(configuration.service_health, health);
+        assert_eq!(
+            configuration.endpoints.work_tracker_api,
+            "http://127.0.0.1:1/api/work-tracker"
+        );
+        assert!(configuration.values.work_tracker_api_key.is_empty());
+    }
+
+    #[test]
+    fn ownership_failure_is_retained_for_the_startup_health_screen() {
+        let ownership = DesktopDataDirectoryOwnership {
+            data_directory: PathBuf::from("/tmp/ticketry"),
+            guard: Mutex::new(None),
+            startup_error: Some("another backend owns the data directory".to_owned()),
+        };
+
+        assert!(ownership
+            .guard
+            .lock()
+            .expect("data-directory lock poisoned")
+            .is_none());
+        assert_eq!(
+            ownership.startup_error.as_deref(),
+            Some("another backend owns the data directory")
+        );
+    }
 
     #[test]
     fn runtime_configuration_uses_live_health_after_failed_publication() {

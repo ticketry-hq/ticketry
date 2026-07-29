@@ -39,11 +39,19 @@ def _run_id() -> str:
 
 @pytest.fixture(autouse=True)
 def isolated_tmux_socket(monkeypatch):
-    """Keep real-tmux tests away from a developer's live Ticketry sessions."""
+    """Keep real-tmux tests away from a developer's live Ticketry sessions.
+
+    Finder-launched macOS applications do not reliably inherit locale
+    variables.  Exercise that production environment on every integration
+    test so session creation never regresses to libtmux's locale-sensitive
+    formatted-object lookup.
+    """
 
     socket_root = tempfile.mkdtemp(prefix="ticketry-test-tmux-", dir="/private/tmp")
     monkeypatch.setenv("TMUX_TMPDIR", socket_root)
     monkeypatch.delenv("TMUX", raising=False)
+    for name in ("LANG", "LC_ALL", "LC_CTYPE"):
+        monkeypatch.delenv(name, raising=False)
     try:
         yield
     finally:
@@ -341,10 +349,10 @@ def test_reconcile_preserves_rows_when_tmux_listing_is_uncertain(
             )
             return FailedListing()
 
-    monkeypatch.setattr(tmux, "_server", lambda: UncertainServer())
-
-    with pytest.raises(TmuxSessionError, match="list-sessions failed"):
-        tmux.reconcile_sessions()
+    with monkeypatch.context() as patch:
+        patch.setattr(tmux, "_server", lambda: UncertainServer())
+        with pytest.raises(TmuxSessionError, match="list-sessions failed"):
+            tmux.reconcile_sessions()
 
     assert AgentTerminalSession.objects.get(
         agent_run_id=agent_run_id

@@ -28,6 +28,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/terminal/create/types",
   "features/agents/terminal/AgentPicker",
   "features/agents/terminal/ModuleFolder",
+  "features/agents/terminal/ModuleFolderSelection",
   "features/agents/terminal/PromptInput",
   "features/agents/terminal/WorkspaceTerminalHost",
   "features/agents/types",

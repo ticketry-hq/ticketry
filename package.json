@@ -7,6 +7,13 @@
     "surfaces/worktracker-typescript-sdk"
   ],
   "scripts": {
+    "catalog:build": "npm --prefix eventcatalog run build",
+    "catalog:dev": "npm --prefix eventcatalog run dev",
+    "catalog:model": "npm --prefix modelcatalog run dev",
+    "catalog:model:build": "npm --prefix modelcatalog run build",
+    "catalog:model:preview": "npm --prefix modelcatalog run preview",
+    "catalog:preview": "npm --prefix eventcatalog run preview",
+    "catalog:sync": "npm --prefix eventcatalog run sync",
     "dev": "npm run desktop:dev",
     "web": "node scripts/web-dev.mjs",
     "web:dev": "npm run web",

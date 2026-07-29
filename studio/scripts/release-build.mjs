@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { access, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -225,6 +226,14 @@ export async function validateReleaseInputs(
   } catch (error) {
     throw new ReleaseManifestError(`could not read versioned desktop components: ${error.message}`);
   }
+  if (
+    !Array.isArray(tauriConfiguration.bundle?.icon)
+    || !tauriConfiguration.bundle.icon.includes("icons/icon.icns")
+  ) {
+    throw new ReleaseManifestError(
+      "Tauri bundle must declare icons/icon.icns as its macOS application icon",
+    );
+  }
   const cargoVersion = cargoToml.match(/^version\s*=\s*"([^"]+)"$/m)?.[1];
   validateComponentVersions(manifest, { tauriVersion: tauriConfiguration.version, cargoVersion });
 }
@@ -362,6 +371,47 @@ export async function verifyMacOSBundle(
   }
 }
 
+export async function rebuildUnsignedDmg(
+  artifacts,
+  { execute = run } = {},
+) {
+  const bundleScript = path.join(path.dirname(artifacts.dmg), "bundle_dmg.sh");
+  if (!(await exists(bundleScript))) {
+    throw new ReleaseManifestError(
+      `Tauri DMG bundler is missing; cannot rebuild installer from verified app: ${bundleScript}`,
+    );
+  }
+
+  const source = await mkdtemp(path.join(tmpdir(), "ticketry-verified-dmg-"));
+  const appName = path.basename(artifacts.app);
+  const volumeName = path.basename(appName, ".app");
+  try {
+    await cp(artifacts.app, path.join(source, appName), { recursive: true });
+    await rm(artifacts.dmg, { force: true });
+    await execute(
+      "bash",
+      [
+        bundleScript,
+        "--volname",
+        volumeName,
+        "--icon",
+        appName,
+        "180",
+        "170",
+        "--app-drop-link",
+        "320",
+        "170",
+        "--skip-jenkins",
+        artifacts.dmg,
+        source,
+      ],
+      "DMG rebuild from verified unsigned app",
+    );
+  } finally {
+    await rm(source, { recursive: true, force: true });
+  }
+}
+
 export function releaseMetadata(manifest, target, { allowUnsigned = false } = {}) {
   return {
     format_version: 1,
@@ -449,6 +499,11 @@ export async function buildRelease(manifest, targets, { allowUnsigned = false } 
     );
     const artifacts = await bundleArtifacts(manifest, target);
     await verifyMacOSBundle(manifest, target, artifacts, { allowUnsigned });
+    if (allowUnsigned) {
+      // Ad-hoc signing mutates the app after Tauri has already created its
+      // DMG. Recreate the installer so it contains the exact verified app.
+      await rebuildUnsignedDmg(artifacts);
+    }
     await stageTarget(manifest, target, artifacts, { allowUnsigned });
   }
 }

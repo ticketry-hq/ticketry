@@ -579,6 +579,7 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
         assert config_response.status_code == 200
         assert config_response.json() == {
             "recent_profile_index": 0,
+            "features": {"projects": False},
             "profiles": [
                 {
                     "name": "Local",
@@ -605,7 +606,7 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
         assert (
             httpx.get(
                 url,
-                headers={"x-api-key": credential, "Origin": "http://tauri.localhost"},
+                headers={"x-api-key": credential, "Origin": "tauri://localhost"},
                 timeout=5,
             ).status_code
             == 200
@@ -613,7 +614,7 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
         preflight = httpx.options(
             url,
             headers={
-                "Origin": "http://tauri.localhost",
+                "Origin": "tauri://localhost",
                 "Access-Control-Request-Method": "GET",
                 "Access-Control-Request-Headers": "x-api-key",
             },
@@ -621,7 +622,7 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
         )
         assert preflight.status_code == 204
         assert (
-            preflight.headers["access-control-allow-origin"] == "http://tauri.localhost"
+            preflight.headers["access-control-allow-origin"] == "tauri://localhost"
         )
         assert "x-api-key" in preflight.headers["access-control-allow-headers"]
         assert (

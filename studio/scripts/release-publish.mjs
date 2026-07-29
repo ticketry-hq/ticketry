@@ -3,7 +3,10 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { loadManifest, selectTargets } from "./release-build.mjs";
-import { runInstalledArtifactAcceptance } from "./installed-artifact-acceptance.mjs";
+import {
+  bundledAcceptanceDriverPath,
+  runInstalledArtifactAcceptance,
+} from "./installed-artifact-acceptance.mjs";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -117,7 +120,7 @@ async function main() {
   await publishRelease({
     manifest,
     targets: selectTargets(manifest, requestedTarget),
-    driverPath: process.env.MUXED_DESKTOP_ACCEPTANCE_DRIVER,
+    driverPath: process.env.MUXED_DESKTOP_ACCEPTANCE_DRIVER ?? bundledAcceptanceDriverPath,
     publishCommand,
     acknowledgeUnsigned,
   });

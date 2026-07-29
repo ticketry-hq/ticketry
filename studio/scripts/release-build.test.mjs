@@ -10,6 +10,7 @@ import {
   macosTauriBuildEnvironment,
   macosTauriSigningConfig,
   parseArguments,
+  rebuildUnsignedDmg,
   releaseMetadata,
   selectTargets,
   stageTarget,
@@ -22,6 +23,13 @@ import {
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(path.join(studioRoot, "release", "manifest.v1.json"), "utf8"));
+
+test("the Tauri bundle declares the packaged macOS application icon", async () => {
+  const configuration = JSON.parse(
+    await readFile(path.join(studioRoot, "src-tauri", "tauri.conf.json"), "utf8"),
+  );
+  assert.ok(configuration.bundle.icon.includes("icons/icon.icns"));
+});
 
 test("all resolves to the single supported macOS target", () => {
   assert.deepEqual(selectTargets(manifest, "all").map(({ id }) => id), ["macos-aarch64"]);
@@ -184,6 +192,56 @@ test("unsigned bundle verification keeps architecture and integrity checks but s
   );
   assert.equal(calls.some(([command]) => command === "spctl"), false);
   assert.match(logs.join("\n"), /Skipping spctl assessment.*--allow-unsigned/);
+});
+
+test("unsigned DMG is rebuilt from the exact verified app", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "ticketry-release-dmg-"));
+  const app = path.join(temporaryRoot, "bundle", "macos", "Ticketry.app");
+  const dmg = path.join(temporaryRoot, "bundle", "dmg", "Ticketry_0.1.0_aarch64.dmg");
+  const bundleScript = path.join(path.dirname(dmg), "bundle_dmg.sh");
+  await Promise.all([
+    mkdir(app, { recursive: true }),
+    mkdir(path.dirname(dmg), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(path.join(app, "verified-marker"), "verified"),
+    writeFile(dmg, "stale pre-verification image"),
+    writeFile(bundleScript, "#!/usr/bin/env bash\n"),
+  ]);
+
+  const calls = [];
+  try {
+    await rebuildUnsignedDmg({ app, dmg }, {
+      execute: async (command, args, label) => {
+        calls.push([command, ...args, label]);
+        await assert.rejects(readFile(dmg), /ENOENT/);
+        assert.equal(
+          await readFile(path.join(args.at(-1), "Ticketry.app", "verified-marker"), "utf8"),
+          "verified",
+        );
+        await writeFile(dmg, "rebuilt from verified app");
+      },
+    });
+    assert.equal(await readFile(dmg, "utf8"), "rebuilt from verified app");
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].slice(0, 12), [
+    "bash",
+    bundleScript,
+    "--volname",
+    "Ticketry",
+    "--icon",
+    "Ticketry.app",
+    "180",
+    "170",
+    "--app-drop-link",
+    "320",
+    "170",
+    "--skip-jenkins",
+  ]);
 });
 
 test("release metadata records signing and notarization status explicitly", () => {

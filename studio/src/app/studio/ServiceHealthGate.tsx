@@ -58,7 +58,7 @@ export function ServiceHealthGate({
       <div className="flex h-full w-full items-center justify-center bg-pane-bg p-8">
         <div className="max-w-xl text-center">
           <h1 className="text-lg font-semibold text-text-primary">
-            Studio could not reconnect
+            Ticketry services could not start
           </h1>
           <p className="mt-2 text-sm text-text-muted">
             {health.message ?? "The local server stopped unexpectedly."}

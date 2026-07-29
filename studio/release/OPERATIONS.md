@@ -58,9 +58,13 @@ Run the ten installed-artifact scenarios against the staged application:
 
 ```bash
 cd studio
-export MUXED_DESKTOP_ACCEPTANCE_DRIVER="$PWD/scripts/installed-artifact-acceptance-driver"
-npm run release:acceptance -- release-output/0.1.0/macos-aarch64/Ticketry.app
+npm run release:acceptance
 ```
+
+That command uses the staged app for the manifest's single release target and
+the acceptance driver shipped in `scripts/`. Pass an app path after `--` or set
+`MUXED_DESKTOP_ACCEPTANCE_DRIVER` only when deliberately testing an alternate
+artifact or driver.
 
 ## Publish only after installed-artifact acceptance
 
@@ -108,6 +112,14 @@ Security**, scroll to the security message for Ticketry, click **Open Anyway**,
 then confirm **Open**. On macOS 15 and newer, do not rely on
 right-clicking the app and choosing **Open**; that no longer bypasses
 quarantine for an unnotarized app.
+
+Ticketry never overwrites an existing user-owned or locally modified provider
+skill. If startup reports a packaged-skill collision, the named path has been
+preserved unchanged. A release acceptance account with such a collision is not
+clean: repeat the recipient test in a new macOS user account. For an existing
+account, back up and rename the reported conflicting skill directory, relaunch
+Ticketry, and use **Retry**. Do not delete or replace the conflicting directory
+unless its owner has explicitly decided how its contents should be retained.
 
 ## Update and rollback
 

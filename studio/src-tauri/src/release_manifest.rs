@@ -60,7 +60,7 @@ mod tests {
     fn manifest_is_versioned_and_declares_only_macos_targets() {
         let manifest: ReleaseManifest = serde_json::from_str(RELEASE_MANIFEST).unwrap();
         assert_eq!(manifest.schema_version, 1);
-        assert_eq!(manifest.targets.len(), 2);
+        assert_eq!(manifest.targets.len(), 1);
         assert!(manifest
             .targets
             .iter()

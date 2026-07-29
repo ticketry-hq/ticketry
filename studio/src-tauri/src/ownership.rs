@@ -11,9 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const LOCK_FILE_NAME: &str = ".muxed-desktop-owner.json";
 const DEVELOPMENT_STACK_MARKER: &str = ".muxed-dev-stack.json";
@@ -59,7 +58,6 @@ pub enum OwnershipError {
     DataDirectoryInUse { owner: Option<OwnerIdentity> },
     DevelopmentStackDetected { port: u16 },
     DevelopmentStackUnavailable { port: u16 },
-    DevelopmentStackUnverified { port: u16 },
     InvalidDevelopmentMode(String),
     Io(String),
 }
@@ -82,10 +80,6 @@ impl std::fmt::Display for OwnershipError {
             Self::DevelopmentStackUnavailable { port } => write!(
                 formatter,
                 "connect mode requires a verified `pnpm dev` backend on 127.0.0.1:{port}; start `pnpm dev` before attaching the desktop app"
-            ),
-            Self::DevelopmentStackUnverified { port } => write!(
-                formatter,
-                "a Ticketry backend is listening on 127.0.0.1:{port} without a matching `pnpm dev` data-directory marker; stop it before launching the desktop app"
             ),
             Self::InvalidDevelopmentMode(value) => write!(
                 formatter,
@@ -143,11 +137,6 @@ impl DataDirectoryGuard {
                 if development_stack_access(mode, true, development_backend_port)? {
                     return Ok(DataDirectoryAccess::DevelopmentStack);
                 }
-            }
-            DevelopmentStackState::Unverified => {
-                return Err(OwnershipError::DevelopmentStackUnverified {
-                    port: development_backend_port,
-                });
             }
             DevelopmentStackState::Absent => {
                 if mode == DevelopmentMode::Connect {
@@ -248,7 +237,6 @@ pub fn established_data_directory() -> Result<PathBuf, OwnershipError> {
 enum DevelopmentStackState {
     Absent,
     Verified,
-    Unverified,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -274,11 +262,7 @@ fn development_stack_state(data_directory: &Path, port: u16) -> DevelopmentStack
             let _ = fs::remove_file(marker_path);
         }
     }
-    if development_backend_is_running(port) {
-        DevelopmentStackState::Unverified
-    } else {
-        DevelopmentStackState::Absent
-    }
+    DevelopmentStackState::Absent
 }
 
 fn paths_match(left: &Path, right: &Path) -> bool {
@@ -286,27 +270,6 @@ fn paths_match(left: &Path, right: &Path) -> bool {
         (Ok(left), Ok(right)) => left == right,
         _ => left == right,
     }
-}
-
-fn development_backend_is_running(port: u16) -> bool {
-    let address = SocketAddr::from(([127, 0, 0, 1], port));
-    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(100)) else {
-        return false;
-    };
-    let timeout = Some(Duration::from_millis(100));
-    if stream.set_read_timeout(timeout).is_err() || stream.set_write_timeout(timeout).is_err() {
-        return false;
-    }
-    if stream
-        .write_all(b"GET /api/healthz HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
-        .is_err()
-    {
-        return false;
-    }
-    let mut response = String::new();
-    stream.read_to_string(&mut response).is_ok()
-        && response.starts_with("HTTP/1.1 200")
-        && response.contains("\"ok\": true")
 }
 
 fn development_stack_access(
@@ -673,6 +636,22 @@ mod tests {
         guard.release().expect("release owner");
         fs::remove_dir_all(directory).expect("clean test directory");
         fs::remove_dir_all(other_directory).expect("clean test directory");
+    }
+
+    #[test]
+    fn unrelated_listener_on_the_development_port_does_not_block_ownership() {
+        let directory = temp_data_directory("unrelated-development-port");
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .expect("bind unrelated local service");
+        let port = listener.local_addr().expect("listener address").port();
+
+        let guard = DataDirectoryGuard::acquire(&directory, DevelopmentMode::Forbid, port)
+            .expect("an unrelated service on the conventional port must not own this directory");
+        assert!(matches!(guard, DataDirectoryAccess::Owned(_)));
+
+        drop(listener);
+        drop(guard);
+        fs::remove_dir_all(directory).expect("clean test directory");
     }
 
     #[test]

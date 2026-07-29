@@ -94,14 +94,21 @@ def _read_user_options(server: libtmux.Server, name: str) -> dict[str, str]:
     return _parse_show_options(list(res.stdout or []))
 
 
-def _set_user_option(session: libtmux.Session, key: str, value: str) -> None:
-    """Set a single user-option on a session, raising on failure."""
+def _set_user_option(
+    server: libtmux.Server, session_name: str, key: str, value: str
+) -> None:
+    """Set a single user-option on a named session, raising on failure.
 
-    res = session.cmd("set-option", "-t", session.session_name, key, value)
+    Use the raw server command seam instead of constructing a high-level
+    ``libtmux.Session``.  The latter reparses formatted tmux listings and is
+    locale-sensitive in packaged Finder launches.
+    """
+
+    res = server.cmd("set-option", "-t", session_name, key, value)
     if res.returncode != 0:
         stderr = "\n".join(res.stderr or [])
         raise TmuxSessionError(
-            f"set-option {key!r} failed for {session.session_name!r}: {stderr}"
+            f"set-option {key!r} failed for {session_name!r}: {stderr}"
         )
 
 

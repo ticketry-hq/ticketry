@@ -233,7 +233,7 @@ def test_create_session_retains_provider_pane_after_exit(agent_run_id):
         module_id="module-456",
         project_id="project-789",
         agent="codex",
-        command="sleep 0.1; exit 7",
+        command="exit 7",
         cwd="/tmp",
     )
 

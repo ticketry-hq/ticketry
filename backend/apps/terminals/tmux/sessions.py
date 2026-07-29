@@ -111,15 +111,10 @@ def create_session(
     # formatted ``list-sessions`` response.  In a Finder-launched app with no
     # locale variables, tmux sanitizes libtmux's Unicode record separator,
     # causing that lookup to fail after the session was already created.
-    res = server.cmd(
-        "new-session",
-        "-d",
-        "-s",
-        name,
-        "-c",
-        cwd,
-        command,
-    )
+    # Start with tmux's default shell as a stable setup pane. Some providers
+    # can fail or exit immediately; launching them here would let the final
+    # pane disappear before remain-on-exit and the metadata options are set.
+    res = server.cmd("new-session", "-d", "-s", name, "-c", cwd)
     if res.returncode != 0 or res.stderr:
         stderr = "\n".join(res.stderr or [])
         raise TmuxSessionError(f"new-session failed for {name!r}: {stderr}")
@@ -173,6 +168,15 @@ def create_session(
         values[_OPT_DOC_PATH] = doc_rel_path
     for key, value in values.items():
         _set_user_option(server, name, key, value)
+
+    # All durability and identity settings are now in place. Replace the
+    # setup shell with the provider command; even an immediate exit leaves a
+    # retained dead pane that reconciliation can classify.
+    res = server.cmd("respawn-pane", "-k", "-t", name, command)
+    if res.returncode != 0:
+        stderr = "\n".join(res.stderr or [])
+        server.cmd("kill-session", "-t", name)
+        raise TmuxSessionError(f"respawn-pane failed for {name!r}: {stderr}")
 
     logger.info("tmux session created name=%s agent_run_id=%s", name, agent_run_id)
 

@@ -67,6 +67,23 @@ def test_contract_models_multipart_and_empty_responses():
     }
 
 
+def test_configuration_feature_models_are_published():
+    schemas = build_openapi_schema()["components"]["schemas"]
+
+    assert schemas["ConfigBody"]["properties"]["features"] == {
+        "$ref": "#/components/schemas/FeaturesBody"
+    }
+    assert schemas["FeaturesBody"] == {
+        "properties": {
+            "sidebar": {"title": "Sidebar", "type": "boolean"},
+            "projects": {"title": "Projects", "type": "boolean"},
+        },
+        "required": ["sidebar", "projects"],
+        "title": "FeaturesBody",
+        "type": "object",
+    }
+
+
 def test_retired_operations_are_absent():
     schema = build_openapi_schema()
     operations = {

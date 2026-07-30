@@ -18,7 +18,7 @@ import uuid
 
 import pytest
 
-from worktracker.models import IssueType
+from worktracker.models import IssueType, Project
 from worktracker.services import exceptions as compat
 from worktracker.services.errors import (
     ConflictError,
@@ -111,6 +111,12 @@ def test_no_service_module_imports_ninja():
 @pytest.mark.django_db
 def test_duplicate_project_slug_maps_to_http_409(client, project, auth):
     """ConflictError surfaces as HTTP 409 with its message at the boundary."""
-    r = post_json(client, f"{BASE}/projects", {"name": "dup", "slug": project.slug}, auth)
+    Project.objects.create(
+        id=uuid.uuid4(),
+        workspace=project.workspace,
+        name="Existing",
+        slug="DUP",
+    )
+    r = post_json(client, f"{BASE}/projects", {"name": "dup", "slug": "DUP"}, auth)
     assert r.status_code == 409
-    assert r.json()["detail"] == f"Project slug '{project.slug}' already exists."
+    assert r.json()["detail"] == "Project slug 'DUP' already exists."

@@ -22,7 +22,7 @@ if os.environ.get("MUXED_SKIP_LOCAL_STATE_MIGRATION") != "1":
 
 CONFIG_FILE = CONFIG_DIR / "profiles.json"
 FEATURES_FILE = CONFIG_DIR / "features.json"
-DEFAULT_FEATURES = {"projects": False}
+DEFAULT_FEATURES = {"sidebar": False, "projects": False}
 PROFILE_FIELDS = {
     "name",
     "workspace_slug",
@@ -43,13 +43,21 @@ def load_features() -> dict[str, bool]:
         return DEFAULT_FEATURES.copy()
     if not isinstance(data, dict):
         return DEFAULT_FEATURES.copy()
-    return {
+    resolved = {
+        "sidebar": (
+            data["sidebar"]
+            if isinstance(data.get("sidebar"), bool)
+            else DEFAULT_FEATURES["sidebar"]
+        ),
         "projects": (
             data["projects"]
             if isinstance(data.get("projects"), bool)
             else DEFAULT_FEATURES["projects"]
         )
     }
+    if not resolved["sidebar"]:
+        resolved["projects"] = False
+    return resolved
 
 
 class NoConfigurationSelected(Exception):

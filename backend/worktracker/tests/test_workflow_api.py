@@ -60,14 +60,14 @@ def _story(project, states, story, *, state, issue_type_override=...):
 @pytest.mark.django_db
 def test_legal_state_patch_returns_200(client, project, sdlc, auth):
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
 
     r = patch_json(
-        client, f"{BASE}/work-items/{issue.id}", {"state_id": str(states["Refinement"].id)}, auth
+        client, f"{BASE}/work-items/{issue.id}", {"state_id": str(states["Spec"].id)}, auth
     )
 
     assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Refinement"
+    assert r.json()["state"]["name"] == "Spec"
 
 
 @pytest.mark.django_db
@@ -75,22 +75,17 @@ def test_unlabelled_rest_patch_is_human_on_human_only_edge(
     client, project, sdlc, auth
 ):
     states, story = sdlc
-    IssueTypeTransition.objects.filter(
-        issue_type=story,
-        from_state=states["Idea"],
-        to_state=states["Refinement"],
-    ).update(agent_allowed=False)
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Tickets")
 
     r = patch_json(
         client,
         f"{BASE}/work-items/{issue.id}",
-        {"state_id": str(states["Refinement"].id)},
+        {"state_id": str(states["Implement"].id)},
         auth,
     )
 
     assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Refinement"
+    assert r.json()["state"]["name"] == "Implement"
 
 
 @pytest.mark.django_db
@@ -98,36 +93,31 @@ def test_agent_rest_patch_is_rejected_on_human_only_edge(
     client, project, sdlc, auth
 ):
     states, story = sdlc
-    IssueTypeTransition.objects.filter(
-        issue_type=story,
-        from_state=states["Idea"],
-        to_state=states["Refinement"],
-    ).update(agent_allowed=False)
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Tickets")
 
     r = patch_json(
         client,
         f"{BASE}/work-items/{issue.id}",
-        {"state_id": str(states["Refinement"].id), "origin": "agent"},
+        {"state_id": str(states["Implement"].id), "origin": "agent"},
         auth,
     )
 
     assert r.status_code == 422
     assert r.json() == {
         "detail": (
-            "The 'Idea' → 'Refinement' edge is a human-only transition; "
+            "The 'Tickets' → 'Implement' edge is a human-only transition; "
             "agents are not allowed to take it."
         ),
         "code": "human_only_transition",
-        "from": "Idea",
-        "to": "Refinement",
+        "from": "Tickets",
+        "to": "Implement",
     }
 
 
 @pytest.mark.django_db
 def test_illegal_state_patch_returns_structured_422(client, project, sdlc, auth):
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
 
     r = patch_json(
         client, f"{BASE}/work-items/{issue.id}", {"state_id": str(states["Done"].id)}, auth
@@ -136,11 +126,11 @@ def test_illegal_state_patch_returns_structured_422(client, project, sdlc, auth)
     assert r.status_code == 422
     body = r.json()
     assert body["code"] == "illegal_transition"
-    assert body["from"] == "Idea" and body["to"] == "Done"
+    assert body["from"] == "Grill" and body["to"] == "Done"
     assert "detail" in body
     # provably unchanged
     issue.refresh_from_db()
-    assert issue.state.name == "Idea"
+    assert issue.state.name == "Grill"
 
 
 @pytest.mark.django_db
@@ -154,7 +144,7 @@ def test_foreign_state_patch_returns_structured_422(client, project, sdlc, auth)
         project,
         states,
         story,
-        state="Refinement",
+        state="Spec",
         issue_type_override=pathfind,
     )
 
@@ -168,33 +158,33 @@ def test_foreign_state_patch_returns_structured_422(client, project, sdlc, auth)
     assert r.status_code == 422
     body = r.json()
     assert body["code"] == "foreign_state"
-    assert body["from"] == "Refinement" and body["to"] == "Implement"
+    assert body["from"] == "Spec" and body["to"] == "Implement"
     issue.refresh_from_db()
-    assert issue.state.name == "Refinement"
+    assert issue.state.name == "Spec"
 
 
 @pytest.mark.django_db
 def test_bundled_edit_is_rejected(client, project, sdlc, auth):
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
 
     r = patch_json(
         client,
         f"{BASE}/work-items/{issue.id}",
-        {"state_id": str(states["Refinement"].id), "name": "renamed"},
+        {"state_id": str(states["Spec"].id), "name": "renamed"},
         auth,
     )
 
     assert r.status_code == 422
     issue.refresh_from_db()
-    assert issue.state.name == "Idea"
+    assert issue.state.name == "Grill"
     assert issue.name == "S"  # neither field moved
 
 
 @pytest.mark.django_db
 def test_force_via_patch_bypasses_and_records(client, project, sdlc, auth):
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
 
     r = patch_json(
         client,
@@ -213,7 +203,7 @@ def test_force_if_completed_is_decided_from_locked_destination(
     client, project, sdlc, auth
 ):
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
 
     r = patch_json(
         client,
@@ -235,7 +225,7 @@ def test_force_if_completed_does_not_force_after_destination_group_changes(
     client, project, sdlc, auth
 ):
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
     states["Done"].group = "started"
     states["Done"].save(update_fields=["group", "updated_at"])
 
@@ -257,7 +247,7 @@ def test_force_if_completed_does_not_force_after_destination_group_changes(
 @pytest.mark.django_db
 def test_agent_force_via_patch_is_rejected(client, project, sdlc, auth):
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
 
     r = patch_json(
         client,
@@ -273,14 +263,14 @@ def test_agent_force_via_patch_is_rejected(client, project, sdlc, auth):
     assert r.status_code == 422
     assert r.json()["code"] == "agent_force_forbidden"
     issue.refresh_from_db()
-    assert issue.state.name == "Idea"
+    assert issue.state.name == "Grill"
     assert not ForceTransition.objects.filter(issue=issue).exists()
 
 
 @pytest.mark.django_db
 def test_untyped_issue_patches_through_ungated(client, project, sdlc, auth):
     states, _ = sdlc
-    issue = _story(project, states, None, state="Idea", issue_type_override=None)
+    issue = _story(project, states, None, state="Grill", issue_type_override=None)
 
     r = patch_json(
         client, f"{BASE}/work-items/{issue.id}", {"state_id": str(states["Done"].id)}, auth
@@ -303,7 +293,7 @@ def test_failing_subscriber_never_masks_the_committed_write(client, project, sdl
     """
 
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
 
     def boom(sender, **kwargs):
         raise RuntimeError("subscriber blew up")
@@ -313,16 +303,16 @@ def test_failing_subscriber_never_masks_the_committed_write(client, project, sdl
         r = patch_json(
             client,
             f"{BASE}/work-items/{issue.id}",
-            {"state_id": str(states["Refinement"].id)},
+            {"state_id": str(states["Spec"].id)},
             auth,
         )
     finally:
         issue_state_changed.disconnect(dispatch_uid="test_boom")
 
     assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Refinement"
+    assert r.json()["state"]["name"] == "Spec"
     issue.refresh_from_db()
-    assert issue.state.name == "Refinement"  # committed, not rolled back
+    assert issue.state.name == "Spec"  # committed, not rolled back
 
 
 # --- cross-door parity (#872) -----------------------------------------------
@@ -341,7 +331,7 @@ def test_all_write_doors_reject_the_same_move_identically(client, project, sdlc,
     gate than the others and none can bypass the sole-writer.
     """
 
-    def reject_idea_to_done(issue):
+    def reject_grill_to_done(issue):
         r = patch_json(
             client,
             f"{BASE}/work-items/{issue.id}",
@@ -350,25 +340,25 @@ def test_all_write_doors_reject_the_same_move_identically(client, project, sdlc,
         )
         assert r.status_code == 422
         issue.refresh_from_db()
-        assert issue.state.name == "Idea"  # provably unchanged
+        assert issue.state.name == "Grill"  # provably unchanged
         return r.json()
 
     states, story = sdlc
 
     # UI door: a single drag/status-change PATCH.
-    ui = reject_idea_to_done(_story(project, states, story, state="Idea"))
+    ui = reject_grill_to_done(_story(project, states, story, state="Grill"))
 
     # Bulk door: the fan-out is N of the same per-item PATCH — every item is
     # refused with the same reason, so the response is stable across the batch.
     bulk = [
-        reject_idea_to_done(_story(project, states, story, state="Idea"))
+        reject_grill_to_done(_story(project, states, story, state="Grill"))
         for _ in range(3)
     ]
 
     expected = {
-        "detail": "A Story cannot move 'Idea' → 'Done'.",
+        "detail": "A Story cannot move 'Grill' → 'Done'.",
         "code": "illegal_transition",
-        "from": "Idea",
+        "from": "Grill",
         "to": "Done",
     }
     assert ui == expected
@@ -379,7 +369,7 @@ def test_all_write_doors_reject_the_same_move_identically(client, project, sdlc,
 @pytest.mark.django_db(transaction=True)
 def test_gate_rejection_leaves_row_unchanged(client, project, sdlc, auth):
     states, story = sdlc
-    issue = _story(project, states, story, state="Idea")
+    issue = _story(project, states, story, state="Grill")
 
     r = patch_json(
         client, f"{BASE}/work-items/{issue.id}", {"state_id": str(states["Done"].id)}, auth
@@ -387,4 +377,4 @@ def test_gate_rejection_leaves_row_unchanged(client, project, sdlc, auth):
 
     assert r.status_code == 422
     issue.refresh_from_db()
-    assert issue.state.name == "Idea"
+    assert issue.state.name == "Grill"

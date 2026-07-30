@@ -1,0 +1,38 @@
+---
+id: workflow-state
+name: Workflow State
+version: 1.0.0
+summary: Project-owned state node used by configurable work-item workflows.
+owners:
+  - ticketry
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+  - name: projectId
+    type: UUID
+    required: true
+    references: project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: name
+    type: string
+    required: true
+  - name: group
+    type: string
+    required: true
+    description: One of the five frozen workflow groups.
+  - name: color
+    type: string
+  - name: sortOrder
+    type: integer
+    required: true
+  - name: isProtected
+    type: boolean
+    required: true
+---
+
+States are configurable; the five state groups are intentionally fixed.
+
+<EntityPropertiesTable />

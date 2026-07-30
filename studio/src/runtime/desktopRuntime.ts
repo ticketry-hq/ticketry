@@ -3,7 +3,12 @@ import type {
   ServiceHealth,
   ServiceHealthListener,
   StudioRuntime,
+  UserNoticeListener,
 } from "./contract";
+import {
+  validateUserNotice,
+  validateUserNotices,
+} from "./userNotice";
 
 type DesktopCommand =
   | "desktop_runtime_configuration"
@@ -11,14 +16,14 @@ type DesktopCommand =
   | "desktop_pick_folder";
 
 export type DesktopInvoke = <T>(command: DesktopCommand) => Promise<T>;
-export type DesktopServiceHealthListen = (
-  event: "desktop-service-health",
+export type DesktopRuntimeListen = (
+  event: "desktop-service-health" | "desktop-user-notice",
   handler: (event: { payload: unknown }) => void,
 ) => Promise<() => void>;
 
 export interface DesktopRuntimeOptions {
   readonly invoke: DesktopInvoke;
-  readonly listen?: DesktopServiceHealthListen;
+  readonly listen?: DesktopRuntimeListen;
 }
 
 function initializationError(field: string, expectation: string): never {
@@ -146,6 +151,7 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
       message: serviceHealth.message as string | null,
       logPointer: serviceHealth.logPointer as string | null,
     }),
+    initialNotices: validateUserNotices(configuration.initialNotices),
   });
 }
 
@@ -177,6 +183,9 @@ export async function createDesktopRuntime({
   const startup = validateConfiguration(
     await invoke<unknown>("desktop_runtime_configuration"),
   );
+  const deliveredNoticeIds = new Set(
+    startup.initialNotices.map((notice) => notice.id),
+  );
 
   return Object.freeze({
     platform: "desktop" as const,
@@ -202,6 +211,24 @@ export async function createDesktopRuntime({
       void listen("desktop-service-health", (event) => {
         const health = serviceHealth(event.payload);
         if (active && health) listener(health);
+      }).then((stop) => {
+        unlisten = stop;
+        if (!active) stop();
+      });
+      return () => {
+        active = false;
+        unlisten?.();
+      };
+    },
+    subscribeUserNotices: (listener: UserNoticeListener) => {
+      if (!listen) return () => {};
+      let active = true;
+      let unlisten: (() => void) | undefined;
+      void listen("desktop-user-notice", (event) => {
+        const notice = validateUserNotice(event.payload);
+        if (!active || !notice || deliveredNoticeIds.has(notice.id)) return;
+        deliveredNoticeIds.add(notice.id);
+        listener(notice);
       }).then((stop) => {
         unlisten = stop;
         if (!active) stop();

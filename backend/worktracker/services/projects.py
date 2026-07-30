@@ -24,7 +24,7 @@ from worktracker.seed import (
 from worktracker.services.errors import ConflictError, NotFoundError
 
 
-_CURRENT_PROJECT_SLUG = "CODING"
+_CURRENT_PROJECT_SLUG = "CDN"
 _current_project_lock = threading.Lock()
 
 

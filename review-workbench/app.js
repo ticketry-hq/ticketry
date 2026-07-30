@@ -1,161 +1,38 @@
-const STATES = [
-  { name: "Idea", group: "Backlog", color: "#747982" },
-  { name: "Refinement", group: "Unstarted", color: "#9b6bd0" },
-  { name: "Ready", group: "Unstarted", color: "#2e9bf3" },
-  { name: "Implement", group: "Started", color: "#eea62b" },
-  { name: "Review", group: "Started", color: "#dc55a7" },
-  { name: "Done", group: "Completed", color: "#55b36a" },
-  { name: "Cancelled", group: "Cancelled", color: "#8f9bae" },
-];
-
-const ISSUE_TYPES = [
-  {
-    name: "Story",
-    eyebrow: "Default task",
-    description: "End-to-end product work, refined before implementation.",
-    start: "Idea",
-    states: ["Idea", "Refinement", "Ready", "Implement", "Review", "Done", "Cancelled"],
-    edges: [
-      ["Idea", "Refinement"],
-      ["Idea", "Cancelled"],
-      ["Refinement", "Ready"],
-      ["Refinement", "Cancelled"],
-      ["Ready", "Implement"],
-      ["Ready", "Cancelled"],
-      ["Implement", "Review"],
-      ["Implement", "Cancelled"],
-      ["Review", "Implement"],
-      ["Review", "Done"],
-      ["Review", "Cancelled"],
-    ],
-  },
-  {
-    name: "PathFind",
-    eyebrow: "Discovery task",
-    description: "A bounded investigation that resolves directly from refinement.",
-    start: "Refinement",
-    states: ["Refinement", "Done", "Cancelled"],
-    edges: [
-      ["Refinement", "Done"],
-      ["Refinement", "Cancelled"],
-    ],
-  },
-  {
-    name: "Implementation",
-    eyebrow: "Delivery child",
-    description: "A dependency-ordered implementation slice created under a Story.",
-    start: "Implement",
-    states: ["Ready", "Implement", "Review", "Done", "Cancelled"],
-    edges: [
-      ["Ready", "Implement"],
-      ["Ready", "Cancelled"],
-      ["Implement", "Review"],
-      ["Implement", "Cancelled"],
-      ["Review", "Implement"],
-      ["Review", "Done"],
-      ["Review", "Cancelled"],
-    ],
-  },
-];
-
-const SHARED_PROMPTS = {
-  default:
-    "Follow AGENTS.md exactly when this prompt is launched from a work item. Highest priority is readability. Do not extend functionality, integrate new interfaces, or touch unrelated modules; keep changes local to the requested file or module, explore the local repo first, and use the current module folder as the working directory. This is the SDLC workflow: `Idea -> Refinement -> Ready -> Implement -> Review -> Done`, with `Cancelled` the terminal off-ramp for dropped work. Advance state only through the coding agent's status tool, and only when the active stage guidance explicitly requests a legal move; completing a phase does not imply automatic promotion. Never leave a ticket in an earlier phase when the active stage guidance requires advancing after its deliverable is complete. Blockedness is expressed only by dependency edges - there is no `Blocked` state. If work is trivial enough to skip ceremony, say so; skipping ceremony requires an explicit audited `force` rather than half-doing a phase.",
-  Idea: `This task is in \`Idea\`: The user has typed in a thought with stream of consciousness writing style.
-This may or may not contain a coherent idea. Your job is to make sense of it with the codebase context you have.
-
-Refine step:
-1. Based on the user's description, explore the codebase and find relevant files and make sense of the ask.
-2. Update the title based on your understanding using the MCP server.
-
-After this, we decide, do we have enough to just make the change or if further refinement is required.
-Case "small change" && "no refinement needed":
-- Use the skill 'to-spec' to write a spec for the ask with the relevant files the next agent should look at.
-- Use the skill 'to-tickets' to split the task into tickets.
-- Create those tickets as 'Implementation' tickets using the MCP under the main task.
-- Move the story over to 'Ready' state for the user to prioritize and execute when required.
-
-Case "large change" || "needs refinement":
-- Append the paths to the relevant files to the ticket
-- Move it to "Refinement" state.`,
-  Refinement: `This task is in \`Refinement\`, where an idea is turned into a committed, dependency-ordered plan through agent-driven discovery.
-
-This is what you need to do in this ticket:
-1. Use the /grill-with-docs or the $grill-with-docs skill to finalize requirements.
-2. Use the /to-spec or $to-spec and generate spec, add the link to the spec in the story.
-3. Use to /to-tickets or $to-tickets skill to generated tickets. Create the tickets as Implementation subtasks.
-
-Move the story to Ready state.
-Stop after this, don't implement.`,
-  Ready: `This task is in \`Ready\`: refined work queued until implementation capacity is assigned. Do not implement anything - \`Ready\` is a prioritization queue, not an implementation phase. If launched here, use the time to *verify the promise of \`Ready\`* and report: for a **Story**, confirm the spec and HLD exist in its design directory, that Implementation children exist, and that their dependency edges form a DAG, and flag anything missing; for an **Implementation child**, confirm its scope and its \`blocked_by\` edges read correctly. Then report the verification and stop; verification does not itself request or trigger entering \`Implement\`.`,
-  Implement: `This task is in \`Implement\`: **What you do depends on this ticket's Type.**
-
-**If this is an Implementation child:** implement only this child's agreed slice, from its spec and the parent's HLD. Keep changes local, avoid unrelated edits, and validate the touched behaviour before finishing. You are running because your dependencies are satisfied - do not start work that a \`blocked_by\` edge still gates. When the slice is complete and validated, move **this child** to \`Review\` so the review step is triggered by the work itself. If you are blocked, say so and leave it in \`Implement\`.
-
-**If this is a Story:** the implementation campaign is running across your Implementation children; your job is coordination and integration, not re-implementing the children. Do not move the story yourself - it advances to \`Review\` on its own once every Implementation child is terminal and at least one is \`Done\`. Surface cross-child integration problems as they appear.
-If there are no implementation stories under this, then implement the story itself.
-
-For dependencies, treat 'Review' state as unblocked.`,
-  Review: `This task is in \`Review\`. **What you do depends on this ticket's Type.**
-
-**If this is an Implementation child:** run \`code-review\` over this child's changes and report findings plainly. The review deliverable is the findings; completing it does not itself request or trigger a move to \`Done\`.
-
-**If this is a Story:** review the *combined* result of all children together, looking for integration issues that per-child review cannot catch. Turn each actionable finding into a new **Implementation** child through the dedicated \`create_review_finding\` tool - it creates the child directly in \`Ready\`, parented to this Story, carrying a fixed \`Path\` (repo-relative file) / inclusive \`Lines\` (start-end) / optional \`Note\` evidence block, so fixes rejoin the same execution machinery. Do not draw a \`blocked_by\` dependency edge and do not fix findings inline here; returning to \`Implement\` is outside this review deliverable. Final acceptance must be explicitly requested; do not infer it from a clean review. It requires a PR linked to the story. When final acceptance is requested, finalize atomically: commit the worktree changes, open a PR, link it to the story, clean up the worktree, and only then request the \`Review -> Done\` transition; if any step fails, stay in \`Review\` and report the exact error rather than advancing.`,
-};
-
-const AGENTS_MD = `# Ticketry desktop application
-
-This repository owns the complete Ticketry desktop application: the React
-frontend, Tauri shell, supervised Python backend sidecar, MCP service, and
-generated SDKs required by that application.
-
-Use \`npm run desktop:dev\` or \`pnpm run dev\` from the repository root for local
-desktop development. Both commands rebuild and launch the sidecar. Keep browser-
-only service commands as supporting development tools, not as a separate product.
-
-Keep the Tauri/webview boundary narrow. The native terminal renderer consumes a
-pinned libghostty revision through its C API, while tmux remains responsible for
-durable sessions. Preserve the existing fallback unless a deliberate migration
-removes it.
-
-Development data must remain isolated from live application data. Generated
-databases, caches, sidecars, native libraries, and build output must not be
-committed.`;
-
-const makePromptMatrix = () =>
-  Object.fromEntries(
-    ISSUE_TYPES.map(({ name }) => [
-      name,
-      Object.fromEntries(
-        STATES.map(({ name: state }) => [
-          state,
-          SHARED_PROMPTS[state] ?? SHARED_PROMPTS.default,
-        ]),
-      ),
-    ]),
-  );
-
-const INITIAL = {
-  schemaVersion: 1,
-  agentsMd: AGENTS_MD,
-  prompts: makePromptMatrix(),
-};
-
 const STORAGE_KEY = "ticketry-final-review-v1";
 
-let model = loadDraft() ?? structuredClone(INITIAL);
-let selectedType = "Story";
-let selectedState = "Idea";
+let baseline;
+let model;
+let selectedType;
+let selectedState;
 let view = "prompts";
 let toastTimer = null;
 let autosaveTimer = null;
 
-function loadDraft() {
+function loadDraft(artifact) {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return value?.schemaVersion === 1 ? value : null;
+    if (
+      value?.schemaVersion !== artifact.schemaVersion ||
+      typeof value.guidance !== "string" ||
+      !value.prompts
+    ) {
+      return structuredClone(artifact);
+    }
+    for (const typeName of artifact.issueTypes) {
+      for (const { name: stateName } of artifact.states) {
+        if (typeof value.prompts?.[typeName]?.[stateName] !== "string") {
+          return structuredClone(artifact);
+        }
+      }
+    }
+    const draft = structuredClone(artifact);
+    draft.guidance = value.guidance;
+    draft.prompts = structuredClone(value.prompts);
+    if (value.finalizedAt) draft.finalizedAt = value.finalizedAt;
+    else delete draft.finalizedAt;
+    return draft;
   } catch {
-    return null;
+    return structuredClone(artifact);
   }
 }
 
@@ -175,12 +52,12 @@ function saveDraft(message = "Draft saved on this device") {
 }
 
 function changedCells() {
-  let count = model.agentsMd === INITIAL.agentsMd ? 0 : 1;
-  for (const type of ISSUE_TYPES) {
-    for (const state of STATES) {
+  let count = model.guidance === baseline.guidance ? 0 : 1;
+  for (const typeName of model.issueTypes) {
+    for (const state of model.states) {
       if (
-        model.prompts[type.name][state.name] !==
-        INITIAL.prompts[type.name][state.name]
+        model.prompts[typeName][state.name] !==
+        baseline.prompts[typeName][state.name]
       ) {
         count += 1;
       }
@@ -191,10 +68,10 @@ function changedCells() {
 
 function emptyCells() {
   const cells = [];
-  for (const type of ISSUE_TYPES) {
-    for (const state of STATES) {
-      if (!model.prompts[type.name][state.name].trim()) {
-        cells.push(`${type.name} · ${state.name}`);
+  for (const typeName of model.issueTypes) {
+    for (const state of model.states) {
+      if (!model.prompts[typeName][state.name].trim()) {
+        cells.push(`${typeName} · ${state.name}`);
       }
     }
   }
@@ -204,9 +81,7 @@ function emptyCells() {
 function activeEmptyCells() {
   return emptyCells().filter((cell) => {
     const [type, state] = cell.split(" · ");
-    return ISSUE_TYPES.find((candidate) => candidate.name === type).states.includes(
-      state,
-    );
+    return issueType(type).states.includes(state);
   });
 }
 
@@ -223,11 +98,17 @@ function escapeHtml(value) {
 }
 
 function stateMeta(name) {
-  return STATES.find((state) => state.name === name);
+  return model.states.find((state) => state.name === name);
 }
 
 function issueType(name) {
-  return ISSUE_TYPES.find((type) => type.name === name);
+  const workflow = model.workflows[name];
+  return {
+    name,
+    start: workflow.start,
+    states: workflow.states,
+    edges: workflow.transitions,
+  };
 }
 
 function isActive(typeName, stateName) {
@@ -330,24 +211,26 @@ function renderTypeRail() {
     <aside class="rail">
       <div class="rail-heading">
         <span class="kicker">Issue types</span>
-        <span class="rail-count">3</span>
+        <span class="rail-count">${model.issueTypes.length}</span>
       </div>
       <div class="type-list">
-        ${ISSUE_TYPES.map(
-          (type) => `
+        ${model.issueTypes
+          .map(
+            (typeName, index) => `
             <button
-              class="type-card ${type.name === selectedType ? "is-selected" : ""}"
-              data-type="${type.name}"
+              class="type-card ${typeName === selectedType ? "is-selected" : ""}"
+              data-type="${typeName}"
               type="button"
             >
               <span class="type-card-top">
-                <strong>${type.name}</strong>
-                ${type.name === "Story" ? '<span class="mini-badge">Default</span>' : ""}
+                <strong>${typeName}</strong>
+                ${index === 0 ? '<span class="mini-badge">Default</span>' : ""}
               </span>
-              <span>${type.eyebrow}</span>
+              <span>Tracked issue type</span>
             </button>
           `,
-        ).join("")}
+          )
+          .join("")}
       </div>
       <div class="rail-note">
         <span class="rail-note-icon">M</span>
@@ -361,7 +244,10 @@ function bindTypeRail(next) {
   document.querySelectorAll("[data-type]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedType = button.dataset.type;
-      if (next === "prompt" && !STATES.some((state) => state.name === selectedState)) {
+      if (
+        next === "prompt" &&
+        !model.states.some((state) => state.name === selectedState)
+      ) {
         selectedState = issueType(selectedType).start;
       }
       renderView();
@@ -381,10 +267,10 @@ function renderPrompts() {
       <aside class="state-panel">
         <div class="panel-heading">
           <span class="kicker">States</span>
-          <span class="rail-count">7</span>
+          <span class="rail-count">${model.states.length}</span>
         </div>
         <div class="state-list">
-          ${STATES.map(
+          ${model.states.map(
             (candidate) => `
               <button
                 class="state-button ${candidate.name === selectedState ? "is-selected" : ""}"
@@ -396,7 +282,7 @@ function renderPrompts() {
                   <strong>${candidate.name}</strong>
                   <small>${isActive(selectedType, candidate.name) ? candidate.group : "Outside active flow"}</small>
                 </span>
-                ${model.prompts[selectedType][candidate.name] !== INITIAL.prompts[selectedType][candidate.name] ? '<span class="edited-dot" title="Edited"></span>' : ""}
+                ${model.prompts[selectedType][candidate.name] !== baseline.prompts[selectedType][candidate.name] ? '<span class="edited-dot" title="Edited"></span>' : ""}
               </button>
             `,
           ).join("")}
@@ -432,7 +318,7 @@ function renderPrompts() {
         <div>
           <span class="kicker">Flow context</span>
           <h2>${selectedState}</h2>
-          <p>${type.description}</p>
+          <p>This context comes from the ${selectedType} workflow in the tracked defaults artifact.</p>
         </div>
         <div class="context-block">
           <span class="context-label">Arrives from</span>
@@ -467,14 +353,14 @@ function renderPrompts() {
   });
   document.querySelector("#restore-prompt").addEventListener("click", () => {
     model.prompts[selectedType][selectedState] =
-      INITIAL.prompts[selectedType][selectedState];
+      baseline.prompts[selectedType][selectedState];
     markEdited();
     renderPrompts();
     toast("Prompt restored to the repository default");
   });
   document.querySelector("#copy-to-types").addEventListener("click", () => {
-    for (const typeOption of ISSUE_TYPES) {
-      model.prompts[typeOption.name][selectedState] = editor.value;
+    for (const typeName of model.issueTypes) {
+      model.prompts[typeName][selectedState] = editor.value;
     }
     markEdited();
     renderPrompts();
@@ -492,7 +378,7 @@ function flowChip(name) {
 }
 
 function renderAgents() {
-  const text = model.agentsMd;
+  const text = model.guidance;
   document.querySelector("#main").innerHTML = `
     <div class="document-layout">
       <aside class="document-aside">
@@ -531,13 +417,13 @@ function renderAgents() {
   `;
   const editor = document.querySelector("#agents-editor");
   editor.addEventListener("input", () => {
-    model.agentsMd = editor.value;
+    model.guidance = editor.value;
     document.querySelector("#agents-lines").textContent = editor.value.split("\n").length;
     document.querySelector("#agents-words").textContent = words(editor.value);
     markEdited();
   });
   document.querySelector("#restore-agents").addEventListener("click", () => {
-    model.agentsMd = INITIAL.agentsMd;
+    model.guidance = baseline.guidance;
     markEdited();
     renderAgents();
     toast("AGENTS.md restored to the repository version");
@@ -550,19 +436,20 @@ function checkRow(label, passed) {
 
 function renderFlow() {
   const type = issueType(selectedType);
-  const mainStates = type.states.filter((state) => state !== "Cancelled");
-  const cancelledSources = type.edges
-    .filter(([, to]) => to === "Cancelled")
-    .map(([from]) => from);
+  const terminalStates = new Set(
+    type.states.filter(
+      (stateName) => !type.edges.some(([from]) => from === stateName),
+    ),
+  );
   document.querySelector("#main").innerHTML = `
     <div class="flow-layout">
       ${renderTypeRail()}
       <section class="flow-canvas">
         <div class="flow-heading">
           <div>
-            <span class="kicker">${type.eyebrow}</span>
+            <span class="kicker">Tracked issue type</span>
             <h1>${selectedType} workflow</h1>
-            <p>${type.description}</p>
+            <p>The node set, start marker, and transitions below come from the tracked defaults artifact.</p>
           </div>
           <div class="legend">
             <span><i class="legend-dot start"></i>Start</span>
@@ -572,38 +459,27 @@ function renderFlow() {
         </div>
         <div class="flow-board">
           <div class="flow-track">
-            ${mainStates
+            ${type.states
               .map((name, index) => {
                 const state = stateMeta(name);
                 const reverse =
                   index > 0 &&
                   type.edges.some(
-                    ([from, to]) => from === name && to === mainStates[index - 1],
+                    ([from, to]) =>
+                      from === name && to === type.states[index - 1],
                   );
                 return `
                   ${index ? `<div class="connector"><span>${reverse ? "⇄" : "→"}</span><small>${reverse ? "rework" : ""}</small></div>` : ""}
-                  <button class="flow-node ${name === type.start ? "is-start" : ""} ${["Done"].includes(name) ? "is-terminal" : ""}" data-flow-state="${name}" type="button">
+                  <button class="flow-node ${name === type.start ? "is-start" : ""} ${terminalStates.has(name) ? "is-terminal" : ""}" data-flow-state="${name}" type="button">
                     <span class="node-index">${String(index + 1).padStart(2, "0")}</span>
                     <i style="--state-color:${state.color}"></i>
                     <strong>${name}</strong>
                     <small>${state.group}</small>
-                    ${model.prompts[selectedType][name] !== INITIAL.prompts[selectedType][name] ? '<span class="node-edited">Edited</span>' : ""}
+                    ${model.prompts[selectedType][name] !== baseline.prompts[selectedType][name] ? '<span class="node-edited">Edited</span>' : ""}
                   </button>
                 `;
               })
               .join("")}
-          </div>
-          <div class="offramp">
-            <div class="offramp-line"></div>
-            <div>
-              <span class="kicker">Terminal off-ramp</span>
-              <p>${cancelledSources.join(", ")} ${cancelledSources.length === 1 ? "can" : "can each"} move here.</p>
-            </div>
-            <button class="flow-node is-terminal cancelled-node" data-flow-state="Cancelled" type="button">
-              <i style="--state-color:${stateMeta("Cancelled").color}"></i>
-              <strong>Cancelled</strong>
-              <small>Archived and resolved</small>
-            </button>
           </div>
         </div>
         <div class="edge-section">
@@ -643,7 +519,13 @@ function renderReview() {
   const empties = emptyCells();
   const activeEmpties = activeEmptyCells();
   const changes = changedCells();
-  const agentsChanged = model.agentsMd !== INITIAL.agentsMd;
+  const agentsChanged = model.guidance !== baseline.guidance;
+  const totalCells = model.issueTypes.length * model.states.length;
+  const readyFlows = model.issueTypes.filter((typeName) =>
+    issueType(typeName).states.every(
+      (stateName) => model.prompts[typeName][stateName].trim(),
+    ),
+  ).length;
   document.querySelector("#main").innerHTML = `
     <div class="review-page">
       <header class="review-heading">
@@ -660,9 +542,9 @@ function renderReview() {
         </div>
       </header>
       <section class="summary-grid">
-        ${summaryCard("Prompt coverage", `${21 - empties.length}/21`, empties.length ? `${empties.length} need attention` : "Every issue type × state has guidance", !empties.length)}
-        ${summaryCard("Active flows", `${3 - (activeEmpties.length ? 1 : 0)}/3`, activeEmpties.length ? "A routed prompt is empty" : "All routed states are launch-ready", !activeEmpties.length)}
-        ${summaryCard("AGENTS.md", agentsChanged ? "Edited" : "Baseline", `${model.agentsMd.split("\n").length} lines · ${words(model.agentsMd)} words`, Boolean(model.agentsMd.trim()))}
+        ${summaryCard("Prompt coverage", `${totalCells - empties.length}/${totalCells}`, empties.length ? `${empties.length} need attention` : "Every issue type × state has guidance", !empties.length)}
+        ${summaryCard("Active flows", `${readyFlows}/${model.issueTypes.length}`, activeEmpties.length ? "A routed prompt is empty" : "All routed states are launch-ready", !activeEmpties.length)}
+        ${summaryCard("AGENTS.md", agentsChanged ? "Edited" : "Baseline", `${model.guidance.split("\n").length} lines · ${words(model.guidance)} words`, Boolean(model.guidance.trim()))}
         ${summaryCard("Review delta", String(changes), changes === 1 ? "Edited surface" : "Edited surfaces", true)}
       </section>
       <section class="matrix-card">
@@ -673,21 +555,22 @@ function renderReview() {
         <div class="matrix" role="table" aria-label="Prompt coverage">
           <div class="matrix-row matrix-header" role="row">
             <span role="columnheader">Issue type</span>
-            ${STATES.map((state) => `<span role="columnheader">${state.name}</span>`).join("")}
+            ${model.states.map((state) => `<span role="columnheader">${state.name}</span>`).join("")}
           </div>
-          ${ISSUE_TYPES.map(
-            (type) => `
+          ${model.issueTypes
+            .map(
+              (typeName) => `
               <div class="matrix-row" role="row">
-                <span class="matrix-type" role="rowheader"><strong>${type.name}</strong><small>${type.eyebrow}</small></span>
-                ${STATES.map((state) => {
-                  const value = model.prompts[type.name][state.name];
+                <span class="matrix-type" role="rowheader"><strong>${typeName}</strong><small>Tracked issue type</small></span>
+                ${model.states.map((state) => {
+                  const value = model.prompts[typeName][state.name];
                   const changed =
-                    value !== INITIAL.prompts[type.name][state.name];
-                  const active = isActive(type.name, state.name);
+                    value !== baseline.prompts[typeName][state.name];
+                  const active = isActive(typeName, state.name);
                   return `
                     <button
                       class="matrix-cell ${changed ? "is-edited" : ""} ${!value.trim() ? "is-empty" : ""}"
-                      data-matrix-type="${type.name}"
+                      data-matrix-type="${typeName}"
                       data-matrix-state="${state.name}"
                       type="button"
                       role="cell"
@@ -699,23 +582,24 @@ function renderReview() {
                 }).join("")}
               </div>
             `,
-          ).join("")}
+            )
+            .join("")}
         </div>
       </section>
-      <section class="finalize-card ${activeEmpties.length || !model.agentsMd.trim() ? "has-blocker" : ""}">
-        <div class="finalize-icon">${activeEmpties.length || !model.agentsMd.trim() ? "!" : "✓"}</div>
+      <section class="finalize-card ${activeEmpties.length || !model.guidance.trim() ? "has-blocker" : ""}">
+        <div class="finalize-icon">${activeEmpties.length || !model.guidance.trim() ? "!" : "✓"}</div>
         <div>
           <span class="kicker">Finalize checkpoint</span>
-          <h2>${activeEmpties.length || !model.agentsMd.trim() ? "Resolve required guidance" : model.finalizedAt ? "Review finalized" : "Ready to finalize"}</h2>
+          <h2>${activeEmpties.length || !model.guidance.trim() ? "Resolve required guidance" : model.finalizedAt ? "Review finalized" : "Ready to finalize"}</h2>
           <p>${
             activeEmpties.length
               ? `Fill ${activeEmpties.length} empty prompt${activeEmpties.length === 1 ? "" : "s"} in active workflow states.`
               : model.finalizedAt
                 ? `Saved ${new Date(model.finalizedAt).toLocaleString()}. Further edits will return this review to draft.`
-                : "Finalizing writes the approved matrix into Ticketry's production defaults and keeps a review-output.json audit artifact beside this disposable app."
+                : "Finalizing writes the approved artifact into Ticketry's production defaults and derives AGENTS.md from its guidance."
           }</p>
         </div>
-        <button class="button button-primary" id="finalize-card-button" type="button" ${activeEmpties.length || !model.agentsMd.trim() ? "disabled" : ""}>
+        <button class="button button-primary" id="finalize-card-button" type="button" ${activeEmpties.length || !model.guidance.trim() ? "disabled" : ""}>
           ${model.finalizedAt ? "Finalize again" : "Finalize review"}
         </button>
       </section>
@@ -750,31 +634,14 @@ function summaryCard(label, value, detail, positive) {
 }
 
 function payload(finalizedAt = model.finalizedAt) {
-  return {
-    schemaVersion: 1,
-    finalizedAt: finalizedAt ?? null,
-    source: {
-      agentsMd: "AGENTS.md",
-      prompts: "backend/worktracker/launch_seeds.py",
-      workflows: "backend/worktracker/workflow_seeds.py",
-    },
-    agentsMd: model.agentsMd,
-    prompts: model.prompts,
-    workflows: Object.fromEntries(
-      ISSUE_TYPES.map((type) => [
-        type.name,
-        {
-          start: type.start,
-          transitions: type.edges,
-        },
-      ]),
-    ),
-  };
+  const artifact = structuredClone(model);
+  artifact.finalizedAt = finalizedAt ?? null;
+  return artifact;
 }
 
 async function finalizeReview() {
   const activeEmpties = activeEmptyCells();
-  if (!model.agentsMd.trim() || activeEmpties.length) {
+  if (!model.guidance.trim() || activeEmpties.length) {
     view = "review";
     renderShell();
     toast("Complete required guidance before finalizing", "danger");
@@ -789,7 +656,13 @@ async function finalizeReview() {
       body: JSON.stringify(next),
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error ?? "Could not finalize review.");
+    if (!response.ok) {
+      throw new Error(
+        result.errors?.join("\n") ??
+          result.error ??
+          "Could not finalize review.",
+      );
+    }
     model.finalizedAt = finalizedAt;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(model));
     view = "review";
@@ -817,18 +690,19 @@ async function importDraft(event) {
   if (!file) return;
   try {
     const imported = JSON.parse(await file.text());
+    const importedGuidance =
+      imported.schemaVersion === 2 ? imported.guidance : imported.agentsMd;
     if (
-      imported.schemaVersion !== 1 ||
-      typeof imported.agentsMd !== "string" ||
+      ![1, 2].includes(imported.schemaVersion) ||
+      typeof importedGuidance !== "string" ||
       !imported.prompts
     ) {
       throw new Error("That file is not a Ticketry review export.");
     }
-    model = {
-      schemaVersion: 1,
-      agentsMd: imported.agentsMd,
-      prompts: imported.prompts,
-    };
+    model = structuredClone(baseline);
+    model.guidance = importedGuidance;
+    model.prompts = structuredClone(imported.prompts);
+    delete model.finalizedAt;
     saveDraft("Review imported");
     renderReview();
   } catch (error) {
@@ -849,4 +723,34 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-renderShell();
+async function initialize() {
+  document.querySelector("#app").innerHTML =
+    '<main class="review-page"><span class="kicker">Release defaults</span><h1>Loading tracked artifact…</h1></main>';
+  try {
+    const response = await fetch("/api/finalized", {
+      headers: { accept: "application/json" },
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error ?? "Could not load the tracked defaults artifact.");
+    }
+    if (!result.review) {
+      throw new Error("The tracked defaults artifact is missing.");
+    }
+    baseline = structuredClone(result.review);
+    model = loadDraft(result.review);
+    selectedType = model.issueTypes[0];
+    selectedState = issueType(selectedType).start;
+    renderShell();
+  } catch (error) {
+    document.querySelector("#app").innerHTML = `
+      <main class="review-page">
+        <span class="kicker">Release defaults</span>
+        <h1>Could not load the tracked artifact</h1>
+        <p>${escapeHtml(error instanceof Error ? error.message : String(error))}</p>
+      </main>
+    `;
+  }
+}
+
+await initialize();

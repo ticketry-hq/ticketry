@@ -9,11 +9,7 @@ import { launchAgent, launchDocumentAgent } from "./internal/actions";
 import { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
 import type { SessionId, TaskId } from "../types";
 import type { LifecycleState } from "./lifecycle";
-import {
-  selectRunState,
-  selectScratchRunCount,
-  useAgentStatusStore,
-} from "../status";
+import { selectRunState, useAgentStatusStore } from "../status";
 
 // Public query + launch surface of the terminal module. Hosts that render a
 // tab strip, a badge, or a launch button import these — never the store
@@ -77,14 +73,5 @@ export function useTaskSessions(taskId: TaskId | null): SessionTab[] {
 export function useActiveSession(taskId: TaskId | null): SessionId | null {
   return useWorkspaceTabsStore((s) =>
     taskId ? s.activeByTask[taskId] ?? null : null,
-  );
-}
-
-// Badge query for taskless runs in the selected scratch module.
-export function useScratchAgentCount(moduleId?: string, projectId?: string): number {
-  return useAgentStatusStore((state) =>
-    projectId && state.projectId !== projectId
-      ? 0
-      : selectScratchRunCount(state, moduleId),
   );
 }

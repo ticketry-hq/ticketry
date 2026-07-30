@@ -3,8 +3,8 @@ import { isResolved } from "../../../../shared/utilities/display";
 
 // CODIN-907: the Story-detail review-findings panel. A "finding" is a direct
 // Implementation child the integration-review agent created under a Story in
-// Review (CODIN-905); "queued" findings are the ones still in Ready — the head
-// of the CODIN-901 fix campaign. These predicates are the single source of
+// Review (CODIN-905); findings at the Implementation start stage have not left
+// the ordinary Implementation path. These predicates are the single source of
 // truth the panel and its count share.
 
 /** Findings are the Story's direct Implementation children (CODIN-905). */
@@ -12,9 +12,9 @@ export function isFinding(item: WorkItem): boolean {
   return item.issue_type?.name === "Implementation";
 }
 
-/** Queued = Implementation AND still in Ready (the campaign-queue head). */
+/** Queued = Implementation AND still at the Implementation start stage. */
 export function isQueuedFinding(item: WorkItem): boolean {
-  return isFinding(item) && item.state?.name === "Ready";
+  return isFinding(item) && item.state?.name === "Implement";
 }
 
 /** The panel is Review-scoped on a Story; hidden for every other type/state. */
@@ -27,7 +27,7 @@ export function findings(children: WorkItem[]): WorkItem[] {
   return children.filter(isFinding);
 }
 
-/** The "N fixes queued" count — Ready Implementation children only. */
+/** The "N fixes queued" count — start-stage Implementation children only. */
 export function queuedFindingCount(children: WorkItem[]): number {
   return children.filter(isQueuedFinding).length;
 }

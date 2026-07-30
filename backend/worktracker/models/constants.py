@@ -1,3 +1,9 @@
+from worktracker.reviewed_defaults import (
+    REVIEWED_STATES,
+    REVIEWED_TASK_ISSUE_TYPES,
+)
+
+
 GROUP_CHOICES = [
     ("backlog", "Backlog"),
     ("unstarted", "Unstarted"),
@@ -39,19 +45,9 @@ LIFECYCLE_CHOICES = [
     ("cancelled", "Cancelled"),
 ]
 
-# The canonical seven-state SDLC workflow (CODIN-859), in exact left-to-right
-# board order. Each entry is ``(name, group, color)``. Refinement/Ready share
-# ``unstarted`` and Implement/Review share ``started`` — so this list's *order*,
-# not group rank, is the primary ordering key (see ``seed.ensure_state_order``).
-DEFAULT_STATES = [
-    ("Idea", "backlog", "#60646C"),
-    ("Refinement", "unstarted", "#8E4EC6"),
-    ("Ready", "unstarted", "#0091FF"),
-    ("Implement", "started", "#F59E0B"),
-    ("Review", "started", "#D6409F"),
-    ("Done", "completed", "#46A758"),
-    ("Cancelled", "cancelled", "#9AA4BC"),
-]
+# The canonical workflow in exact left-to-right board order. Each entry is
+# ``(name, group, color)`` and is projected from the reviewed defaults artifact.
+DEFAULT_STATES = list(REVIEWED_STATES)
 
 # IBM Carbon's 14-color dark categorical palette, in the published sequence.
 # Runtime workflow-state color assignment draws from this project-scoped pool.
@@ -76,13 +72,13 @@ CARBON_DARK_PALETTE = (
 # ``(name, group)`` in ``seed.ensure_protected_states``.
 PROTECTED_STATE_KEYS = {(name, group) for name, group, _ in DEFAULT_STATES}
 
-# The canonical issue types (CODIN-859, CODIN-954). Each entry is ``(name,
-# level, is_default)``. Module is the module/container type; Story, PathFind,
-# and Implementation are the task-level work kinds. Exactly one default per
-# level: Module (module) and Story (task).
+# The canonical issue types (CODIN-859, CODIN-954). The module/container type
+# remains model-owned; task-level work kinds and their order come from the
+# reviewed defaults artifact. The artifact's first task type is the default.
 DEFAULT_ISSUE_TYPES = [
     ("Module", "module", True),
-    ("Story", "task", True),
-    ("PathFind", "task", False),
-    ("Implementation", "task", False),
+    *[
+        (name, "task", index == 0)
+        for index, name in enumerate(REVIEWED_TASK_ISSUE_TYPES)
+    ],
 ]

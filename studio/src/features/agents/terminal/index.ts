@@ -12,8 +12,6 @@
 //   useTaskSessions / useActiveSession
 //                                  the tab-strip queries: a bucket's ordered
 //                                  terminal tabs (with lifecycle) + focused tab
-//   useScratchAgentCount
-//                                  the badge queries (task rows)
 //   useTerminalStore               tab/launch mutations and workspace-store
 //                                  reads (transitional width — prefer the hooks
 //                                  above for queries; treat additions as
@@ -50,7 +48,6 @@ export {
   launchDocChat,
   useTaskSessions,
   useActiveSession,
-  useScratchAgentCount,
   type SessionTab,
 } from "./hooks";
 

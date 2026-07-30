@@ -4,7 +4,6 @@ export {
   selectModuleLifecycleCounts,
   selectRunState,
   selectScratchLifecycleChips,
-  selectScratchRunCount,
   selectScratchRunIds,
   selectTaskAgentLifecycle,
   selectTaskAutomationAttempts,

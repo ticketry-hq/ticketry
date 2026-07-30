@@ -41,6 +41,10 @@ import {
   providerListPlaceholder,
   useActivatedProviders,
 } from "../../workflows/launchProviderCatalog";
+import {
+  isSidebarEnabled,
+  useConfigStore,
+} from "../../studio/stores/configStore";
 import { useUIStore } from "../../studio/stores/uiStore";
 import { formatChordSymbols } from "../../../app/navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../app/navigation/three-zone/threeZoneNavigation";
@@ -222,6 +226,7 @@ export function WorkspacePane({
   bucket,
   projectId,
   moduleId,
+  ticketKey,
   owner,
   details,
   launchContext = null,
@@ -232,6 +237,8 @@ export function WorkspacePane({
   bucket: string | null;
   projectId: string | null;
   moduleId: string | null;
+  /** Live canonical key for a ticket workspace; absent for scratch or unresolved data. */
+  ticketKey?: string;
   owner: ForegroundOwner;
   details: ReactNode;
   launchContext?: WorkspaceLauncherContext | null;
@@ -310,6 +317,7 @@ export function WorkspacePane({
   const [highlightedTab, setHighlightedTab] =
     useState<TaskWorkspaceTabIdentity>({ kind: "details" });
   const sidebarVisible = useUIStore((state) => state.sidebarVisible);
+  const sidebarEnabled = useConfigStore(isSidebarEnabled);
   const editViewZone = useUIStore((state) => state.editViewZone);
   const editViewBodyEngaged = useUIStore(
     (state) => state.editViewBodyEngaged,
@@ -322,18 +330,24 @@ export function WorkspacePane({
   const setEditViewBodyEngaged = useUIStore(
     (state) => state.setEditViewBodyEngaged,
   );
-  const isEditView = owner === "studio" && !sidebarVisible;
+  const isEditView =
+    owner === "studio" && (!sidebarEnabled || !sidebarVisible);
 
   const engageWorkspaceTab = useCallback((tab: TaskWorkspaceTabIdentity): void => {
     setEditViewBodyEngaged(true);
     if (tab.kind === "terminal") {
       requestedTerminalRef.current = tab.id;
-      setTerminalFocusSignal((signal) => signal + 1);
+      // Edit-view terminal focus is synchronized from the committed engaged
+      // state below. Other workspace owners do not have that state, so their
+      // explicit engagement remains an immediate focus request.
+      if (!isEditView) {
+        setTerminalFocusSignal((signal) => signal + 1);
+      }
       return;
     }
     requestedSurfaceRef.current = tab;
     setSurfaceFocusSignal((signal) => signal + 1);
-  }, [setEditViewBodyEngaged]);
+  }, [isEditView, setEditViewBodyEngaged]);
 
   // Seed defaults when a ticket is first selected.
   useEffect(() => {
@@ -621,6 +635,27 @@ export function WorkspacePane({
         : { kind: "details" };
 
   useEffect(() => {
+    if (
+      !isEditView ||
+      !editViewBodyEngaged ||
+      activeTab.kind !== "terminal"
+    ) {
+      return;
+    }
+    // Engagement is global Studio navigation state and intentionally survives
+    // a selected-ticket change. Re-issue focus for the terminal that is now
+    // presented, including after restore/reattach changes its session id.
+    requestedTerminalRef.current = activeTab.id;
+    setTerminalFocusSignal((signal) => signal + 1);
+  }, [
+    activeTab.kind,
+    activeTab.kind === "terminal" ? activeTab.id : null,
+    bucket,
+    editViewBodyEngaged,
+    isEditView,
+  ]);
+
+  useEffect(() => {
     if (!isEditView) return;
     if (editViewZone === "tab-strip") {
       if (document.activeElement !== tabStripRef.current) {
@@ -744,7 +779,7 @@ export function WorkspacePane({
         agentRunId ? { kind: "terminal", agentRunId } : { kind: "details" },
       );
     }
-    void closeTerminalTab(sessionId, bucket);
+    void closeTerminalTab(sessionId, bucket, ticketKey);
   }
 
   async function resumeWorkspaceTerminal(agentRunId: string): Promise<void> {
@@ -955,7 +990,7 @@ export function WorkspacePane({
         {tabs.map(({ id, meta, lifecycle }) => (
           <Tab
             key={id}
-            label={terminalLabel(meta)}
+            label={terminalLabel(meta, ticketKey)}
             active={effActive === "terminal" && activeTermId === id}
             highlighted={
               showTabHighlight &&
@@ -967,7 +1002,7 @@ export function WorkspacePane({
             lifecycle={lifecycle}
             onClick={() => selectWorkspaceTab({ kind: "terminal", id })}
             onClose={() => closeWorkspaceTerminal(id)}
-            closeLabel={`Close terminal ${terminalLabel(meta)}`}
+            closeLabel={`Close terminal ${terminalLabel(meta, ticketKey)}`}
           />
         ))}
         {launchContext && (

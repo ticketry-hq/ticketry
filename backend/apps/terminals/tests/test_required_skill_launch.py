@@ -29,6 +29,7 @@ from apps.terminals.agents.skills.preflight import (
     resolve_required_skills,
     skill_prompt_envelope,
 )
+from worktracker.required_skills import DEFAULT_REQUIRED_SKILLS
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -74,6 +75,44 @@ def test_resolution_freezes_dependency_closure_tools_and_revision(monkeypatch, t
     envelope = skill_prompt_envelope(resolved)
     assert "grill-with-docs, to-spec, to-tickets" in envelope
     assert resolved.upstream_revision in envelope
+
+
+@pytest.mark.parametrize(
+    ("stage", "expected_names"),
+    [
+        (
+            "Grill",
+            {"grill-with-docs", "grilling", "domain-modeling"},
+        ),
+        (
+            "Spec",
+            {"to-spec", "setup-matt-pocock-skills"},
+        ),
+        (
+            "Tickets",
+            {"to-tickets", "setup-matt-pocock-skills"},
+        ),
+    ],
+)
+def test_refinement_stage_resolves_only_its_declared_skill_closure(
+    monkeypatch,
+    tmp_path,
+    stage,
+    expected_names,
+):
+    home, repo = _isolate_visible_skills(monkeypatch, tmp_path)
+    install_packaged_skills(providers=("claude",), home=home)
+
+    resolved = resolve_required_skills(
+        provider="claude",
+        required_skills=DEFAULT_REQUIRED_SKILLS[stage],
+        cwd=str(repo),
+        supports_required_skills=True,
+        available_tools=WORKTRACKER_TOOLS,
+    )
+
+    assert resolved.requested == DEFAULT_REQUIRED_SKILLS[stage]
+    assert set(resolved.names) == expected_names
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))

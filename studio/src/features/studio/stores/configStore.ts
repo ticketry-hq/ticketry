@@ -2,10 +2,24 @@ import { create } from "zustand";
 import * as api from "../lib/api";
 import { type Profile } from "../lib/types";
 
+export type SidebarPaneComposition =
+  | "absent"
+  | "modules"
+  | "projects-and-modules";
+
+export function sidebarPaneComposition(
+  projectsEnabled: boolean,
+  sidebarEnabled = true,
+): SidebarPaneComposition {
+  if (!sidebarEnabled) return "absent";
+  return projectsEnabled ? "projects-and-modules" : "modules";
+}
+
 interface ConfigStoreState {
   profiles: Profile[];
   recentProfileIndex: number | null;
   features: {
+    sidebar: boolean;
     projects: boolean;
   };
 
@@ -20,7 +34,7 @@ interface ConfigStoreState {
 export const useConfigStore = create<ConfigStoreState>((set, get) => ({
   profiles: [],
   recentProfileIndex: null,
-  features: { projects: false },
+  features: { sidebar: false, projects: false },
 
   async loadConfig() {
     const cfg = await api.getConfig();
@@ -75,3 +89,9 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
     });
   },
 }));
+
+export function isSidebarEnabled(
+  state: Pick<ConfigStoreState, "features"> = useConfigStore.getState(),
+): boolean {
+  return state.features.sidebar;
+}

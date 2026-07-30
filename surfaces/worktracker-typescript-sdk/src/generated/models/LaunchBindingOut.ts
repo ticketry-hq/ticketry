@@ -22,7 +22,7 @@ import { mapValues } from '../runtime.js';
  */
 export interface LaunchBindingOut {
     /**
-     *
+     * 
      * @type {string}
      * @memberof LaunchBindingOut
      */
@@ -52,7 +52,7 @@ export interface LaunchBindingOut {
      */
     reasoning?: string | null;
     /**
-     *
+     * 
      * @type {Array<string>}
      * @memberof LaunchBindingOut
      */
@@ -116,3 +116,4 @@ export function LaunchBindingOutToJSONTyped(value?: LaunchBindingOut | null, ign
         'state_id': value['state_id'],
     };
 }
+

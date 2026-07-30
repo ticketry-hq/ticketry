@@ -10,7 +10,15 @@ export type {
   RuntimeValues,
   StudioPlatform,
   StudioRuntime,
+  UserNoticeListener,
 } from "./contract";
+export {
+  USER_NOTICE_SEVERITIES,
+  validateUserNotice,
+  validateUserNotices,
+  type UserNotice,
+  type UserNoticeSeverity,
+} from "./userNotice";
 export { createBrowserRuntime } from "./browserRuntime";
 
 let installedRuntime: StudioRuntime | null = null;

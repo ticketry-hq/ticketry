@@ -23,7 +23,14 @@ const REQUIRED_SCENARIOS = [
   "skill_overlay_cleanup",
 ];
 
-const REQUIRED_SKILLS = ["grill-with-docs", "to-spec", "to-tickets"];
+const REQUIRED_SKILLS = [
+  "code-review",
+  "grill-with-docs",
+  "implement",
+  "tdd",
+  "to-spec",
+  "to-tickets",
+];
 const SKILL_PROVIDERS = ["claude", "codex", "agy", "gemini"];
 
 function requireValue(value, label) {

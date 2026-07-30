@@ -1,0 +1,20 @@
+---
+id: document-service
+name: Document Service
+version: 1.0.0
+summary: Discovers design documents, serves their assets, and persists edited HTML.
+owners:
+  - ticketry
+entities:
+  - id: document
+readsFrom:
+  - id: workspace-filesystem
+writesTo:
+  - id: workspace-filesystem
+---
+
+The document service exposes discovery, asset reads, document writes, and
+filesystem path completion without turning filesystem layout into frontend
+domain language.
+
+<NodeGraph />

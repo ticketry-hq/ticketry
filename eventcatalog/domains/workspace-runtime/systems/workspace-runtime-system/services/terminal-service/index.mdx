@@ -1,0 +1,36 @@
+---
+id: terminal-service
+name: Terminal Service
+version: 1.0.0
+summary: Creates, resumes, attaches, leases, and terminates tmux-backed terminal sessions.
+owners:
+  - ticketry
+receives:
+  - id: terminal-init-spawn
+    version: 1.0.0
+  - id: terminal-init-attach
+    version: 1.0.0
+sends:
+  - id: terminal-ready
+    version: 1.0.0
+  - id: backend-session-ended
+    version: 1.0.0
+entities:
+  - id: terminal-session
+readsFrom:
+  - id: ticketry-state-database
+  - id: tmux-server
+writesTo:
+  - id: ticketry-state-database
+  - id: tmux-server
+flows:
+  - id: terminal-spawn-or-attach
+---
+
+The HTTP control plane manages session records and viewer leases. The
+`/ws/terminal` data plane carries init, ready, resize, scroll, error, and byte
+stream traffic.
+
+<NodeGraph />
+
+<MessageTable format="all" />

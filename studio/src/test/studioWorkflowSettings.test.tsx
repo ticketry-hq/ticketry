@@ -196,10 +196,35 @@ describe("Studio workflow settings", () => {
       name: "Issue types",
     });
     const modelsTab = within(rail).getByRole("tab", { name: "Models" });
+    const workflowGroup = within(rail).getByRole("group", {
+      name: "Workflow",
+    });
+    const configurationGroup = within(rail).getByRole("group", {
+      name: "Configuration",
+    });
+    const workflowHeading = within(workflowGroup).getByRole("heading", {
+      name: "Workflow",
+      level: 2,
+    });
+    const configurationHeading = within(configurationGroup).getByRole(
+      "heading",
+      {
+        name: "Configuration",
+        level: 2,
+      },
+    );
 
     expect(statesTab).toHaveAttribute("aria-selected", "true");
-    expect(within(rail).getByText("Workflow")).not.toHaveAttribute("tabindex");
-    expect(within(rail).getByText("Configuration")).not.toHaveAttribute("tabindex");
+    expect(workflowHeading).not.toHaveAttribute("tabindex");
+    expect(configurationHeading).not.toHaveAttribute("tabindex");
+    expect(within(workflowGroup).getAllByRole("tab")).toEqual([
+      statesTab,
+      issueTypesTab,
+    ]);
+    expect(within(configurationGroup).getAllByRole("tab")).toEqual([
+      modelsTab,
+    ]);
+    expect(within(rail).getAllByRole("tab")).toHaveLength(3);
     expect(within(rail).queryByRole("tab", { name: "Keyboard" }))
       .not.toBeInTheDocument();
     expect(within(dialog).queryByRole("tablist", {

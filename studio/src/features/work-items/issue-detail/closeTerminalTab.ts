@@ -14,6 +14,7 @@ import { terminalLabel } from "./terminalLabel";
 export async function closeTerminalTab(
   sessionId: SessionId,
   bucket: string,
+  ticketKey?: string,
 ): Promise<void> {
   const term = useTerminalStore.getState();
   const meta = term.sessions[sessionId];
@@ -21,7 +22,7 @@ export async function closeTerminalTab(
   const chip = {
     agentRunId: meta.agentRunId,
     agent: meta.agent,
-    label: terminalLabel(meta),
+    label: terminalLabel(meta, ticketKey),
   };
   if (meta.agentRunId) {
     try {

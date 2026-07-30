@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import * as api from "../lib/api";
 import { normalizeTask } from "../lib/api";
-import { sortModulesByRecency } from "../../projects";
+import { sortModulesByRecency, useStudioStore } from "../../projects";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { useConfigStore } from "../../agents/stores/configStore";
 import { toast } from "../../../app/stores/toastStore";
@@ -455,11 +455,22 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
     // Create in the owned work tracker, refresh, then auto-select the module.
     const created = await api.createModule(projectId, name);
 
-    // List refresh and selection (which loads the module's tasks) are
+    // Keep the work-items project context in sync when it already owns this
+    // project. Issue details derive a Story's module from that list, including
+    // Run subtree eligibility, so leaving it stale hides the action until a
+    // full reload.
+    const workItemsStore = useStudioStore.getState();
+    const refreshWorkItemsModules =
+      workItemsStore.selectedProjectId === projectId
+        ? workItemsStore.reloadModules()
+        : Promise.resolve();
+
+    // Both list refreshes and selection (which loads the module's tasks) are
     // independent once the module exists.
     await Promise.all([
       get().loadModules(projectId),
       get().selectModule(created.id),
+      refreshWorkItemsModules,
     ]);
   },
 

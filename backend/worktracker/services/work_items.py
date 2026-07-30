@@ -70,11 +70,10 @@ def create_project_work_item(
     return issue
 
 
-#: The fixed birth state of a review finding and the type it must carry — an
-#: Implementation is "born Ready" (see ``worktracker.workflow``), so a finding
-#: created the generic way (defaulting to the Idea backlog state) would land
-#: outside its transition table.
-_FINDING_STATE = "Ready"
+#: The workflow stage a finding rejoins and the type it must carry. The actual
+#: birth state is resolved through the Implementation type's published start
+#: pointer, exactly as it is for every other Implementation child.
+_FINDING_STAGE = "Implement"
 _FINDING_TYPE = "Implementation"
 
 
@@ -86,12 +85,12 @@ def create_review_finding(
     description: str,
     issue_type_id=None,
 ):
-    """Create a Ready Implementation finding under a Story in Review (#905).
+    """Create an Implementation finding under a Story in Review (#905).
 
     The dedicated, validated create the Story integration-review agent uses to
-    turn a finding into a fresh Implementation child: the child is born directly
-    in ``Ready`` (an Implementation's real birth state), typed
-    ``Implementation``, and parented to a Story that is currently in ``Review``.
+    turn a finding into a fresh Implementation child: the child is born in the
+    Implementation workflow's start stage, typed ``Implementation``, and
+    parented to a Story that is currently in ``Review``.
 
     Every parent / type / state / project precondition is checked **before any
     write**; a rejection raises :class:`~worktracker.workflow.InvalidTransition`
@@ -123,7 +122,7 @@ def create_review_finding(
             "The finding's parent work item belongs to another project.",
             code="foreign_project",
             from_state=parent_state,
-            to_state=_FINDING_STATE,
+            to_state=_FINDING_STAGE,
         )
 
     parent_type = parent.issue_type.name if parent.issue_type_id else None
@@ -132,7 +131,7 @@ def create_review_finding(
             "A review finding can only be created under a Story.",
             code="parent_not_story",
             from_state=parent_state,
-            to_state=_FINDING_STATE,
+            to_state=_FINDING_STAGE,
         )
 
     if parent_state != "Review":
@@ -140,7 +139,7 @@ def create_review_finding(
             "A review finding's parent Story must be in Review.",
             code="parent_not_review",
             from_state=parent_state,
-            to_state=_FINDING_STATE,
+            to_state=_FINDING_STAGE,
         )
 
     impl_type = (
@@ -159,24 +158,13 @@ def create_review_finding(
             f"A review finding must be an {_FINDING_TYPE} child.",
             code="child_not_implementation",
             from_state=parent_state,
-            to_state=_FINDING_STATE,
-        )
-
-    ready = (
-        State.objects.filter(project_id=project.id, name=_FINDING_STATE)
-        .order_by("sort_order", "created_at")
-        .first()
-    )
-    if ready is None:
-        raise ValidationError(
-            f"Project has no {_FINDING_STATE!r} state to birth the finding in."
+            to_state=_FINDING_STAGE,
         )
 
     return create_project_work_item(
         project.id,
         name=name,
         issue_type_id=impl_type.id,
-        state_id=ready.id,
         description=description,
         parent_id=parent.id,
     )
@@ -209,7 +197,7 @@ def create_module_work_item(
         issue.description = description
         issue.description_html = description
     # Resolve the type BEFORE the state: the birth state depends on it, so an
-    # Implementation lands in Ready, not the Idea default it can't leave (#870).
+    # Implementation lands at its workflow start instead of a generic default.
     issue.issue_type = resolve_issue_type(module.project_id, issue_type_id, "task")
     issue.state_id = resolve_birth_state(module.project_id, issue.issue_type, None)
 

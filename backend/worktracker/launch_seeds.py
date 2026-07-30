@@ -1,7 +1,10 @@
-"""Reviewed defaults for project-owned launch prompt configuration."""
+"""Launch-prompt seeds from ``worktracker/reviewed_defaults.json``.
 
-import json
-from importlib.resources import files
+The artifact is read once at import time and materialized as project-owned
+launch bindings. Existing bindings remain authoritative on later seed passes.
+"""
+
+from worktracker.reviewed_defaults import REVIEWED_DEFAULTS
 
 
 _LEGACY_AGENT_PROMPTS = {
@@ -49,10 +52,11 @@ For dependencies, treat 'Review' state as unblocked.""",
 }
 
 
-_REVIEWED_DEFAULTS = json.loads(
-    files("worktracker").joinpath("reviewed_defaults.json").read_text(encoding="utf-8")
-)
-DEFAULT_AGENT_PROMPTS_BY_ISSUE_TYPE = _REVIEWED_DEFAULTS["prompts"]
+DEFAULT_AGENT_PROMPTS_BY_ISSUE_TYPE = REVIEWED_DEFAULTS["prompts"]
+DEFAULT_AUTO_START_BY_STATE = {
+    state["name"]: state.get("autoStart", False)
+    for state in REVIEWED_DEFAULTS["states"]
+}
 
 # Compatibility for older callers that only understand one prompt per state.
 # Story is the canonical task type and therefore remains the legacy projection.

@@ -5,12 +5,14 @@
 //! agent run's session.
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use std::env;
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const TMUX_SOCKET: &str = "muxed";
+const DEFAULT_TMUX_SOCKET: &str = "muxed";
+const TMUX_SOCKET_ENV: &str = "MUXED_TMUX_SOCKET";
 const SESSION_PREFIX: &str = "pt-";
 const MAX_COLUMNS: u16 = 500;
 const MAX_ROWS: u16 = 500;
@@ -130,8 +132,9 @@ impl TmuxViewer {
         let pair = native_pty_system().openpty(size).map_err(pty_error)?;
         let reader = pair.master.try_clone_reader().map_err(pty_error)?;
         let writer = pair.master.take_writer().map_err(pty_error)?;
+        let socket = tmux_socket()?;
         let mut command = CommandBuilder::new(&tmux);
-        command.args(["-L", TMUX_SOCKET, "attach-session", "-t", &session]);
+        command.args(["-L", &socket, "attach-session", "-t", &session]);
         let mut client = pair.slave.spawn_command(command).map_err(pty_error)?;
 
         // A session can disappear after the preflight check. Surface that race
@@ -320,6 +323,22 @@ fn session_name(run_id: &str) -> String {
     format!("{SESSION_PREFIX}{run_id}")
 }
 
+fn tmux_socket() -> Result<String, TmuxViewerError> {
+    let socket = env::var(TMUX_SOCKET_ENV).unwrap_or_else(|_| DEFAULT_TMUX_SOCKET.to_owned());
+    let valid = !socket.is_empty()
+        && socket.len() <= 64
+        && socket
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
+    if valid {
+        Ok(socket)
+    } else {
+        Err(TmuxViewerError::TmuxUnavailable(
+            "desktop supplied an invalid tmux socket name".to_owned(),
+        ))
+    }
+}
+
 fn approved_tmux_path() -> Result<PathBuf, TmuxViewerError> {
     let diagnostic = crate::discovery::preflight_report()
         .tools
@@ -342,8 +361,9 @@ fn approved_tmux_path() -> Result<PathBuf, TmuxViewerError> {
 }
 
 fn session_exists(tmux: &Path, session: &str) -> Result<bool, TmuxViewerError> {
+    let socket = tmux_socket()?;
     let status = Command::new(tmux)
-        .args(["-L", TMUX_SOCKET, "has-session", "-t", session])
+        .args(["-L", &socket, "has-session", "-t", session])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -358,10 +378,11 @@ fn resize_tmux_window(
     columns: u16,
     rows: u16,
 ) -> Result<(), TmuxViewerError> {
+    let socket = tmux_socket()?;
     let output = Command::new(tmux)
         .args([
             "-L",
-            TMUX_SOCKET,
+            &socket,
             "resize-window",
             "-t",
             session,
@@ -391,7 +412,9 @@ fn scroll_tmux(
     if !(1..=MAX_SCROLL_LINES).contains(&lines) {
         return Err(TmuxViewerError::InvalidScrollLines { lines });
     }
-    run_tmux_control(tmux, session, &["copy-mode", "-e", "-t", session])?;
+    // Ticketry targets tmux 3.6+'s -H capability explicitly so the marker is
+    // hidden per entry without changing users' tmux configuration.
+    run_tmux_control(tmux, session, &["copy-mode", "-e", "-H", "-t", session])?;
     let action = match direction {
         TmuxScrollDirection::Up => "scroll-up",
         TmuxScrollDirection::Down => "scroll-down",
@@ -405,8 +428,9 @@ fn scroll_tmux(
 }
 
 fn run_tmux_control(tmux: &Path, session: &str, arguments: &[&str]) -> Result<(), TmuxViewerError> {
+    let socket = tmux_socket()?;
     let output = Command::new(tmux)
-        .args(["-L", TMUX_SOCKET])
+        .args(["-L", &socket])
         .args(arguments)
         .stdin(Stdio::null())
         .output()

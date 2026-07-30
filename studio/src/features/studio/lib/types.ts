@@ -53,6 +53,9 @@ export interface TaskSummary {
   name: string;
   project_id: string;
   sequence_id: number | null;
+  // Server-computed canonical ticket key. Optional for older cached summaries
+  // and synthetic rows such as Scratch.
+  key?: string;
   // Canonical fractional rank. Optional for older cached summaries and
   // synthetic rows such as Scratch.
   rank?: string;
@@ -133,6 +136,7 @@ export interface ConfigPayload {
   recent_profile_index: number | null;
   profiles: Profile[];
   features: {
+    sidebar: boolean;
     projects: boolean;
   };
 }

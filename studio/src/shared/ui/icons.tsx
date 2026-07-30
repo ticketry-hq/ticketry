@@ -228,3 +228,55 @@ const PLAY_GEOMETRY = (
   </>
 );
 export const IconPlay = (p: IconProps) => <Icon {...p}>{PLAY_GEOMETRY}</Icon>;
+
+// Grill — flame, for the interactive requirements-grilling stage.
+const GRILL_GEOMETRY = (
+  <>
+    <path d="M12 22a8 8 0 0 0 8-8c0-3.5-2-6.5-5-8.5.1 2-1 4-2.5 5.2C12 7 10 4 7 2c.2 3.5-1.7 5.2-2.8 7.2A8.4 8.4 0 0 0 4 14a8 8 0 0 0 8 8Z" />
+    <path d="M9.5 17.5c0-1.8 1.1-2.8 2.5-4.5.2 1.4 1.2 2.2 2 3.1.7.8.5 2.2-.2 3" />
+  </>
+);
+export const IconGrill = (p: IconProps) => <Icon {...p}>{GRILL_GEOMETRY}</Icon>;
+
+// Spec — a document with written requirements.
+const SPEC_GEOMETRY = (
+  <>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+    <path d="M8 13h8" />
+    <path d="M8 17h6" />
+  </>
+);
+export const IconSpec = (p: IconProps) => <Icon {...p}>{SPEC_GEOMETRY}</Icon>;
+
+// Tickets — a perforated work ticket.
+const TICKETS_GEOMETRY = (
+  <>
+    <path d="M2 9a3 3 0 0 0 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 0 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+    <path d="M13 5v2" />
+    <path d="M13 17v2" />
+    <path d="M13 11v2" />
+  </>
+);
+export const IconTickets = (p: IconProps) => <Icon {...p}>{TICKETS_GEOMETRY}</Icon>;
+
+// Implement — source-code brackets.
+const IMPLEMENT_GEOMETRY = (
+  <>
+    <path d="m8 9-4 3 4 3" />
+    <path d="m16 9 4 3-4 3" />
+    <path d="m14 5-4 14" />
+  </>
+);
+export const IconImplement = (p: IconProps) => (
+  <Icon {...p}>{IMPLEMENT_GEOMETRY}</Icon>
+);
+
+// Review — an eye for inspection.
+const REVIEW_GEOMETRY = (
+  <>
+    <path d="M2.1 12a10.9 10.9 0 0 1 19.8 0 10.9 10.9 0 0 1-19.8 0Z" />
+    <circle cx="12" cy="12" r="3" />
+  </>
+);
+export const IconReview = (p: IconProps) => <Icon {...p}>{REVIEW_GEOMETRY}</Icon>;

@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import { useConfigStore } from "../../../features/studio/stores/configStore";
+import {
+  isSidebarEnabled,
+  sidebarPaneComposition,
+  useConfigStore,
+} from "../../../features/studio/stores/configStore";
 import { useUIStore } from "../../../features/studio/stores/uiStore";
 import {
   DEFAULT_PANEL_LAYOUT,
@@ -11,8 +15,11 @@ import {
 } from "./layoutMath";
 
 export function useStudioPanelLayout() {
-  const projectsEnabled = useConfigStore(
-    (state) => state.features.projects,
+  const paneComposition = useConfigStore((state) =>
+    sidebarPaneComposition(
+      state.features.projects,
+      isSidebarEnabled(state),
+    ),
   );
   const sidebarVisible = useUIStore((state) => state.sidebarVisible);
   const panelLayout = useUIStore((state) => state.panelLayout);
@@ -35,7 +42,7 @@ export function useStudioPanelLayout() {
     skipNextOuterLayout.current = true;
     skipNextWorkAreaLayout.current = true;
     outerGroupRef.current?.setLayout(
-      outerPanelLayout(sizes, isSidebarVisible, projectsEnabled),
+      outerPanelLayout(sizes, isSidebarVisible, paneComposition),
     );
     workAreaGroupRef.current?.setLayout(splitWorkArea(sizes));
   }
@@ -43,7 +50,7 @@ export function useStudioPanelLayout() {
   useEffect(() => {
     previousSidebarVisible.current = sidebarVisible;
     applyLayout(panelLayout ?? DEFAULT_PANEL_LAYOUT, sidebarVisible);
-  }, [sidebarVisible, panelLayout, projectsEnabled]);
+  }, [sidebarVisible, panelLayout, paneComposition]);
 
   function handleOuterLayout(sizes: number[]) {
     if (skipNextOuterLayout.current) {
@@ -51,12 +58,12 @@ export function useStudioPanelLayout() {
       return;
     }
 
-    if (!sidebarVisible) return;
+    if (!sidebarVisible || paneComposition === "absent") return;
 
     const nextLayout = mergeOuterPanelLayout(
       panelLayout ?? DEFAULT_PANEL_LAYOUT,
       sizes,
-      projectsEnabled,
+      paneComposition,
     );
     if (nextLayout) setPanelLayout(nextLayout);
   }
@@ -70,14 +77,13 @@ export function useStudioPanelLayout() {
     const nextLayout = mergeWorkAreaLayout(
       panelLayout ?? DEFAULT_PANEL_LAYOUT,
       sizes,
-      projectsEnabled,
     );
     if (nextLayout) setPanelLayout(nextLayout);
   }
 
   return {
     layout,
-    projectsEnabled,
+    paneComposition,
     sidebarVisible,
     outerGroupRef,
     workAreaGroupRef,

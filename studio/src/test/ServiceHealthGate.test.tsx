@@ -40,6 +40,7 @@ function runtimeHealthHarness() {
       },
       values: { workTrackerApiKey: "" },
       serviceHealth: health("ready"),
+      initialNotices: [],
     }),
     retryServices,
     subscribeServiceHealth: (next: ServiceHealthListener) => {
@@ -49,6 +50,7 @@ function runtimeHealthHarness() {
         listener = null;
       };
     },
+    subscribeUserNotices: () => () => {},
   } as StudioRuntime;
 
   return {

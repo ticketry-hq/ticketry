@@ -5,6 +5,8 @@
 export * from './AddWorkflowTransitionIn.js';
 export * from './AssigneeOut.js';
 export * from './AttachmentOut.js';
+export * from './ConfigBody.js';
+export * from './FeaturesBody.js';
 export * from './IssueTypeIn.js';
 export * from './IssueTypeOut.js';
 export * from './IssueTypePatch.js';
@@ -15,6 +17,7 @@ export * from './MessageError.js';
 export * from './ModuleIn.js';
 export * from './ModuleOut.js';
 export * from './ModuleWorkItemIn.js';
+export * from './ProfileBody.js';
 export * from './ProjectIn.js';
 export * from './ProjectOut.js';
 export * from './ProjectPatch.js';

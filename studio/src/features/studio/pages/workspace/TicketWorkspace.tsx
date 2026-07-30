@@ -57,6 +57,7 @@ export function TicketWorkspace() {
         bucket={bucket}
         projectId={selectedProjectId}
         moduleId={selectedModuleId}
+        ticketKey={task?.key}
         owner="studio"
         details={<DetailsTab />}
         launchContext={launchContext}

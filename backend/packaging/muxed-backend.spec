@@ -10,6 +10,7 @@ from PyInstaller.utils.hooks import collect_all, copy_metadata
 datas = []
 hiddenimports = []
 binaries = []
+database_filename_markers = (".db", ".sqlite", ".sqlite3")
 
 
 def include_source_package(source_root, package_name):
@@ -21,6 +22,15 @@ def include_source_package(source_root, package_name):
 
 
 repository_root = Path(SPECPATH).parents[1]
+reviewed_defaults_artifact = (
+    repository_root / "backend" / "worktracker" / "reviewed_defaults.json"
+)
+datas.append(
+    (
+        str(reviewed_defaults_artifact),
+        "worktracker",
+    )
+)
 skill_catalog_root = (
     repository_root / "backend" / "apps" / "terminals" / "agents" / "skills"
 )
@@ -74,6 +84,22 @@ datas += copy_metadata("django-ninja")
 datas += copy_metadata("uvicorn")
 datas += copy_metadata("fastmcp")
 datas += copy_metadata("mcp")
+
+database_sources = sorted(
+    str(source)
+    for source, _destination in datas
+    if any(
+        Path(source).name.lower().endswith(marker)
+        or f"{marker}-" in Path(source).name.lower()
+        or f"{marker}." in Path(source).name.lower()
+        for marker in database_filename_markers
+    )
+)
+if database_sources:
+    raise ValueError(
+        "sidecar packaging must not contain database artifacts: "
+        + ", ".join(database_sources)
+    )
 
 a = Analysis(
     ["sidecar.py"],

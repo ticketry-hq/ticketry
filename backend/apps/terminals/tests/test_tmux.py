@@ -7,17 +7,25 @@ from ``PATH``. Metadata persistence is checked against the Django ORM.
 
 from __future__ import annotations
 
+import os
+import select
 import shutil
 import subprocess
 import tempfile
 import time
 import uuid
 
+import ptyprocess
 import pytest
 
 from apps.runs.models import AgentRun
 from apps.terminals.tmux import sessions as tmux
-from apps.terminals.tmux._core import SESSION_PREFIX, TMUX_SOCKET, TmuxSessionError, _server
+from apps.terminals.tmux._core import (
+    SESSION_PREFIX,
+    TMUX_SOCKET,
+    TmuxSessionError,
+    _server,
+)
 from apps.terminals.tmux.client import attach_argv, refresh_client_size, scroll
 from apps.terminals.tmux.metadata import TmuxSession, _parse_show_options
 from apps.terminals.models import AgentTerminalSession
@@ -25,9 +33,7 @@ from apps.terminals.models import AgentTerminalSession
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),
-    pytest.mark.skipif(
-        shutil.which("tmux") is None, reason="tmux binary not on PATH"
-    ),
+    pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux binary not on PATH"),
 ]
 
 
@@ -93,16 +99,28 @@ def agent_run_id():
         pass
 
 
-def _make(rid: str) -> TmuxSession:
+def _make(rid: str, command: str = "sleep 60") -> TmuxSession:
     return tmux.create_session(
         agent_run_id=rid,
         task_id="task-123",
         module_id="module-456",
         project_id="project-789",
         agent="claude-code",
-        command="sleep 60",
+        command=command,
         cwd="/tmp",
     )
+
+
+def _read_available_pty_bytes(
+    viewer: ptyprocess.PtyProcessUnicode, timeout: float = 0.25
+) -> bytes:
+    output = bytearray()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ready, _, _ = select.select([viewer.fileno()], [], [], 0.02)
+        if ready:
+            output.extend(os.read(viewer.fileno(), 65536))
+    return bytes(output)
 
 
 def test_create_session_returns_populated_dataclass_and_is_listed(agent_run_id):
@@ -238,16 +256,12 @@ def test_create_session_retains_provider_pane_after_exit(agent_run_id):
     )
 
     server = _server()
-    options = server.cmd(
-        "show-options", "-wv", "-t", session.name, "remain-on-exit"
-    )
+    options = server.cmd("show-options", "-wv", "-t", session.name, "remain-on-exit")
     assert (options.stdout or []) == ["on"]
 
     deadline = time.monotonic() + 2
     while time.monotonic() < deadline:
-        panes = server.cmd(
-            "list-panes", "-t", session.name, "-F", "#{pane_dead}"
-        )
+        panes = server.cmd("list-panes", "-t", session.name, "-F", "#{pane_dead}")
         if (panes.stdout or []) == ["1"]:
             break
         time.sleep(0.02)
@@ -271,9 +285,7 @@ def test_reconcile_classifies_retained_dead_pane_as_exited(agent_run_id):
     server = _server()
     deadline = time.monotonic() + 2
     while time.monotonic() < deadline:
-        panes = server.cmd(
-            "list-panes", "-t", session.name, "-F", "#{pane_dead}"
-        )
+        panes = server.cmd("list-panes", "-t", session.name, "-F", "#{pane_dead}")
         if (panes.stdout or []) == ["1"]:
             break
         time.sleep(0.02)
@@ -284,13 +296,14 @@ def test_reconcile_classifies_retained_dead_pane_as_exited(agent_run_id):
 
     assert result.exited == [agent_run_id]
     assert result.soft_deleted == []
-    assert AgentTerminalSession.objects.get(
-        agent_run_id=agent_run_id
-    ).terminated_at is not None
+    assert (
+        AgentTerminalSession.objects.get(agent_run_id=agent_run_id).terminated_at
+        is not None
+    )
     assert tmux.get_session(agent_run_id) is None
 
 
-def test_reconcile_graces_new_orphan_before_reaping(monkeypatch):
+def test_reconcile_preserves_untracked_live_session():
     name = f"pt-orphan-{uuid.uuid4().hex[:8]}"
     subprocess.run(
         [
@@ -307,23 +320,12 @@ def test_reconcile_graces_new_orphan_before_reaping(monkeypatch):
     )
     try:
         server = _server()
-        created_at = tmux._live_session_births(server)[name]
-        monkeypatch.setattr(tmux.time, "time", lambda: created_at + 1)
-
-        fresh = tmux.reconcile_sessions()
-
-        assert fresh.killed_orphans == []
         assert name in tmux._live_session_births(server)
 
-        monkeypatch.setattr(
-            tmux.time,
-            "time",
-            lambda: created_at + tmux.ORPHAN_GRACE_SECONDS + 1,
-        )
-        stale = tmux.reconcile_sessions()
+        result = tmux.reconcile_sessions()
 
-        assert stale.killed_orphans == [name]
-        assert name not in tmux._live_session_births(server)
+        assert result.untracked == [name]
+        assert name in tmux._live_session_births(server)
     finally:
         subprocess.run(
             ["tmux", "-L", TMUX_SOCKET, "kill-session", "-t", name],
@@ -354,32 +356,109 @@ def test_reconcile_preserves_rows_when_tmux_listing_is_uncertain(
         with pytest.raises(TmuxSessionError, match="list-sessions failed"):
             tmux.reconcile_sessions()
 
-    assert AgentTerminalSession.objects.get(
-        agent_run_id=agent_run_id
-    ).terminated_at is None
+    assert (
+        AgentTerminalSession.objects.get(agent_run_id=agent_run_id).terminated_at
+        is None
+    )
 
 
-def test_scroll_enters_copy_mode_and_rejects_bad_direction(agent_run_id):
+def test_reconcile_preserves_rows_when_tmux_server_is_absent(agent_run_id):
+    _make(agent_run_id)
+    server = _server()
+    stopped = server.cmd("kill-server")
+    assert stopped.returncode == 0
+
+    result = tmux.reconcile_sessions()
+
+    assert result.inventory_available is False
+    assert result.soft_deleted == []
+    assert result.exited == []
+    assert (
+        AgentTerminalSession.objects.get(agent_run_id=agent_run_id).terminated_at
+        is None
+    )
+
+
+def test_scroll_hides_position_marker_and_returns_to_live_prompt(agent_run_id):
     """Wheel bridge drives copy-mode scrollback without mouse mode (#578)."""
 
-    _make(agent_run_id)
+    _make(
+        agent_run_id,
+        command=(
+            "i=1; while [ $i -le 80 ]; do "
+            "printf 'SCROLL_%03d\\n' \"$i\"; i=$((i+1)); "
+            "done; sleep 60"
+        ),
+    )
     server = _server()
     name = f"pt-{agent_run_id}"
 
-    # Not in copy-mode before the first scroll.
-    before = server.cmd("display-message", "-t", name, "-p", "#{pane_in_mode}")
-    assert (before.stdout or ["0"])[0].strip() == "0"
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        history = server.cmd("display-message", "-t", name, "-p", "#{history_size}")
+        if int((history.stdout or ["0"])[0].strip()) >= 40:
+            break
+        time.sleep(0.02)
+    else:
+        pytest.fail("tmux did not populate scrollback")
 
-    scroll(agent_run_id, "up", 5)
+    marker = b"POSMARK"
+    marker_option = server.cmd(
+        "set-option",
+        "-w",
+        "-t",
+        name,
+        "copy-mode-position-format",
+        marker.decode(),
+    )
+    assert marker_option.returncode == 0
+    viewer_env = os.environ.copy()
+    viewer_env["LC_ALL"] = "C.UTF-8"
+    viewer_env["TERM"] = "xterm-256color"
+    viewer_env.pop("TERMINFO", None)
+    viewer = ptyprocess.PtyProcessUnicode.spawn(
+        attach_argv(agent_run_id),
+        env=viewer_env,
+        dimensions=(12, 80),
+    )
+    try:
+        # Discard the live screen so this read contains only copy-mode output.
+        initial = _read_available_pty_bytes(viewer, timeout=1)
+        assert initial, (
+            f"tmux viewer produced no initial screen "
+            f"(alive={viewer.isalive()}, exit={viewer.exitstatus})"
+        )
+        scroll(agent_run_id, "up", 5)
+        rendered = _read_available_pty_bytes(viewer, timeout=1)
 
-    after = server.cmd("display-message", "-t", name, "-p", "#{pane_in_mode}")
-    assert (after.stdout or ["0"])[0].strip() == "1"
+        after = server.cmd("display-message", "-t", name, "-p", "#{pane_in_mode}")
+        assert (after.stdout or ["0"])[0].strip() == "1"
+        position = server.cmd("display-message", "-t", name, "-p", "#{scroll_position}")
+        assert int((position.stdout or ["0"])[0].strip()) >= 5
+        assert viewer.isalive(), (
+            f"tmux viewer exited during scroll (exit={viewer.exitstatus})"
+        )
+        assert b"SCROLL_" in rendered
+        assert marker not in rendered
 
-    # Scrolling down is accepted (returns to prompt; -e exits at the bottom).
-    scroll(agent_run_id, "down", 5)
+        # A large downward scroll returns to the prompt because -e exits at bottom.
+        scroll(agent_run_id, "down", 500)
+        after_down = server.cmd("display-message", "-t", name, "-p", "#{pane_in_mode}")
+        assert (after_down.stdout or ["1"])[0].strip() == "0"
 
-    with pytest.raises(TmuxSessionError):
-        scroll(agent_run_id, "sideways", 3)
+        mouse = server.cmd("show-options", "-gv", "mouse")
+        assert (mouse.stdout or ["off"])[0].strip() == "off"
+        assert tmux.get_session(agent_run_id) is not None
+        assert AgentTerminalSession.objects.filter(
+            agent_run_id=agent_run_id, terminated_at__isnull=True
+        ).exists()
+
+        with pytest.raises(TmuxSessionError):
+            scroll(agent_run_id, "sideways", 3)
+    finally:
+        viewer.terminate(force=True)
+
+    assert tmux.get_session(agent_run_id) is not None
 
 
 def test_terminate_returns_true_then_false(agent_run_id):
@@ -431,21 +510,21 @@ def test_list_sessions_ignores_non_pt_sessions(agent_run_id):
         )
 
 
-def test_create_session_kills_tmux_when_db_insert_fails(agent_run_id, monkeypatch):
-    """A failed metadata insert must kill the just-created tmux session."""
+def test_create_session_does_not_start_provider_when_db_insert_fails(
+    agent_run_id, monkeypatch, tmp_path
+):
+    """A failed metadata insert rolls back before any provider work starts."""
 
     def boom(**kwargs):
         raise RuntimeError("db down")
 
-    # Force the persistence step to fail after the session is created.
-
+    launched = tmp_path / "provider-started"
     monkeypatch.setattr(AgentTerminalSession.objects, "create", boom)
 
     with pytest.raises(TmuxSessionError, match="persist session metadata failed"):
-        _make(agent_run_id)
+        _make(agent_run_id, command=f"touch {launched}; sleep 60")
 
-    # The orphaned tmux session was reaped; nothing remains to attach to.
-
+    assert not launched.exists()
     assert tmux.get_session(agent_run_id) is None
 
 
@@ -453,6 +532,19 @@ def test_attach_argv_shape():
     argv = attach_argv("abc123")
 
     assert argv == ["tmux", "-L", "muxed", "attach", "-t", "pt-abc123"]
+
+
+def test_attach_argv_uses_profile_scoped_tmux_socket(monkeypatch):
+    monkeypatch.setenv("MUXED_TMUX_SOCKET", "muxed-dev-0123456789abcdef")
+
+    assert attach_argv("abc123") == [
+        "tmux",
+        "-L",
+        "muxed-dev-0123456789abcdef",
+        "attach",
+        "-t",
+        "pt-abc123",
+    ]
 
 
 def test_attach_argv_uses_the_rust_approved_tmux_path(monkeypatch):

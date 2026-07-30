@@ -79,7 +79,6 @@ const confirmDelete = vi.spyOn(dialog, "confirm");
 
 const TODO: State = { id: "st-todo", name: "Todo", group: "unstarted", color: null };
 const DONE: State = { id: "st-done", name: "Done", group: "completed", color: null };
-const READY: State = { id: "st-ready", name: "Ready", group: "unstarted", color: null };
 const REVIEW: State = { id: "st-review", name: "Review", group: "started", color: null };
 const IMPLEMENT: State = { id: "st-implement", name: "Implement", group: "started", color: null };
 const CANCELLED: State = { id: "st-cancelled", name: "Cancelled", group: "cancelled", color: null };
@@ -804,7 +803,7 @@ describe("FindingsPanel (#907)", () => {
     useBacklogStore.setState({
       projectId: "p1",
       items: [story],
-      states: [TODO, DONE, READY, REVIEW, IMPLEMENT, CANCELLED],
+      states: [TODO, DONE, REVIEW, IMPLEMENT, CANCELLED],
       filters: { query: "" },
     });
     useStudioStore.setState({
@@ -815,24 +814,24 @@ describe("FindingsPanel (#907)", () => {
     return render(<IssueDetail issueId="a" />);
   }
 
-  it("shows Implementation findings with a Ready-only queued count and parsed location", async () => {
+  it("shows Implementation findings with an Implement-stage queued count and parsed location", async () => {
     setupStory([
       finding({
-        id: "f1", key: "MEML-11", name: "Fix null deref", state: READY,
+        id: "f1", key: "MEML-11", name: "Fix null deref", state: IMPLEMENT,
         description_html: "Path: src/auth/login.ts\nLines: 40-48\nNote: guard the token",
       }),
       finding({
-        id: "f2", key: "MEML-12", name: "Second fix", state: READY,
+        id: "f2", key: "MEML-12", name: "Second fix", state: IMPLEMENT,
         description_html: "Path: src/auth/session.ts\nLines: 10-10",
       }),
       finding({
-        id: "f3", key: "MEML-13", name: "Already building", state: IMPLEMENT,
+        id: "f3", key: "MEML-13", name: "Under review", state: REVIEW,
         description_html: "Path: src/x.ts\nLines: 1-2",
       }),
     ]);
 
     expect(screen.getByTestId("findings-panel")).toBeInTheDocument();
-    // Ready-only: the Implement finding is not counted as queued.
+    // Start-stage only: the Review finding is not counted as queued.
     expect(screen.getByTestId("findings-queued-count")).toHaveTextContent("2 fixes queued");
 
     const rows = screen.getAllByTestId("finding-row");
@@ -840,21 +839,21 @@ describe("FindingsPanel (#907)", () => {
     expect(rows[0]).toHaveTextContent("MEML-11");
     expect(rows[0]).toHaveTextContent("Fix null deref");
     expect(within(rows[0]).getByTestId("finding-location")).toHaveTextContent("src/auth/login.ts:40-48");
-    expect(within(rows[0]).getByTestId("finding-state")).toHaveTextContent("Ready");
+    expect(within(rows[0]).getByTestId("finding-state")).toHaveTextContent("Implement");
     // Idempotent re-fetch on mount leaves the same set (reconcile seam).
     await waitFor(() => expect(listProjectWorkItems).toHaveBeenCalled());
   });
 
   it("uses the singular label for a single queued fix", () => {
     setupStory([
-      finding({ id: "f1", key: "MEML-11", name: "Only fix", state: READY, description_html: "Path: a.ts\nLines: 1-2" }),
+      finding({ id: "f1", key: "MEML-11", name: "Only fix", state: IMPLEMENT, description_html: "Path: a.ts\nLines: 1-2" }),
     ]);
     expect(screen.getByTestId("findings-queued-count")).toHaveTextContent("1 fix queued");
   });
 
   it("selects a finding in the Studio task store", () => {
     setupStory([
-      finding({ id: "finding-id", key: "MEML-11", name: "Only fix", state: READY }),
+      finding({ id: "finding-id", key: "MEML-11", name: "Only fix", state: IMPLEMENT }),
     ]);
 
     fireEvent.click(within(screen.getByTestId("finding-row")).getByRole("button", { name: /^MEML-11/ }));
@@ -864,7 +863,7 @@ describe("FindingsPanel (#907)", () => {
 
   it("does not render the panel for a Story outside Review", () => {
     setupStory(
-      [finding({ id: "f1", key: "MEML-11", name: "Fix", state: READY, description_html: "Path: a.ts\nLines: 1-2" })],
+      [finding({ id: "f1", key: "MEML-11", name: "Fix", state: IMPLEMENT, description_html: "Path: a.ts\nLines: 1-2" })],
       TODO,
     );
     expect(screen.queryByTestId("findings-panel")).toBeNull();
@@ -874,7 +873,7 @@ describe("FindingsPanel (#907)", () => {
     const task = wi({ id: "a", issue_type: IMPL_TYPE, state: REVIEW });
     useIssueStore.setState({ open: detail(task), children: [], loading: false, notFound: false, error: null, saving: {} });
     useBacklogStore.setState({
-      projectId: "p1", items: [task], states: [TODO, DONE, READY, REVIEW, CANCELLED],
+      projectId: "p1", items: [task], states: [TODO, DONE, REVIEW, IMPLEMENT, CANCELLED],
       filters: { query: "" },
     });
     useStudioStore.setState({ selectedProjectId: "p1", modules: [EPIC] });
@@ -887,8 +886,8 @@ describe("FindingsPanel (#907)", () => {
       finding({ id: "f1", key: "MEML-11", name: "Fix null deref", state: CANCELLED, description_html: "Path: a.ts\nLines: 1-2" }),
     );
     setupStory([
-      finding({ id: "f1", key: "MEML-11", name: "Fix null deref", state: READY, description_html: "Path: a.ts\nLines: 1-2" }),
-      finding({ id: "f2", key: "MEML-12", name: "Second", state: READY, description_html: "Path: b.ts\nLines: 3-4" }),
+      finding({ id: "f1", key: "MEML-11", name: "Fix null deref", state: IMPLEMENT, description_html: "Path: a.ts\nLines: 1-2" }),
+      finding({ id: "f2", key: "MEML-12", name: "Second", state: IMPLEMENT, description_html: "Path: b.ts\nLines: 3-4" }),
     ]);
     expect(screen.getByTestId("findings-queued-count")).toHaveTextContent("2 fixes queued");
 

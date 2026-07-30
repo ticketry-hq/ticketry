@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
+from importlib.resources import files
+
+from worktracker.reviewed_defaults import REVIEWED_REQUIRED_SKILLS
 
 
-# This is the binding-facing name catalog for the pinned mattpocock/skills
-# snapshot. Snapshot acquisition and runtime resolution consume the same
-# canonical identifiers; bindings deliberately store names, not resource paths.
-PINNED_UPSTREAM_SKILL_IDS = (
-    "grill-with-docs",
-    "to-spec",
-    "to-tickets",
+_PINNED_UPSTREAM_SKILL_LOCK = json.loads(
+    files("apps.terminals.agents.skills")
+    .joinpath("lock.json")
+    .read_text(encoding="utf-8")
 )
+PINNED_UPSTREAM_SKILL_IDS = tuple(_PINNED_UPSTREAM_SKILL_LOCK["selected_packages"])
 _PINNED_UPSTREAM_SKILL_ID_SET = frozenset(PINNED_UPSTREAM_SKILL_IDS)
 
-DEFAULT_REQUIRED_SKILLS = {
-    "Idea": ("to-spec", "to-tickets"),
-    "Refinement": ("grill-with-docs", "to-spec", "to-tickets"),
-}
+DEFAULT_REQUIRED_SKILLS = REVIEWED_REQUIRED_SKILLS
 
 
 class RequiredSkillsValidationError(ValueError):

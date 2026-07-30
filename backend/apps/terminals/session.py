@@ -7,8 +7,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from math import isfinite
+from datetime import datetime, timezone
 from typing import Optional
 
 from asgiref.sync import async_to_sync
@@ -80,31 +79,6 @@ class ResumeUnavailable(Exception):
 
 
 TerminalSessionError = TmuxSessionError
-
-
-def _parse_iso_datetime(value: str) -> datetime | None:
-    """Parse an ISO-8601 timestamp and normalize it to UTC."""
-
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
-def _idle_ttl_hours() -> float | None:
-    """Return the idle-TTL configured for the reaper, or ``None`` if disabled."""
-
-    raw_value = os.environ.get("MUXED_IDLE_TTL_HOURS", "24")
-    try:
-        ttl_hours = float(raw_value)
-    except (TypeError, ValueError):
-        return None
-    if ttl_hours <= 0 or not isfinite(ttl_hours):
-        return None
-    return ttl_hours
 
 
 class AttachHandle:
@@ -410,59 +384,6 @@ class TerminalSessionService:
                 project_id, agent_run_id, "exited", at=ended_at
             )
 
-    def reap_idle_sessions(self, *, now: datetime | None = None) -> list[str]:
-        ttl_hours = _idle_ttl_hours()
-        if ttl_hours is None:
-            return []
-
-        current_time = now or datetime.now(timezone.utc)
-        if current_time.tzinfo is None:
-            current_time = current_time.replace(tzinfo=timezone.utc)
-        current_time = current_time.astimezone(timezone.utc)
-        cutoff = current_time - timedelta(hours=ttl_hours)
-
-        try:
-            rows = list(
-                AgentTerminalSession.objects.select_related("agent_run")
-                .filter(
-                    terminated_at__isnull=True,
-                    agent_run__ended_at__isnull=True,
-                )
-                .exclude(agent_run__provider_session_id__isnull=True)
-                .exclude(agent_run__provider_session_id="")
-                .order_by("agent_run__lifecycle_updated_at", "agent_run_id")
-            )
-        finally:
-            close_old_connections()
-
-        if not rows:
-            return []
-
-        try:
-            attached_session_names = tmux_sessions.attached_session_names()
-        except Exception as exc:
-            logger.warning("idle reap skipped: attachment state unavailable: %s", exc)
-            return []
-
-        reaped: list[str] = []
-        for row in rows:
-            run = row.agent_run
-            lifecycle_updated_at = run.lifecycle_updated_at
-            if not lifecycle_updated_at:
-                continue
-            parsed_updated_at = _parse_iso_datetime(lifecycle_updated_at)
-            if parsed_updated_at is None or parsed_updated_at >= cutoff:
-                continue
-            if row.tmux_session_name in attached_session_names:
-                continue
-            try:
-                self.terminate(run.id)
-            except Exception as exc:
-                logger.warning("idle reap failed agent_run_id=%s: %s", run.id, exc)
-                continue
-            reaped.append(run.id)
-        return reaped
-
     def live_run_for(self, task_id: str) -> AgentRun | None:
         return (
             AgentRun.objects.filter(task_id=task_id, status="running")
@@ -536,10 +457,7 @@ class TerminalSessionService:
             )
             reconcile_temporary_artifacts(active_run_ids)
         finally:
-            try:
-                self.reap_idle_sessions()
-            except Exception as exc:
-                logger.warning("idle terminal reap failed: %s", exc)
+            close_old_connections()
         return result
 
 

@@ -41,6 +41,7 @@ export type Row =
       key: string;
       stateId?: string | null;
       stateName: string;
+      stateColor: string;
       count: number;
     };
 
@@ -250,6 +251,7 @@ export function TasksPane() {
         <StateHeaderRow
           key={r.key}
           stateName={r.stateName}
+          stateColor={r.stateColor}
           count={r.count}
           isCollapsed={
             isSearchActive ? false : collapsedStateNames.has(r.stateName)

@@ -6,7 +6,7 @@ import {
   selectScratchLifecycleChips,
   useAgentStatusStore,
 } from "../../../../agents/status";
-import { LifecycleBadge } from "../../../../agents/terminal";
+import { ScratchStateBadge } from "../../../../agents/lifecycle";
 import { IssueDetail } from "../../../../work-items/issue-detail";
 
 function ScratchDetails({
@@ -26,22 +26,7 @@ function ScratchDetails({
     return <div className="text-text-muted">No active Scratch runs.</div>;
   }
 
-  return (
-    <span
-      className="inline-flex min-w-0 flex-none items-center gap-1 overflow-hidden"
-      data-testid="scratch-run-chicklets"
-    >
-      {chips.map((chip) => (
-        <LifecycleBadge
-          key={chip.state}
-          state={chip.state}
-          count={chip.count}
-          showLabel={false}
-          alwaysShowCount
-        />
-      ))}
-    </span>
-  );
+  return <ScratchStateBadge projectId={projectId} moduleId={moduleId} />;
 }
 
 // Mirror of the Tasks pane's selection debounce: rapid arrow-key navigation

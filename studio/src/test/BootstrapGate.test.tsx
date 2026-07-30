@@ -23,11 +23,22 @@ vi.mock("../shared/api/client", async () => {
 });
 
 let profiles: Array<{ recent_project_id?: string | null }> = [];
-let features = { projects: true };
+let features = { sidebar: true, projects: true };
 let projects: Array<{ id: string; identifier: string }> = [];
 let selectedProjectId: string | null = null;
 
 vi.mock("../features/studio/stores/configStore", () => ({
+  isSidebarEnabled: (state: { features: typeof features }) =>
+    state.features.sidebar,
+  sidebarPaneComposition: (
+    projectsEnabled: boolean,
+    sidebarEnabled = true,
+  ) =>
+    sidebarEnabled
+      ? projectsEnabled
+        ? "projects-and-modules"
+        : "modules"
+      : "absent",
   useConfigStore: {
     getState: () => ({
       loadConfig: mocks.studioLoadConfig,
@@ -69,11 +80,13 @@ vi.mock("../features/studio/stores/uiStore", () => ({
   visiblePaneOrder: (
     sidebarVisible: boolean,
     hasSelectedProject: boolean,
-    projectsEnabled: boolean,
+    paneComposition: "absent" | "modules" | "projects-and-modules",
   ) => {
-    if (!sidebarVisible) return ["tasks", "details-or-terminal"];
+    if (!sidebarVisible || paneComposition === "absent") {
+      return ["tasks", "details-or-terminal"];
+    }
     return [
-      ...(projectsEnabled ? ["projects"] : []),
+      ...(paneComposition === "projects-and-modules" ? ["projects"] : []),
       ...(hasSelectedProject ? ["modules"] : []),
       "tasks",
       "details-or-terminal",
@@ -86,7 +99,7 @@ describe("BootstrapGate", () => {
     vi.restoreAllMocks();
     vi.spyOn(console, "warn").mockImplementation(() => {});
     profiles = [];
-    features = { projects: true };
+    features = { sidebar: true, projects: true };
     projects = [];
     selectedProjectId = null;
     mocks.studioLoadConfig.mockResolvedValue(undefined);
@@ -171,9 +184,9 @@ describe("BootstrapGate", () => {
     expect(await screen.findByText("Studio ready")).toBeInTheDocument();
   });
 
-  it("selects the resolved project and focuses Modules when Projects is off", async () => {
+  it("prefers an existing legacy CODING project over creating CDN", async () => {
     profiles = [{ recent_project_id: "legacy-project" }];
-    features = { projects: false };
+    features = { sidebar: true, projects: false };
     projects = [{ id: "coding-project", identifier: "CODING" }];
 
     render(
@@ -184,16 +197,36 @@ describe("BootstrapGate", () => {
 
     expect(await screen.findByText("Studio ready")).toBeInTheDocument();
     expect(mocks.selectProject).toHaveBeenCalledWith("coding-project");
+    expect(mocks.createProject).not.toHaveBeenCalled();
     expect(mocks.setSidebarVisible).toHaveBeenCalledWith(true);
     expect(mocks.setFocusedPane).toHaveBeenLastCalledWith("modules");
   });
 
-  it("resolves a missing CODING project through the existing project flow", async () => {
+  it("resolves CDN before the legacy CODING project", async () => {
     profiles = [{}];
-    features = { projects: false };
+    features = { sidebar: true, projects: false };
+    projects = [
+      { id: "coding-project", identifier: "CODING" },
+      { id: "cdn-project", identifier: "CDN" },
+    ];
+
+    render(
+      <BootstrapGate>
+        <div>Studio ready</div>
+      </BootstrapGate>,
+    );
+
+    expect(await screen.findByText("Studio ready")).toBeInTheDocument();
+    expect(mocks.selectProject).toHaveBeenCalledWith("cdn-project");
+    expect(mocks.createProject).not.toHaveBeenCalled();
+  });
+
+  it("creates the CDN project when neither default nor legacy project exists", async () => {
+    profiles = [{}];
+    features = { sidebar: true, projects: false };
     mocks.createProject.mockResolvedValue({
-      id: "created-coding-project",
-      identifier: "CODING",
+      id: "created-cdn-project",
+      identifier: "CDN",
     });
 
     render(
@@ -205,14 +238,14 @@ describe("BootstrapGate", () => {
     expect(await screen.findByText("Studio ready")).toBeInTheDocument();
     expect(mocks.createProject).toHaveBeenCalledWith({
       name: "coding",
-      slug: "CODING",
+      slug: "CDN",
     });
-    expect(mocks.selectProject).toHaveBeenCalledWith("created-coding-project");
+    expect(mocks.selectProject).toHaveBeenCalledWith("created-cdn-project");
   });
 
   it("preserves recent-project bootstrap behavior when Projects is on", async () => {
     profiles = [{ recent_project_id: "recent-project" }];
-    features = { projects: true };
+    features = { sidebar: true, projects: true };
     projects = [
       { id: "coding-project", identifier: "CODING" },
       { id: "recent-project", identifier: "RECENT" },
@@ -229,6 +262,23 @@ describe("BootstrapGate", () => {
     expect(mocks.createProject).not.toHaveBeenCalled();
     expect(mocks.setSidebarVisible).not.toHaveBeenCalled();
     expect(mocks.setFocusedPane).toHaveBeenLastCalledWith("modules");
+  });
+
+  it("opens in Edit view without rewriting a persisted visible sidebar", async () => {
+    profiles = [{ recent_project_id: "legacy-project" }];
+    features = { sidebar: false, projects: false };
+    projects = [{ id: "coding-project", identifier: "CODING" }];
+
+    render(
+      <BootstrapGate>
+        <div>Studio ready</div>
+      </BootstrapGate>,
+    );
+
+    expect(await screen.findByText("Studio ready")).toBeInTheDocument();
+    expect(mocks.selectProject).toHaveBeenCalledWith("coding-project");
+    expect(mocks.setSidebarVisible).not.toHaveBeenCalled();
+    expect(mocks.setFocusedPane).toHaveBeenLastCalledWith("tasks");
   });
 
   it("continues automatically retrying while the server is unavailable", async () => {

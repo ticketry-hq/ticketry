@@ -4,10 +4,19 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { validateFinalizedDefaults } from "../../backend/worktracker/reviewed_defaults_validator.mjs";
+
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const manifestPath = path.join(studioRoot, "release", "manifest.v1.json");
 
 export class ReleaseManifestError extends Error {}
+
+export class ReleaseDefaultsArtifactError extends ReleaseManifestError {
+  constructor(message, options) {
+    super(message, options);
+    this.name = "ReleaseDefaultsArtifactError";
+  }
+}
 
 function requireValue(value, label) {
   if (value === undefined || value === null || value === "") {
@@ -32,10 +41,16 @@ export function validateManifest(manifest) {
   const artifacts = requireValue(manifest.artifacts, "artifacts");
   requireArray(artifacts.frontend?.command, "artifacts.frontend.command");
   requireArray(artifacts.frontend?.required_outputs, "artifacts.frontend.required_outputs");
-  requireArray(artifacts.tauri?.command, "artifacts.tauri.command");
+  const tauriCommand = requireArray(artifacts.tauri?.command, "artifacts.tauri.command");
+  if (!tauriCommand.includes("native-libghostty")) {
+    throw new ReleaseManifestError(
+      "artifacts.tauri.command must enable the native-libghostty feature",
+    );
+  }
   requireValue(artifacts.tauri?.binary_name, "artifacts.tauri.binary_name");
   requireArray(artifacts.tauri?.bundle_formats, "artifacts.tauri.bundle_formats");
   requireValue(artifacts.sidecar?.build_script, "artifacts.sidecar.build_script");
+  requireValue(artifacts.sidecar?.defaults_artifact, "artifacts.sidecar.defaults_artifact");
   requireArray(artifacts.sidecar?.migration_directories, "artifacts.sidecar.migration_directories");
   requireValue(artifacts.sidecar?.dependency_policy?.python_lock, "sidecar dependency policy python_lock");
   requireValue(artifacts.sidecar?.dependency_policy?.python_project, "sidecar dependency policy python_project");
@@ -194,6 +209,44 @@ async function requireMigrationDirectory(root, relativePath) {
   }
 }
 
+async function validateDefaultsArtifact(root, relativePath) {
+  const absolutePath = path.resolve(root, relativePath);
+  let source;
+  try {
+    source = await readFile(absolutePath, "utf8");
+  } catch (error) {
+    throw new ReleaseDefaultsArtifactError(
+      `release defaults artifact is missing or unreadable: ${relativePath}`,
+      { cause: error },
+    );
+  }
+
+  let artifact;
+  try {
+    artifact = JSON.parse(source);
+  } catch (error) {
+    throw new ReleaseDefaultsArtifactError(
+      `release defaults artifact is not parseable JSON (${relativePath}): ${error.message}`,
+      { cause: error },
+    );
+  }
+
+  const errors = validateFinalizedDefaults(artifact);
+  if (errors.length > 0) {
+    throw new ReleaseDefaultsArtifactError(
+      `release defaults artifact is invalid (${relativePath}):\n- ${errors.join("\n- ")}`,
+    );
+  }
+}
+
+async function validateFrontendOutputs(manifest, root = studioRoot) {
+  await Promise.all(
+    manifest.artifacts.frontend.required_outputs.map((asset) =>
+      requireFile(root, asset, "frontend asset"),
+    ),
+  );
+}
+
 export async function validateReleaseInputs(
   manifest,
   root = studioRoot,
@@ -201,6 +254,7 @@ export async function validateReleaseInputs(
 ) {
   validateManifest(manifest);
   const { artifacts } = manifest;
+  await validateDefaultsArtifact(root, artifacts.sidecar.defaults_artifact);
   await requireFile(root, artifacts.sidecar.build_script, "sidecar build script");
   await Promise.all([
     requireFile(root, artifacts.sidecar.dependency_policy.python_lock, "Python dependency lock"),
@@ -472,20 +526,28 @@ async function verifySidecarArchitecture(target) {
   }
 }
 
-export async function buildRelease(manifest, targets, { allowUnsigned = false } = {}) {
+export async function buildRelease(
+  manifest,
+  targets,
+  { allowUnsigned = false, execute = run } = {},
+) {
   validateMacOSReleaseEnvironment(process.env, { allowUnsigned });
+  await validateReleaseInputs(manifest, studioRoot, {
+    includeFrontendOutputs: false,
+    allowUnsigned,
+  });
   const [frontendCommand, ...frontendArgs] = manifest.artifacts.frontend.command;
-  await run(frontendCommand, frontendArgs, "frontend build");
-  await validateReleaseInputs(manifest, studioRoot, { allowUnsigned });
+  await execute(frontendCommand, frontendArgs, "frontend build");
+  await validateFrontendOutputs(manifest);
   for (const target of targets) {
-    await run(
+    await execute(
       "arch",
       [`-${target.build_architecture}`, "bash", manifest.artifacts.sidecar.build_script, target.sidecar.target_triple],
       `sidecar build for ${target.id}`,
     );
     await verifySidecarArchitecture(target);
     const [tauriCommand, ...tauriArgs] = manifest.artifacts.tauri.command;
-    await run(
+    await execute(
       tauriCommand,
       [
         ...tauriArgs,

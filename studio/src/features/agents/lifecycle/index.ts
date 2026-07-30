@@ -6,3 +6,4 @@
 
 export { AgentStateBadge } from "./AgentStateBadge";
 export { AutomationFailureChicklet } from "./AutomationFailureChicklet";
+export { ScratchStateBadge } from "./ScratchStateBadge";

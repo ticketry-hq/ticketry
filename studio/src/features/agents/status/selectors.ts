@@ -127,6 +127,7 @@ export function selectScratchLifecycleChips(
   for (const run of Object.values(state.runs)) {
     if (run.moduleId !== moduleId) continue;
     if (run.scope !== "plan" && run.scope !== "instant") continue;
+    if (!isLiveAgentRunState(run.state)) continue;
     if (!LIFECYCLE_STATE_ORDER.includes(run.state)) continue;
     counts.set(run.state, (counts.get(run.state) ?? 0) + 1);
   }
@@ -138,9 +139,11 @@ export function selectScratchLifecycleChips(
 
 /**
  * Run ids of the plan/instant runs that belong to one module's scratch bucket
- * — the same runs `selectScratchLifecycleChips` counts, identified the same
- * way. A scratch bucket is keyed by module, not by task id, so membership is
- * module + scope rather than `byTask`.
+ * that must remain mounted as terminal tabs. Unlike
+ * `selectScratchLifecycleChips`, this deliberately retains terminal-state runs
+ * so an exited or lost run does not unmount its terminal. A scratch bucket is
+ * keyed by module, not by task id, so membership is module + scope rather than
+ * `byTask`.
  */
 export function selectScratchRunIds(
   state: AgentStatusData,
@@ -155,18 +158,6 @@ export function selectScratchRunIds(
     ids.push(run.runId);
   }
   return ids;
-}
-
-export function selectScratchRunCount(
-  state: AgentStatusData,
-  moduleId?: string,
-): number {
-  return Object.values(state.runs).filter(
-    (run) =>
-      run.taskId === null &&
-      (!moduleId || run.moduleId === moduleId) &&
-      isLiveAgentRunState(run.state),
-  ).length;
 }
 
 export const MODULE_LIFECYCLE_STATES = [

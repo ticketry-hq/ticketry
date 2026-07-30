@@ -54,6 +54,30 @@ and hook runner. They stage the `.app`, `.dmg`, and a
 `release-output/<version>/<target>/`; that record explicitly states whether
 the release is signed and notarized.
 
+Before either build mode runs a frontend, sidecar, or bundle command, it
+validates the release inputs declared by `release/manifest.v1.json`. This gate
+reads and parses `backend/worktracker/reviewed_defaults.json`, then applies the
+same finalized-defaults validator used by the review workbench. That tracked
+file is the single source of truth for reviewed repository guidance, launch
+prompts, state vocabulary, and workflow graphs; the workbench, backend seed
+modules, release validator, and packaging recipe are consumers.
+
+A failure beginning with `release defaults artifact` means the declared file
+is missing or unreadable, is not JSON, or violates the reviewed-defaults
+schema. Invalid-content messages name the offending issue type, state, or
+transition edge. Correct the source artifact through the workbench finalization
+flow and rerun the release command; do not copy or translate it for packaging.
+The PyInstaller recipe bundles that same file directly, so the validated bytes
+are the bytes embedded in the sidecar.
+
+Packaging contains no state database, SQLite journal, migration snapshot, or
+other database artifact. On a clean installation, the first sidecar launch
+creates `state.db` in the application data directory and builds its schema from
+the bundled Django migrations. Creating the first project then materializes
+its issue types, start states, transition edges, and launch bindings from the
+bundled `backend/worktracker/reviewed_defaults.json`. Those materialized rows
+are project-owned after creation.
+
 Run the ten installed-artifact scenarios against the staged application:
 
 ```bash
@@ -179,7 +203,8 @@ snapshot together with an application version that can read that snapshot.
 CI runs its single `Desktop and sidecar` job on `macos-14`. It runs the Studio,
 backend, SDK, and Rust test/build checks, builds and verifies the host-native
 sidecar, runs the release contract tests, and runs `release:validate`.
-`release:validate` checks manifest structure and version agreement only; it
+`release:validate` checks manifest structure, declared files and migrations,
+component versions, and the finalized-defaults artifact validation gate. It
 does not check credentials or perform a real release build. CI never runs
 `release:build`, bundles a `.app` or `.dmg`, signs, notarizes, runs
 installed-artifact acceptance, or publishes. The packaging path can therefore

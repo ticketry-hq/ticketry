@@ -22,7 +22,7 @@ import { mapValues } from '../runtime.js';
  */
 export interface ScopedWorkflowLaunchBindingOut {
     /**
-     *
+     * 
      * @type {string}
      * @memberof ScopedWorkflowLaunchBindingOut
      */
@@ -52,7 +52,7 @@ export interface ScopedWorkflowLaunchBindingOut {
      */
     reasoning?: string | null;
     /**
-     *
+     * 
      * @type {Array<string>}
      * @memberof ScopedWorkflowLaunchBindingOut
      */
@@ -125,3 +125,4 @@ export function ScopedWorkflowLaunchBindingOutToJSONTyped(value?: ScopedWorkflow
         'subtree_run_enabled': value['subtree_run_enabled'],
     };
 }
+

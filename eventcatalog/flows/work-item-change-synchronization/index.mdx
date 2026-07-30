@@ -1,0 +1,78 @@
+---
+id: work-item-change-synchronization
+name: Work-item Change Synchronization
+version: 1.0.0
+summary: Shows how authoritative backend work changes reach Studio projections—and where they currently do not.
+owners:
+  - ticketry
+badges:
+  - content: Known model drift
+    backgroundColor: amber
+    textColor: amber
+steps:
+  - id: user-edit
+    title: User edits a work item
+    actor:
+      name: Ticketry user
+    next_step: patch
+  - id: patch
+    title: Send the change
+    message:
+      id: change-work-item
+      version: 1.0.0
+    next_step: persist
+  - id: persist
+    title: Validate and persist authoritative state
+    service:
+      id: worktracker-api
+    next_steps:
+      - http-result
+      - status-delta
+  - id: http-result
+    title: Update the caller from the HTTP response
+    service:
+      id: studio-frontend
+  - id: status-delta
+    title: Publish only when workflow-state identity changed
+    message:
+      id: work-item-state-changed
+      version: 1.0.0
+    next_step: collections
+  - id: collections
+    title: Reconcile backlog and task collections
+    service:
+      id: frontend-state-projections
+    next_step: detail-gap
+  - id: detail-gap
+    title: Issue-detail projection is not invalidated
+    custom:
+      title: Projection gap
+      summary: Non-state edits, deletes, and remote state moves can leave an open detail record stale.
+---
+
+## What the domain model says
+
+There is one authoritative Work Item. Any client projection of that item should
+be refreshable when its authoritative revision changes.
+
+## What the implementation does today
+
+Studio has multiple projections. The status feed updates backlog/task
+collections for state moves, but the issue-detail store is neither reconciled
+nor invalidated. The feed also has no general changed-fields event and no
+deletion tombstone.
+
+## The useful connection
+
+This is not simply a frontend bug or backend bug. It is a translation gap
+between:
+
+1. the domain identity (**one Work Item**);
+2. the backend persistence model (a complete Issue row plus a state-only
+   revision cursor); and
+3. the frontend read model (several independently refreshed projections).
+
+The catalog intentionally renders that mismatch instead of inventing a cleaner
+architecture than the code currently provides.
+
+<NodeGraph />

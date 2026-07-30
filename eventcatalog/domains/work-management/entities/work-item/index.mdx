@@ -1,0 +1,71 @@
+---
+id: work-item
+name: Work Item
+version: 1.0.0
+summary: Unified planning unit used for modules and tasks, with parent and blocker graph relationships.
+owners:
+  - ticketry
+aggregateRoot: true
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+  - name: projectId
+    type: UUID
+    required: true
+    references: project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: key
+    type: string
+    required: true
+    description: Derived project slug and project-wide sequence, such as MEML-7.
+  - name: type
+    type: string
+    required: true
+    enum:
+      - module
+      - task
+  - name: workItemTypeId
+    type: UUID
+    references: work-item-type
+    referencesIdentifier: id
+    relationType: classifiedAs
+  - name: parentId
+    type: UUID
+    references: work-item
+    referencesIdentifier: id
+    relationType: childOf
+  - name: stateId
+    type: UUID
+    references: workflow-state
+    referencesIdentifier: id
+    relationType: currentlyIn
+  - name: blockedBy
+    type: array
+    description: Directed edges to work items that must complete first.
+    items:
+      type: UUID
+  - name: name
+    type: string
+    required: true
+  - name: rank
+    type: string
+    required: true
+    description: Fractional index used for manual ordering inside a view column.
+  - name: stateRevision
+    type: integer
+    required: true
+  - name: updatedAt
+    type: datetime
+    required: true
+---
+
+## Ontology note
+
+Issue, ticket, task, and module occur in code and UI, but **work item** is the
+canonical domain term. `type` preserves the module/task tree split while
+`workItemTypeId` adds configurable business classification.
+
+<EntityPropertiesTable />

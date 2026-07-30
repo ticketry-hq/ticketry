@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useModalStore } from "../app/modal";
 import { SettingsModal } from "../features/studio/modals/SettingsModal";
 import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
+import { KeyboardSettingsPanel } from "../features/studio/modals/KeyboardSettingsPanel";
+import { useConfigStore } from "../features/studio/stores/configStore";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 
 vi.mock("../features/workflows/WorkflowSettingsPanel", () => ({
@@ -23,6 +25,44 @@ it("hides keyboard customization", () => {
       .getEffectiveBindings()
       .some((binding) => binding.actionId === "open-web"),
   ).toBe(false);
+});
+
+it("lists the sidebar toggle for rebinding only when the sidebar exists", () => {
+  const panel = () => (
+    <KeyboardSettingsPanel
+      bindings={studioKeymapRegistry.getConfigurableBindings()}
+      overridden={new Set()}
+      recordingKey={null}
+      message={null}
+      saving={false}
+      onRecord={vi.fn()}
+      onReset={vi.fn()}
+      onRestoreDefaults={vi.fn()}
+    />
+  );
+  useConfigStore.setState({
+    features: { sidebar: false, projects: false },
+  });
+  const { rerender } = render(panel());
+
+  expect(screen.queryByText("Toggle sidebar")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", {
+      name: "Record Toggle sidebar binding",
+    }),
+  ).not.toBeInTheDocument();
+
+  useConfigStore.setState({
+    features: { sidebar: true, projects: false },
+  });
+  rerender(panel());
+
+  expect(screen.getByText("Toggle sidebar")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", {
+      name: "Record Toggle sidebar binding",
+    }),
+  ).toHaveTextContent("\\");
 });
 
 describe.skip("keyboard settings behavior while hidden", () => {

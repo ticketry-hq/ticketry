@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
-import { useModalStore, type ModalDescriptor } from "../../../app/modal/modalStore";
+import { useModalStore, type StandardModalType } from "../../../app/modal/modalStore";
 import { useConfigStore as useAgentConfigStore } from "../stores/configStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
@@ -18,7 +18,7 @@ export type FolderConfigHook = <T>(selector: (state: FolderConfigState) => T) =>
 
 export interface ModuleFolderPayload {
   /** Optional follow-up modal kind to push after saving. */
-  next?: ModalDescriptor["type"];
+  next?: StandardModalType;
   nextPayload?: Record<string, unknown>;
   /** Studio terminal-create callers pass explicit module context. */
   moduleId?: string;

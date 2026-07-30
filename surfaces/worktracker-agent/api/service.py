@@ -449,17 +449,18 @@ class WorktrackerService:
         line_end: int,
         note: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Create a Ready Implementation finding under a Review Story (#905).
+        """Create an Implementation finding under a Review Story (#905).
 
         Builds the fixed evidence block from ``path`` / ``line_start`` /
         ``line_end`` / ``note`` and, if it is well-formed, creates a direct
-        Implementation child born in ``Ready`` under ``parent_id`` through the
-        SDK's dedicated finding surface. Every rejection is returned as
-        ``{"ok": False, ...}`` carrying a machine-readable reason rather than
-        raised: malformed evidence locally (``code``/``detail``), and — from the
-        backend gate — a parent that is not a Story, not in ``Review``, in a
-        foreign project, or a non-Implementation type (``detail``/``code``/
-        ``from``/``to``). Success returns ``{"ok": True, "task_id", "key"}``.
+        Implementation child born in its workflow start stage under
+        ``parent_id`` through the SDK's dedicated finding surface. Every
+        rejection is returned as ``{"ok": False, ...}`` carrying a
+        machine-readable reason rather than raised: malformed evidence locally
+        (``code``/``detail``), and — from the backend gate — a parent that is
+        not a Story, not in ``Review``, in a foreign project, or a
+        non-Implementation type (``detail``/``code``/``from``/``to``). Success
+        returns ``{"ok": True, "task_id", "key"}``.
 
         Inert by contract: no agent launch, no parent state move, no scheduler,
         no blocker/dependency edge.

@@ -23,7 +23,7 @@ export default function OnboardingWelcome() {
   const createProject = useTasksStore((state) => state.createProject);
   const startTour = useOnboardingTourStore((state) => state.start);
   const [name, setName] = useState("Coding");
-  const [slug, setSlug] = useState("CODING");
+  const [slug, setSlug] = useState("CDN");
   const [creating, setCreating] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -99,9 +99,13 @@ export default function OnboardingWelcome() {
                 <input
                   value={slug}
                   onChange={(event) => setSlug(event.target.value)}
+                  maxLength={3}
                   data-testid="onboarding-project-key"
                   className="mt-2 block w-full rounded-md border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm font-normal tracking-normal text-text-primary outline-none focus:border-focus-accent"
                 />
+                <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-text-muted">
+                  Project key must be exactly three letters, using only A-Z.
+                </span>
               </label>
 
               {createError ? (

@@ -1,108 +1,127 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readFile,
+  readdir,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { createReviewHandler } from "./server.mjs";
+import { createReviewServer } from "./server.mjs";
 
-const states = [
-  "Idea",
-  "Refinement",
-  "Ready",
-  "Implement",
-  "Review",
-  "Done",
-  "Cancelled",
-];
-
-const validReview = {
-  schemaVersion: 1,
-  agentsMd: "# Ticketry",
-  prompts: Object.fromEntries(
-    ["Story", "PathFind", "Implementation"].map((type) => [
-      type,
-      Object.fromEntries(states.map((state) => [state, `${type} ${state}`])),
-    ]),
+const validReview = JSON.parse(
+  await readFile(
+    new URL("../backend/worktracker/reviewed_defaults.json", import.meta.url),
+    "utf8",
   ),
-};
+);
 
-async function call(handler, path, { method = "GET", body } = {}) {
-  const request = {
-    url: path,
-    method,
-    async *[Symbol.asyncIterator]() {
-      if (body) yield Buffer.from(body);
-    },
-  };
-  const result = { status: null, headers: {}, body: "" };
-  const response = {
-    writeHead(status, headers = {}) {
-      result.status = status;
-      result.headers = headers;
-    },
-    end(value = "") {
-      result.body = Buffer.isBuffer(value) ? value.toString("utf8") : String(value);
-    },
-  };
-  await handler(request, response);
-  return {
-    status: result.status,
-    contentType: result.headers["content-type"],
-    body: result.body,
-  };
+async function startServer(t, options) {
+  const server = createReviewServer(options);
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(
+    () =>
+      new Promise((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  );
+  const address = server.address();
+  assert(address && typeof address === "object");
+  return `http://127.0.0.1:${address.port}`;
 }
 
-test("serves the workbench and persists a finalized review atomically", async (t) => {
+test("rejects invalid finalized defaults over HTTP without touching either file", async (t) => {
   const temporaryRoot = await mkdtemp(join(tmpdir(), "ticketry-review-"));
-  const finalizedPath = join(temporaryRoot, "finalized.json");
   const productionDefaultsPath = join(temporaryRoot, "reviewed-defaults.json");
   const agentsPath = join(temporaryRoot, "AGENTS.md");
-  const handler = createReviewHandler({
-    finalizedPath,
+  const artifactBefore = '{\n  "existing": "artifact bytes"\n}\n';
+  const agentsBefore = "existing AGENTS.md bytes\n";
+  await writeFile(productionDefaultsPath, artifactBefore, "utf8");
+  await writeFile(agentsPath, agentsBefore, "utf8");
+
+  const baseUrl = await startServer(t, {
+    productionDefaultsPath,
+    agentsPath,
+  });
+  const invalidReview = structuredClone(validReview);
+  invalidReview.schemaVersion = 1;
+  delete invalidReview.prompts.Story.Review;
+
+  const response = await fetch(`${baseUrl}/api/finalized`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(invalidReview),
+  });
+  const result = await response.json();
+
+  assert.equal(response.status, 422);
+  assert.equal(result.errors.length, 2);
+  assert.match(result.errors[0], /Schema version/);
+  assert.match(result.errors[1], /Story.*Review/);
+  assert.equal(result.error, result.errors.join("\n"));
+  assert.equal(await readFile(productionDefaultsPath, "utf8"), artifactBefore);
+  assert.equal(await readFile(agentsPath, "utf8"), agentsBefore);
+  assert.deepEqual((await readdir(temporaryRoot)).sort(), [
+    "AGENTS.md",
+    "reviewed-defaults.json",
+  ]);
+});
+
+test("reads and writes the one tracked artifact over HTTP and derives AGENTS.md", async (t) => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "ticketry-review-"));
+  const productionDefaultsPath = join(temporaryRoot, "reviewed-defaults.json");
+  const agentsPath = join(temporaryRoot, "AGENTS.md");
+  const previousReview = structuredClone(validReview);
+  previousReview.guidance = "Previous guidance";
+  await writeFile(
+    productionDefaultsPath,
+    `${JSON.stringify(previousReview, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(agentsPath, previousReview.guidance, "utf8");
+
+  const baseUrl = await startServer(t, {
     productionDefaultsPath,
     agentsPath,
   });
 
-  const page = await call(handler, "/");
+  const page = await fetch(`${baseUrl}/`);
   assert.equal(page.status, 200);
-  assert.match(page.contentType, /^text\/html/);
-  assert.match(page.body, /Ticketry · Final review/);
+  assert.match(page.headers.get("content-type"), /^text\/html/);
+  assert.match(await page.text(), /Ticketry · Final review/);
 
-  const before = await call(handler, "/api/finalized");
-  assert.deepEqual(JSON.parse(before.body), { review: null });
+  const before = await fetch(`${baseUrl}/api/finalized`);
+  assert.deepEqual(await before.json(), { review: previousReview });
 
-  const saved = await call(handler, "/api/finalized", {
+  const acceptedReview = structuredClone(validReview);
+  acceptedReview.guidance = "Accepted guidance without an implicit newline.";
+  acceptedReview.finalizedAt = new Date().toISOString();
+  const saved = await fetch(`${baseUrl}/api/finalized`, {
     method: "POST",
-    body: JSON.stringify(validReview),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(acceptedReview),
   });
+
   assert.equal(saved.status, 200);
-  assert.equal(JSON.parse(saved.body).ok, true);
-  assert.deepEqual(JSON.parse(await readFile(finalizedPath, "utf8")), validReview);
+  assert.equal((await saved.json()).ok, true);
   assert.deepEqual(
     JSON.parse(await readFile(productionDefaultsPath, "utf8")),
-    validReview,
+    acceptedReview,
   );
-  assert.equal(await readFile(agentsPath, "utf8"), "# Ticketry\n");
+  assert.equal(
+    await readFile(agentsPath, "utf8"),
+    acceptedReview.guidance,
+  );
+  assert.deepEqual((await readdir(temporaryRoot)).sort(), [
+    "AGENTS.md",
+    "reviewed-defaults.json",
+  ]);
 
-  const after = await call(handler, "/api/finalized");
-  assert.deepEqual(JSON.parse(after.body), { review: validReview });
-});
-
-test("rejects an incomplete prompt matrix", async (t) => {
-  const temporaryRoot = await mkdtemp(join(tmpdir(), "ticketry-review-"));
-  const handler = createReviewHandler({
-    finalizedPath: join(temporaryRoot, "finalized.json"),
-    productionDefaultsPath: join(temporaryRoot, "reviewed-defaults.json"),
-    agentsPath: join(temporaryRoot, "AGENTS.md"),
-  });
-
-  const invalid = structuredClone(validReview);
-  delete invalid.prompts.Story.Review;
-  const response = await call(handler, "/api/finalized", {
-    method: "POST",
-    body: JSON.stringify(invalid),
-  });
-  assert.equal(response.status, 422);
-  assert.match(JSON.parse(response.body).error, /Story · Review/);
+  const after = await fetch(`${baseUrl}/api/finalized`);
+  assert.deepEqual(await after.json(), { review: acceptedReview });
 });

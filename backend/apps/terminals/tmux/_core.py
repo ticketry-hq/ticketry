@@ -12,9 +12,12 @@ from pathlib import Path
 import libtmux
 
 
-# Dedicated socket isolates prototype from user's tmux.
+# Dedicated socket isolates Ticketry from the user's tmux. Desktop development
+# further scopes it to the isolated data-directory identity so another
+# worktree's reconciler cannot mistake this profile's sessions for orphans.
 
 TMUX_SOCKET = "muxed"
+_TMUX_SOCKET_ENV = "MUXED_TMUX_SOCKET"
 
 # Session-name prefix used by every Muxed session.
 
@@ -48,10 +51,26 @@ def tmux_executable() -> str:
     return str(path)
 
 
+def tmux_socket() -> str:
+    """Return the application-owned tmux socket name for this profile."""
+
+    socket = os.getenv(_TMUX_SOCKET_ENV) or TMUX_SOCKET
+    if (
+        not socket
+        or len(socket) > 64
+        or any(
+            not (character.isalnum() or character in "-_")
+            for character in socket
+        )
+    ):
+        raise TmuxSessionError("desktop supplied an invalid tmux socket name")
+    return socket
+
+
 def _server() -> libtmux.Server:
     """Return a libtmux server bound to the dedicated Muxed socket."""
 
-    return libtmux.Server(socket_name=TMUX_SOCKET)
+    return libtmux.Server(socket_name=tmux_socket())
 
 
 def _session_name(agent_run_id: str) -> str:

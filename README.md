@@ -16,11 +16,11 @@ spec/                                Application design history
 
 ## Local development
 
-Install workspace dependencies here, then provision the development data:
+Install the frontend and backend dependencies:
 
 ```bash
 npm install
-scripts/dev.sh bootstrap
+(cd backend && uv sync --extra dev)
 ```
 
 Start the complete browser application from the repository root:
@@ -30,9 +30,17 @@ npm run web
 # or: pnpm run web
 ```
 
-This applies pending Django migrations, then starts the backend at
-`127.0.0.1:8787` and Studio at `http://127.0.0.1:5174`; Ctrl+C stops both. To
-run the services separately:
+This prepares a per-worktree development profile, applies pending Django
+migrations, starts the backend and Studio on the first free loopback ports
+(beginning at `8787` and `5174`), and opens Studio in the default browser when
+Vite is ready; Ctrl+C stops both services. The selected URLs and isolated
+profile path are printed at startup. Override them with `MUXED_WEB_BACKEND_PORT`,
+`MUXED_FRONTEND_PORT`, and `MUXED_DATA_DIR` when fixed values are needed.
+
+Local web development disables API-key authentication by default because both
+services bind only to loopback. Set `WORKTRACKER_DISABLE_AUTH=false` and provide
+the same token through `WORKTRACKER_API_TOKEN` and `VITE_WT_API_KEY` when testing
+an authenticated Studio session. To run the services separately:
 
 ```bash
 scripts/dev.sh backend  # 127.0.0.1:8787
@@ -43,9 +51,9 @@ For the desktop application, run either `npm run desktop:dev` or `pnpm run dev`
 from the repository root. Both commands rebuild the Python sidecar and launch
 the Tauri shell with its supervised backend and MCP services.
 
-Copy `studio/.env.example` to `studio/.env.local` and set `VITE_WT_API_KEY` to
-the token printed by provisioning when testing an authenticated Studio session.
-Studio proxies `/api` to the backend; `VITE_AGENT_API_BASE` defaults to `/api`.
+Copy `studio/.env.example` to `studio/.env.local` and set `VITE_WT_API_KEY` when
+testing an authenticated Studio session. Studio proxies `/api` to the backend;
+`VITE_AGENT_API_BASE` defaults to `/api`.
 
 ## Desktop
 

@@ -105,6 +105,10 @@ describe("ProjectsPane", () => {
     const dialog = await screen.findByRole("dialog", { name: "Add Project" });
     const nameInput = within(dialog).getByPlaceholderText("Project name");
     const keyInput = within(dialog).getByPlaceholderText("Project key");
+    expect(keyInput).toHaveAttribute("maxlength", "3");
+    expect(dialog).toHaveTextContent(
+      "Project key must be exactly three letters, using only A-Z.",
+    );
     fireEvent.change(nameInput, { target: { value: "Created project" } });
     fireEvent.change(keyInput, { target: { value: "DUP" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));

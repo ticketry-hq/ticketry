@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useConfigStore as useAgentConfigStore } from "../features/agents/stores/configStore";
-import { useConfigStore as useStudioConfigStore } from "../features/studio/stores/configStore";
+import {
+  isSidebarEnabled,
+  useConfigStore as useStudioConfigStore,
+} from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 
 const fetchMock = vi.fn();
@@ -35,6 +38,7 @@ describe("Studio profile persistence", () => {
     });
     useStudioConfigStore.setState({
       recentProfileIndex: 0,
+      features: { sidebar: false, projects: false },
       profiles: [
         {
           ...currentProfile,
@@ -80,5 +84,27 @@ describe("Studio profile persistence", () => {
       Idea: "custom idea",
       Refinement: "custom refinement",
     });
+  });
+
+  it("loads the resolved sidebar feature into typed Studio state", async () => {
+    fetchMock.mockImplementationOnce((url: string) => {
+      if (url !== "/api/config") throw new Error(`Unexpected request: ${url}`);
+      return Promise.resolve(
+        jsonResponse({
+          recent_profile_index: null,
+          profiles: [],
+          features: { sidebar: true, projects: false },
+        }),
+      );
+    });
+
+    await useStudioConfigStore.getState().loadConfig();
+
+    expect(useStudioConfigStore.getState().features).toEqual({
+      sidebar: true,
+      projects: false,
+    });
+    expect(isSidebarEnabled()).toBe(true);
+    expect(isSidebarEnabled(useStudioConfigStore.getState())).toBe(true);
   });
 });

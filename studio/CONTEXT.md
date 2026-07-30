@@ -193,10 +193,18 @@ share ports, origins, or state.
 _Avoid_: Dev window, second app copy, port profile
 
 **Edit view**:
-The two-column Studio layout — Stories pane beside the Task workspace — shown
-when the sidebar is hidden. It has its own modal, three-zone keyboard model;
-the full sidebar view keeps the pane-focus navigation.
+The two-column Studio layout — Stories pane beside the Task workspace — used
+whenever installation configuration disables the sidebar, and shown when a
+configured sidebar is hidden by the user's visibility preference. It has its
+own modal, three-zone keyboard model.
 _Avoid_: Focused view, zen mode, two-pane mode
+
+**Full sidebar view**:
+The Studio layout that adds the installation-configured sidebar panes beside
+the Edit view work area and uses pane-focus navigation. It is available only
+when installation configuration enables the sidebar; the user's visibility
+preference then chooses between this layout and the Edit view.
+_Avoid_: Default view, navigation mode, three-pane mode
 
 **Navigation zone**:
 One of the three focus targets the edit view cycles between — the Stories list,
@@ -260,9 +268,8 @@ _Avoid_: Product tour, walkthrough, tutorial steps
 
 **Coach mark**:
 One step of the guided tour, rendered as a callout attached to the live surface
-element that step is about. A step's element is its anchor; the guided tour puts
-the surface into the layout its anchors need before the first step and restores
-the user's own layout when the tour ends.
+element that step is about. A step's element is its anchor; every anchor belongs
+to a surface that is already available in the current installation and layout.
 _Avoid_: Tooltip, popover, hotspot, spotlight
 
 **Onboarding acknowledgement**:

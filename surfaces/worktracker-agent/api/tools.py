@@ -231,13 +231,13 @@ class WorktrackerToolset:
         line_end: int,
         note: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Create a Ready Implementation finding under a Story in Review (#905).
+        """Create an Implementation finding under a Story in Review (#905).
 
         The dedicated review-finding surface: one call creates a direct
         Implementation child, parented to a Story currently in ``Review``, born
-        directly in ``Ready`` (its real birth state), with a fixed evidence-block
-        description — ``Path`` (repo-relative), inclusive ``Lines``
-        (``line_start``..``line_end``), and an optional ``Note``.
+        directly in the Implementation workflow's start stage, with a fixed
+        evidence-block description — ``Path`` (repo-relative), inclusive
+        ``Lines`` (``line_start``..``line_end``), and an optional ``Note``.
 
         Returns ``{"ok": True, "task_id", "key"}`` on success. On rejection it
         returns ``{"ok": False, ...}`` with a machine-readable reason instead of

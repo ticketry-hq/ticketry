@@ -38,7 +38,7 @@ def _states(client, project, auth):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("name", ["Done", "Implement", "Refinement"])
+@pytest.mark.parametrize("name", ["Done", "Implement", "Spec"])
 def test_delete_protected_state_409(client, project, auth, name):
     """A protected state 409s even when its group has ≥2 states and it's unused."""
     _seed(project)
@@ -138,9 +138,9 @@ def test_state_out_serializes_is_protected(client, project, auth):
     assert all("is_protected" in s for s in states)
     protected = {s["name"] for s in states if s["is_protected"]}
     assert protected == {
-        "Idea",
-        "Refinement",
-        "Ready",
+        "Grill",
+        "Spec",
+        "Tickets",
         "Implement",
         "Review",
         "Done",

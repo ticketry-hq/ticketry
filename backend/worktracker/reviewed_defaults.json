@@ -1,134 +1,269 @@
 {
-  "schemaVersion": 1,
-  "finalizedAt": "2026-07-28T12:01:02.360Z",
-  "source": {
-    "agentsMd": "AGENTS.md",
-    "prompts": "backend/worktracker/launch_seeds.py",
-    "workflows": "backend/worktracker/workflow_seeds.py"
+  "schemaVersion": 2,
+  "finalizedAt": "2026-07-30T08:31:42.000Z",
+  "sourceOfTruth": {
+    "artifact": "backend/worktracker/reviewed_defaults.json",
+    "consumers": [
+      "AGENTS.md",
+      "review-workbench",
+      "backend/worktracker/launch_seeds.py",
+      "backend/worktracker/workflow_seeds.py",
+      "studio/scripts/release-build.mjs"
+    ]
   },
-  "agentsMd": "# Ticketry desktop application\n\nThis repository owns the complete Ticketry desktop application: the React\nfrontend, Tauri shell, supervised Python backend sidecar, MCP service, and\ngenerated SDKs required by that application.\n\nUse `npm run desktop:dev` or `pnpm run dev` from the repository root for local\ndesktop development. Both commands rebuild and launch the sidecar. Keep browser-\nonly service commands as supporting development tools, not as a separate product.\n\nKeep the Tauri/webview boundary narrow. The native terminal renderer consumes a\npinned libghostty revision through its C API, while tmux remains responsible for\ndurable sessions. Preserve the existing fallback unless a deliberate migration\nremoves it.\n\nDevelopment data must remain isolated from live application data. Generated\ndatabases, caches, sidecars, native libraries, and build output must not be\ncommitted.",
+  "guidance": "# Ticketry desktop application\n\nThis repository owns the complete Ticketry desktop application: the React\nfrontend, Tauri shell, supervised Python backend sidecar, MCP service, and\ngenerated SDKs required by that application.\n\nUse `npm run desktop:dev` or `pnpm run dev` from the repository root for local\ndesktop development. Both commands rebuild and launch the sidecar. Keep browser-\nonly service commands as supporting development tools, not as a separate product.\n\nKeep the Tauri/webview boundary narrow. The native terminal renderer consumes a\npinned libghostty revision through its C API, while tmux remains responsible for\ndurable sessions. Preserve the existing fallback unless a deliberate migration\nremoves it.\n\nDevelopment data must remain isolated from live application data. Generated\ndatabases, caches, sidecars, native libraries, and build output must not be\ncommitted.",
+  "states": [
+    {
+      "name": "Grill",
+      "group": "backlog",
+      "color": "#60646C",
+      "autoStart": false
+    },
+    {
+      "name": "Spec",
+      "group": "unstarted",
+      "color": "#8E4EC6",
+      "autoStart": true
+    },
+    {
+      "name": "Tickets",
+      "group": "unstarted",
+      "color": "#33B1FF",
+      "autoStart": true
+    },
+    {
+      "name": "Implement",
+      "group": "started",
+      "color": "#F59E0B",
+      "autoStart": false
+    },
+    {
+      "name": "Review",
+      "group": "started",
+      "color": "#D6409F",
+      "autoStart": false
+    },
+    {
+      "name": "Done",
+      "group": "completed",
+      "color": "#46A758",
+      "autoStart": false
+    },
+    {
+      "name": "Cancelled",
+      "group": "cancelled",
+      "color": "#9AA4BC",
+      "autoStart": false
+    }
+  ],
+  "issueTypes": [
+    "Story",
+    "PathFind",
+    "Implementation"
+  ],
+  "requiredSkills": {
+    "Grill": [
+      "grill-with-docs"
+    ],
+    "Spec": [
+      "to-spec"
+    ],
+    "Tickets": [
+      "to-tickets"
+    ],
+    "Implement": [],
+    "Review": [],
+    "Done": [],
+    "Cancelled": []
+  },
   "prompts": {
     "Story": {
-      "Idea": "This task is in `Idea`: The user has typed in a thought with stream of consciousness writing style.\nThis may or may not contain a coherent idea. Your job is to make sense of it with the codebase context you have.\n\nRefine step:\n1. Based on the user's description, explore the codebase and find relevant files and make sense of the ask.\n2. Update the title based on your understanding using the MCP server. The first 3 works should tell the user what this is about.\n\nAfter this, we decide, do we have enough to just make the change or if further refinement is required.\nCase \"small change\" && \"no refinement needed\":\n- Use the skill 'to-spec' to write a spec for the ask with the relevant files the next agent should look at.\n- Use the skill 'to-tickets' to split the task into tickets.\n- Create those tickets as 'Implementation' tickets using the MCP under the main task.\n- Move the story over to 'Ready' state for the user to prioritize and execute when required.\n\nCase \"large change\" || \"needs refinement\":\n- Append the paths to the relevant files to the ticket\n- Move it to \"Refinement\" state.",
-      "Refinement": "This task is in `Refinement`, where an idea is turned into a committed, dependency-ordered plan through agent-driven discovery.\n\nThis is what you need to do:\n1. Use the /grill-with-docs or the $grill-with-docs skill to finalize requirements.\n2. Use the /to-spec or $to-spec and generate spec, add the link to the spec in the story.\n3. Use to /to-tickets or $to-tickets skill to generated tickets. Create the tickets as Implementation subtasks.\n\nMove the story to Ready state.\nStop after this, don't implement.\n\nAfter this terminate this session using the MCP server with the terminate_current_run tool.",
-      "Ready": "Don’t do anything. If the user asks you to do something, then do it.",
+      "Grill": "This task is in `Grill`.\n\nUse the `grill-with-docs` skill to interview the person until the Story's requirements, constraints, and acceptance boundary are explicit. Record the agreed requirements on the Story. Do not write the specification or create implementation tickets in this stage.\n\nWhen grilling is complete, move this Story to `Spec` so the specification stage can start automatically.",
+      "Spec": "This task is in `Spec`.\n\nUse the `to-spec` skill to turn the agreed requirements into the Story's implementation specification and link the finished spec from the Story. Do not create implementation tickets in this stage.\n\nWhen the specification is complete, move this Story to `Tickets` so ticket cutting can start automatically.",
+      "Tickets": "This task is in `Tickets`.\n\nUse the `to-tickets` skill to split the approved specification into scoped Implementation children and record their dependency edges. Do not implement any ticket in this stage.\n\nWhen the ticket set is complete, stop and wait for a person to move this Story to `Implement`; that transition is deliberately human-only.",
       "Implement": "This task is in `Implement`:\n\nThe implementation campaign is running across your Implementation children; your job is coordination and integration, not re-implementing the children. Do not move the story yourself - it advances to `Review` on its own once every Implementation child is terminal and at least one is `Done`. Surface cross-child integration problems as they appear.\n\nIf there are no implementation stories under this, then implement the story itself and move it to 'Review' using the /tdd skill.\n\nFor dependencies, treat 'Review' state as unblocked.\n\nAfter this terminate this session using the MCP server with the terminate_current_run tool.",
-      "Review": "This task is in `Review`. **What you do depends on this ticket's Type.**\n\n**If this is an Implementation child:** run `code-review` over this child's changes and report findings plainly. The review deliverable is the findings; completing it does not itself request or trigger a move to `Done`.\n\n**If this is a Story:** review the *combined* result of all children together, looking for integration issues that per-child review cannot catch. Turn each actionable finding into a new **Implementation** child through the dedicated `create_review_finding` tool - it creates the child directly in `Ready`, parented to this Story, carrying a fixed `Path` (repo-relative file) / inclusive `Lines` (start-end) / optional `Note` evidence block, so fixes rejoin the same execution machinery. Do not draw a `blocked_by` dependency edge and do not fix findings inline here; returning to `Implement` is outside this review deliverable. ",
+      "Review": "This task is in `Review`. **What you do depends on this ticket's Type.**\n\n**If this is an Implementation child:** run `code-review` over this child's changes and report findings plainly. The review deliverable is the findings; completing it does not itself request or trigger a move to `Done`.\n\n**If this is a Story:** review the *combined* result of all children together, looking for integration issues that per-child review cannot catch. Turn each actionable finding into a new **Implementation** child through the dedicated `create_review_finding` tool - it creates the child directly in `Implement`, parented to this Story, carrying a fixed `Path` (repo-relative file) / inclusive `Lines` (start-end) / optional `Note` evidence block, so fixes rejoin the same execution machinery. Do not draw a `blocked_by` dependency edge and do not fix findings inline here; implementation waits for a person's kickoff outside this review deliverable. ",
       "Done": "Do nothing!",
       "Cancelled": "Do nothing."
     },
     "PathFind": {
-      "Idea": "This task is in `Idea`: The user has typed in a thought with stream of consciousness writing style.\nThis may or may not contain a coherent idea. Your job is to make sense of it with the codebase context you have.\n\nRefine step:\n1. Based on the user's description, explore the codebase and find relevant files and make sense of the ask.\n2. Update the title based on your understanding using the MCP server.\n\nAfter this, we decide, do we have enough to just make the change or if further refinement is required.\nCase \"small change\" && \"no refinement needed\":\n- Use the skill 'to-spec' to write a spec for the ask with the relevant files the next agent should look at.\n- Use the skill 'to-tickets' to split the task into tickets.\n- Create those tickets as 'Implementation' tickets using the MCP under the main task.\n- Move the story over to 'Ready' state for the user to prioritize and execute when required.\n\nCase \"large change\" || \"needs refinement\":\n- Append the paths to the relevant files to the ticket\n- Move it to \"Refinement\" state.",
-      "Refinement": "This task is in `Refinement`, where an idea is turned into a committed, dependency-ordered plan through agent-driven discovery.\n\nThis is what you need to do in this ticket:\n1. Use the /grill-with-docs or the $grill-with-docs skill to finalize requirements.\n2. Use the /to-spec or $to-spec and generate spec, add the link to the spec in the story.\n3. Use to /to-tickets or $to-tickets skill to generated tickets. Create the tickets as Implementation subtasks.\n\nMove the story to Ready state.\nStop after this, don't implement.",
-      "Ready": "Don’t do anything. If the user asks you to do something, then do it.",
+      "Grill": "This task is in `Grill`.\n\nUse the `grill-with-docs` skill to interview the person until the work item's requirements, constraints, and acceptance boundary are explicit. Record the agreed requirements on the work item. Do not write the specification or create implementation tickets in this stage.\n\nWhen grilling is complete, move this work item to `Spec`.",
+      "Spec": "This task is in `Spec`.\n\nUse the `to-spec` skill to complete the PathFind investigation and record its findings and decision as the specification deliverable. Do not create implementation tickets in this stage.\n\nWhen the PathFind deliverable is complete, move this work item to `Done`.",
+      "Tickets": "This task is in `Tickets`.\n\nUse the `to-tickets` skill to split an approved specification into scoped Implementation children and record their dependency edges. Do not implement any ticket in this stage.\n\nWhen the ticket set is complete, stop and wait for a person to move the work item to `Implement`; that transition is deliberately human-only.",
       "Implement": "This task is in `Implement`: **What you do depends on this ticket's Type.**\n\n**If this is an Implementation child:** implement only this child's agreed slice, from its spec and the parent's HLD. Keep changes local, avoid unrelated edits, and validate the touched behaviour before finishing. You are running because your dependencies are satisfied - do not start work that a `blocked_by` edge still gates. When the slice is complete and validated, move **this child** to `Review` so the review step is triggered by the work itself. If you are blocked, say so and leave it in `Implement`.\n\n**If this is a Story:** the implementation campaign is running across your Implementation children; your job is coordination and integration, not re-implementing the children. Do not move the story yourself - it advances to `Review` on its own once every Implementation child is terminal and at least one is `Done`. Surface cross-child integration problems as they appear.\nIf there are no implementation stories under this, then implement the story itself.\n\nFor dependencies, treat 'Review' state as unblocked.",
-      "Review": "This task is in `Review`. **What you do depends on this ticket's Type.**\n\n**If this is an Implementation child:** run `code-review` over this child's changes and report findings plainly. The review deliverable is the findings; completing it does not itself request or trigger a move to `Done`.\n\n**If this is a Story:** review the *combined* result of all children together, looking for integration issues that per-child review cannot catch. Turn each actionable finding into a new **Implementation** child through the dedicated `create_review_finding` tool - it creates the child directly in `Ready`, parented to this Story, carrying a fixed `Path` (repo-relative file) / inclusive `Lines` (start-end) / optional `Note` evidence block, so fixes rejoin the same execution machinery. Do not draw a `blocked_by` dependency edge and do not fix findings inline here; returning to `Implement` is outside this review deliverable. Final acceptance must be explicitly requested; do not infer it from a clean review. It requires a PR linked to the story. When final acceptance is requested, finalize atomically: commit the worktree changes, open a PR, link it to the story, clean up the worktree, and only then request the `Review -> Done` transition; if any step fails, stay in `Review` and report the exact error rather than advancing.",
+      "Review": "This task is in `Review`. **What you do depends on this ticket's Type.**\n\n**If this is an Implementation child:** run `code-review` over this child's changes and report findings plainly. The review deliverable is the findings; completing it does not itself request or trigger a move to `Done`.\n\n**If this is a Story:** review the *combined* result of all children together, looking for integration issues that per-child review cannot catch. Turn each actionable finding into a new **Implementation** child through the dedicated `create_review_finding` tool - it creates the child directly in `Implement`, parented to this Story, carrying a fixed `Path` (repo-relative file) / inclusive `Lines` (start-end) / optional `Note` evidence block, so fixes rejoin the same execution machinery. Do not draw a `blocked_by` dependency edge and do not fix findings inline here; implementation waits for a person's kickoff outside this review deliverable. Final acceptance must be explicitly requested; do not infer it from a clean review. It requires a PR linked to the story. When final acceptance is requested, finalize atomically: commit the worktree changes, open a PR, link it to the story, clean up the worktree, and only then request the `Review -> Done` transition; if any step fails, stay in `Review` and report the exact error rather than advancing.",
       "Done": "Do nothing!",
       "Cancelled": "Do nothing."
     },
     "Implementation": {
-      "Idea": "This task is in `Idea`: The user has typed in a thought with stream of consciousness writing style.\nThis may or may not contain a coherent idea. Your job is to make sense of it with the codebase context you have.\n\nRefine step:\n1. Based on the user's description, explore the codebase and find relevant files and make sense of the ask.\n2. Update the title based on your understanding using the MCP server.\n\nAfter this, we decide, do we have enough to just make the change or if further refinement is required.\nCase \"small change\" && \"no refinement needed\":\n- Use the skill 'to-spec' to write a spec for the ask with the relevant files the next agent should look at.\n- Use the skill 'to-tickets' to split the task into tickets.\n- Create those tickets as 'Implementation' tickets using the MCP under the main task.\n- Move the story over to 'Ready' state for the user to prioritize and execute when required.\n\nCase \"large change\" || \"needs refinement\":\n- Append the paths to the relevant files to the ticket\n- Move it to \"Refinement\" state.",
-      "Refinement": "This task is in `Refinement`, where an idea is turned into a committed, dependency-ordered plan through agent-driven discovery.\n\nThis is what you need to do in this ticket:\n1. Use the /grill-with-docs or the $grill-with-docs skill to finalize requirements.\n2. Use the /to-spec or $to-spec and generate spec, add the link to the spec in the story.\n3. Use to /to-tickets or $to-tickets skill to generated tickets. Create the tickets as Implementation subtasks.\n\nMove the story to Ready state.\nStop after this, don't implement.",
-      "Ready": "Don’t do anything. If the user asks you to do something, then do it.",
+      "Grill": "This task is in `Grill`.\n\nUse the `grill-with-docs` skill to interview the person until the work item's requirements, constraints, and acceptance boundary are explicit. Record the agreed requirements on the work item. Do not write the specification or create implementation tickets in this stage.\n\nWhen grilling is complete, move this work item to `Spec`.",
+      "Spec": "This task is in `Spec`.\n\nUse the `to-spec` skill to turn the agreed requirements into an implementation specification and link the finished spec from the work item. Do not create implementation tickets in this stage.\n\nWhen the specification is complete, move this work item to `Tickets`.",
+      "Tickets": "This task is in `Tickets`.\n\nUse the `to-tickets` skill to split the approved specification into scoped Implementation children and record their dependency edges. Do not implement any ticket in this stage.\n\nWhen the ticket set is complete, stop and wait for a person to move the work item to `Implement`; that transition is deliberately human-only.",
       "Implement": "This task is in `Implement`: \n\nOnly this child's agreed slice, from its spec and the parent's HLD. \nKeep changes local, avoid unrelated edits, and validate the touched behaviour before finishing. \n\nYou are running because your dependencies are satisfied - do not start work that a `blocked_by` edge still gates. If the story is in 'Review' then it's not a blocker.\n\nWhen the slice is complete and validated, move **this child** to `Review` so the review step is triggered by the work itself. \nIf you are blocked, say so and leave it in `Implement` and don't terminate yourself.\n\nDon't run any reviews as review would be done in the next stage.\n\nAfter this terminate this session using the MCP server with the terminate_current_run tool.",
-      "Review": "This task is in `Review`. \n\nRun `code-review` over this child's changes and report findings plainly. The review deliverable is the findings; Create implementation child through the dedicated `create_review_finding` tool - it creates the child directly in `Ready`, parented to this Story, carrying a fixed `Path` (repo-relative file) / inclusive `Lines` (start-end) / optional `Note` evidence block, so fixes rejoin the same execution machinery. Do not draw a `blocked_by` dependency edge and do not fix findings inline here; returning to `Implement` is outside this review deliverable.",
+      "Review": "This task is in `Review`. \n\nRun `code-review` over this child's changes and report findings plainly. The review deliverable is the findings; Create implementation child through the dedicated `create_review_finding` tool - it creates the child directly in `Implement`, parented to this Story, carrying a fixed `Path` (repo-relative file) / inclusive `Lines` (start-end) / optional `Note` evidence block, so fixes rejoin the same execution machinery. Do not draw a `blocked_by` dependency edge and do not fix findings inline here; implementation waits for a person's kickoff outside this review deliverable.",
       "Done": "Do nothing!",
       "Cancelled": "Do nothing."
     }
   },
   "workflows": {
     "Story": {
-      "start": "Idea",
+      "start": "Grill",
+      "states": [
+        "Grill",
+        "Spec",
+        "Tickets",
+        "Implement",
+        "Review",
+        "Done",
+        "Cancelled"
+      ],
       "transitions": [
         [
-          "Idea",
-          "Refinement"
+          "Grill",
+          "Spec",
+          {
+            "agentAllowed": true
+          }
         ],
         [
-          "Idea",
-          "Cancelled"
+          "Grill",
+          "Cancelled",
+          {
+            "agentAllowed": true
+          }
         ],
         [
-          "Refinement",
-          "Ready"
+          "Spec",
+          "Tickets",
+          {
+            "agentAllowed": true
+          }
         ],
         [
-          "Refinement",
-          "Cancelled"
+          "Spec",
+          "Cancelled",
+          {
+            "agentAllowed": true
+          }
         ],
         [
-          "Ready",
-          "Implement"
+          "Tickets",
+          "Implement",
+          {
+            "agentAllowed": false
+          }
         ],
         [
-          "Ready",
-          "Cancelled"
+          "Tickets",
+          "Cancelled",
+          {
+            "agentAllowed": true
+          }
         ],
         [
           "Implement",
-          "Review"
+          "Review",
+          {
+            "agentAllowed": true
+          }
         ],
         [
           "Implement",
-          "Cancelled"
+          "Cancelled",
+          {
+            "agentAllowed": true
+          }
         ],
         [
           "Review",
-          "Implement"
+          "Implement",
+          {
+            "agentAllowed": true
+          }
         ],
         [
           "Review",
-          "Done"
+          "Done",
+          {
+            "agentAllowed": true
+          }
         ],
         [
           "Review",
-          "Cancelled"
+          "Cancelled",
+          {
+            "agentAllowed": true
+          }
         ]
       ]
     },
     "PathFind": {
-      "start": "Refinement",
+      "start": "Spec",
+      "states": [
+        "Spec",
+        "Done",
+        "Cancelled"
+      ],
       "transitions": [
         [
-          "Refinement",
-          "Done"
+          "Spec",
+          "Done",
+          {
+            "agentAllowed": true
+          }
         ],
         [
-          "Refinement",
-          "Cancelled"
+          "Spec",
+          "Cancelled",
+          {
+            "agentAllowed": true
+          }
         ]
       ]
     },
     "Implementation": {
       "start": "Implement",
+      "states": [
+        "Implement",
+        "Review",
+        "Done",
+        "Cancelled"
+      ],
       "transitions": [
         [
-          "Ready",
-          "Implement"
-        ],
-        [
-          "Ready",
-          "Cancelled"
+          "Implement",
+          "Review",
+          {
+            "agentAllowed": true
+          }
         ],
         [
           "Implement",
-          "Review"
+          "Cancelled",
+          {
+            "agentAllowed": true
+          }
         ],
         [
+          "Review",
           "Implement",
-          "Cancelled"
+          {
+            "agentAllowed": true
+          }
         ],
         [
           "Review",
-          "Implement"
+          "Done",
+          {
+            "agentAllowed": true
+          }
         ],
         [
           "Review",
-          "Done"
-        ],
-        [
-          "Review",
-          "Cancelled"
+          "Cancelled",
+          {
+            "agentAllowed": true
+          }
         ]
       ]
     }

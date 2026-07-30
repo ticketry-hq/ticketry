@@ -161,6 +161,7 @@ function closeActiveWorkspaceTab(ctx: NavigationContext): void {
 
   const sessionId = useWorkspaceTabsStore.getState().activeByTask[bucket];
   if (!sessionId) return;
-  void closeTerminalTab(sessionId, bucket);
+  const ticketKey = ctx.tasks.tasks.find((task) => task.id === taskId)?.key;
+  void closeTerminalTab(sessionId, bucket, ticketKey);
   ctx.event.preventDefault();
 }

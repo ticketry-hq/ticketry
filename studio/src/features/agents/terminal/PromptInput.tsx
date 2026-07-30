@@ -2,13 +2,13 @@ import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import {
   useModalStore,
-  type ModalDescriptor,
+  type StandardModalType,
 } from "../../../app/modal/modalStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 
 export interface PromptInputPayload {
   /** Next modal kind to push after submit, e.g. "agent-picker". */
-  next: ModalDescriptor["type"];
+  next: StandardModalType;
   /** Payload prefix to merge with `{ initialPrompt: text }`. */
   nextPayload?: Record<string, unknown>;
 }

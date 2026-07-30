@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -12,6 +13,7 @@ from ninja.testing import TestClient
 from apps.execution import signals as execution_signals
 from apps.runs.api import router as runs_router
 from apps.runs.models import AutomationAttempt
+from apps.settings_store.models import AppSetting
 from worktracker.models import (
     Issue,
     IssueType,
@@ -21,6 +23,7 @@ from worktracker.models import (
     State,
     Workspace,
 )
+from worktracker.services.projects import create_project
 from worktracker.signals import issue_state_changed
 
 
@@ -116,6 +119,70 @@ def test_auto_start_state_launches_once_after_the_destination_commits(monkeypatc
     assert launch["launch_configuration"].prompt == (
         "Review the committed implementation"
     )
+
+
+def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
+    monkeypatch,
+):
+    workspace = Workspace.objects.create(
+        id=uuid.uuid4(), slug="matt-defaults", name="Matt defaults"
+    )
+    project = create_project(
+        name="Matt defaults",
+        slug="MAT",
+        workspace_slug=workspace.slug,
+    )
+    AppSetting.objects.create(
+        scope="host",
+        key="provider_catalog",
+        value=json.dumps(
+            {
+                "activated_providers": ["codex"],
+                "global_default": {"provider": "codex", "model": "gpt-5.4"},
+            }
+        ),
+        updated_at="2026-07-27T00:00:00+00:00",
+    )
+    story_type = IssueType.objects.get(project=project, name="Story")
+    states = {
+        state.name: state for state in State.objects.filter(project=project)
+    }
+    module = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        name="Module",
+        sequence_id=1,
+    )
+    story = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=story_type,
+        parent=module,
+        state=states["Grill"],
+        name="Story",
+        sequence_id=2,
+    )
+    launches = []
+
+    async def spawn(**kwargs):
+        launches.append(kwargs)
+        return f"agent-run-{len(launches)}"
+
+    monkeypatch.setattr("apps.execution.driver.spawn_run", spawn)
+
+    story.state = states["Spec"]
+    story.save(update_fields=["state", "updated_at"])
+    story.state = states["Tickets"]
+    story.save(update_fields=["state", "updated_at"])
+    story.state = states["Implement"]
+    story.save(update_fields=["state", "updated_at"])
+
+    assert [
+        launch["launch_configuration"].required_skills for launch in launches
+    ] == [("to-spec",), ("to-tickets",)]
+    assert AutomationAttempt.objects.filter(issue=story).count() == 2
 
 
 def test_auto_start_launches_from_an_alternate_incoming_edge(monkeypatch):

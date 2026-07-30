@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "libghostty:prepare": "sh scripts/prepare-libghostty.sh",
+    "predesktop:build": "npm run libghostty:prepare",
     "predesktop:dev": "npm run libghostty:prepare",
+    "prerelease:build": "npm run libghostty:prepare",
     "desktop:build": "node scripts/release-build.mjs",
     "desktop:dev": "node scripts/desktop-dev.mjs",
     "release:build": "node scripts/release-build.mjs",

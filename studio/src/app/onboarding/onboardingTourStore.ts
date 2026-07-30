@@ -1,6 +1,8 @@
 import { create } from "zustand";
-import { useUIStore } from "../../features/studio/stores/uiStore";
-import { DEFAULT_PANEL_LAYOUT } from "../studio/layout/layoutMath";
+import {
+  isSidebarEnabled,
+  useConfigStore,
+} from "../../features/studio/stores/configStore";
 
 export type OnboardingTourStep =
   | "inactive"
@@ -9,16 +11,11 @@ export type OnboardingTourStep =
   | "story-create"
   | "handoff";
 
-export function onboardingTourRequiresModules(step: OnboardingTourStep): boolean {
-  return step === "module-create" || step === "story-create";
-}
-
 interface OnboardingTourState {
   step: OnboardingTourStep;
   projectId: string | null;
   moduleId: string | null;
   storyId: string | null;
-  capturedLayout: CapturedLayout | null;
   start: (projectId: string) => void;
   showModuleCreate: () => void;
   moduleCreated: (moduleId: string) => void;
@@ -31,44 +28,20 @@ const INACTIVE = {
   projectId: null,
   moduleId: null,
   storyId: null,
-  capturedLayout: null,
 };
 
-interface CapturedLayout {
-  sidebarVisible: boolean;
-  panelLayout: number[] | null;
-}
-
-function copyLayout(layout: number[] | null): number[] | null {
-  return layout ? [...layout] : null;
-}
-
-function restoreLayout(layout: CapturedLayout | null): void {
-  if (!layout) return;
-  useUIStore.setState({
-    sidebarVisible: layout.sidebarVisible,
-    panelLayout: copyLayout(layout.panelLayout),
-  });
+function openingStep(): OnboardingTourStep {
+  const config = useConfigStore.getState();
+  return isSidebarEnabled(config) && config.features.projects
+    ? "projects-pane"
+    : "module-create";
 }
 
 /** Run-local only by design: a refresh never resumes a half-finished tour. */
-export const useOnboardingTourStore = create<OnboardingTourState>((set, get) => ({
+export const useOnboardingTourStore = create<OnboardingTourState>((set) => ({
   ...INACTIVE,
-  start: (projectId) => {
-    const ui = useUIStore.getState();
-    const capturedLayout = get().capturedLayout ?? {
-      sidebarVisible: ui.sidebarVisible,
-      panelLayout: copyLayout(ui.panelLayout),
-    };
-
-    // This is deliberately transient. The user's durable layout preferences
-    // remain untouched while the tour temporarily makes every anchor visible.
-    useUIStore.setState({
-      sidebarVisible: true,
-      panelLayout: [...DEFAULT_PANEL_LAYOUT],
-    });
-    set({ ...INACTIVE, step: "projects-pane", projectId, capturedLayout });
-  },
+  start: (projectId) =>
+    set({ ...INACTIVE, step: openingStep(), projectId }),
   showModuleCreate: () => set({ step: "module-create" }),
   moduleCreated: (moduleId) => set({ step: "story-create", moduleId }),
   storyCreated: (storyId) =>
@@ -77,8 +50,5 @@ export const useOnboardingTourStore = create<OnboardingTourState>((set, get) => 
         ? { step: "handoff", storyId }
         : state,
     ),
-  reset: () => {
-    restoreLayout(get().capturedLayout);
-    set(INACTIVE);
-  },
+  reset: () => set(INACTIVE),
 }));

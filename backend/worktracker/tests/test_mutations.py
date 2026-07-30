@@ -76,9 +76,9 @@ def test_create_project_seeds_states(client, project, auth):
         )
     )
     assert protected == {
-        "Idea",
-        "Refinement",
-        "Ready",
+        "Grill",
+        "Spec",
+        "Tickets",
         "Implement",
         "Review",
         "Done",
@@ -99,7 +99,7 @@ def test_create_project_unknown_workspace_404(client, project, auth):
     r = post_json(
         client,
         f"{BASE}/projects",
-        {"name": "X", "slug": "X1", "workspace_slug": "nope"},
+        {"name": "X", "slug": "XXX", "workspace_slug": "nope"},
         auth,
     )
     assert r.status_code == 404
@@ -107,15 +107,20 @@ def test_create_project_unknown_workspace_404(client, project, auth):
 
 @pytest.mark.django_db
 def test_create_project_duplicate_slug_409(client, project, auth):
-    # The fixture project is already slug MEML in workspace meml.
+    Project.objects.create(
+        id=uuid.uuid4(),
+        workspace=project.workspace,
+        name="Existing",
+        slug="DUP",
+    )
     r = post_json(
         client,
         f"{BASE}/projects",
-        {"name": "Dup", "slug": "MEML", "workspace_slug": "meml"},
+        {"name": "Dup", "slug": "DUP", "workspace_slug": "meml"},
         auth,
     )
     assert r.status_code == 409
-    assert Project.objects.filter(slug="MEML").count() == 1
+    assert Project.objects.filter(slug="DUP").count() == 1
 
 
 @pytest.mark.django_db

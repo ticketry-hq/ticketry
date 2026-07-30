@@ -140,6 +140,29 @@ def test_sidecar_reports_provisioning_failure_as_migration_failure(tmp_path):
     _assert_database_startup_failure(tmp_path)
 
 
+def test_sidecar_refuses_a_structurally_corrupt_database(tmp_path):
+    with _running_sidecar(tmp_path):
+        pass
+
+    database_path = tmp_path / "state.db"
+    with sqlite3.connect(database_path) as database:
+        page_size = database.execute("PRAGMA page_size").fetchone()[0]
+        root_page = database.execute(
+            """
+            SELECT rootpage
+            FROM sqlite_master
+            WHERE type = 'index'
+              AND name = 'worktracker_issue_rank_0fa0887c'
+            """
+        ).fetchone()[0]
+
+    with database_path.open("r+b") as database_file:
+        database_file.seek((root_page - 1) * page_size)
+        database_file.write(b"\0")
+
+    _assert_database_startup_failure(tmp_path)
+
+
 def test_sidecar_dispatches_packaged_lifecycle_hooks():
     result = subprocess.run(
         _entrypoint_command(
@@ -185,7 +208,10 @@ def test_sidecar_resolves_and_verifies_packaged_skills_without_network():
     verified = json.loads(result.stdout)
     assert verified["commit"] == "ed37663cc5fbef691ddfecd080dff42f7e7e350d"
     assert set(verified["packages"]) == {
+        "code-review",
         "grill-with-docs",
+        "implement",
+        "tdd",
         "to-spec",
         "to-tickets",
         "grilling",
@@ -284,7 +310,10 @@ def test_sidecar_installs_and_smokes_every_packaged_provider_offline(
     assert result.returncode == 0, result.stderr
     smoke = json.loads(result.stdout)
     expected = {
+        "code-review",
         "grill-with-docs",
+        "implement",
+        "tdd",
         "to-spec",
         "to-tickets",
         "grilling",
@@ -690,14 +719,31 @@ def _running_sidecar(data_dir: Path, **environment_overrides: str):
 
 def test_sidecar_startup_installs_skills_before_readiness(tmp_path):
     home = tmp_path / "home"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
 
-    with _running_sidecar(tmp_path / "data", HOME=str(home)):
+    with _running_sidecar(data_dir, HOME=str(home)):
         pass
 
-    assert (home / ".codex/skills/to-spec/SKILL.md").is_file()
-    assert (home / ".claude/skills/grill-with-docs/SKILL.md").is_file()
-    assert (home / ".agy/skills/to-tickets/SKILL.md").is_file()
-    assert (home / ".gemini/skills/to-spec/SKILL.md").is_file()
+    expected = {
+        "code-review",
+        "domain-modeling",
+        "grill-with-docs",
+        "grilling",
+        "implement",
+        "setup-matt-pocock-skills",
+        "tdd",
+        "to-spec",
+        "to-tickets",
+    }
+    roots = (
+        home / ".claude/skills",
+        home / ".codex/skills",
+        home / ".agy/skills",
+        home / ".gemini/skills",
+    )
+    for root in roots:
+        assert {path.name for path in root.iterdir() if path.is_dir()} == expected
 
 
 def test_sidecar_startup_refuses_a_user_owned_skill_collision(tmp_path):

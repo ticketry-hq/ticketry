@@ -12,6 +12,68 @@ from typing import Any
 LOCK_PATH = Path(__file__).with_name("lock.json")
 SNAPSHOT_PATH = Path(__file__).with_name("snapshot")
 UPSTREAM_LICENSE_PATH = Path(__file__).with_name("UPSTREAM_LICENSE")
+UPSTREAM_REPOSITORY = "https://github.com/mattpocock/skills.git"
+PINNED_UPSTREAM_COMMIT = "ed37663cc5fbef691ddfecd080dff42f7e7e350d"
+EXPECTED_SELECTED_PACKAGES = (
+    "code-review",
+    "grill-with-docs",
+    "implement",
+    "tdd",
+    "to-spec",
+    "to-tickets",
+)
+EXPECTED_PACKAGES = {
+    "code-review": {
+        "source_path": "skills/engineering/code-review",
+        "dependencies": ("setup-matt-pocock-skills",),
+        "required_mcp_tools": (),
+    },
+    "grill-with-docs": {
+        "source_path": "skills/engineering/grill-with-docs",
+        "dependencies": ("grilling", "domain-modeling"),
+        "required_mcp_tools": (),
+    },
+    "implement": {
+        "source_path": "skills/engineering/implement",
+        "dependencies": ("tdd", "code-review"),
+        "required_mcp_tools": (),
+    },
+    "tdd": {
+        "source_path": "skills/engineering/tdd",
+        "dependencies": (),
+        "required_mcp_tools": (),
+    },
+    "to-spec": {
+        "source_path": "skills/engineering/to-spec",
+        "dependencies": ("setup-matt-pocock-skills",),
+        "required_mcp_tools": ("get_task_details", "update_task", "attach_file"),
+    },
+    "to-tickets": {
+        "source_path": "skills/engineering/to-tickets",
+        "dependencies": ("setup-matt-pocock-skills",),
+        "required_mcp_tools": (
+            "get_task_details",
+            "create_sub_task",
+            "set_task_blockers",
+        ),
+    },
+    "domain-modeling": {
+        "source_path": "skills/engineering/domain-modeling",
+        "dependencies": (),
+        "required_mcp_tools": (),
+    },
+    "grilling": {
+        "source_path": "skills/productivity/grilling",
+        "dependencies": (),
+        "required_mcp_tools": (),
+    },
+    "setup-matt-pocock-skills": {
+        "source_path": "skills/engineering/setup-matt-pocock-skills",
+        "dependencies": (),
+        "required_mcp_tools": (),
+    },
+}
+EXPECTED_PROVIDERS = ("claude", "codex", "agy", "gemini")
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -81,14 +143,36 @@ def verify_catalog() -> dict[str, Any]:
     lock = load_lock()
     if lock.get("schema_version") != 1:
         raise CatalogValidationError("unsupported skill lock schema")
-    commit = lock.get("upstream", {}).get("commit", "")
-    if not _COMMIT.fullmatch(commit):
-        raise CatalogValidationError("upstream commit must be an exact SHA")
+    installer = lock.get("installer", {})
+    if (
+        installer.get("name") != "skills"
+        or not isinstance(installer.get("command"), str)
+        or not installer["command"]
+        or not isinstance(installer.get("version"), str)
+        or not installer["version"]
+    ):
+        raise CatalogValidationError("skill installer metadata is invalid")
 
-    license_digest = lock.get("upstream", {}).get("license", {}).get("digest", "")
-    actual_license_digest = "sha256:" + hashlib.sha256(
-        UPSTREAM_LICENSE_PATH.read_bytes()
-    ).hexdigest()
+    upstream = lock.get("upstream", {})
+    if upstream.get("repository") != UPSTREAM_REPOSITORY:
+        raise CatalogValidationError("upstream repository disagrees with catalog")
+    commit = lock.get("upstream", {}).get("commit", "")
+    if not _COMMIT.fullmatch(commit) or commit != PINNED_UPSTREAM_COMMIT:
+        raise CatalogValidationError("upstream commit disagrees with pinned revision")
+
+    license_metadata = upstream.get("license", {})
+    if (
+        license_metadata.get("spdx") != "MIT"
+        or license_metadata.get("copyright") != "Copyright (c) 2026 Matt Pocock"
+        or license_metadata.get("path") != UPSTREAM_LICENSE_PATH.name
+    ):
+        raise CatalogValidationError("upstream license attribution is invalid")
+    license_digest = license_metadata.get("digest", "")
+    try:
+        license_bytes = UPSTREAM_LICENSE_PATH.read_bytes()
+    except OSError as exc:
+        raise CatalogValidationError(f"cannot read upstream license: {exc}") from exc
+    actual_license_digest = "sha256:" + hashlib.sha256(license_bytes).hexdigest()
     if not _SHA256.fullmatch(license_digest) or license_digest != actual_license_digest:
         raise CatalogValidationError("upstream license does not match its digest")
 
@@ -100,6 +184,8 @@ def verify_catalog() -> dict[str, Any]:
         raise CatalogValidationError("every package needs a name")
     if len(names) != len(set(names)):
         raise CatalogValidationError("skill package names must be unique")
+    if set(names) != EXPECTED_PACKAGES.keys():
+        raise CatalogValidationError("skill package set disagrees with catalog")
     packages_by_name = dict(zip(names, packages, strict=True))
     actual_snapshot_entries = {
         path.name for path in SNAPSHOT_PATH.iterdir() if path.is_dir()
@@ -110,9 +196,12 @@ def verify_catalog() -> dict[str, Any]:
         raise CatalogValidationError("snapshot root disagrees with locked packages")
 
     for name, package in packages_by_name.items():
+        expected = EXPECTED_PACKAGES[name]
         relative = package.get("path")
-        if not isinstance(relative, str):
-            raise CatalogValidationError(f"{name} has no package path")
+        if relative != f"snapshot/{name}":
+            raise CatalogValidationError(f"{name} has an invalid package path")
+        if package.get("source_path") != expected["source_path"]:
+            raise CatalogValidationError(f"{name} has an invalid upstream path")
         directory = (catalog_root() / relative).resolve()
         if not directory.is_relative_to(SNAPSHOT_PATH.resolve()):
             raise CatalogValidationError(f"{name} path escapes the snapshot")
@@ -136,17 +225,21 @@ def verify_catalog() -> dict[str, Any]:
             raise CatalogValidationError(
                 f"{name} has unknown dependencies: {sorted(unknown)}"
             )
+        if tuple(dependencies) != expected["dependencies"]:
+            raise CatalogValidationError(f"{name} dependency metadata is invalid")
         tools = package.get("required_mcp_tools")
         if not isinstance(tools, list) or len(tools) != len(set(tools)):
             raise CatalogValidationError(f"{name} MCP tools must be unique")
         if any(not isinstance(tool, str) or not tool for tool in tools):
             raise CatalogValidationError(f"{name} MCP tool name is invalid")
+        if tuple(tools) != expected["required_mcp_tools"]:
+            raise CatalogValidationError(f"{name} MCP tool metadata is invalid")
 
     selected = lock.get("selected_packages")
     if not isinstance(selected, list) or len(selected) != len(set(selected)):
         raise CatalogValidationError("selected packages must be unique")
-    if set(selected) - packages_by_name.keys():
-        raise CatalogValidationError("selected package is absent from snapshot")
+    if tuple(selected) != EXPECTED_SELECTED_PACKAGES:
+        raise CatalogValidationError("selected package set disagrees with catalog")
     for name, package in packages_by_name.items():
         expected_role = "selected" if name in selected else "transitive"
         if package.get("role") != expected_role:
@@ -161,15 +254,19 @@ def verify_catalog() -> dict[str, Any]:
         reachable.add(name)
         frontier.extend(packages_by_name[name]["dependencies"])
     if reachable != packages_by_name.keys():
-        raise CatalogValidationError("snapshot contains packages outside dependency closure")
+        raise CatalogValidationError(
+            "snapshot contains packages outside dependency closure"
+        )
 
     providers = lock.get("providers")
     if not isinstance(providers, list) or not providers:
         raise CatalogValidationError("skill lock has no provider support matrix")
     provider_names = [provider.get("name") for provider in providers]
-    if len(provider_names) != len(set(provider_names)):
-        raise CatalogValidationError("provider names must be unique")
+    if tuple(provider_names) != EXPECTED_PROVIDERS:
+        raise CatalogValidationError("provider support matrix disagrees with catalog")
     for provider in providers:
         if not provider.get("minimum_tested_version") or not provider.get("mechanism"):
-            raise CatalogValidationError("provider entry lacks tested version or mechanism")
+            raise CatalogValidationError(
+                "provider entry lacks tested version or mechanism"
+            )
     return lock

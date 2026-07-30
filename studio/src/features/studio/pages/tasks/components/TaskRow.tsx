@@ -1,10 +1,10 @@
 import React from "react";
 import { formatSequenceId } from "../../../lib/planeUrl";
 import { type FlatRow } from "../TasksPane";
-import { useScratchAgentCount } from "../../../../agents/terminal";
 import {
   AgentStateBadge,
   AutomationFailureChicklet,
+  ScratchStateBadge,
 } from "../../../../agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../agents/types";
 import { useTasksStore } from "../../../stores/tasksStore";
@@ -38,6 +38,7 @@ export const TaskRow = React.memo(function TaskRow({
 }: TaskRowProps) {
   const caret = row.hasChildren ? (row.isExpanded ? "▾" : "▸") : " ";
   const seqStr = formatSequenceId(row.task.sequence_id);
+  const identifier = row.task.key ?? seqStr;
 
   // The scratch row counts ephemeral plan/instant sessions, not backend rows.
   const isScratch = row.task.id === TEMP_TASK_ID;
@@ -82,7 +83,7 @@ export const TaskRow = React.memo(function TaskRow({
 
       {/* Task Label */}
       <span className="min-w-0 truncate">
-        {seqStr ? (
+        {identifier ? (
           <>
             <span
               data-task-id-token
@@ -93,7 +94,7 @@ export const TaskRow = React.memo(function TaskRow({
                   : undefined
               }
             >
-              {seqStr}
+              {identifier}
             </span>
             <span> · </span>
           </>
@@ -102,7 +103,7 @@ export const TaskRow = React.memo(function TaskRow({
       </span>
 
       {isScratch ? (
-        <ScratchCountBadge />
+        <ScratchTaskStateBadge />
       ) : (
         <>
           <AutomationFailureChicklet
@@ -121,26 +122,17 @@ export const TaskRow = React.memo(function TaskRow({
   );
 });
 
-// Only the scratch row needs the module-scoped run count; keeping these
+// Only the scratch row needs module-scoped lifecycle status; keeping these
 // subscriptions here means ordinary rows never evaluate the agent-status
 // selector on status updates.
-function ScratchCountBadge() {
+function ScratchTaskStateBadge() {
   const selectedProjectId = useTasksStore((state) => state.selectedProjectId);
   const selectedModuleId = useTasksStore((state) => state.selectedModuleId);
-  const scratchCount = useScratchAgentCount(
-    selectedModuleId ?? undefined,
-    selectedProjectId ?? undefined,
-  );
-  if (scratchCount <= 0) return null;
-  const badgeTitle = `${scratchCount} running scratch agent${scratchCount === 1 ? "" : "s"}`;
   return (
-    <span
-      className="ml-2 inline-flex shrink-0 items-center gap-1 border border-focus-accent/60 bg-pane-bg px-1 text-[10px] font-bold leading-4 text-focus-accent"
-      title={badgeTitle}
-      aria-label={badgeTitle}
-    >
-      <span aria-hidden="true">●</span>
-      <span>{scratchCount}</span>
-    </span>
+    <ScratchStateBadge
+      projectId={selectedProjectId}
+      moduleId={selectedModuleId}
+      className="ml-2"
+    />
   );
 }

@@ -3,6 +3,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
@@ -328,7 +329,7 @@ export function SettingsModal({ runtimePlatform }: SettingsModalProps = {}) {
             aria-orientation="vertical"
             className="flex min-h-0 flex-col gap-0.5 overflow-y-auto p-2 max-md:flex-row max-md:flex-wrap max-md:overflow-hidden"
           >
-            <RailGroup label="Workflow">
+            <RailGroup label="Workflow" first>
               {(["states", "issue-types"] as const).map((section) => (
                 <RailItem
                   key={section}
@@ -534,18 +535,29 @@ function AppliedChangesLedger({
 
 function RailGroup({
   children,
+  first = false,
   label,
 }: {
   children: ReactNode;
+  first?: boolean;
   label: string;
 }) {
+  const headingId = useId();
+
   return (
-    <div role="group" aria-label={label} className="contents max-md:flex max-md:gap-0.5">
-      <div
-        className={`${SETTINGS_EYEBROW_CLASS} px-2 pb-1 pt-3 first:pt-1 max-md:hidden`}
+    <div
+      role="group"
+      aria-labelledby={headingId}
+      className="contents max-md:flex max-md:gap-0.5"
+    >
+      <h2
+        id={headingId}
+        className={`mx-2 mb-1 border-b border-pane-border pb-1.5 text-sm font-semibold tracking-wide text-text-primary max-md:hidden ${
+          first ? "pt-1" : "pt-3"
+        }`}
       >
         {label}
-      </div>
+      </h2>
       {children}
     </div>
   );

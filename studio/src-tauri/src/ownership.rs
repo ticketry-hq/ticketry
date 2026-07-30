@@ -641,8 +641,8 @@ mod tests {
     #[test]
     fn unrelated_listener_on_the_development_port_does_not_block_ownership() {
         let directory = temp_data_directory("unrelated-development-port");
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
-            .expect("bind unrelated local service");
+        let listener =
+            std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind unrelated local service");
         let port = listener.local_addr().expect("listener address").port();
 
         let guard = DataDirectoryGuard::acquire(&directory, DevelopmentMode::Forbid, port)

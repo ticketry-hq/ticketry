@@ -8,11 +8,7 @@ import { useUIStore } from "../features/studio/stores/uiStore";
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => null,
   AutomationFailureChicklet: () => null,
-}));
-
-vi.mock("../features/agents/terminal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/agents/terminal")>()),
-  useScratchAgentCount: () => 0,
+  ScratchStateBadge: () => null,
 }));
 
 const fetchMock = vi.fn();

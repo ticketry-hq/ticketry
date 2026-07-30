@@ -4,6 +4,7 @@ import { useUIStore } from "../../../stores/uiStore";
 import { orderedTaskSections } from "../../../lib/taskTree";
 import { type TaskSummary } from "../../../lib/types";
 import { formatSequenceId } from "../../../lib/planeUrl";
+import { stateColor } from "../../../../../shared/utilities/display";
 import { TEMP_TASK_ID } from "../../../../agents/types";
 import {
   type Row,
@@ -30,6 +31,7 @@ export function useTaskTree() {
 
     function matchesQuery(task: TaskSummary): boolean {
       return (
+        (task.key?.toLowerCase().includes(normalizedQuery) ?? false) ||
         task.name.toLowerCase().includes(normalizedQuery) ||
         formatSequenceId(task.sequence_id)
           .toLowerCase()
@@ -136,6 +138,7 @@ export function useTaskTree() {
         key: `header-${state.id ?? state.name}`,
         stateId: state.id,
         stateName: state.name,
+        stateColor: stateColor(state),
         count: ordered.length,
       });
 

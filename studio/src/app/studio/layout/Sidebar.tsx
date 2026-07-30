@@ -1,24 +1,27 @@
 import { Panel } from "react-resizable-panels";
 import { ModulesPane } from "../../../features/studio/pages/modules/ModulesPane";
 import { ProjectsPane } from "../../../features/studio/pages/projects/ProjectsPane";
-import { useConfigStore } from "../../../features/studio/stores/configStore";
+import type { SidebarPaneComposition } from "../../../features/studio/stores/configStore";
 import { PaneResizeHandle } from "./PaneResizeHandle";
 
 interface SidebarProps {
   layout: number[];
+  paneComposition: SidebarPaneComposition;
 }
 
-export function Sidebar({ layout }: SidebarProps) {
-  const projectsEnabled = useConfigStore((state) => state.features.projects);
+export function Sidebar({ layout, paneComposition }: SidebarProps) {
+  if (paneComposition === "absent") return null;
+
+  const projectsVisible = paneComposition === "projects-and-modules";
   const visibleTotal = layout[1] + layout[2] + layout[3];
   const moduleSize =
-    projectsEnabled || visibleTotal <= 0
+    projectsVisible || visibleTotal <= 0
       ? layout[1]
       : (layout[1] / visibleTotal) * 100;
 
   return (
     <>
-      {projectsEnabled ? (
+      {projectsVisible ? (
         <>
           <Panel
             defaultSize={layout[0]}

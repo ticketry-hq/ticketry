@@ -23,6 +23,7 @@ describe("browser runtime contract", () => {
         message: null,
         logPointer: null,
       },
+      initialNotices: [],
     });
   });
 
@@ -66,6 +67,7 @@ describe("browser runtime contract", () => {
         message: null,
         logPointer: null,
       },
+      initialNotices: [],
     });
   });
 
@@ -77,5 +79,16 @@ describe("browser runtime contract", () => {
     ).toThrowError(
       "Invalid Studio runtime configuration: agentApi must be a relative path or an HTTP(S) URL",
     );
+  });
+
+  it("defaults to an empty startup and subscription notice source", () => {
+    const runtime = createBrowserRuntime({ environment: {} });
+    let delivered = false;
+
+    expect(runtime.startup().initialNotices).toEqual([]);
+    expect(runtime.subscribeUserNotices(() => {
+      delivered = true;
+    })).toEqual(expect.any(Function));
+    expect(delivered).toBe(false);
   });
 });

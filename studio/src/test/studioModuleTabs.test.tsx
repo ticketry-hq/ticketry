@@ -6,6 +6,7 @@ import { useAgentStatusStore } from "../features/agents/status";
 import { ModuleTabStrip } from "../features/studio/components/ModuleTabStrip";
 import { ModulesPane } from "../features/studio/pages/modules/ModulesPane";
 import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
+import { useStudioStore } from "../features/projects/store";
 import { useConfigStore as useStudioConfigStore } from "../features/studio/stores/configStore";
 import { useConfigStore as useAgentConfigStore } from "../features/agents/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
@@ -16,11 +17,7 @@ import { ModalHost, useModalStore } from "../app/modal";
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => null,
   AutomationFailureChicklet: () => null,
-}));
-
-vi.mock("../features/agents/terminal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/agents/terminal")>()),
-  useScratchAgentCount: () => 0,
+  ScratchStateBadge: () => null,
 }));
 
 vi.mock("react-resizable-panels", async () => {
@@ -223,9 +220,10 @@ describe("Studio module tab strip", () => {
     useStudioConfigStore.setState({
       profiles: [],
       recentProfileIndex: null,
-      features: { projects: true },
+      features: { sidebar: true, projects: true },
     });
     useAgentConfigStore.setState({ profiles: [], recentProfileIndex: null });
+    useStudioStore.setState({ selectedProjectId: null, modules: [] });
     useModalStore.setState({ modalStack: [], activeBindings: null });
     useAgentStatusStore.setState({
       projectId: "project-1",
@@ -451,6 +449,10 @@ describe("Studio module tab strip", () => {
     const profile = localProfile();
     useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
     useAgentConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
+    useStudioStore.setState({
+      selectedProjectId: "project-1",
+      modules: [],
+    });
     mockModuleCreation();
     render(
       <>
@@ -474,6 +476,11 @@ describe("Studio module tab strip", () => {
     expect(screen.getByRole("tab", { name: "New module" })).toHaveAttribute("aria-selected", "true");
     expect(useModalStore.getState().modalStack).toEqual([]);
     expect(useTasksStore.getState().selectedModuleId).toBe("module-new");
+    expect(useStudioStore.getState().modules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "module-new", project_id: "project-1" }),
+      ]),
+    );
     expect(useAgentConfigStore.getState().profiles[0]?.module_folders).toEqual({
       "module-new": "/repos/new-module",
     });
@@ -739,7 +746,10 @@ describe("Studio module tab strip", () => {
   });
 
   it("does not render the Projects pane or Add Project when the flag is off", () => {
-    useStudioConfigStore.setState({ features: { projects: false } });
+    useStudioConfigStore.setState({
+      features: { sidebar: true, projects: false },
+    });
+    useUIStore.setState({ panelLayout: [20, 20, 35, 25] });
 
     render(<Layout />);
 
@@ -748,7 +758,56 @@ describe("Studio module tab strip", () => {
     expect(
       screen.queryByRole("button", { name: "+ Add Project" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId("pane-modules")).toBeInTheDocument();
+    expect(screen.getByTestId("pane-modules")).toHaveAttribute(
+      "data-default-size",
+      "25",
+    );
+    expect(
+      screen.getByTestId("module-workspace-region").parentElement,
+    ).toHaveAttribute("data-default-size", "75");
+    expect(screen.getAllByTestId("pane-resize-handle")).toHaveLength(2);
+  });
+
+  it("uses the full-width Edit view while preserving dormant sidebar state", () => {
+    const persistedLayout = [15, 25, 35, 25];
+    localStorage.setItem("studio.sidebarVisible:v1", "true");
+    useStudioConfigStore.setState({
+      features: { sidebar: false, projects: false },
+    });
+    useUIStore.setState({
+      sidebarVisible: true,
+      panelLayout: persistedLayout,
+    });
+
+    render(<Layout />);
+
+    expect(screen.queryByTestId("pane-projects")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("pane-modules")).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("module-workspace-region").parentElement,
+    ).toHaveAttribute("data-default-size", "100");
+    expect(screen.getAllByTestId("pane-resize-handle")).toHaveLength(1);
+    expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("true");
+    expect(useUIStore.getState().panelLayout).toEqual(persistedLayout);
+
+    act(() => {
+      useStudioConfigStore.setState({
+        features: { sidebar: true, projects: true },
+      });
+    });
+
+    expect(screen.getByTestId("pane-projects")).toHaveAttribute(
+      "data-default-size",
+      "15",
+    );
+    expect(screen.getByTestId("pane-modules")).toHaveAttribute(
+      "data-default-size",
+      "25",
+    );
+    expect(
+      screen.getByTestId("module-workspace-region").parentElement,
+    ).toHaveAttribute("data-default-size", "60");
+    expect(useUIStore.getState().panelLayout).toEqual(persistedLayout);
   });
 
   it("drives resize cursor behavior through every divider's expanded hover target", () => {

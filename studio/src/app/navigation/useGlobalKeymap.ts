@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useModalStore } from "../modal/modalStore";
+import { isSidebarEnabled } from "../../features/studio/stores/configStore";
 import { useUIStore } from "../../features/studio/stores/uiStore";
 import { isTypingTarget } from "../../shared/utilities/keyboard";
 import {
@@ -40,12 +41,13 @@ export function useGlobalKeymap(taskRows: Row[] = EMPTY_TASK_ROWS): void {
   useEffect(() => {
     function onCaptureKeyDown(event: KeyboardEvent): void {
       const ui = useUIStore.getState();
+      const sidebarVisible = isSidebarEnabled() && ui.sidebarVisible;
       if (hasOpenModal(ui)) return;
 
       const actionId = studioKeymapRegistry.resolve("capture", event);
       if (routeModulePositionNavigation(event, actionId)) return;
-      if (!ui.sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
-      if (ui.sidebarVisible) {
+      if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
+      if (sidebarVisible) {
         routeFullSidebarViewCaptureNavigation(
           event,
           taskRowsRef.current,
@@ -58,11 +60,12 @@ export function useGlobalKeymap(taskRows: Row[] = EMPTY_TASK_ROWS): void {
 
     function onKeyDown(event: KeyboardEvent): void {
       const ui = useUIStore.getState();
-      if (!ui.sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
+      const sidebarVisible = isSidebarEnabled() && ui.sidebarVisible;
+      if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       const captureAction = studioKeymapRegistry.resolve("capture", event);
       if (
         captureAction &&
-        (!ui.sidebarVisible || !captureAction.startsWith("edit-view."))
+        (!sidebarVisible || !captureAction.startsWith("edit-view."))
       ) {
         return;
       }
@@ -86,7 +89,7 @@ export function useGlobalKeymap(taskRows: Row[] = EMPTY_TASK_ROWS): void {
         return;
       }
       if (
-        ui.sidebarVisible &&
+        sidebarVisible &&
         routeFullSidebarViewFocusedPaneNavigation(
           event,
           taskRowsRef.current,

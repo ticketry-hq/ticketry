@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Literal, Optional
 
 from ninja import Schema
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 
@@ -302,6 +302,19 @@ class ProjectIn(Schema):
     description: Optional[str] = None
     workspace_slug: Optional[str] = None
 
+    @field_validator("slug")
+    @classmethod
+    def normalize_project_key(cls, value):
+        normalized = value.upper()
+        if len(normalized) != 3 or not all(
+            "A" <= character <= "Z" for character in normalized
+        ):
+            raise PydanticCustomError(
+                "project_key",
+                "Project key must be exactly three letters, using only A-Z.",
+            )
+        return normalized
+
 
 class ProjectPatch(Schema):
     """Body for a project edit — name and/or markdown description; only present
@@ -346,10 +359,11 @@ class ReviewFindingIn(Schema):
     """Body for the dedicated review-finding create (#905).
 
     ``parent_id`` is the Story-in-``Review`` the finding attaches to; the child
-    is always born in ``Ready`` and typed ``Implementation`` server-side.
-    ``description`` carries the caller-rendered ``Path`` / ``Lines`` / ``Note``
-    evidence block verbatim. ``issue_type_id`` is optional and, if present, must
-    resolve to the project's ``Implementation`` type.
+    is always born in the Implementation workflow's start stage and typed
+    ``Implementation`` server-side. ``description`` carries the caller-rendered
+    ``Path`` / ``Lines`` / ``Note`` evidence block verbatim. ``issue_type_id``
+    is optional and, if present, must resolve to the project's
+    ``Implementation`` type.
     """
 
     parent_id: uuid.UUID

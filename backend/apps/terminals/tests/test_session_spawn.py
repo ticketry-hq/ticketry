@@ -177,6 +177,7 @@ async def test_spawn_happy_path_returns_id_and_persists(tmp_config, tmp_path, mo
     assert created["scope"] == "task"
     assert created["cwd"] == str(module_folder)
     assert "claude" in created["command"]
+    assert created["command"].startswith("env -u NO_COLOR ")
 
 
 async def test_spawn_publishes_a_starting_lifecycle_delta(tmp_config, tmp_path, monkeypatch):

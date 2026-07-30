@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "installer": {
-    "command": "npx skills@latest add mattpocock/skills",
+    "command": "npx skills@latest add <pinned mattpocock/skills checkout>",
     "name": "skills",
-    "version": "1.5.20"
+    "version": "1.5.21"
   },
   "upstream": {
     "repository": "https://github.com/mattpocock/skills.git",
@@ -16,11 +16,26 @@
     }
   },
   "selected_packages": [
+    "code-review",
     "grill-with-docs",
+    "implement",
+    "tdd",
     "to-spec",
     "to-tickets"
   ],
   "packages": [
+    {
+      "name": "code-review",
+      "role": "selected",
+      "source_path": "skills/engineering/code-review",
+      "path": "snapshot/code-review",
+      "installer_hash": "31d149a480eaa68c11e32f5ee77f0fd0b98a906834d531d881d502352edd0b8e",
+      "digest": "sha256:80a206dcc243da0c52bfb8264faaa3738fe7c16ebcd355d54530b376d64b06e2",
+      "dependencies": [
+        "setup-matt-pocock-skills"
+      ],
+      "required_mcp_tools": []
+    },
     {
       "name": "grill-with-docs",
       "role": "selected",
@@ -32,6 +47,29 @@
         "grilling",
         "domain-modeling"
       ],
+      "required_mcp_tools": []
+    },
+    {
+      "name": "implement",
+      "role": "selected",
+      "source_path": "skills/engineering/implement",
+      "path": "snapshot/implement",
+      "installer_hash": "2139cfedf24791adbc839aaab6019cff158af1e28bfead020ec6e0ce01b3e74d",
+      "digest": "sha256:f1109e2ef7d9707b25101c0ed360ac0835458ebd33ca9069466c09951f58e318",
+      "dependencies": [
+        "tdd",
+        "code-review"
+      ],
+      "required_mcp_tools": []
+    },
+    {
+      "name": "tdd",
+      "role": "selected",
+      "source_path": "skills/engineering/tdd",
+      "path": "snapshot/tdd",
+      "installer_hash": "81eca2a5b53a63f481c0849be7a663a8cd43d5cf53f32b644ec0a2f50cf91aa2",
+      "digest": "sha256:19f6f4658a76ade84cf3033dcf20bc2abcbcc2f7a05be11bb96f5896629a9ae9",
+      "dependencies": [],
       "required_mcp_tools": []
     },
     {
@@ -67,22 +105,22 @@
       ]
     },
     {
-      "name": "grilling",
-      "role": "transitive",
-      "source_path": "skills/productivity/grilling",
-      "path": "snapshot/grilling",
-      "installer_hash": "368d3dd7251247c69f3656d93dc83c8f1577792eacac2111f1e7981db2ece49b",
-      "digest": "sha256:b4fe640c45f7190fb1c57ec45a00504f9a24c247aa66d158b2b3338c5c2deb38",
-      "dependencies": [],
-      "required_mcp_tools": []
-    },
-    {
       "name": "domain-modeling",
       "role": "transitive",
       "source_path": "skills/engineering/domain-modeling",
       "path": "snapshot/domain-modeling",
       "installer_hash": "363cb0f53b0b431e7c00086ad1f823500b7e1b70b5616ee969c979f0934e9e6e",
       "digest": "sha256:ef416c64e8c6888c59d73d637574719ff828861f4df626b022c4a90db33ebcf4",
+      "dependencies": [],
+      "required_mcp_tools": []
+    },
+    {
+      "name": "grilling",
+      "role": "transitive",
+      "source_path": "skills/productivity/grilling",
+      "path": "snapshot/grilling",
+      "installer_hash": "368d3dd7251247c69f3656d93dc83c8f1577792eacac2111f1e7981db2ece49b",
+      "digest": "sha256:b4fe640c45f7190fb1c57ec45a00504f9a24c247aa66d158b2b3338c5c2deb38",
       "dependencies": [],
       "required_mcp_tools": []
     },

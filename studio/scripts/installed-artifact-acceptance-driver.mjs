@@ -555,7 +555,14 @@ export async function packagedSkillEvidenceScenario(context) {
     );
   }
 
-  const requiredSkills = ["grill-with-docs", "to-spec", "to-tickets"];
+  const requiredSkills = [
+    "code-review",
+    "grill-with-docs",
+    "implement",
+    "tdd",
+    "to-spec",
+    "to-tickets",
+  ];
   const providers = ["claude", "codex", "agy", "gemini"];
   for (const provider of providers) {
     const discovered = evidence.providers?.[provider];

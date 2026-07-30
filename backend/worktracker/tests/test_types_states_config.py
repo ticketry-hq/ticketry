@@ -367,7 +367,7 @@ def test_create_state_bad_group_422(client, project, auth):
 @pytest.mark.django_db
 def test_patch_state_rename_recolor_regroup(client, project, auth):
     _seed(project)
-    todo = State.objects.get(project=project, name="Refinement")
+    todo = State.objects.get(project=project, name="Spec")
     r = patch_json(
         client,
         f"{BASE}/states/{todo.id}",
@@ -384,7 +384,7 @@ def test_patch_state_rename_recolor_regroup(client, project, auth):
 @pytest.mark.django_db
 def test_patch_state_bad_group_422(client, project, auth):
     _seed(project)
-    todo = State.objects.get(project=project, name="Refinement")
+    todo = State.objects.get(project=project, name="Spec")
     r = patch_json(client, f"{BASE}/states/{todo.id}", {"group": "nope"}, auth)
     assert r.status_code == 422
 

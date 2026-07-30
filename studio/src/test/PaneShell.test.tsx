@@ -1,6 +1,7 @@
 import { act, fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { PaneShell } from "../features/studio/components/PaneShell";
+import { useConfigStore } from "../features/studio/stores/configStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 
 function renderPanePair() {
@@ -19,6 +20,9 @@ function renderPanePair() {
 
 describe("PaneShell", () => {
   beforeEach(() => {
+    useConfigStore.setState({
+      features: { sidebar: true, projects: true },
+    });
     useUIStore.setState({
       focusedPane: "tasks",
       editViewZone: "stories",

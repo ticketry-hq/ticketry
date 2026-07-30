@@ -30,6 +30,7 @@
     "desktop:smoke:concurrent": "npm run desktop:smoke:concurrent --workspace @worktracker/studio",
     "desktop:smoke:dev": "npm run desktop:smoke:dev --workspace @worktracker/studio",
     "desktop:smoke:packaged": "npm run desktop:smoke:packaged --workspace @worktracker/studio",
+    "serve:dmg": "node scripts/serve-dmg.mjs",
     "test:sdk": "npm run test --workspace @worktracker/typescript-sdk",
     "typecheck": "npm run typecheck --workspace @worktracker/typescript-sdk && npm run typecheck --workspace @worktracker/studio",
     "build": "npm run build --workspace @worktracker/typescript-sdk && npm run build --workspace @worktracker/studio"

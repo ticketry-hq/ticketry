@@ -101,6 +101,56 @@
         "title": "AttachmentOut",
         "type": "object"
       },
+      "ConfigBody": {
+        "properties": {
+          "features": {
+            "$ref": "#/components/schemas/FeaturesBody"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileBody"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "recent_profile_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recent Profile Index"
+          }
+        },
+        "required": [
+          "recent_profile_index",
+          "profiles",
+          "features"
+        ],
+        "title": "ConfigBody",
+        "type": "object"
+      },
+      "FeaturesBody": {
+        "properties": {
+          "projects": {
+            "title": "Projects",
+            "type": "boolean"
+          },
+          "sidebar": {
+            "title": "Sidebar",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sidebar",
+          "projects"
+        ],
+        "title": "FeaturesBody",
+        "type": "object"
+      },
       "IssueTypeIn": {
         "description": "Body for issue-type create — name + level required, the rest optional.",
         "properties": {
@@ -491,6 +541,67 @@
         "title": "ModuleWorkItemIn",
         "type": "object"
       },
+      "ProfileBody": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Agent Prompt"
+          },
+          "agent_prompts": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Agent Prompts",
+            "type": "object"
+          },
+          "module_folders": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Module Folders",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "recent_module_ids": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Recent Module Ids",
+            "type": "object"
+          },
+          "recent_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Recent Project Id"
+          },
+          "workspace_slug": {
+            "title": "Workspace Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "workspace_slug"
+        ],
+        "title": "ProfileBody",
+        "type": "object"
+      },
       "ProjectIn": {
         "description": "Body for project create — name + slug, optional workspace.\n\n``workspace_slug`` is omitted on single-workspace installs; the route then\nresolves the sole workspace.",
         "properties": {
@@ -657,7 +768,7 @@
         "type": "object"
       },
       "ReviewFindingIn": {
-        "description": "Body for the dedicated review-finding create (#905).\n\n``parent_id`` is the Story-in-``Review`` the finding attaches to; the child\nis always born in ``Ready`` and typed ``Implementation`` server-side.\n``description`` carries the caller-rendered ``Path`` / ``Lines`` / ``Note``\nevidence block verbatim. ``issue_type_id`` is optional and, if present, must\nresolve to the project's ``Implementation`` type.",
+        "description": "Body for the dedicated review-finding create (#905).\n\n``parent_id`` is the Story-in-``Review`` the finding attaches to; the child\nis always born in the Implementation workflow's start stage and typed\n``Implementation`` server-side. ``description`` carries the caller-rendered\n``Path`` / ``Lines`` / ``Note`` evidence block verbatim. ``issue_type_id``\nis optional and, if present, must resolve to the project's\n``Implementation`` type.",
         "properties": {
           "description": {
             "title": "Description",
@@ -4060,7 +4171,7 @@
     },
     "/projects/{project_id}/review-findings": {
       "post": {
-        "description": "Create a Ready Implementation finding under a Story in Review (#905).\n\nThe dedicated validated finding surface: the child is born in ``Ready`` and\ntyped ``Implementation`` server-side. A parent that is not a Story, not in\n``Review``, in a foreign project, or a non-Implementation type override is\nrejected *before any write* with the workflow gate's structured 422 body\n(``detail``/``code``/``from``/``to``) — identical to the status gate. This\nsurface never launches an agent, moves the parent, or draws a dependency\nedge.",
+        "description": "Create an Implementation finding under a Story in Review (#905).\n\nThe dedicated validated finding surface: the child is born in the\nImplementation workflow's start stage and typed ``Implementation``\nserver-side. A parent that is not a Story, not in ``Review``, in a foreign\nproject, or a non-Implementation type override is rejected *before any\nwrite* with the workflow gate's structured 422 body\n(``detail``/``code``/``from``/``to``) — identical to the status gate.\nThis surface never launches an agent, moves the parent, or draws a\ndependency edge.",
         "operationId": "createReviewFinding",
         "parameters": [
           {

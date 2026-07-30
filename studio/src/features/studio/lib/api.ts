@@ -140,6 +140,7 @@ export function normalizeTask(task: WorkItem): TaskSummary {
     name: task.name,
     project_id: task.project_id,
     sequence_id: task.sequence_id,
+    key: task.key,
     rank: task.rank,
     state:
       task.state ?? {

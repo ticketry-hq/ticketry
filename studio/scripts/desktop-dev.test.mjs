@@ -9,6 +9,7 @@ import {
   formatDevelopmentIdentity,
   parseDesktopDevMode,
   resolveDevelopmentDataDirectory,
+  resolveDevelopmentTmuxSocket,
   resolveTauriCliPath,
   selectDevelopmentServicePorts,
 } from "./desktop-dev.mjs";
@@ -51,6 +52,16 @@ test("linked worktrees resolve distinct stable profiles", () => {
   assert.notEqual(primaryProfile, linkedProfile);
   assert.match(path.basename(primaryProfile), /-[0-9a-f]{16}$/);
   assert.match(path.basename(linkedProfile), /-[0-9a-f]{16}$/);
+});
+
+test("development tmux sockets are stable per isolated data directory", () => {
+  const first = resolveDevelopmentTmuxSocket("/tmp/profile-one");
+  const repeated = resolveDevelopmentTmuxSocket("/tmp/profile-one");
+  const second = resolveDevelopmentTmuxSocket("/tmp/profile-two");
+
+  assert.equal(first, repeated);
+  assert.notEqual(first, second);
+  assert.match(first, /^muxed-dev-[0-9a-f]{16}$/);
 });
 
 test("resolution outside a Git worktree fails closed with the launch directory", () => {
@@ -165,11 +176,12 @@ test("startup identity is one concise non-secret report with all selected resour
     backendPort: 8788,
     mcpPort: 8798,
     dataDirectory: "/tmp/muxed-profile",
+    tmuxSocket: "muxed-dev-0123456789abcdef",
   });
 
   assert.equal(
     report,
-    "Ticketry desktop development instance: frontend=http://127.0.0.1:5175 backend=http://127.0.0.1:8788 mcp=http://127.0.0.1:8798/mcp data=/tmp/muxed-profile",
+    "Ticketry desktop development instance: frontend=http://127.0.0.1:5175 backend=http://127.0.0.1:8788 mcp=http://127.0.0.1:8798/mcp data=/tmp/muxed-profile tmux=muxed-dev-0123456789abcdef",
   );
   assert.equal(report.split("\n").length, 1);
   assert.doesNotMatch(report, /token|credential|secret/i);

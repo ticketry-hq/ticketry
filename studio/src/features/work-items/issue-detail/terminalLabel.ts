@@ -7,7 +7,11 @@ function formatSequenceId(value: number | null): string | null {
 }
 
 /** Strip/chip label for a terminal session (shared by tabs and history chips). */
-export function terminalLabel(meta: SessionMeta): string {
+export function terminalLabel(
+  meta: SessionMeta,
+  ticketKey?: string,
+): string {
+  if (ticketKey) return `${ticketKey} · ${meta.agent}`;
   const seq = formatSequenceId(meta.ticketSeq);
   if (seq) return `#${seq} · ${meta.agent}`;
   if (meta.isInstant) return "instant";

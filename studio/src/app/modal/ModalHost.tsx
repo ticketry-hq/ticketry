@@ -1,10 +1,11 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import type {
   AgentPickerPayload,
   ModuleFolderPayload,
   PromptInputPayload,
 } from "../../features/agents/terminal";
 import type { ParentUpdatePayload } from "../../features/studio/modals/ParentUpdate";
+import { studioRuntime } from "../../runtime";
 import { useModalStore } from "./modalStore";
 
 const AgentPicker = lazy(async () => ({
@@ -36,9 +37,24 @@ const AddModule = lazy(async () => ({
 const AddProject = lazy(async () => ({
   default: (await import("../../features/studio/modals/AddProject")).AddProject,
 }));
+const NotifyUserModal = lazy(async () => ({
+  default: (await import("./NotifyUserModal")).NotifyUserModal,
+}));
+
+function useRuntimeUserNotices(): void {
+  const notifyUser = useModalStore((state) => state.notifyUser);
+  useEffect(() => {
+    const runtime = studioRuntime();
+    for (const notice of runtime.startup().initialNotices) {
+      notifyUser(notice);
+    }
+    return runtime.subscribeUserNotices(notifyUser);
+  }, [notifyUser]);
+}
 
 /** Renders the top Studio-reachable descriptor from the modal bus. */
 export function ModalHost() {
+  useRuntimeUserNotices();
   const top = useModalStore((state) =>
     state.modalStack.at(-1),
   );
@@ -99,6 +115,12 @@ export function ModalHost() {
       return (
         <Suspense fallback={null}>
           <AddProject />
+        </Suspense>
+      );
+    case "notify-user":
+      return (
+        <Suspense fallback={null}>
+          <NotifyUserModal notice={top.payload} />
         </Suspense>
       );
   }

@@ -1,0 +1,15 @@
+---
+id: terminal-init-attach
+name: Terminal Init — Attach
+version: 1.0.0
+summary: First terminal WebSocket frame requesting attachment to an existing agent run.
+owners:
+  - ticketry
+badges:
+  - content: WebSocket
+    backgroundColor: purple
+    textColor: purple
+---
+
+The frame carries `type: init`, `mode: attach`, `agent_run_id`, columns, and
+rows. It is used for both first attachment and reconnect.

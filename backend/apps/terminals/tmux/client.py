@@ -8,11 +8,11 @@ PTY is bridged to a session.
 from __future__ import annotations
 
 from apps.terminals.tmux._core import (
-    TMUX_SOCKET,
     TmuxSessionError,
     _server,
     _session_name,
     tmux_executable,
+    tmux_socket,
 )
 
 
@@ -22,7 +22,14 @@ def attach_argv(agent_run_id: str) -> list[str]:
     No PTY is spawned here; the consumer's spawn/attach path consumes this argv.
     """
 
-    return [tmux_executable(), "-L", TMUX_SOCKET, "attach", "-t", _session_name(agent_run_id)]
+    return [
+        tmux_executable(),
+        "-L",
+        tmux_socket(),
+        "attach",
+        "-t",
+        _session_name(agent_run_id),
+    ]
 
 
 def scroll(agent_run_id: str, direction: str, lines: int = 3) -> None:
@@ -35,6 +42,8 @@ def scroll(agent_run_id: str, direction: str, lines: int = 3) -> None:
 
     - Entering copy-mode with ``-e`` makes a downward scroll past the bottom
       exit the mode automatically, so the view returns to the live prompt.
+    - ``-H`` (tmux 3.6+) hides tmux's copy-mode position marker without
+      changing the session or the user's global tmux configuration.
     - ``scroll-up`` / ``scroll-down`` move ``lines`` rows per call.
 
     :param agent_run_id: run whose tmux session should scroll.
@@ -49,10 +58,12 @@ def scroll(agent_run_id: str, direction: str, lines: int = 3) -> None:
     name = _session_name(agent_run_id)
     server = _server()
 
-    # Enter (or stay in) copy-mode with exit-on-bottom semantics. Idempotent:
+    # Enter (or stay in) copy-mode with exit-on-bottom semantics and no tmux
+    # position marker. Ticketry targets tmux 3.6+'s -H capability explicitly
+    # rather than mutating users' global tmux configuration. Idempotent:
     # re-issuing copy-mode while already in it is a no-op for our purposes.
 
-    enter = server.cmd("copy-mode", "-e", "-t", name)
+    enter = server.cmd("copy-mode", "-e", "-H", "-t", name)
     if enter.returncode != 0:
         stderr = "\n".join(enter.stderr or [])
         raise TmuxSessionError(f"copy-mode failed for {name!r}: {stderr}")

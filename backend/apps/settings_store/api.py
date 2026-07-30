@@ -1,10 +1,10 @@
 import json
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from django.http import JsonResponse
 from ninja import Router
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from apps.settings_store import dao, service
 from apps.settings_store.provider_catalog import (
@@ -14,6 +14,7 @@ from apps.settings_store.provider_catalog import (
     ProviderCatalog,
     parse_provider_catalog,
 )
+from apps.settings_store.schemas import ConfigBody, ProfileBody
 
 
 router = Router(tags=["system"])
@@ -39,28 +40,6 @@ class ProviderCatalogImpactBody(BaseModel):
 
 class ProviderCatalogSavedBody(ProviderCatalogImpactBody):
     value: ProviderCatalog
-
-
-class ProfileBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    workspace_slug: str
-    agent_prompt: Optional[str] = None
-    agent_prompts: dict = {}
-    module_folders: dict = {}
-    recent_project_id: Optional[str] = None
-    recent_module_ids: dict = {}
-
-
-class FeaturesBody(BaseModel):
-    projects: bool
-
-
-class ConfigBody(BaseModel):
-    recent_profile_index: Optional[int]
-    profiles: list[ProfileBody]
-    features: FeaturesBody
 
 
 class RecentIndexBody(BaseModel):

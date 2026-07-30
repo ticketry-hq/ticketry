@@ -663,7 +663,7 @@ class WorkItemsApi:
     ) -> WorkItemOut:
         """Create Review Finding
 
-        Create a Ready Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in ``Ready`` and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+        Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow's start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -737,7 +737,7 @@ class WorkItemsApi:
     ) -> ApiResponse[WorkItemOut]:
         """Create Review Finding
 
-        Create a Ready Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in ``Ready`` and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+        Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow's start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -811,7 +811,7 @@ class WorkItemsApi:
     ) -> RESTResponseType:
         """Create Review Finding
 
-        Create a Ready Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in ``Ready`` and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+        Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow's start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
 
         :param project_id: (required)
         :type project_id: UUID

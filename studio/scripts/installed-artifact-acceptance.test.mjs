@@ -10,6 +10,14 @@ import {
   sanitizedDesktopEnvironment,
 } from "./installed-artifact-acceptance.mjs";
 
+const SELECTED_SKILLS = [
+  "code-review",
+  "grill-with-docs",
+  "implement",
+  "tdd",
+  "to-spec",
+  "to-tickets",
+];
 const passingResult = {
   clean_install: true,
   upgrade_with_existing_data: true,
@@ -22,10 +30,10 @@ const passingResult = {
   skill_configuration_unchanged: true,
   skill_overlay_cleanup: true,
   packaged_skill_providers: {
-    claude: ["grill-with-docs", "to-spec", "to-tickets"],
-    codex: ["grill-with-docs", "to-spec", "to-tickets"],
-    agy: ["grill-with-docs", "to-spec", "to-tickets"],
-    gemini: ["grill-with-docs", "to-spec", "to-tickets"],
+    claude: SELECTED_SKILLS,
+    codex: SELECTED_SKILLS,
+    agy: SELECTED_SKILLS,
+    gemini: SELECTED_SKILLS,
   },
   diagnostics: [
     { kind: "missing_dependency", message: "tmux is required; install it or approve its executable path." },
@@ -85,7 +93,7 @@ test("acceptance requires packaged skill provider evidence", () => {
       ...passingResult,
       packaged_skill_providers: {
         ...passingResult.packaged_skill_providers,
-        codex: ["grill-with-docs", "to-spec"],
+        codex: SELECTED_SKILLS.slice(0, -1),
       },
     }),
     /required packaged skills for codex/,

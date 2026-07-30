@@ -29,7 +29,8 @@ case "$cmd" in
     echo "==> Done. Set VITE_WT_API_KEY (studio/.env.local) to the printed token."
     ;;
   backend)
-    (cd "$ROOT/backend" && MUXED_ADMIN_ENABLED=true uv run python manage.py runserver 127.0.0.1:8787)
+    backend_port="${MUXED_WEB_BACKEND_PORT:-8787}"
+    (cd "$ROOT/backend" && MUXED_ADMIN_ENABLED=true uv run python manage.py runserver "127.0.0.1:${backend_port}")
     ;;
   studio)
     (cd "$ROOT/studio" && npm run dev)

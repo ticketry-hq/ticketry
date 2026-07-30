@@ -123,7 +123,7 @@ describe("Studio task keymap", () => {
     });
     useStudioConfigStore.setState({
       recentProfileIndex: 0,
-      features: { projects: true },
+      features: { sidebar: true, projects: true },
       profiles: [
         {
           name: "Local",
@@ -616,6 +616,62 @@ describe("Studio task keymap", () => {
     expect(screen.queryByText("— Close Menu")).not.toBeInTheDocument();
   });
 
+  it("omits every sidebar-toggle affordance when the installation disables it", async () => {
+    const reboundSidebarToggle = {
+      context: "global" as const,
+      actionId: "toggle-sidebar",
+      chord: {
+        key: "x",
+        alt: false,
+        control: false,
+        meta: false,
+        shift: false,
+      },
+    };
+    studioKeymapRegistry.setOverrides([reboundSidebarToggle]);
+    useStudioConfigStore.setState({
+      features: { sidebar: false, projects: false },
+    });
+    useUIStore.setState({ sidebarVisible: true });
+
+    render(
+      <>
+        <KeymapHarness />
+        <ModalHost />
+        <Footer />
+      </>,
+    );
+
+    expect(screen.queryByText(/— (Open|Close) Menu/)).not.toBeInTheDocument();
+    expect(
+      studioKeymapRegistry.getEffectiveBinding("global", "toggle-sidebar"),
+    ).toBeNull();
+    expect(
+      studioKeymapRegistry
+        .getConfigurableBindings()
+        .some((binding) => binding.actionId === "toggle-sidebar"),
+    ).toBe(false);
+
+    const defaultKeyWasNotConsumed = fireEvent.keyDown(window, { key: "\\" });
+    const reboundKeyWasNotConsumed = fireEvent.keyDown(window, { key: "x" });
+
+    expect(defaultKeyWasNotConsumed).toBe(true);
+    expect(reboundKeyWasNotConsumed).toBe(true);
+    expect(useUIStore.getState().sidebarVisible).toBe(true);
+    expect(studioKeymapRegistry.getOverrides()).toEqual([
+      reboundSidebarToggle,
+    ]);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open Keyboard Shortcuts" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Keyboard Shortcuts",
+    });
+    expect(within(dialog).queryByText("Toggle sidebar")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("cell", { name: "X" })).not.toBeInTheDocument();
+  });
+
   it("teaches the current edit-view zone and replaces it with disengage while engaged", () => {
     useUIStore.setState({
       sidebarVisible: false,
@@ -815,12 +871,34 @@ describe("Studio task keymap", () => {
     });
   });
 
-  it("toggles the sidebar on backslash", () => {
+  it("toggles the sidebar with its default or user-rebound key", () => {
     render(<KeymapHarness />);
 
     fireEvent.keyDown(window, { key: "\\" });
 
     expect(useUIStore.getState().sidebarVisible).toBe(false);
+
+    act(() => {
+      studioKeymapRegistry.setOverrides([
+        {
+          context: "global",
+          actionId: "toggle-sidebar",
+          chord: {
+            key: "x",
+            alt: false,
+            control: false,
+            meta: false,
+            shift: false,
+          },
+        },
+      ]);
+    });
+
+    fireEvent.keyDown(window, { key: "\\" });
+    expect(useUIStore.getState().sidebarVisible).toBe(false);
+
+    fireEvent.keyDown(window, { key: "x" });
+    expect(useUIStore.getState().sidebarVisible).toBe(true);
   });
 
   it("moves focus left and right with h and l", () => {
@@ -839,13 +917,42 @@ describe("Studio task keymap", () => {
   });
 
   it("cannot traverse left from Modules into Projects when the flag is off", () => {
-    useStudioConfigStore.setState({ features: { projects: false } });
+    useStudioConfigStore.setState({
+      features: { sidebar: true, projects: false },
+    });
     useUIStore.setState({ focusedPane: "modules" });
     render(<KeymapHarness />);
 
     fireEvent.keyDown(window, { key: "h" });
 
     expect(useUIStore.getState().focusedPane).toBe("modules");
+  });
+
+  it("keeps sidebar panes out of traversal when installation disables them", () => {
+    useStudioConfigStore.setState({
+      features: { sidebar: false, projects: false },
+    });
+    useUIStore.setState({
+      sidebarVisible: true,
+      focusedPane: "details-or-terminal",
+      editViewZone: "active-tab-body",
+    });
+    render(<KeymapHarness />);
+
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+
+    expect(useUIStore.getState()).toMatchObject({
+      sidebarVisible: true,
+      focusedPane: "tasks",
+      editViewZone: "stories",
+    });
+
+    fireEvent.keyDown(window, { key: "h" });
+
+    expect(useUIStore.getState()).toMatchObject({
+      sidebarVisible: true,
+      focusedPane: "tasks",
+    });
   });
 
   it("closes the active terminal tab on q", () => {

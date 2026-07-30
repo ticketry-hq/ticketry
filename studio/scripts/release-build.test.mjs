@@ -6,7 +6,9 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
+  ReleaseDefaultsArtifactError,
   ReleaseManifestError,
+  buildRelease,
   macosTauriBuildEnvironment,
   macosTauriSigningConfig,
   parseArguments,
@@ -23,12 +25,30 @@ import {
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(path.join(studioRoot, "release", "manifest.v1.json"), "utf8"));
+const reviewedDefaults = JSON.parse(
+  await readFile(path.resolve(studioRoot, manifest.artifacts.sidecar.defaults_artifact), "utf8"),
+);
 
 test("the Tauri bundle declares the packaged macOS application icon", async () => {
   const configuration = JSON.parse(
     await readFile(path.join(studioRoot, "src-tauri", "tauri.conf.json"), "utf8"),
   );
   assert.ok(configuration.bundle.icon.includes("icons/icon.icns"));
+});
+
+test("release builds compile the native libghostty terminal renderer", () => {
+  assert.deepEqual(
+    manifest.artifacts.tauri.command.slice(-2),
+    ["--features", "native-libghostty"],
+  );
+
+  const withoutNativeTerminal = structuredClone(manifest);
+  withoutNativeTerminal.artifacts.tauri.command =
+    withoutNativeTerminal.artifacts.tauri.command.slice(0, -2);
+  assert.throws(
+    () => validateManifest(withoutNativeTerminal),
+    /must enable the native-libghostty feature/,
+  );
 });
 
 test("all resolves to the single supported macOS target", () => {
@@ -51,6 +71,13 @@ test("manifest validation requires sidecar and dependency policy declarations", 
   const missingPolicy = structuredClone(manifest);
   delete missingPolicy.artifacts.sidecar.dependency_policy.python_lock;
   assert.throws(() => validateManifest(missingPolicy), ReleaseManifestError);
+
+  const missingDefaultsArtifact = structuredClone(manifest);
+  delete missingDefaultsArtifact.artifacts.sidecar.defaults_artifact;
+  assert.throws(
+    () => validateManifest(missingDefaultsArtifact),
+    /artifacts\.sidecar\.defaults_artifact/,
+  );
 
   const missingBuildArchitecture = structuredClone(manifest);
   delete missingBuildArchitecture.targets[0].build_architecture;
@@ -283,6 +310,72 @@ test("the app and Cargo package versions must remain aligned with the release ma
     tauriVersion: "0.1.1",
     cargoVersion: manifest.release_version,
   }), /tauriVersion version "0.1.1" must match release_version/);
+});
+
+test("the release manifest declares the reviewed defaults artifact as a sidecar input", () => {
+  assert.equal(
+    manifest.artifacts.sidecar.defaults_artifact,
+    "../backend/worktracker/reviewed_defaults.json",
+  );
+});
+
+test("missing, unparseable, and invalid defaults artifacts fail release-input validation", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "ticketry-release-defaults-"));
+  const invalidDefaults = structuredClone(reviewedDefaults);
+  invalidDefaults.workflows.Story.transitions = [["Idea", "Unknown state"]];
+  const cases = [
+    {
+      name: "missing",
+      path: path.join(temporaryRoot, "missing.json"),
+      message: /defaults artifact is missing or unreadable/,
+    },
+    {
+      name: "unparseable",
+      path: path.join(temporaryRoot, "unparseable.json"),
+      contents: "{ definitely not json",
+      message: /defaults artifact is not parseable JSON/,
+    },
+    {
+      name: "invalid but parseable",
+      path: path.join(temporaryRoot, "invalid.json"),
+      contents: JSON.stringify(invalidDefaults),
+      message: /Issue type 'Story' edge 'Idea -> Unknown state'/,
+    },
+  ];
+
+  try {
+    for (const fixture of cases) {
+      if (fixture.contents !== undefined) {
+        await writeFile(fixture.path, fixture.contents);
+      }
+      const invalidManifest = structuredClone(manifest);
+      invalidManifest.artifacts.sidecar.defaults_artifact = fixture.path;
+
+      await assert.rejects(
+        validateReleaseInputs(invalidManifest, undefined, {
+          includeFrontendOutputs: false,
+          allowUnsigned: true,
+        }),
+        (error) => {
+          assert.ok(error instanceof ReleaseDefaultsArtifactError, fixture.name);
+          assert.match(error.message, fixture.message);
+          return true;
+        },
+      );
+
+      const commands = [];
+      await assert.rejects(
+        buildRelease(invalidManifest, invalidManifest.targets, {
+          allowUnsigned: true,
+          execute: async (...command) => commands.push(command),
+        }),
+        ReleaseDefaultsArtifactError,
+      );
+      assert.deepEqual(commands, [], `${fixture.name} artifact ran a build command`);
+    }
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test("missing declared runtime resources and migrations fail validation", async () => {

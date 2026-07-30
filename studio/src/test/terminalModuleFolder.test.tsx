@@ -37,8 +37,10 @@ function folderPickerRuntime(
         message: null,
         logPointer: null,
       },
+      initialNotices: [],
     }),
     subscribeServiceHealth: () => () => {},
+    subscribeUserNotices: () => () => {},
   };
 }
 

@@ -3,6 +3,8 @@ import { readFile, rename, stat, writeFile } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { validateFinalizedDefaults } from "../backend/worktracker/reviewed_defaults_validator.mjs";
+
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number.parseInt(process.env.TICKETRY_REVIEW_PORT ?? "4174", 10);
 const host = "127.0.0.1";
@@ -21,36 +23,6 @@ function json(response, status, body) {
     "content-type": "application/json; charset=utf-8",
   });
   response.end(JSON.stringify(body));
-}
-
-function validateReview(value) {
-  if (!value || typeof value !== "object") return "Expected a JSON object.";
-  if (value.schemaVersion !== 1) return "Unsupported review schema.";
-  if (typeof value.agentsMd !== "string" || !value.agentsMd.trim()) {
-    return "AGENTS.md cannot be empty.";
-  }
-  if (!value.prompts || typeof value.prompts !== "object") {
-    return "Prompt matrix is missing.";
-  }
-  for (const type of ["Story", "PathFind", "Implementation"]) {
-    if (!value.prompts[type] || typeof value.prompts[type] !== "object") {
-      return `Prompt matrix is missing ${type}.`;
-    }
-    for (const state of [
-      "Idea",
-      "Refinement",
-      "Ready",
-      "Implement",
-      "Review",
-      "Done",
-      "Cancelled",
-    ]) {
-      if (typeof value.prompts[type][state] !== "string") {
-        return `Prompt matrix is missing ${type} · ${state}.`;
-      }
-    }
-  }
-  return null;
 }
 
 async function readBody(request) {
@@ -90,7 +62,6 @@ async function serveStatic(pathname, response, staticRoot) {
 
 export function createReviewHandler({
   staticRoot = root,
-  finalizedPath = join(root, "review-output.json"),
   productionDefaultsPath = join(
     root,
     "..",
@@ -100,8 +71,6 @@ export function createReviewHandler({
   ),
   agentsPath = join(root, "..", "AGENTS.md"),
 } = {}) {
-  const outputPath = resolve(finalizedPath);
-  const temporaryOutputPath = `${outputPath}.tmp`;
   const reviewedDefaultsPath = resolve(productionDefaultsPath);
   const temporaryReviewedDefaultsPath = `${reviewedDefaultsPath}.tmp`;
   const repositoryAgentsPath = resolve(agentsPath);
@@ -115,7 +84,7 @@ export function createReviewHandler({
       }
       if (url.pathname === "/api/finalized" && request.method === "GET") {
         try {
-          const review = JSON.parse(await readFile(outputPath, "utf8"));
+          const review = JSON.parse(await readFile(reviewedDefaultsPath, "utf8"));
           json(response, 200, { review });
         } catch (error) {
           if (error?.code === "ENOENT") {
@@ -128,17 +97,18 @@ export function createReviewHandler({
       }
       if (url.pathname === "/api/finalized" && request.method === "POST") {
         const review = JSON.parse(await readBody(request));
-        const validationError = validateReview(review);
-        if (validationError) {
-          json(response, 422, { error: validationError });
+        const validationErrors = validateFinalizedDefaults(review);
+        if (validationErrors.length) {
+          json(response, 422, {
+            error: validationErrors.join("\n"),
+            errors: validationErrors,
+          });
           return;
         }
         const serialized = `${JSON.stringify(review, null, 2)}\n`;
-        const serializedAgents = `${review.agentsMd.trimEnd()}\n`;
-        await writeFile(temporaryOutputPath, serialized, "utf8");
+        const serializedAgents = review.guidance;
         await writeFile(temporaryReviewedDefaultsPath, serialized, "utf8");
         await writeFile(temporaryAgentsPath, serializedAgents, "utf8");
-        await rename(temporaryOutputPath, outputPath);
         await rename(temporaryReviewedDefaultsPath, reviewedDefaultsPath);
         await rename(temporaryAgentsPath, repositoryAgentsPath);
         json(response, 200, {

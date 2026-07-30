@@ -8,12 +8,13 @@
       "required_outputs": ["dist/index.html"]
     },
     "tauri": {
-      "command": ["npx", "tauri", "build"],
+      "command": ["npx", "tauri", "build", "--features", "native-libghostty"],
       "binary_name": "ticketry",
       "bundle_formats": ["app", "dmg"]
     },
     "sidecar": {
       "build_script": "../backend/packaging/build-sidecar.sh",
+      "defaults_artifact": "../backend/worktracker/reviewed_defaults.json",
       "migration_directories": [
         "../backend/worktracker/migrations",
         "../backend/apps/documents/migrations",

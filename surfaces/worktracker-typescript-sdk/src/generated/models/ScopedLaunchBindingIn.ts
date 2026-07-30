@@ -22,7 +22,7 @@ import { mapValues } from '../runtime.js';
  */
 export interface ScopedLaunchBindingIn {
     /**
-     *
+     * 
      * @type {string}
      * @memberof ScopedLaunchBindingIn
      */
@@ -46,7 +46,7 @@ export interface ScopedLaunchBindingIn {
      */
     reasoning?: string | null;
     /**
-     *
+     * 
      * @type {Array<string>}
      * @memberof ScopedLaunchBindingIn
      */
@@ -105,3 +105,4 @@ export function ScopedLaunchBindingInToJSONTyped(value?: ScopedLaunchBindingIn |
         'workflow_revision': value['workflow_revision'],
     };
 }
+

@@ -18,6 +18,7 @@ import {
   HEADER,
   type Row,
 } from "../features/studio/pages/tasks/TasksPane";
+import { useConfigStore } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
@@ -176,6 +177,9 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
         ),
       ),
     );
+    useConfigStore.setState({
+      features: { sidebar: true, projects: true },
+    });
     useTasksStore.setState({
       selectedProjectId: "project-1",
       selectedModuleId: "module-1",
@@ -185,6 +189,7 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
       subtasks: {},
     });
     useUIStore.setState({
+      sidebarVisible: true,
       focusedPane: "details-or-terminal",
       modalStack: [],
       expandedTaskIds: new Set(),
@@ -263,6 +268,7 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
             kind: HEADER,
             key: "header-done",
             stateName: doneState.name,
+            stateColor: doneState.color ?? "",
             count: 1,
           },
         ]}

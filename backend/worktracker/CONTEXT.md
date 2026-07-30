@@ -56,9 +56,11 @@ _Avoid_: soft delete, hidden feature
 
 **Review finding**:
 A newly created Implementation work item that records a defect found while its
-parent Story is in Review and is intended to be resolved in a later campaign.
-It is not a separate issue type and follows the normal Implementation workflow.
-_Avoid_: AddressReview, comment, dependency
+parent Story is in Review. It is created in the Implementation start stage and
+is not a separate issue type; nothing distinguishes it from any other
+Implementation child once created. It carries no dependency edge and starts no
+agent — it is inert until a person kicks off implementation.
+_Avoid_: AddressReview, comment, dependency, queued state
 
 **Finding source location**:
 The repository-relative file path and inclusive start/end line range identifying
@@ -74,13 +76,28 @@ any graph run, and carries no execution-run or lifecycle data and no derived
 flags (such as a computed frontier).
 _Avoid_: graph run, execution status, ready/frontier flag, graph-status skill
 
-**Fix campaign**:
-The direct Implementation children bulk-moved from Ready to Implement when a
-person moves a parent Story from Review to Implement. Only children in
-Implement (or their subsequent review/terminal path) belong to that round;
-findings created later remain Ready for the next campaign. It is a scheduling
-boundary, not a snapshot of repository code.
-_Avoid_: code snapshot, review batch, persisted member list
+**Implementation kickoff**:
+The human act of moving a parent Story into the implementation stage and starting
+a dependency subtree run. It is the only thing that makes Implementation children
+runnable: children — including review findings — accumulate in the Implementation
+start stage and sit inert until a person kicks off. There is no bulk state move,
+no persisted round membership, and no snapshot of repository code.
+_Avoid_: fix campaign, bulk move, review batch, persisted member list, queue drain
+
+**Workflow stage**:
+A named workflow state as a person reads it in the task tree: an ordered position
+carrying its own icon, its own launch prompt, and at most one pinned upstream
+skill. Stage is the presentation-and-launch reading of a workflow state; it adds
+no second identity and no separate storage.
+_Avoid_: phase, step, lifecycle stage, column
+
+**Refinement chain**:
+The three consecutive Story stages — Grill, Spec, Tickets — that turn an idea
+into dependency-ordered Implementation children, one stage per skill and one
+stage per deliverable. Entering Spec or Tickets starts its agent automatically,
+so the chain advances without a relaunch; it halts at Tickets because leaving it
+is an Implementation kickoff and therefore a human-only move.
+_Avoid_: refinement state, planning phase, grooming, auto-pipeline
 
 **Per-type transition map**:
 The complete set of allowed state transitions owned by one issue type — one

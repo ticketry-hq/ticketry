@@ -230,4 +230,8 @@ class InMemorySessionService:
                 run.status = "exited"
                 run.ended_at = "now"
             self.stopped_watchers.append(run_id)
-        return SimpleNamespace(soft_deleted=reaped, killed_orphans=[])
+        return SimpleNamespace(
+            soft_deleted=reaped,
+            untracked=[],
+            inventory_available=True,
+        )

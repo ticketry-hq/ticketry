@@ -1,8 +1,20 @@
 import React from "react";
 import type { DropTargetProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
+import {
+  IconCheckCircle,
+  IconGrill,
+  IconImplement,
+  IconList,
+  IconReview,
+  IconSpec,
+  IconTickets,
+  IconX,
+  type IconProps,
+} from "../../../../../shared/ui/icons";
 
 interface StateHeaderRowProps {
   stateName: string;
+  stateColor: string;
   count: number;
   isCollapsed: boolean;
   // Name-taking handler so the parent can pass one stable callback to every
@@ -12,14 +24,35 @@ interface StateHeaderRowProps {
   showDropSeam?: boolean;
 }
 
+const STAGE_ICON_BY_NAME: Readonly<
+  Record<string, React.ComponentType<IconProps>>
+> = {
+  Grill: IconGrill,
+  Spec: IconSpec,
+  Tickets: IconTickets,
+  Implement: IconImplement,
+  Review: IconReview,
+  Done: IconCheckCircle,
+  Cancelled: IconX,
+};
+
+export function stageIconForName(
+  stateName: string,
+): React.ComponentType<IconProps> {
+  return STAGE_ICON_BY_NAME[stateName] ?? IconList;
+}
+
 export const StateHeaderRow = React.memo(function StateHeaderRow({
   stateName,
+  stateColor,
   count,
   isCollapsed,
   onToggle,
   dropTargetProps,
   showDropSeam = false,
 }: StateHeaderRowProps) {
+  const StageIcon = stageIconForName(stateName);
+
   return (
     <li
       role="button"
@@ -38,6 +71,14 @@ export const StateHeaderRow = React.memo(function StateHeaderRow({
       ) : null}
       <span className="mr-1 inline-block w-4 shrink-0 text-center text-text-muted">
         {isCollapsed ? "▸" : "▾"}
+      </span>
+      <span
+        data-stage-icon={stateName}
+        aria-hidden="true"
+        className="mr-1 inline-flex w-4 shrink-0 items-center justify-center"
+        style={{ color: stateColor }}
+      >
+        <StageIcon />
       </span>
       <span className="font-bold">{stateName}</span>
       <span className="ml-2 text-text-muted">{count}</span>

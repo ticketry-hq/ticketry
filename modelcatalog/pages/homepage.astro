@@ -1,0 +1,28 @@
+---
+import DataModel from '../custom-defined-components/DataModel.astro';
+import UbiquitousLanguage from '../custom-defined-components/UbiquitousLanguage.astro';
+---
+
+<div class="not-prose mb-8 pb-5 border-b border-[rgb(var(--ec-page-border))]">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <div class="text-xs font-semibold uppercase tracking-[0.18em] text-[rgb(var(--ec-accent))]">
+        Ticketry model atlas
+      </div>
+      <h1 class="mt-2 text-3xl md:text-5xl font-bold text-[rgb(var(--ec-page-text))]">
+        Data and language. Nothing else.
+      </h1>
+    </div>
+    <nav class="flex items-center gap-2" aria-label="Model atlas sections">
+      <a href="#data-model" class="rounded-lg border border-[rgb(var(--ec-page-border))] px-3 py-2 text-sm font-medium text-[rgb(var(--ec-page-text))] hover:border-[rgb(var(--ec-accent)/0.5)]">
+        Data model
+      </a>
+      <a href="#ubiquitous-language" class="rounded-lg border border-[rgb(var(--ec-page-border))] px-3 py-2 text-sm font-medium text-[rgb(var(--ec-page-text))] hover:border-[rgb(var(--ec-accent)/0.5)]">
+        Ubiquitous language
+      </a>
+    </nav>
+  </div>
+</div>
+
+<DataModel />
+<UbiquitousLanguage />

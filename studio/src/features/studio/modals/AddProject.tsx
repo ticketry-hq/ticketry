@@ -62,10 +62,14 @@ export function AddProject() {
         <input
           value={key}
           onChange={(event) => setKey(event.target.value)}
+          maxLength={3}
           placeholder="Project key"
           spellCheck={false}
           className="mt-1 w-full bg-pane-bg px-2 py-1 font-mono text-sm uppercase text-text-primary outline-none ring-1 ring-pane-border focus:ring-focus-accent"
         />
+        <span className="mt-1 block text-xs text-text-muted">
+          Project key must be exactly three letters, using only A-Z.
+        </span>
       </label>
       {error && (
         <div className="mt-2 text-sm text-red-400" role="alert">

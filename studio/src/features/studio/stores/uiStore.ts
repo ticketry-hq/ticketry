@@ -7,7 +7,12 @@ import {
   putExpandedSubtasks,
 } from "../lib/api";
 import { taskRevealPath } from "../lib/taskTree";
-import { useConfigStore } from "./configStore";
+import {
+  isSidebarEnabled,
+  sidebarPaneComposition,
+  type SidebarPaneComposition,
+  useConfigStore,
+} from "./configStore";
 import { useTasksStore } from "./tasksStore";
 import { readVersionedItem } from "../../../shared/storage/versioned";
 
@@ -203,24 +208,34 @@ interface UIStoreState {
 export function visiblePaneOrder(
   sidebarVisible: boolean,
   hasSelectedProject: boolean,
-  projectsEnabled: boolean,
+  paneComposition: SidebarPaneComposition,
 ): FocusedPane[] {
-  if (!sidebarVisible) {
-    return PANE_ORDER.filter((p) => p !== "projects" && p !== "modules");
+  if (!sidebarVisible) return ["tasks", "details-or-terminal"];
+
+  switch (paneComposition) {
+    case "absent":
+      return ["tasks", "details-or-terminal"];
+    case "modules":
+      return PANE_ORDER.filter(
+        (pane) => pane !== "projects" && (hasSelectedProject || pane !== "modules"),
+      );
+    case "projects-and-modules":
+      return PANE_ORDER.filter(
+        (pane) => hasSelectedProject || pane !== "modules",
+      );
   }
-  return PANE_ORDER.filter(
-    (pane) =>
-      (projectsEnabled || pane !== "projects") &&
-      (hasSelectedProject || pane !== "modules"),
-  );
 }
 
 function hasProject(): boolean {
   return useTasksStore.getState().selectedProjectId != null;
 }
 
-function projectsEnabled(): boolean {
-  return useConfigStore.getState().features.projects;
+function currentSidebarPaneComposition(): SidebarPaneComposition {
+  const config = useConfigStore.getState();
+  return sidebarPaneComposition(
+    config.features.projects,
+    isSidebarEnabled(config),
+  );
 }
 
 export const useUIStore = create<UIStoreState>((set, get) => ({
@@ -243,11 +258,11 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
   focusLeft() {
     const { focusedPane, sidebarVisible } = get();
     const hasProj = hasProject();
-    const projectsAreEnabled = projectsEnabled();
+    const paneComposition = currentSidebarPaneComposition();
     const order = visiblePaneOrder(
       sidebarVisible,
       hasProj,
-      projectsAreEnabled,
+      paneComposition,
     );
     const idx = order.indexOf(focusedPane);
     if (idx > 0) {
@@ -257,7 +272,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
     // At (or past) leftmost visible: if sidebar is collapsed, re-show it and
     // jump focus to Modules (or Projects if no project). Mirrors TUI
     // action_focus_left's re-show clause.
-    if (!sidebarVisible) {
+    if (!sidebarVisible && paneComposition !== "absent") {
       try {
         localStorage.setItem(SIDEBAR_KEY, "true");
       } catch {
@@ -266,7 +281,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
       set({
         sidebarVisible: true,
         focusedPane:
-          hasProj || !projectsAreEnabled ? "modules" : "projects",
+          hasProj || paneComposition === "modules" ? "modules" : "projects",
       });
     }
   },
@@ -276,7 +291,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
     const order = visiblePaneOrder(
       sidebarVisible,
       hasProject(),
-      projectsEnabled(),
+      currentSidebarPaneComposition(),
     );
     const idx = order.indexOf(focusedPane);
     if (idx >= 0 && idx < order.length - 1) {
@@ -304,7 +319,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
     set({
       editViewBodyEngaged:
         engaged &&
-        !state.sidebarVisible &&
+        (!isSidebarEnabled() || !state.sidebarVisible) &&
         state.editViewZone === "active-tab-body",
     });
   },

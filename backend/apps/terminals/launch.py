@@ -216,13 +216,16 @@ async def _launch(
                 message="The provider lifecycle or MCP configuration could not be created.",
             ) from exc
         raise
-    final_argv = [str(item) for item in augmentation.argv]
-    if augmentation.environment:
-        final_argv = [
-            "env",
-            *(f"{name}={value}" for name, value in augmentation.environment),
-            *final_argv,
-        ]
+    # Ticketry is often launched by an agent host that sets NO_COLOR for its
+    # own captured output. Do not leak that host-only preference into the
+    # interactive agent terminal, whose tmux/libghostty path advertises color.
+    final_argv = [
+        "env",
+        "-u",
+        "NO_COLOR",
+        *(f"{name}={value}" for name, value in augmentation.environment),
+        *(str(item) for item in augmentation.argv),
+    ]
     command = shlex.join(final_argv)
 
     run = AgentRun(

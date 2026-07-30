@@ -40,6 +40,8 @@ __all__ = [
     "AddWorkflowTransitionIn",
     "AssigneeOut",
     "AttachmentOut",
+    "ConfigBody",
+    "FeaturesBody",
     "IssueTypeIn",
     "IssueTypeOut",
     "IssueTypePatch",
@@ -50,6 +52,7 @@ __all__ = [
     "ModuleIn",
     "ModuleOut",
     "ModuleWorkItemIn",
+    "ProfileBody",
     "ProjectIn",
     "ProjectOut",
     "ProjectPatch",
@@ -114,6 +117,8 @@ from worktracker_sdk.generated.exceptions import ApiException as ApiException
 from worktracker_sdk.generated.models.add_workflow_transition_in import AddWorkflowTransitionIn as AddWorkflowTransitionIn
 from worktracker_sdk.generated.models.assignee_out import AssigneeOut as AssigneeOut
 from worktracker_sdk.generated.models.attachment_out import AttachmentOut as AttachmentOut
+from worktracker_sdk.generated.models.config_body import ConfigBody as ConfigBody
+from worktracker_sdk.generated.models.features_body import FeaturesBody as FeaturesBody
 from worktracker_sdk.generated.models.issue_type_in import IssueTypeIn as IssueTypeIn
 from worktracker_sdk.generated.models.issue_type_out import IssueTypeOut as IssueTypeOut
 from worktracker_sdk.generated.models.issue_type_patch import IssueTypePatch as IssueTypePatch
@@ -124,6 +129,7 @@ from worktracker_sdk.generated.models.message_error import MessageError as Messa
 from worktracker_sdk.generated.models.module_in import ModuleIn as ModuleIn
 from worktracker_sdk.generated.models.module_out import ModuleOut as ModuleOut
 from worktracker_sdk.generated.models.module_work_item_in import ModuleWorkItemIn as ModuleWorkItemIn
+from worktracker_sdk.generated.models.profile_body import ProfileBody as ProfileBody
 from worktracker_sdk.generated.models.project_in import ProjectIn as ProjectIn
 from worktracker_sdk.generated.models.project_out import ProjectOut as ProjectOut
 from worktracker_sdk.generated.models.project_patch import ProjectPatch as ProjectPatch

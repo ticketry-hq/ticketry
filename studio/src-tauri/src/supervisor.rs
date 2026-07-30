@@ -28,6 +28,7 @@ const MCP_URL_ENV: &str = "WORKTRACKER_MCP_URL";
 const READINESS_PREFIX: &str = "MUXED_READY service=backend port=";
 const FAILURE_PREFIX: &str = "MUXED_FAILURE ";
 const SIDECAR_LOG_FILE_NAME: &str = "sidecar.log";
+const MCP_PORT_FILE_NAME: &str = "mcp-port";
 const MCP_RESPONSE_LIMIT_BYTES: usize = 64 * 1024;
 const READINESS_TERMINAL_DRAIN: Duration = Duration::from_millis(50);
 
@@ -99,6 +100,10 @@ pub enum SupervisorEvent {
     },
     SidecarLogUnavailable {
         message: String,
+    },
+    McpPortRollover {
+        previous_port: u16,
+        active_port: u16,
     },
     ShutdownTermRequested {
         service: String,
@@ -183,6 +188,7 @@ pub struct CommandTable {
     backend: BackendCommand,
     mcp: Option<BackendCommand>,
     sidecar_log_path: PathBuf,
+    mcp_port_path: PathBuf,
 }
 
 impl CommandTable {
@@ -216,6 +222,7 @@ impl CommandTable {
             },
             mcp: None,
             sidecar_log_path: sidecar_log_path(data_dir),
+            mcp_port_path: data_dir.join(MCP_PORT_FILE_NAME),
         })
     }
 
@@ -266,6 +273,13 @@ impl CommandTable {
                 pass_port_argument: false,
             },
             mcp: None,
+            mcp_port_path: sidecar_log_path.with_file_name(format!(
+                "{}.mcp-port",
+                sidecar_log_path
+                    .file_name()
+                    .expect("stub sidecar log path has a file name")
+                    .to_string_lossy()
+            )),
             sidecar_log_path,
         }
     }
@@ -482,6 +496,11 @@ struct RunningChild {
     port: u16,
 }
 
+struct McpPortReservation {
+    listener: TcpListener,
+    rollover_from: Option<u16>,
+}
+
 struct LivenessProbe {
     stopped: Arc<AtomicBool>,
     consecutive_failures: Arc<AtomicUsize>,
@@ -504,6 +523,9 @@ pub struct Supervisor {
     running_mcp: Option<RunningChild>,
     pinned_port: Option<u16>,
     pinned_mcp_port: Option<u16>,
+    persisted_mcp_port: Option<u16>,
+    persist_mcp_port: bool,
+    launched_once: bool,
     liveness_probe: Option<LivenessProbe>,
     restarts: usize,
     next_recovery: Option<(String, Instant)>,
@@ -524,6 +546,10 @@ impl Supervisor {
     ) -> Result<Self, SupervisorError> {
         let credential = generate_credential();
         let log_path = commands.sidecar_log_path.clone();
+        let persist_mcp_port = commands.mcp.is_some() && options.mcp_port_candidates.is_empty();
+        let persisted_mcp_port = persist_mcp_port
+            .then(|| read_persisted_mcp_port(&commands.mcp_port_path))
+            .flatten();
         let logs = CapturedLogs::new(
             options.log_limit_bytes,
             options.sidecar_log_limit_bytes,
@@ -550,7 +576,10 @@ impl Supervisor {
             running: None,
             running_mcp: None,
             pinned_port: None,
-            pinned_mcp_port: None,
+            pinned_mcp_port: persisted_mcp_port,
+            persisted_mcp_port,
+            persist_mcp_port,
+            launched_once: false,
             liveness_probe: None,
             restarts: 0,
             next_recovery: None,
@@ -568,7 +597,8 @@ impl Supervisor {
         }
         self.shutting_down = false;
         self.pinned_port = None;
-        self.pinned_mcp_port = None;
+        self.pinned_mcp_port = self.persisted_mcp_port;
+        self.launched_once = false;
         self.restarts = 0;
         self.next_recovery = None;
         self.healthy_since = None;
@@ -577,25 +607,33 @@ impl Supervisor {
             .lock()
             .expect("logs lock poisoned")
             .replace_secret(self.credential.clone());
-        self.spawn_supervised_pair()?;
+        self.spawn_supervised_pair(true)?;
+        self.launched_once = true;
         self.healthy_since = Some(Instant::now());
         Ok(())
     }
 
-    fn spawn_supervised_pair(&mut self) -> Result<(), SupervisorError> {
+    fn spawn_supervised_pair(
+        &mut self,
+        allow_persisted_fallback: bool,
+    ) -> Result<(), SupervisorError> {
         let mcp_reservation = self
             .commands
             .mcp
             .as_ref()
-            .map(|_| self.reserve_mcp_port())
+            .map(|_| self.reserve_mcp_port(allow_persisted_fallback))
             .transpose()
             .map_err(|error| self.record_service_failure("mcp", error))?;
-        let mcp_port = mcp_reservation.as_ref().map(|listener| {
-            listener
+        let mcp_port = mcp_reservation.as_ref().map(|reservation| {
+            reservation
+                .listener
                 .local_addr()
                 .expect("MCP reservation has local address")
                 .port()
         });
+        let rollover_from = mcp_reservation
+            .as_ref()
+            .and_then(|reservation| reservation.rollover_from);
         self.running = Some(
             self.spawn_and_wait(mcp_port)
                 .map_err(|error| self.record_failure(error))?,
@@ -603,7 +641,18 @@ impl Supervisor {
         if let Some(port) = mcp_port {
             drop(mcp_reservation);
             match self.spawn_mcp_and_wait(port) {
-                Ok(running) => self.running_mcp = Some(running),
+                Ok(running) => {
+                    self.running_mcp = Some(running);
+                    if let Err(error) = self.commit_mcp_port(port, rollover_from) {
+                        if let Some(mut mcp) = self.running_mcp.take() {
+                            let _ = stop_and_reap(&mut mcp.child);
+                        }
+                        if let Some(mut backend) = self.running.take() {
+                            let _ = stop_and_reap(&mut backend.child);
+                        }
+                        return Err(self.record_service_failure("mcp", error));
+                    }
+                }
                 Err(error) => {
                     if let Some(mut backend) = self.running.take() {
                         let _ = stop_and_reap(&mut backend.child);
@@ -719,7 +768,7 @@ impl Supervisor {
                 });
             }
         }
-        match self.spawn_supervised_pair() {
+        match self.spawn_supervised_pair(false) {
             Ok(()) => {
                 self.healthy_since = Some(Instant::now());
                 Ok(())
@@ -759,7 +808,8 @@ impl Supervisor {
         self.restarts = 0;
         self.next_recovery = None;
         self.healthy_since = None;
-        self.spawn_supervised_pair()?;
+        self.spawn_supervised_pair(!self.launched_once)?;
+        self.launched_once = true;
         self.healthy_since = Some(Instant::now());
         Ok(())
     }
@@ -1105,16 +1155,111 @@ impl Supervisor {
         }
     }
 
-    fn reserve_mcp_port(&self) -> Result<TcpListener, SupervisorError> {
+    fn reserve_mcp_port(
+        &self,
+        allow_persisted_fallback: bool,
+    ) -> Result<McpPortReservation, SupervisorError> {
         match self.pinned_mcp_port {
-            Some(port) => reserve_pinned_loopback_port(
-                port,
-                self.options.bind_retry_timeout,
-                self.options.bind_retry_interval,
-            ),
-            None => reserve_loopback_port(&self.options.mcp_port_candidates),
+            Some(port) => {
+                match reserve_pinned_loopback_port(
+                    port,
+                    self.options.bind_retry_timeout,
+                    self.options.bind_retry_interval,
+                ) {
+                    Ok(listener) => Ok(McpPortReservation {
+                        listener,
+                        rollover_from: None,
+                    }),
+                    Err(error)
+                        if allow_persisted_fallback
+                            && self.persist_mcp_port
+                            && self.persisted_mcp_port == Some(port) =>
+                    {
+                        Ok(McpPortReservation {
+                            listener: reserve_loopback_port(&self.options.mcp_port_candidates)?,
+                            rollover_from: Some(port),
+                        })
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            None => Ok(McpPortReservation {
+                listener: reserve_loopback_port(&self.options.mcp_port_candidates)?,
+                rollover_from: None,
+            }),
         }
     }
+
+    fn commit_mcp_port(
+        &mut self,
+        active_port: u16,
+        rollover_from: Option<u16>,
+    ) -> Result<(), SupervisorError> {
+        if self.persist_mcp_port && self.persisted_mcp_port != Some(active_port) {
+            persist_mcp_port_atomically(&self.commands.mcp_port_path, active_port)?;
+            self.persisted_mcp_port = Some(active_port);
+        }
+        self.pinned_mcp_port = Some(active_port);
+        if let Some(previous_port) = rollover_from.filter(|port| *port != active_port) {
+            self.emit(SupervisorEvent::McpPortRollover {
+                previous_port,
+                active_port,
+            });
+        }
+        Ok(())
+    }
+}
+
+fn read_persisted_mcp_port(path: &Path) -> Option<u16> {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|value| value.trim().parse::<u16>().ok())
+        .filter(|port| *port > 0)
+}
+
+fn persist_mcp_port_atomically(path: &Path, port: u16) -> Result<(), SupervisorError> {
+    let parent = path.parent().ok_or_else(|| {
+        SupervisorError::new(
+            FailureKind::Crash,
+            "MCP port persistence path has no parent directory",
+        )
+    })?;
+    fs::create_dir_all(parent).map_err(|error| {
+        SupervisorError::new(
+            FailureKind::Crash,
+            format!("could not create MCP port persistence directory: {error}"),
+        )
+    })?;
+    let temporary = path.with_file_name(format!(
+        ".{}.{}.{}.tmp",
+        path.file_name()
+            .expect("MCP port persistence path has a file name")
+            .to_string_lossy(),
+        std::process::id(),
+        rand::thread_rng().gen::<u64>()
+    ));
+    let write_result = (|| -> std::io::Result<()> {
+        let mut options = OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&temporary)?;
+        writeln!(file, "{port}")?;
+        file.sync_all()?;
+        fs::rename(&temporary, path)?;
+        #[cfg(unix)]
+        File::open(parent)?.sync_all()?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    write_result.map_err(|error| {
+        SupervisorError::new(
+            FailureKind::Crash,
+            format!("could not persist MCP port selection: {error}"),
+        )
+    })
 }
 
 fn backend_health_probe_succeeds(port: u16, timeout: Duration) -> bool {
@@ -1528,6 +1673,45 @@ mod tests {
         }
     }
 
+    fn production_mcp_options() -> SupervisorOptions {
+        let mut options = fast_options();
+        options.mcp_port_candidates.clear();
+        options
+    }
+
+    #[test]
+    fn contract_atomically_replaces_the_persisted_mcp_port() {
+        let path = unique_temp_path("supervisor-mcp-port");
+
+        persist_mcp_port_atomically(&path, 43_219).expect("persist first MCP port");
+        persist_mcp_port_atomically(&path, 43_220).expect("replace MCP port");
+
+        assert_eq!(read_persisted_mcp_port(&path), Some(43_220));
+        assert_eq!(
+            fs::read_dir(path.parent().expect("temporary parent"))
+                .expect("read temporary parent")
+                .filter_map(Result::ok)
+                .filter(|entry| {
+                    entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".supervisor-mcp-port")
+                })
+                .count(),
+            0
+        );
+        #[cfg(unix)]
+        assert_eq!(
+            fs::metadata(&path)
+                .expect("persisted MCP port metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+        fs::remove_file(path).expect("remove persisted MCP port");
+    }
+
     fn until(mut predicate: impl FnMut() -> bool) {
         let deadline = Instant::now() + Duration::from_secs(2);
         while !predicate() {
@@ -1580,6 +1764,140 @@ mod tests {
         supervisor.launch().expect("retries MCP port");
         assert_ne!(supervisor.mcp_port(), Some(blocked_port));
         supervisor.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn contract_persists_and_reuses_the_mcp_port_with_the_same_injected_url() {
+        let _guard = MCP_TEST_LOCK.lock().expect("MCP test lock");
+        let table = stub_table_with_mcp();
+        let port_path = table.mcp_port_path.clone();
+        let mut first = Supervisor::new(table.clone(), production_mcp_options());
+
+        first.launch().expect("first packaged launch");
+        let selected_port = first.mcp_port().expect("first MCP port");
+        assert_eq!(
+            fs::read_to_string(&port_path)
+                .expect("persisted MCP port")
+                .trim(),
+            selected_port.to_string()
+        );
+        first.shutdown().expect("first shutdown");
+
+        let mut fresh = Supervisor::new(table, production_mcp_options());
+        fresh.launch().expect("fresh supervisor launch");
+
+        assert_eq!(fresh.mcp_port(), Some(selected_port));
+        assert!(fresh
+            .logs()
+            .iter()
+            .any(|line| { line == &format!("stub-mcp-url=http://127.0.0.1:{selected_port}/mcp") }));
+        assert!(!fresh
+            .events()
+            .iter()
+            .any(|event| matches!(event, SupervisorEvent::McpPortRollover { .. })));
+        fresh.shutdown().expect("fresh supervisor shutdown");
+        let _ = fs::remove_file(port_path);
+    }
+
+    #[test]
+    fn contract_rolls_over_an_occupied_persisted_mcp_port_after_readiness() {
+        let _guard = MCP_TEST_LOCK.lock().expect("MCP test lock");
+        let occupied = TcpListener::bind("127.0.0.1:0").expect("occupy persisted port");
+        let previous_port = occupied.local_addr().expect("occupied address").port();
+        let table = stub_table_with_mcp();
+        persist_mcp_port_atomically(&table.mcp_port_path, previous_port)
+            .expect("seed persisted MCP port");
+        let mut supervisor = Supervisor::new(table.clone(), production_mcp_options());
+
+        supervisor.launch().expect("collision falls back");
+
+        let active_port = supervisor.mcp_port().expect("fallback MCP port");
+        assert_ne!(active_port, previous_port);
+        assert_eq!(
+            read_persisted_mcp_port(&table.mcp_port_path),
+            Some(active_port)
+        );
+        let rollover_facts = supervisor
+            .events()
+            .into_iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    SupervisorEvent::McpPortRollover {
+                        previous_port: actual_previous,
+                        active_port: actual_active,
+                    } if *actual_previous == previous_port && *actual_active == active_port
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rollover_facts.len(), 1);
+        let serialized = serde_json::to_string(&rollover_facts[0]).expect("serialize fact");
+        assert_eq!(
+            serialized,
+            format!(
+                r#"{{"type":"mcp_port_rollover","previous_port":{previous_port},"active_port":{active_port}}}"#
+            )
+        );
+        assert!(!serialized.contains(supervisor.credential()));
+        supervisor.shutdown().expect("shutdown");
+        let _ = fs::remove_file(table.mcp_port_path);
+    }
+
+    #[test]
+    fn contract_failed_fallback_keeps_the_previous_persisted_mcp_port() {
+        let _guard = MCP_TEST_LOCK.lock().expect("MCP test lock");
+        let occupied = TcpListener::bind("127.0.0.1:0").expect("occupy persisted port");
+        let previous_port = occupied.local_addr().expect("occupied address").port();
+        let mut table = stub_table_with_mcp();
+        persist_mcp_port_atomically(&table.mcp_port_path, previous_port)
+            .expect("seed persisted MCP port");
+        table.mcp.as_mut().expect("MCP command").environment = vec![(
+            OsString::from("MUXED_STUB_MODE"),
+            OsString::from("mcp-exits"),
+        )];
+        let mut supervisor = Supervisor::new(table.clone(), production_mcp_options());
+
+        supervisor
+            .launch()
+            .expect_err("failed MCP readiness must fail fallback");
+
+        assert_eq!(
+            read_persisted_mcp_port(&table.mcp_port_path),
+            Some(previous_port)
+        );
+        assert!(!supervisor
+            .events()
+            .iter()
+            .any(|event| matches!(event, SupervisorEvent::McpPortRollover { .. })));
+        let _ = fs::remove_file(table.mcp_port_path);
+    }
+
+    #[test]
+    fn contract_explicit_mcp_port_is_authoritative_and_does_not_replace_persistence() {
+        let _guard = MCP_TEST_LOCK.lock().expect("MCP test lock");
+        let table = stub_table_with_mcp();
+        let previous_port = select_loopback_port(&[]).expect("previous persisted port");
+        persist_mcp_port_atomically(&table.mcp_port_path, previous_port)
+            .expect("seed persisted MCP port");
+        let explicit_port = select_loopback_port(&[]).expect("explicit MCP port");
+        assert_ne!(explicit_port, previous_port);
+        let mut options = fast_options();
+        options.mcp_port_candidates = vec![explicit_port];
+        let mut supervisor = Supervisor::new(table.clone(), options);
+
+        supervisor.launch().expect("explicit MCP launch");
+
+        assert_eq!(supervisor.mcp_port(), Some(explicit_port));
+        assert_eq!(
+            read_persisted_mcp_port(&table.mcp_port_path),
+            Some(previous_port)
+        );
+        assert!(!supervisor
+            .events()
+            .iter()
+            .any(|event| matches!(event, SupervisorEvent::McpPortRollover { .. })));
+        supervisor.shutdown().expect("shutdown");
+        let _ = fs::remove_file(table.mcp_port_path);
     }
 
     #[test]
@@ -2102,6 +2420,10 @@ mod tests {
         assert_eq!(supervisor.port(), Some(backend_port));
         assert_eq!(supervisor.mcp_port(), Some(mcp_port));
         assert_eq!(supervisor.credential(), credential);
+        assert!(!supervisor
+            .events()
+            .iter()
+            .any(|event| matches!(event, SupervisorEvent::McpPortRollover { .. })));
         for service in ["backend", "mcp"] {
             assert!(supervisor.events().iter().any(|event| matches!(
                 event,

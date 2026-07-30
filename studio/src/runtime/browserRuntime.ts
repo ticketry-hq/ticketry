@@ -75,6 +75,7 @@ export function createBrowserRuntime({
       message: null,
       logPointer: null,
     }),
+    initialNotices: Object.freeze([]),
   });
 
   return Object.freeze({
@@ -96,5 +97,6 @@ export function createBrowserRuntime({
       listener(startup.serviceHealth);
       return () => {};
     },
+    subscribeUserNotices: () => () => {},
   });
 }

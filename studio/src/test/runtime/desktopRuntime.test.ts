@@ -17,6 +17,17 @@ function startupConfiguration() {
       message: null,
       logPointer: null,
     },
+    initialNotices: [],
+  };
+}
+
+function userNotice(id = "notice-1") {
+  return {
+    id,
+    severity: "warning",
+    title: "Runtime notice",
+    message: "Something important happened.",
+    acknowledgementLabel: "Understood",
   };
 }
 
@@ -47,6 +58,7 @@ describe("desktop runtime contract", () => {
         message: null,
         logPointer: null,
       },
+      initialNotices: [],
     });
   });
 
@@ -134,5 +146,57 @@ describe("desktop runtime contract", () => {
     await expect(createDesktopRuntime({ invoke })).rejects.toThrowError(
       "Desktop initialization failed: agentApi must be a loopback HTTP(S) URL",
     );
+  });
+
+  it("retains valid initial notices and ignores malformed or duplicate entries", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      ...startupConfiguration(),
+      initialNotices: [
+        userNotice("startup-1"),
+        { ...userNotice("startup-1"), title: "Duplicate" },
+        { ...userNotice("invalid-severity"), severity: "urgent" },
+        { ...userNotice("invalid-id"), id: "contains spaces" },
+        null,
+      ],
+    });
+
+    const runtime = await createDesktopRuntime({ invoke });
+
+    expect(runtime.startup().initialNotices).toEqual([userNotice("startup-1")]);
+  });
+
+  it("delivers later valid notices and drops malformed or previously seen ids", async () => {
+    let noticeHandler: ((event: { payload: unknown }) => void) | undefined;
+    const stop = vi.fn();
+    const listen = vi.fn().mockImplementation(
+      async (
+        event: "desktop-service-health" | "desktop-user-notice",
+        handler: (event: { payload: unknown }) => void,
+      ) => {
+        if (event === "desktop-user-notice") noticeHandler = handler;
+        return stop;
+      },
+    );
+    const invoke = vi.fn().mockResolvedValue({
+      ...startupConfiguration(),
+      initialNotices: [userNotice("startup-1")],
+    });
+    const runtime = await createDesktopRuntime({ invoke, listen });
+    const listener = vi.fn();
+
+    const unsubscribe = runtime.subscribeUserNotices(listener);
+    await vi.waitFor(() => expect(noticeHandler).toBeDefined());
+    noticeHandler?.({ payload: userNotice("later-1") });
+    noticeHandler?.({ payload: userNotice("later-1") });
+    noticeHandler?.({ payload: userNotice("startup-1") });
+    noticeHandler?.({
+      payload: { ...userNotice("malformed"), acknowledgementLabel: "" },
+    });
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledWith(userNotice("later-1"));
+
+    unsubscribe();
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
   });
 });

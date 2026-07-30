@@ -1,10 +1,13 @@
-"""Shared seed helpers for the configurable types & state order (S6, G1/G2).
+"""Shared project-row materializers for reviewed and canonical defaults.
 
-The project-create route and data migration backfills call into these so the
-project-owned defaults are written once. Each
-helper takes its model class explicitly — passing ``apps.get_model(...)`` from a
-migration or the live model from the service — so the logic is identical in
-both worlds. Every helper is idempotent: a second run changes nothing.
+Workflow graphs, launch prompts, state and issue-type vocabulary, and default
+skill requirements all enter through ``worktracker/reviewed_defaults.json``.
+The project-create route and data migration backfills call into these helpers
+so project-owned defaults are written once. Each helper takes its model class
+explicitly — passing
+``apps.get_model(...)`` from a migration or the live model from the service —
+so the logic is identical in both worlds. Every helper is idempotent: a second
+run changes nothing.
 """
 
 import uuid
@@ -14,7 +17,10 @@ from worktracker.models import (
     DEFAULT_STATES,
     PROTECTED_STATE_KEYS,
 )
-from worktracker.launch_seeds import default_agent_prompt
+from worktracker.launch_seeds import (
+    DEFAULT_AUTO_START_BY_STATE,
+    default_agent_prompt,
+)
 from worktracker.required_skills import DEFAULT_REQUIRED_SKILLS
 from worktracker.workflow_seeds import DEFAULT_WORKFLOW_TEMPLATES
 
@@ -74,7 +80,7 @@ def ensure_issue_types(project, IssueType, Issue=None):
 
 
 def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
-    """Write the legacy known prompt behavior as explicit project policy rows.
+    """Write the reviewed launch defaults as explicit project policy rows.
 
     Only canonical task types and canonical states are selected. Custom types
     and states are deliberately ignored, and existing rows are never replaced.
@@ -96,6 +102,9 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
         field.name == "required_skills"
         for field in LaunchBinding._meta.get_fields()
     )
+    supports_auto_start = any(
+        field.name == "auto_start" for field in LaunchBinding._meta.get_fields()
+    )
     for issue_type in issue_types:
         for state in states:
             defaults = {
@@ -109,6 +118,10 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
             if supports_required_skills:
                 defaults["required_skills"] = list(
                     DEFAULT_REQUIRED_SKILLS.get(state.name, ())
+                )
+            if supports_auto_start:
+                defaults["auto_start"] = DEFAULT_AUTO_START_BY_STATE.get(
+                    state.name, False
                 )
             LaunchBinding.objects.get_or_create(
                 issue_type=issue_type,
@@ -154,7 +167,11 @@ def ensure_type_workflows(project, IssueType, State, IssueTypeTransition):
                     issue_type=issue_type,
                     from_state=states[source],
                     to_state=states[target],
-                    defaults={"agent_allowed": True},
+                    defaults={
+                        "agent_allowed": template["agent_allowed"].get(
+                            (source, target), True
+                        )
+                    },
                 )
 
 

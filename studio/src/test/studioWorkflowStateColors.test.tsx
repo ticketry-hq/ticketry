@@ -15,11 +15,7 @@ import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStor
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => <span data-testid="agent-lifecycle" />,
   AutomationFailureChicklet: () => null,
-}));
-
-vi.mock("../features/agents/terminal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/agents/terminal")>()),
-  useScratchAgentCount: () => 0,
+  ScratchStateBadge: () => null,
 }));
 
 vi.mock("../features/studio/lib/api", async (importOriginal) => ({

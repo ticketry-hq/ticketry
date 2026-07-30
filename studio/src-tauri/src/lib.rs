@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::HashSet;
 use std::env::{self, VarError};
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -33,6 +34,7 @@ const PACKAGED_HOOK_RUNNER_ENV: &str = "MUXED_PACKAGED_HOOK_RUNNER";
 const HOOK_RUNNER_BINARY: &str = "ticketry-hook";
 const DEVELOPMENT_BACKEND_PORT_ENV: &str = "MUXED_DESKTOP_BACKEND_PORT";
 const HEALTH_EVENT: &str = "desktop-service-health";
+const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 const DEVELOPMENT_WEBVIEW_ORIGIN: &str = "http://127.0.0.1:5174";
 const PACKAGED_WEBVIEW_ORIGIN: &str = "tauri://localhost";
 
@@ -231,18 +233,41 @@ struct RuntimeValues {
     work_tracker_api_key: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(dead_code)] // Concrete notices are produced by runtime integrations.
+enum UserNoticeSeverity {
+    Info,
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Concrete notices are produced by runtime integrations.
+struct UserNotice {
+    id: String,
+    severity: UserNoticeSeverity,
+    title: String,
+    message: String,
+    acknowledgement_label: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RuntimeStartupConfiguration {
     endpoints: RuntimeEndpoints,
     values: RuntimeValues,
     service_health: ServiceHealth,
+    initial_notices: Vec<UserNotice>,
 }
 
 struct DesktopServiceState {
     supervisor: Mutex<Option<Supervisor>>,
     configuration: Mutex<Option<RuntimeStartupConfiguration>>,
     health: Mutex<ServiceHealth>,
+    notices: Mutex<Vec<UserNotice>>,
+    notice_ids: Mutex<HashSet<String>>,
     stopping: AtomicBool,
 }
 
@@ -252,6 +277,8 @@ impl DesktopServiceState {
             supervisor: Mutex::new(None),
             configuration: Mutex::new(None),
             health: Mutex::new(ServiceHealth::starting()),
+            notices: Mutex::new(Vec::new()),
+            notice_ids: Mutex::new(HashSet::new()),
             stopping: AtomicBool::new(false),
         }
     }
@@ -263,6 +290,35 @@ impl DesktopServiceState {
     fn publish(&self, application: &tauri::AppHandle, health: ServiceHealth) {
         self.record_health(health.clone());
         let _ = application.emit(HEALTH_EVENT, health);
+    }
+
+    fn retain_supervisor_notices(&self, events: &[SupervisorEvent]) -> Vec<UserNotice> {
+        let mut notice_ids = self
+            .notice_ids
+            .lock()
+            .expect("user notice id lock poisoned");
+        let notices = events
+            .iter()
+            .filter_map(mcp_port_rollover_notice)
+            .filter(|notice| notice_ids.insert(notice.id.clone()))
+            .collect::<Vec<_>>();
+        if !notices.is_empty() {
+            self.notices
+                .lock()
+                .expect("user notice lock poisoned")
+                .extend(notices.iter().cloned());
+        }
+        notices
+    }
+
+    fn publish_supervisor_notices(
+        &self,
+        application: &tauri::AppHandle,
+        events: &[SupervisorEvent],
+    ) {
+        for notice in self.retain_supervisor_notices(events) {
+            let _ = application.emit(USER_NOTICE_EVENT, notice);
+        }
     }
 
     fn configuration(&self) -> Result<RuntimeStartupConfiguration, String> {
@@ -279,8 +335,42 @@ impl DesktopServiceState {
             .lock()
             .expect("service health lock poisoned")
             .clone();
+        configuration.initial_notices = self
+            .notices
+            .lock()
+            .expect("user notice lock poisoned")
+            .clone();
         Ok(configuration)
     }
+}
+
+fn mcp_port_rollover_notice(event: &SupervisorEvent) -> Option<UserNotice> {
+    let SupervisorEvent::McpPortRollover {
+        previous_port,
+        active_port,
+    } = event
+    else {
+        return None;
+    };
+    if previous_port == active_port {
+        return None;
+    }
+
+    Some(UserNotice {
+        id: format!("mcp-port-rollover:{previous_port}:{active_port}"),
+        severity: UserNoticeSeverity::Warning,
+        title: "MCP connection changed".to_owned(),
+        message: concat!(
+            "Ticketry changed its MCP connection endpoint because the previous port was ",
+            "unavailable. Agents launched before this change may encounter MCP connection ",
+            "errors. Agents launched afterward already have the current endpoint and need no ",
+            "action.\n\nFor each affected live terminal connection, close or disconnect it, ",
+            "then use its Resume action so the resumed provider process receives the new MCP ",
+            "URL. If Resume is unavailable, start a new agent."
+        )
+        .to_owned(),
+        acknowledgement_label: "Understood".to_owned(),
+    })
 }
 
 fn endpoint(name: &str, default: &str) -> Result<String, String> {
@@ -346,6 +436,7 @@ fn development_runtime_configuration() -> Result<RuntimeStartupConfiguration, St
             work_tracker_api_key: optional_value("MUXED_DESKTOP_WORKTRACKER_API_KEY")?,
         },
         service_health: ServiceHealth::ready(),
+        initial_notices: Vec::new(),
     })
 }
 
@@ -364,6 +455,7 @@ fn sidecar_runtime_configuration(port: u16, credential: &str) -> RuntimeStartupC
             work_tracker_api_key: credential.to_owned(),
         },
         service_health: ServiceHealth::ready(),
+        initial_notices: Vec::new(),
     }
 }
 
@@ -539,6 +631,7 @@ fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
     let port = supervisor
         .port()
         .expect("ready supervisor retains its assigned port");
+    state.retain_supervisor_notices(&supervisor.events());
     if env::var(SMOKE_EXIT_AFTER_STARTUP).as_deref() == Ok("1") {
         if let Err(message) = verify_packaged_backend(port, supervisor.credential(), &origin) {
             let error = SupervisorError {
@@ -664,6 +757,7 @@ fn start_supervisor_monitor(application: tauri::AppHandle) {
                     eprintln!("Ticketry sidecar log unavailable: {message}");
                 }
             }
+            state.publish_supervisor_notices(&application, new_events);
             // Publish before releasing the supervisor lock so a retry cannot
             // overtake this poll result with a newer health transition.
             for health in health_updates {
@@ -717,7 +811,24 @@ fn desktop_retry_services(
     // the monitor so no stale poll result can be published after it.
     state.publish(&application, ServiceHealth::recovering());
     let (result, log_path) = match supervisor_guard.as_mut() {
-        Some(supervisor) => (supervisor.retry(), supervisor.log_path().to_path_buf()),
+        Some(supervisor) => {
+            let observed_events = supervisor.events().len();
+            let result = supervisor.retry();
+            let events = supervisor.events();
+            let new_events = events.get(observed_events..).unwrap_or(&[]);
+            if result.is_ok() {
+                state.retain_supervisor_notices(new_events);
+                let port = supervisor
+                    .port()
+                    .expect("successful retry retains its assigned port");
+                *state
+                    .configuration
+                    .lock()
+                    .expect("runtime configuration lock poisoned") =
+                    Some(sidecar_runtime_configuration(port, supervisor.credential()));
+            }
+            (result, supervisor.log_path().to_path_buf())
+        }
         None => (
             Err(SupervisorError {
                 service: "backend".to_owned(),
@@ -1045,6 +1156,79 @@ mod tests {
     }
 
     #[test]
+    fn mcp_rollover_is_retained_for_startup_and_deduplicated_by_incident() {
+        let state = DesktopServiceState::new();
+        *state
+            .configuration
+            .lock()
+            .expect("runtime configuration lock poisoned") = Some(sidecar_runtime_configuration(
+            43_219,
+            "per-launch-credential",
+        ));
+        let rollover = supervisor::SupervisorEvent::McpPortRollover {
+            previous_port: 43_101,
+            active_port: 43_219,
+        };
+
+        assert_eq!(
+            state.retain_supervisor_notices(&[rollover.clone()]).len(),
+            1
+        );
+        assert!(state.retain_supervisor_notices(&[rollover]).is_empty());
+
+        let configuration = state.configuration().expect("runtime configuration");
+        assert_eq!(configuration.initial_notices.len(), 1);
+        assert_eq!(
+            configuration.initial_notices[0].id,
+            "mcp-port-rollover:43101:43219"
+        );
+    }
+
+    #[test]
+    fn mcp_rollover_notice_has_the_exact_manual_recovery_meaning() {
+        let notice = mcp_port_rollover_notice(&supervisor::SupervisorEvent::McpPortRollover {
+            previous_port: 43_101,
+            active_port: 43_219,
+        })
+        .expect("changed MCP port produces a notice");
+
+        assert_eq!(notice.title, "MCP connection changed");
+        assert_eq!(notice.severity, UserNoticeSeverity::Warning);
+        assert!(notice
+            .message
+            .contains("Agents launched before this change may encounter MCP connection errors."));
+        assert!(notice.message.contains(
+            "Agents launched afterward already have the current endpoint and need no action."
+        ));
+        assert!(notice.message.contains(
+            "close or disconnect it, then use its Resume action so the resumed provider process receives the new MCP URL."
+        ));
+        assert!(notice
+            .message
+            .contains("If Resume is unavailable, start a new agent."));
+        assert!(!notice.message.contains('<'));
+        assert!(!notice.message.contains("Authorization"));
+        assert!(!notice.message.contains("credential"));
+    }
+
+    #[test]
+    fn unchanged_ports_and_unrelated_supervisor_facts_are_silent() {
+        let unchanged = supervisor::SupervisorEvent::McpPortRollover {
+            previous_port: 43_219,
+            active_port: 43_219,
+        };
+
+        assert!(mcp_port_rollover_notice(&unchanged).is_none());
+        assert!(
+            mcp_port_rollover_notice(&supervisor::SupervisorEvent::Ready {
+                service: "mcp".to_owned(),
+                port: 43_219,
+            })
+            .is_none()
+        );
+    }
+
+    #[test]
     fn recovery_attempt_reports_recovering_then_ready_for_a_serving_pair() {
         let updates = recovery_health_updates(
             &[supervisor::SupervisorEvent::Restarting {
@@ -1233,6 +1417,36 @@ mod tests {
         assert_eq!(
             configuration.service_health.state,
             ServiceHealthState::Ready
+        );
+        assert!(configuration.initial_notices.is_empty());
+        assert_eq!(
+            serde_json::to_value(configuration)
+                .expect("serialize runtime configuration")
+                .get("initialNotices"),
+            Some(&serde_json::json!([]))
+        );
+    }
+
+    #[test]
+    fn user_notice_uses_the_stable_desktop_event_contract() {
+        let notice = UserNotice {
+            id: "runtime-warning-1".to_owned(),
+            severity: UserNoticeSeverity::Warning,
+            title: "Runtime warning".to_owned(),
+            message: "A native service needs your attention.".to_owned(),
+            acknowledgement_label: "Understood".to_owned(),
+        };
+
+        assert_eq!(USER_NOTICE_EVENT, "desktop-user-notice");
+        assert_eq!(
+            serde_json::to_value(notice).expect("serialize user notice"),
+            serde_json::json!({
+                "id": "runtime-warning-1",
+                "severity": "warning",
+                "title": "Runtime warning",
+                "message": "A native service needs your attention.",
+                "acknowledgementLabel": "Understood",
+            })
         );
     }
 

@@ -17,6 +17,7 @@ vi.mock("../features/studio/lib/api", async (importOriginal) => ({
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { useOnboardingStore } from "../app/onboarding/onboardingStore";
+import { useConfigStore } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import * as workspaceApi from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
@@ -87,6 +88,9 @@ beforeEach(() => {
   });
   useOnboardingStore.setState({ onboardingRequired: true });
   useOnboardingTourStore.getState().reset();
+  useConfigStore.setState({
+    features: { sidebar: true, projects: true },
+  });
   useTasksStore.setState({ projects: [], selectedProjectId: null });
 });
 
@@ -243,21 +247,25 @@ describe("Onboarding welcome", () => {
     const name = screen.getByTestId("onboarding-project-name");
     const key = screen.getByTestId("onboarding-project-key");
     expect(name).toHaveValue("Coding");
-    expect(key).toHaveValue("CODING");
+    expect(key).toHaveValue("CDN");
+    expect(key).toHaveAttribute("maxlength", "3");
+    expect(screen.getByText(
+      "Project key must be exactly three letters, using only A-Z.",
+    )).toBeInTheDocument();
 
     fireEvent.change(name, { target: { value: "My project" } });
-    expect(key).toHaveValue("CODING");
+    expect(key).toHaveValue("CDN");
     fireEvent.change(key, { target: { value: "" } });
     expect(name).toHaveValue("My project");
     expect(screen.getByTestId("onboarding-create-project")).toBeDisabled();
 
-    fireEvent.change(key, { target: { value: "MINE" } });
+    fireEvent.change(key, { target: { value: "MYP" } });
     fireEvent.click(screen.getByTestId("onboarding-create-project"));
 
     await waitFor(() => {
       expect(catalogApi.createProject).toHaveBeenCalledWith({
         name: "My project",
-        slug: "MINE",
+        slug: "MYP",
         description: "",
       });
       expect(useTasksStore.getState().projects).toEqual([
@@ -279,7 +287,7 @@ describe("Onboarding welcome", () => {
   it("shows a duplicate-key conflict inline and keeps the project form editable", async () => {
     catalogApi.createProject.mockRejectedValueOnce(
       new ApiError(409, "Conflict", {
-        detail: "Project slug 'CODING' already exists.",
+        detail: "Project slug 'CDN' already exists.",
       }),
     );
     render(<OnboardingWelcome />);
@@ -291,12 +299,12 @@ describe("Onboarding welcome", () => {
     fireEvent.click(screen.getByTestId("onboarding-create-project"));
 
     expect(await screen.findByTestId("onboarding-create-error"))
-      .toHaveTextContent("Project slug 'CODING' already exists.");
+      .toHaveTextContent("Project slug 'CDN' already exists.");
     expect(screen.getByTestId("onboarding-project-name")).toHaveValue("Coding");
-    expect(screen.getByTestId("onboarding-project-key")).toHaveValue("CODING");
+    expect(screen.getByTestId("onboarding-project-key")).toHaveValue("CDN");
 
     fireEvent.change(screen.getByTestId("onboarding-project-key"), {
-      target: { value: "CODING2" },
+      target: { value: "NEW" },
     });
     expect(screen.getByTestId("onboarding-create-project")).toBeEnabled();
   });

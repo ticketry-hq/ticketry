@@ -20,13 +20,17 @@ def test_new_project_seeds_known_bindings_as_explicit_rows_and_nothing_wildcard(
     story = IssueType.objects.get(project=created, name="Story")
     implement = State.objects.get(project=created, name="Implement")
     seeded = LaunchBinding.objects.get(issue_type=story, state=implement)
-    idea = LaunchBinding.objects.get(
+    grill = LaunchBinding.objects.get(
         issue_type=story,
-        state__name="Idea",
+        state__name="Grill",
     )
-    refinement = LaunchBinding.objects.get(
+    spec = LaunchBinding.objects.get(
         issue_type=story,
-        state__name="Refinement",
+        state__name="Spec",
+    )
+    tickets = LaunchBinding.objects.get(
+        issue_type=story,
+        state__name="Tickets",
     )
 
     assert seeded.prompt == DEFAULT_AGENT_PROMPTS["Implement"]
@@ -34,14 +38,15 @@ def test_new_project_seeds_known_bindings_as_explicit_rows_and_nothing_wildcard(
     assert seeded.model is None
     assert seeded.reasoning is None
     assert seeded.subtree_run_enabled is True
-    assert idea.required_skills == ["to-spec", "to-tickets"]
-    assert refinement.required_skills == [
-        "grill-with-docs",
-        "to-spec",
-        "to-tickets",
-    ]
-    assert "grill-me-with-docs" not in refinement.prompt
-    assert "grill-with-docs" in refinement.prompt
+    assert grill.required_skills == ["grill-with-docs"]
+    assert grill.auto_start is False
+    assert spec.required_skills == ["to-spec"]
+    assert spec.auto_start is True
+    assert tickets.required_skills == ["to-tickets"]
+    assert tickets.auto_start is True
+    assert "grill-with-docs" in grill.prompt
+    assert "to-spec" not in grill.prompt
+    assert "to-tickets" not in grill.prompt
 
     implementation = IssueType.objects.get(project=created, name="Implementation")
     story_implement = LaunchBinding.objects.get(

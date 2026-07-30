@@ -115,51 +115,51 @@ only — never credentials or a real build.
 
 ### Other defects found
 
-- `installed-artifact-acceptance.mjs:145` sets the acceptance data directory to
+* `installed-artifact-acceptance.mjs:145` sets the acceptance data directory to
   `Library/Application Support/muxed-studio`. That path appears nowhere else in
   the codebase; the real default is `~/.config/worktracker-studio`
   (`backend/apps/settings_store/local_state_migration.py:17`,
   `studio/src-tauri/src/ownership.rs:244`, `OPERATIONS.md:68`). Acceptance
   passes it via `MUXED_DATA_DIR` so the app still honors it, but acceptance
   never exercises the real default path.
-- `installed-artifact-acceptance.mjs:151-156` comment says "seven acceptance
+* `installed-artifact-acceptance.mjs:151-156` comment says "seven acceptance
   scenarios"; the required list has ten.
-- The cold launch awaits `open -W` to completion *before* starting the driver
+* The cold launch awaits `open -W` to completion *before* starting the driver
   (lines 121-135 vs 151-156), so the driver cannot observe the first launch.
-- `OPERATIONS.md:17-26` documents `npm run release:build` without stating that
+* `OPERATIONS.md:17-26` documents `npm run release:build` without stating that
   it is defined only in `studio/package.json:12`, not at the repository root.
 
 ## Decisions
 
-| Question | Decision |
-| --- | --- |
-| Release version | `0.1.0`, shipped as-is. No bump. |
-| Target architecture | `macos-aarch64` only. `macos-x86_64` removed. |
-| Signing / notarization | None. Unsigned developer build via an explicit opt-in flag. No Apple Developer Program enrolment. |
-| Acceptance driver | Does not exist; building it is in scope. |
-| Publication destination | Private GitHub repository release on a version tag, invited collaborators only. |
-| macOS CI release gap | Out of scope. Release stays a manual operation. |
-| Packaged-skills dependency | Hard blocker on CODIN-1467. |
+| Question                   | Decision                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| Release version            | `0.1.0`, shipped as-is. No bump.                                                                  |
+| Target architecture        | `macos-aarch64` only. `macos-x86_64` removed.                                                     |
+| Signing / notarization     | None. Unsigned developer build via an explicit opt-in flag. No Apple Developer Program enrolment. |
+| Acceptance driver          | Does not exist; building it is in scope.                                                          |
+| Publication destination    | Private GitHub repository release on a version tag, invited collaborators only.                   |
+| macOS CI release gap       | Out of scope. Release stays a manual operation.                                                   |
+| Packaged-skills dependency | Hard blocker on CODIN-1467.                                                                       |
 
 ### Rationale
 
-- **0.1.0 as-is** avoids touching six version sources for a release whose
+* **0.1.0 as-is** avoids touching six version sources for a release whose
   audience already knows what they are installing. The cost is accepted: a
   released `0.1.0` is indistinguishable from prior dev `0.1.0` builds, so the
   git tag is the only durable identifier.
-- **arm64 only** because accepting `macos-x86_64` requires launching the
+* **arm64 only** because accepting `macos-x86_64` requires launching the
   installed app on Intel hardware, which is unavailable. A cross-compiled
   sidecar that was never launched is not evidence. Keeping a target in the
   manifest that will never be accepted makes `OPERATIONS.md`'s support claim
   false.
-- **Unsigned over enrolment** is the user's cost decision. It is recorded here
+* **Unsigned over enrolment** is the user's cost decision. It is recorded here
   as a deliberate, documented weakening rather than an oversight: recipients
   must clear the quarantine attribute themselves, which macOS 15+ routes
   through System Settings → Privacy & Security → "Open Anyway".
-- **Private repository release** limits who can obtain an unsigned macOS
+* **Private repository release** limits who can obtain an unsigned macOS
   application. A public download of an unsigned app is not acceptable for this
   artifact.
-- **Blocking on CODIN-1467** keeps the acceptance contract honest. Three of the
+* **Blocking on CODIN-1467** keeps the acceptance contract honest. Three of the
   ten required scenarios and all provider evidence describe packaged-skills
   behavior that does not exist yet; relaxing them for convenience would remove
   the only automated check that the packaged sidecar exposes its skills.
@@ -181,13 +181,13 @@ only — never credentials or a real build.
 
 ## Non-goals
 
-- Apple Developer Program enrolment, Developer ID signing, or notarization.
-- Universal (arm64 + x86_64) binaries or any `lipo` merge step.
-- An in-app automatic updater. Updates remain verified manual installers.
-- Closing the macOS CI release gap.
-- Windows or Linux targets.
-- Public distribution of an unsigned artifact.
-- Any version bump or version-sync tooling.
+* Apple Developer Program enrolment, Developer ID signing, or notarization.
+* Universal (arm64 + x86\_64) binaries or any `lipo` merge step.
+* An in-app automatic updater. Updates remain verified manual installers.
+* Closing the macOS CI release gap.
+* Windows or Linux targets.
+* Public distribution of an unsigned artifact.
+* Any version bump or version-sync tooling.
 
 ## Requirements
 
@@ -213,19 +213,19 @@ failure.
 
 With the flag:
 
-- The `APPLE_SIGNING_IDENTITY` and notarization credential gates
+* The `APPLE_SIGNING_IDENTITY` and notarization credential gates
   (`release-build.mjs:91-103`) are skipped.
-- The Tauri signing config override (`release-build.mjs:116-126`) omits
+* The Tauri signing config override (`release-build.mjs:116-126`) omits
   `signingIdentity`; hardened runtime and entitlements handling must be
   resolved explicitly rather than left implicit, and whichever is chosen must
   be asserted by a test.
-- The bundle is ad-hoc signed (`codesign -s -`) so that
+* The bundle is ad-hoc signed (`codesign -s -`) so that
   `codesign --verify --deep --strict` still passes. Bundle integrity remains
   verified.
-- `spctl --assess --type execute` is **not** required, because an
+* `spctl --assess --type execute` is **not** required, because an
   un-notarized bundle cannot pass it. The skip is logged explicitly, naming
   the flag as its cause.
-- All architecture verification (`lipo -archs`), embedded-sidecar, and
+* All architecture verification (`lipo -archs`), embedded-sidecar, and
   embedded-hook checks remain mandatory and unchanged.
 
 If both `--allow-unsigned` and a complete credential set are present, the
@@ -250,13 +250,13 @@ unsigned one without an explicit decision.
 
 Prerequisites for a driver that can pass:
 
-- The acceptance data directory becomes the product's real default
+* The acceptance data directory becomes the product's real default
   (`~/.config/worktracker-studio`) relative to the sandboxed home, replacing
   `Library/Application Support/muxed-studio`
   (`installed-artifact-acceptance.mjs:145`).
-- The stale "seven acceptance scenarios" comment (line 151) is corrected to
+* The stale "seven acceptance scenarios" comment (line 151) is corrected to
   ten.
-- The cold-launch ordering is resolved so the required first-launch evidence is
+* The cold-launch ordering is resolved so the required first-launch evidence is
   observable: either the driver starts before the cold launch, or the harness
   documents that `clean_install` evidence is gathered by the driver's own
   subsequent launch and the `open -W` call is a liveness precondition only.
@@ -280,19 +280,19 @@ developer's real home, keychain, or checkout, and must never emit a credential
 
 Evidence required, per the harness contract:
 
-| Scenario | Evidence |
-| --- | --- |
-| `clean_install` | Fresh sandboxed home; app launches, sidecar starts, workspace reachable. |
-| `upgrade_with_existing_data` | Pre-seeded `state.db` survives launch; pre-migration snapshot generations behave per `OPERATIONS.md:64-80`. |
-| `failed_update_recovery` | Snapshot restore procedure yields a launchable app with accessible workspace. |
-| `uninstall_preserves_data` | Removing the `.app` leaves the data directory and its contents intact. |
-| `missing_dependency_diagnostic` | Absent `tmux` (an external prerequisite per the manifest) produces a redacted, actionable diagnostic. |
-| `os_permission_diagnostic` | A denied OS permission produces a redacted, actionable diagnostic. |
-| `durable_agent_terminal_flow` | repository → agent → terminal → relaunch survives an app restart. |
-| `offline_packaged_skill_matrix` | **Blocked on CODIN-1467.** All four providers discover all three skills with no network. |
-| `skill_configuration_unchanged` | **Blocked on CODIN-1467.** User/provider config byte-identical after launch and termination. |
-| `skill_overlay_cleanup` | **Blocked on CODIN-1467.** Run-scoped overlays removed on termination. |
-| `packaged_skill_providers` | **Blocked on CODIN-1467.** Per-provider discovered-skill arrays. |
+| Scenario                        | Evidence                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `clean_install`                 | Fresh sandboxed home; app launches, sidecar starts, workspace reachable.                                    |
+| `upgrade_with_existing_data`    | Pre-seeded `state.db` survives launch; pre-migration snapshot generations behave per `OPERATIONS.md:64-80`. |
+| `failed_update_recovery`        | Snapshot restore procedure yields a launchable app with accessible workspace.                               |
+| `uninstall_preserves_data`      | Removing the `.app` leaves the data directory and its contents intact.                                      |
+| `missing_dependency_diagnostic` | Absent `tmux` (an external prerequisite per the manifest) produces a redacted, actionable diagnostic.       |
+| `os_permission_diagnostic`      | A denied OS permission produces a redacted, actionable diagnostic.                                          |
+| `durable_agent_terminal_flow`   | repository → agent → terminal → relaunch survives an app restart.                                           |
+| `offline_packaged_skill_matrix` | **Blocked on CODIN-1467.** All four providers discover all three skills with no network.                    |
+| `skill_configuration_unchanged` | **Blocked on CODIN-1467.** User/provider config byte-identical after launch and termination.                |
+| `skill_overlay_cleanup`         | **Blocked on CODIN-1467.** Run-scoped overlays removed on termination.                                      |
+| `packaged_skill_providers`      | **Blocked on CODIN-1467.** Per-provider discovered-skill arrays.                                            |
 
 The seven unblocked scenarios are implementable and testable now. The driver
 must be structured so the three blocked scenarios plus provider evidence are
@@ -307,36 +307,36 @@ operator's interactive session state, and must fail closed on timeout.
 
 A publisher is added, invoked through `MUXED_RELEASE_PUBLISH_COMMAND`.
 
-- Target: a **private** GitHub repository release on a version tag matching
+* Target: a **private** GitHub repository release on a version tag matching
   `release_version`. Download requires invited collaborator access.
-- The release attaches the staged `.dmg` and its `release-metadata.json`, plus
+* The release attaches the staged `.dmg` and its `release-metadata.json`, plus
   a recorded content digest for each attached file.
-- Notes state plainly that the build is unsigned and not notarized, name the
+* Notes state plainly that the build is unsigned and not notarized, name the
   minimum macOS version (`11.0`, `manifest.v1.json:84`), name `tmux` as an
   external prerequisite, and give the quarantine-clearing steps recipients
   will need.
-- Credentials come from a scoped GitHub token read from the environment, never
+* Credentials come from a scoped GitHub token read from the environment, never
   from a committed file, and are never echoed.
-- The publisher is idempotent-safe: it refuses to overwrite an existing release
+* The publisher is idempotent-safe: it refuses to overwrite an existing release
   for the same tag rather than silently replacing a published artifact.
-- It refuses to run if the tag does not exist or does not match
+* It refuses to run if the tag does not exist or does not match
   `release_version`.
 
 ### R7 — Documentation correctness
 
 `OPERATIONS.md` is corrected:
 
-- The support sentence states arm64-only (R1).
-- The stale "Known release gap" paragraph (lines 103-110) is rewritten: CI runs
+* The support sentence states arm64-only (R1).
+* The stale "Known release gap" paragraph (lines 103-110) is rewritten: CI runs
   on `macos-14` and does build and verify the sidecar; the real gap is that CI
   never bundles, signs, notarizes, runs installed-artifact acceptance, or
   publishes. The out-of-scope statement stays, with its actual reason —
   runner cost and the absence of signing credentials.
-- The unsigned release path is documented as a first-class supported flow with
+* The unsigned release path is documented as a first-class supported flow with
   its exact commands, alongside the signed flow it does not replace.
-- Recipient-side quarantine instructions are included, with an explicit note
+* Recipient-side quarantine instructions are included, with an explicit note
   that they exist because the build is unsigned.
-- The required working directory (or `--workspace @worktracker/studio`) is
+* The required working directory (or `--workspace @worktracker/studio`) is
   stated for every `npm run release:*` command.
 
 `docs/desktop-executable-policy.md` is reviewed for statements that an
@@ -361,16 +361,16 @@ way a recipient would install it.
 
 ### R9 — Verification
 
-- Release-script unit tests cover: single-target resolution; unsigned mode
+* Release-script unit tests cover: single-target resolution; unsigned mode
   skipping credential gates; unsigned mode still enforcing `codesign --verify`,
   `lipo`, sidecar, and hook checks; `--allow-unsigned` plus credentials being
   rejected; `signed`/`notarized` metadata fields; publish refusing unsigned
   input without acknowledgement; publish refusing a mismatched or absent tag.
-- Acceptance-harness tests cover the corrected data directory, the documented
+* Acceptance-harness tests cover the corrected data directory, the documented
   cold-launch semantics, and that a driver omitting any blocked scenario fails.
-- Driver tests cover the seven unblocked scenarios and assert no credential
+* Driver tests cover the seven unblocked scenarios and assert no credential
   appears in any diagnostic.
-- `release:validate` continues to pass in CI on `macos-14` with the
+* `release:validate` continues to pass in CI on `macos-14` with the
   single-target manifest.
 
 ## Dependency-ordered implementation sequence
@@ -401,23 +401,23 @@ T-4 harness fixes ──> T-5 acceptance driver ────┤
 
 ## File change map
 
-- `studio/release/manifest.v1.json` — remove `macos-x86_64` (T-1)
-- `studio/release/OPERATIONS.md` — support claim, stale CI paragraph, unsigned
+* `studio/release/manifest.v1.json` — remove `macos-x86_64` (T-1)
+* `studio/release/OPERATIONS.md` — support claim, stale CI paragraph, unsigned
   flow, quarantine steps, working directory (T-1, T-3)
-- `studio/scripts/release-build.mjs` — `--allow-unsigned`, ad-hoc signing,
+* `studio/scripts/release-build.mjs` — `--allow-unsigned`, ad-hoc signing,
   `spctl` skip, metadata fields (T-2, T-3)
-- `studio/scripts/release-build.test.mjs` — unsigned-mode coverage (T-2)
-- `studio/scripts/desktop-smoke.mjs` — unsupported-host error (T-1)
-- `studio/scripts/installed-artifact-acceptance.mjs` — data directory, stale
+* `studio/scripts/release-build.test.mjs` — unsigned-mode coverage (T-2)
+* `studio/scripts/desktop-smoke.mjs` — unsupported-host error (T-1)
+* `studio/scripts/installed-artifact-acceptance.mjs` — data directory, stale
   comment, cold-launch semantics (T-4)
-- `studio/scripts/installed-artifact-acceptance.test.mjs` — harness coverage
+* `studio/scripts/installed-artifact-acceptance.test.mjs` — harness coverage
   (T-4)
-- new acceptance driver under `studio/scripts/` plus its tests (T-5)
-- `studio/scripts/release-publish.mjs` — unsigned gate, tag validation (T-3,
+* new acceptance driver under `studio/scripts/` plus its tests (T-5)
+* `studio/scripts/release-publish.mjs` — unsigned gate, tag validation (T-3,
   T-6)
-- `studio/scripts/release-publish.test.mjs` — publish coverage (T-6)
-- new publisher script plus its tests (T-6)
-- `docs/desktop-executable-policy.md` — reconcile with unsigned distribution
+* `studio/scripts/release-publish.test.mjs` — publish coverage (T-6)
+* new publisher script plus its tests (T-6)
+* `docs/desktop-executable-policy.md` — reconcile with unsigned distribution
   (T-3)
 
 Unchanged: all six version sources; `backend/packaging/*`;
@@ -425,42 +425,42 @@ Unchanged: all six version sources; `backend/packaging/*`;
 
 ## Acceptance criteria
 
-- `manifest.v1.json` declares exactly one target and `OPERATIONS.md` claims
+* `manifest.v1.json` declares exactly one target and `OPERATIONS.md` claims
   support for exactly that target.
-- `release:build --allow-unsigned` succeeds on a host with no `APPLE_*`
+* `release:build --allow-unsigned` succeeds on a host with no `APPLE_*`
   variables and no Developer ID certificate, producing a staged `.app` and
   `.dmg` that pass `codesign --verify --deep --strict` and all architecture,
   sidecar, and hook checks.
-- `release:build` without the flag still fails closed on absent credentials.
-- `release:build --allow-unsigned` with a complete credential set fails.
-- `release-metadata.json` records `signed: false` and `notarized: false`, and
+* `release:build` without the flag still fails closed on absent credentials.
+* `release:build --allow-unsigned` with a complete credential set fails.
+* `release-metadata.json` records `signed: false` and `notarized: false`, and
   `release:publish` refuses that artifact without explicit unsigned
   acknowledgement.
-- `release:acceptance` passes all ten scenarios against the staged `.app` in a
+* `release:acceptance` passes all ten scenarios against the staged `.app` in a
   sandboxed home with no network, and no diagnostic contains a credential.
-- A driver missing any blocked scenario fails rather than reporting success.
-- `release:publish` creates a private GitHub Release on the `0.1.0` tag with
+* A driver missing any blocked scenario fails rather than reporting success.
+* `release:publish` creates a private GitHub Release on the `0.1.0` tag with
   the `.dmg`, its metadata, digests, and quarantine instructions; it refuses a
   duplicate tag and a mismatched tag.
-- A clean arm64 macOS user account installs from the published `.dmg` using
+* A clean arm64 macOS user account installs from the published `.dmg` using
   only the published instructions and reaches a usable workspace.
-- `OPERATIONS.md` contains no false statement about CI, the supported
+* `OPERATIONS.md` contains no false statement about CI, the supported
   architecture, signing status, or command working directories.
 
 ## Open risks
 
-- **CODIN-1467 gates the release.** Four pieces of acceptance evidence depend
+* **CODIN-1467 gates the release.** Four pieces of acceptance evidence depend
   on packaged skills. If that story slips, T-7 cannot complete, and the only
   alternatives are relaxing the contract or absorbing its scope — both
   explicitly rejected here.
-- **Unsigned distribution is a permanent property of this artifact.** Every
+* **Unsigned distribution is a permanent property of this artifact.** Every
   recipient performs a quarantine-clearing step. Teaching that habit is a real
   cost the audience choice accepts, and it is why the release is private.
-- **Acceptance-driver scope is the largest unknown** in the story. Seven
+* **Acceptance-driver scope is the largest unknown** in the story. Seven
   scenarios spanning install, upgrade, snapshot recovery, uninstall, two
   diagnostics, and a durable agent/terminal flow are broad, and the harness
   offers no automation primitives.
-- **`0.1.0` is not a unique identifier.** The git tag is the only durable way
+* **`0.1.0` is not a unique identifier.** The git tag is the only durable way
   to distinguish this release from prior dev builds of the same version.
-- **CI still cannot detect packaging rot,** by decision. The bundle, sign, and
+* **CI still cannot detect packaging rot,** by decision. The bundle, sign, and
   acceptance path is exercised only when someone releases manually.

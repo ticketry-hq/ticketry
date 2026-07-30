@@ -168,6 +168,16 @@ def _create_pre_migration_snapshot(database_path: Path, connection) -> None:
         raise
 
 
+def _verify_database_integrity(connection) -> None:
+    """Refuse to report readiness for a structurally damaged state database."""
+
+    with connection.cursor() as cursor:
+        result = cursor.execute("PRAGMA quick_check(1)").fetchone()
+    if result != ("ok",):
+        detail = result[0] if result else "no result"
+        raise RuntimeError(f"state database integrity check failed: {detail}")
+
+
 def migrate_and_provision() -> None:
     import django
     from django.core.management import call_command
@@ -177,6 +187,7 @@ def migrate_and_provision() -> None:
     database_path = Path(os.environ["MUXED_STATE_DB"])
     database_existed = database_path.is_file()
     django.setup()
+    _verify_database_integrity(connection)
     executor = MigrationExecutor(connection)
     migrations_pending = bool(
         executor.migration_plan(executor.loader.graph.leaf_nodes())
@@ -352,7 +363,14 @@ def smoke_skill_providers() -> int:
             else smoke_root / "repository"
         )
         repository.mkdir(parents=True, exist_ok=True)
-        requested = ("grill-with-docs", "to-spec", "to-tickets")
+        requested = (
+            "code-review",
+            "grill-with-docs",
+            "implement",
+            "tdd",
+            "to-spec",
+            "to-tickets",
+        )
         discovered: dict[str, list[str]] = {}
         mcp_configured: dict[str, bool] = {}
         install_packaged_skills()

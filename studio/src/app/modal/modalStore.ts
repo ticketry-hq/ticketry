@@ -1,7 +1,10 @@
 import { create } from "zustand";
+import {
+  validateUserNotice,
+  type UserNotice,
+} from "../../runtime/userNotice";
 
-export interface ModalDescriptor {
-  type:
+export type StandardModalType =
     | "agent-picker"
     | "prompt-input"
     | "module-folder"
@@ -11,8 +14,20 @@ export interface ModalDescriptor {
     | "parent-update"
     | "add-project"
     | "add-module";
+
+export interface StandardModalDescriptor {
+  type: StandardModalType;
   payload?: Record<string, unknown>;
 }
+
+export interface NotifyUserModalDescriptor {
+  type: "notify-user";
+  payload: UserNotice;
+}
+
+export type ModalDescriptor =
+  | StandardModalDescriptor
+  | NotifyUserModalDescriptor;
 
 export interface ModalKeyBinding {
   actionId: string | readonly string[];
@@ -26,8 +41,10 @@ export interface ModalBindingHint {
 
 interface ModalState {
   modalStack: ModalDescriptor[];
+  presentedNoticeIds: ReadonlySet<string>;
   activeBindings: ModalBindingHint[] | null;
-  pushModal: (modal: ModalDescriptor) => void;
+  pushModal: (modal: StandardModalDescriptor) => void;
+  notifyUser: (notice: UserNotice) => void;
   openKeyboardShortcuts: () => void;
   openSettings: () => void;
   popModal: () => void;
@@ -36,9 +53,24 @@ interface ModalState {
 
 export const useModalStore = create<ModalState>((set) => ({
   modalStack: [],
+  presentedNoticeIds: new Set(),
   activeBindings: null,
   pushModal: (modal) =>
     set((state) => ({ modalStack: [...state.modalStack, modal] })),
+  notifyUser: (candidate) =>
+    set((state) => {
+      const notice = validateUserNotice(candidate);
+      if (!notice || state.presentedNoticeIds.has(notice.id)) return state;
+      const presentedNoticeIds = new Set(state.presentedNoticeIds);
+      presentedNoticeIds.add(notice.id);
+      return {
+        modalStack: [
+          ...state.modalStack,
+          { type: "notify-user", payload: notice },
+        ],
+        presentedNoticeIds,
+      };
+    }),
   openKeyboardShortcuts: () =>
     set((state) =>
       state.modalStack.length > 0

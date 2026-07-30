@@ -196,7 +196,7 @@ export interface WorkItemsApiInterface {
     createReviewFindingRequestOpts(requestParameters: CreateReviewFindingRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Create a Ready Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in ``Ready`` and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
      * @summary Create Review Finding
      * @param {string} projectId 
      * @param {ReviewFindingIn} reviewFindingIn 
@@ -207,7 +207,7 @@ export interface WorkItemsApiInterface {
     createReviewFindingRaw(requestParameters: CreateReviewFindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItemOut>>;
 
     /**
-     * Create a Ready Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in ``Ready`` and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
      * Create Review Finding
      */
     createReviewFinding(requestParameters: CreateReviewFindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut>;
@@ -593,7 +593,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Create a Ready Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in ``Ready`` and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
      * Create Review Finding
      */
     async createReviewFindingRaw(requestParameters: CreateReviewFindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItemOut>> {
@@ -604,7 +604,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Create a Ready Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in ``Ready`` and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
      * Create Review Finding
      */
     async createReviewFinding(requestParameters: CreateReviewFindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut> {

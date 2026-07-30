@@ -1,0 +1,131 @@
+---
+import { getCollection } from 'astro:content';
+
+const { Tile, Tiles, SystemContextMap } = Astro.props.components;
+const isCurrent = (entry) => !entry.filePath?.includes('/versioned/');
+
+const [domains, systems, services] = await Promise.all([
+  getCollection('domains'),
+  getCollection('systems'),
+  getCollection('services'),
+]);
+
+const stats = [
+  { label: 'Domains', value: domains.filter(isCurrent).length, href: '/discover/domains' },
+  { label: 'Systems', value: systems.filter(isCurrent).length, href: '/visualiser/system-context-map' },
+  { label: 'Services', value: services.filter(isCurrent).length, href: '/discover/services' },
+];
+---
+
+<div class="not-prose">
+  <div class="pb-8 border-b border-[rgb(var(--ec-page-border))]">
+    <div class="text-sm font-semibold uppercase tracking-[0.2em] text-[rgb(var(--ec-accent))]">
+      Architecture as a connected model
+    </div>
+    <h1 class="mt-3 text-4xl md:text-6xl font-bold text-[rgb(var(--ec-page-text))]">
+      See what Ticketry is.
+    </h1>
+    <p class="mt-4 text-lg text-[rgb(var(--ec-page-text-muted))] max-w-4xl font-light">
+      Move from product capabilities to bounded contexts, runtime systems, services, APIs,
+      messages, data stores, entities, and source evidence. The catalog shows both the intended
+      domain model and where the implementation currently drifts from it.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
+    {
+      stats.map((stat) => (
+        <a
+          href={stat.href}
+          class="group rounded-xl border border-[rgb(var(--ec-page-border))] bg-[rgb(var(--ec-card-bg,var(--ec-page-bg)))] p-6 shadow-xs hover:shadow-md hover:border-[rgb(var(--ec-accent)/0.5)] transition-all"
+        >
+          <div class="text-4xl font-bold text-[rgb(var(--ec-page-text))]">{stat.value}</div>
+          <div class="mt-1 text-sm font-medium uppercase tracking-wide text-[rgb(var(--ec-page-text-muted))]">
+            {stat.label}
+          </div>
+        </a>
+      ))
+    }
+  </div>
+
+  <h2 class="text-2xl font-semibold text-[rgb(var(--ec-page-text))] mt-12 mb-4">
+    Pick an altitude
+  </h2>
+</div>
+
+<Tiles columns={4}>
+  <Tile
+    icon="GlobeAltIcon"
+    href="/visualiser/system-context-map"
+    title="10,000 ft"
+    description="The whole desktop product and the major capabilities that make it work."
+  />
+  <Tile
+    icon="RectangleGroupIcon"
+    href="/discover/domains"
+    title="1,000 ft"
+    description="Bounded contexts, systems, responsibilities, and the relationships between them."
+  />
+  <Tile
+    icon="CpuChipIcon"
+    href="/discover/services"
+    title="100 ft"
+    description="Services, state stores, flows, messages, and the full HTTP API contract."
+  />
+  <Tile
+    icon="MagnifyingGlassIcon"
+    href="/docs/flows/work-item-change-synchronization/1.0.0"
+    title="10 ft"
+    description="Entity fields, frontend projections, wire frames, source evidence, and known drift."
+  />
+</Tiles>
+
+<div class="not-prose">
+  <h2 class="text-2xl font-semibold text-[rgb(var(--ec-page-text))] mt-12 mb-2">
+    Product context map
+  </h2>
+  <p class="text-[rgb(var(--ec-page-text-muted))] font-light mb-2">
+    The five runtime systems and their explicit dependencies.
+  </p>
+</div>
+
+<SystemContextMap />
+
+<div class="not-prose">
+  <h2 class="text-2xl font-semibold text-[rgb(var(--ec-page-text))] mt-12 mb-4">
+    Explore by domain
+  </h2>
+</div>
+
+<Tiles columns={3}>
+  <Tile
+    icon="QueueListIcon"
+    href="/docs/domains/work-management/1.0.0"
+    title="Work Management"
+    description="Planning ontology: workspaces, projects, work items, workflows, types, and launch policy."
+  />
+  <Tile
+    icon="PlayCircleIcon"
+    href="/docs/domains/agent-execution/1.0.0"
+    title="Agent Execution"
+    description="Dependency graphs, launch readiness, automation attempts, and agent-run lifecycle."
+  />
+  <Tile
+    icon="CommandLineIcon"
+    href="/docs/domains/workspace-runtime/1.0.0"
+    title="Workspace Runtime"
+    description="Durable terminals, working trees, and design-document access for coding sessions."
+  />
+  <Tile
+    icon="WindowIcon"
+    href="/docs/domains/studio-experience/1.0.0"
+    title="Studio Experience"
+    description="The human-facing desktop workspace and its local projections of backend state."
+  />
+  <Tile
+    icon="ComputerDesktopIcon"
+    href="/docs/domains/desktop-runtime/1.0.0"
+    title="Desktop Runtime"
+    description="Tauri lifecycle, sidecar supervision, webview boundary, and native terminal rendering."
+  />
+</Tiles>

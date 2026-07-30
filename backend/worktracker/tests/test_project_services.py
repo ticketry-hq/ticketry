@@ -46,9 +46,9 @@ def test_create_project_seeds_defaults_and_persists_description(project):
             "name", flat=True
         )
     ) == {
-        "Idea",
-        "Refinement",
-        "Ready",
+        "Grill",
+        "Spec",
+        "Tickets",
         "Implement",
         "Review",
         "Done",
@@ -78,14 +78,14 @@ def test_create_project_rejects_duplicate_slug(project):
 
 
 @pytest.mark.django_db
-def test_resolve_current_project_creates_fully_seeded_coding_project():
+def test_resolve_current_project_creates_fully_seeded_cdn_project():
     Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
 
     resolved = resolve_current_project()
 
     assert resolved.name == "coding"
-    assert resolved.slug == "CODING"
-    assert Project.objects.filter(slug="CODING").count() == 1
+    assert resolved.slug == "CDN"
+    assert Project.objects.filter(slug="CDN").count() == 1
     assert State.objects.filter(project=resolved).count() == 7
     assert IssueType.objects.filter(project=resolved).count() == 4
     assert LaunchBinding.objects.filter(issue_type__project=resolved).count() == 21
@@ -98,10 +98,10 @@ def test_resolve_current_project_creates_fully_seeded_coding_project():
 
 
 @pytest.mark.django_db
-def test_resolve_current_project_returns_existing_coding_project():
+def test_resolve_current_project_returns_existing_cdn_project():
     workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
     existing = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="Existing", slug="CODING"
+        id=uuid.uuid4(), workspace=workspace, name="Existing", slug="CDN"
     )
 
     resolved = resolve_current_project()
@@ -125,7 +125,7 @@ def test_resolve_current_project_preserves_other_projects_and_is_idempotent(proj
     second = resolve_current_project()
 
     assert first.id == second.id
-    assert first.slug == "CODING"
+    assert first.slug == "CDN"
     assert Project.objects.count() == 2
     assert Project.objects.filter(**original).exists()
 
@@ -145,7 +145,7 @@ def test_resolve_current_project_is_safe_for_concurrent_callers():
         resolved_ids = list(executor.map(lambda _: resolve_in_thread(), range(2)))
 
     assert resolved_ids[0] == resolved_ids[1]
-    assert Project.objects.filter(slug="CODING").count() == 1
+    assert Project.objects.filter(slug="CDN").count() == 1
 
 
 @pytest.mark.django_db

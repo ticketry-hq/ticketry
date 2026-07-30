@@ -20,6 +20,8 @@ struct TmuxEnvironmentOverride {
     previous_tmux: Option<std::ffi::OsString>,
     previous_term: Option<std::ffi::OsString>,
     previous_terminfo: Option<std::ffi::OsString>,
+    previous_data_dir: Option<std::ffi::OsString>,
+    previous_socket: Option<std::ffi::OsString>,
 }
 
 impl TmuxEnvironmentOverride {
@@ -28,15 +30,21 @@ impl TmuxEnvironmentOverride {
         let previous_tmux = env::var_os("TMUX");
         let previous_term = env::var_os("TERM");
         let previous_terminfo = env::var_os("TERMINFO");
+        let previous_data_dir = env::var_os("MUXED_DATA_DIR");
+        let previous_socket = env::var_os("MUXED_TMUX_SOCKET");
         env::set_var("TMUX_TMPDIR", path);
         env::remove_var("TMUX");
         env::set_var("TERM", "xterm-256color");
         env::remove_var("TERMINFO");
+        env::set_var("MUXED_DATA_DIR", path.join("data"));
+        env::set_var("MUXED_TMUX_SOCKET", SOCKET);
         Self {
             previous_tmpdir,
             previous_tmux,
             previous_term,
             previous_terminfo,
+            previous_data_dir,
+            previous_socket,
         }
     }
 }
@@ -58,6 +66,14 @@ impl Drop for TmuxEnvironmentOverride {
         match self.previous_terminfo.take() {
             Some(value) => env::set_var("TERMINFO", value),
             None => env::remove_var("TERMINFO"),
+        }
+        match self.previous_data_dir.take() {
+            Some(value) => env::set_var("MUXED_DATA_DIR", value),
+            None => env::remove_var("MUXED_DATA_DIR"),
+        }
+        match self.previous_socket.take() {
+            Some(value) => env::set_var("MUXED_TMUX_SOCKET", value),
+            None => env::remove_var("MUXED_TMUX_SOCKET"),
         }
     }
 }
@@ -92,7 +108,6 @@ impl IsolatedTmux {
                 "-d",
                 "-s",
                 "pt-integration-run",
-                "/bin/sh",
             ],
         );
         run_tmux(
@@ -115,6 +130,7 @@ impl IsolatedTmux {
     fn has_session(&self) -> bool {
         Command::new(&self.executable)
             .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
             .args(["-L", SOCKET, "has-session", "-t", "pt-integration-run"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -127,6 +143,7 @@ impl IsolatedTmux {
     fn window_size(&self) -> String {
         let output = Command::new(&self.executable)
             .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
             .args([
                 "-L",
                 SOCKET,
@@ -153,6 +170,7 @@ impl IsolatedTmux {
     fn pane_value(&self, format: &str) -> String {
         let output = Command::new(&self.executable)
             .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
             .args([
                 "-L",
                 SOCKET,
@@ -179,6 +197,7 @@ impl IsolatedTmux {
     fn global_option(&self, option: &str) -> String {
         let output = Command::new(&self.executable)
             .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
             .args(["-L", SOCKET, "show-options", "-g", "-v", option])
             .stdin(Stdio::null())
             .output()
@@ -193,12 +212,28 @@ impl IsolatedTmux {
             .trim()
             .to_owned()
     }
+
+    fn set_window_option(&self, option: &str, value: &str) {
+        run_tmux(
+            &self.executable,
+            &self.socket_dir,
+            [
+                "set-option",
+                "-w",
+                "-t",
+                "pt-integration-run",
+                option,
+                value,
+            ],
+        );
+    }
 }
 
 impl Drop for IsolatedTmux {
     fn drop(&mut self) {
         let _ = Command::new(&self.executable)
             .env("TMUX_TMPDIR", &self.socket_dir)
+            .env_remove("TMUX")
             .args(["-L", SOCKET, "kill-server"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -291,7 +326,22 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
     let _environment_lock = TMUX_ENV_LOCK.lock().expect("lock TMUX_TMPDIR");
     let server = IsolatedTmux::start();
     let _environment = TmuxEnvironmentOverride::set(&server.socket_dir);
-    let mut viewer = TmuxViewer::attach(RUN_ID, 80, 12).expect("attach viewer PTY");
+    let viewer = TmuxViewer::attach(RUN_ID, 80, 12).expect("attach viewer PTY");
+    let (mut viewer, mut reader) = viewer.into_control_and_reader();
+    let (output_sender, output_receiver) = mpsc::channel();
+    let reader_thread = thread::spawn(move || {
+        let mut buffer = [0_u8; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => return,
+                Ok(read) => {
+                    if output_sender.send(buffer[..read].to_vec()).is_err() {
+                        return;
+                    }
+                }
+            }
+        }
+    });
 
     viewer
         .write_all(
@@ -312,6 +362,13 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
         thread::sleep(Duration::from_millis(20));
     }
 
+    const MARKER: &[u8] = b"POSMARK";
+    server.set_window_option(
+        "copy-mode-position-format",
+        std::str::from_utf8(MARKER).expect("ASCII marker"),
+    );
+    while output_receiver.try_recv().is_ok() {}
+
     viewer
         .scroll(TmuxScrollDirection::Up, 6)
         .expect("scroll upward");
@@ -322,6 +379,26 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
             .parse::<usize>()
             .expect("numeric scroll position")
             >= 6
+    );
+    let output_deadline = std::time::Instant::now() + Duration::from_secs(2);
+    let mut rendered = Vec::new();
+    while std::time::Instant::now() < output_deadline {
+        match output_receiver.recv_timeout(Duration::from_millis(50)) {
+            Ok(chunk) => rendered.extend_from_slice(&chunk),
+            Err(mpsc::RecvTimeoutError::Timeout) if !rendered.is_empty() => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    assert!(
+        rendered
+            .windows(b"SCROLL_".len())
+            .any(|bytes| bytes == b"SCROLL_"),
+        "copy-mode should redraw terminal history"
+    );
+    assert!(
+        !rendered.windows(MARKER.len()).any(|bytes| bytes == MARKER),
+        "copy-mode position marker must be hidden"
     );
 
     viewer
@@ -338,6 +415,7 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
         viewer.detach().expect("detach scrolled viewer"),
         ViewerOutcome::Detached
     );
+    reader_thread.join().expect("join viewer output reader");
     assert!(
         server.has_session(),
         "detach must preserve the durable session"
@@ -362,6 +440,8 @@ fn tmux_path() -> PathBuf {
 fn run_tmux<const N: usize>(executable: &Path, socket_dir: &Path, arguments: [&str; N]) {
     let output = Command::new(executable)
         .env("TMUX_TMPDIR", socket_dir)
+        .env_remove("TMUX")
+        .current_dir(socket_dir)
         .args(["-L", SOCKET])
         .args(arguments)
         .stdin(Stdio::null())

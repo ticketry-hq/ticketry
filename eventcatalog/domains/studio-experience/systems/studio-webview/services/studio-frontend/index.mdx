@@ -1,0 +1,32 @@
+---
+id: studio-frontend
+name: Studio Frontend
+version: 1.0.0
+summary: React application that presents work, documents, terminals, settings, and agent activity.
+owners:
+  - ticketry
+receives:
+  - id: terminal-ready
+    version: 1.0.0
+  - id: backend-session-ended
+    version: 1.0.0
+sends:
+  - id: change-work-item
+    version: 1.0.0
+  - id: get-work-item-detail
+    version: 1.0.0
+  - id: terminal-init-spawn
+    version: 1.0.0
+  - id: terminal-init-attach
+    version: 1.0.0
+flows:
+  - id: work-item-change-synchronization
+  - id: terminal-spawn-or-attach
+---
+
+Studio owns interaction and view composition. It uses the generated TypeScript
+SDK for HTTP contracts and explicit transport contracts for WebSocket frames.
+
+<NodeGraph />
+
+<MessageTable format="all" />

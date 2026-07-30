@@ -1,10 +1,10 @@
 """The review-finding create tool — the agent-side public contract (#905).
 
 The Story integration-review agent turns a finding into a direct Implementation
-child born in ``Ready`` through one dedicated call. This suite proves the tool's
-two responsibilities: it renders the fixed ``Path`` / inclusive ``Lines`` /
-optional ``Note`` evidence block and rejects malformed evidence *before* any SDK
-write, and it surfaces the backend gate's structured rejection
+child born in the Implementation start stage through one dedicated call. This
+suite proves the tool's two responsibilities: it renders the fixed ``Path`` /
+inclusive ``Lines`` / optional ``Note`` evidence block and rejects malformed
+evidence *before* any SDK write, and it surfaces the backend gate's rejection
 (``detail``/``code``/``from``/``to``) rather than swallowing or raising it.
 """
 
@@ -30,7 +30,7 @@ GATE_REJECTION = {
     "detail": "A review finding's parent Story must be in Review.",
     "code": "parent_not_review",
     "from": "Implement",
-    "to": "Ready",
+    "to": "Implement",
 }
 
 

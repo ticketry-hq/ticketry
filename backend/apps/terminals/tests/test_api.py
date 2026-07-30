@@ -246,7 +246,7 @@ def test_list_terminals_reconciles_dead_session_before_responding(client, monkey
     def fake_reconcile():
         reconcile_calls.append(1)
         dao_soft_delete("run-dead", "2026-05-29T12:00:00")
-        return tmux.ReconcileResult(soft_deleted=["run-dead"], killed_orphans=[])
+        return tmux.ReconcileResult(soft_deleted=["run-dead"])
 
     monkeypatch.setattr(
         session_module.tmux_sessions, "reconcile_sessions", fake_reconcile

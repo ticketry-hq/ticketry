@@ -1,6 +1,11 @@
 import { useConfigStore as useAgentConfigStore } from "../../features/agents/stores/configStore";
 import { useOnboardingStore } from "../onboarding/onboardingStore";
-import { useConfigStore } from "../../features/studio/stores/configStore";
+import {
+  isSidebarEnabled,
+  sidebarPaneComposition,
+  type SidebarPaneComposition,
+  useConfigStore,
+} from "../../features/studio/stores/configStore";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";
 import { loadKeybindingOverrides } from "../navigation/keymapSettings";
 import {
@@ -10,6 +15,9 @@ import {
 } from "../../features/studio/stores/uiStore";
 
 export type BootstrapOutcome = "provisioning" | "unavailable" | "ready";
+
+const DEFAULT_PROJECT_KEY = "CDN";
+const LEGACY_PROJECT_KEY = "CODING";
 
 export async function bootstrapStudio(): Promise<BootstrapOutcome> {
   try {
@@ -52,7 +60,14 @@ function preferredProfileIndex(): number | null {
 }
 
 async function restoreWorkspace(profileIndex: number): Promise<void> {
-  const projectsEnabled = useConfigStore.getState().features.projects;
+  const config = useConfigStore.getState();
+  const projectsEnabled = config.features.projects;
+  if (!isSidebarEnabled(config)) {
+    await selectResolvedProject();
+    focusVisiblePane("tasks");
+    return;
+  }
+
   if (!projectsEnabled) {
     await selectResolvedProject();
     useUIStore.getState().setSidebarVisible(true);
@@ -82,25 +97,36 @@ async function restoreWorkspace(profileIndex: number): Promise<void> {
 
 async function selectResolvedProject(): Promise<void> {
   const tasks = useTasksStore.getState();
-  let resolved = tasks.projects.find(
-    (project) => project.identifier === "CODING",
-  );
+  let resolved =
+    tasks.projects.find(
+      (project) => project.identifier === DEFAULT_PROJECT_KEY,
+    ) ??
+    tasks.projects.find(
+      (project) => project.identifier === LEGACY_PROJECT_KEY,
+    );
 
   if (!resolved) {
     try {
       resolved = await tasks.createProject({
         name: "coding",
-        slug: "CODING",
+        slug: DEFAULT_PROJECT_KEY,
       });
     } catch {
       // A concurrent bootstrap may have resolved the project first. Refresh
       // once and use that authoritative row instead of duplicating resolution
       // policy in project-scoped code paths.
       await tasks.loadProjects();
-      resolved = useTasksStore
-        .getState()
-        .projects.find((project) => project.identifier === "CODING");
-      if (!resolved) throw new Error("The resolved CODING project is unavailable.");
+      const refreshedProjects = useTasksStore.getState().projects;
+      resolved =
+        refreshedProjects.find(
+          (project) => project.identifier === DEFAULT_PROJECT_KEY,
+        ) ??
+        refreshedProjects.find(
+          (project) => project.identifier === LEGACY_PROJECT_KEY,
+        );
+      if (!resolved) {
+        throw new Error("The resolved default project is unavailable.");
+      }
     }
   }
 
@@ -110,10 +136,15 @@ async function selectResolvedProject(): Promise<void> {
 function focusVisiblePane(preferredPane: FocusedPane): void {
   const { sidebarVisible, setFocusedPane } = useUIStore.getState();
   const projectIsSelected = useTasksStore.getState().selectedProjectId !== null;
+  const config = useConfigStore.getState();
+  const paneComposition: SidebarPaneComposition = sidebarPaneComposition(
+    config.features.projects,
+    isSidebarEnabled(config),
+  );
   const visiblePanes = visiblePaneOrder(
     sidebarVisible,
     projectIsSelected,
-    useConfigStore.getState().features.projects,
+    paneComposition,
   );
 
   setFocusedPane(

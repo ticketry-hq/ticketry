@@ -1,0 +1,49 @@
+---
+id: work-management
+name: Work Management
+version: 1.0.0
+summary: |
+  The planning ontology: workspaces contain projects; projects contain typed work
+  items whose lifecycle is governed by configurable workflows and launch policy.
+owners:
+  - ticketry
+systems:
+  - id: worktracker
+    version: 1.0.0
+entities:
+  - id: workspace
+    version: 1.0.0
+  - id: project
+    version: 1.0.0
+  - id: work-item
+    version: 1.0.0
+  - id: work-item-type
+    version: 1.0.0
+  - id: workflow-state
+    version: 1.0.0
+  - id: launch-binding
+    version: 1.0.0
+flows:
+  - id: work-item-change-synchronization
+    version: 1.0.0
+badges:
+  - content: Core domain
+    backgroundColor: blue
+    textColor: blue
+---
+
+## Domain language
+
+This is the domain model behind the tickets visible in Studio. A **work item**
+is the canonical term; issue, ticket, task, module, and project are views or
+specializations. A **workflow** is a directed graph, and a **launch binding**
+selects how an agent should be launched for a work-item type and workflow state.
+
+## Intended ownership
+
+The backend database is authoritative. Studio holds projections for interaction
+and must reconcile them from snapshots, deltas, or explicit refetches.
+
+<ContextDiagram />
+
+<NodeGraph />

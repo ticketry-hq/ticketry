@@ -82,6 +82,7 @@ export function ModuleTabStrip() {
         <button
           type="button"
           aria-label="Add module"
+          data-coach-anchor="module-add"
           onClick={() => pushModal({ type: "add-module" })}
           className="flex w-8 shrink-0 items-center justify-center border-r border-pane-border text-sm text-text-muted hover:bg-pane-panel hover:text-text-primary"
         >

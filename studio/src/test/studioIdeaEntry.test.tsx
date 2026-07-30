@@ -25,11 +25,7 @@ vi.mock("../features/studio/lib/api", async (importOriginal) => ({
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => null,
   AutomationFailureChicklet: () => null,
-}));
-
-vi.mock("../features/agents/terminal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/agents/terminal")>()),
-  useScratchAgentCount: () => 0,
+  ScratchStateBadge: () => null,
 }));
 
 const IDEA = {

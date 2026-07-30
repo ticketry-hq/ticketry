@@ -11,18 +11,14 @@ import { TEMP_TASK_ID } from "../features/agents/types";
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => null,
   AutomationFailureChicklet: () => null,
-}));
-
-vi.mock("../features/agents/terminal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/agents/terminal")>()),
-  useScratchAgentCount: () => 0,
+  ScratchStateBadge: () => null,
 }));
 
 const TODO: TaskState = {
   id: "todo",
   name: "Todo",
   group: "backlog",
-  color: null,
+  color: "#123456",
   sort_order: 0,
 };
 
@@ -47,6 +43,7 @@ function story(overrides: Partial<TaskSummary> = {}): TaskSummary {
     name: "Alpha launch",
     project_id: "project-1",
     sequence_id: 201,
+    key: "CODING-201",
     state: TODO,
     assignees: [],
     labels: [],
@@ -88,6 +85,7 @@ describe("Studio Stories search", () => {
           id: "story-beta",
           name: "Beta follow-up",
           sequence_id: 202,
+          key: "CODING-202",
         }),
       ],
       states: [SCRATCH, TODO, DONE],
@@ -103,11 +101,20 @@ describe("Studio Stories search", () => {
     });
   });
 
-  it("narrows by title or displayed ticket number and clears back to every Story", () => {
+  it("renders canonical keys and narrows by key, title, or bare ticket number", () => {
     render(<TasksPane />);
 
     const search = screen.getByRole("textbox", { name: "Search stories" });
     const ideaEntry = screen.getByRole("textbox", { name: "Capture an idea" });
+    const alphaRow = screen.getByRole("treeitem", { name: /Alpha launch/ });
+    expect(alphaRow).toHaveTextContent("CODING-201 · Alpha launch");
+    const alphaKey = within(alphaRow).getByText("CODING-201");
+    expect(alphaKey).toHaveAttribute("data-task-id-token");
+    expect(alphaKey).toHaveStyle({ color: "#123456" });
+    expect(within(alphaRow).getByText("Alpha launch").parentElement).toHaveClass(
+      "min-w-0",
+      "truncate",
+    );
     expect(
       screen.getByRole("button", { name: "Collapse Done" }),
     ).toHaveTextContent("Done0");
@@ -115,6 +122,11 @@ describe("Studio Stories search", () => {
       search.compareDocumentPosition(ideaEntry) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "  coding-202  " } });
+    expect(visibleStoryNames()).toEqual([
+      expect.stringMatching(/CODING-202 · Beta follow-up/),
+    ]);
 
     fireEvent.change(search, { target: { value: "  ALPHA  " } });
     expect(visibleStoryNames()).toEqual([expect.stringMatching(/Alpha launch/)]);
@@ -199,6 +211,7 @@ describe("Studio Stories search", () => {
       id: "implementation-match",
       name: "Needle implementation",
       sequence_id: 302,
+      key: "CODING-302",
       parent_id: root.id,
       sub_issues_count: 2,
     });
@@ -219,6 +232,7 @@ describe("Studio Stories search", () => {
             id: "task-match",
             name: "Needle validation",
             sequence_id: 304,
+            key: "CODING-304",
             parent_id: matchingParent.id,
           }),
           story({
@@ -237,13 +251,13 @@ describe("Studio Stories search", () => {
     render(<TasksPane />);
 
     fireEvent.change(screen.getByRole("textbox", { name: "Search stories" }), {
-      target: { value: "needle" },
+      target: { value: "coding-304" },
     });
 
     expect(visibleStoryNames()).toEqual([
       expect.stringMatching(/Release work/),
-      expect.stringMatching(/Needle implementation/),
-      expect.stringMatching(/Needle validation/),
+      expect.stringMatching(/CODING-302 · Needle implementation/),
+      expect.stringMatching(/CODING-304 · Needle validation/),
     ]);
     expect(
       screen.queryByText("Unrelated implementation"),
@@ -358,7 +372,8 @@ describe("Studio Stories search", () => {
         story({
           id: TEMP_TASK_ID,
           name: "Local scratch workspace",
-          sequence_id: null,
+          sequence_id: 500,
+          key: undefined,
           state: SCRATCH,
           parent_id: null,
         }),
@@ -376,7 +391,8 @@ describe("Studio Stories search", () => {
 
     expect(
       screen.getByRole("treeitem", { name: /Local scratch workspace/ }),
-    ).toBeInTheDocument();
+    ).toHaveTextContent("500 · Local scratch workspace");
+    expect(screen.queryByText(/undefined-|null-/)).not.toBeInTheDocument();
     expect(
       screen.getByRole("treeitem", { name: /Alpha loading branch/ }),
     ).toHaveAttribute("aria-expanded", "true");

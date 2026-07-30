@@ -1,3 +1,5 @@
+import type { UserNotice } from "./userNotice";
+
 export type StudioPlatform = "browser" | "desktop";
 
 export interface RuntimeCapabilities {
@@ -36,11 +38,13 @@ export interface ServiceHealth {
 }
 
 export type ServiceHealthListener = (health: ServiceHealth) => void;
+export type UserNoticeListener = (notice: UserNotice) => void;
 
 export interface RuntimeStartupConfiguration {
   readonly endpoints: RuntimeEndpoints;
   readonly values: RuntimeValues;
   readonly serviceHealth: ServiceHealth;
+  readonly initialNotices: readonly UserNotice[];
 }
 
 /** Platform-neutral boundary consumed by the shared Studio application. */
@@ -51,4 +55,5 @@ export interface StudioRuntime {
   retryServices(): Promise<void>;
   startup(): RuntimeStartupConfiguration;
   subscribeServiceHealth(listener: ServiceHealthListener): () => void;
+  subscribeUserNotices(listener: UserNoticeListener): () => void;
 }

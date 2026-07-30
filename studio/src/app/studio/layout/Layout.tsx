@@ -7,7 +7,7 @@ import { WorkArea } from "./WorkArea";
 export function Layout() {
   const {
     layout,
-    projectsEnabled,
+    paneComposition,
     sidebarVisible,
     outerGroupRef,
     workAreaGroupRef,
@@ -17,7 +17,7 @@ export function Layout() {
   const outerLayout = outerPanelLayout(
     layout,
     sidebarVisible,
-    projectsEnabled,
+    paneComposition,
   );
   const [tasksSize, workspaceSize] = splitWorkArea(layout);
 
@@ -28,7 +28,9 @@ export function Layout() {
       className="h-full w-full"
       onLayout={handleOuterLayout}
     >
-      {sidebarVisible ? <Sidebar layout={layout} /> : null}
+      {sidebarVisible && paneComposition !== "absent" ? (
+        <Sidebar layout={layout} paneComposition={paneComposition} />
+      ) : null}
       <Panel defaultSize={outerLayout.at(-1)} minSize={30} order={3}>
         <WorkArea
           tasksSize={tasksSize}

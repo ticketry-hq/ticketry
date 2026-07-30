@@ -1,0 +1,53 @@
+---
+id: terminal-spawn-or-attach
+name: Terminal Spawn or Attach
+version: 1.0.0
+summary: Establishes a terminal WebSocket as either a new session or an attachment to a durable run.
+owners:
+  - ticketry
+steps:
+  - id: open
+    title: User opens a terminal surface
+    actor:
+      name: Ticketry user
+    next_step: choose
+  - id: choose
+    title: Choose explicit init mode
+    service:
+      id: studio-frontend
+    next_steps:
+      - spawn
+      - attach
+  - id: spawn
+    title: Request a fresh session
+    message:
+      id: terminal-init-spawn
+      version: 1.0.0
+    next_step: terminal-service
+  - id: attach
+    title: Request an existing session
+    message:
+      id: terminal-init-attach
+      version: 1.0.0
+    next_step: terminal-service
+  - id: terminal-service
+    title: Spawn or attach through tmux
+    service:
+      id: terminal-service
+    next_step: ready
+  - id: ready
+    title: Confirm live byte stream
+    message:
+      id: terminal-ready
+      version: 1.0.0
+    next_step: render
+  - id: render
+    title: Render with the native terminal
+    service:
+      id: tauri-shell
+---
+
+The explicit `mode` discriminant prevents the client and backend from inferring
+spawn versus attach from different clues.
+
+<NodeGraph />

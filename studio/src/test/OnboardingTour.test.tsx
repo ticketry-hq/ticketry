@@ -5,18 +5,53 @@ import OnboardingTour from "../app/onboarding/OnboardingTour";
 import { useOnboardingStore } from "../app/onboarding/onboardingStore";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { DEFAULT_PANEL_LAYOUT } from "../app/studio/layout/layoutMath";
+import { ModuleTabStrip } from "../features/studio/components/ModuleTabStrip";
+import { ModulesPane } from "../features/studio/pages/modules/ModulesPane";
+import { ProjectsPane } from "../features/studio/pages/projects/ProjectsPane";
+import {
+  isSidebarEnabled,
+  useConfigStore,
+} from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 
 const CUSTOM_PANEL_LAYOUT = [12, 24, 40, 24];
 
+interface Features {
+  sidebar: boolean;
+  projects: boolean;
+}
+
 function startTourFromLayout(
   sidebarVisible: boolean,
   panelLayout: number[] | null,
+  features: Features = { sidebar: true, projects: true },
 ) {
   useOnboardingTourStore.getState().reset();
+  useConfigStore.setState({ features });
   useUIStore.setState({ sidebarVisible, panelLayout });
   useOnboardingTourStore.getState().start("project-created");
+}
+
+function TourSurface() {
+  const sidebarEnabled = useConfigStore((state) => isSidebarEnabled(state));
+  const projectsEnabled = useConfigStore((state) => state.features.projects);
+
+  return (
+    <>
+      {sidebarEnabled ? (
+        <>
+          {projectsEnabled ? <ProjectsPane /> : null}
+          <ModulesPane />
+        </>
+      ) : null}
+      <ModuleTabStrip />
+      <textarea data-coach-anchor="story-add" aria-label="Capture an idea" />
+      <div data-coach-anchor="workspace" tabIndex={-1}>
+        Workspace
+      </div>
+    </>
+  );
 }
 
 function renderTour(onSelectStory = vi.fn()) {
@@ -24,10 +59,7 @@ function renderTour(onSelectStory = vi.fn()) {
     onSelectStory,
     ...render(
       <>
-        <button data-coach-anchor="project-add">+ Add Project</button>
-        <button data-coach-anchor="module-add">+ Add Module</button>
-        <textarea data-coach-anchor="story-add" aria-label="Capture an idea" />
-        <div data-coach-anchor="workspace">Workspace</div>
+        <TourSurface />
         <OnboardingTour onSelectStory={onSelectStory} />
       </>,
     ),
@@ -36,14 +68,27 @@ function renderTour(onSelectStory = vi.fn()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useTasksStore.setState({ selectedModuleId: null });
+  useTasksStore.setState((state) => ({
+    projects: [],
+    modules: [],
+    selectedProjectId: null,
+    selectedModuleId: null,
+    loading: {
+      ...state.loading,
+      projects: false,
+      modules: false,
+    },
+  }));
   useOnboardingTourStore.getState().reset();
   startTourFromLayout(true, DEFAULT_PANEL_LAYOUT);
 });
 
 describe("post-project onboarding tour", () => {
-  it("runs four anchored steps, creates and selects a module, then advances on real Story creation", async () => {
-    startTourFromLayout(false, CUSTOM_PANEL_LAYOUT);
+  it("creates a module and Story and reaches the final step with the sidebar flag off without changing layout", async () => {
+    startTourFromLayout(false, CUSTOM_PANEL_LAYOUT, {
+      sidebar: false,
+      projects: false,
+    });
     const createModule = vi.fn(async () => {
       useTasksStore.setState({ selectedModuleId: "module-returned" });
     });
@@ -53,23 +98,32 @@ describe("post-project onboarding tour", () => {
     const { onSelectStory } = renderTour();
 
     expect(useUIStore.getState()).toMatchObject({
-      sidebarVisible: true,
-      panelLayout: DEFAULT_PANEL_LAYOUT,
+      sidebarVisible: false,
+      panelLayout: CUSTOM_PANEL_LAYOUT,
     });
-    expect(screen.getByRole("dialog", { name: "Your projects" })).toHaveAttribute(
-      "data-placement",
-      "anchored",
-    );
-
-    fireEvent.click(screen.getByTestId("onboarding-continue"));
+    expect(screen.queryByRole("dialog", { name: "Your projects" }))
+      .not.toBeInTheDocument();
+    expect(useOnboardingTourStore.getState().step).toBe("module-create");
+    const moduleAnchor = screen.getByRole("button", { name: "Add module" });
+    expect(document.querySelectorAll('[data-coach-anchor="module-add"]'))
+      .toHaveLength(1);
     expect(
       screen.getByRole("dialog", { name: "Create your first module" }),
     ).toHaveAttribute("data-placement", "anchored");
+    fireEvent.keyDown(
+      screen.getByRole("dialog", { name: "Create your first module" }),
+      { key: "Escape" },
+    );
+    expect(moduleAnchor).toHaveFocus();
     fireEvent.click(screen.getByTestId("onboarding-create-module"));
 
-    expect(
-      await screen.findByRole("dialog", { name: "Create your first story" }),
-    ).toHaveAttribute("data-placement", "anchored");
+    const storyDialog = await screen.findByRole("dialog", {
+      name: "Create your first story",
+    });
+    expect(storyDialog).toHaveAttribute("data-placement", "anchored");
+    fireEvent.keyDown(storyDialog, { key: "Escape" });
+    expect(screen.getByRole("textbox", { name: "Capture an idea" }))
+      .toHaveFocus();
     expect(createModule).toHaveBeenCalledWith("project-created", "General");
     expect(useTasksStore.getState().selectedModuleId).toBe("module-returned");
     expect(screen.queryByTestId("onboarding-story-name")).not.toBeInTheDocument();
@@ -80,6 +134,11 @@ describe("post-project onboarding tour", () => {
     expect(
       await screen.findByRole("dialog", { name: "Your first story is ready" }),
     ).toHaveAttribute("data-placement", "anchored");
+    fireEvent.keyDown(
+      screen.getByRole("dialog", { name: "Your first story is ready" }),
+      { key: "Escape" },
+    );
+    expect(screen.getByText("Workspace")).toHaveFocus();
     await waitFor(() =>
       expect(onSelectStory).toHaveBeenCalledWith("story-returned"),
     );
@@ -92,6 +151,63 @@ describe("post-project onboarding tour", () => {
       panelLayout: CUSTOM_PANEL_LAYOUT,
     });
   });
+
+  it.each([
+    {
+      features: { sidebar: true, projects: true },
+      openingStep: "projects-pane",
+      openingTitle: "Your projects",
+    },
+    {
+      features: { sidebar: true, projects: false },
+      openingStep: "module-create",
+      openingTitle: "Create your first module",
+    },
+    {
+      features: { sidebar: false, projects: false },
+      openingStep: "module-create",
+      openingTitle: "Create your first module",
+    },
+    {
+      features: { sidebar: false, projects: true },
+      openingStep: "module-create",
+      openingTitle: "Create your first module",
+    },
+  ] as const)(
+    "opens on $openingStep for features $features and keeps exactly one tab-strip module anchor",
+    ({ features, openingStep, openingTitle }) => {
+      startTourFromLayout(true, CUSTOM_PANEL_LAYOUT, features);
+      renderTour();
+
+      expect(useOnboardingTourStore.getState().step).toBe(openingStep);
+      expect(screen.getByRole("dialog", { name: openingTitle })).toHaveAttribute(
+        "data-placement",
+        "anchored",
+      );
+      const moduleAnchor = screen.getByRole("button", { name: "Add module" });
+      const moduleAnchors = document.querySelectorAll(
+        '[data-coach-anchor="module-add"]',
+      );
+      expect(moduleAnchors).toHaveLength(1);
+      expect(moduleAnchors[0]).toBe(moduleAnchor);
+
+      if (openingStep === "projects-pane") {
+        const projectAnchor = screen.getByRole("button", {
+          name: "+ Add Project",
+        });
+        expect(document.querySelector('[data-coach-anchor="project-add"]'))
+          .toBe(projectAnchor);
+      } else {
+        expect(screen.queryByRole("dialog", { name: "Your projects" }))
+          .not.toBeInTheDocument();
+        fireEvent.keyDown(
+          screen.getByRole("dialog", { name: "Create your first module" }),
+          { key: "Escape" },
+        );
+        expect(moduleAnchor).toHaveFocus();
+      }
+    },
+  );
 
   it("retains the module value, step, and focus when creation fails so it can retry", async () => {
     const createModule = vi.fn(async () => {

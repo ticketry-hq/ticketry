@@ -31,6 +31,17 @@ import { assertAcceptanceResult } from "./installed-artifact-acceptance.mjs";
 
 const CREDENTIAL_PATTERN =
   /((api|access|auth|secret|token|password)[_-]?(key|token|password)?\s*[=:])|bearer\s+/i;
+const PACKAGED_SKILLS = [
+  "code-review",
+  "domain-modeling",
+  "grill-with-docs",
+  "grilling",
+  "implement",
+  "setup-matt-pocock-skills",
+  "tdd",
+  "to-spec",
+  "to-tickets",
+];
 
 async function fixture() {
   const sandboxRoot = await mkdtemp(path.join(tmpdir(), "ticketry-driver-test-"));
@@ -71,7 +82,7 @@ async function fixture() {
             providers: Object.fromEntries(
               ["claude", "codex", "agy", "gemini"].map((provider) => [
                 provider,
-                ["grill-with-docs", "to-spec", "to-tickets"],
+                PACKAGED_SKILLS,
               ]),
             ),
             mcp_configured: {
@@ -243,10 +254,10 @@ test("packaged sidecar smoke proves provider discovery, config preservation, and
       skill_configuration_unchanged: true,
       skill_overlay_cleanup: true,
       packaged_skill_providers: {
-        claude: ["grill-with-docs", "to-spec", "to-tickets"],
-        codex: ["grill-with-docs", "to-spec", "to-tickets"],
-        agy: ["grill-with-docs", "to-spec", "to-tickets"],
-        gemini: ["grill-with-docs", "to-spec", "to-tickets"],
+        claude: PACKAGED_SKILLS,
+        codex: PACKAGED_SKILLS,
+        agy: PACKAGED_SKILLS,
+        gemini: PACKAGED_SKILLS,
       },
     });
   });

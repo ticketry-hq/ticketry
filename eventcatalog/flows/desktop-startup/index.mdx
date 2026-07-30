@@ -1,0 +1,39 @@
+---
+id: desktop-startup
+name: Desktop Startup
+version: 1.0.0
+summary: Starts one Ticketry product from the Tauri shell through a healthy sidecar to the Studio webview.
+owners:
+  - ticketry
+steps:
+  - id: launch
+    title: User launches Ticketry
+    actor:
+      name: Ticketry user
+    next_step: shell
+  - id: shell
+    title: Start native shell
+    service:
+      id: tauri-shell
+    next_step: sidecar
+  - id: sidecar
+    title: Supervise Python backend sidecar
+    service:
+      id: ticketry-backend
+    next_step: health
+  - id: health
+    title: Wait for backend health
+    custom:
+      title: GET /api/healthz
+      summary: The shell only presents the product once its owned backend is ready.
+    next_step: studio
+  - id: studio
+    title: Load Studio webview
+    service:
+      id: studio-frontend
+---
+
+Browser-only service commands support development; they are not a separate
+product boundary.
+
+<NodeGraph />

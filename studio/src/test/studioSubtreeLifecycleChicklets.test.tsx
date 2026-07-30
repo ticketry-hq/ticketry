@@ -14,11 +14,6 @@ import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 
-vi.mock("../features/agents/terminal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/agents/terminal")>()),
-  useScratchAgentCount: () => 0,
-}));
-
 const getAgentStatus = vi.hoisted(() =>
   vi.fn<() => Promise<AgentStatusSnapshot>>(),
 );

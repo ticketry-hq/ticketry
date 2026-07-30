@@ -151,7 +151,6 @@ describe("agentStatusStore selectors", () => {
         "module-1",
       ),
     ).toEqual([
-      { state: "lost", count: 1 },
       { state: "error", count: 1 },
       { state: "needs_input", count: 1 },
       { state: "permission_required", count: 1 },

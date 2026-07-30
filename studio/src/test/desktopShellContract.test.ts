@@ -125,7 +125,7 @@ describe("desktop shell security contract", () => {
       "desktop:build": "node scripts/release-build.mjs",
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
-      "release:test": "node --test scripts/release-build.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/release-publish.test.mjs",
+      "release:test": "node --test scripts/release-build.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs",
       "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && cargo test --manifest-path src-tauri/Cargo.toml && node scripts/desktop-smoke.mjs",
       "desktop:smoke:dev": "node scripts/desktop-smoke.mjs dev",
       "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",
@@ -139,6 +139,7 @@ describe("desktop shell security contract", () => {
     expect(configuration.bundle).toEqual({
       active: true,
       targets: ["app", "dmg"],
+      icon: ["icons/icon.icns", "icons/icon.png"],
       externalBin: ["binaries/muxed-backend", "binaries/ticketry-hook"],
       macOS: {
         minimumSystemVersion: "11.0",

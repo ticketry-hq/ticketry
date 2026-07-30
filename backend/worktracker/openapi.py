@@ -4,7 +4,9 @@ from copy import deepcopy
 from functools import lru_cache
 
 from ninja import NinjaAPI
+from pydantic.json_schema import models_json_schema
 
+from apps.settings_store.schemas import ConfigBody
 from worktracker.api import router
 
 
@@ -44,6 +46,13 @@ def _error_response(description, schema_name):
 def _normalize_schema(schema):
     schema["servers"] = [{"url": API_ROOT}]
     components = schema.setdefault("components", {})
+    # The desktop host owns /api/config, while the shared published schema owns
+    # its models so generated consumers can type that response without adding
+    # host-only routes to the WorkTracker client.
+    _, configuration_schema = models_json_schema(
+        [(ConfigBody, "serialization")],
+        ref_template="#/components/schemas/{model}",
+    )
     components.setdefault("schemas", {}).update(
         {
             "MessageError": {
@@ -76,6 +85,7 @@ def _normalize_schema(schema):
                     }
                 },
             },
+            **configuration_schema["$defs"],
         }
     )
 

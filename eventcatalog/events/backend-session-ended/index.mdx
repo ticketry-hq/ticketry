@@ -1,0 +1,12 @@
+---
+id: backend-session-ended
+name: Backend Session Ended
+version: 1.0.0
+summary: Explicit server-to-client outcome that a terminal session exited or was lost.
+owners:
+  - ticketry
+---
+
+The `backend_session` frame carries `agent_run_id`, `status` (`exited` or
+`lost`), and timestamp. It reports backend/tmux outcome rather than inferred
+WebSocket transport state.

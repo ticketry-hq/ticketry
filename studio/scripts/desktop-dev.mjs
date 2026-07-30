@@ -56,6 +56,14 @@ export function resolveDevelopmentDataDirectory({
   );
 }
 
+export function resolveDevelopmentTmuxSocket(dataDirectory) {
+  const identity = createHash("sha256")
+    .update(path.resolve(dataDirectory))
+    .digest("hex")
+    .slice(0, 16);
+  return `muxed-dev-${identity}`;
+}
+
 function parseFrontendPort(value) {
   if (!/^\d+$/.test(value ?? "") || Number(value) < 1 || Number(value) > 65_535) {
     throw new Error("MUXED_FRONTEND_PORT must be a valid TCP port (1-65535)");
@@ -217,6 +225,7 @@ export function formatDevelopmentIdentity({
   backendPort,
   mcpPort,
   dataDirectory,
+  tmuxSocket,
 }) {
   return [
     "Ticketry desktop development instance:",
@@ -224,6 +233,7 @@ export function formatDevelopmentIdentity({
     `backend=http://127.0.0.1:${backendPort}`,
     `mcp=http://127.0.0.1:${mcpPort}/mcp`,
     `data=${dataDirectory}`,
+    `tmux=${tmuxSocket}`,
   ].join(" ");
 }
 
@@ -271,6 +281,7 @@ export async function main() {
   }
 
   const dataDirectory = resolveDevelopmentDataDirectory();
+  const tmuxSocket = resolveDevelopmentTmuxSocket(dataDirectory);
   const frontendPort = await selectFrontendPort({
     requestedPort: process.env.MUXED_FRONTEND_PORT,
   });
@@ -279,6 +290,7 @@ export async function main() {
   const environment = {
     ...process.env,
     MUXED_DATA_DIR: dataDirectory,
+    MUXED_TMUX_SOCKET: tmuxSocket,
     MUXED_DESKTOP_ORIGIN: frontendOrigin,
     MUXED_DESKTOP_BACKEND_PORT: String(backendPort),
     MUXED_DESKTOP_MCP_PORT: String(mcpPort),
@@ -295,6 +307,7 @@ export async function main() {
     backendPort,
     mcpPort,
     dataDirectory,
+    tmuxSocket,
   }));
   await run(process.execPath, [
     resolveTauriCliPath(),

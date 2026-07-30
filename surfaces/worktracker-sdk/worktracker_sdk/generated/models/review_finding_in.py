@@ -27,7 +27,7 @@ from pydantic_core import to_jsonable_python
 
 class ReviewFindingIn(BaseModel):
     """
-    Body for the dedicated review-finding create (#905).  ``parent_id`` is the Story-in-``Review`` the finding attaches to; the child is always born in ``Ready`` and typed ``Implementation`` server-side. ``description`` carries the caller-rendered ``Path`` / ``Lines`` / ``Note`` evidence block verbatim. ``issue_type_id`` is optional and, if present, must resolve to the project's ``Implementation`` type.
+    Body for the dedicated review-finding create (#905).  ``parent_id`` is the Story-in-``Review`` the finding attaches to; the child is always born in the Implementation workflow's start stage and typed ``Implementation`` server-side. ``description`` carries the caller-rendered ``Path`` / ``Lines`` / ``Note`` evidence block verbatim. ``issue_type_id`` is optional and, if present, must resolve to the project's ``Implementation`` type.
     """ # noqa: E501
     description: StrictStr
     issue_type_id: Optional[UUID] = None

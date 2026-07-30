@@ -122,6 +122,7 @@ import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { MODAL_ACTIONS } from "../app/navigation/keymapRegistry";
 import type { TaskSummary } from "../features/studio/lib/types";
 import type { Row } from "../features/studio/pages/tasks/TasksPane";
+import { useConfigStore } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { useLaunchProviderCatalog } from "../features/workflows/launchProviderCatalog";
@@ -136,7 +137,8 @@ const taskSummaries: TaskSummary[] = [TASK_ID, NEXT_TASK_ID].map(
     id,
     name: `Task ${index + 1}`,
     project_id: "project-1",
-    sequence_id: index + 1,
+    sequence_id: index + 3,
+    key: `MEML-${index + 3}`,
     state: { id: "state-1", name: "Todo", group: "backlog", color: null },
     assignees: [],
     labels: [],
@@ -192,11 +194,15 @@ function ModalKeymapHarness({ onClose }: { onClose: () => void }) {
 
 function SelectedTaskWorkspace() {
   const selectedTaskId = useTasksStore((state) => state.selectedTaskId);
+  const ticketKey = useTasksStore(
+    (state) => state.tasks.find((task) => task.id === selectedTaskId)?.key,
+  );
   return (
     <WorkspacePane
       bucket={selectedTaskId}
       projectId="project-1"
       moduleId="module-1"
+      ticketKey={ticketKey}
       owner="studio"
       details={<div>Task details</div>}
     />
@@ -296,6 +302,7 @@ function mount(
         bucket={bucket}
         projectId="project-1"
         moduleId="module-1"
+        ticketKey="MEML-3"
         owner={owner}
         launchContext={{
           kind: "task",
@@ -360,6 +367,9 @@ beforeEach(() => {
     focusRequest: null,
     focusSequence: 0,
   });
+  useConfigStore.setState({
+    features: { sidebar: true, projects: true },
+  });
   useUIStore.setState({
     focusedPane: "tasks",
     editViewZone: "stories",
@@ -411,6 +421,45 @@ afterEach(() => {
 });
 
 describe("workspace terminal tab state", () => {
+  it("uses the live ticket key for the tab and its close affordance", () => {
+    mount();
+
+    expect(screen.getByRole("tab", { name: "MEML-3 · claude" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Close terminal MEML-3 · claude",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back from an unresolved key to the sequence and then the agent", () => {
+    render(
+      <WorkspacePane
+        bucket={TASK_ID}
+        projectId="project-1"
+        moduleId="module-1"
+        owner="drawer"
+        details={<div>Task details</div>}
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "#3 · claude" })).toBeInTheDocument();
+
+    act(() => {
+      useTerminalStore.setState((state) => ({
+        sessions: {
+          ...state.sessions,
+          "session-1": {
+            ...state.sessions["session-1"],
+            ticketSeq: null,
+          },
+        },
+      }));
+    });
+
+    expect(screen.getByRole("tab", { name: "claude" })).toBeInTheDocument();
+  });
+
   it("selects an unselected tab opened into an empty bucket", () => {
     useWorkspaceTabsStore
       .getState()
@@ -829,14 +878,14 @@ describe("Studio edit-view navigation zones", () => {
     for (let index = 0; index < 10; index += 1) {
       fireEvent.keyDown(window, { key: "ArrowRight" });
     }
-    expect(screen.getByRole("tab", { name: "#3 · codex" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "MEML-3 · codex" })).toHaveAttribute(
       "data-highlighted",
       "true",
     );
     expect(useUIStore.getState().editViewZone).toBe("tab-strip");
 
     fireEvent.keyDown(window, { key: "ArrowUp" });
-    expect(screen.getByRole("tab", { name: "#3 · codex" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "MEML-3 · codex" })).toHaveAttribute(
       "data-highlighted",
       "true",
     );
@@ -980,7 +1029,7 @@ describe("Studio edit-view navigation zones", () => {
     }
     expect(ptyKeydown).toHaveBeenCalledTimes(passthroughKeys.length);
     expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
-    expect(selectedTab()).toHaveAccessibleName("#3 · claude");
+    expect(selectedTab()).toHaveAccessibleName("MEML-3 · claude");
 
     const escape = keydown(xtermInput, {
       key: "Escape",
@@ -1128,6 +1177,64 @@ describe("Studio edit-view navigation zones", () => {
     );
   });
 
+  it("focuses the newly presented terminal when ticket navigation preserves body engagement", async () => {
+    const nextSession = {
+      ...session("session-next", "codex"),
+      taskId: NEXT_TASK_ID,
+      agentRunId: "run-session-next",
+    };
+    useTerminalStore.setState((state) => ({
+      sessions: {
+        ...state.sessions,
+        [nextSession.sessionId]: nextSession,
+      },
+    }));
+    useWorkspaceTabsStore.setState((state) => ({
+      byTaskId: {
+        ...state.byTaskId,
+        [NEXT_TASK_ID]: [nextSession.sessionId],
+      },
+      activeByTask: {
+        ...state.activeByTask,
+        [NEXT_TASK_ID]: nextSession.sessionId,
+      },
+    }));
+    useIssueDrawerWorkspaceStore.setState((state) => ({
+      workspaces: {
+        ...state.workspaces,
+        [TASK_ID]: {
+          ...state.workspaces[TASK_ID],
+          active: "terminal",
+        },
+        [NEXT_TASK_ID]: {
+          ...DEFAULT_WORKSPACE,
+          active: "terminal",
+        },
+      },
+    }));
+
+    const view = mountEditView();
+    act(() => {
+      useUIStore.getState().setEditViewZone("active-tab-body");
+      useUIStore.getState().setEditViewBodyEngaged(true);
+    });
+    await waitFor(() => expect(terminalHarness.focusOrder).toHaveLength(1));
+    const firstTerminal = terminalHarness.focusOrder[0];
+
+    act(() => useTasksStore.setState({ selectedTaskId: NEXT_TASK_ID }));
+
+    await waitFor(() => expect(terminalHarness.focusOrder).toHaveLength(2));
+    expect(terminalHarness.focusOrder[1]).not.toBe(firstTerminal);
+    expect(useUIStore.getState().editViewBodyEngaged).toBe(true);
+    expect(view.getByTestId("terminal-mode-ring")).toHaveAttribute(
+      "data-terminal-mode",
+      "engaged",
+    );
+    expect(
+      view.container.querySelector(".xterm-helper-textarea"),
+    ).toHaveFocus();
+  });
+
   it("distinguishes a selected terminal zone from an entered one while keyboard navigating", () => {
     useIssueDrawerWorkspaceStore.setState((state) => ({
       workspaces: {
@@ -1251,7 +1358,7 @@ describe("task workspace manual agent launch", () => {
         taskId: TASK_ID,
       }),
     ]);
-    expect(screen.getByRole("tab", { name: "#3 · claude" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "MEML-3 · claude" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -1313,8 +1420,8 @@ describe("mounted task workspace terminal refresh", () => {
   function persistedSession(
     agentRunId: string,
     taskId = TASK_ID,
-    // A restored tab is labelled by its agent alone (it carries no ticket
-    // sequence), so two runs on different agents give two distinguishable tabs.
+    // Restored metadata carries no ticket sequence. The mounted workspace's
+    // live work-item key keeps the tab associated with its ticket.
     agent: PersistedTerminalSession["agent"] = "agy",
     terminatedAt: string | null = null,
   ): PersistedTerminalSession {
@@ -1360,7 +1467,7 @@ describe("mounted task workspace terminal refresh", () => {
     dispatchLifecycle("spawned-run");
 
     await waitFor(() =>
-      expect(screen.getAllByRole("tab", { name: "agy" })).toHaveLength(1),
+      expect(screen.getAllByRole("tab", { name: "MEML-3 · agy" })).toHaveLength(1),
     );
     expect(selectedTab()).toHaveAccessibleName("Notes");
 
@@ -1372,7 +1479,7 @@ describe("mounted task workspace terminal refresh", () => {
     dispatchLifecycle("foreign-run", NEXT_TASK_ID);
 
     await act(async () => {});
-    expect(screen.getAllByRole("tab", { name: "agy" })).toHaveLength(1);
+    expect(screen.getAllByRole("tab", { name: "MEML-3 · agy" })).toHaveLength(1);
     expect(selectedTab()).toHaveAccessibleName("Notes");
 
     vi.mocked(agentApi.getTerminals).mockRejectedValueOnce(
@@ -1381,7 +1488,7 @@ describe("mounted task workspace terminal refresh", () => {
     dispatchLifecycle("failed-refresh-run");
 
     await act(async () => {});
-    expect(screen.getAllByRole("tab", { name: "agy" })).toHaveLength(1);
+    expect(screen.getAllByRole("tab", { name: "MEML-3 · agy" })).toHaveLength(1);
     expect(selectedTab()).toHaveAccessibleName("Notes");
   });
 
@@ -1394,12 +1501,14 @@ describe("mounted task workspace terminal refresh", () => {
     ]);
     dispatchLifecycle("dismissed-run");
     await waitFor(() =>
-      expect(screen.getAllByRole("tab", { name: "agy" })).toHaveLength(1),
+      expect(screen.getAllByRole("tab", { name: "MEML-3 · agy" })).toHaveLength(1),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Close terminal agy" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close terminal MEML-3 · agy" }),
+    );
     await waitFor(() =>
-      expect(screen.queryByRole("tab", { name: "agy" })).toBeNull(),
+      expect(screen.queryByRole("tab", { name: "MEML-3 · agy" })).toBeNull(),
     );
 
     // The server still lists the closed run as live — the next spawn's
@@ -1413,9 +1522,9 @@ describe("mounted task workspace terminal refresh", () => {
     dispatchLifecycle("fresh-run");
 
     await waitFor(() =>
-      expect(screen.getAllByRole("tab", { name: "gemini" })).toHaveLength(1),
+      expect(screen.getAllByRole("tab", { name: "MEML-3 · gemini" })).toHaveLength(1),
     );
-    expect(screen.queryByRole("tab", { name: "agy" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "MEML-3 · agy" })).toBeNull();
     expect(selectedTab()).toHaveAccessibleName("Notes");
 
     // Once the server reports that run ended, the dismissal is spent: it is no
@@ -1427,7 +1536,7 @@ describe("mounted task workspace terminal refresh", () => {
     ]);
     dispatchLifecycle("ended-run");
     await act(async () => {});
-    expect(screen.queryByRole("tab", { name: "agy" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "MEML-3 · agy" })).toBeNull();
 
     vi.mocked(agentApi.getTerminals).mockResolvedValueOnce([
       persistedSession("dismissed-run"),
@@ -1435,7 +1544,7 @@ describe("mounted task workspace terminal refresh", () => {
     ]);
     dispatchLifecycle("relisted-run");
     await waitFor(() =>
-      expect(screen.getAllByRole("tab", { name: "agy" })).toHaveLength(1),
+      expect(screen.getAllByRole("tab", { name: "MEML-3 · agy" })).toHaveLength(1),
     );
     expect(selectedTab()).toHaveAccessibleName("Notes");
   });
@@ -1605,7 +1714,7 @@ describe("task workspace Command-arrow navigation", () => {
     keydown(window, { repeat: true });
     expect(selectedTab()).toHaveAccessibleName("Notes");
     keydown(window);
-    expect(selectedTab()).toHaveAccessibleName("#3 · claude");
+    expect(selectedTab()).toHaveAccessibleName("MEML-3 · claude");
     await waitFor(() => expect(terminalHarness.focusOrder).toEqual([0]));
     expect(document.activeElement).toHaveClass("xterm-helper-textarea");
 
@@ -1623,11 +1732,11 @@ describe("task workspace Command-arrow navigation", () => {
 
     expect(terminalEvent.defaultPrevented).toBe(true);
     expect(ptyKeydown).toHaveBeenCalledTimes(2);
-    expect(selectedTab()).toHaveAccessibleName("#3 · codex");
+    expect(selectedTab()).toHaveAccessibleName("MEML-3 · codex");
     expect(terminalHarness.focusOrder).toEqual([0, 1]);
 
     keydown(window, { key: "ArrowLeft" });
-    expect(selectedTab()).toHaveAccessibleName("#3 · claude");
+    expect(selectedTab()).toHaveAccessibleName("MEML-3 · claude");
     keydown(window, { key: "ArrowLeft" });
     expect(selectedTab()).toHaveAccessibleName("Notes");
     keydown(window, { key: "ArrowLeft" });
@@ -1646,7 +1755,7 @@ describe("task workspace Command-arrow navigation", () => {
     for (let index = 0; index < 4; index += 1) keydown(window);
     const last = keydown(window, { repeat: true });
     expect(last.defaultPrevented).toBe(true);
-    expect(selectedTab()).toHaveAccessibleName("#3 · codex");
+    expect(selectedTab()).toHaveAccessibleName("MEML-3 · codex");
   });
 
   it("focuses the Details and document scroll surfaces when landing on those stops", async () => {
@@ -1673,7 +1782,7 @@ describe("task workspace Command-arrow navigation", () => {
     mount();
 
     await waitFor(() => expect(screen.getByTestId("terminal-host")).toBeInTheDocument());
-    expect(selectedTab()).toHaveAccessibleName("#3 · claude");
+    expect(selectedTab()).toHaveAccessibleName("MEML-3 · claude");
     expect(terminalHarness.focusOrder).toEqual([]);
     expect(document.activeElement).not.toHaveClass("xterm-helper-textarea");
   });
@@ -1719,8 +1828,8 @@ describe("task workspace Command-arrow navigation", () => {
 
     // Prime both already-open terminal sessions, then return to Details. The
     // navigation under test must only select/focus these existing sessions.
-    fireEvent.click(screen.getByRole("tab", { name: "#3 · claude" }));
-    fireEvent.click(screen.getByRole("tab", { name: "#3 · codex" }));
+    fireEvent.click(screen.getByRole("tab", { name: "MEML-3 · claude" }));
+    fireEvent.click(screen.getByRole("tab", { name: "MEML-3 · codex" }));
     fireEvent.click(screen.getByRole("tab", { name: "Details" }));
     terminalHarness.socketOpen.mockClear();
     terminalHarness.transportResume.mockClear();
@@ -1739,9 +1848,9 @@ describe("task workspace Command-arrow navigation", () => {
     keydown(window);
     expect(selectedTab()).toHaveAccessibleName("Notes");
     keydown(window);
-    expect(selectedTab()).toHaveAccessibleName("#3 · claude");
+    expect(selectedTab()).toHaveAccessibleName("MEML-3 · claude");
     keydown(window);
-    expect(selectedTab()).toHaveAccessibleName("#3 · codex");
+    expect(selectedTab()).toHaveAccessibleName("MEML-3 · codex");
 
     const workspace = useIssueDrawerWorkspaceStore.getState().workspaces[TASK_ID];
     expect(workspace.overlayOpenByDoc.design).toBe(true);
@@ -1782,14 +1891,16 @@ describe("Studio workspace context restoration", () => {
       </>,
     );
 
-    await waitFor(() => expect(selectedTab()).toHaveAccessibleName("#3 · codex"));
+    await waitFor(() =>
+      expect(selectedTab()).toHaveAccessibleName("MEML-3 · codex"),
+    );
     expect(document.activeElement).toBe(
       view.container.querySelector('[data-pane="tasks"]'),
     );
     expect(useUIStore.getState().focusedPane).toBe("tasks");
     expect(terminalHarness.focusOrder).toEqual([]);
 
-    const terminalTab = screen.getByRole("tab", { name: "#3 · codex" });
+    const terminalTab = screen.getByRole("tab", { name: "MEML-3 · codex" });
     fireEvent.pointerDown(terminalTab);
     fireEvent.mouseDown(terminalTab);
     fireEvent.click(terminalTab);
@@ -1810,7 +1921,9 @@ describe("Studio workspace context restoration", () => {
 
     fireEvent.keyDown(window, { key: "ArrowUp" });
     expect(useTasksStore.getState().selectedTaskId).toBe(TASK_ID);
-    await waitFor(() => expect(selectedTab()).toHaveAccessibleName("#3 · codex"));
+    await waitFor(() =>
+      expect(selectedTab()).toHaveAccessibleName("MEML-3 · codex"),
+    );
     expect(document.activeElement).toBe(
       view.container.querySelector('[data-pane="tasks"]'),
     );
@@ -1942,8 +2055,10 @@ describe("Studio workspace context restoration", () => {
       },
     ]);
 
-    await waitFor(() => expect(selectedTab()).toHaveAccessibleName("codex"));
-    expect(screen.getAllByRole("tab", { name: "codex" })).toHaveLength(1);
+    await waitFor(() =>
+      expect(selectedTab()).toHaveAccessibleName("MEML-3 · codex"),
+    );
+    expect(screen.getAllByRole("tab", { name: "MEML-3 · codex" })).toHaveLength(1);
     expect(
       Object.values(useTerminalStore.getState().sessions).filter(
         (entry) => entry.agentRunId === "remembered-run",
@@ -2021,7 +2136,7 @@ describe("Studio workspace context restoration", () => {
     const drawer = mount(TASK_ID, 0, "drawer");
     fireEvent.click(within(drawer.container).getByRole("tab", { name: "Details" }));
     fireEvent.click(
-      within(drawer.container).getByRole("tab", { name: "#3 · codex" }),
+      within(drawer.container).getByRole("tab", { name: "MEML-3 · codex" }),
     );
 
     expect(localStorage.getItem("studio.activeWorkspaceByBucket:v1")).toBe(
@@ -2036,7 +2151,7 @@ describe("Studio workspace context restoration", () => {
   it("persists terminals by durable agent run identity", () => {
     mount(TASK_ID, 0, "studio");
 
-    fireEvent.click(screen.getByRole("tab", { name: "#3 · codex" }));
+    fireEvent.click(screen.getByRole("tab", { name: "MEML-3 · codex" }));
 
     expect(
       JSON.parse(localStorage.getItem("studio.activeWorkspaceByBucket:v1")!),
@@ -2066,10 +2181,12 @@ describe("Studio workspace context restoration", () => {
 
   it("remembers the next tab when the active terminal closes", () => {
     mount(TASK_ID, 0, "studio");
-    fireEvent.click(screen.getByRole("tab", { name: "#3 · claude" }));
+    fireEvent.click(screen.getByRole("tab", { name: "MEML-3 · claude" }));
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Close terminal #3 · claude" }),
+      screen.getByRole("button", {
+        name: "Close terminal MEML-3 · claude",
+      }),
     );
 
     expect(
@@ -2110,7 +2227,7 @@ describe("Studio workspace context restoration", () => {
         [TASK_ID]: { kind: "terminal", agentRunId: "resumed-run" },
       }),
     );
-    expect(screen.getAllByRole("tab", { name: "gemini" })).toHaveLength(1);
+    expect(screen.getAllByRole("tab", { name: "MEML-3 · gemini" })).toHaveLength(1);
   });
 
   it("keeps Studio usable with malformed or unavailable workspace storage", () => {

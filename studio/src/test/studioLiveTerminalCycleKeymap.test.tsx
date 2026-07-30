@@ -12,6 +12,7 @@ import { WorkspaceTerminalHost } from "../features/agents/terminal/WorkspaceTerm
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import type { TaskSummary } from "../features/studio/lib/types";
 import type { Row } from "../features/studio/pages/tasks/TasksPane";
+import { useConfigStore } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
@@ -174,6 +175,9 @@ describe("Studio live-terminal cycle keymap", () => {
       },
     );
     useModalStore.setState({ modalStack: [], activeBindings: null });
+    useConfigStore.setState({
+      features: { sidebar: true, projects: true },
+    });
     useTasksStore.setState({
       selectedProjectId: "project-1",
       selectedModuleId: "module-1",

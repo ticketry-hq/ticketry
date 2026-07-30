@@ -35,28 +35,6 @@ def _insert_run(run_id: str, *, task_id: str = "task-1") -> None:
     )
 
 
-def _insert_idle_run(
-    run_id: str,
-    *,
-    task_id: str = "task-1",
-    provider_session_id: str | None = "sess-1",
-    lifecycle_updated_at: str | None = "2026-07-04T10:00:00+00:00",
-) -> None:
-    AgentRun.objects.create(
-        id=run_id,
-        workspace_slug="ws",
-        project_id="proj-1",
-        module_id="mod-1",
-        task_id=task_id,
-        agent="claude",
-        status="running",
-        started_at="2026-07-05T10:00:00+00:00",
-        cwd="/tmp",
-        provider_session_id=provider_session_id,
-        lifecycle_updated_at=lifecycle_updated_at,
-    )
-
-
 def _insert_session(run_id: str, *, task_id: str = "task-1") -> None:
     AgentTerminalSession.objects.create(
         agent_run_id=run_id,
@@ -163,7 +141,7 @@ def test_reconcile_stops_watchers_and_marks_dead_runs_exited(monkeypatch):
     monkeypatch.setattr(
         session_module.tmux_sessions,
         "reconcile_sessions",
-        lambda: ReconcileResult(soft_deleted=["run-dead"], killed_orphans=[]),
+        lambda: ReconcileResult(soft_deleted=["run-dead"]),
     )
     monkeypatch.setattr(
         session_module.documents_watch,
@@ -193,7 +171,6 @@ def test_reconcile_publishes_retained_provider_exit_as_exited(monkeypatch):
         "reconcile_sessions",
         lambda: ReconcileResult(
             soft_deleted=[],
-            killed_orphans=[],
             exited=["run-complete"],
         ),
     )
@@ -227,7 +204,7 @@ def test_reconcile_removes_stale_overlays_and_preserves_active_ones(
     monkeypatch.setattr(
         session_module.tmux_sessions,
         "reconcile_sessions",
-        lambda: ReconcileResult(soft_deleted=[], killed_orphans=[]),
+        lambda: ReconcileResult(soft_deleted=[]),
     )
 
     service.reconcile()
@@ -235,178 +212,6 @@ def test_reconcile_removes_stale_overlays_and_preserves_active_ones(
     assert active_overlay.exists()
     assert not stale_overlay.exists()
     assert not (tmp_path / "ticketry-agent-runs" / "run-stale").exists()
-
-
-def test_reap_idle_sessions_reaps_idle_resumable_unattached(monkeypatch):
-    service = TerminalSessionService()
-    _insert_idle_run("run-idle")
-    _insert_session("run-idle")
-    killed: list[str] = []
-    stopped: list[str] = []
-
-    monkeypatch.setenv("MUXED_IDLE_TTL_HOURS", "24")
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "attached_session_names",
-        lambda: set(),
-    )
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: killed.append(run_id) or True,
-    )
-    monkeypatch.setattr(
-        session_module.documents_watch,
-        "stop_watch",
-        lambda run_id: stopped.append(run_id),
-    )
-
-    reaped = service.reap_idle_sessions(
-        now=datetime(2026, 7, 7, 10, 0, tzinfo=timezone.utc)
-    )
-
-    run = AgentRun.objects.get(id="run-idle")
-    terminal = AgentTerminalSession.objects.get(agent_run_id="run-idle")
-    assert reaped == ["run-idle"]
-    assert killed == ["run-idle"]
-    assert stopped == ["run-idle"]
-    assert run.status == "terminated"
-    assert run.ended_at is not None
-    assert terminal.terminated_at is not None
-
-
-@pytest.mark.parametrize("provider_session_id", [None, ""])
-def test_reap_idle_sessions_keeps_unresumable_runs(monkeypatch, provider_session_id):
-    service = TerminalSessionService()
-    _insert_idle_run("run-unresumable", provider_session_id=provider_session_id)
-    _insert_session("run-unresumable")
-
-    monkeypatch.setenv("MUXED_IDLE_TTL_HOURS", "24")
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: pytest.fail("terminate_session should not be called"),
-    )
-
-    assert (
-        service.reap_idle_sessions(
-            now=datetime(2026, 7, 7, 10, 0, tzinfo=timezone.utc)
-        )
-        == []
-    )
-
-
-@pytest.mark.parametrize(
-    "lifecycle_updated_at",
-    [
-        "2026-07-07T09:30:00+00:00",
-        None,
-        "not-an-iso-timestamp",
-    ],
-)
-def test_reap_idle_sessions_keeps_fresh_or_unparseable_runs(
-    monkeypatch, lifecycle_updated_at
-):
-    service = TerminalSessionService()
-    _insert_idle_run("run-not-old", lifecycle_updated_at=lifecycle_updated_at)
-    _insert_session("run-not-old")
-
-    monkeypatch.setenv("MUXED_IDLE_TTL_HOURS", "24")
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "attached_session_names",
-        lambda: set(),
-    )
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: pytest.fail("terminate_session should not be called"),
-    )
-
-    assert (
-        service.reap_idle_sessions(
-            now=datetime(2026, 7, 7, 10, 0, tzinfo=timezone.utc)
-        )
-        == []
-    )
-
-
-def test_reap_idle_sessions_keeps_attached_runs(monkeypatch):
-    service = TerminalSessionService()
-    _insert_idle_run("run-attached")
-    _insert_session("run-attached")
-
-    monkeypatch.setenv("MUXED_IDLE_TTL_HOURS", "24")
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "attached_session_names",
-        lambda: {"pt-run-attached"},
-    )
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: pytest.fail("terminate_session should not be called"),
-    )
-
-    assert (
-        service.reap_idle_sessions(
-            now=datetime(2026, 7, 7, 10, 0, tzinfo=timezone.utc)
-        )
-        == []
-    )
-
-
-def test_reap_idle_sessions_keeps_runs_when_attachment_state_is_indeterminate(
-    monkeypatch,
-):
-    service = TerminalSessionService()
-    _insert_idle_run("run-unknown")
-    _insert_session("run-unknown")
-
-    monkeypatch.setenv("MUXED_IDLE_TTL_HOURS", "24")
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "attached_session_names",
-        lambda: (_ for _ in ()).throw(session_module.TmuxSessionError("boom")),
-    )
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: pytest.fail("terminate_session should not be called"),
-    )
-
-    assert (
-        service.reap_idle_sessions(
-            now=datetime(2026, 7, 7, 10, 0, tzinfo=timezone.utc)
-        )
-        == []
-    )
-
-
-@pytest.mark.parametrize("ttl_value", ["0", "junk", "-1"])
-def test_reap_idle_sessions_disables_on_bad_ttl(monkeypatch, ttl_value):
-    service = TerminalSessionService()
-    _insert_idle_run("run-disabled")
-    _insert_session("run-disabled")
-
-    monkeypatch.setenv("MUXED_IDLE_TTL_HOURS", ttl_value)
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "attached_session_names",
-        lambda: pytest.fail("attached_session_names should not be called"),
-    )
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: pytest.fail("terminate_session should not be called"),
-    )
-
-    assert (
-        service.reap_idle_sessions(
-            now=datetime(2026, 7, 7, 10, 0, tzinfo=timezone.utc)
-        )
-        == []
-    )
 
 
 def test_live_run_for_returns_running_run_then_none_after_terminate(monkeypatch):
@@ -423,25 +228,23 @@ def test_live_run_for_returns_running_run_then_none_after_terminate(monkeypatch)
     assert service.live_run_for("task-1") is None
 
 
-def test_reconcile_invokes_idle_reaper(monkeypatch):
+def test_reconcile_never_invokes_explicit_termination(monkeypatch):
     service = TerminalSessionService()
-    called: list[bool] = []
 
     monkeypatch.setattr(
         session_module.tmux_sessions,
         "reconcile_sessions",
-        lambda: ReconcileResult(soft_deleted=[], killed_orphans=[]),
+        lambda: ReconcileResult(soft_deleted=[], untracked=["pt-foreign"]),
     )
     monkeypatch.setattr(
-        service,
-        "reap_idle_sessions",
-        lambda *, now=None: called.append(True) or [],
+        session_module.tmux_sessions,
+        "terminate_session",
+        lambda run_id: pytest.fail("reconciliation must not terminate a session"),
     )
 
-    service.reconcile()
+    result = service.reconcile()
 
-    assert called == [True]
-
+    assert result.untracked == ["pt-foreign"]
 
 def test_attach_replaces_existing_viewer_and_release_is_idempotent(monkeypatch):
     service = TerminalSessionService()
@@ -489,7 +292,7 @@ def test_session_contract_shared_behaviors(adapter_kind, monkeypatch):
         monkeypatch.setattr(
             session_module.tmux_sessions,
             "reconcile_sessions",
-            lambda: ReconcileResult(soft_deleted=["run-dead"], killed_orphans=[]),
+            lambda: ReconcileResult(soft_deleted=["run-dead"]),
         )
         monkeypatch.setattr(
             session_module.documents_watch,

@@ -71,76 +71,72 @@ def _issue(project, states, issue_type, *, state, parent=None):
 
 LEGAL_BY_TYPE = {
     "Story": [
-        ("Idea", "Refinement"),
-        ("Refinement", "Ready"),
-        ("Ready", "Implement"),
+        ("Grill", "Spec"),
+        ("Spec", "Tickets"),
+        ("Tickets", "Implement"),
         ("Implement", "Review"),
         ("Review", "Implement"),
         ("Review", "Done"),
-        ("Idea", "Cancelled"),
-        ("Refinement", "Cancelled"),
-        ("Ready", "Cancelled"),
+        ("Grill", "Cancelled"),
+        ("Spec", "Cancelled"),
+        ("Tickets", "Cancelled"),
         ("Implement", "Cancelled"),
         ("Review", "Cancelled"),
     ],
     "Implementation": [
-        ("Ready", "Implement"),
         ("Implement", "Review"),
         ("Review", "Implement"),
         ("Review", "Done"),
-        ("Ready", "Cancelled"),
         ("Implement", "Cancelled"),
         ("Review", "Cancelled"),
     ],
     "PathFind": [
-        ("Refinement", "Done"),
-        ("Refinement", "Cancelled"),
+        ("Spec", "Done"),
+        ("Spec", "Cancelled"),
     ],
 }
 
 ILLEGAL_BY_TYPE = {
     "Story": [
-        ("Idea", "Ready"),
-        ("Idea", "Implement"),
-        ("Idea", "Done"),
-        ("Refinement", "Implement"),
-        ("Ready", "Review"),
+        ("Grill", "Tickets"),
+        ("Grill", "Implement"),
+        ("Grill", "Done"),
+        ("Spec", "Implement"),
+        ("Tickets", "Review"),
         ("Implement", "Done"),
-        ("Refinement", "Idea"),
-        ("Ready", "Refinement"),
-        ("Implement", "Ready"),
-        ("Review", "Ready"),
-        ("Review", "Refinement"),
+        ("Spec", "Grill"),
+        ("Tickets", "Spec"),
+        ("Implement", "Tickets"),
+        ("Review", "Tickets"),
+        ("Review", "Spec"),
         ("Done", "Review"),
         ("Done", "Implement"),
         ("Done", "Cancelled"),
-        ("Cancelled", "Idea"),
+        ("Cancelled", "Grill"),
         ("Cancelled", "Done"),
-        ("Idea", "Idea"),  # idempotent re-set is not a legal edge
+        ("Grill", "Grill"),  # idempotent re-set is not a legal edge
     ],
     "Implementation": [
-        ("Ready", "Review"),
-        ("Ready", "Done"),
         ("Implement", "Done"),
-        ("Implement", "Ready"),
-        ("Review", "Ready"),
+        ("Implement", "Tickets"),
+        ("Review", "Tickets"),
         ("Done", "Cancelled"),
-        ("Cancelled", "Ready"),
+        ("Cancelled", "Implement"),
         ("Cancelled", "Cancelled"),
-        ("Ready", "Ready"),
-        ("Ready", "Idea"),
-        ("Ready", "Refinement"),
-        ("Review", "Refinement"),
+        ("Implement", "Implement"),
+        ("Implement", "Grill"),
+        ("Implement", "Spec"),
+        ("Review", "Spec"),
     ],
     "PathFind": [
-        ("Refinement", "Idea"),
-        ("Refinement", "Ready"),
-        ("Refinement", "Implement"),
-        ("Refinement", "Review"),
+        ("Spec", "Grill"),
+        ("Spec", "Tickets"),
+        ("Spec", "Implement"),
+        ("Spec", "Review"),
         ("Done", "Cancelled"),
-        ("Cancelled", "Refinement"),
+        ("Cancelled", "Spec"),
         ("Cancelled", "Cancelled"),
-        ("Refinement", "Refinement"),
+        ("Spec", "Spec"),
     ],
 }
 
@@ -195,14 +191,13 @@ def test_reduced_type_graphs_forbid_foreign_states(sdlc):
         }
 
     assert node_names("Implementation") == {
-        "Ready",
         "Implement",
         "Review",
         "Done",
         "Cancelled",
     }
     assert node_names("PathFind") == {
-        "Refinement",
+        "Spec",
         "Done",
         "Cancelled",
     }
@@ -228,36 +223,48 @@ def test_human_only_transition_rejects_agent_but_allows_human(project, sdlc):
     states, types = sdlc
     edge = IssueTypeTransition.objects.get(
         issue_type=types["Story"],
-        from_state=states["Idea"],
-        to_state=states["Refinement"],
+        from_state=states["Tickets"],
+        to_state=states["Implement"],
     )
-    edge.agent_allowed = False
-    edge.save(update_fields=["agent_allowed"])
+    assert edge.agent_allowed is False
 
-    agent_issue = _issue(project, states, types["Story"], state="Idea")
+    agent_issue = _issue(project, states, types["Story"], state="Tickets")
     with pytest.raises(InvalidTransition) as exc:
-        transition_state(agent_issue, states["Refinement"].id, origin="agent")
+        transition_state(agent_issue, states["Implement"].id, origin="agent")
 
     assert exc.value.code == "human_only_transition"
     assert "human-only transition" in exc.value.message
     agent_issue.refresh_from_db()
-    assert agent_issue.state.name == "Idea"
+    assert agent_issue.state.name == "Tickets"
 
-    human_issue = _issue(project, states, types["Story"], state="Idea")
-    transition_state(human_issue, states["Refinement"].id, origin="human")
+    forced_agent_issue = _issue(project, states, types["Story"], state="Tickets")
+    with pytest.raises(InvalidTransition) as forced_exc:
+        transition_state(
+            forced_agent_issue,
+            states["Implement"].id,
+            origin="agent",
+            force=True,
+        )
+
+    assert forced_exc.value.code == "agent_force_forbidden"
+    forced_agent_issue.refresh_from_db()
+    assert forced_agent_issue.state.name == "Tickets"
+
+    human_issue = _issue(project, states, types["Story"], state="Tickets")
+    transition_state(human_issue, states["Implement"].id, origin="human")
     human_issue.refresh_from_db()
-    assert human_issue.state.name == "Refinement"
+    assert human_issue.state.name == "Implement"
 
 
 @pytest.mark.django_db
 def test_agent_allowed_transition_accepts_agent_origin(project, sdlc):
     states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Idea")
+    issue = _issue(project, states, types["Story"], state="Grill")
 
-    transition_state(issue, states["Refinement"].id, origin="agent")
+    transition_state(issue, states["Spec"].id, origin="agent")
 
     issue.refresh_from_db()
-    assert issue.state.name == "Refinement"
+    assert issue.state.name == "Spec"
 
 
 @pytest.mark.django_db
@@ -276,30 +283,30 @@ def test_illegal_moves_rejected(project, sdlc, type_name, frm, to):
 @pytest.mark.django_db
 def test_rejection_carries_structured_fields(project, sdlc):
     states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Idea")
+    issue = _issue(project, states, types["Story"], state="Grill")
 
     with pytest.raises(InvalidTransition) as exc:
         transition_state(issue, states["Done"].id)
 
     err = exc.value
     assert err.code == "illegal_transition"
-    assert err.from_state == "Idea"
+    assert err.from_state == "Grill"
     assert err.to_state == "Done"
     body = err.as_body()
     assert set(body) == {"detail", "code", "from", "to"}
-    assert body["from"] == "Idea" and body["to"] == "Done"
+    assert body["from"] == "Grill" and body["to"] == "Done"
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "type_name,frm,to",
     [
-        pytest.param("PathFind", "Refinement", "Implement", id="PathFind->Implement"),
+        pytest.param("PathFind", "Spec", "Implement", id="PathFind->Implement"),
         pytest.param(
             "Implementation",
-            "Ready",
-            "Refinement",
-            id="Implementation->Refinement",
+            "Implement",
+            "Spec",
+            id="Implementation->Spec",
         ),
     ],
 )
@@ -322,7 +329,7 @@ def test_foreign_state_rejection_is_structured(project, sdlc, type_name, frm, to
 @pytest.mark.django_db
 def test_unknown_target_state_rejected(project, sdlc):
     states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Idea")
+    issue = _issue(project, states, types["Story"], state="Grill")
 
     # A random id that is no State in this project.
     with pytest.raises(InvalidTransition) as exc:
@@ -336,7 +343,7 @@ def test_non_canonical_target_rejected_for_gated_type(project, sdlc):
     custom = State.objects.create(
         id=uuid.uuid4(), project=project, name="Parking Lot", group="unstarted"
     )
-    issue = _issue(project, states, types["Story"], state="Idea")
+    issue = _issue(project, states, types["Story"], state="Grill")
 
     with pytest.raises(InvalidTransition) as exc:
         transition_state(issue, custom.id)
@@ -346,12 +353,12 @@ def test_non_canonical_target_rejected_for_gated_type(project, sdlc):
 @pytest.mark.django_db
 def test_allowed_transitions_respects_each_type_graph(project, sdlc):
     states, types = sdlc
-    story = _issue(project, states, types["Story"], state="Idea")
-    impl = _issue(project, states, types["Implementation"], state="Ready")
-    pathfind = _issue(project, states, types["PathFind"], state="Refinement")
+    story = _issue(project, states, types["Story"], state="Grill")
+    impl = _issue(project, states, types["Implementation"], state="Implement")
+    pathfind = _issue(project, states, types["PathFind"], state="Spec")
 
-    assert allowed_transitions(story) == {"Refinement", "Cancelled"}
-    assert allowed_transitions(impl) == {"Implement", "Cancelled"}
+    assert allowed_transitions(story) == {"Spec", "Cancelled"}
+    assert allowed_transitions(impl) == {"Review", "Cancelled"}
     assert allowed_transitions(pathfind) == {"Done", "Cancelled"}
 
 
@@ -361,14 +368,14 @@ def test_allowed_transitions_respects_each_type_graph(project, sdlc):
 @pytest.mark.django_db
 def test_force_bypasses_gate_and_records_trace(project, sdlc):
     states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Idea")
+    issue = _issue(project, states, types["Story"], state="Grill")
 
     transition_state(issue, states["Done"].id, force=True, actor="alice")
 
     issue.refresh_from_db()
     assert issue.state.name == "Done"
     trace = ForceTransition.objects.get(issue=issue)
-    assert (trace.from_state, trace.to_state, trace.actor) == ("Idea", "Done", "alice")
+    assert (trace.from_state, trace.to_state, trace.actor) == ("Grill", "Done", "alice")
 
 
 @pytest.mark.django_db
@@ -376,17 +383,17 @@ def test_force_leaves_a_terminal_state(project, sdlc):
     states, types = sdlc
     issue = _issue(project, states, types["Story"], state="Done")
 
-    transition_state(issue, states["Idea"].id, force=True)
+    transition_state(issue, states["Grill"].id, force=True)
 
     issue.refresh_from_db()
-    assert issue.state.name == "Idea"
+    assert issue.state.name == "Grill"
     assert ForceTransition.objects.filter(issue=issue).count() == 1
 
 
 @pytest.mark.django_db
 def test_agent_origin_force_is_rejected(project, sdlc):
     states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Idea")
+    issue = _issue(project, states, types["Story"], state="Grill")
 
     with pytest.raises(InvalidTransition) as exc:
         transition_state(
@@ -399,16 +406,16 @@ def test_agent_origin_force_is_rejected(project, sdlc):
     assert exc.value.code == "agent_force_forbidden"
     assert "Force is human-only" in exc.value.message
     issue.refresh_from_db()
-    assert issue.state.name == "Idea"
+    assert issue.state.name == "Grill"
     assert not ForceTransition.objects.filter(issue=issue).exists()
 
 
 @pytest.mark.django_db
 def test_legal_move_records_no_force_trace(project, sdlc):
     states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Idea")
+    issue = _issue(project, states, types["Story"], state="Grill")
 
-    transition_state(issue, states["Refinement"].id)
+    transition_state(issue, states["Spec"].id)
 
     assert not ForceTransition.objects.filter(issue=issue).exists()
 
@@ -419,7 +426,7 @@ def test_legal_move_records_no_force_trace(project, sdlc):
 @pytest.mark.django_db
 def test_untyped_issue_writes_through_ungated(project, sdlc):
     states, _types = sdlc
-    # issue_type=None → no table → the Story-illegal Idea→Done writes through.
+    # issue_type=None → no table → the Story-illegal Grill→Done writes through.
     issue = Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -427,7 +434,7 @@ def test_untyped_issue_writes_through_ungated(project, sdlc):
         issue_type=None,
         name="X",
         sequence_id=99,
-        state=states["Idea"],
+        state=states["Grill"],
     )
 
     transition_state(issue, states["Done"].id)
@@ -449,7 +456,7 @@ def test_epic_type_writes_through_ungated(project, sdlc):
         issue_type=epic,
         name="E",
         sequence_id=98,
-        state=states["Idea"],
+        state=states["Grill"],
     )
 
     transition_state(issue, states["Done"].id)

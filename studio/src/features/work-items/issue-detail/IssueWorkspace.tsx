@@ -36,6 +36,7 @@ export default function IssueWorkspace({
       bucket={task?.id ?? null}
       projectId={workspace?.projectId ?? null}
       moduleId={workspace?.module?.moduleId ?? null}
+      ticketKey={task?.key}
       owner={owner}
       entrySignal={entrySignal}
       onBeforeFirstTab={onBeforeFirstTab}

@@ -109,9 +109,6 @@ def launch_workflow_automation(
 def observe_completion(
     sender,
     issue_id,
-    from_group=None,
-    to_group=None,
-    to_state_id=None,
     **kwargs,
 ) -> None:
     """Observe task completion best-effort; never break the WorkTracker save."""
@@ -119,9 +116,6 @@ def observe_completion(
     try:
         driver.observe_issue_state_changed(
             issue_id=str(issue_id),
-            from_group=from_group,
-            to_group=to_group,
-            to_state_id=to_state_id,
         )
     except Exception:
         logger.exception("execution observer failed issue=%s", issue_id)

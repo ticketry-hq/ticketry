@@ -329,19 +329,16 @@ class WorktrackerToolset:
         agent: str | None = None,
         reset: bool = False,
     ) -> dict:
-        """Launch the ready set of a root task's dependency subtree.
+        """Launch eligible direct children of a root task.
 
-        Walks the root's subtree, launches every task whose blocked_by edges
-        are all complete, and drains the rest as runs finish. Idempotent — a
-        re-invoke re-seeds from durable state and launches only new work.
+        Only direct children participate. Each child launches once after every
+        blocker reaches a satisfying workflow state; a durable ledger prevents
+        later re-launches.
 
-        Pass ``reset=True`` to recover a poisoned campaign in one call: failed
-        and halted node facts are cleared first, then the normal idempotent
-        execute launches the re-armed ready set. The default ``False`` preserves
-        recorded failures and halted nodes while re-evaluating the graph exactly
-        as before.
+        Passing ``reset=True`` clears that root's ledger first, then executes
+        newly launchable direct children. The default leaves the ledger intact.
 
-        Returns the current graph state (root_id + per-node status)."""
+        Returns ``root_id`` and task ids launched by this call."""
         return self.service.execute_dependency_graph(root_task_id, agent, reset=reset)
 
     def get_dependency_graph_tool(

@@ -866,24 +866,24 @@ class WorktrackerService:
         agent: str | None = None,
         reset: bool = False,
     ) -> Dict[str, Any]:
-        """Launch the ready set of a root task's dependency subtree (#721).
+        """Launch eligible direct children of an armed root task (#721).
 
-        Routes through the SDK's rooted execution resource (#894). Idempotent
-        server-side — safe to re-invoke. Returns the current graph state, or
-        ``{"root_id", "error"}`` when the backend rejects it (4xx), read off the
-        generated SDK exception body.
+        Routes through the SDK's rooted execution resource (#894). The response
+        contains only task ids launched by this call. ``reset=True`` first
+        clears the root's permanent launch ledger, then performs the normal
+        execute. A 4xx becomes ``{"root_id", "error"}``.
         """
         root_task_id = str(self._sdk_resolve_task_id(root_task_id))
         try:
             if reset:
                 self.sdk.execution.reset_graph(root_task_id)
-            graph = self.sdk.execution.execute_graph(root_task_id, agent)
+            result = self.sdk.execution.execute_graph(root_task_id, agent)
         except ApiException as error:
             detail = self._sdk_execution_error(error)
             if detail is None:
                 raise
             return {"root_id": root_task_id, "error": detail}
-        return graph.model_dump(mode="json")
+        return result.model_dump(mode="json")
 
     def get_dependency_graph(self, root_task_id: str) -> Dict[str, Any]:
         """Read a task subtree's factual workflow state and dependency edges."""

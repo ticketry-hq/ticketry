@@ -2,17 +2,14 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from asgiref.sync import async_to_sync
 
 from worktracker.models import Issue, LaunchBinding
 from worktracker.state_groups import state_group
 
-from apps.execution.graph import GraphState, TaskNode, decide_graph
-from apps.execution.models import EngineRun, GraphRun
-from apps.execution.state import LaunchAction, SeamEvent
-from apps.runs.models import AgentRun
+from apps.execution.models import GraphRun, LaunchedTask
 from apps.terminals.session import LaunchIntent, session as terminal_session
 from apps.terminals.launch_configuration import (
     ResolvedLaunchConfiguration,
@@ -22,10 +19,7 @@ from apps.terminals.launch_configuration import (
 logger = logging.getLogger(__name__)
 
 SpawnRun = Callable[..., Awaitable[str]]
-LiveRunFor = Callable[[str], AgentRun | None]
 REVIEW_STATE_NAME = "Review"
-
-_graph_registry: dict[str, GraphState] = {}
 
 
 async def spawn_run(**kwargs) -> str:
@@ -68,9 +62,9 @@ def launch_task_agent(
     seam with ``scope="task"`` and *no* caller prompt — so the canonical task
     prompt (ticket context + SDLC), design-dir calculation, live-worktree
     selection, AgentRun/terminal persistence, and MCP injection all run
-    exactly as the normal task launch. Deliberately outside the reducer: it seeds
-    no ``EngineRun``/``GraphRun`` state and moves no workflow state — a
-    launch is just a launch. A caller may supply an immutable configuration it
+    exactly as the normal task launch. Deliberately outside subtree execution:
+    it seeds no ``GraphRun``/``LaunchedTask`` state and moves no workflow state —
+    a launch is just a launch. A caller may supply an immutable configuration it
     already resolved for a committed destination event; otherwise current-state
     policy is resolved here. Repeated calls each start a fresh detached run,
     matching current direct terminal behavior.
@@ -113,34 +107,8 @@ def launch_task_agent(
 
 
 def clear_registry() -> None:
-    _graph_registry.clear()
+    LaunchedTask.objects.all().delete()
     GraphRun.objects.all().delete()
-    EngineRun.objects.all().delete()
-
-
-def get_graph(root_id: str) -> GraphState | None:
-    """Rebuild the graph state for ``root_id`` from durable facts.
-
-    Source of truth is the ``GraphRun`` header (CODIN-777) plus the S1
-    ``EngineRun`` node rows and the live ``blocked_by`` edges — never the
-    in-memory cache. Rebuilding on every read is what makes a ``blocked_by``
-    change show up in the returned edges/ready-status, and what lets the graph
-    survive an ASGI restart. ``None`` (→ HTTP 404) now means *no header row
-    exists*, not *the process restarted*.
-    """
-
-    context = _load_graph_context(root_id)
-    if context is None:
-        return None
-    header, root, module_id = context
-    return _store_graph(
-        _build_graph_state(
-            root,
-            module_id,
-            header.agent,
-            live_run_for=terminal_session.live_run_for,
-        )
-    )
 
 
 def get_dependency_graph(root_id: str) -> DependencyGraphState:
@@ -175,86 +143,15 @@ def get_dependency_graph(root_id: str) -> DependencyGraphState:
     )
 
 
-def reset_graph(root_id: str) -> GraphState:
-    """Clear failed/halted graph facts and rebuild without launching work."""
-
-    context = _load_graph_context(root_id)
-    if context is None:
-        raise ValueError("graph_not_found")
-    header, root, module_id = context
-
-    # Replace, rather than fold into, the cached graph so a later seam event
-    # cannot persist a stale failed/halted node back into durable storage.
-    _graph_registry.pop(str(root_id), None)
-    descendants = _task_descendants(root)
-    reset_facts = EngineRun.objects.filter(
-        task_id__in=[issue.id for issue in descendants],
-        status__in=("failed", "halted"),
+def satisfied(issue: Issue) -> bool:
+    group = state_group(issue.state_id)
+    # The hardcoded Review name is a candidate for workflow configuration later.
+    return (
+        group == "completed"
+        or (issue.state is not None and issue.state.name == REVIEW_STATE_NAME)
+        or group == "cancelled"
+        or issue.is_archived
     )
-    reset_facts.delete()
-    graph = _build_graph_state(
-        root,
-        module_id,
-        header.agent,
-        live_run_for=terminal_session.live_run_for,
-    )
-    _graph_registry[graph.root_id] = graph
-    return graph
-
-
-def _load_graph_context(root_id: str) -> tuple[GraphRun, Issue, str] | None:
-    """Load the durable header, live root, and resolved module for a graph."""
-
-    try:
-        header = GraphRun.objects.get(pk=root_id)
-    except GraphRun.DoesNotExist:
-        return None
-    root = (
-        Issue.objects.select_related("project")
-        .filter(pk=root_id, type="task")
-        .first()
-    )
-    if root is None:
-        return None
-    module_id = str(header.module_id) if header.module_id else _module_id_for(root)
-    if module_id is None:
-        return None
-    return header, root, module_id
-
-
-def _store_graph(state: GraphState) -> GraphState:
-    """Persist the graph header + node rows and mirror into the process cache.
-
-    The ``GraphRun`` header records run context (no edges). Per-node status uses
-    one ``EngineRun`` row per node that has advanced past ``idle``. Idle nodes
-    are deliberately *not* written: an absent row rebuilds to ``idle`` anyway
-    (the re-seed default), and writing idle rows would add noise.
-    """
-
-    GraphRun.objects.update_or_create(
-        root_id=state.root_id,
-        defaults={
-            "project_id": state.project_id,
-            "module_id": state.module_id,
-            "agent": state.agent,
-        },
-    )
-    for node in state.nodes:
-        if node.status == "idle":
-            continue
-        EngineRun.objects.update_or_create(
-            task_id=node.task_id,
-            defaults={
-                "project_id": state.project_id,
-                "module_id": state.module_id,
-                "agent": state.agent,
-                "status": node.status,
-                "agent_run_id": node.agent_run_id,
-                "error": node.error,
-            },
-        )
-    _graph_registry[state.root_id] = state
-    return state
 
 
 def execute_graph(
@@ -262,9 +159,8 @@ def execute_graph(
     *,
     agent: str | None,
     spawn: SpawnRun | None = None,
-    live_run_for: LiveRunFor | None = None,
-) -> GraphState:
-    """Launch the ready set for a root task's dependency subtree."""
+) -> list[str]:
+    """Arm a root and launch its eligible direct children."""
 
     root = (
         Issue.objects.select_related("project", "issue_type", "state")
@@ -282,108 +178,113 @@ def execute_graph(
     module_id = _module_id_for(root)
     if module_id is None:
         raise ValueError("module_id_required")
-
-    live_run_for = live_run_for or terminal_session.live_run_for
-    graph = _build_graph_state(root, module_id, agent, live_run_for=live_run_for)
-    if not graph.nodes:
+    if not Issue.objects.filter(
+        parent_id=root.id,
+        type="task",
+        is_archived=False,
+    ).exists():
         raise ValueError("graph_empty")
-    graph = _store_graph(graph)
 
-    decision = decide_graph(
-        graph,
-        SeamEvent(kind="execute_requested", task_id=graph.root_id),
+    GraphRun.objects.update_or_create(
+        root_id=root.id,
+        defaults={
+            "project_id": root.project_id,
+            "module_id": module_id,
+            "agent": agent,
+        },
     )
-    graph = _store_graph(decision.next)
-    for action in decision.actions:
-        graph = _apply_graph_launch_action(
-            graph,
-            action,
-            spawn or spawn_run,
-            live_run_for,
+    return advance(str(root.id), spawn=spawn)
+
+
+def advance(root_id: str, *, spawn: SpawnRun | None = None) -> list[str]:
+    """Launch every eligible direct child of an armed root. Returns launched task ids."""
+
+    header = GraphRun.objects.filter(pk=root_id).first()
+    if header is None:
+        return []
+
+    children = list(
+        Issue.objects.filter(
+            parent_id=root_id,
+            type="task",
+            is_archived=False,
         )
-    return graph
+        .select_related("state")
+        .prefetch_related("blocked_by__state")
+        .order_by("sequence_id", "id")
+    )
+    launched_set = set(
+        LaunchedTask.objects.filter(root_id=root_id).values_list("task_id", flat=True)
+    )
+    launched: list[str] = []
+    spawn_call = spawn or spawn_run
+
+    for child in children:
+        if satisfied(child):
+            continue
+        if child.id in launched_set:
+            continue
+        if any(not satisfied(blocker) for blocker in child.blocked_by.all()):
+            continue
+        try:
+            run_id = async_to_sync(spawn_call)(
+                agent=header.agent,
+                project_id=str(header.project_id),
+                module_id=str(header.module_id),
+                task_id=str(child.id),
+                scope="task",
+            )
+        except Exception:
+            logger.exception("execution subtree launch failed task=%s", child.id)
+            continue
+
+        LaunchedTask.objects.create(
+            task=child,
+            root_id=root_id,
+            agent_run_id=run_id,
+        )
+        launched_set.add(child.id)
+        launched.append(str(child.id))
+
+    return launched
+
+
+def reset_subtree(root_id: str) -> list[str]:
+    """Delete the launch ledger for a root so its children become launchable again."""
+
+    if not GraphRun.objects.filter(pk=root_id).exists():
+        raise ValueError("graph_not_found")
+    rows = LaunchedTask.objects.filter(root_id=root_id).order_by(
+        "task__sequence_id", "task_id"
+    )
+    cleared = [str(task_id) for task_id in rows.values_list("task_id", flat=True)]
+    rows.delete()
+    return cleared
 
 
 def observe_issue_state_changed(
     *,
     issue_id: str,
-    from_group: str | None,
-    to_group: str | None,
-    to_state_id: str | None = None,
     spawn: SpawnRun | None = None,
-    live_run_for: LiveRunFor | None = None,
-) -> GraphState | None:
-    """Fold a WorkTracker state-change seam event into active local state."""
+) -> list[str]:
+    """Advance armed roots associated with the changed issue."""
 
-    live_run_for = live_run_for or terminal_session.live_run_for
-    event = SeamEvent(
-        kind="issue_state_changed",
-        task_id=str(issue_id),
-        from_group=from_group,
-        to_group=to_group,
-    )
-
-    # Review satisfies graph dependencies without completing direct runs.
-
-    review_reached = (
-        bool(to_state_id)
-        and Issue.objects.filter(
-            pk=issue_id,
-            state_id=to_state_id,
-            state__name=REVIEW_STATE_NAME,
-        ).exists()
-    )
-    graph_event = replace(event, to_group="completed") if review_reached else event
-
-    result: GraphState | None = None
-
-    for graph in list(_graph_registry.values()):
-        if not _graph_contains(graph, str(issue_id)):
-            continue
-        decision = decide_graph(graph, graph_event)
-        next_graph = _store_graph(decision.next)
-        for action in decision.actions:
-            next_graph = _apply_graph_launch_action(
-                next_graph,
-                action,
-                spawn or spawn_run,
-                live_run_for,
-            )
-        result = next_graph
-
-    return result
-
-
-def _build_graph_state(
-    root: Issue,
-    module_id: str,
-    agent: str | None,
-    *,
-    live_run_for: LiveRunFor,
-) -> GraphState:
-    descendants = _task_descendants(root)
-    previous_nodes = _durable_node_facts(descendants)
-    nodes = tuple(
-        _seed_node_from_durable_facts(
-            issue,
-            previous_nodes.get(str(issue.id)),
-            live_run_for=live_run_for,
+    issue = Issue.objects.filter(pk=issue_id).only("id", "parent_id").first()
+    candidate_ids = [str(issue_id)]
+    if issue is not None and issue.parent_id is not None:
+        candidate_ids.append(str(issue.parent_id))
+    armed = {
+        str(root_id)
+        for root_id in GraphRun.objects.filter(root_id__in=candidate_ids).values_list(
+            "root_id", flat=True
         )
-        for issue in sorted(
-            descendants, key=lambda item: (item.sequence_id, str(item.id))
-        )
-    )
+    }
 
-    edges = _dependency_edges(descendants, root=root)
-
-    return GraphState(
-        root_id=str(root.id),
-        project_id=str(root.project_id),
-        module_id=module_id,
-        agent=agent,
-        nodes=nodes,
-        edges=edges,
-    )
+    launched: list[str] = []
+    for root_id in candidate_ids:
+        if root_id in armed:
+            launched.extend(advance(root_id, spawn=spawn))
+    return launched
 
 
 def _dependency_edges(
@@ -428,91 +329,6 @@ def _task_descendants(root: Issue) -> list[Issue]:
     return descendants
 
 
-def _durable_node_facts(descendants: list[Issue]) -> dict[str, TaskNode]:
-    """Reconstruct per-node status from durable ``EngineRun`` rows (CODIN-777).
-
-    The returned nodes feed ``_seed_node_from_durable_facts`` as its
-    ``previous``, which is what makes ``failed``/``halted``/stalled state
-    survive a restart; ``done`` and ``running`` are re-derived from the tracker
-    and live ``AgentRun`` regardless.
-    """
-
-    seq_by_id = {str(issue.id): issue.sequence_id for issue in descendants}
-    rows = EngineRun.objects.filter(task_id__in=list(seq_by_id)).values_list(
-        "task_id", "status", "agent_run_id", "error"
-    )
-    return {
-        str(task_id): TaskNode(
-            task_id=str(task_id),
-            sequence_id=seq_by_id[str(task_id)],
-            status=status,
-            agent_run_id=agent_run_id,
-            error=error,
-        )
-        for task_id, status, agent_run_id, error in rows
-    }
-
-
-def _seed_node_from_durable_facts(
-    issue: Issue,
-    previous: TaskNode | None,
-    *,
-    live_run_for: LiveRunFor,
-) -> TaskNode:
-    task_id = str(issue.id)
-
-    # Review satisfies graph blockers like completed workflow states.
-
-    if state_group(issue.state_id) == "completed" or (
-        issue.state is not None and issue.state.name == REVIEW_STATE_NAME
-    ):
-        return TaskNode(
-            task_id=task_id,
-            sequence_id=issue.sequence_id,
-            status="done",
-        )
-
-    live_run = live_run_for(task_id)
-    if live_run is not None:
-        return TaskNode(
-            task_id=task_id,
-            sequence_id=issue.sequence_id,
-            status="running",
-            agent_run_id=live_run.id,
-        )
-
-    if previous is None:
-        return TaskNode(task_id=task_id, sequence_id=issue.sequence_id)
-
-    if previous.status in {"failed", "halted"}:
-        return TaskNode(
-            task_id=task_id,
-            sequence_id=issue.sequence_id,
-            status=previous.status,
-            error=previous.error,
-        )
-
-    if previous.status == "running":
-        logger.warning(
-            "execution graph run stalled task=%s agent_run_id=%s",
-            task_id,
-            previous.agent_run_id,
-        )
-        return TaskNode(
-            task_id=task_id,
-            sequence_id=issue.sequence_id,
-            status="running",
-            agent_run_id=previous.agent_run_id,
-            error="stalled",
-        )
-
-    return TaskNode(task_id=task_id, sequence_id=issue.sequence_id)
-
-
-def _graph_contains(graph: GraphState, task_id: str) -> bool:
-    return any(node.task_id == task_id for node in graph.nodes)
-
-
 def _module_id_for(issue: Issue) -> str | None:
     parent_id = issue.parent_id
     seen: set[str] = set()
@@ -528,63 +344,3 @@ def _module_id_for(issue: Issue) -> str | None:
             return str(parent.id)
         parent_id = parent.parent_id
     return None
-
-
-def _apply_graph_launch_action(
-    graph: GraphState,
-    action: LaunchAction,
-    spawn: SpawnRun,
-    live_run_for: LiveRunFor,
-) -> GraphState:
-    live_run = live_run_for(action.task_id)
-    if live_run is not None:
-        decision = decide_graph(
-            graph,
-            SeamEvent(
-                kind="run_started",
-                task_id=action.task_id,
-                agent_run_id=live_run.id,
-            ),
-        )
-        return _store_graph(decision.next)
-
-    issue = Issue.objects.filter(pk=action.task_id, type="task").first()
-    if issue is None:
-        decision = decide_graph(
-            graph,
-            SeamEvent(
-                kind="run_failed",
-                task_id=action.task_id,
-                error="task_not_found",
-            ),
-        )
-        return _store_graph(decision.next)
-
-    try:
-        run_id = async_to_sync(spawn)(
-            agent=action.agent,
-            project_id=action.project_id,
-            module_id=action.module_id,
-            task_id=action.task_id,
-            scope="task",
-        )
-    except Exception as exc:
-        logger.exception("execution graph launch failed task=%s", action.task_id)
-        decision = decide_graph(
-            graph,
-            SeamEvent(
-                kind="run_failed",
-                task_id=action.task_id,
-                error=str(exc) or exc.__class__.__name__,
-            ),
-        )
-    else:
-        decision = decide_graph(
-            graph,
-            SeamEvent(
-                kind="run_started",
-                task_id=action.task_id,
-                agent_run_id=run_id,
-            ),
-        )
-    return _store_graph(decision.next)

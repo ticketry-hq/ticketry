@@ -19,9 +19,9 @@ from worktracker_sdk.generated.exceptions import ApiException
 from worktracker_sdk.root_api import (
     DependencyGraphNodeOut,
     DependencyGraphOut,
-    GraphNodeOut,
-    GraphOut,
+    ExecuteGraphOut,
     LaunchedAgentOut,
+    ResetGraphOut,
 )
 
 
@@ -198,10 +198,10 @@ def make_scope_context(**over) -> ScopeContextOut:
 __all__ = [
     "DependencyGraphNodeOut",
     "DependencyGraphOut",
+    "ExecuteGraphOut",
     "FakeGeneratedSdk",
-    "GraphNodeOut",
-    "GraphOut",
     "LaunchedAgentOut",
+    "ResetGraphOut",
     "make_api_error",
     "make_attachment",
     "make_detail",

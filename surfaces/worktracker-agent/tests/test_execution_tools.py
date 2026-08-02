@@ -15,9 +15,9 @@ from worktracker_sdk.generated.exceptions import ApiException, NotFoundException
 from fake_sdk import (
     DependencyGraphNodeOut,
     DependencyGraphOut,
+    ExecuteGraphOut,
     FakeGeneratedSdk,
-    GraphNodeOut,
-    GraphOut,
+    ResetGraphOut,
     make_api_error,
     raises,
 )
@@ -97,31 +97,26 @@ def test_get_dependency_graph_unknown_key_returns_clean_error():
 
 def test_execute_dependency_graph_routes_through_sdk():
     client = FakeGeneratedSdk()
-    client.execution.returns["execute_graph"] = GraphOut(
+    client.execution.returns["execute_graph"] = ExecuteGraphOut(
         root_id=ROOT,
-        project_id=B,
-        module_id=B,
-        agent="codex",
-        nodes=[GraphNodeOut(task_id=A, status="running", agent_run_id="run-1")],
+        launched=[A],
     )
     service = _service(client)
 
     result = service.execute_dependency_graph(ROOT)
 
     # Routed through the rooted execution resource with no provider override.
-    # projected back to the exact dict shape the tool has always returned.
+    # Projected back to the fire-and-forget response shape.
     assert [c[0] for c in client.execution.calls] == ["execute_graph"]
     _name, args, _kwargs = client.execution.calls[0]
     assert str(args[0]) == ROOT and args[1] is None
-    assert result["root_id"] == ROOT
-    assert result["nodes"][0]["status"] == "running"
-    assert result["nodes"][0]["agent_run_id"] == "run-1"
+    assert result == {"root_id": ROOT, "launched": [A]}
 
 
 def test_execute_dependency_graph_passes_agent():
     client = FakeGeneratedSdk()
-    client.execution.returns["execute_graph"] = GraphOut(
-        root_id=ROOT, project_id=B, module_id=B, agent="claude", nodes=[]
+    client.execution.returns["execute_graph"] = ExecuteGraphOut(
+        root_id=ROOT, launched=[]
     )
     service = _service(client)
 
@@ -131,19 +126,15 @@ def test_execute_dependency_graph_passes_agent():
     assert args[1] == "claude"
 
 
-def test_execute_dependency_graph_reset_rearms_then_executes():
+def test_execute_dependency_graph_reset_clears_then_executes():
     client = FakeGeneratedSdk()
-    client.execution.returns["reset_graph"] = GraphOut(
+    client.execution.returns["reset_graph"] = ResetGraphOut(
         root_id=ROOT,
-        project_id=B,
-        module_id=B,
-        nodes=[GraphNodeOut(task_id=A, status="idle")],
+        cleared=[A],
     )
-    client.execution.returns["execute_graph"] = GraphOut(
+    client.execution.returns["execute_graph"] = ExecuteGraphOut(
         root_id=ROOT,
-        project_id=B,
-        module_id=B,
-        nodes=[GraphNodeOut(task_id=A, status="running", agent_run_id="run-2")],
+        launched=[A],
     )
     service = _service(client)
     toolset = WorktrackerToolset(service)
@@ -154,25 +145,21 @@ def test_execute_dependency_graph_reset_rearms_then_executes():
         "reset_graph",
         "execute_graph",
     ]
-    assert result["nodes"][0]["status"] == "running"
-    assert result["nodes"][0]["agent_run_id"] == "run-2"
+    assert result == {"root_id": ROOT, "launched": [A]}
 
 
-def test_execute_dependency_graph_default_preserves_recorded_failure():
+def test_execute_dependency_graph_default_does_not_reset_the_ledger():
     client = FakeGeneratedSdk()
-    client.execution.returns["execute_graph"] = GraphOut(
+    client.execution.returns["execute_graph"] = ExecuteGraphOut(
         root_id=ROOT,
-        project_id=B,
-        module_id=B,
-        nodes=[GraphNodeOut(task_id=A, status="failed", error="agent_not_configured")],
+        launched=[],
     )
     toolset = WorktrackerToolset(_service(client))
 
     result = toolset.execute_dependency_graph_tool(None, ROOT)
 
     assert [call[0] for call in client.execution.calls] == ["execute_graph"]
-    assert result["nodes"][0]["status"] == "failed"
-    assert result["nodes"][0]["error"] == "agent_not_configured"
+    assert result == {"root_id": ROOT, "launched": []}
 
 
 def test_execute_dependency_graph_4xx_returns_clean_error():
@@ -212,7 +199,7 @@ def test_execution_tools_are_registered():
     }.isdisjoint(tool_names)
 
 
-def test_execute_dependency_graph_tool_exposes_reset_recovery_contract():
+def test_execute_dependency_graph_tool_exposes_reset_contract():
     tools = dict(generate_worktracker_tools())
     tool = tools["execute_dependency_graph"]
     doc = " ".join(inspect.getdoc(tool).split())
@@ -223,4 +210,4 @@ def test_execute_dependency_graph_tool_exposes_reset_recovery_contract():
         "reset",
     )
     assert "reset=True" in doc
-    assert "preserves recorded failures" in doc
+    assert "clears" in doc

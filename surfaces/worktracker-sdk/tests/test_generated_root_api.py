@@ -61,7 +61,7 @@ def test_get_dependency_graph_uses_generated_transport_at_api_root() -> None:
 
 
 def test_execute_graph_uses_generated_transport_at_api_root() -> None:
-    from worktracker_sdk import ApiClient, Configuration, ExecutionApi, GraphOut
+    from worktracker_sdk import ApiClient, Configuration, ExecuteGraphOut, ExecutionApi
 
     calls = []
 
@@ -72,10 +72,7 @@ def test_execute_graph_uses_generated_transport_at_api_root() -> None:
             json.dumps(
                 {
                     "root_id": ROOT,
-                    "project_id": PROJECT,
-                    "module_id": MODULE,
-                    "agent": "codex",
-                    "nodes": [],
+                    "launched": [MODULE],
                 }
             ).encode(),
             "Created",
@@ -88,10 +85,11 @@ def test_execute_graph_uses_generated_transport_at_api_root() -> None:
     client = ApiClient(configuration)
     client.rest_client.pool_manager.request = request
 
-    graph = ExecutionApi(client).execute_graph(ROOT, agent="codex")
+    result = ExecutionApi(client).execute_graph(ROOT, agent="codex")
 
-    assert isinstance(graph, GraphOut)
-    assert graph.root_id == ROOT
+    assert isinstance(result, ExecuteGraphOut)
+    assert result.root_id == ROOT
+    assert result.launched == [MODULE]
     assert [(method, url) for method, url, _ in calls] == [
         ("POST", f"https://worktracker.test/api/work-items/{ROOT}/execute-graph")
     ]
@@ -100,7 +98,7 @@ def test_execute_graph_uses_generated_transport_at_api_root() -> None:
 
 
 def test_reset_graph_uses_delete_at_api_root() -> None:
-    from worktracker_sdk import ApiClient, Configuration, ExecutionApi, GraphOut
+    from worktracker_sdk import ApiClient, Configuration, ExecutionApi, ResetGraphOut
 
     calls = []
 
@@ -111,10 +109,7 @@ def test_reset_graph_uses_delete_at_api_root() -> None:
             json.dumps(
                 {
                     "root_id": ROOT,
-                    "project_id": PROJECT,
-                    "module_id": MODULE,
-                    "agent": None,
-                    "nodes": [],
+                    "cleared": [MODULE],
                 }
             ).encode(),
             "OK",
@@ -123,9 +118,10 @@ def test_reset_graph_uses_delete_at_api_root() -> None:
     client = ApiClient(Configuration(host="https://worktracker.test/api/work-tracker"))
     client.rest_client.pool_manager.request = request
 
-    graph = ExecutionApi(client).reset_graph(ROOT)
+    result = ExecutionApi(client).reset_graph(ROOT)
 
-    assert isinstance(graph, GraphOut)
+    assert isinstance(result, ResetGraphOut)
+    assert result.cleared == [MODULE]
     assert [(method, url) for method, url, _ in calls] == [
         ("DELETE", f"https://worktracker.test/api/work-items/{ROOT}/execute-graph")
     ]

@@ -9,11 +9,8 @@ from worktracker.signals import issue_state_changed
 def test_receiver_delegates_completion(monkeypatch):
     seen = {}
 
-    def observe(*, issue_id, from_group, to_group, to_state_id=None):
+    def observe(*, issue_id):
         seen["issue_id"] = issue_id
-        seen["from_group"] = from_group
-        seen["to_group"] = to_group
-        seen["to_state_id"] = to_state_id
 
     monkeypatch.setattr(signals.driver, "observe_issue_state_changed", observe)
 
@@ -25,16 +22,11 @@ def test_receiver_delegates_completion(monkeypatch):
         to_state_id="state-any",
     )
 
-    assert seen == {
-        "issue_id": "task-1",
-        "from_group": "unstarted",
-        "to_group": "unstarted",
-        "to_state_id": "state-any",
-    }
+    assert seen == {"issue_id": "task-1"}
 
 
 def test_receiver_swallows_observer_errors(monkeypatch, caplog):
-    def fail(*, issue_id, from_group, to_group, to_state_id=None):
+    def fail(*, issue_id):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(signals.driver, "observe_issue_state_changed", fail)

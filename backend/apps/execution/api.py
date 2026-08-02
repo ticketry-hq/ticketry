@@ -6,7 +6,6 @@ from django.http import JsonResponse
 from ninja import Router, Schema, Status
 
 from apps.execution import driver
-from apps.execution.graph import GraphState
 from apps.terminals.launch import LaunchUnavailable
 from apps.settings_store.config import NoConfigurationSelected
 from worktracker.auth import ApiKeyAuth
@@ -36,21 +35,14 @@ class LaunchedAgentOut(Schema):
     agent_run_id: str
 
 
-class GraphNodeOut(Schema):
-    task_id: str
-    status: str
-    agent_run_id: str | None = None
-    error: str | None = None
-
-
-class GraphOut(Schema):
-    """Graph state; null ``agent`` means each node uses its current binding."""
-
+class ExecuteGraphOut(Schema):
     root_id: str
-    project_id: str
-    module_id: str
-    agent: str | None
-    nodes: list[GraphNodeOut]
+    launched: list[str]
+
+
+class ResetGraphOut(Schema):
+    root_id: str
+    cleared: list[str]
 
 
 class DependencyGraphNodeOut(Schema):
@@ -69,63 +61,26 @@ def _error_payload(error: str) -> dict[str, str]:
     return {"error": error, "message": error}
 
 
-def _graph_out(graph: GraphState) -> GraphOut:
-    return GraphOut(
-        root_id=graph.root_id,
-        project_id=graph.project_id,
-        module_id=graph.module_id,
-        agent=graph.agent,
-        nodes=[
-            GraphNodeOut(
-                task_id=node.task_id,
-                status=node.status,
-                agent_run_id=node.agent_run_id,
-                error=node.error,
-            )
-            for node in graph.nodes
-        ],
-    )
-
-
 def _value_error_status(error: str) -> int:
     if error in {"task_not_found", "graph_not_found"}:
         return 404
     return 422
 
 
-@router.post("/work-items/{issue_id}/execute-graph", response={201: GraphOut})
+@router.post("/work-items/{issue_id}/execute-graph", response={201: ExecuteGraphOut})
 def create_execute_graph(request, issue_id: str, payload: ExecuteGraphIn):
-    """Launch the ready set of a root task's dependency subtree.
-
-    Idempotent: a re-invoke re-seeds the graph from durable facts (tracker
-    completion + live AgentRuns) and launches only genuinely-new work, so
-    mashing the button is safe. Always returns 201 with the current state; no
-    409 is raised.
-    """
+    """Arm a root and launch its eligible direct children."""
 
     try:
-        graph = driver.execute_graph(issue_id, agent=payload.agent)
+        launched = driver.execute_graph(issue_id, agent=payload.agent)
     except ValueError as exc:
         error = str(exc)
         return JsonResponse(_error_payload(error), status=_value_error_status(error))
 
-    return Status(201, _graph_out(graph))
-
-
-@router.get("/work-items/{issue_id}/execute-graph", response={200: GraphOut})
-def get_execute_graph(request, issue_id: str):
-    """Return the current graph state, or 404 if no graph run exists.
-
-    Durable (CODIN-777): the state is rebuilt from the ``GraphRun`` header, the
-    per-node ``EngineRun`` rows, and the live ``blocked_by`` edges, so it
-    survives an ASGI restart and reflects the current dependency edges. A 404
-    now means no header row exists — never merely "the process restarted".
-    """
-
-    graph = driver.get_graph(issue_id)
-    if graph is None:
-        return JsonResponse(_error_payload("graph_not_found"), status=404)
-    return Status(200, _graph_out(graph))
+    return Status(
+        201,
+        ExecuteGraphOut(root_id=str(issue_id), launched=launched),
+    )
 
 
 @router.get(
@@ -157,16 +112,19 @@ def get_dependency_graph(request, issue_id: str):
     )
 
 
-@router.delete("/work-items/{issue_id}/execute-graph", response={200: GraphOut})
+@router.delete("/work-items/{issue_id}/execute-graph", response={200: ResetGraphOut})
 def reset_execute_graph(request, issue_id: str):
-    """Re-arm failed and dependency-halted nodes without launching work."""
+    """Clear a root's launch ledger without launching work."""
 
     try:
-        graph = driver.reset_graph(issue_id)
+        cleared = driver.reset_subtree(issue_id)
     except ValueError as exc:
         error = str(exc)
         return JsonResponse(_error_payload(error), status=_value_error_status(error))
-    return Status(200, _graph_out(graph))
+    return Status(
+        200,
+        ResetGraphOut(root_id=str(issue_id), cleared=cleared),
+    )
 
 
 @router.post("/work-items/{issue_id}/launch-agent", response={201: LaunchedAgentOut})

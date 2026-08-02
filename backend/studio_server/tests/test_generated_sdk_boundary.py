@@ -21,7 +21,6 @@ HAND_ROLLED_ROOT_EXPORTS = {
     "DependencyGraph",
     "DependencyGraphRead",
     "DependencyGraphReadNode",
-    "GraphNode",
     "IssueLevel",
     "IssueType",
     "LaunchedAgent",

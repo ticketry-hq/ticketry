@@ -20,19 +20,14 @@ from pydantic import BaseModel
 from worktracker_sdk.generated.api_client import ApiClient
 
 
-class GraphNodeOut(BaseModel):
-    task_id: str
-    status: str
-    agent_run_id: str | None = None
-    error: str | None = None
-
-
-class GraphOut(BaseModel):
+class ExecuteGraphOut(BaseModel):
     root_id: str
-    project_id: str
-    module_id: str
-    agent: str | None = None
-    nodes: list[GraphNodeOut]
+    launched: list[str]
+
+
+class ResetGraphOut(BaseModel):
+    root_id: str
+    cleared: list[str]
 
 
 class DependencyGraphNodeOut(BaseModel):
@@ -111,7 +106,9 @@ class ExecutionApi(_RootApi):
         )
         return DependencyGraphOut.model_validate(data)
 
-    def execute_graph(self, root_id: str | UUID, agent: str | None = None) -> GraphOut:
+    def execute_graph(
+        self, root_id: str | UUID, agent: str | None = None
+    ) -> ExecuteGraphOut:
         data = self._request(
             "POST",
             "/work-items/{root_id}/execute-graph",
@@ -119,9 +116,9 @@ class ExecutionApi(_RootApi):
             body={} if agent is None else {"agent": agent},
             success_status=201,
         )
-        return GraphOut.model_validate(data)
+        return ExecuteGraphOut.model_validate(data)
 
-    def reset_graph(self, root_id: str | UUID) -> GraphOut:
+    def reset_graph(self, root_id: str | UUID) -> ResetGraphOut:
         data = self._request(
             "DELETE",
             "/work-items/{root_id}/execute-graph",
@@ -129,7 +126,8 @@ class ExecutionApi(_RootApi):
             body=None,
             success_status=200,
         )
-        return GraphOut.model_validate(data)
+        return ResetGraphOut.model_validate(data)
+
 
 class LaunchApi(_RootApi):
     """Generated-client extension for the root-mounted direct launch."""

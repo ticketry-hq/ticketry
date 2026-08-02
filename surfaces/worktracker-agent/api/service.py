@@ -897,44 +897,6 @@ class WorktrackerService:
             return {"root_id": root_task_id, "error": detail}
         return graph.model_dump(mode="json")
 
-    def generate_leaf_llds(
-        self, root_task_id: str, agent: str | None = None
-    ) -> Dict[str, Any]:
-        """Launch one ``lld`` run per eligible leaf of an approved split tree (#721).
-
-        Routes through the SDK's rooted execution resource (#894); folds a 4xx
-        into ``{"root_id", "error"}`` off the generated exception body.
-        """
-        root_task_id = str(self._sdk_resolve_task_id(root_task_id))
-        try:
-            result = self.sdk.execution.generate_leaf_llds(root_task_id, agent)
-        except ApiException as error:
-            detail = self._sdk_execution_error(error)
-            if detail is None:
-                raise
-            return {"root_id": root_task_id, "error": detail}
-        return result.model_dump(mode="json")
-
-    def release_planning_run(self, task_id: str) -> Dict[str, Any]:
-        """Release a wedged ``planning_run_already_running`` guard (CODIN-755).
-
-        Clears the tracked planning-run lock for one task so the next launch is
-        a fresh run. Routes through the SDK's rooted execution resource (#894).
-        Returns the release result (released run + now-idle guard), or
-        ``{"task_id", "error"}`` when no running planning run is registered
-        (404 ``planning_run_not_found``). Releases the lock only — it does not
-        terminate the tmux/agent process.
-        """
-        task_id = str(self._sdk_resolve_task_id(task_id))
-        try:
-            result = self.sdk.execution.release_planning_run(task_id)
-        except ApiException as error:
-            detail = self._sdk_execution_error(error)
-            if detail is None:
-                raise
-            return {"task_id": task_id, "error": detail}
-        return result.model_dump(mode="json")
-
     def launch_default_coding_agent(self, id_or_key: str) -> Dict[str, Any]:
         """Launch the current-state coding agent for a target work item (#924).
 

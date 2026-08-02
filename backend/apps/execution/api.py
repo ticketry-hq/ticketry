@@ -7,7 +7,6 @@ from ninja import Router, Schema, Status
 
 from apps.execution import driver
 from apps.execution.graph import GraphState
-from apps.execution.state import Phase
 from apps.terminals.launch import LaunchUnavailable
 from apps.settings_store.config import NoConfigurationSelected
 from worktracker.auth import ApiKeyAuth
@@ -16,34 +15,7 @@ from worktracker.auth import ApiKeyAuth
 router = Router(tags=["execution"], auth=ApiKeyAuth())
 
 
-PlanningPhase = Literal["refine", "split"]
 PlanningAgent = Literal["claude", "agy", "codex", "gemini"]
-
-
-class PlanningRunOut(Schema):
-    """Execution state; ``agent`` is the optional launch-time override."""
-
-    task_id: str
-    project_id: str
-    module_id: str
-    agent: str | None
-    phase: Phase
-    status: str
-    agent_run_id: str | None = None
-    error: str | None = None
-
-
-class ReleasePlanningRunOut(Schema):
-    """Result of releasing a wedged planning-run guard (CODIN-755).
-
-    ``released`` is the previous run that held the lock (its ``status`` is
-    ``running``); ``status`` is the task's current guard state after release —
-    ``idle``, i.e. the guard is clear and a fresh launch will succeed.
-    """
-
-    task_id: str
-    status: str
-    released: PlanningRunOut
 
 
 class ExecuteGraphIn(Schema):
@@ -93,18 +65,6 @@ class DependencyGraphOut(Schema):
     nodes: list[DependencyGraphNodeOut]
 
 
-class LeafLldRunOut(Schema):
-    task_id: str
-    status: str
-    agent_run_id: str | None = None
-    error: str | None = None
-
-
-class GenerateLeafLldsOut(Schema):
-    root_id: str
-    runs: list[LeafLldRunOut]
-
-
 def _error_payload(error: str) -> dict[str, str]:
     return {"error": error, "message": error}
 
@@ -131,42 +91,6 @@ def _value_error_status(error: str) -> int:
     if error in {"task_not_found", "graph_not_found"}:
         return 404
     return 422
-
-
-@router.delete(
-    "/work-items/{issue_id}/planning-run", response={200: ReleasePlanningRunOut}
-)
-def release_planning_run(request, issue_id: str):
-    """Manually release a wedged ``planning_run_already_running`` guard.
-
-    Clears the process-local lock so the next tracked planning launch is a
-    fresh run. Returns 200 with the released run and the now-idle guard, or 404
-    ``planning_run_not_found`` when no running planning run is registered. This
-    releases the lock only — it never terminates the tmux/AgentRun process.
-    """
-
-    try:
-        released = driver.release(issue_id)
-    except ValueError as exc:
-        return JsonResponse(_error_payload(str(exc)), status=404)
-
-    return Status(
-        200,
-        ReleasePlanningRunOut(
-            task_id=released.task_id,
-            status="idle",
-            released=PlanningRunOut(
-                task_id=released.task_id,
-                project_id=released.project_id,
-                module_id=released.module_id,
-                agent=released.agent,
-                phase=released.phase,
-                status=released.status,
-                agent_run_id=released.agent_run_id,
-                error=released.error,
-            ),
-        ),
-    )
 
 
 @router.post("/work-items/{issue_id}/execute-graph", response={201: GraphOut})
@@ -243,36 +167,6 @@ def reset_execute_graph(request, issue_id: str):
         error = str(exc)
         return JsonResponse(_error_payload(error), status=_value_error_status(error))
     return Status(200, _graph_out(graph))
-
-
-@router.post(
-    "/work-items/{issue_id}/generate-leaf-llds",
-    response={201: GenerateLeafLldsOut},
-)
-def create_generate_leaf_llds(request, issue_id: str, payload: ExecuteGraphIn):
-    """Launch one ``lld`` run per eligible leaf of an approved split tree."""
-
-    try:
-        states = driver.generate_leaf_llds(issue_id, agent=payload.agent)
-    except ValueError as exc:
-        error = str(exc)
-        return JsonResponse(_error_payload(error), status=_value_error_status(error))
-
-    return Status(
-        201,
-        GenerateLeafLldsOut(
-            root_id=issue_id,
-            runs=[
-                LeafLldRunOut(
-                    task_id=state.task_id,
-                    status=state.status,
-                    agent_run_id=state.agent_run_id,
-                    error=state.error,
-                )
-                for state in states
-            ],
-        ),
-    )
 
 
 @router.post("/work-items/{issue_id}/launch-agent", response={201: LaunchedAgentOut})

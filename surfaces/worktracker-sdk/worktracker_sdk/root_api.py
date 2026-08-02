@@ -47,35 +47,6 @@ class DependencyGraphOut(BaseModel):
     nodes: list[DependencyGraphNodeOut]
 
 
-class LeafLldRunOut(BaseModel):
-    task_id: str
-    status: str
-    agent_run_id: str | None = None
-    error: str | None = None
-
-
-class GenerateLeafLldsOut(BaseModel):
-    root_id: str
-    runs: list[LeafLldRunOut]
-
-
-class PlanningRunOut(BaseModel):
-    task_id: str
-    project_id: str
-    module_id: str
-    agent: str | None = None
-    phase: str
-    status: str
-    agent_run_id: str | None = None
-    error: str | None = None
-
-
-class ReleasePlanningRunOut(BaseModel):
-    task_id: str
-    status: str
-    released: PlanningRunOut
-
-
 class LaunchedAgentOut(BaseModel):
     target_id: str
     agent: str
@@ -159,29 +130,6 @@ class ExecutionApi(_RootApi):
             success_status=200,
         )
         return GraphOut.model_validate(data)
-
-    def generate_leaf_llds(
-        self, root_id: str | UUID, agent: str | None = None
-    ) -> GenerateLeafLldsOut:
-        data = self._request(
-            "POST",
-            "/work-items/{root_id}/generate-leaf-llds",
-            path_params={"root_id": root_id},
-            body={} if agent is None else {"agent": agent},
-            success_status=201,
-        )
-        return GenerateLeafLldsOut.model_validate(data)
-
-    def release_planning_run(self, task_id: str | UUID) -> ReleasePlanningRunOut:
-        data = self._request(
-            "DELETE",
-            "/work-items/{task_id}/planning-run",
-            path_params={"task_id": task_id},
-            body=None,
-            success_status=200,
-        )
-        return ReleasePlanningRunOut.model_validate(data)
-
 
 class LaunchApi(_RootApi):
     """Generated-client extension for the root-mounted direct launch."""

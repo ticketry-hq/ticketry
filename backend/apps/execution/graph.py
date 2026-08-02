@@ -54,7 +54,7 @@ def ready_set(graph: GraphState) -> list[str]:
 
 
 def decide_graph(graph: GraphState, event: SeamEvent) -> GraphDecision:
-    """Pure graph transition for implement-phase ready-set release."""
+    """Pure graph transition for ready-set release."""
 
     if event.kind == "execute_requested":
         if event.task_id != graph.root_id:
@@ -110,7 +110,6 @@ def _with_ready_launches(graph: GraphState) -> GraphDecision:
             project_id=graph.project_id,
             module_id=graph.module_id,
             agent=graph.agent,
-            recipe="implement",
         )
         for task_id in ready_set(graph)
     ]

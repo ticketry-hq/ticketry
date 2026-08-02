@@ -19,13 +19,9 @@ from worktracker_sdk.generated.exceptions import ApiException
 from worktracker_sdk.root_api import (
     DependencyGraphNodeOut,
     DependencyGraphOut,
-    GenerateLeafLldsOut,
     GraphNodeOut,
     GraphOut,
     LaunchedAgentOut,
-    LeafLldRunOut,
-    PlanningRunOut,
-    ReleasePlanningRunOut,
 )
 
 
@@ -203,13 +199,9 @@ __all__ = [
     "DependencyGraphNodeOut",
     "DependencyGraphOut",
     "FakeGeneratedSdk",
-    "GenerateLeafLldsOut",
     "GraphNodeOut",
     "GraphOut",
     "LaunchedAgentOut",
-    "LeafLldRunOut",
-    "PlanningRunOut",
-    "ReleasePlanningRunOut",
     "make_api_error",
     "make_attachment",
     "make_detail",

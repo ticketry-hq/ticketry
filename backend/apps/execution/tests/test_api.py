@@ -184,7 +184,7 @@ def test_execute_graph_allows_configured_nested_root_without_checking_descendant
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_disabled_root_can_still_be_read_reset_and_generate_leaf_llds(
+def test_disabled_root_can_still_be_read_and_reset(
     client, project, module, todo, monkeypatch
 ):
     root = task(project, module, todo, sequence_id=2)
@@ -206,28 +206,17 @@ def test_disabled_root_can_still_be_read_reset_and_generate_leaf_llds(
         issue_type=root.issue_type,
         state=root.state,
     ).update(subtree_run_enabled=False)
-    fresh_leaf = _child(project, root, todo, 4, name="Fresh leaf")
     successful_spawn.calls.clear()
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     graph = client.get(f"/api/work-items/{root.id}/execute-graph")
     dependency_graph = client.get(f"/api/work-items/{root.id}/dependency-graph")
     reset = client.delete(f"/api/work-items/{root.id}/execute-graph")
-    leaf_llds = client.post(
-        f"/api/work-items/{root.id}/generate-leaf-llds",
-        data={"agent": "codex"},
-        content_type="application/json",
-    )
-
     assert graph.status_code == 200
     assert dependency_graph.status_code == 200
     assert reset.status_code == 200
     assert reset.json()["nodes"][0]["task_id"] == str(failed.id)
     assert reset.json()["nodes"][0]["status"] == "idle"
-    assert leaf_llds.status_code == 201
-    assert str(fresh_leaf.id) in {
-        run["task_id"] for run in leaf_llds.json()["runs"]
-    }
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -464,10 +453,10 @@ def test_execute_graph_persists_header_and_node_rows(client, project, module, to
     assert str(header.agent) == "codex"
     assert str(header.project_id) == str(project.id)
     assert str(header.module_id) == str(module.id)
-    # The running node gets an implement-phase EngineRun row; the still-idle,
-    # blocked node does not (absent → rebuilds to idle).
+    # The running node gets an EngineRun row; the still-idle, blocked node does
+    # not (absent → rebuilds to idle).
     row_a = EngineRun.objects.get(pk=a.id)
-    assert (row_a.phase, row_a.status, row_a.agent_run_id) == ("implement", "running", "run-1")
+    assert (row_a.status, row_a.agent_run_id) == ("running", "run-1")
     assert not EngineRun.objects.filter(pk=b.id).exists()
 
 
@@ -679,7 +668,7 @@ def test_reset_execute_graph_without_header_returns_graph_not_found(
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_reset_execute_graph_changes_only_failed_and_halted_implement_facts(
+def test_reset_execute_graph_changes_only_failed_and_halted_facts(
     client, project, module, todo, done, monkeypatch
 ):
     from apps.execution.models import EngineRun, GraphRun
@@ -689,9 +678,7 @@ def test_reset_execute_graph_changes_only_failed_and_halted_implement_facts(
     halted = _child(project, root, todo, 4, name="Halted")
     completed = _child(project, root, done, 5, name="Done")
     running = _child(project, root, todo, 6, name="Running")
-    planning = _child(project, root, todo, 7, name="Planning")
     halted.blocked_by.add(failed)
-    planning.blocked_by.add(running)
     spawn_calls = []
 
     async def mixed_spawn(**kwargs):
@@ -708,28 +695,17 @@ def test_reset_execute_graph_changes_only_failed_and_halted_implement_facts(
     )
     assert launched.status_code == 201
 
-    EngineRun.objects.create(
-        task=planning,
-        project=project,
-        module=module,
-        agent="claude",
-        phase="lld",
-        status="failed",
-        error="planning failure",
-    )
     header_before = GraphRun.objects.filter(pk=root.id).values().get()
     done_before = EngineRun.objects.filter(pk=completed.id).values().get()
     running_before = EngineRun.objects.filter(pk=running.id).values().get()
-    planning_before = EngineRun.objects.filter(pk=planning.id).values().get()
     visible_state_before = list(
         Issue.objects.filter(
-            pk__in=[root.id, failed.id, halted.id, completed.id, running.id, planning.id]
+            pk__in=[root.id, failed.id, halted.id, completed.id, running.id]
         )
         .order_by("id")
         .values_list("id", "state_id")
     )
     halted_blockers_before = list(halted.blocked_by.values_list("id", flat=True))
-    planning_blockers_before = list(planning.blocked_by.values_list("id", flat=True))
 
     response = client.delete(f"/api/work-items/{root.id}/execute-graph")
 
@@ -739,16 +715,14 @@ def test_reset_execute_graph_changes_only_failed_and_halted_implement_facts(
     assert GraphRun.objects.filter(pk=root.id).values().get() == header_before
     assert EngineRun.objects.filter(pk=completed.id).values().get() == done_before
     assert EngineRun.objects.filter(pk=running.id).values().get() == running_before
-    assert EngineRun.objects.filter(pk=planning.id).values().get() == planning_before
     assert list(
         Issue.objects.filter(
-            pk__in=[root.id, failed.id, halted.id, completed.id, running.id, planning.id]
+            pk__in=[root.id, failed.id, halted.id, completed.id, running.id]
         )
         .order_by("id")
         .values_list("id", "state_id")
     ) == visible_state_before
     assert list(halted.blocked_by.values_list("id", flat=True)) == halted_blockers_before
-    assert list(planning.blocked_by.values_list("id", flat=True)) == planning_blockers_before
     assert [call["task_id"] for call in spawn_calls] == [
         str(failed.id),
         str(running.id),
@@ -879,29 +853,6 @@ def test_execute_graph_edges_derived_from_blocked_by_on_read(client, project, mo
 
     b.blocked_by.remove(a)
     assert driver.get_graph(str(root.id)).edges == frozenset()
-
-
-@override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_generate_leaf_llds_launches_todo_leaves_and_returns_201(client, project, module, todo, backlog, monkeypatch):
-    root = task(project, module, todo, sequence_id=2)
-    a = _child(project, root, todo, 3, name="A")
-    b = _child(project, root, todo, 4, name="B")
-    _child(project, root, backlog, 5, name="C")  # not in Todo → skipped
-    successful_spawn.calls.clear()
-    monkeypatch.setattr(driver, "spawn_run", successful_spawn)
-
-    response = client.post(
-        f"/api/work-items/{root.id}/generate-leaf-llds",
-        data={"agent": "codex"},
-        content_type="application/json",
-    )
-
-    assert response.status_code == 201
-    body = response.json()
-    assert body["root_id"] == str(root.id)
-    launched = {run["task_id"] for run in body["runs"]}
-    assert launched == {str(a.id), str(b.id)}
-    assert {call["task_id"] for call in successful_spawn.calls} == {str(a.id), str(b.id)}
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -1043,6 +994,8 @@ def test_execute_graph_rejects_promptless_current_state(
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_launch_agent_does_not_move_target_state(client, project, module, todo, monkeypatch):
+    from apps.execution.models import EngineRun
+
     issue = task(project, module, todo)
     successful_spawn.calls.clear()
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
@@ -1056,7 +1009,7 @@ def test_launch_agent_does_not_move_target_state(client, project, module, todo, 
     # A launch is just a launch: no workflow move and no engine state.
     issue.refresh_from_db()
     assert issue.state.group == "unstarted"
-    assert driver.get_state(str(issue.id)) is None
+    assert not EngineRun.objects.filter(pk=issue.id).exists()
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -1140,56 +1093,3 @@ def test_launch_agent_launch_unavailable_returns_503(client, project, module, to
     assert response.status_code == 503
     assert response.json()["error"] == "launch_unavailable"
 
-
-@override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_release_planning_run_clears_lock_and_returns_200(client, project, module, backlog, monkeypatch):
-    issue = task(project, module, backlog)
-    successful_spawn.calls.clear()
-    monkeypatch.setattr(driver, "spawn_run", successful_spawn)
-
-    driver.execute(str(issue.id), agent="codex", phase="refine")
-    response = client.delete(f"/api/work-items/{issue.id}/planning-run")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["task_id"] == str(issue.id)
-    assert body["status"] == "idle"
-    assert body["released"]["status"] == "running"
-    assert body["released"]["phase"] == "refine"
-    assert body["released"]["agent"] == "codex"
-    assert body["released"]["agent_run_id"] == "run-1"
-    assert driver.get_state(str(issue.id)) is None
-
-
-@override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_release_planning_run_missing_returns_404_and_no_mutation(client, project, module, backlog, monkeypatch):
-    issue = task(project, module, backlog)
-    successful_spawn.calls.clear()
-    monkeypatch.setattr(driver, "spawn_run", successful_spawn)
-
-    response = client.delete(f"/api/work-items/{issue.id}/planning-run")
-
-    assert response.status_code == 404
-    assert response.json()["error"] == "planning_run_not_found"
-    issue.refresh_from_db()
-    assert issue.state.group == "backlog"
-    assert successful_spawn.calls == []
-
-
-@override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_planning_run_manual_release_deletes_entire_row(client, project, module, backlog, monkeypatch):
-    from apps.execution.models import EngineRun
-    issue = task(project, module, backlog)
-    successful_spawn.calls.clear()
-    monkeypatch.setattr(driver, "spawn_run", successful_spawn)
-
-    # Launch to seed
-    driver.execute(str(issue.id), agent="codex", phase="refine")
-    assert EngineRun.objects.filter(pk=issue.id).exists()
-
-    # Manual release
-    response = client.delete(f"/api/work-items/{issue.id}/planning-run")
-    assert response.status_code == 200
-
-    # Row is completely deleted from the database
-    assert not EngineRun.objects.filter(pk=issue.id).exists()

@@ -15,7 +15,7 @@ graph-wide provider override. It stores no edges and no per-node status.
 _Avoid_: campaign record, attempt id, graph snapshot
 
 **Durable node fact**:
-The per-task engine-run row (implement phase) recording a graph node's
+The per-task engine-run row recording a graph node's
 last-known execution status, agent run id, and error. An absent row *is* the
 idle status — nodes are re-seeded idle when no fact exists, and `done`/
 `running` are re-derived from the tracker and live agent runs on every rebuild.

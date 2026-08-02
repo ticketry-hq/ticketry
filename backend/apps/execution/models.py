@@ -26,7 +26,6 @@ class EngineRun(models.Model):
         related_name="module_engine_runs",
     )
     agent = models.CharField(max_length=255, null=True, blank=True)
-    phase = models.CharField(max_length=50, default="implement")
     status = models.CharField(max_length=50, default="idle")
     agent_run_id = models.CharField(max_length=255, null=True, blank=True)
     error = models.TextField(null=True, blank=True)
@@ -44,10 +43,9 @@ class GraphRun(models.Model):
     override, project,
     module) needed to rebuild the graph after an ASGI restart. Graph **edges
     are never stored** — they stay derived from ``Issue.blocked_by`` on read.
-    Per-node status is likewise not stored here; it reuses the S1 ``EngineRun``
-    rows (one per descendant task, ``phase="implement"``). A missing header row
-    is what a GET 404 now means: "no graph run exists," not "the server
-    restarted."
+    Per-node status is likewise not stored here; it uses ``EngineRun`` rows,
+    one per descendant task. A missing header row is what a GET 404 now means:
+    "no graph run exists," not "the server restarted."
     """
 
     root = models.OneToOneField(

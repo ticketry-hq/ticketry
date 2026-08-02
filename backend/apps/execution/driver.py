@@ -11,8 +11,7 @@ from worktracker.state_groups import state_group
 
 from apps.execution.graph import GraphState, TaskNode, decide_graph
 from apps.execution.models import EngineRun, GraphRun
-from apps.execution.reducer import decide
-from apps.execution.state import EngineState, LaunchAction, Phase, SeamEvent
+from apps.execution.state import LaunchAction, SeamEvent
 from apps.runs.models import AgentRun
 from apps.terminals.session import LaunchIntent, session as terminal_session
 from apps.terminals.launch_configuration import (
@@ -26,7 +25,6 @@ SpawnRun = Callable[..., Awaitable[str]]
 LiveRunFor = Callable[[str], AgentRun | None]
 REVIEW_STATE_NAME = "Review"
 
-_registry: dict[str, EngineState] = {}
 _graph_registry: dict[str, GraphState] = {}
 
 
@@ -115,27 +113,9 @@ def launch_task_agent(
 
 
 def clear_registry() -> None:
-    _registry.clear()
     _graph_registry.clear()
     GraphRun.objects.all().delete()
     EngineRun.objects.all().delete()
-
-
-def get_state(task_id: str) -> EngineState | None:
-    try:
-        run = EngineRun.objects.get(pk=task_id)
-        return EngineState(
-            task_id=str(run.task_id),
-            project_id=str(run.project_id),
-            module_id=str(run.module_id) if run.module_id else None,
-            agent=run.agent,
-            phase=run.phase,
-            status=run.status,
-            agent_run_id=run.agent_run_id,
-            error=run.error,
-        )
-    except EngineRun.DoesNotExist:
-        return None
 
 
 def get_graph(root_id: str) -> GraphState | None:
@@ -209,7 +189,6 @@ def reset_graph(root_id: str) -> GraphState:
     descendants = _task_descendants(root)
     reset_facts = EngineRun.objects.filter(
         task_id__in=[issue.id for issue in descendants],
-        phase="implement",
         status__in=("failed", "halted"),
     )
     reset_facts.delete()
@@ -243,32 +222,13 @@ def _load_graph_context(root_id: str) -> tuple[GraphRun, Issue, str] | None:
     return header, root, module_id
 
 
-def _store(state: EngineState) -> EngineState:
-    EngineRun.objects.update_or_create(
-        task_id=state.task_id,
-        defaults={
-            "project_id": state.project_id,
-            "module_id": state.module_id,
-            "agent": state.agent,
-            "phase": state.phase,
-            "status": state.status,
-            "agent_run_id": state.agent_run_id,
-            "error": state.error,
-        },
-    )
-    _registry[state.task_id] = state
-    return state
-
-
 def _store_graph(state: GraphState) -> GraphState:
     """Persist the graph header + node rows and mirror into the process cache.
 
-    The ``GraphRun`` header records run context (no edges). Per-node status is
-    reused from S1's ``EngineRun`` table with ``phase="implement"`` — one row
-    per node that has advanced past ``idle``. Idle nodes are deliberately *not*
-    written: an absent row rebuilds to ``idle`` anyway (the re-seed default),
-    and writing idle rows would both add noise and make ``generate_leaf_llds``
-    skip un-launched leaves (its ``get_state`` relaunch guard).
+    The ``GraphRun`` header records run context (no edges). Per-node status uses
+    one ``EngineRun`` row per node that has advanced past ``idle``. Idle nodes
+    are deliberately *not* written: an absent row rebuilds to ``idle`` anyway
+    (the re-seed default), and writing idle rows would add noise.
     """
 
     GraphRun.objects.update_or_create(
@@ -288,83 +248,12 @@ def _store_graph(state: GraphState) -> GraphState:
                 "project_id": state.project_id,
                 "module_id": state.module_id,
                 "agent": state.agent,
-                "phase": "implement",
                 "status": node.status,
                 "agent_run_id": node.agent_run_id,
                 "error": node.error,
             },
         )
     _graph_registry[state.root_id] = state
-    return state
-
-
-def execute(
-    task_id: str,
-    *,
-    agent: str | None,
-    phase: Phase = "implement",
-    spawn: SpawnRun | None = None,
-) -> EngineState:
-    """Launch one phase run and return its process-local engine state."""
-
-    issue = (
-        Issue.objects.select_related("project").filter(pk=task_id, type="task").first()
-    )
-    if issue is None:
-        raise ValueError("task_not_found")
-    module_id = _module_id_for(issue)
-    if module_id is None:
-        raise ValueError("module_id_required")
-    if phase == "refine" and state_group(issue.state_id) != "backlog":
-        raise ValueError("task_not_in_backlog")
-    if phase == "split" and state_group(issue.state_id) != "unstarted":
-        raise ValueError("task_not_in_todo")
-    if phase == "lld" and state_group(issue.state_id) != "unstarted":
-        raise ValueError("task_not_in_todo")
-
-    state = _store(
-        EngineState(
-            task_id=str(issue.id),
-            project_id=str(issue.project_id),
-            module_id=module_id,
-            agent=agent,
-            phase=phase,
-        )
-    )
-    decision = decide(state, SeamEvent(kind="execute_requested", task_id=state.task_id))
-    state = _store(decision.next)
-
-    for action in decision.actions:
-        state = _apply_launch_action(state, action, spawn or spawn_run)
-
-    return state
-
-
-def release(task_id: str) -> EngineState:
-    """Manually release a wedged one-task planning-run guard (CODIN-755).
-
-    The reducer owns legality: only a registered ``running`` run is a
-    releasable lock. On release the driver folds a pure ``release_requested``
-    event and then *unregisters* the task, so the guard is fully clear and the
-    next launch is a genuinely fresh ``execute``. It returns the previous
-    (running) state so callers can report which run was released.
-
-    This is a lock-state mutation only — it never touches tmux or the
-    ``AgentRun`` process; a still-live orphan is accepted operator
-    responsibility. CODIN-757 retargets this same boundary from ``_registry``
-    to the durable ``EngineRun`` row.
-    """
-
-    key = str(task_id)
-    state = get_state(key)
-    if state is None or state.status != "running":
-        raise ValueError("planning_run_not_found")
-
-    # Prove the transition is legal through the pure reducer before mutating.
-    decide(state, SeamEvent(kind="release_requested", task_id=state.task_id))
-    EngineRun.objects.filter(pk=key).delete()
-    if key in _registry:
-        del _registry[key]
     return state
 
 
@@ -415,54 +304,6 @@ def execute_graph(
     return graph
 
 
-def generate_leaf_llds(
-    root_task_id: str,
-    *,
-    agent: str | None,
-    spawn: SpawnRun | None = None,
-) -> list[EngineState]:
-    """Launch one ``lld`` run per eligible leaf of an approved split tree.
-
-    A leaf is a non-archived ``type=task`` child of the root sitting in the
-    ``unstarted`` (Todo) group — the state #745's register agent lands new
-    leaves in. Children that already have an engine state in the registry are
-    skipped (relaunch guard). Unlike register's surface-and-halt, leaf-LLD
-    generation is independent per leaf: a launch failure is recorded on that
-    leaf's state and does not stop the others.
-    """
-
-    root = Issue.objects.filter(pk=root_task_id, type="task").first()
-    if root is None:
-        raise ValueError("task_not_found")
-
-    children = (
-        Issue.objects.filter(parent_id=root.id, type="task", is_archived=False)
-        .select_related("project", "parent")
-        .order_by("sequence_id", "id")
-    )
-
-    launched: list[EngineState] = []
-    for child in children:
-        if state_group(child.state_id) != "unstarted":
-            continue
-        if get_state(str(child.id)) is not None:
-            continue
-        try:
-            state = execute(
-                str(child.id),
-                agent=agent,
-                phase="lld",
-                spawn=spawn,
-            )
-        except ValueError:
-            logger.exception(
-                "leaf-lld launch skipped root=%s leaf=%s", root.id, child.id
-            )
-            continue
-        launched.append(state)
-    return launched
-
-
 def observe_issue_state_changed(
     *,
     issue_id: str,
@@ -471,7 +312,7 @@ def observe_issue_state_changed(
     to_state_id: str | None = None,
     spawn: SpawnRun | None = None,
     live_run_for: LiveRunFor | None = None,
-) -> EngineState | GraphState | None:
+) -> GraphState | None:
     """Fold a WorkTracker state-change seam event into active local state."""
 
     live_run_for = live_run_for or terminal_session.live_run_for
@@ -494,12 +335,7 @@ def observe_issue_state_changed(
     )
     graph_event = replace(event, to_group="completed") if review_reached else event
 
-    result: EngineState | GraphState | None = None
-    state = get_state(str(issue_id))
-    if state is not None:
-        decision = decide(state, event)
-        next_state = _store(decision.next)
-        result = next_state
+    result: GraphState | None = None
 
     for graph in list(_graph_registry.values()):
         if not _graph_contains(graph, str(issue_id)):
@@ -595,19 +431,16 @@ def _task_descendants(root: Issue) -> list[Issue]:
 def _durable_node_facts(descendants: list[Issue]) -> dict[str, TaskNode]:
     """Reconstruct per-node status from durable ``EngineRun`` rows (CODIN-777).
 
-    Only ``phase="implement"`` rows count as graph-node state — a leaf may also
-    carry a planning-phase row (refine/split/lld) under the same OneToOne
-    ``task_id`` key, and that must not be mistaken for implement progress. The
-    returned nodes feed ``_seed_node_from_durable_facts`` as its ``previous``,
-    which is what makes ``failed``/``halted``/stalled state survive a restart;
-    ``done`` and ``running`` are re-derived from the tracker and live
-    ``AgentRun`` regardless.
+    The returned nodes feed ``_seed_node_from_durable_facts`` as its
+    ``previous``, which is what makes ``failed``/``halted``/stalled state
+    survive a restart; ``done`` and ``running`` are re-derived from the tracker
+    and live ``AgentRun`` regardless.
     """
 
     seq_by_id = {str(issue.id): issue.sequence_id for issue in descendants}
-    rows = EngineRun.objects.filter(
-        task_id__in=list(seq_by_id), phase="implement"
-    ).values_list("task_id", "status", "agent_run_id", "error")
+    rows = EngineRun.objects.filter(task_id__in=list(seq_by_id)).values_list(
+        "task_id", "status", "agent_run_id", "error"
+    )
     return {
         str(task_id): TaskNode(
             task_id=str(task_id),
@@ -695,41 +528,6 @@ def _module_id_for(issue: Issue) -> str | None:
             return str(parent.id)
         parent_id = parent.parent_id
     return None
-
-
-def _apply_launch_action(
-    state: EngineState,
-    action: LaunchAction,
-    spawn: SpawnRun,
-) -> EngineState:
-    try:
-        run_id = async_to_sync(spawn)(
-            agent=action.agent,
-            project_id=action.project_id,
-            module_id=action.module_id,
-            task_id=action.task_id,
-            scope="task",
-        )
-    except Exception as exc:
-        logger.exception("execution launch failed task=%s", action.task_id)
-        decision = decide(
-            state,
-            SeamEvent(
-                kind="run_failed",
-                task_id=action.task_id,
-                error=str(exc) or exc.__class__.__name__,
-            ),
-        )
-    else:
-        decision = decide(
-            state,
-            SeamEvent(
-                kind="run_started",
-                task_id=action.task_id,
-                agent_run_id=run_id,
-            ),
-        )
-    return _store(decision.next)
 
 
 def _apply_graph_launch_action(

@@ -357,34 +357,6 @@ class WorktrackerToolset:
         """
         return self.service.get_dependency_graph(root_task_id)
 
-    def generate_leaf_llds_tool(
-        self,
-        ctx: Any,
-        root_task_id: str,
-        agent: str | None = None,
-    ) -> dict:
-        """Generate one split-level LLD per eligible leaf of an approved split.
-
-        Launches an ``lld`` run for each Todo child of the root, idempotently,
-        with failures isolated per leaf. Returns the launched runs."""
-        return self.service.generate_leaf_llds(root_task_id, agent)
-
-    def release_planning_run_tool(
-        self,
-        ctx: Any,
-        task_id: str,
-    ) -> dict:
-        """Release a stuck planning-run lock for one task.
-
-        Escape hatch for a wedged ``planning_run_already_running`` guard: it
-        clears the tracked planning-run lock so the next Refine/Split launch is
-        a fresh run. This releases the lock only — it does NOT kill the tmux
-        session or agent process; a still-live run is the operator's
-        responsibility. Returns the released run plus the now-idle guard, or
-        ``{"task_id", "error": "planning_run_not_found"}`` when nothing is
-        registered as running for that task."""
-        return self.service.release_planning_run(task_id)
-
     def launch_default_coding_agent_tool(
         self,
         ctx: Any,

@@ -1,6 +1,6 @@
 """Tests for the MCP execution trigger surface (#721).
 
-Cover the graph/planning tools: they route through the SDK's rooted execution
+Cover the graph tools: they route through the SDK's rooted execution
 resource (mounted at the API *root*, not under ``/work-tracker`` — #894), pass
 the agent, surface the typed body as a dict, and fold a 4xx into a clean
 ``{root_id/task_id, error}`` result read off the generated exception body. Plus
@@ -16,12 +16,8 @@ from fake_sdk import (
     DependencyGraphNodeOut,
     DependencyGraphOut,
     FakeGeneratedSdk,
-    GenerateLeafLldsOut,
     GraphNodeOut,
     GraphOut,
-    LeafLldRunOut,
-    PlanningRunOut,
-    ReleasePlanningRunOut,
     make_api_error,
     raises,
 )
@@ -198,81 +194,6 @@ def test_execute_dependency_graph_5xx_propagates():
         service.execute_dependency_graph(ROOT)
 
 
-# --- generate_leaf_llds -------------------------------------------------------
-
-
-def test_generate_leaf_llds_routes_and_returns_runs():
-    client = FakeGeneratedSdk()
-    client.execution.returns["generate_leaf_llds"] = GenerateLeafLldsOut(
-        root_id=ROOT,
-        runs=[
-            LeafLldRunOut(task_id=A, status="running", agent_run_id="run-1"),
-            LeafLldRunOut(task_id=B, status="running", agent_run_id="run-2"),
-        ],
-    )
-    service = _service(client)
-
-    result = service.generate_leaf_llds(ROOT)
-
-    assert [c[0] for c in client.execution.calls] == ["generate_leaf_llds"]
-    _name, args, _kwargs = client.execution.calls[0]
-    assert str(args[0]) == ROOT and args[1] is None
-    assert {run["task_id"] for run in result["runs"]} == {A, B}
-
-
-def test_generate_leaf_llds_4xx_returns_clean_error():
-    client = FakeGeneratedSdk()
-    client.execution.returns["generate_leaf_llds"] = raises(
-        _sdk_error(404, "task_not_found", NotFoundException)
-    )
-    service = _service(client)
-
-    result = service.generate_leaf_llds(ROOT)
-
-    assert result == {"root_id": ROOT, "error": "task_not_found"}
-
-
-# --- release_planning_run -----------------------------------------------------
-
-
-def test_release_planning_run_routes_and_returns_result():
-    client = FakeGeneratedSdk()
-    client.execution.returns["release_planning_run"] = ReleasePlanningRunOut(
-        task_id=ROOT,
-        status="idle",
-        released=PlanningRunOut(
-            task_id=ROOT,
-            project_id=B,
-            module_id=B,
-            agent="codex",
-            phase="refine",
-            status="running",
-            agent_run_id="run-1",
-        ),
-    )
-    service = _service(client)
-
-    result = service.release_planning_run(ROOT)
-
-    assert [c[0] for c in client.execution.calls] == ["release_planning_run"]
-    _name, args, _kwargs = client.execution.calls[0]
-    assert str(args[0]) == ROOT
-    assert result["status"] == "idle"
-    assert result["released"]["status"] == "running"
-
-
-def test_release_planning_run_404_returns_clean_error():
-    client = FakeGeneratedSdk()
-    client.execution.returns["release_planning_run"] = raises(
-        _sdk_error(404, "planning_run_not_found", NotFoundException)
-    )
-    service = _service(client)
-
-    result = service.release_planning_run(ROOT)
-
-    assert result == {"task_id": ROOT, "error": "planning_run_not_found"}
-
-
 # --- Registration -------------------------------------------------------------
 
 
@@ -282,8 +203,6 @@ def test_execution_tools_are_registered():
     assert {
         "get_dependency_graph",
         "execute_dependency_graph",
-        "generate_leaf_llds",
-        "release_planning_run",
     } <= tool_names
     assert {
         "start_orchestration_run",

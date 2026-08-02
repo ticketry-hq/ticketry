@@ -5,16 +5,26 @@ the replace-set patch field, both id arrays on ``WorkItemOut``, the self-block
 and cycle guards, and the M2M-drop-on-delete behaviour.
 """
 
+import uuid
+
 import pytest
 
-from worktracker.models import Issue
+from worktracker.models import Issue, IssueType
 from worktracker.tests.conftest import BASE, patch_json, post_json
 
 
 def _task(client, project, auth, name):
     """Create a project task and return its JSON."""
+    issue_type, _ = IssueType.objects.get_or_create(
+        project=project,
+        name="Task",
+        defaults={"id": uuid.uuid4(), "level": "task"},
+    )
     r = post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": name}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        {"name": name, "issue_type_id": str(issue_type.id)},
+        auth,
     )
     assert r.status_code == 200
     return r.json()

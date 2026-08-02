@@ -12,12 +12,18 @@ import {
   startInstantChangeFlow,
   startPlanFlow,
 } from "../../modals/PlanFeature";
+import { StateConfigurationPanel } from "../../../workflows/StateConfigurationPanel";
 
 /** Adapts the Studio selection stores to the shared workspace pane. */
 export function TicketWorkspace() {
   const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
+  const workspaceSelection = useTasksStore((s) => s.workspaceSelection);
+  const states = useTasksStore((s) => s.states);
+  const dismissStateConfiguration = useTasksStore(
+    (s) => s.dismissStateConfiguration,
+  );
   const tasks = useTasksStore((s) => s.tasks);
   const recentProfileIndex = useConfigStore((s) => s.recentProfileIndex);
   const profiles = useConfigStore((s) => s.profiles);
@@ -50,18 +56,31 @@ export function TicketWorkspace() {
             },
           }
         : null;
+  const configuredState =
+    workspaceSelection.kind === "state-configuration" &&
+    workspaceSelection.projectId === selectedProjectId
+      ? states.find((state) => state.id === workspaceSelection.stateId) ?? null
+      : null;
 
   return (
     <PaneShell pane="details-or-terminal">
-      <WorkspacePane
-        bucket={bucket}
-        projectId={selectedProjectId}
-        moduleId={selectedModuleId}
-        ticketKey={task?.key}
-        owner="studio"
-        details={<DetailsTab />}
-        launchContext={launchContext}
-      />
+      <div className="relative h-full min-h-0">
+        <WorkspacePane
+          bucket={bucket}
+          projectId={selectedProjectId}
+          moduleId={selectedModuleId}
+          ticketKey={task?.key}
+          owner="studio"
+          details={<DetailsTab />}
+          launchContext={launchContext}
+        />
+        {configuredState ? (
+          <StateConfigurationPanel
+            state={configuredState}
+            onClose={dismissStateConfiguration}
+          />
+        ) : null}
+      </div>
     </PaneShell>
   );
 }

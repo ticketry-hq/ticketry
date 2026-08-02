@@ -71,7 +71,7 @@ def list_issue_types(request, project_id: uuid.UUID):
     tags=["IssueTypes"],
 )
 def create_issue_type(request, project_id: uuid.UUID, payload: IssueTypeIn):
-    """Create a non-default issue type at the tail of its level's order."""
+    """Create an issue type at the tail of its level's order."""
 
     with _http_errors():
         return workflow_config.create_issue_type(
@@ -79,7 +79,6 @@ def create_issue_type(request, project_id: uuid.UUID, payload: IssueTypeIn):
             name=payload.name,
             level=payload.level,
             color=payload.color,
-            icon=payload.icon,
         )
 
 
@@ -90,7 +89,7 @@ def create_issue_type(request, project_id: uuid.UUID, payload: IssueTypeIn):
     tags=["IssueTypes"],
 )
 def patch_issue_type(request, type_id: uuid.UUID, payload: IssueTypePatch):
-    """Rename / recolor / reorder a type; ``is_default=true`` flips the level's default."""
+    """Rename, recolor, or reorder an issue type."""
 
     with _http_errors():
         return workflow_config.update_issue_type(
@@ -107,7 +106,7 @@ def patch_issue_type(request, type_id: uuid.UUID, payload: IssueTypePatch):
 def delete_issue_type(
     request, type_id: uuid.UUID, reassign_to: Optional[uuid.UUID] = None
 ):
-    """Delete a type; 409 if it is a default or in use without ``reassign_to``."""
+    """Delete a type; 409 if it is in use without ``reassign_to``."""
 
     with _http_errors():
         workflow_config.delete_issue_type(type_id, reassign_to)

@@ -248,10 +248,10 @@ def resolve_issue_launch_binding(
     *,
     activated_providers: Set[str] | None = None,
 ) -> LaunchBinding:
-    if not issue.issue_type_id or not issue.state_id:
+    if not issue.state_id:
         raise LaunchBindingError(
             "launch_context_incomplete",
-            "A work-item type and current state are required to resolve agent launch configuration.",
+            "A current state is required to resolve agent launch configuration.",
         )
     return resolve_launch_binding(
         issue.issue_type_id,

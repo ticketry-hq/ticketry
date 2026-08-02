@@ -16,11 +16,6 @@
 
 import * as runtime from '../runtime.js';
 import {
-    type LifecycleIn,
-    LifecycleInFromJSON,
-    LifecycleInToJSON,
-} from '../models/LifecycleIn.js';
-import {
     type MessageError,
     MessageErrorFromJSON,
     MessageErrorToJSON,
@@ -117,11 +112,6 @@ export interface ReorderWorkItemRequest {
     workItemReorderIn: WorkItemReorderIn;
 }
 
-export interface SetWorkItemLifecycleRequest {
-    issueId: string;
-    lifecycleIn: LifecycleIn;
-}
-
 export interface UpdateWorkItemRequest {
     issueId: string;
     workItemPatch: WorkItemPatch;
@@ -196,7 +186,7 @@ export interface WorkItemsApiInterface {
     createReviewFindingRequestOpts(requestParameters: CreateReviewFindingRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, or in a foreign project is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
      * @summary Create Review Finding
      * @param {string} projectId 
      * @param {ReviewFindingIn} reviewFindingIn 
@@ -207,7 +197,7 @@ export interface WorkItemsApiInterface {
     createReviewFindingRaw(requestParameters: CreateReviewFindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItemOut>>;
 
     /**
-     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, or in a foreign project is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
      * Create Review Finding
      */
     createReviewFinding(requestParameters: CreateReviewFindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut>;
@@ -269,7 +259,7 @@ export interface WorkItemsApiInterface {
     getWorkItemScopeContextRequestOpts(requestParameters: GetWorkItemScopeContextRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this). Any neighbor carrying a non-empty ``assignees`` set is also flagged ``owned_elsewhere``, and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges + the ``assignees`` M2M — no writes, no new field.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
+     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges; it performs no writes.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
      * @summary Work Item Scope Context
      * @param {string} issueId 
      * @param {*} [options] Override http request option.
@@ -279,7 +269,7 @@ export interface WorkItemsApiInterface {
     getWorkItemScopeContextRaw(requestParameters: GetWorkItemScopeContextRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ScopeContextOut>>;
 
     /**
-     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this). Any neighbor carrying a non-empty ``assignees`` set is also flagged ``owned_elsewhere``, and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges + the ``assignees`` M2M — no writes, no new field.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
+     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges; it performs no writes.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
      * Work Item Scope Context
      */
     getWorkItemScopeContext(requestParameters: GetWorkItemScopeContextRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ScopeContextOut>;
@@ -371,32 +361,6 @@ export interface WorkItemsApiInterface {
     reorderWorkItem(requestParameters: ReorderWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut>;
 
     /**
-     * Creates request options for setWorkItemLifecycle without sending the request
-     * @param {string} issueId 
-     * @param {LifecycleIn} lifecycleIn 
-     * @throws {RequiredError}
-     * @memberof WorkItemsApiInterface
-     */
-    setWorkItemLifecycleRequestOpts(requestParameters: SetWorkItemLifecycleRequest): Promise<runtime.RequestOpts>;
-
-    /**
-     * Advance the issue\'s internal lifecycle to ``target`` (#758), guarded.  The single write path for ``Issue.lifecycle_state``: ``set_lifecycle`` validates the transition and the ``(lifecycle_state, state)`` pairing, raising ``InvalidTransition`` (a ``ValidationError`` → 422) on any illegal move. Resolves modules too (``task_only=False``); a missing id/key 404s. Returns the hydrated item carrying the new state + fresh transitions.
-     * @summary Set Work Item Lifecycle
-     * @param {string} issueId 
-     * @param {LifecycleIn} lifecycleIn 
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof WorkItemsApiInterface
-     */
-    setWorkItemLifecycleRaw(requestParameters: SetWorkItemLifecycleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItemOut>>;
-
-    /**
-     * Advance the issue\'s internal lifecycle to ``target`` (#758), guarded.  The single write path for ``Issue.lifecycle_state``: ``set_lifecycle`` validates the transition and the ``(lifecycle_state, state)`` pairing, raising ``InvalidTransition`` (a ``ValidationError`` → 422) on any illegal move. Resolves modules too (``task_only=False``); a missing id/key 404s. Returns the hydrated item carrying the new state + fresh transitions.
-     * Set Work Item Lifecycle
-     */
-    setWorkItemLifecycle(requestParameters: SetWorkItemLifecycleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut>;
-
-    /**
      * Creates request options for updateWorkItem without sending the request
      * @param {string} issueId 
      * @param {WorkItemPatch} workItemPatch 
@@ -406,7 +370,7 @@ export interface WorkItemsApiInterface {
     updateWorkItemRequestOpts(requestParameters: UpdateWorkItemRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions and cannot use ``force``.
+     * Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions.
      * @summary Patch Work Item
      * @param {string} issueId 
      * @param {WorkItemPatch} workItemPatch 
@@ -417,7 +381,7 @@ export interface WorkItemsApiInterface {
     updateWorkItemRaw(requestParameters: UpdateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItemOut>>;
 
     /**
-     * Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions and cannot use ``force``.
+     * Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions.
      * Patch Work Item
      */
     updateWorkItem(requestParameters: UpdateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut>;
@@ -593,7 +557,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, or in a foreign project is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
      * Create Review Finding
      */
     async createReviewFindingRaw(requestParameters: CreateReviewFindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItemOut>> {
@@ -604,7 +568,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, in a foreign project, or a non-Implementation type override is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
+     * Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow\'s start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, or in a foreign project is rejected *before any write* with the workflow gate\'s structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
      * Create Review Finding
      */
     async createReviewFinding(requestParameters: CreateReviewFindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut> {
@@ -745,7 +709,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this). Any neighbor carrying a non-empty ``assignees`` set is also flagged ``owned_elsewhere``, and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges + the ``assignees`` M2M — no writes, no new field.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
+     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges; it performs no writes.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
      * Work Item Scope Context
      */
     async getWorkItemScopeContextRaw(requestParameters: GetWorkItemScopeContextRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ScopeContextOut>> {
@@ -756,7 +720,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this). Any neighbor carrying a non-empty ``assignees`` set is also flagged ``owned_elsewhere``, and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges + the ``assignees`` M2M — no writes, no new field.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
+     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges; it performs no writes.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
      * Work Item Scope Context
      */
     async getWorkItemScopeContext(requestParameters: GetWorkItemScopeContextRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ScopeContextOut> {
@@ -952,67 +916,6 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Creates request options for setWorkItemLifecycle without sending the request
-     */
-    async setWorkItemLifecycleRequestOpts(requestParameters: SetWorkItemLifecycleRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['issueId'] == null) {
-            throw new runtime.RequiredError(
-                'issueId',
-                'Required parameter "issueId" was null or undefined when calling setWorkItemLifecycle().'
-            );
-        }
-
-        if (requestParameters['lifecycleIn'] == null) {
-            throw new runtime.RequiredError(
-                'lifecycleIn',
-                'Required parameter "lifecycleIn" was null or undefined when calling setWorkItemLifecycle().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        headerParameters['Content-Type'] = 'application/json';
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
-        }
-
-
-        let urlPath = `/work-items/{issue_id}/lifecycle`;
-        urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
-
-        return {
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-            body: LifecycleInToJSON(requestParameters['lifecycleIn']),
-        };
-    }
-
-    /**
-     * Advance the issue\'s internal lifecycle to ``target`` (#758), guarded.  The single write path for ``Issue.lifecycle_state``: ``set_lifecycle`` validates the transition and the ``(lifecycle_state, state)`` pairing, raising ``InvalidTransition`` (a ``ValidationError`` → 422) on any illegal move. Resolves modules too (``task_only=False``); a missing id/key 404s. Returns the hydrated item carrying the new state + fresh transitions.
-     * Set Work Item Lifecycle
-     */
-    async setWorkItemLifecycleRaw(requestParameters: SetWorkItemLifecycleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItemOut>> {
-        const requestOptions = await this.setWorkItemLifecycleRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => WorkItemOutFromJSON(jsonValue));
-    }
-
-    /**
-     * Advance the issue\'s internal lifecycle to ``target`` (#758), guarded.  The single write path for ``Issue.lifecycle_state``: ``set_lifecycle`` validates the transition and the ``(lifecycle_state, state)`` pairing, raising ``InvalidTransition`` (a ``ValidationError`` → 422) on any illegal move. Resolves modules too (``task_only=False``); a missing id/key 404s. Returns the hydrated item carrying the new state + fresh transitions.
-     * Set Work Item Lifecycle
-     */
-    async setWorkItemLifecycle(requestParameters: SetWorkItemLifecycleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut> {
-        const response = await this.setWorkItemLifecycleRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
      * Creates request options for updateWorkItem without sending the request
      */
     async updateWorkItemRequestOpts(requestParameters: UpdateWorkItemRequest): Promise<runtime.RequestOpts> {
@@ -1054,7 +957,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions and cannot use ``force``.
+     * Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions.
      * Patch Work Item
      */
     async updateWorkItemRaw(requestParameters: UpdateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItemOut>> {
@@ -1065,7 +968,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions and cannot use ``force``.
+     * Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions.
      * Patch Work Item
      */
     async updateWorkItem(requestParameters: UpdateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemOut> {

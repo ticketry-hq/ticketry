@@ -19,15 +19,15 @@ def initial_prompt_for(phase: Phase, issue: Issue) -> str | None:
 
 
 def _refine_prompt(issue: Issue) -> str:
-    description = issue.description or issue.description_stripped or ""
+    description = issue.description or ""
     return (
         "Run a relentless refinement interview for this Backlog task. "
         "Use the existing WorkTracker/task context and ask the human questions in this "
         "terminal until the requirements are clear. Produce a distilled visual "
         "HLD in the task spec directory when the run context provides one, update "
-        "the task description with the clarified requirements, set lifecycle "
-        "prd_generated and then prd_review while the task is still Backlog, then "
-        "move the task from Backlog to Todo. Do not implement code.\n\n"
+        "the task description with the clarified requirements, then move the "
+        "task through its configured workflow transition when the human approves. "
+        "Do not implement code.\n\n"
         f"Task id: {issue.id}\n"
         f"Task key: {issue.key}\n"
         f"Task title: {issue.name}\n"
@@ -38,10 +38,10 @@ def _refine_prompt(issue: Issue) -> str:
 
 
 def _register_prompt(issue: Issue) -> str:
-    description = issue.description or issue.description_stripped or ""
+    description = issue.description or ""
     return (
-        "This task's HLD split proposal was just approved (lifecycle "
-        "hld_approved). Act as a split-registration agent: turn the approved "
+        "This task's HLD split proposal was just approved. Act as a "
+        "split-registration agent: turn the approved "
         "proposal into real tracker work items. Read the approved visual HLD in "
         "this task's spec directory and extract the proposed leaf tasks and the "
         "intended blocked_by dependency edges.\n\n"
@@ -59,7 +59,7 @@ def _register_prompt(issue: Issue) -> str:
         "the partial state clearly (what was created, what failed, why), and "
         "do NOT claim registration complete.\n\n"
         "Do NOT generate leaf-level LLDs, do NOT implement code, and do NOT "
-        "ask for a second approval — lifecycle hld_approved was the approval.\n\n"
+        "ask for a second approval — the proposal was already approved.\n\n"
         f"Task id: {issue.id}\n"
         f"Task key: {issue.key}\n"
         f"Task title: {issue.name}\n"
@@ -70,7 +70,7 @@ def _register_prompt(issue: Issue) -> str:
 
 
 def _lld_prompt(issue: Issue) -> str:
-    description = issue.description or issue.description_stripped or ""
+    description = issue.description or ""
     parent = issue.parent
     parent_id = getattr(parent, "id", None) or issue.parent_id
     parent_key = getattr(parent, "key", None)
@@ -107,7 +107,7 @@ def _lld_prompt(issue: Issue) -> str:
 
 
 def _split_prompt(issue: Issue) -> str:
-    description = issue.description or issue.description_stripped or ""
+    description = issue.description or ""
     return (
         "This Todo task carries a locked PRD. Act as an HLD/splitter agent. "
         "Explore the relevant code context and use to-issues-style tracer-bullet "
@@ -120,8 +120,9 @@ def _split_prompt(issue: Issue) -> str:
         "non-goals. Present the proposal for human review.\n\n"
         "Do NOT create any tasks, do NOT wire any blocked_by edges, do NOT write "
         "leaf-level LLDs, and do NOT implement code. The split is a proposal only. "
-        "When the human approves the HLD, set this same task's lifecycle to "
-        "hld_approved. Split registration happens in a later phase.\n\n"
+        "When the human approves the HLD, move this same task through its "
+        "configured workflow transition. Split registration happens in a later "
+        "phase.\n\n"
         f"Task id: {issue.id}\n"
         f"Task key: {issue.key}\n"
         f"Task title: {issue.name}\n"

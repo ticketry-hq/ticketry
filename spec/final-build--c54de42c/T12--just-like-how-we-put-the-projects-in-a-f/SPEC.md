@@ -90,76 +90,76 @@ Turning the flag back on is one line in `features.json` and a restart.
 
 ### The flag and its resolution
 
-- A `sidebar` boolean joins the installation feature defaults, defaulting to
+* A `sidebar` boolean joins the installation feature defaults, defaulting to
   `false`. Like `projects`, it is read from `features.json` in the local config
   directory, tolerates every read and parse failure by falling back to the
   default, and is resolved once at process start.
-- The feature loader whitelists keys explicitly, as it does today; `sidebar` is
+* The feature loader whitelists keys explicitly, as it does today; `sidebar` is
   added to that whitelist rather than the loader being made permissive.
-- **The loader coerces `projects` to false whenever `sidebar` resolves false.**
+* **The loader coerces `projects` to false whenever `sidebar` resolves false.**
   This is the single place the subordination rule lives. The configuration
   response therefore never describes an enabled pane with no surface to hold it.
-- The configuration response body gains the `sidebar` field. The frontend
+* The configuration response body gains the `sidebar` field. The frontend
   configuration payload type and the loaded feature state gain it in step.
-- `openapi.json` and the generated SDK models are regenerated for the new field.
+* `openapi.json` and the generated SDK models are regenerated for the new field.
 
 ### The derived predicate
 
-- Frontend code asks one derived question — does the sidebar surface exist —
+* Frontend code asks one derived question — does the sidebar surface exist —
   rather than reading the raw flag at each site. Rendering, key-binding
   registration, footer composition, shortcut listings and focus traversal all
   consult that one predicate, so they cannot disagree.
-- Because the backend has already coerced, the predicate for the Projects pane
+* Because the backend has already coerced, the predicate for the Projects pane
   is the `projects` flag alone. The frontend does not re-implement subordination.
 
 ### The sidebar surface
 
-- The top-level layout renders no sidebar and no resize handle when the surface
+* The top-level layout renders no sidebar and no resize handle when the surface
   is off; the work area occupies the full width.
-- Panel-sizing must express three sidebar shapes rather than two: absent,
+* Panel-sizing must express three sidebar shapes rather than two: absent,
   Modules only, and Projects plus Modules. The current `projectsEnabled`
   boolean cannot carry three states and is replaced by a representation that
   can.
-- The persisted panel layout keeps its existing four-slot shape — Projects,
+* The persisted panel layout keeps its existing four-slot shape — Projects,
   Modules, Stories, Workspace. The two sidebar slots lie dormant while the
   surface is off, so re-enabling the flag restores prior pane sizes.
-- Persisted sidebar visibility is overridden by the flag rather than honoured,
+* Persisted sidebar visibility is overridden by the flag rather than honoured,
   and the stored value is not rewritten, so re-enabling restores the user's last
   state.
 
 ### Keyboard, footer and discoverability
 
-- The sidebar toggle action is **not registered** when the surface is off, so no
+* The sidebar toggle action is **not registered** when the surface is off, so no
   key is bound to it. It is not registered-and-inert.
-- The footer omits its Open/Close Menu chip; the keyboard-shortcuts modal omits
+* The footer omits its Open/Close Menu chip; the keyboard-shortcuts modal omits
   its sidebar row; the shortcut-rebinding panel omits its sidebar label. A user
   cannot bind a key to an action that cannot run.
-- Pane traversal order contains no sidebar panes, and the focus-left clause that
+* Pane traversal order contains no sidebar panes, and the focus-left clause that
   re-reveals a collapsed sidebar and jumps into it is gated off, so leftward
   movement stops at the leftmost Edit view zone.
-- Startup does not reveal a sidebar and focuses a pane that is actually visible.
+* Startup does not reveal a sidebar and focuses a pane that is actually visible.
 
 ### Guided tour
 
-- The module-creation coach anchor moves to the Module tab strip's add-module
+* The module-creation coach anchor moves to the Module tab strip's add-module
   affordance and is **removed from the Modules pane**, so exactly one element
   carries it in every flag combination and the anchor cannot be resolved by
   accident of DOM order.
-- The tour's forced sidebar reveal, forced default panel layout, and layout
+* The tour's forced sidebar reveal, forced default panel layout, and layout
   capture-and-restore are deleted, not made conditional.
-- The tour's opening step is `projects-pane` only when the Projects pane
+* The tour's opening step is `projects-pane` only when the Projects pane
   actually renders, and `module-create` otherwise. This closes a gap in which
   the code contradicted the Guided tour glossary entry; it was previously masked
   by the forced reveal.
-- The now-unused helper that reported whether a tour step requires the Modules
+* The now-unused helper that reported whether a tour step requires the Modules
   pane is deleted along with the layout manipulation it was written for.
 
 ### Documentation
 
-- ADR 0005 records the surface-scoped flag name, the backend coercion, the
+* ADR 0005 records the surface-scoped flag name, the backend coercion, the
   rejected pane-scoped alternative, and the tour losing its layout clause. ADR
   0004 stays valid and is not superseded.
-- The glossary's Coach mark entry currently asserts that the tour puts the
+* The glossary's Coach mark entry currently asserts that the tour puts the
   surface into the layout its anchors need and restores the user's layout when
   it ends. That becomes false and is corrected. The Edit view and full sidebar
   view entries are updated to describe the sidebar as conditional on
@@ -222,34 +222,34 @@ so the sizing representation stays an implementation detail free to change.
 
 ## Out of Scope
 
-- Making feature flags editable from within Studio, or reloadable without a
+* Making feature flags editable from within Studio, or reloadable without a
   restart. ADR 0004 settled process-start resolution and this spec inherits it.
-- Any change to the REST or MCP contract beyond adding the flag to the
+* Any change to the REST or MCP contract beyond adding the flag to the
   configuration response. Projects and modules remain fully addressable over
   both regardless of flag state.
-- Removing the Modules pane, the Projects pane, or the sidebar as code. This is
+* Removing the Modules pane, the Projects pane, or the sidebar as code. This is
   a gate, and it is reversible by construction.
-- A migration that writes `features.json` on upgrade to preserve an existing
+* A migration that writes `features.json` on upgrade to preserve an existing
   installation's sidebar. Existing installations lose the sidebar until they opt
   back in; ADR 0005 records this as accepted.
-- Redesigning the Module tab strip. It is treated as an existing, sufficient
+* Redesigning the Module tab strip. It is treated as an existing, sufficient
   surface for module selection and creation, not as something to extend.
-- Any per-pane flag beyond `projects`, and any general pane-registry mechanism.
-- Changing what the guided tour teaches, its step count, or its copy beyond the
+* Any per-pane flag beyond `projects`, and any general pane-registry mechanism.
+* Changing what the guided tour teaches, its step count, or its copy beyond the
   opening-step selection and the relocated anchor.
 
 ## Further Notes
 
-- The helper reporting whether a tour step requires the Modules pane is
+* The helper reporting whether a tour step requires the Modules pane is
   currently exported with no callers — scaffolding for exactly this work. It is
   deleted rather than wired up, because relocating the anchor removes the
   question it answered.
-- The coach-mark implementation resolves its anchor with a single-element query
+* The coach-mark implementation resolves its anchor with a single-element query
   and degrades to a centred in-flow dialog when the anchor is missing. That
   degradation is why the orphaned opening step is a wrong-content bug rather
   than a crash, and why leaving two elements carrying the same anchor would fail
   silently by DOM order. Both are reasons the anchor moves rather than being
   duplicated.
-- Default-off is only safe because the Module tab strip carries module selection
+* Default-off is only safe because the Module tab strip carries module selection
   and creation. If a future sidebar pane offers a capability with no equivalent
   elsewhere, ADR 0005's default should be revisited.

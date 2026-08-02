@@ -342,7 +342,7 @@ class ProjectsApi:
     ) -> None:
         """Delete Project
 
-        Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project's States, IssueTypes, Labels and Issues (and each issue's Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
+        Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project's States, IssueTypes and Issues (and each issue's Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -412,7 +412,7 @@ class ProjectsApi:
     ) -> ApiResponse[None]:
         """Delete Project
 
-        Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project's States, IssueTypes, Labels and Issues (and each issue's Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
+        Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project's States, IssueTypes and Issues (and each issue's Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -482,7 +482,7 @@ class ProjectsApi:
     ) -> RESTResponseType:
         """Delete Project
 
-        Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project's States, IssueTypes, Labels and Issues (and each issue's Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
+        Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project's States, IssueTypes and Issues (and each issue's Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
 
         :param project_id: (required)
         :type project_id: UUID

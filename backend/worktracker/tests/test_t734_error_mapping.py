@@ -15,7 +15,15 @@ from worktracker.tests.conftest import BASE, post_json
 
 @pytest.fixture
 def module(client, project, auth):
-    r = post_json(client, f"{BASE}/projects/{project.id}/modules", {"name": "Epic"}, auth)
+    module_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Module", level="module"
+    )
+    r = post_json(
+        client,
+        f"{BASE}/projects/{project.id}/modules",
+        {"name": "Epic", "issue_type_id": str(module_type.id)},
+        auth,
+    )
     assert r.status_code == 200
     return r.json()
 
@@ -39,6 +47,9 @@ def test_create_module_work_item_wrong_level_type_maps_422(client, project, modu
 def test_create_module_missing_project_maps_404(client, auth):
     """Creating a module under an absent project must map to 404, not 500."""
     r = post_json(
-        client, f"{BASE}/projects/{uuid.uuid4()}/modules", {"name": "Epic"}, auth
+        client,
+        f"{BASE}/projects/{uuid.uuid4()}/modules",
+        {"name": "Epic", "issue_type_id": str(uuid.uuid4())},
+        auth,
     )
     assert r.status_code == 404

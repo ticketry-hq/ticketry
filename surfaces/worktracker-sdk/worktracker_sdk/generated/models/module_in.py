@@ -19,7 +19,7 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List
 from uuid import UUID
 from typing import Optional, Set
 from typing_extensions import Self
@@ -27,9 +27,9 @@ from pydantic_core import to_jsonable_python
 
 class ModuleIn(BaseModel):
     """
-    Body for module create — name, optional module-level issue type.
+    Body for module create — name and explicit module-level issue type.
     """ # noqa: E501
-    issue_type_id: Optional[UUID] = None
+    issue_type_id: UUID
     name: StrictStr
     __properties: ClassVar[List[str]] = ["issue_type_id", "name"]
 
@@ -72,11 +72,6 @@ class ModuleIn(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # set to None if issue_type_id (nullable) is None
-        # and model_fields_set contains the field
-        if self.issue_type_id is None and "issue_type_id" in self.model_fields_set:
-            _dict['issue_type_id'] = None
-
         return _dict
 
     @classmethod

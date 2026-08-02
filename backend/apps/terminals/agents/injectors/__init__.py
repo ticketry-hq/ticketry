@@ -26,15 +26,11 @@ from apps.terminals.agents.hooks._reporter import (  # noqa: F401
 
 HOOKS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hooks")
 
-# WorkTracker MCP server URL injected into agent launches when the supervisor
-# does not inject one. The desktop shell always sets ``WORKTRACKER_MCP_URL`` from
-# the port it actually reserved, so this only applies to standalone runs — and it
-# must therefore agree with the MCP service's own default port, which is 8124
-# (``MCP_PORT`` in ``surfaces/worktracker-agent/mcp/main.py``). It previously
-# read 8123, a leftover from the predecessor application, which pointed every
-# standalone launch at a port nothing listens on (#1462).
+# WorkTracker MCP has one stable loopback endpoint across standalone, web, and
+# desktop launches. Keeping the fallback pinned means external MCP clients and
+# agent launches can use the same URL without reading process-local metadata.
 
-DEFAULT_MCP_PORT = 8124
+DEFAULT_MCP_PORT = 8123
 
 DEFAULT_MCP_URL = f"http://127.0.0.1:{DEFAULT_MCP_PORT}/mcp"
 

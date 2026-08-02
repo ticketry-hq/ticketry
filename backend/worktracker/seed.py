@@ -30,16 +30,12 @@ def ensure_issue_types(project, IssueType, Issue=None):
 
     Reconciles the exact legacy module-level ``Epic`` type to ``Module``, then
     seeds Module (module) + Story, PathFind, Implementation (task) in
-    :data:`DEFAULT_ISSUE_TYPES` order, then enforces *exactly one default per
-    level* — the canonical default (Module for module, Story for task) is the sole
-    ``is_default`` row in its level, and every other type of that level is
-    cleared. Idempotent.
+    :data:`DEFAULT_ISSUE_TYPES` order. Idempotent.
 
     :param project: the project (live or historical instance).
     :param IssueType: the IssueType model class (live or historical).
     :param Issue: the Issue model class when reconciling a legacy collision.
         Required only when a project already has both Epic and Module rows.
-    :return: a ``{level: IssueType}`` map of the project's per-level defaults.
     """
 
     if Issue is None:
@@ -50,33 +46,16 @@ def ensure_issue_types(project, IssueType, Issue=None):
         Issue = LiveIssue
     _reconcile_legacy_module_type(project, IssueType, Issue)
 
-    canonical_default = {}
-    for order, (name, level, is_default) in enumerate(DEFAULT_ISSUE_TYPES):
-        issue_type, _ = IssueType.objects.get_or_create(
+    for order, (name, level) in enumerate(DEFAULT_ISSUE_TYPES):
+        IssueType.objects.get_or_create(
             project=project,
             name=name,
             defaults={
                 "id": uuid.uuid4(),
                 "level": level,
                 "sort_order": order,
-                "is_default": is_default,
             },
         )
-        if is_default:
-            canonical_default[level] = issue_type
-
-    # Enforce exactly one default per seeded level: the canonical type is the
-    # sole default; any other row of that level (including a pre-existing custom
-    # default) is cleared. Only writes rows whose flag actually changes.
-    defaults_by_level = {}
-    for level, default_type in canonical_default.items():
-        for issue_type in IssueType.objects.filter(project=project, level=level):
-            want = issue_type.id == default_type.id
-            if issue_type.is_default != want:
-                issue_type.is_default = want
-                issue_type.save(update_fields=["is_default"])
-        defaults_by_level[level] = default_type
-    return defaults_by_level
 
 
 def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
@@ -87,7 +66,7 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
     """
 
     task_type_names = [
-        name for name, level, _is_default in DEFAULT_ISSUE_TYPES if level == "task"
+        name for name, level in DEFAULT_ISSUE_TYPES if level == "task"
     ]
     state_names = [name for name, _group, _color in DEFAULT_STATES]
     issue_types = IssueType.objects.filter(

@@ -1,6 +1,29 @@
 from django.db import migrations, models
 
-from worktracker.models.constants import LIFECYCLE_CHOICES
+
+# Historical migration state must not import a runtime constant that can be
+# retired after this field is removed.
+LIFECYCLE_CHOICES = [
+    ("backlog", "Backlog"),
+    ("refining", "Refining"),
+    ("prd_generated", "PRD generated"),
+    ("prd_review", "PRD in review"),
+    ("prd_approved", "PRD approved"),
+    ("generating_hld", "Generating HLD"),
+    ("hld_generated", "HLD generated"),
+    ("hld_review", "HLD in review"),
+    ("hld_approved", "HLD approved"),
+    ("registering_split", "Registering split"),
+    ("split_created", "Split created"),
+    ("lld_generating", "Generating LLD"),
+    ("lld_generated", "LLD generated"),
+    ("lld_review", "LLD in review"),
+    ("lld_approved", "LLD approved"),
+    ("implementing", "Implementing"),
+    ("done", "Done"),
+    ("failed", "Failed"),
+    ("cancelled", "Cancelled"),
+]
 
 
 class Migration(migrations.Migration):

@@ -45,14 +45,11 @@ function story(overrides: Partial<TaskSummary> = {}): TaskSummary {
     sequence_id: 201,
     key: "CODING-201",
     state: TODO,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: "module-1",
     sub_issues_count: 0,
     ...overrides,
+    issue_type: overrides.issue_type ?? { id: "type-story", name: "Story", level: "task" },
   };
 }
 

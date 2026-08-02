@@ -314,33 +314,6 @@ def test_execute_graph_launches_only_initial_unblocked_chain_node(graph_project)
     assert _nodes_by_status(graph, "running") == [str(a.id)]
 
 
-def test_execute_graph_launch_writes_implementing_lifecycle_when_legal(graph_project):
-    _successful_spawn.calls.clear()
-    project, _, root, states = graph_project
-    a = _task(project, root, "A", 3, states["started"])
-    a.lifecycle_state = "lld_approved"
-    a.save(update_fields=["lifecycle_state"])
-
-    graph = driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn)
-
-    assert _nodes_by_status(graph, "running") == [str(a.id)]
-    a.refresh_from_db()
-    assert a.lifecycle_state == "implementing"
-
-    a.state = states["done"]
-    a.save(update_fields=["state"])
-    after_done = driver.observe_issue_state_changed(
-        issue_id=str(a.id),
-        from_group="started",
-        to_group="completed",
-        spawn=_successful_spawn,
-    )
-
-    assert _node_status(after_done, str(a.id)) == "done"
-    a.refresh_from_db()
-    assert a.lifecycle_state == "done"
-
-
 def test_graph_completion_releases_dependent_and_drains_chain(graph_project):
     _successful_spawn.calls.clear()
     project, _, root, states = graph_project

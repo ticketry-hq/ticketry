@@ -43,12 +43,9 @@ function task(
     name: id,
     project_id: "project-1",
     sequence_id: 1,
+    issue_type: { id: "type-story", name: "Story", level: "task" },
     rank,
     state,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: "module-1",
     sub_issues_count: 0,
@@ -111,7 +108,6 @@ describe("tasksStore moveTaskWithinState", () => {
       "project-1",
       "move",
       "review",
-      true,
     );
     expect(api.reorderTask).toHaveBeenCalledWith("move", null, null);
     expect(

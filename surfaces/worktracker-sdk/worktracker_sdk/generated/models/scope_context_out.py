@@ -27,14 +27,13 @@ from pydantic_core import to_jsonable_python
 
 class ScopeContextOut(BaseModel):
     """
-    The read-only dependency slice a subagent consumes for a task (#667, B).  Derived entirely from the existing ``blocked_by``/``blocks`` edges (#624) and the ``assignees`` M2M — no new field, no migration. ``depends_on`` are the direct blockers (must land first), ``depended_by`` the direct dependents (wait on this task), ``owned_elsewhere`` the subset of either with a non-empty assignee set, and ``advisory`` a short natural-language summary.
+    The read-only dependency slice a subagent consumes for a task (#667, B).  Derived entirely from the existing ``blocked_by``/``blocks`` edges (#624). ``depends_on`` are the direct blockers (must land first), ``depended_by`` the direct dependents (wait on this task), and ``advisory`` a short natural-language summary.
     """ # noqa: E501
     advisory: StrictStr
     depended_by: Optional[List[ScopeRef]] = None
     depends_on: Optional[List[ScopeRef]] = None
-    owned_elsewhere: Optional[List[ScopeRef]] = None
     task: ScopeRef
-    __properties: ClassVar[List[str]] = ["advisory", "depended_by", "depends_on", "owned_elsewhere", "task"]
+    __properties: ClassVar[List[str]] = ["advisory", "depended_by", "depends_on", "task"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -89,13 +88,6 @@ class ScopeContextOut(BaseModel):
                 if _item_depends_on:
                     _items.append(_item_depends_on.to_dict())
             _dict['depends_on'] = _items
-        # override the default output from pydantic by calling `to_dict()` of each item in owned_elsewhere (list)
-        _items = []
-        if self.owned_elsewhere:
-            for _item_owned_elsewhere in self.owned_elsewhere:
-                if _item_owned_elsewhere:
-                    _items.append(_item_owned_elsewhere.to_dict())
-            _dict['owned_elsewhere'] = _items
         # override the default output from pydantic by calling `to_dict()` of task
         if self.task:
             _dict['task'] = self.task.to_dict()
@@ -114,7 +106,6 @@ class ScopeContextOut(BaseModel):
             "advisory": obj.get("advisory"),
             "depended_by": [ScopeRef.from_dict(_item) for _item in obj["depended_by"]] if obj.get("depended_by") is not None else None,
             "depends_on": [ScopeRef.from_dict(_item) for _item in obj["depends_on"]] if obj.get("depends_on") is not None else None,
-            "owned_elsewhere": [ScopeRef.from_dict(_item) for _item in obj["owned_elsewhere"]] if obj.get("owned_elsewhere") is not None else None,
             "task": ScopeRef.from_dict(obj["task"]) if obj.get("task") is not None else None
         })
         return _obj

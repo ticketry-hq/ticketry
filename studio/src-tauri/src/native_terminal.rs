@@ -87,6 +87,7 @@ mod imp {
     struct NativeTerminalFailure {
         handle: String,
         run_id: String,
+        reason: String,
     }
 
     pub struct NativeTerminalState {
@@ -478,6 +479,7 @@ mod imp {
                             NativeTerminalFailure {
                                 handle: handle.clone(),
                                 run_id: run_id.clone(),
+                                reason: "the native terminal bridge disconnected".to_owned(),
                             },
                         );
                         let _ = control

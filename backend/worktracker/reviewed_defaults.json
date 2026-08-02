@@ -1,6 +1,5 @@
 {
   "schemaVersion": 2,
-  "finalizedAt": "2026-07-30T08:31:42.000Z",
   "sourceOfTruth": {
     "artifact": "backend/worktracker/reviewed_defaults.json",
     "consumers": [
@@ -78,9 +77,9 @@
   },
   "prompts": {
     "Story": {
-      "Grill": "This task is in `Grill`.\n\nUse the `grill-with-docs` skill to interview the person until the Story's requirements, constraints, and acceptance boundary are explicit. Record the agreed requirements on the Story. Do not write the specification or create implementation tickets in this stage.\n\nWhen grilling is complete, move this Story to `Spec` so the specification stage can start automatically.",
-      "Spec": "This task is in `Spec`.\n\nUse the `to-spec` skill to turn the agreed requirements into the Story's implementation specification and link the finished spec from the Story. Do not create implementation tickets in this stage.\n\nWhen the specification is complete, move this Story to `Tickets` so ticket cutting can start automatically.",
-      "Tickets": "This task is in `Tickets`.\n\nUse the `to-tickets` skill to split the approved specification into scoped Implementation children and record their dependency edges. Do not implement any ticket in this stage.\n\nWhen the ticket set is complete, stop and wait for a person to move this Story to `Implement`; that transition is deliberately human-only.",
+      "Grill": "This task is in `Grill`.\n\nUse the `$grill-with-docs` skill to interview the person.\n\nWhen this is complete, move this Story to `Spec` using the MCP server.\n\nOnce you are done, kill the current coding agent session with the MCP too.",
+      "Spec": "This task is in `Spec`.\n\nUse the `to-spec` skill to turn the agreed requirements into the Story's implementation specification and link the finished spec from the Story. Do not create implementation tickets in this stage.\n\nWhen this is complete, move this Story to `Tickets ` using the MCP server.\n\nOnce you are done, kill the current coding agent session with the MCP too.",
+      "Tickets": "This task is in `Tickets`.\n\nUse the `to-tickets` skill to split the approved specification into scoped Implementation children and record their dependency edges. Do not implement any ticket in this stage.\n\nWhen this is complete, move this Story to `Implement ` using the MCP server.\n\nOnce you are done, kill the current coding agent session with the MCP too.",
       "Implement": "This task is in `Implement`:\n\nThe implementation campaign is running across your Implementation children; your job is coordination and integration, not re-implementing the children. Do not move the story yourself - it advances to `Review` on its own once every Implementation child is terminal and at least one is `Done`. Surface cross-child integration problems as they appear.\n\nIf there are no implementation stories under this, then implement the story itself and move it to 'Review' using the /tdd skill.\n\nFor dependencies, treat 'Review' state as unblocked.\n\nAfter this terminate this session using the MCP server with the terminate_current_run tool.",
       "Review": "This task is in `Review`. **What you do depends on this ticket's Type.**\n\n**If this is an Implementation child:** run `code-review` over this child's changes and report findings plainly. The review deliverable is the findings; completing it does not itself request or trigger a move to `Done`.\n\n**If this is a Story:** review the *combined* result of all children together, looking for integration issues that per-child review cannot catch. Turn each actionable finding into a new **Implementation** child through the dedicated `create_review_finding` tool - it creates the child directly in `Implement`, parented to this Story, carrying a fixed `Path` (repo-relative file) / inclusive `Lines` (start-end) / optional `Note` evidence block, so fixes rejoin the same execution machinery. Do not draw a `blocked_by` dependency edge and do not fix findings inline here; implementation waits for a person's kickoff outside this review deliverable. ",
       "Done": "Do nothing!",
@@ -267,5 +266,6 @@
         ]
       ]
     }
-  }
+  },
+  "finalizedAt": "2026-07-30T15:30:48.833Z"
 }

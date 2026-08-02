@@ -8,13 +8,13 @@ from worktracker.services.modules import create_module
 
 
 @pytest.mark.django_db
-def test_create_module_service_allocates_sequence_and_issue_type(project):
-    module = create_module(project.id, "Epic")
+def test_create_module_service_allocates_sequence_and_issue_type(project, module_type):
+    module = create_module(project.id, "Epic", module_type.id)
 
     assert module.type == "module"
     assert module.project_id == project.id
     assert module.sequence_id == 1
-    assert module.issue_type is None
+    assert module.issue_type_id == module_type.id
 
 
 @pytest.mark.django_db
@@ -35,4 +35,4 @@ def test_create_module_service_rejects_wrong_issue_type_level(project):
 @pytest.mark.django_db
 def test_create_module_service_missing_project_not_found():
     with pytest.raises(NotFoundError):
-        create_module(uuid.uuid4(), "Epic")
+        create_module(uuid.uuid4(), "Epic", uuid.uuid4())

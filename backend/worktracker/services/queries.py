@@ -48,8 +48,8 @@ def _work_item_dict(issue):
     """Project a task ``Issue`` onto the work-item dict subset the adapter reads.
 
     Mirrors the fields ``WorkItemOut`` exposes that the adapter consumes:
-    nested ``state`` (or ``None``), ``assignees`` / ``labels`` lists, the
-    descriptions, ``parent_id`` and ``sub_issues_count`` (from the ``task_qs``
+    nested ``state`` (or ``None``), description,
+    ``parent_id`` and ``sub_issues_count`` (from the ``task_qs``
     ``child_count`` annotation, falling back to a direct count exactly as
     ``WorkItemOut.resolve_sub_issues_count`` does).
     """
@@ -66,13 +66,6 @@ def _work_item_dict(issue):
         "issue_type": (
             {"name": issue.issue_type.name} if issue.issue_type else None
         ),
-        "assignees": [
-            {"display_name": a.display_name, "email": a.email}
-            for a in issue.assignees.all()
-        ],
-        "labels": [{"name": l.name} for l in issue.labels.all()],
-        "description_html": issue.description_html,
-        "description_stripped": issue.description_stripped,
         "description": issue.description,
         "parent_id": issue.parent_id,
         "sub_issues_count": sub_issues_count,
@@ -199,14 +192,18 @@ def retrieve_work_item(issue_id: str):
     return _work_item_dict(issue)
 
 
-def create_module_and_serialize(project_id: uuid.UUID, name: str):
+def create_module_and_serialize(
+    project_id: uuid.UUID,
+    name: str,
+    issue_type_id: uuid.UUID,
+):
     """Create a module and return its module dict, in one ORM hop.
 
     Routes through the existing ``services.modules.create_module`` mutation; the
     returned ``Issue`` already carries ``id``/``name``/``project_id``.
     """
 
-    module = create_module_service(project_id, name)
+    module = create_module_service(project_id, name, issue_type_id)
     return {"id": module.id, "name": module.name, "project_id": module.project_id}
 
 

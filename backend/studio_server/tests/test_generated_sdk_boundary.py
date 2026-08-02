@@ -16,7 +16,6 @@ HAND_ROLLED_MODULES = {
 HAND_ROLLED_ROOT_MODULES = {module.rsplit(".", 1)[1] for module in HAND_ROLLED_MODULES}
 HAND_ROLLED_ROOT_EXPORTS = {
     "ApiError",
-    "Assignee",
     "Attachment",
     "AuthenticationError",
     "DependencyGraph",
@@ -25,7 +24,6 @@ HAND_ROLLED_ROOT_EXPORTS = {
     "GraphNode",
     "IssueLevel",
     "IssueType",
-    "Label",
     "LaunchedAgent",
     "LeafLldResult",
     "LeafLldRun",

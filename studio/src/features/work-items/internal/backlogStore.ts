@@ -2,13 +2,9 @@ import { create } from "zustand";
 import * as api from "../../../shared/api/client";
 import { ApiError } from "../../../shared/api/client";
 import type { State, WorkItem, WorkItemCreate } from "../../../shared/api/types";
-import {
-  overlayAuthoritativeState,
-  stateCatalogChangedSince,
-  stateCatalogRevision,
-} from "../../../shared/stateCatalogRevision";
+import { useIssueStore } from "../issue-detail/internal/issueStore";
+import { rankBetween } from "../utilities/rank";
 
-// Re-export selectors, helpers, and types from backlogSelectors.ts
 export {
   compareRank,
   owningEpic,
@@ -32,14 +28,12 @@ export type {
   StateGroup,
 } from "./backlogSelectors";
 
-export type { BulkResult } from "./backlogIssueActions";
-
 import type { BacklogFilters } from "./backlogSelectors";
-import type { BulkResult } from "./backlogIssueActions";
 
-// Import action implementations
-import * as blockerActions from "./backlogBlockerActions";
-import * as issueActions from "./backlogIssueActions";
+export interface BulkResult {
+  ok: number;
+  failed: number;
+}
 
 export interface StateRevisionDelta {
   state: State | null;
@@ -49,190 +43,111 @@ export interface StateRevisionDelta {
 
 export interface BacklogState {
   projectId: string | null;
-  items: WorkItem[];
+  /** Membership only. Work-item records live in useIssueStore. */
+  itemIds: string[];
+  /**
+   * Derived compatibility projection for legacy selectors. This accessor never
+   * stores records in the backlog state; it resolves itemIds from the owner.
+   */
+  readonly items: WorkItem[];
+  /** Derived compatibility aliases for the canonical owner's revision guards. */
+  readonly seenStateRevisions: Record<string, number>;
+  readonly pendingStateDeltas: Record<string, StateRevisionDelta>;
   states: State[];
   filters: BacklogFilters;
   loading: boolean;
-  /**
-   * Mutation-error message (rollback case). Kept for back-compat / debugging but
-   * no longer rendered inline — mutation failures surface as toasts (#638).
-   */
   error: string | null;
-  /**
-   * Page-LOAD error: set only by loadBacklog. The Backlog renders THIS inline
-   * (a failed initial fetch is a page state, not a transient mutation), keeping
-   * the load surface separate from the toast channel.
-   */
   loadError: string | null;
-  /** Latest feed revision observed per WorkItem for the active project. */
-  seenStateRevisions: Record<string, number>;
-  /** Latest state-only frame, retained until an equally fresh detail arrives. */
-  pendingStateDeltas: Record<string, StateRevisionDelta>;
 
   loadBacklog: (projectId: string) => Promise<void>;
   setFilter: (patch: Partial<BacklogFilters>) => void;
   createIssue: (projectId: string, body: WorkItemCreate) => Promise<WorkItem | null>;
   reparent: (id: string, parentId: string | null) => Promise<void>;
   setItemState: (itemId: string, stateId: string) => Promise<void>;
-  /**
-   * Within-column reorder (#626): set the item's rank strictly between its two
-   * destination neighbors (null = top / bottom / empty). Optimistic with
-   * rollback; the server's authoritative rank reconciles on success. Used for
-   * list reorder operations.
-   */
-  reorderItem: (
-    itemId: string,
-    beforeId: string | null,
-    afterId: string | null,
-  ) => Promise<void>;
+  reorderItem: (itemId: string, beforeId: string | null, afterId: string | null) => Promise<void>;
   deleteIssue: (id: string) => Promise<void>;
-  /**
-   * Bulk actions (#637): fan out a single-item mutation over a selection. Each
-   * applies optimistically to all targets at once, fires the PATCHes/DELETEs in
-   * parallel (`allSettled`, never `all`), and reconciles per item — a fulfilled
-   * result flows through `applyServerItem`, a rejected one rolls back only that
-   * row. They return a summary the bulk-action bar renders inline (the store's
-   * `error` is left untouched so a partial failure never blanks the whole view).
-   */
   bulkSetState: (ids: string[], stateId: string) => Promise<BulkResult>;
-  /**
-   * Confirm-gated bulk delete: optimistically remove all, fan out deleteWorkItem,
-   * restore any that reject (a 409 = "has sub-tasks"), and report how many were
-   * deleted vs the ids that survived so the caller can trim the selection.
-   */
   bulkDelete: (ids: string[]) => Promise<{ deleted: number; skipped: string[] }>;
-  /** Replace an item by id (or insert it) — the cross-store write seam. */
+
+  /** Membership reconciliation boundary; the record is written only by the owner. */
   applyServerItem: (item: WorkItem) => void;
-  /** Apply a newer state-only project-feed delta to an already-loaded item. */
-  applyStateDelta: (
-    itemId: string,
-    state: State | null,
-    revision: number,
-    updatedAt: string,
-  ) => boolean;
-  /** Reconcile one targeted detail response through revision/optimistic guards. */
-  reconcileTargetedItem: (
-    item: WorkItem,
-    requestedRevision: number,
-  ) => "applied" | "ignored" | "stale";
-  /** Evict a confirmed missing item unless newer cached truth already exists. */
+  /** Compatibility router for callers during the migration; ownership remains canonical. */
+  applyStateDelta: (itemId: string, state: State | null, revision: number, updatedAt: string) => boolean;
+  reconcileTargetedItem: (item: WorkItem, requestedRevision: number) => "applied" | "ignored" | "stale";
   removeReconciledItem: (itemId: string, requestedRevision: number) => boolean;
-  /**
-   * Reverse write-through for blocker edits (#624): when an issue's blocked_by
-   * set gains/loses a blocker, mirror it onto each blocker's reverse blocks_ids
-   * so the other issue's drawer reads correctly without a refetch.
-   */
-  mirrorBlockerChange: (
-    blockedId: string,
-    addedBlockerIds: string[],
-    removedBlockerIds: string[],
-  ) => void;
+  /** Optimistically maintain reverse dependency edges on the canonical records. */
+  mirrorBlockerChange: (blockedId: string, addedBlockerIds: string[], removedBlockerIds: string[]) => void;
 }
 
-function errMessage(e: unknown): string {
-  if (e instanceof ApiError) return `${e.status}: ${e.message}`;
-  return e instanceof Error ? e.message : String(e);
+const EMPTY_FILTERS: BacklogFilters = { query: "" };
+
+function errMessage(error: unknown): string {
+  if (error instanceof ApiError) return `${error.status}: ${error.message}`;
+  return error instanceof Error ? error.message : String(error);
 }
 
-const EMPTY_FILTERS: BacklogFilters = {
-  query: "",
-};
+function resolveItems(ids: string[]): WorkItem[] {
+  const byId = useIssueStore.getState().workItemsById;
+  return ids.map((id) => byId[id]).filter((item): item is WorkItem => item !== undefined);
+}
 
-export const useBacklogStore = create<BacklogState>((set, get) => ({
+function mergeIds(existing: string[], ids: string[]): string[] {
+  const known = new Set(existing);
+  return [...existing, ...ids.filter((id) => !known.has(id))];
+}
+
+function attachDerivedItems(state: BacklogState): void {
+  Object.defineProperty(state, "items", {
+    configurable: true,
+    enumerable: false,
+    get: () => resolveItems(state.itemIds),
+  });
+  Object.defineProperties(state, {
+    seenStateRevisions: {
+      configurable: true,
+      enumerable: false,
+      get: () => useIssueStore.getState().seenStateRevisions,
+    },
+    pendingStateDeltas: {
+      configurable: true,
+      enumerable: false,
+      get: () => useIssueStore.getState().pendingStateDeltas,
+    },
+  });
+}
+
+const createBacklogState = (set: (partial: Partial<BacklogState>) => void, get: () => BacklogState): BacklogState => ({
   projectId: null,
-  items: [],
+  itemIds: [],
   states: [],
   filters: EMPTY_FILTERS,
   loading: false,
   error: null,
   loadError: null,
-  seenStateRevisions: {},
-  pendingStateDeltas: {},
 
   async loadBacklog(projectId) {
-    const catalogRevision = stateCatalogRevision(projectId);
     const switchingProject = get().projectId !== projectId;
-    if (switchingProject) issueActions.clearOptimisticStateMoves();
     set({
       projectId,
       loading: true,
       loadError: null,
-      ...(switchingProject
-        ? { items: [], seenStateRevisions: {}, pendingStateDeltas: {} }
-        : {}),
+      ...(switchingProject ? { itemIds: [] } : {}),
     });
     try {
       const [items, states] = await Promise.all([
         api.listProjectWorkItems(projectId, { includePathfind: true }),
         api.listStates(projectId),
       ]);
-      // A feed delta may land while this authoritative request is in flight.
-      // Keep its newer state revision while taking every other field from the
-      // authoritative snapshot. A switched project ignores a late response.
       if (get().projectId !== projectId) return;
-      const currentById = new Map(get().items.map((item) => [item.id, item]));
-      const pending = get().pendingStateDeltas;
-      const catalogChanged = stateCatalogChangedSince(
-        projectId,
-        catalogRevision,
-      );
-      const reconciledItems = items.map((item) => {
-        const catalogReconciled = catalogChanged
-          ? {
-              ...item,
-              state: overlayAuthoritativeState(projectId, item.state),
-            }
-          : item;
-        const current = currentById.get(item.id);
-        const delta = pending[item.id];
-        const incomingRevision = catalogReconciled.state_revision ?? 0;
-        if (delta && delta.revision > incomingRevision) {
-          return {
-            ...catalogReconciled,
-            state: delta.state,
-            state_revision: delta.revision,
-            updated_at: delta.updatedAt,
-          };
-        }
-        if (current && (current.state_revision ?? 0) > incomingRevision) {
-          return {
-            ...item,
-            state: current.state,
-            state_revision: current.state_revision,
-            updated_at: current.updated_at,
-          };
-        }
-        if (
-          current &&
-          current.state_revision === undefined &&
-          item.state_revision === undefined &&
-          Date.parse(current.updated_at) > Date.parse(item.updated_at)
-        ) {
-          return {
-            ...item,
-            state: current.state,
-            updated_at: current.updated_at,
-          };
-        }
-        return catalogReconciled;
-      });
-      const seenStateRevisions = { ...get().seenStateRevisions };
-      for (const item of reconciledItems) {
-        seenStateRevisions[item.id] = Math.max(
-          seenStateRevisions[item.id] ?? 0,
-          item.state_revision ?? 0,
-        );
-      }
-      // Reset filters when the project changes so stale ids never leak across.
+      useIssueStore.getState().hydrateWorkItems(items);
       set({
-        items: reconciledItems,
-        states: catalogChanged ? get().states : states,
-        seenStateRevisions,
+        itemIds: items.filter((item) => !item.is_archived).map((item) => item.id),
+        states,
         loading: false,
         ...(switchingProject ? { filters: EMPTY_FILTERS } : {}),
       });
-    } catch (e) {
-      set({ loadError: errMessage(e), loading: false });
+    } catch (error) {
+      set({ loadError: errMessage(error), loading: false });
     }
   },
 
@@ -240,39 +155,192 @@ export const useBacklogStore = create<BacklogState>((set, get) => ({
     set({ filters: { ...get().filters, ...patch } });
   },
 
-  createIssue: (projectId, body) =>
-    issueActions.createIssue(set, get, projectId, body),
+  async createIssue(projectId, body) {
+    try {
+      const created = await api.createWorkItem(projectId, body);
+      useIssueStore.getState().hydrateWorkItems([created]);
+      set({ itemIds: mergeIds(get().itemIds, [created.id]), error: null });
+      return created;
+    } catch (error) {
+      set({ error: errMessage(error) });
+      return null;
+    }
+  },
 
-  reparent: (id, parentId) =>
-    issueActions.reparent(set, get, id, parentId),
+  async reparent(id, parentId) {
+    const updated = await useIssueStore.getState().patchWorkItem(id, { parent_id: parentId }, get().states);
+    if (!updated) set({ error: useIssueStore.getState().error ?? "Unable to update parent." });
+  },
 
-  setItemState: (itemId, stateId) =>
-    issueActions.setItemState(set, get, itemId, stateId),
+  async setItemState(itemId, stateId) {
+    const updated = await useIssueStore.getState().setWorkItemState(itemId, stateId, get().states);
+    if (!updated) set({ error: useIssueStore.getState().error ?? "Unable to update state." });
+  },
 
-  reorderItem: (itemId, beforeId, afterId) =>
-    issueActions.reorderItem(set, get, itemId, beforeId, afterId),
+  async reorderItem(itemId, beforeId, afterId) {
+    const items = resolveItems(get().itemIds);
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+    const rankOf = (id: string | null) => id ? items.find((candidate) => candidate.id === id)?.rank ?? null : null;
+    let rank: string;
+    try {
+      rank = rankBetween(rankOf(beforeId), rankOf(afterId));
+    } catch {
+      return;
+    }
+    useIssueStore.getState().hydrateWorkItems([{ ...item, rank }]);
+    try {
+      get().applyServerItem(await api.reorderWorkItem(itemId, { before_id: beforeId, after_id: afterId }));
+    } catch (error) {
+      useIssueStore.getState().hydrateWorkItems([item]);
+      set({ error: errMessage(error) });
+    }
+  },
 
-  deleteIssue: (id) =>
-    issueActions.deleteIssue(set, get, id),
+  async deleteIssue(id) {
+    const snapshot = get().itemIds;
+    if (!snapshot.includes(id)) return;
+    set({ itemIds: snapshot.filter((itemId) => itemId !== id), error: null });
+    try {
+      await api.deleteWorkItem(id);
+      useIssueStore.getState().removeReconciledWorkItem(id, Number.MAX_SAFE_INTEGER);
+    } catch (error) {
+      set({ itemIds: snapshot, error: errMessage(error) });
+    }
+  },
 
-  bulkSetState: (ids, stateId) =>
-    issueActions.bulkSetState(set, get, ids, stateId),
+  async bulkSetState(ids, stateId) {
+    const items = resolveItems(get().itemIds);
+    const target = get().states.find((state) => state.id === stateId) ?? null;
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const todo = ids.filter((id) => {
+      const item = byId.get(id);
+      return item && item.state?.id !== stateId;
+    });
+    if (!todo.length) return { ok: 0, failed: 0 };
+    const optimistic = todo.map((id) => ({ ...byId.get(id)!, state: target }));
+    useIssueStore.getState().hydrateWorkItems(optimistic);
+    const results = await Promise.allSettled(
+      todo.map((id) => api.patchWorkItem(id, { state_id: stateId })),
+    );
+    const failed: string[] = [];
+    results.forEach((result, index) => {
+      const id = todo[index];
+      if (result.status === "fulfilled") get().applyServerItem(result.value);
+      else {
+        failed.push(id);
+        const before = byId.get(id);
+        if (before) useIssueStore.getState().hydrateWorkItems([before]);
+      }
+    });
+    return { ok: todo.length - failed.length, failed: failed.length };
+  },
 
-  bulkDelete: (ids) =>
-    issueActions.bulkDelete(set, get, ids),
+  async bulkDelete(ids) {
+    const snapshot = get().itemIds;
+    const todo = ids.filter((id) => snapshot.includes(id));
+    if (!todo.length) return { deleted: 0, skipped: [] };
+    const removed = new Set(todo);
+    set({ itemIds: snapshot.filter((id) => !removed.has(id)), error: null });
+    const results = await Promise.allSettled(todo.map((id) => api.deleteWorkItem(id)));
+    const skipped = results.flatMap((result, index) => result.status === "rejected" ? [todo[index]] : []);
+    const deleted = todo.filter((id) => !skipped.includes(id));
+    deleted.forEach((id) => useIssueStore.getState().removeReconciledWorkItem(id, Number.MAX_SAFE_INTEGER));
+    if (skipped.length) set({ itemIds: mergeIds(get().itemIds, skipped) });
+    return { deleted: deleted.length, skipped };
+  },
 
-  applyServerItem: (item) =>
-    issueActions.applyServerItem(set, get, item),
+  applyServerItem(item) {
+    const owner = useIssueStore.getState();
+    if (item.is_archived) {
+      owner.reconcileWorkItem(item, 0);
+      set({ itemIds: get().itemIds.filter((id) => id !== item.id) });
+      return;
+    }
+    const reconciled = owner.reconcileWorkItem(item, 0);
+    if (reconciled !== "applied") return;
+    set({
+      itemIds: (get().projectId === null || get().projectId === item.project_id)
+          ? mergeIds(get().itemIds, [item.id])
+          : get().itemIds,
+    });
+  },
 
-  applyStateDelta: (itemId, state, revision, updatedAt) =>
-    issueActions.applyStateDelta(set, get, itemId, state, revision, updatedAt),
+  applyStateDelta(itemId, state, revision, updatedAt) {
+    return useIssueStore.getState().applyWorkItemStateDelta(itemId, state, revision, updatedAt);
+  },
 
-  reconcileTargetedItem: (item, requestedRevision) =>
-    issueActions.reconcileTargetedItem(set, get, item, requestedRevision),
+  reconcileTargetedItem(item, requestedRevision) {
+    if (item.project_id !== get().projectId) return "ignored";
+    const result = useIssueStore.getState().reconcileWorkItem(item, requestedRevision);
+    if (result === "applied") get().applyServerItem(item);
+    return result;
+  },
 
-  removeReconciledItem: (itemId, requestedRevision) =>
-    issueActions.removeReconciledItem(set, get, itemId, requestedRevision),
+  removeReconciledItem(itemId, requestedRevision) {
+    const removed = useIssueStore.getState().removeReconciledWorkItem(itemId, requestedRevision);
+    if (removed || !useIssueStore.getState().getWorkItem(itemId)) {
+      set({ itemIds: get().itemIds.filter((id) => id !== itemId) });
+      return true;
+    }
+    return false;
+  },
 
-  mirrorBlockerChange: (blockedId, addedBlockerIds, removedBlockerIds) =>
-    blockerActions.mirrorBlockerChange(set, get, blockedId, addedBlockerIds, removedBlockerIds),
-}));
+  mirrorBlockerChange(blockedId, addedBlockerIds, removedBlockerIds) {
+    const owner = useIssueStore.getState();
+    const updates = [
+      ...addedBlockerIds.map((id) => {
+        const item = owner.getWorkItem(id);
+        return item && !item.blocks_ids.includes(blockedId)
+          ? { ...item, blocks_ids: [...item.blocks_ids, blockedId] }
+          : null;
+      }),
+      ...removedBlockerIds.map((id) => {
+        const item = owner.getWorkItem(id);
+        return item && item.blocks_ids.includes(blockedId)
+          ? { ...item, blocks_ids: item.blocks_ids.filter((candidate) => candidate !== blockedId) }
+          : null;
+      }),
+    ].filter((item): item is WorkItem => item !== null);
+    owner.hydrateWorkItems(updates);
+  },
+  // Defined after construction so it remains a non-enumerable derived
+  // accessor and can never become a second record cache.
+  items: [] as WorkItem[],
+  seenStateRevisions: {},
+  pendingStateDeltas: {},
+});
+
+export const useBacklogStore = create<BacklogState>()((set, get, api) => {
+  const setWithDerivedItems = (partial: Partial<BacklogState>) => {
+    set(partial);
+    attachDerivedItems(api.getState());
+  };
+  return createBacklogState(setWithDerivedItems, get);
+});
+
+attachDerivedItems(useBacklogStore.getState());
+
+const rawSetState = useBacklogStore.setState;
+useBacklogStore.setState = ((partial, replace) => {
+  const current = useBacklogStore.getState();
+  const next = typeof partial === "function" ? partial(current) : partial;
+  const {
+    items,
+    seenStateRevisions,
+    pendingStateDeltas,
+    ...withoutItems
+  } = next;
+  if (items !== undefined) {
+    useIssueStore.getState().hydrateWorkItems(items);
+    withoutItems.itemIds = items.map((item) => item.id);
+  }
+  if (seenStateRevisions !== undefined || pendingStateDeltas !== undefined) {
+    useIssueStore.setState({
+      ...(seenStateRevisions !== undefined ? { seenStateRevisions } : {}),
+      ...(pendingStateDeltas !== undefined ? { pendingStateDeltas } : {}),
+    });
+  }
+  rawSetState(withoutItems, replace);
+  attachDerivedItems(useBacklogStore.getState());
+}) as typeof useBacklogStore.setState;

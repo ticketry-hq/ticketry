@@ -32,12 +32,12 @@ def test_wrong_token_401(client, project):
 
 
 @pytest.mark.django_db
-def test_valid_token_200(client, project):
+def test_valid_token_200(client, project, module_type):
     good = {"x-api-key": TOKEN}
     assert client.get(f"{BASE}/projects", headers=good).status_code == 200
     r = client.post(
         f"{BASE}/projects/{project.id}/modules",
-        data=json.dumps({"name": "X"}),
+        data=json.dumps({"name": "X", "issue_type_id": str(module_type.id)}),
         content_type="application/json",
         headers=good,
     )
@@ -45,13 +45,13 @@ def test_valid_token_200(client, project):
 
 
 @pytest.mark.django_db
-def test_disable_auth_allows_missing_token(client, project, settings):
+def test_disable_auth_allows_missing_token(client, project, module_type, settings):
     settings.WORKTRACKER_DISABLE_AUTH = True
 
     assert client.get(f"{BASE}/projects").status_code == 200
     r = client.post(
         f"{BASE}/projects/{project.id}/modules",
-        data=json.dumps({"name": "X"}),
+        data=json.dumps({"name": "X", "issue_type_id": str(module_type.id)}),
         content_type="application/json",
     )
     assert r.status_code == 200

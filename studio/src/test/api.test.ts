@@ -4,6 +4,7 @@ import {
   agentApiBase,
   apiBase,
   createIssueType,
+  createModule,
   createState,
   createWorkItem,
   acknowledgeOnboarding,
@@ -102,6 +103,18 @@ describe("api client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/projects/proj-123/modules");
   });
 
+  it("POSTs an explicit type when creating a module", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: "module-1" }));
+    await createModule("proj-123", "General", "type-module");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/work-tracker/projects/proj-123/modules");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      name: "General",
+      issue_type_id: "type-module",
+    });
+  });
+
   it("throws a typed ApiError with status + body on non-2xx", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: "nope" }, 401));
     await expect(listProjects()).rejects.toMatchObject({
@@ -138,11 +151,19 @@ describe("S2 fetchers", () => {
 
   it("POSTs a create body to the project work-items path", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: "w1" }));
-    await createWorkItem("p1", { name: "Story", parent_id: "m1" });
+    await createWorkItem("p1", {
+      name: "Story",
+      parent_id: "m1",
+      issue_type_id: "type-story",
+    });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/work-tracker/projects/p1/work-items");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({ name: "Story", parent_id: "m1" });
+    expect(JSON.parse(init.body)).toEqual({
+      name: "Story",
+      parent_id: "m1",
+      issue_type_id: "type-story",
+    });
   });
 
   it("PATCHes a work item by its UUID id with only the changed fields", async () => {
@@ -193,11 +214,11 @@ describe("S6 config fetchers", () => {
 
   it("PATCHes an issue type by id", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: "t1" }));
-    await patchIssueType("t1", { is_default: true });
+    await patchIssueType("t1", { name: "Bug" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/work-tracker/issue-types/t1");
     expect(init.method).toBe("PATCH");
-    expect(JSON.parse(init.body)).toEqual({ is_default: true });
+    expect(JSON.parse(init.body)).toEqual({ name: "Bug" });
   });
 
   it("DELETEs an issue type with a reassign_to query when given", async () => {

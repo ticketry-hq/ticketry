@@ -136,11 +136,11 @@ export const listModules = (projectId: string) =>
     ),
   );
 
-export const createModule = (projectId: string, name: string) =>
+export const createModule = (projectId: string, name: string, issueTypeId: string) =>
   call<Module>(async () =>
     (await sdk().modules.createModule({
       projectId,
-      moduleIn: { name },
+      moduleIn: { name, issue_type_id: issueTypeId },
     })) as Module
   );
 

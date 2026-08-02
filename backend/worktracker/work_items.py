@@ -12,7 +12,7 @@ import uuid
 from django.db.models import Count, Max, Prefetch, Q
 from django.shortcuts import get_object_or_404
 
-from worktracker.models import Issue, IssueType, Label, State
+from worktracker.models import Issue, IssueType, State
 from worktracker.ranking import key_between
 from worktracker.services.errors import NotFoundError, ValidationError
 from worktracker.state_groups import RESOLVED_GROUPS, state_group
@@ -98,29 +98,20 @@ def reorder_neighbor(issue, neighbor_id):
 
 
 def resolve_issue_type(project_id, issue_type_id, bucket):
-    """Resolve the IssueType for a create on the given binary bucket level."""
+    """Resolve an explicitly selected IssueType for the requested level."""
 
-    if issue_type_id:
-        try:
-            issue_type = IssueType.objects.get(
-                pk=issue_type_id, project_id=project_id
-            )
-        except IssueType.DoesNotExist as exc:
-            raise NotFoundError("Issue type not found.") from exc
-        if issue_type.level != bucket:
-            raise ValidationError(
-                f"Issue type '{issue_type.name}' is level "
-                f"'{issue_type.level}', not '{bucket}'."
-            )
-        return issue_type
-
-    return (
-        IssueType.objects.filter(
-            project_id=project_id, level=bucket, is_default=True
+    if issue_type_id is None:
+        raise ValidationError("issue_type_id is required.")
+    try:
+        issue_type = IssueType.objects.get(pk=issue_type_id, project_id=project_id)
+    except IssueType.DoesNotExist as exc:
+        raise NotFoundError("Issue type not found.") from exc
+    if issue_type.level != bucket:
+        raise ValidationError(
+            f"Issue type '{issue_type.name}' is level "
+            f"'{issue_type.level}', not '{bucket}'."
         )
-        .order_by("sort_order", "created_at")
-        .first()
-    )
+    return issue_type
 
 
 def resolve_issue(id_or_key, *, task_only=True):
@@ -159,26 +150,6 @@ def blocker_would_cycle(issue_id, new_blocker_ids):
     return False
 
 
-def apply_label_names(issue, raw_names):
-    """Replace an issue's labels from a trimmed, de-duped name list."""
-
-    names, seen = [], set()
-    for raw in raw_names or []:
-        name = raw.strip()
-        if name and name not in seen:
-            seen.add(name)
-            names.append(name)
-    labels = [
-        Label.objects.get_or_create(
-            project=issue.project,
-            name=name,
-            defaults={"id": uuid.uuid4()},
-        )[0]
-        for name in names
-    ]
-    issue.labels.set(labels)
-
-
 def state_group_for_state_id(state_id):
     """Return the frozen state group for a state id."""
 
@@ -195,23 +166,19 @@ def scope_ref(issue):
         "name": issue.name,
         "state_group": group,
         "resolved": group in RESOLVED_GROUPS,
-        "assignees": [a.display_name or a.email for a in issue.assignees.all()],
     }
 
 
 def build_scope_context(issue_id):
     """Build the read-only dependency slice a subagent consumes for a task."""
 
-    neighbor_qs = Issue.objects.select_related("state", "project").prefetch_related(
-        "assignees"
-    )
+    neighbor_qs = Issue.objects.select_related("state", "project")
     base = (
         Issue.objects.filter(type="task")
         .select_related("project", "state")
         .prefetch_related(
             Prefetch("blocked_by", queryset=neighbor_qs),
             Prefetch("blocks", queryset=neighbor_qs),
-            "assignees",
         )
     )
 
@@ -225,12 +192,6 @@ def build_scope_context(issue_id):
     depends_on = [scope_ref(b) for b in issue.blocked_by.all()]
     depended_by = [scope_ref(b) for b in issue.blocks.all()]
 
-    owned_elsewhere, seen = [], set()
-    for ref in depends_on + depended_by:
-        if ref["assignees"] and ref["id"] not in seen:
-            seen.add(ref["id"])
-            owned_elsewhere.append(ref)
-
     unresolved = [ref for ref in depends_on if not ref["resolved"]]
     if unresolved:
         keys = ", ".join(ref["key"] for ref in unresolved)
@@ -238,13 +199,6 @@ def build_scope_context(issue_id):
             f"{len(unresolved)} of {len(depends_on)} blocker(s) unresolved "
             f"({keys}) - stay within this task; do not implement upstream work."
         )
-        owned_unresolved = [ref for ref in unresolved if ref["assignees"]]
-        if owned_unresolved:
-            detail = "; ".join(
-                f"{ref['key']} owned by {', '.join(ref['assignees'])}"
-                for ref in owned_unresolved
-            )
-            advisory += f" Owned elsewhere: {detail}."
     else:
         advisory = (
             "No unresolved blockers - deliver only this task and nothing beyond "
@@ -255,6 +209,5 @@ def build_scope_context(issue_id):
         "task": scope_ref(issue),
         "depends_on": depends_on,
         "depended_by": depended_by,
-        "owned_elsewhere": owned_elsewhere,
         "advisory": advisory,
     }

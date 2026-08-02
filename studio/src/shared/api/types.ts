@@ -1,10 +1,8 @@
 import type {
-  AssigneeOut as GeneratedAssignee,
   AttachmentOut as GeneratedAttachment,
   IssueTypeIn as GeneratedIssueTypeCreate,
   IssueTypeOut as GeneratedIssueType,
   IssueTypePatch as GeneratedIssueTypePatch,
-  LabelOut as GeneratedLabel,
   LaunchBindingOut as GeneratedLaunchBinding,
   ModuleOut as GeneratedModule,
   ModuleWorkItemIn as GeneratedModuleWorkItemCreate,
@@ -57,14 +55,12 @@ export type Module = GeneratedModule;
 export type IssueLevel = "module" | "task";
 export type IssueType = Omit<
   GeneratedIssueType,
-  "level" | "name" | "color" | "icon" | "sort_order" | "is_default"
+  "level" | "name" | "color" | "sort_order"
 > & {
   name: string;
   level: IssueLevel;
   color: string | null;
-  icon: string | null;
   sort_order: number;
-  is_default: boolean;
 };
 
 export type State = Omit<
@@ -80,56 +76,20 @@ export type State = Omit<
   is_protected?: boolean;
 };
 
-export type LifecycleState =
-  | "backlog"
-  | "refining"
-  | "prd_generated"
-  | "prd_review"
-  | "prd_approved"
-  | "generating_hld"
-  | "hld_generated"
-  | "hld_review"
-  | "hld_approved"
-  | "registering_split"
-  | "split_created"
-  | "lld_generating"
-  | "lld_generated"
-  | "lld_review"
-  | "lld_approved"
-  | "implementing"
-  | "done"
-  | "failed"
-  | "cancelled";
-
-export type Assignee = GeneratedAssignee;
-export type Label = GeneratedLabel;
-
 export type WorkItem = Omit<
   GeneratedWorkItem,
-  | "assignees"
   | "blocked_by_ids"
   | "blocks_ids"
   | "description"
-  | "description_html"
-  | "description_stripped"
   | "is_archived"
-  | "labels"
   | "parent_id"
   | "rank"
   | "sequence_id"
   | "state"
-  | "lifecycle_state"
-  | "lifecycle_transitions"
   | "sub_issues_count"
 > & {
   sequence_id: number | null;
   state: State | null;
-  lifecycle_state?: LifecycleState | null;
-  lifecycle_transitions?: LifecycleState[];
-  assignees: Assignee[];
-  labels: Label[];
-  description_html: string | null;
-  description_stripped: string | null;
   description: string | null;
   parent_id: string | null;
   sub_issues_count: number;
@@ -163,32 +123,28 @@ export type ModuleWorkItemCreate = GeneratedModuleWorkItemCreate;
 // shape so required fields are non-optional.
 export type ScopeRef = Omit<
   GeneratedScopeRef,
-  "state_group" | "resolved" | "assignees"
+  "state_group" | "resolved"
 > & {
   state_group: string | null;
   resolved: boolean;
-  assignees: string[];
 };
 
 export type ScopeContext = Omit<
   GeneratedScopeContext,
-  "task" | "depends_on" | "depended_by" | "owned_elsewhere" | "advisory"
+  "task" | "depends_on" | "depended_by" | "advisory"
 > & {
   task: ScopeRef;
   depends_on: ScopeRef[];
   depended_by: ScopeRef[];
-  owned_elsewhere: ScopeRef[];
   advisory: string;
 };
 
 export type WorkItemPatch = Omit<
   GeneratedWorkItemPatch,
-  "blocked_by_ids" | "labels" | "name" | "origin"
+  "blocked_by_ids" | "name" | "origin"
 > & {
   blocked_by_ids?: string[];
-  labels?: string[];
   name?: string;
-  force?: boolean;
 };
 
 export type IssueTypeCreate = Omit<
@@ -199,12 +155,10 @@ export type IssueTypeCreate = Omit<
 };
 export type IssueTypePatch = Omit<
   GeneratedIssueTypePatch,
-  "name" | "color" | "icon" | "is_default" | "sort_order"
+  "name" | "color" | "sort_order"
 > & {
   name?: string;
   color?: string;
-  icon?: string;
-  is_default?: boolean;
   sort_order?: number;
 };
 export type StateCreate = GeneratedStateCreate;

@@ -129,30 +129,12 @@ def test_lld_has_no_completion_gate_and_stays_running():
             to_group="completed",
         ),
     )
-    hld_approval = decide(
-        running,
-        SeamEvent(
-            kind="lifecycle_changed",
-            task_id="task-1",
-            lifecycle_state="hld_approved",
-        ),
-    )
-
     assert completed.next == running
-    assert hld_approval.next == running
 
 
 def test_register_has_no_completion_gate_and_stays_running():
     running = _register_state(status="running")
 
-    replayed_hld_approval = decide(
-        running,
-        SeamEvent(
-            kind="lifecycle_changed",
-            task_id="task-1",
-            lifecycle_state="hld_approved",
-        ),
-    )
     completed = decide(
         running,
         SeamEvent(
@@ -162,91 +144,23 @@ def test_register_has_no_completion_gate_and_stays_running():
         ),
     )
 
-    assert replayed_hld_approval.next == running
-    assert replayed_hld_approval.actions == []
     assert completed.next == running
 
 
-def test_matching_hld_approved_lifecycle_event_marks_split_done():
-    decision = decide(
-        _split_state(status="running"),
-        SeamEvent(
-            kind="lifecycle_changed",
-            task_id="task-1",
-            lifecycle_state="hld_approved",
-        ),
-    )
-
-    assert decision.next.status == "done"
-
-
-def test_split_ignores_non_hld_approved_lifecycle():
+def test_split_completes_on_visible_unstarted_workflow_transition():
     running = _split_state(status="running")
 
-    other_lifecycle = decide(
-        running,
-        SeamEvent(
-            kind="lifecycle_changed",
-            task_id="task-1",
-            lifecycle_state="hld_review",
-        ),
-    )
-    no_lifecycle = decide(
+    completed = decide(
         running,
         SeamEvent(
             kind="issue_state_changed",
             task_id="task-1",
-            to_group="started",
+            from_group="unstarted",
+            to_group="unstarted",
         ),
     )
 
-    assert other_lifecycle.next == running
-    assert no_lifecycle.next == running
-
-
-def test_split_hld_approved_event_while_not_running_is_ignored():
-    idle = _split_state(status="idle")
-
-    decision = decide(
-        idle,
-        SeamEvent(
-            kind="lifecycle_changed",
-            task_id="task-1",
-            lifecycle_state="hld_approved",
-        ),
-    )
-
-    assert decision.next == idle
-
-
-def test_split_unrelated_task_hld_approved_event_is_ignored():
-    running = _split_state(status="running")
-
-    decision = decide(
-        running,
-        SeamEvent(
-            kind="lifecycle_changed",
-            task_id="other-task",
-            lifecycle_state="hld_approved",
-        ),
-    )
-
-    assert decision.next == running
-
-
-def test_split_completion_after_done_stays_done():
-    done = _split_state(status="done")
-
-    decision = decide(
-        done,
-        SeamEvent(
-            kind="lifecycle_changed",
-            task_id="task-1",
-            lifecycle_state="hld_approved",
-        ),
-    )
-
-    assert decision.next == done
+    assert completed.next.status == "done"
 
 
 def test_run_started_records_run_id_and_marks_running():

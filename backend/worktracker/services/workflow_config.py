@@ -2,7 +2,7 @@
 
 Owns the runtime policy behind state and issue-type configuration: valid
 groups/levels, protected-state and last-state-in-group guards, reassignment
-validation, default-type flipping, and full-list reorder completeness. The API
+validation, and full-list reorder completeness. The API
 layer decodes payloads and translates the raised :mod:`worktracker.services.errors`
 onto the HTTP contract; the rules live here.
 """
@@ -26,6 +26,7 @@ from worktracker.models import (
     State,
 )
 from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
+from worktracker.work_items import cascade_archive
 
 
 def _get_project(project_id):
@@ -38,8 +39,8 @@ def _get_project(project_id):
 # --- issue types ------------------------------------------------------------
 
 
-def create_issue_type(project_id, *, name, level, color=None, icon=None):
-    """Create a non-default issue type at the tail of its level's order."""
+def create_issue_type(project_id, *, name, level, color=None):
+    """Create an issue type at the tail of its level's order."""
 
     project = _get_project(project_id)
 
@@ -58,26 +59,17 @@ def create_issue_type(project_id, *, name, level, color=None, icon=None):
         name=name,
         level=level,
         color=color or "",
-        icon=icon or "",
         sort_order=0 if max_order is None else max_order + 1,
-        is_default=False,
     )
 
 
 def update_issue_type(type_id, data):
-    """Rename / recolor / reorder a type; ``is_default=True`` flips the default.
-
-    ``data`` is the set-only field map (the API's ``exclude_unset`` dict).
-    """
+    """Rename, recolor, or reorder an issue type."""
 
     try:
         issue_type = IssueType.objects.get(pk=type_id)
     except IssueType.DoesNotExist:
         raise NotFoundError("Issue type not found.")
-
-    if data.get("is_default") is False:
-        raise ConflictError("Set another type as this level's default rather than clearing it."
-        )
 
     with transaction.atomic():
         if "name" in data:
@@ -91,31 +83,20 @@ def update_issue_type(type_id, data):
             issue_type.name = data["name"]
         if "color" in data:
             issue_type.color = data["color"] or ""
-        if "icon" in data:
-            issue_type.icon = data["icon"] or ""
         if "sort_order" in data:
             issue_type.sort_order = data["sort_order"]
-        if data.get("is_default") is True:
-            IssueType.objects.filter(
-                project=issue_type.project, level=issue_type.level, is_default=True
-            ).exclude(pk=issue_type.pk).update(is_default=False)
-            issue_type.is_default = True
         issue_type.save()
 
     return issue_type
 
 
 def delete_issue_type(type_id, reassign_to=None):
-    """Delete a type; conflict if it is a default or in use without ``reassign_to``."""
+    """Delete a type; conflict if it is in use without ``reassign_to``."""
 
     try:
         issue_type = IssueType.objects.get(pk=type_id)
     except IssueType.DoesNotExist:
         raise NotFoundError("Issue type not found.")
-
-    if issue_type.is_default:
-        raise ConflictError("Cannot delete a level's default type; set another default first."
-        )
 
     in_use = Issue.objects.filter(issue_type=issue_type).count()
     if in_use and reassign_to is None:
@@ -340,7 +321,7 @@ def get_state_impact(state_id):
         "work_items": [
             {
                 "id": str(issue.id),
-                "issue_type_id": str(issue.issue_type_id) if issue.issue_type_id else None,
+                "issue_type_id": str(issue.issue_type_id),
             }
             for issue in issues
         ],
@@ -369,13 +350,49 @@ def get_state_impact(state_id):
     }
 
 
+def _reassign_issue_for_state_deletion(issue, deleted_state, replacement_state):
+    """Repair one issue whose current state is about to be deleted.
+
+    This is configuration maintenance, not a workflow transition. Its guard is
+    deliberately narrower than the transition service: it can only replace the
+    exact state currently being deleted with another state in the same project.
+    Saving the issue normally preserves revision and post-commit event behavior;
+    the cancellation archive invariants match ordinary state entry and exit.
+    """
+
+    if issue.state_id != deleted_state.id:
+        raise ValidationError(
+            "State-deletion reassignment only applies to issues in the deleted state."
+        )
+    if (
+        replacement_state.project_id != deleted_state.project_id
+        or issue.project_id != deleted_state.project_id
+        or replacement_state.id == deleted_state.id
+    ):
+        raise ValidationError(
+            "State-deletion reassignment requires a different state in the same project."
+        )
+
+    old_group = deleted_state.group
+    new_group = replacement_state.group
+    issue.state = replacement_state
+    entering_cancelled = old_group != "cancelled" and new_group == "cancelled"
+    if entering_cancelled:
+        issue.is_archived = True
+    elif old_group == "cancelled" and new_group != "cancelled":
+        issue.is_archived = False
+    issue.save()
+    if entering_cancelled:
+        cascade_archive(issue)
+
+
 def delete_state(state_id, reassign_to=None, impact_token=None):
     """Delete a state after confirming and repairing its current impact.
 
-    Reassignment routes each issue through the sole writer
-    (:func:`worktracker.workflow.transition_state`) as a forced move, so the
-    archive cascade and the durable force-audit trace apply — a queryset
-    ``update(state=...)`` here would reopen the cross-door gap #871/#872 closed.
+    Reassignment is a narrowly scoped configuration repair, not a user/agent
+    workflow transition. Each affected issue is saved individually so revision,
+    event, and cancellation-archive behavior stays intact; the operation cannot
+    move an issue unless its current state is the state being deleted.
     """
 
     with transaction.atomic():
@@ -451,8 +468,6 @@ def delete_state(state_id, reassign_to=None, impact_token=None):
             if target.pk == state.pk:
                 raise ValidationError("A state cannot replace itself.")
 
-        from worktracker.workflow import transition_state
-
         for issue_type in issue_types:
             type_transitions = [
                 edge for edge in transitions if edge.issue_type_id == issue_type.id
@@ -502,7 +517,7 @@ def delete_state(state_id, reassign_to=None, impact_token=None):
 
         if target is not None:
             for issue in locked_issues:
-                transition_state(issue, target.pk, force=True, actor="state-deletion")
+                _reassign_issue_for_state_deletion(issue, state, target)
 
         state.delete()
 

@@ -35,25 +35,7 @@ export interface WorkItemPatch {
      * @type {string}
      * @memberof WorkItemPatch
      */
-    description_html?: string | null;
-    /**
-     * 
-     * @type {boolean}
-     * @memberof WorkItemPatch
-     */
-    force?: boolean;
-    /**
-     * 
-     * @type {boolean}
-     * @memberof WorkItemPatch
-     */
-    force_if_completed?: boolean;
-    /**
-     * 
-     * @type {Array<string>}
-     * @memberof WorkItemPatch
-     */
-    labels?: Array<string> | null;
+    description?: string | null;
     /**
      * 
      * @type {string}
@@ -108,10 +90,7 @@ export function WorkItemPatchFromJSONTyped(json: any, ignoreDiscriminator: boole
     return {
         
         'blocked_by_ids': json['blocked_by_ids'] == null ? undefined : json['blocked_by_ids'],
-        'description_html': json['description_html'] == null ? undefined : json['description_html'],
-        'force': json['force'] == null ? undefined : json['force'],
-        'force_if_completed': json['force_if_completed'] == null ? undefined : json['force_if_completed'],
-        'labels': json['labels'] == null ? undefined : json['labels'],
+        'description': json['description'] == null ? undefined : json['description'],
         'name': json['name'] == null ? undefined : json['name'],
         'origin': json['origin'] == null ? undefined : json['origin'],
         'parent_id': json['parent_id'] == null ? undefined : json['parent_id'],
@@ -131,10 +110,7 @@ export function WorkItemPatchToJSONTyped(value?: WorkItemPatch | null, ignoreDis
     return {
         
         'blocked_by_ids': value['blocked_by_ids'],
-        'description_html': value['description_html'],
-        'force': value['force'],
-        'force_if_completed': value['force_if_completed'],
-        'labels': value['labels'],
+        'description': value['description'],
         'name': value['name'],
         'origin': value['origin'],
         'parent_id': value['parent_id'],

@@ -49,10 +49,6 @@ function workItem(id: string, state: State): WorkItem {
     project_id: "project-1",
     sequence_id: 1,
     state,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -60,6 +56,7 @@ function workItem(id: string, state: State): WorkItem {
     blocks_ids: [],
     created_at: "2026-07-25T00:00:00Z",
     updated_at: "2026-07-25T00:00:00Z",
+    issue_type: { id: "story", name: "Story", level: "task" },
   };
 }
 
@@ -527,6 +524,8 @@ describe("Studio workflow settings", () => {
 
     expect(screen.getByRole("checkbox", { name: "Auto-start Review" })).toBeDisabled();
     const form = screen.getByRole("form", { name: "Story · Review launch configuration" });
+    expect(within(form).getByRole("textbox", { name: "Prompt" }))
+      .toHaveAttribute("rows", "4");
     fireEvent.change(within(form).getByRole("textbox", { name: "Prompt" }), {
       target: { value: "Review the implementation." },
     });

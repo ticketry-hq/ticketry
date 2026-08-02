@@ -69,6 +69,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/workflows/LaunchDefaultPicker",
   "features/workflows/launchBindingValidation",
   "features/workflows/launchProviderCatalog",
+  "features/workflows/StateConfigurationPanel",
   "features/workflows/WorkflowSettingsPanel",
   "features/workflows/stateCatalogSync",
   "features/workflows/workflowEditorStore",

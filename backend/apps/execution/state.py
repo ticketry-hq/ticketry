@@ -11,7 +11,6 @@ EventKind = Literal[
     "run_started",
     "run_failed",
     "issue_state_changed",
-    "lifecycle_changed",
     "release_requested",
 ]
 ActionKind = Literal["launch"]
@@ -40,7 +39,6 @@ class SeamEvent:
     error: str | None = None
     from_group: str | None = None
     to_group: str | None = None
-    lifecycle_state: str | None = None
 
 
 @dataclass(frozen=True)

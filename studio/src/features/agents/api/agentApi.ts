@@ -61,19 +61,30 @@ export const getModuleActivity = (projectId: string): Promise<Record<string, str
 // The session/document GETs below coalesce by URL: the Studio workspace and
 // the drawer can mount panes for the same bucket at once, and each pane
 // otherwise issues its own copy of these reads.
-export const getTerminals = (taskId: string) => {
+export const getTerminals = (taskId: string, signal?: AbortSignal) => {
   const url = `/api/terminals?task_id=${encodeURIComponent(taskId)}`;
+  if (signal) return request<PersistedTerminalSession[]>(url, { signal });
   return dedupeInFlight(`GET ${url}`, () => request<PersistedTerminalSession[]>(url));
 };
-export const listResumableTerminals = (taskId?: string, projectId?: string, moduleId?: string) => {
+export const listResumableTerminals = (
+  taskId?: string,
+  projectId?: string,
+  moduleId?: string,
+  signal?: AbortSignal,
+) => {
   const params = new URLSearchParams();
   if (taskId) params.set("task_id", taskId);
   if (projectId) params.set("project_id", projectId);
   if (moduleId) params.set("module_id", moduleId);
-  return request<ResumableTerminalSession[]>(`/api/terminals/resumable?${params}`);
+  return request<ResumableTerminalSession[]>(`/api/terminals/resumable?${params}`, { signal });
 };
-export const getScratchTerminals = (projectId: string, moduleId?: string) => {
+export const getScratchTerminals = (
+  projectId: string,
+  moduleId?: string,
+  signal?: AbortSignal,
+) => {
   const url = `/api/terminals/scratch?project_id=${encodeURIComponent(projectId)}${moduleId ? `&module_id=${encodeURIComponent(moduleId)}` : ""}`;
+  if (signal) return request<PersistedTerminalSession[]>(url, { signal });
   return dedupeInFlight(`GET ${url}`, () => request<PersistedTerminalSession[]>(url));
 };
 export const terminateTerminal = (agentRunId: string) =>
@@ -101,15 +112,22 @@ export const createTerminalRun = (body: CreateTerminalRunRequest) =>
     body: JSON.stringify(body),
   });
 
-export const getDocuments = (taskId: string, projectId?: string, moduleId?: string) => {
+export const getDocuments = (
+  taskId: string,
+  projectId?: string,
+  moduleId?: string,
+  signal?: AbortSignal,
+) => {
   const params = new URLSearchParams({ task_id: taskId });
   if (projectId) params.set("project_id", projectId);
   if (moduleId) params.set("module_id", moduleId);
   const url = `/api/documents?${params}`;
+  if (signal) return request<{ documents: DesignDoc[] }>(url, { signal });
   return dedupeInFlight(`GET ${url}`, () => request<{ documents: DesignDoc[] }>(url));
 };
-export const getScratchDocuments = (moduleId: string) => {
+export const getScratchDocuments = (moduleId: string, signal?: AbortSignal) => {
   const url = `/api/documents?scope=scratch&module_id=${encodeURIComponent(moduleId)}`;
+  if (signal) return request<{ documents: DesignDoc[] }>(url, { signal });
   return dedupeInFlight(`GET ${url}`, () => request<{ documents: DesignDoc[] }>(url));
 };
 export const fsComplete = (path: string, signal?: AbortSignal) =>

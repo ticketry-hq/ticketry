@@ -75,7 +75,7 @@ def delete_project(request, project_id: uuid.UUID):
     Unlike module/work-item delete, there is **no** child-count guard — this is
     the single-user local setup, and the operator gates the destruction with a
     typed-key confirm in the UI. The cascade is automatic: the project's States,
-    IssueTypes, Labels and Issues (and each issue's Attachments) all
+    IssueTypes and Issues (and each issue's Attachments) all
     declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
     """
     with _http_errors():

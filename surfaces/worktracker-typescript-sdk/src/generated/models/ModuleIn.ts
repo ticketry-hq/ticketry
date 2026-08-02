@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * Body for module create — name, optional module-level issue type.
+ * Body for module create — name and explicit module-level issue type.
  * @export
  * @interface ModuleIn
  */
@@ -26,7 +26,7 @@ export interface ModuleIn {
      * @type {string}
      * @memberof ModuleIn
      */
-    issue_type_id?: string | null;
+    issue_type_id: string;
     /**
      * 
      * @type {string}
@@ -39,6 +39,7 @@ export interface ModuleIn {
  * Check if a given object implements the ModuleIn interface.
  */
 export function instanceOfModuleIn(value: object): value is ModuleIn {
+    if (!('issue_type_id' in value) || value['issue_type_id'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     return true;
 }
@@ -53,7 +54,7 @@ export function ModuleInFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
     }
     return {
         
-        'issue_type_id': json['issue_type_id'] == null ? undefined : json['issue_type_id'],
+        'issue_type_id': json['issue_type_id'],
         'name': json['name'],
     };
 }

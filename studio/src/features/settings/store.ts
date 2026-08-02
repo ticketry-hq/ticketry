@@ -3,7 +3,6 @@ import * as api from "../../shared/api/client";
 import { ApiError } from "../../shared/api/client";
 import { toast } from "../../app/stores/toastStore";
 import type {
-  IssueLevel,
   IssueType,
   IssueTypeCreate,
   IssueTypePatch,
@@ -56,7 +55,6 @@ interface SettingsState {
   // Issue types (G1)
   createType: (body: IssueTypeCreate) => Promise<IssueType | null>;
   patchType: (id: string, patch: IssueTypePatch) => Promise<void>;
-  setDefaultType: (id: string) => Promise<void>;
   deleteType: (id: string, reassignTo?: string) => Promise<void>;
   reorderTypes: (orderedIds: string[]) => Promise<void>;
 
@@ -190,27 +188,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         issueTypes: bySortOrder(
           get().issueTypes.map((t) => (t.id === id ? updated : t)),
         ),
-      });
-    } catch (e) {
-      set({ issueTypes: snapshot, error: errMessage(e) });
-      toast.error(errMessage(e));
-    }
-  },
-
-  async setDefaultType(id) {
-    const snapshot = get().issueTypes;
-    const target = snapshot.find((t) => t.id === id);
-    if (!target) return;
-    // Optimistically move the per-level default to this row.
-    const level: IssueLevel = target.level;
-    const optimistic = snapshot.map((t) =>
-      t.level === level ? { ...t, is_default: t.id === id } : t,
-    );
-    set({ issueTypes: optimistic, error: null });
-    try {
-      const updated = await api.patchIssueType(id, { is_default: true });
-      set({
-        issueTypes: get().issueTypes.map((t) => (t.id === id ? updated : t)),
       });
     } catch (e) {
       set({ issueTypes: snapshot, error: errMessage(e) });

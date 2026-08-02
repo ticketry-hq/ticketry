@@ -5,7 +5,6 @@ import uuid
 import pytest
 
 from worktracker.models import (
-    ForceTransition,
     Issue,
     IssueType,
     IssueTypeTransition,
@@ -47,8 +46,14 @@ def test_state_impact_reports_items_workflows_protection_and_replacements(projec
         start_state=source,
         workflow_revision=7,
     )
+    other_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Defect",
+        level="task",
+    )
     _issue(project, source, issue_type, 1)
-    _issue(project, source, None, 2)
+    _issue(project, source, other_type, 2)
     IssueTypeTransition.objects.create(
         issue_type=issue_type,
         from_state=source,
@@ -60,7 +65,11 @@ def test_state_impact_reports_items_workflows_protection_and_replacements(projec
     assert impact["state_id"] == source.id
     assert impact["total_work_items"] == 2
     assert impact["work_item_counts"] == [
-        {"issue_type_id": None, "issue_type_name": None, "count": 1},
+        {
+            "issue_type_id": other_type.id,
+            "issue_type_name": "Defect",
+            "count": 1,
+        },
         {
             "issue_type_id": issue_type.id,
             "issue_type_name": "Feature",
@@ -155,7 +164,7 @@ def test_confirmed_replacement_moves_items_and_repairs_workflow_graphs(project):
     issue.refresh_from_db()
     issue_type.refresh_from_db()
     assert issue.state_id == replacement.id
-    assert ForceTransition.objects.get(issue=issue).actor == "state-deletion"
+    assert issue.state_revision > 0
     assert not State.objects.filter(pk=source.id).exists()
     assert issue_type.workflow_revision == 5
     assert issue_type.start_state_id == replacement.id
@@ -194,7 +203,6 @@ def test_changed_impact_confirmation_conflicts_without_applying(project):
     issue.refresh_from_db()
     assert issue.state_id == source.id
     assert State.objects.filter(pk=source.id).exists()
-    assert not ForceTransition.objects.filter(issue=issue).exists()
 
 
 @pytest.mark.django_db
@@ -258,7 +266,6 @@ def test_replacement_allows_standing_workflow_warnings(project):
     assert issue.state_id == replacement.id
     assert not State.objects.filter(pk=source.id).exists()
     assert issue_type.workflow_revision == 3
-    assert ForceTransition.objects.filter(issue=issue).exists()
 
 
 @pytest.mark.django_db

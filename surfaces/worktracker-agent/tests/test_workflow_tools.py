@@ -72,7 +72,7 @@ def test_update_task_status_returns_structured_success():
     assert str(args[1].state_id) == STATE_DONE
 
 
-def test_update_task_status_stamps_agent_origin_and_is_unforced():
+def test_update_task_status_stamps_agent_origin():
     client = _client_with_done_state()
     client.work_items.returns["update_work_item"] = make_work_item(id=TASK)
     service = WorktrackerService(base_url="http://example.test", sdk=client)
@@ -81,7 +81,6 @@ def test_update_task_status_stamps_agent_origin_and_is_unforced():
 
     _name, args, _kwargs = client.work_items.calls[0]
     assert args[1].origin == "agent"
-    assert args[1].force is False
 
 
 def test_update_task_status_unknown_state_returns_error():

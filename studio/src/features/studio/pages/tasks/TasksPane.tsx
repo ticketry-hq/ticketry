@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import { useTasksStore } from "../../stores/tasksStore";
 import { useUIStore } from "../../stores/uiStore";
 import { TEMP_TASK_ID } from "../../../agents/types";
@@ -90,7 +90,6 @@ function groupRootBlocks(rows: Row[]): RenderBlock[] {
 export function TasksPane() {
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
-  const loadDetails = useTasksStore((s) => s.loadDetails);
   const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
   const moveTaskWithinState = useTasksStore((s) => s.moveTaskWithinState);
   const moveTaskToState = useTasksStore((s) => s.moveTaskToState);
@@ -101,6 +100,9 @@ export function TasksPane() {
   const toggleExpanded = useUIStore((s) => s.toggleExpanded);
   const collapsedStateNames = useUIStore((s) => s.collapsedStateNames);
   const toggleStateCollapsed = useUIStore((s) => s.toggleStateCollapsed);
+  const toggleStateConfiguration = useTasksStore(
+    (s) => s.toggleStateConfiguration,
+  );
 
   const { rows, tasks, loadingTasks, isSearchActive } = useTaskTree();
   const renderBlocks = useMemo(() => groupRootBlocks(rows), [rows]);
@@ -197,7 +199,7 @@ export function TasksPane() {
   // Stable, id-taking handlers so memoized rows don't re-render when the
   // pane does (e.g. on selection change).
   const handleSelect = useCallback((taskId: string) => {
-    useTasksStore.setState({ selectedTaskId: taskId });
+    void useTasksStore.getState().selectTask(taskId);
   }, []);
   const handleToggleExpand = useCallback(
     (taskId: string) => {
@@ -211,34 +213,14 @@ export function TasksPane() {
     },
     [isSearchActive, toggleStateCollapsed],
   );
-
-  const detailsTimerRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (!selectedProjectId || !selectedTaskId) return;
-
-    if (selectedTaskId === TEMP_TASK_ID) {
-      useTasksStore.setState({ details: null });
-      return;
-    }
-
-    if (detailsTimerRef.current !== null) {
-      window.clearTimeout(detailsTimerRef.current);
-    }
-
-    const projectId = selectedProjectId;
-    const taskId = selectedTaskId;
-
-    detailsTimerRef.current = window.setTimeout(() => {
-      void loadDetails(projectId, taskId);
-    }, 150);
-
-    return () => {
-      if (detailsTimerRef.current !== null) {
-        window.clearTimeout(detailsTimerRef.current);
-        detailsTimerRef.current = null;
+  const handleToggleStateConfiguration = useCallback(
+    (stateId: string) => {
+      if (selectedProjectId) {
+        toggleStateConfiguration(selectedProjectId, stateId);
       }
-    };
-  }, [selectedProjectId, selectedTaskId, loadDetails]);
+    },
+    [selectedProjectId, toggleStateConfiguration],
+  );
 
   function renderNonTaskRow(r: Exclude<Row, FlatRow>) {
     if ("kind" in r && r.kind === HEADER) {
@@ -257,6 +239,8 @@ export function TasksPane() {
             isSearchActive ? false : collapsedStateNames.has(r.stateName)
           }
           onToggle={handleToggleStateCollapsed}
+          onConfigure={handleToggleStateConfiguration}
+          stateId={r.stateId}
           dropTargetProps={
             targetId && !isSearchActive
               ? dragDrop.getDropTargetProps(targetId)

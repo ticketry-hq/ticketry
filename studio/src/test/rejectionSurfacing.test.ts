@@ -37,10 +37,6 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
     project_id: "p1",
     sequence_id: 1,
     state: null,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -50,6 +46,7 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
     updated_at: "2026-06-01T00:00:00Z",
     key: `MEML-${partial.id}`,
     ...partial,
+    issue_type: partial.issue_type ?? { id: "type-task", name: "Task", level: "task" },
   };
 }
 

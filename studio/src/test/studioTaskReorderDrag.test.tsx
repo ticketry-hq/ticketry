@@ -49,12 +49,9 @@ function task(
     name: id,
     project_id: "project-1",
     sequence_id: 1,
+    issue_type: { id: "type-story", name: "Story", level: "task" },
     rank,
     state,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: parentId,
     sub_issues_count: childCount,
@@ -247,7 +244,6 @@ describe("TasksPane within-state ticket dragging", () => {
       "project-1",
       "bottom",
       "review",
-      true,
     );
     expect(api.reorderTask).toHaveBeenCalledWith("bottom", null, null);
     expect(

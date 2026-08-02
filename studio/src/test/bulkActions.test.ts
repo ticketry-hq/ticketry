@@ -26,10 +26,6 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
     project_id: "p1",
     sequence_id: 1,
     state: null,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -39,6 +35,7 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
     updated_at: "2026-06-01T00:00:00Z",
     key: `MEML-${partial.id}`,
     ...partial,
+    issue_type: partial.issue_type ?? { id: "type-task", name: "Task", level: "task" },
   };
 }
 
@@ -72,7 +69,6 @@ describe("bulkSetState (#637)", () => {
     expect(by.b.state?.id).toBe("st-todo"); // rolled back to snapshot
     expect(patchWorkItem).toHaveBeenCalledWith("a", {
       state_id: "st-done",
-      force_if_completed: true,
     });
   });
 
@@ -87,7 +83,6 @@ describe("bulkSetState (#637)", () => {
     expect(patchWorkItem).toHaveBeenCalledTimes(1);
     expect(patchWorkItem).toHaveBeenCalledWith("b", {
       state_id: "st-done",
-      force_if_completed: true,
     });
     expect(r).toEqual({ ok: 1, failed: 0 });
   });

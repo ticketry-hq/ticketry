@@ -196,7 +196,6 @@ def test_get_scope_context_returns_all_keys():
 
     assert str(ctx.depends_on[0].id) == BLOCKER
     assert ctx.depended_by == []
-    assert ctx.owned_elsewhere[0].assignees == ["Ada"]
     assert "unresolved" in ctx.advisory
 
 

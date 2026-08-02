@@ -32,7 +32,10 @@ export function focusFirstStory(from: HTMLElement | null): void {
   const taskId = firstStory?.dataset.taskId;
   if (!firstStory || !taskId) return;
 
-  useTasksStore.setState({ selectedTaskId: taskId });
+  useTasksStore.setState({
+    selectedTaskId: taskId,
+    workspaceSelection: { kind: "task" },
+  });
   focusAndReveal(firstStory);
 }
 

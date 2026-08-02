@@ -86,7 +86,7 @@ def launch_workflow_automation(
             .filter(pk=issue_id, project_id=project_id, type="task")
             .first()
         )
-        if issue is None or issue.issue_type_id is None:
+        if issue is None:
             return
         attempt, created = AutomationAttempt.objects.get_or_create(
             transition_id=transition_id,

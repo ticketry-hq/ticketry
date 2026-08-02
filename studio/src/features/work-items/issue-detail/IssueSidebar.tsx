@@ -2,7 +2,6 @@ import { type ReactNode } from "react";
 import { type WorkItem, type Module } from "../../../shared/api/types";
 import { type BlockerChip } from "./internal/issueStore";
 import ParentPicker from "../fields/ParentPicker";
-import LabelEditor from "../fields/LabelEditor";
 import BlockerPicker from "../fields/BlockerPicker";
 import { formatDate } from "../../../shared/utilities/display";
 import { IssueTypeLabel } from "../../../shared/ui/IssueTypeLabel";
@@ -77,14 +76,6 @@ export default function IssueSidebar({
             <span className="text-sm text-text-muted">—</span>
           )}
         </Field>
-        <Field label="Labels" arrangement="stacked" saving={Boolean(saving.labels)}>
-          <LabelEditor
-            value={task.labels}
-            saving={Boolean(saving.labels)}
-            onChange={(names) => patchField({ labels: names })}
-          />
-        </Field>
-
         {/* Blockers (#624): editable Blocked-by + read-only reverse Blocks. */}
         <Field
           label="Blocked by"

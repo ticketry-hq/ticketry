@@ -4,6 +4,7 @@ import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
 import { useConfigStore } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
+import { useIssueStore } from "../features/work-items/issue-detail";
 
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => null,
@@ -33,10 +34,6 @@ function workItem(
     project_id: "project-1",
     sequence_id: Number(id),
     state: { id: "todo", name: "Todo", group: "backlog", color: null },
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: parentId,
     sub_issues_count: subIssuesCount,
@@ -77,6 +74,11 @@ describe("Studio module task-tree hydration", () => {
         subtasks: false,
       },
     });
+    useIssueStore.setState({
+      workItemsById: {},
+      workItemIdByKey: {},
+      childWorkItemIds: {},
+    });
   });
 
   it("migrates the legacy module task selection", async () => {
@@ -101,6 +103,39 @@ describe("Studio module task-tree hydration", () => {
     expect(localStorage.getItem("studio.selectedTaskByModule:v1")).toBe(
       remembered,
     );
+  });
+
+  it("hydrates every module descendant into the faithful keyed work-item owner", async () => {
+    const parent = {
+      ...workItem("1", "Nullable-state story", "module-1", 1),
+      state: null,
+      is_archived: true,
+      blocked_by_ids: ["external-blocker"],
+      blocks_ids: ["external-dependent"],
+    };
+    const child = workItem("2", "Implementation child", "1", 0);
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/modules/module-1/work-items")) {
+        return Promise.resolve(jsonResponse([parent, child]));
+      }
+      if (url.endsWith("/projects/project-1/states")) {
+        return Promise.resolve(jsonResponse(states));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await useTasksStore.getState().loadTasks("project-1", "module-1");
+
+    const owner = useIssueStore.getState();
+    expect(owner.getWorkItem("1")).toMatchObject({
+      state: null,
+      is_archived: true,
+      blocked_by_ids: ["external-blocker"],
+      blocks_ids: ["external-dependent"],
+    });
+    expect(owner.getWorkItemByKey("CODIN-1")?.id).toBe("1");
+    expect(owner.getChildWorkItems("1").map((item) => item.id)).toEqual(["2"]);
   });
 
   it("restores a module's selected task only after its tree loads", async () => {

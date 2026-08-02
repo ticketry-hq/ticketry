@@ -288,6 +288,13 @@ export async function validateReleaseInputs(
       "Tauri bundle must declare icons/icon.icns as its macOS application icon",
     );
   }
+  if (
+    tauriConfiguration.bundle?.resources?.["vendor/libghostty/resources/"] !== ""
+  ) {
+    throw new ReleaseManifestError(
+      "Tauri bundle must install the pinned libghostty resources at the macOS Resources root",
+    );
+  }
   const cargoVersion = cargoToml.match(/^version\s*=\s*"([^"]+)"$/m)?.[1];
   validateComponentVersions(manifest, { tauriVersion: tauriConfiguration.version, cargoVersion });
 }
@@ -381,6 +388,23 @@ export async function verifyMacOSBundle(
   const appExecutable = path.join(artifacts.app, "Contents", "MacOS", manifest.artifacts.tauri.binary_name);
   const embeddedSidecar = await findFileWithin(artifacts.app, target.sidecar.bundle_binary_name);
   const embeddedHookRunner = await findFileWithin(artifacts.app, "ticketry-hook");
+  const ghosttyTerminfo = path.join(
+    artifacts.app,
+    "Contents",
+    "Resources",
+    "terminfo",
+    "78",
+    "xterm-ghostty",
+  );
+  const ghosttyShellIntegration = path.join(
+    artifacts.app,
+    "Contents",
+    "Resources",
+    "ghostty",
+    "shell-integration",
+    "zsh",
+    "ghostty-integration",
+  );
   if (!(await exists(appExecutable))) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing its app executable: ${appExecutable}`);
   }
@@ -389,6 +413,11 @@ export async function verifyMacOSBundle(
   }
   if (!embeddedHookRunner) {
     throw new ReleaseManifestError(`macOS bundle for ${target.id} is missing embedded hook runner ticketry-hook`);
+  }
+  if (!(await exists(ghosttyTerminfo)) || !(await exists(ghosttyShellIntegration))) {
+    throw new ReleaseManifestError(
+      `macOS bundle for ${target.id} is missing pinned libghostty runtime resources`,
+    );
   }
   for (const [label, binary] of [
     ["app", appExecutable],

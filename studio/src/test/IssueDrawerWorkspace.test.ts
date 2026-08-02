@@ -21,6 +21,7 @@ import * as api from "../shared/api/client";
 import * as studioApi from "../features/agents/api/agentApi";
 import { useConfigStore } from "../features/agents/stores/configStore";
 import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail/internal/drawerWorkspaceStore";
+import { useIssueStore } from "../features/work-items/issue-detail/internal/issueStore";
 import type { Module, State, WorkItem } from "../shared/api/types";
 
 const getWorkItem = vi.mocked(api.getWorkItem);
@@ -40,6 +41,7 @@ const MODULE: Module = {
   name: "Drawer",
   project_id: "project-1",
   sequence_id: 1,
+  issue_type: { id: "type-module", name: "Module", level: "module" },
 };
 
 function task(partial: Partial<WorkItem> = {}): WorkItem {
@@ -50,10 +52,6 @@ function task(partial: Partial<WorkItem> = {}): WorkItem {
     project_id: "project-1",
     sequence_id: 748,
     state: TODO,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: MODULE.id,
     sub_issues_count: 0,
@@ -62,12 +60,18 @@ function task(partial: Partial<WorkItem> = {}): WorkItem {
     created_at: "2026-07-01T00:00:00Z",
     updated_at: "2026-07-01T00:00:00Z",
     ...partial,
+    issue_type: partial.issue_type ?? { id: "type-task", name: "Task", level: "task" },
   };
 }
 
 beforeEach(() => {
   useIssueDrawerWorkspaceStore.getState().reset();
   useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+  useIssueStore.setState({
+    workItemsById: {},
+    workItemIdByKey: {},
+    childWorkItemIds: {},
+  });
   useConfigStore.setState({ profiles: [], recentProfileIndex: null });
 
   getWorkItem.mockReset().mockResolvedValue({ task: task(), attachments: [] });
@@ -92,7 +96,8 @@ describe("issue drawer workspace orchestration", () => {
     expect(getWorkItem).toHaveBeenCalledWith("CODIN-748", undefined);
 
     const view = useIssueDrawerWorkspaceStore.getState().byIssueKey["CODIN-748"];
-    expect(view.task?.id).toBe("task-1");
+    expect(view.taskId).toBe("task-1");
+    expect(useIssueStore.getState().getWorkItem("task-1")?.name).toBe("Issue workspace seam");
     expect(view.module?.moduleId).toBe(MODULE.id);
     expect(view.profile.status).toBe("ready");
     expect(view.launchContext).toMatchObject({

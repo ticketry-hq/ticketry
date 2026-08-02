@@ -26,6 +26,7 @@ from fake_sdk import (
     make_work_item,
     raises,
 )
+from worktracker_agent.api.schemas import WorktrackerIssueType
 from worktracker_agent.api.service import WorktrackerService
 from worktracker_agent.mcp.tools_adapter import generate_worktracker_tools
 
@@ -78,7 +79,7 @@ def test_update_task_replaces_description_by_key_without_append_behavior():
     client.work_items.returns["update_work_item"] = make_work_item(
         id=TASK,
         key="CODIN-1068",
-        description_html="<p>Replacement</p>",
+        description="<p>Replacement</p>",
     )
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
@@ -95,7 +96,7 @@ def test_update_task_replaces_description_by_key_without_append_behavior():
     assert method == "update_work_item" and args[0] == TASK and kwargs == {}
     assert isinstance(args[1], WorkItemPatch)
     assert args[1].model_dump(mode="json", exclude_unset=True) == {
-        "description_html": "<p>Replacement</p>",
+        "description": "<p>Replacement</p>",
     }
     assert all(
         method != "append_description"
@@ -106,7 +107,7 @@ def test_update_task_replaces_description_by_key_without_append_behavior():
 def test_append_task_description_reads_then_patches_with_generated_models():
     client = FakeGeneratedSdk()
     client.work_items.returns["get_work_item"] = make_detail(
-        make_work_item(id=TASK, description_html="<p>Existing</p>")
+        make_work_item(id=TASK, description="<p>Existing</p>")
     )
     client.work_items.returns["update_work_item"] = make_work_item(id=TASK)
     service = WorktrackerService(base_url="http://example.test", sdk=client)
@@ -120,7 +121,7 @@ def test_append_task_description_reads_then_patches_with_generated_models():
     ]
     patch = client.work_items.calls[1][1][1]
     assert isinstance(patch, WorkItemPatch)
-    assert patch.description_html == "<p>Existing</p>\n\n<p>Added</p>"
+    assert patch.description == "<p>Existing</p>\n\n<p>Added</p>"
 
 
 def test_update_task_replaces_title_and_description_in_one_typed_update():
@@ -129,7 +130,7 @@ def test_update_task_replaces_title_and_description_in_one_typed_update():
         id=TASK,
         key="CODIN-1068",
         name="Sharper title",
-        description_html="<p>Replacement</p>",
+        description="<p>Replacement</p>",
     )
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
@@ -146,7 +147,7 @@ def test_update_task_replaces_title_and_description_in_one_typed_update():
     assert isinstance(args[1], WorkItemPatch)
     assert args[1].model_dump(mode="json", exclude_unset=True) == {
         "name": "Sharper title",
-        "description_html": "<p>Replacement</p>",
+        "description": "<p>Replacement</p>",
     }
 
 
@@ -155,7 +156,7 @@ def test_update_task_explicit_empty_description_clears_it():
     client.work_items.returns["update_work_item"] = make_work_item(
         id=TASK,
         key="CODIN-1068",
-        description_html="",
+        description="",
     )
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
@@ -164,7 +165,7 @@ def test_update_task_explicit_empty_description_clears_it():
     assert result["updated_fields"] == ["description"]
     _method, args, _kwargs = client.work_items.calls[0]
     assert args[1].model_dump(mode="json", exclude_unset=True) == {
-        "description_html": "",
+        "description": "",
     }
 
 
@@ -219,11 +220,15 @@ def test_update_task_tool_signature_is_public_and_context_free():
 # --- list_issue_types: the name→type home for CODIN-883 ----------------------
 
 
+def test_agent_issue_type_schema_has_no_icon_field():
+    assert "icon" not in WorktrackerIssueType.model_fields
+
+
 def test_list_issue_types_reads_typed_rows_off_the_sdk():
     client = FakeGeneratedSdk()
     client.issue_types.returns["list_issue_types"] = [
-        make_issue_type(id=EPIC_TYPE, name="Epic", level="module", is_default=True),
-        make_issue_type(id=STORY_TYPE, name="Story", level="task", is_default=False),
+        make_issue_type(id=EPIC_TYPE, name="Epic", level="module"),
+        make_issue_type(id=STORY_TYPE, name="Story", level="task"),
     ]
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
@@ -233,7 +238,6 @@ def test_list_issue_types_reads_typed_rows_off_the_sdk():
     assert client.issue_types.calls[0][1] == (UUID(PROJECT),)
     assert [t.name for t in types] == ["Epic", "Story"]
     assert [t.level for t in types] == ["module", "task"]
-    assert types[0].is_default is True
 
 
 # --- modules are issues of level module --------------------------------------
@@ -301,27 +305,6 @@ def test_task_shape_surfaces_issue_type_and_parent():
     assert task.issue_type.level == "task"
 
 
-def test_task_shape_tolerates_absent_issue_type():
-    """Pre-migration issues serialize ``issue_type`` as null; the shape holds."""
-    client = FakeGeneratedSdk()
-    client.work_items.returns["list_project_work_items"] = [
-        make_work_item(
-            id=TASK,
-            name="Legacy row",
-            project_id=PROJECT,
-            sequence_id=1,
-            key="MEML-1",
-            issue_type=None,
-        )
-    ]
-    service = WorktrackerService(base_url="http://example.test", sdk=client)
-
-    task = service.list_tasks(PROJECT)[0]
-
-    assert task.issue_type is None
-    assert task.parent_id is None
-
-
 # --- reparent: SDK accounting mapped onto the tool result --------------------
 
 
@@ -376,17 +359,17 @@ def test_create_tools_public_signature_omits_priority_and_accepts_type_and_state
     assert tuple(inspect.signature(tools["create_task"]).parameters) == (
         "project_id",
         "name",
+        "issue_type",
         "description",
         "module_id",
-        "issue_type",
         "state_name",
     )
     assert tuple(inspect.signature(tools["create_sub_task"]).parameters) == (
         "project_id",
         "parent_id",
         "name",
-        "description",
         "issue_type",
+        "description",
         "state_name",
     )
 
@@ -484,16 +467,16 @@ def test_module_task_and_sub_task_include_resolved_issue_type_id():
     assert subtask_args[1].issue_type_id == UUID(STORY_TYPE)
 
 
-def test_create_without_issue_type_uses_default_without_lookup_or_payload_field():
+def test_create_without_issue_type_is_rejected_before_sdk_use():
     client = FakeGeneratedSdk()
     client.work_items.returns["create_project_work_item"] = make_work_item()
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
-    service.create_task(PROJECT, "Default type")
+    with pytest.raises(TypeError):
+        service.create_task(PROJECT, "Untyped")
 
     assert client.issue_types.calls == []
-    _name, args, _kwargs = client.work_items.calls[0]
-    assert "issue_type_id" not in args[1].model_dump(mode="json", exclude_none=True)
+    assert client.work_items.calls == []
 
 
 def test_create_rejects_unknown_or_non_task_issue_type_with_valid_task_names():
@@ -511,15 +494,15 @@ def test_create_rejects_unknown_or_non_task_issue_type_with_valid_task_names():
         service.create_task(PROJECT, "Wrong type", issue_type="Epic")
 
 
-def test_create_rejects_uuid_even_when_a_type_name_matches_it():
+def test_create_accepts_explicit_type_uuid():
     client = FakeGeneratedSdk()
     client.issue_types.returns["list_issue_types"] = [
         make_issue_type(id=STORY_TYPE, name=STORY_TYPE, level="task"),
     ]
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
-    with pytest.raises(
-        ValueError,
-        match=rf"Unknown task issue type '{STORY_TYPE}'. Valid task-level types: {STORY_TYPE}\.",
-    ):
-        service.create_task(PROJECT, "Raw id", issue_type=STORY_TYPE)
+    client.work_items.returns["create_project_work_item"] = make_work_item()
+    service.create_task(PROJECT, "Raw id", issue_type=STORY_TYPE)
+
+    _name, args, _kwargs = client.work_items.calls[0]
+    assert args[1].issue_type_id == UUID(STORY_TYPE)

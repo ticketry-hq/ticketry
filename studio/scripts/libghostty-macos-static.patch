@@ -2,7 +2,7 @@ diff --git a/build.zig b/build.zig
 index f9d861b..363e0d1 100644
 --- a/build.zig
 +++ b/build.zig
-@@ -136,18 +136,19 @@ pub fn build(b: *std.Build) !void {
+@@ -136,18 +136,20 @@ pub fn build(b: *std.Build) !void {
          // As such, these build steps are lacking. For example, the Darwin
          // build only produces an xcframework.
  
@@ -10,6 +10,7 @@ index f9d861b..363e0d1 100644
 -        // build on macOS this way ironically so we need to fix that.
 +        libghostty_shared.installHeader();
 +        libghostty_static.install("libghostty.a");
++        resources.install();
 +
          if (!config.target.result.os.tag.isDarwin()) {
 -            libghostty_shared.installHeader(); // Only need one header

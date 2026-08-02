@@ -11,6 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const useProcessGroups = process.platform !== "win32";
 const children = new Set();
 const portCandidates = 10;
+const defaultMcpPort = 8123;
 
 let stopping = false;
 let exitCode = 0;
@@ -71,6 +72,34 @@ export function buildWebFrontendCommand(frontendPort) {
     "--strictPort",
     "--open",
   ].join(" ");
+}
+
+export function buildWebMcpCommand() {
+  return "uv run --project surfaces/worktracker-agent python -m worktracker_agent.mcp.main";
+}
+
+export function buildWebRuntimeEnvironment({
+  environment,
+  backendPort,
+  mcpPort = defaultMcpPort,
+}) {
+  const backendOrigin = `http://127.0.0.1:${backendPort}`;
+  const mcpUrl = `http://127.0.0.1:${mcpPort}/mcp`;
+  const apiKey = environment.WORKTRACKER_API_KEY ?? environment.WORKTRACKER_API_TOKEN;
+
+  return {
+    ...environment,
+    ...(apiKey ? { WORKTRACKER_API_KEY: apiKey } : {}),
+    MCP_HOST: "127.0.0.1",
+    MCP_PORT: String(mcpPort),
+    MCP_TRANSPORT: "http",
+    MUXED_BACKEND_PORT: String(backendPort),
+    MUXED_VITE_BACKEND_ORIGIN: backendOrigin,
+    MUXED_WEB_BACKEND_PORT: String(backendPort),
+    STUDIO_RUN_CONTROL_URL: `${backendOrigin}/api/terminals/self-terminate`,
+    WORKTRACKER_BASE_URL: `${backendOrigin}/api/work-tracker`,
+    WORKTRACKER_MCP_URL: mcpUrl,
+  };
 }
 
 function start(name, command, environment) {
@@ -275,17 +304,25 @@ export async function main() {
         requestedPort: launch.environment.MUXED_FRONTEND_PORT,
         firstPort: 5174,
       });
+      const mcpPort = await selectWebPort({
+        name: "MCP port",
+        requestedPort: launch.environment.MUXED_WEB_MCP_PORT ?? String(defaultMcpPort),
+        firstPort: defaultMcpPort,
+      });
       const backendOrigin = `http://127.0.0.1:${backendPort}`;
       const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
-      const runtimeEnvironment = {
-        ...launch.environment,
-        MUXED_VITE_BACKEND_ORIGIN: backendOrigin,
-        MUXED_WEB_BACKEND_PORT: String(backendPort),
-      };
+      const mcpUrl = `http://127.0.0.1:${mcpPort}/mcp`;
+      const runtimeEnvironment = buildWebRuntimeEnvironment({
+        environment: launch.environment,
+        backendPort,
+        mcpPort,
+      });
 
       console.log(`[web] Starting backend at ${backendOrigin}`);
       console.log(`[web] Starting Ticketry at ${frontendOrigin}`);
+      console.log(`[web] Starting WorkTracker MCP at ${mcpUrl}`);
       start("backend", "./scripts/dev.sh backend", runtimeEnvironment);
+      start("MCP", buildWebMcpCommand(), runtimeEnvironment);
       start(
         "frontend",
         buildWebFrontendCommand(frontendPort),

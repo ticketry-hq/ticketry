@@ -303,16 +303,13 @@ export function WorkspacePane({
     target: StudioWorkspaceTarget;
   } | null>(null);
   const restoreGenerationRef = useRef(0);
+  const discoveryAbortRef = useRef<AbortController | null>(null);
   const rememberPendingTerminalRef = useRef(false);
   const observedBucketRunsRef = useRef<{
     bucket: string | null;
     ids: Set<string>;
   }>({ bucket: null, ids: new Set() });
   const [surfaceFocusSignal, setSurfaceFocusSignal] = useState(0);
-  // True while a remembered doc/terminal target is still hydrating; the
-  // details surface stays hidden behind a stable skeleton instead of
-  // flashing before the restored tab takes over (B9).
-  const [restorePending, setRestorePending] = useState(false);
   const [terminalFocusSignal, setTerminalFocusSignal] = useState(0);
   const [highlightedTab, setHighlightedTab] =
     useState<TaskWorkspaceTabIdentity>({ kind: "details" });
@@ -363,7 +360,6 @@ export function WorkspacePane({
     useWorkspaceTabsStore.setState({ focusRequest: null });
     rememberPendingTerminalRef.current = false;
     restoreRequestRef.current = null;
-    setRestorePending(false);
     if (!bucket || owner !== "studio") return;
     const target = readStudioWorkspaceTarget(bucket);
     if (!target) return;
@@ -372,7 +368,6 @@ export function WorkspacePane({
     restoreRequestRef.current = { bucket, generation, target };
     setActive(bucket, "details");
     if (target.kind === "details") restoreRequestRef.current = null;
-    else setRestorePending(true);
   }, [bucket, owner, setActive]);
 
   const restoreTerminalTarget = useCallback(
@@ -398,14 +393,12 @@ export function WorkspacePane({
         : null;
       if (session && bucketOfMeta(session) === expectedBucket) {
         restoreRequestRef.current = null;
-        setRestorePending(false);
         useWorkspaceTabsStore.getState().tabSelected(expectedBucket, sessionId);
         setActive(expectedBucket, "terminal");
         return;
       }
       if (!fallbackWhenMissing) return;
       restoreRequestRef.current = null;
-      setRestorePending(false);
       setActive(expectedBucket, "details");
       rememberStudioWorkspaceTarget(expectedBucket, { kind: "details" });
     },
@@ -452,19 +445,23 @@ export function WorkspacePane({
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [launchOpen]);
 
-  // Restore document tabs from the registry (+ server-side rescan) whenever
-  // the bucket opens — the reload/restart/run-completion restore path (#521).
+  // Discovery is deliberately background-only: Details has already painted.
+  // Both resource reads share one selection debounce and abort lifecycle.
   useEffect(() => {
     if (!bucket) return;
-    const load =
-      isScratchBucket(bucket)
+    const controller = new AbortController();
+    discoveryAbortRef.current = controller;
+    const generation = restoreGenerationRef.current;
+    const timeout = window.setTimeout(() => {
+      if (controller.signal.aborted) return;
+      const load = isScratchBucket(bucket)
         ? moduleId
-          ? getScratchDocuments(moduleId)
+          ? getScratchDocuments(moduleId, controller.signal)
           : null
-        : getDocuments(bucket, projectId ?? undefined, moduleId ?? undefined);
-    if (!load) return;
-    void load
-      .then((res) => {
+        : getDocuments(bucket, projectId ?? undefined, moduleId ?? undefined, controller.signal);
+      if (!load) return;
+      void load.then((res) => {
+        if (controller.signal.aborted || generation !== restoreGenerationRef.current) return;
         hydrateDocs(bucket, res.documents);
         // Resolve documents only after registry hydration.
 
@@ -472,7 +469,7 @@ export function WorkspacePane({
         if (
           owner !== "studio" ||
           request?.bucket !== bucket ||
-          request.generation !== restoreGenerationRef.current ||
+          request.generation !== generation ||
           request.target.kind !== "doc"
         ) {
           return;
@@ -482,50 +479,57 @@ export function WorkspacePane({
           (document) => document.rel_path === relPath,
         );
         restoreRequestRef.current = null;
-        setRestorePending(false);
         if (target) {
           setActiveDoc(bucket, target.id);
         } else {
           setActive(bucket, "details");
           rememberStudioWorkspaceTarget(bucket, { kind: "details" });
         }
-      })
-      .catch(() => {
+      }).catch(() => {
+        if (controller.signal.aborted || generation !== restoreGenerationRef.current) return;
         const request = restoreRequestRef.current;
         if (
           owner !== "studio" ||
           request?.bucket !== bucket ||
-          request.generation !== restoreGenerationRef.current ||
+          request.generation !== generation ||
           request.target.kind !== "doc"
         ) {
           return;
         }
         restoreRequestRef.current = null;
-        setRestorePending(false);
         setActive(bucket, "details");
       });
-  }, [bucket, projectId, moduleId, owner, hydrateDocs, setActive, setActiveDoc]);
 
-  // Fetch the selected bucket's persisted sessions; the fetch silently
-  // re-attaches any tab that was live before a reload (auto-reattach trigger).
-  // Real tickets list by task id; the scratch bucket lists no-task plan/instant
-  // sessions by the selected project/module so they survive reload/restart too.
-  useEffect(() => {
-    const generation = restoreGenerationRef.current;
-    const finishRestore = () => {
-      if (bucket) restoreTerminalTarget(bucket, generation, true);
+      const finishTerminalRestore = () => {
+        if (!controller.signal.aborted) {
+          restoreTerminalTarget(bucket, generation, true);
+        }
+      };
+      if (!isScratchBucket(bucket)) {
+        void fetchPersistedSessions(bucket, controller.signal).then((outcome) => {
+          if (outcome === "applied") finishTerminalRestore();
+        });
+      } else if (projectId && moduleId) {
+        void fetchScratchSessions(projectId, moduleId, controller.signal).then(
+          finishTerminalRestore,
+        );
+      }
+    }, 150);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+      if (discoveryAbortRef.current === controller) {
+        discoveryAbortRef.current = null;
+      }
     };
-    if (bucket && !isScratchBucket(bucket)) {
-      void fetchPersistedSessions(bucket).then((outcome) => {
-        if (outcome === "applied") finishRestore();
-      });
-    } else if (isScratchBucket(bucket) && projectId && moduleId) {
-      void fetchScratchSessions(projectId, moduleId).then(finishRestore);
-    }
   }, [
     bucket,
     projectId,
     moduleId,
+    owner,
+    hydrateDocs,
+    setActive,
+    setActiveDoc,
     fetchPersistedSessions,
     fetchScratchSessions,
     restoreTerminalTarget,
@@ -704,7 +708,6 @@ export function WorkspacePane({
   function selectWorkspaceTab(tab: TaskWorkspaceTabIdentity): void {
     if (!bucket) return;
     restoreRequestRef.current = null;
-    setRestorePending(false);
     rememberPendingTerminalRef.current = false;
     if (tab.kind === "details") {
       setActive(bucket, "details");
@@ -784,6 +787,9 @@ export function WorkspacePane({
 
   async function resumeWorkspaceTerminal(agentRunId: string): Promise<void> {
     if (!bucket) return;
+    // A deliberate resume supersedes the background restoration pass for this
+    // selection, so its late result cannot replace the terminal just opened.
+    discoveryAbortRef.current?.abort();
     const restored = await resumeTerminalTab(
       bucket,
       bucket,
@@ -1141,21 +1147,13 @@ export function WorkspacePane({
           tabIndex={-1}
           data-testid="workspace-details-surface"
           className={
-            effActive === "details" && !restorePending
+            effActive === "details"
               ? "absolute inset-0 overflow-auto"
               : "hidden"
           }
         >
           {details}
         </div>
-        {restorePending && effActive === "details" ? (
-          <div
-            data-testid="workspace-restore-skeleton"
-            className="absolute inset-0 grid place-items-center text-sm text-text-muted"
-          >
-            Restoring workspace…
-          </div>
-        ) : null}
         {/* One iframe per open document, kept mounted so switching docs
             or tabs never reloads them; visibility toggles per active doc. */}
         {openDocs.map((d) => (

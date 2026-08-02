@@ -43,6 +43,7 @@ const CANCELLED: State = { id: "st-cancel", name: "Cancelled", group: "cancelled
 const STORY_TYPE = { id: "ty-story", name: "Story", level: "task" } as WorkItem["issue_type"];
 const IMPL_TYPE = { id: "ty-impl", name: "Implementation", level: "task" } as WorkItem["issue_type"];
 const PATHFIND_TYPE = { id: "ty-pathfind", name: "PathFind", level: "task" } as WorkItem["issue_type"];
+const MODULE_TYPE = { id: "ty-module", name: "Module", level: "module" } as Module["issue_type"];
 
 function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
   return {
@@ -51,10 +52,6 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
     sequence_id: 1,
     issue_type: STORY_TYPE,
     state: null,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -68,7 +65,14 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
 }
 
 const MODULES: Module[] = [
-  { id: "m1", name: "Epic One", project_id: "p1", sequence_id: 609, key: "MEML-609" },
+  {
+    id: "m1",
+    name: "Epic One",
+    project_id: "p1",
+    sequence_id: 609,
+    key: "MEML-609",
+    issue_type: MODULE_TYPE,
+  },
 ];
 
 const EMPTY = { query: "" };
@@ -167,8 +171,8 @@ describe("Story-only predicate (#906)", () => {
 // Multi-select epic filter (#627): epicIds is a set; empty = all, NO_EPIC is a member.
 describe("groupBacklog · multi-select epic filter (#627)", () => {
   const TWO: Module[] = [
-    { id: "m1", name: "Epic One", project_id: "p1", sequence_id: 1, key: "MEML-1" },
-    { id: "m2", name: "Epic Two", project_id: "p1", sequence_id: 2, key: "MEML-2" },
+    { id: "m1", name: "Epic One", project_id: "p1", sequence_id: 1, key: "MEML-1", issue_type: MODULE_TYPE },
+    { id: "m2", name: "Epic Two", project_id: "p1", sequence_id: 2, key: "MEML-2", issue_type: MODULE_TYPE },
   ];
   const a = wi({ id: "a", parent_id: "m1" });
   const b = wi({ id: "b", parent_id: "m2" });
@@ -266,7 +270,11 @@ describe("backlogStore", () => {
   it("createIssue posts and appends the returned item", async () => {
     const created = wi({ id: "new", parent_id: "m1" });
     createWorkItem.mockResolvedValue(created);
-    const out = await useBacklogStore.getState().createIssue("p1", { name: "Story", parent_id: "m1" });
+    const out = await useBacklogStore.getState().createIssue("p1", {
+      name: "Story",
+      parent_id: "m1",
+      issue_type_id: STORY_TYPE.id,
+    });
     expect(out?.id).toBe("new");
     expect(useBacklogStore.getState().items.map((i) => i.id)).toContain("new");
   });
@@ -336,7 +344,7 @@ describe("revisioned targeted reconciliation (#1170)", () => {
       id: "a",
       state: TODO,
       state_revision: 3,
-      description_html: "<p>keep me</p>",
+      description: "<p>keep me</p>",
     });
     useBacklogStore.setState({
       projectId: "p1",
@@ -364,7 +372,7 @@ describe("revisioned targeted reconciliation (#1170)", () => {
     const moved = useBacklogStore.getState().items[0];
     expect(moved.state?.id).toBe("st-prog");
     expect(moved.state_revision).toBe(4);
-    expect(moved.description_html).toBe("<p>keep me</p>");
+    expect(moved.description).toBe("<p>keep me</p>");
     expect(useBacklogStore.getState().filters).toEqual({ query: "MEML-a" });
   });
 
@@ -523,7 +531,6 @@ describe("setItemState", () => {
     expect(useBacklogStore.getState().items[0].state?.id).toBe("st-done");
     expect(patchWorkItem).toHaveBeenCalledWith("a", {
       state_id: "st-done",
-      force_if_completed: true,
     });
     resolve(wi({ id: "a", state: DONE }));
     await promise;
@@ -626,8 +633,8 @@ describe("groupBacklog · query filter (#636)", () => {
 
 describe("search spans all epics, ignoring the epic selection (#636)", () => {
   const TWO: Module[] = [
-    { id: "m1", name: "Epic One", project_id: "p1", sequence_id: 1, key: "MEML-1" },
-    { id: "m2", name: "Epic Two", project_id: "p1", sequence_id: 2, key: "MEML-2" },
+    { id: "m1", name: "Epic One", project_id: "p1", sequence_id: 1, key: "MEML-1", issue_type: MODULE_TYPE },
+    { id: "m2", name: "Epic Two", project_id: "p1", sequence_id: 2, key: "MEML-2", issue_type: MODULE_TYPE },
   ];
   it("groupBacklog: a query finds a No-epic hit even when an epic is selected", () => {
     const story = wi({ id: "s1", parent_id: "m1", name: "Story" });

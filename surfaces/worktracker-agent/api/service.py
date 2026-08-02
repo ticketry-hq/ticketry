@@ -15,7 +15,6 @@ from worktracker_sdk.generated import (
     AttachmentsApi,
     Configuration,
     IssueTypesApi,
-    LifecycleIn,
     ModulesApi,
     ModuleWorkItemIn,
     ProjectsApi,
@@ -124,17 +123,13 @@ class WorktrackerService:
                 return str(project.id)
         return None
 
-    def _map_issue_type(self, it) -> Optional[WorktrackerIssueType]:
-        if it is None:
-            return None
+    def _map_issue_type(self, it) -> WorktrackerIssueType:
         return WorktrackerIssueType(
             id=it.id,
             name=it.name,
             level=it.level,
             color=it.color,
-            icon=it.icon,
             sort_order=it.sort_order,
-            is_default=it.is_default,
         )
 
     def _map_task(self, wi, include_description: bool = False) -> WorktrackerTask:
@@ -143,7 +138,7 @@ class WorktrackerService:
             name=wi.name,
             project_id=wi.project_id,
             state_id=(wi.state.id if wi.state and wi.state.id else None),
-            description=(wi.description_html if include_description else None),
+            description=(wi.description if include_description else None),
             sequence_id=wi.sequence_id or 0,
             key=wi.key,
             parent_id=wi.parent_id,
@@ -151,8 +146,6 @@ class WorktrackerService:
             is_archived=wi.is_archived,
             blocked_by_ids=list(wi.blocked_by_ids or []),
             blocks_ids=list(wi.blocks_ids or []),
-            lifecycle_state=wi.lifecycle_state,
-            lifecycle_transitions=list(wi.lifecycle_transitions or []),
         )
 
     def _sdk_resolve_task_id(self, id_or_key: str) -> UUID:
@@ -193,8 +186,8 @@ class WorktrackerService:
         """List a project's first-class issue types (CODIN-890).
 
         The name→type surface CODIN-883 resolves against: each row carries its
-        ``level`` bucket and ``is_default`` flag so a caller can map a chosen
-        name to the id the create endpoints accept via ``issue_type_id``.
+        ``level`` bucket so a caller can map a chosen name to the id the create
+        endpoints require via ``issue_type_id``.
         """
         resolved = self._resolve_project_id(project_id)
         if not resolved:
@@ -205,11 +198,11 @@ class WorktrackerService:
         ]
 
     def _resolve_task_issue_type_id(
-        self, project_id: str, issue_type: Optional[str]
-    ) -> Optional[UUID]:
-        """Resolve an optional task-type name to its project-scoped UUID."""
-        if issue_type is None:
-            return None
+        self, project_id: str, issue_type: str
+    ) -> UUID:
+        """Resolve a required task-type name or id to its project-scoped UUID."""
+        if not issue_type:
+            raise ValueError("issue_type is required.")
 
         task_types = [
             item
@@ -227,7 +220,11 @@ class WorktrackerService:
             (
                 item
                 for item in task_types
-                if not is_raw_uuid and item.name.casefold() == requested
+                if (
+                    str(item.id) == issue_type
+                    if is_raw_uuid
+                    else item.name.casefold() == requested
+                )
             ),
             None,
         )
@@ -322,9 +319,9 @@ class WorktrackerService:
         self,
         project_id: str,
         name: str,
+        issue_type: str,
         description: str = "",
         module_id: Optional[str] = None,
-        issue_type: Optional[str] = None,
         state_name: Optional[str] = None,
     ) -> UUID:
         resolved = self._resolve_project_id(project_id)
@@ -363,8 +360,8 @@ class WorktrackerService:
         project_id: str,
         parent_id: str,
         name: str,
+        issue_type: str,
         description: str = "",
-        issue_type: Optional[str] = None,
         state_name: Optional[str] = None,
     ) -> UUID:
         resolved = self._resolve_project_id(project_id)
@@ -458,8 +455,8 @@ class WorktrackerService:
         rejection is returned as ``{"ok": False, ...}`` carrying a
         machine-readable reason rather than raised: malformed evidence locally
         (``code``/``detail``), and — from the backend gate — a parent that is
-        not a Story, not in ``Review``, in a foreign project, or a
-        non-Implementation type (``detail``/``code``/``from``/``to``). Success
+        not a Story, not in ``Review``, or in a foreign project
+        (``detail``/``code``/``from``/``to``). Success
         returns ``{"ok": True, "task_id", "key"}``.
 
         Inert by contract: no agent launch, no parent state move, no scheduler,
@@ -668,8 +665,8 @@ class WorktrackerService:
         ``{"ok": True, ...}``; a rejection returns ``{"ok": False, ...}`` carrying
         the gate's structured reason.
 
-        This agent-owned surface always stamps ``origin="agent"`` and exposes no
-        force escape hatch, so callers cannot weaken backend enforcement.
+        This agent-owned surface always stamps ``origin="agent"``, so the backend
+        enforces the configured graph and its agent permissions.
         """
         resolved_project_id = self._resolve_project_id(project_id)
         states = (
@@ -721,10 +718,10 @@ class WorktrackerService:
     ) -> bool:
         del project_id
         detail = self.sdk.work_items.get_work_item(task_id)
-        existing = detail.task.description_html or ""
+        existing = detail.task.description or ""
         merged = f"{existing}\n\n{new_content}" if existing else new_content
         self.sdk.work_items.update_work_item(
-            str(detail.task.id), WorkItemPatch(description_html=merged)
+            str(detail.task.id), WorkItemPatch(description=merged)
         )
         return True
 
@@ -745,7 +742,7 @@ class WorktrackerService:
             fields["name"] = name
             updated_fields.append("name")
         if description is not None:
-            fields["description_html"] = description
+            fields["description"] = description
             updated_fields.append("description")
 
         resolved_id = self._sdk_resolve_task_id(id_or_key)
@@ -758,32 +755,6 @@ class WorktrackerService:
             "task_id": str(updated.id),
             "key": updated.key,
             "updated_fields": updated_fields,
-        }
-
-    def set_lifecycle(self, work_item_id: str, target: str) -> Dict[str, Any]:
-        """Advance a work item's planning lifecycle through the guarded SDK writer."""
-        try:
-            resolved_id = self._sdk_resolve_task_id(work_item_id)
-        except ApiException as error:
-            detail = self._sdk_error_detail(error)
-            if detail is None:
-                raise
-            return {"work_item_id": work_item_id, "error": detail}
-
-        try:
-            updated = self.sdk.work_items.set_work_item_lifecycle(
-                str(resolved_id), LifecycleIn(target=target)
-            )
-        except ApiException as error:
-            detail = self._sdk_error_detail(error)
-            if detail is None:
-                raise
-            return {"work_item_id": str(resolved_id), "error": detail}
-
-        return {
-            "work_item_id": str(updated.id),
-            "lifecycle_state": updated.lifecycle_state,
-            "lifecycle_transitions": list(updated.lifecycle_transitions or []),
         }
 
     @staticmethod
@@ -970,7 +941,7 @@ class WorktrackerService:
         Resolves ``id_or_key`` (UUID or ``KEY-N``) to a target id and routes
         through the SDK's rooted launch resource, which starts a normal
         task-scoped coding session whose prompt is built from the target ticket
-        — no caller prompt, no orchestration/graph/planning run, no lifecycle
+        — no caller prompt, no orchestration/graph/planning run, no workflow
         move. Returns ``{"target_id", "agent", "agent_run_id"}`` on a durable
         launch, or ``{"target_id", "error"}`` when the backend rejects it (4xx,
         e.g. unknown target, no module ancestry, no selected profile), read off

@@ -141,7 +141,10 @@ function cycleLiveTerminal(
     }
   }
 
-  useTasksStore.setState({ selectedTaskId: next.taskId });
+  useTasksStore.setState({
+    selectedTaskId: next.taskId,
+    workspaceSelection: { kind: "task" },
+  });
   workspace.setActive(next.taskId, "terminal");
   useTerminalForegroundStore
     .getState()

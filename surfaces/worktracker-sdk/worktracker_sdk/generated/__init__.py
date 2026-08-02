@@ -38,16 +38,13 @@ __all__ = [
     "ApiAttributeError",
     "ApiException",
     "AddWorkflowTransitionIn",
-    "AssigneeOut",
     "AttachmentOut",
     "ConfigBody",
     "FeaturesBody",
     "IssueTypeIn",
     "IssueTypeOut",
     "IssueTypePatch",
-    "LabelOut",
     "LaunchBindingOut",
-    "LifecycleIn",
     "MessageError",
     "ModuleIn",
     "ModuleOut",
@@ -115,16 +112,13 @@ from worktracker_sdk.generated.exceptions import ApiException as ApiException
 
 # import models into sdk package
 from worktracker_sdk.generated.models.add_workflow_transition_in import AddWorkflowTransitionIn as AddWorkflowTransitionIn
-from worktracker_sdk.generated.models.assignee_out import AssigneeOut as AssigneeOut
 from worktracker_sdk.generated.models.attachment_out import AttachmentOut as AttachmentOut
 from worktracker_sdk.generated.models.config_body import ConfigBody as ConfigBody
 from worktracker_sdk.generated.models.features_body import FeaturesBody as FeaturesBody
 from worktracker_sdk.generated.models.issue_type_in import IssueTypeIn as IssueTypeIn
 from worktracker_sdk.generated.models.issue_type_out import IssueTypeOut as IssueTypeOut
 from worktracker_sdk.generated.models.issue_type_patch import IssueTypePatch as IssueTypePatch
-from worktracker_sdk.generated.models.label_out import LabelOut as LabelOut
 from worktracker_sdk.generated.models.launch_binding_out import LaunchBindingOut as LaunchBindingOut
-from worktracker_sdk.generated.models.lifecycle_in import LifecycleIn as LifecycleIn
 from worktracker_sdk.generated.models.message_error import MessageError as MessageError
 from worktracker_sdk.generated.models.module_in import ModuleIn as ModuleIn
 from worktracker_sdk.generated.models.module_out import ModuleOut as ModuleOut

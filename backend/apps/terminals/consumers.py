@@ -24,6 +24,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import uuid
 from typing import Optional
 
@@ -49,6 +50,28 @@ from apps.settings_store.config import NoConfigurationSelected
 
 
 logger = logging.getLogger(__name__)
+
+_VIEWER_TERM = "xterm-256color"
+_VIEWER_LC_CTYPE = "UTF-8" if sys.platform == "darwin" else "C.UTF-8"
+
+
+def _viewer_environment() -> dict[str, str]:
+    """Return a deterministic terminal environment for the tmux viewer PTY.
+
+    Finder-launched desktop applications commonly inherit ``TERM=dumb`` and no
+    UTF-8 locale. The former makes ``tmux attach`` exit because the entry has no
+    clear-screen capability; the latter makes tmux replace Unicode cells with
+    underscores. Describe the browser renderer and its encoding explicitly,
+    regardless of the environment inherited by the sidecar.
+    """
+
+    environment = os.environ.copy()
+    environment["TERM"] = _VIEWER_TERM
+    environment.pop("LC_ALL", None)
+    environment["LC_CTYPE"] = _VIEWER_LC_CTYPE
+    environment.pop("TERMINFO", None)
+    environment.pop("TERMINFO_DIRS", None)
+    return environment
 
 
 class _TmuxCompat:
@@ -265,6 +288,7 @@ class TerminalConsumer(AsyncWebsocketConsumer):
                 handle.attach_argv(),
                 cwd=os.path.expanduser("~"),
                 dimensions=(rows, cols),
+                env=_viewer_environment(),
             )
         except Exception as e:
             await asyncio.to_thread(handle.release)

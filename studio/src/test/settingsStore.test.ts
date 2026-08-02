@@ -30,27 +30,21 @@ const EPIC: IssueType = {
   name: "Epic",
   level: "module",
   color: null,
-  icon: null,
   sort_order: 0,
-  is_default: true,
 };
 const TASK: IssueType = {
   id: "task",
   name: "Task",
   level: "task",
   color: null,
-  icon: null,
   sort_order: 1,
-  is_default: true,
 };
 const STORY: IssueType = {
   id: "story",
   name: "Story",
   level: "task",
   color: null,
-  icon: null,
   sort_order: 2,
-  is_default: false,
 };
 
 const STATE = (id: string, order: number): State => ({
@@ -189,16 +183,6 @@ describe("settingsStore", () => {
     fn(api.createIssueType).mockResolvedValue(bug);
     await useSettingsStore.getState().createType({ name: "Bug", level: "task" });
     expect(useSettingsStore.getState().issueTypes.map((t) => t.id)).toContain("bug");
-  });
-
-  it("setDefaultType optimistically moves the per-level default", async () => {
-    fn(api.patchIssueType).mockResolvedValue({ ...STORY, is_default: true });
-    await useSettingsStore.getState().setDefaultType("story");
-    const types = useSettingsStore.getState().issueTypes;
-    expect(types.find((t) => t.id === "story")!.is_default).toBe(true);
-    // The prior task-level default was cleared; the module default is untouched.
-    expect(types.find((t) => t.id === "task")!.is_default).toBe(false);
-    expect(types.find((t) => t.id === "epic")!.is_default).toBe(true);
   });
 
   it("patchType rolls back on ApiError", async () => {

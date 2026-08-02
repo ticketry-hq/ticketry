@@ -21,6 +21,7 @@ interface LaunchConfigurationFormProps {
   error?: string;
   issueType: IssueType;
   providerCapabilities: ProviderCapabilities[];
+  promptRows?: number;
   save: (binding: LaunchBindingInput) => Promise<unknown>;
   state: State;
 }
@@ -31,6 +32,7 @@ export function LaunchConfigurationForm({
   binding,
   error,
   issueType,
+  promptRows = 4,
   providerCapabilities,
   save,
   state,
@@ -92,7 +94,7 @@ export function LaunchConfigurationForm({
         <textarea
           aria-label="Prompt"
           value={prompt}
-          rows={4}
+          rows={promptRows}
           onChange={(event) => setPrompt(event.target.value)}
           onBlur={() => void apply(input)}
           className={`${SETTINGS_FIELD_CLASS} w-full resize-y`}

@@ -4,21 +4,39 @@ import uuid
 
 import pytest
 
-from worktracker.models import Issue
+from worktracker.models import Issue, IssueTypeTransition, State
 from worktracker.tests.conftest import BASE, patch_json, post_json
 
 
+def _task_body(task_type, **body):
+    return {**body, "issue_type_id": str(task_type.id)}
+
+
+def _module_body(module_type, **body):
+    return {**body, "issue_type_id": str(module_type.id)}
+
+
 @pytest.fixture
-def module(client, project, auth):
+def module(client, project, module_type, auth):
     """Create one module and return its JSON."""
-    r = post_json(client, f"{BASE}/projects/{project.id}/modules", {"name": "Epic"}, auth)
+    r = post_json(
+        client,
+        f"{BASE}/projects/{project.id}/modules",
+        _module_body(module_type, name="Epic"),
+        auth,
+    )
     assert r.status_code == 200
     return r.json()
 
 
 @pytest.mark.django_db
-def test_create_module(client, project, auth):
-    r = post_json(client, f"{BASE}/projects/{project.id}/modules", {"name": "Epic"}, auth)
+def test_create_module(client, project, module_type, auth):
+    r = post_json(
+        client,
+        f"{BASE}/projects/{project.id}/modules",
+        _module_body(module_type, name="Epic"),
+        auth,
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["name"] == "Epic"
@@ -26,9 +44,12 @@ def test_create_module(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_create_task_and_retrieve_by_uuid(client, project, auth):
+def test_create_task_and_retrieve_by_uuid(client, project, task_type, auth):
     created = post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": "Task"}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        _task_body(task_type, name="Task"),
+        auth,
     ).json()
 
     r = client.get(f"{BASE}/work-items/{created['id']}", headers=auth)
@@ -39,9 +60,12 @@ def test_create_task_and_retrieve_by_uuid(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_retrieve_by_key(client, project, auth):
+def test_retrieve_by_key(client, project, task_type, auth):
     created = post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": "Task"}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        _task_body(task_type, name="Task"),
+        auth,
     ).json()
 
     r = client.get(f"{BASE}/work-items/{created['key']}", headers=auth)
@@ -50,9 +74,9 @@ def test_retrieve_by_key(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_list_by_project(client, project, auth):
-    post_json(client, f"{BASE}/projects/{project.id}/work-items", {"name": "A"}, auth)
-    post_json(client, f"{BASE}/projects/{project.id}/work-items", {"name": "B"}, auth)
+def test_list_by_project(client, project, task_type, auth):
+    post_json(client, f"{BASE}/projects/{project.id}/work-items", _task_body(task_type, name="A"), auth)
+    post_json(client, f"{BASE}/projects/{project.id}/work-items", _task_body(task_type, name="B"), auth)
 
     r = client.get(f"{BASE}/projects/{project.id}/work-items", headers=auth)
     assert r.status_code == 200
@@ -61,14 +85,17 @@ def test_list_by_project(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_list_by_module_returns_subtree(client, project, module, auth):
+def test_list_by_module_returns_subtree(client, project, module, task_type, auth):
     task = post_json(
-        client, f"{BASE}/modules/{module['id']}/work-items", {"name": "T"}, auth
+        client,
+        f"{BASE}/modules/{module['id']}/work-items",
+        _task_body(task_type, name="T"),
+        auth,
     ).json()
     post_json(
         client,
         f"{BASE}/projects/{project.id}/work-items",
-        {"name": "Sub", "parent_id": task["id"]},
+        _task_body(task_type, name="Sub", parent_id=task["id"]),
         auth,
     )
 
@@ -89,11 +116,11 @@ def _assert_retired_priority_error(response, location):
 
 
 @pytest.mark.django_db
-def test_project_create_rejects_retired_priority_without_writing(client, project, auth):
+def test_project_create_rejects_retired_priority_without_writing(client, project, task_type, auth):
     r = post_json(
         client,
         f"{BASE}/projects/{project.id}/work-items",
-        {"name": "Stale", "priority": "high"},
+        _task_body(task_type, name="Stale", priority="high"),
         auth,
     )
 
@@ -103,12 +130,12 @@ def test_project_create_rejects_retired_priority_without_writing(client, project
 
 @pytest.mark.django_db
 def test_module_create_rejects_retired_priority_without_writing(
-    client, project, module, auth
+    client, project, module, task_type, auth
 ):
     r = post_json(
         client,
         f"{BASE}/modules/{module['id']}/work-items",
-        {"name": "Stale", "priority": "high"},
+        _task_body(task_type, name="Stale", priority="high"),
         auth,
     )
 
@@ -117,9 +144,12 @@ def test_module_create_rejects_retired_priority_without_writing(
 
 
 @pytest.mark.django_db
-def test_patch_rejects_retired_priority_without_mutating(client, project, auth):
+def test_patch_rejects_retired_priority_without_mutating(client, project, task_type, auth):
     task = post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": "Before"}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        _task_body(task_type, name="Before"),
+        auth,
     ).json()
 
     r = patch_json(
@@ -146,12 +176,12 @@ def test_list_rejects_retired_priority_query(client, project, module, auth, scop
 
 @pytest.mark.django_db
 def test_unrelated_unknown_create_field_keeps_existing_ignore_behavior(
-    client, project, auth
+    client, project, task_type, auth
 ):
     r = post_json(
         client,
         f"{BASE}/projects/{project.id}/work-items",
-        {"name": "Compatible", "unknown_field": "ignored"},
+        _task_body(task_type, name="Compatible", unknown_field="ignored"),
         auth,
     )
 
@@ -161,9 +191,12 @@ def test_unrelated_unknown_create_field_keeps_existing_ignore_behavior(
 
 
 @pytest.mark.django_db
-def test_list_by_parent(client, project, module, auth):
+def test_list_by_parent(client, project, module, task_type, auth):
     task = post_json(
-        client, f"{BASE}/modules/{module['id']}/work-items", {"name": "T"}, auth
+        client,
+        f"{BASE}/modules/{module['id']}/work-items",
+        _task_body(task_type, name="T"),
+        auth,
     ).json()
 
     r = client.get(
@@ -175,9 +208,20 @@ def test_list_by_parent(client, project, module, auth):
 
 
 @pytest.mark.django_db
-def test_patch_state(client, project, state, auth):
+def test_patch_state(client, project, state, task_type, auth):
+    backlog = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
+    )
+    task_type.start_state = backlog
+    task_type.save(update_fields=["start_state"])
+    IssueTypeTransition.objects.create(
+        issue_type=task_type, from_state=backlog, to_state=state
+    )
     task = post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": "T"}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        _task_body(task_type, name="T"),
+        auth,
     ).json()
 
     r = patch_json(
@@ -188,13 +232,13 @@ def test_patch_state(client, project, state, auth):
 
 
 @pytest.mark.django_db
-def test_patch_parent_reparents(client, project, auth):
-    m1 = post_json(client, f"{BASE}/projects/{project.id}/modules", {"name": "M1"}, auth).json()
-    m2 = post_json(client, f"{BASE}/projects/{project.id}/modules", {"name": "M2"}, auth).json()
+def test_patch_parent_reparents(client, project, module_type, task_type, auth):
+    m1 = post_json(client, f"{BASE}/projects/{project.id}/modules", _module_body(module_type, name="M1"), auth).json()
+    m2 = post_json(client, f"{BASE}/projects/{project.id}/modules", _module_body(module_type, name="M2"), auth).json()
     task = post_json(
         client,
         f"{BASE}/projects/{project.id}/work-items",
-        {"name": "T", "parent_id": m1["id"]},
+        _task_body(task_type, name="T", parent_id=m1["id"]),
         auth,
     ).json()
 
@@ -204,25 +248,31 @@ def test_patch_parent_reparents(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_patch_description(client, project, auth):
+def test_patch_description(client, project, task_type, auth):
     task = post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": "T"}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        _task_body(task_type, name="T"),
+        auth,
     ).json()
 
     r = patch_json(
         client,
         f"{BASE}/work-items/{task['id']}",
-        {"description_html": "<p>hi</p>"},
+        {"description": "## hi"},
         auth,
     )
     assert r.status_code == 200
-    assert r.json()["description_html"] == "<p>hi</p>"
+    assert r.json()["description"] == "## hi"
 
 
 @pytest.mark.django_db
-def test_delete_work_item(client, project, auth):
+def test_delete_work_item(client, project, task_type, auth):
     task = post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": "T"}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        _task_body(task_type, name="T"),
+        auth,
     ).json()
 
     r = client.delete(f"{BASE}/work-items/{task['id']}", headers=auth)
@@ -233,14 +283,17 @@ def test_delete_work_item(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_delete_non_empty_issue_is_blocked(client, project, module, auth):
+def test_delete_non_empty_issue_is_blocked(client, project, module, task_type, auth):
     parent = post_json(
-        client, f"{BASE}/modules/{module['id']}/work-items", {"name": "Story"}, auth
+        client,
+        f"{BASE}/modules/{module['id']}/work-items",
+        _task_body(task_type, name="Story"),
+        auth,
     ).json()
     child = post_json(
         client,
         f"{BASE}/projects/{project.id}/work-items",
-        {"name": "Sub", "parent_id": parent["id"]},
+        _task_body(task_type, name="Sub", parent_id=parent["id"]),
         auth,
     ).json()
 

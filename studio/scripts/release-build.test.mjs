@@ -51,6 +51,22 @@ test("release builds compile the native libghostty terminal renderer", () => {
   );
 });
 
+test("release bundles the pinned libghostty runtime resources", async () => {
+  const [configuration, prepareScript, nativePatch] = await Promise.all([
+    readFile(path.join(studioRoot, "src-tauri", "tauri.conf.json"), "utf8").then(JSON.parse),
+    readFile(path.join(studioRoot, "scripts", "prepare-libghostty.sh"), "utf8"),
+    readFile(path.join(studioRoot, "scripts", "libghostty-macos-static.patch"), "utf8"),
+  ]);
+
+  assert.equal(
+    configuration.bundle.resources["vendor/libghostty/resources/"],
+    "",
+  );
+  assert.match(prepareScript, /zig-out\/share\/ghostty/);
+  assert.match(prepareScript, /zig-out\/share\/terminfo/);
+  assert.match(nativePatch, /\+\s+resources\.install\(\);/);
+});
+
 test("all resolves to the single supported macOS target", () => {
   assert.deepEqual(selectTargets(manifest, "all").map(({ id }) => id), ["macos-aarch64"]);
   assert.equal(manifest.targets.every(({ platform }) => platform === "macos"), true);
@@ -179,14 +195,28 @@ test("unsigned bundle verification keeps architecture and integrity checks but s
   const appExecutable = path.join(app, "Contents", "MacOS", manifest.artifacts.tauri.binary_name);
   const embeddedSidecar = path.join(app, "Contents", "Resources", manifest.targets[0].sidecar.bundle_binary_name);
   const embeddedHook = path.join(app, "Contents", "Resources", "ticketry-hook");
+  const ghosttyTerminfo = path.join(app, "Contents", "Resources", "terminfo", "78", "xterm-ghostty");
+  const ghosttyShellIntegration = path.join(
+    app,
+    "Contents",
+    "Resources",
+    "ghostty",
+    "shell-integration",
+    "zsh",
+    "ghostty-integration",
+  );
   await Promise.all([
     mkdir(path.dirname(appExecutable), { recursive: true }),
     mkdir(path.dirname(embeddedSidecar), { recursive: true }),
+    mkdir(path.dirname(ghosttyTerminfo), { recursive: true }),
+    mkdir(path.dirname(ghosttyShellIntegration), { recursive: true }),
   ]);
   await Promise.all([
     writeFile(appExecutable, ""),
     writeFile(embeddedSidecar, ""),
     writeFile(embeddedHook, ""),
+    writeFile(ghosttyTerminfo, ""),
+    writeFile(ghosttyShellIntegration, ""),
   ]);
 
   const calls = [];

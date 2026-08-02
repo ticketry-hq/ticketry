@@ -87,7 +87,7 @@ export interface IssueTypesApiInterface {
     createIssueTypeRequestOpts(requestParameters: CreateIssueTypeRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Create a non-default issue type at the tail of its level\'s order.
+     * Create an issue type at the tail of its level\'s order.
      * @summary Create Issue Type
      * @param {string} projectId 
      * @param {IssueTypeIn} issueTypeIn 
@@ -98,7 +98,7 @@ export interface IssueTypesApiInterface {
     createIssueTypeRaw(requestParameters: CreateIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<IssueTypeOut>>;
 
     /**
-     * Create a non-default issue type at the tail of its level\'s order.
+     * Create an issue type at the tail of its level\'s order.
      * Create Issue Type
      */
     createIssueType(requestParameters: CreateIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<IssueTypeOut>;
@@ -113,7 +113,7 @@ export interface IssueTypesApiInterface {
     deleteIssueTypeRequestOpts(requestParameters: DeleteIssueTypeRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Delete a type; 409 if it is a default or in use without ``reassign_to``.
+     * Delete a type; 409 if it is in use without ``reassign_to``.
      * @summary Delete Issue Type
      * @param {string} typeId 
      * @param {string} [reassignTo] 
@@ -124,7 +124,7 @@ export interface IssueTypesApiInterface {
     deleteIssueTypeRaw(requestParameters: DeleteIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>>;
 
     /**
-     * Delete a type; 409 if it is a default or in use without ``reassign_to``.
+     * Delete a type; 409 if it is in use without ``reassign_to``.
      * Delete Issue Type
      */
     deleteIssueType(requestParameters: DeleteIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void>;
@@ -189,7 +189,7 @@ export interface IssueTypesApiInterface {
     updateIssueTypeRequestOpts(requestParameters: UpdateIssueTypeRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Rename / recolor / reorder a type; ``is_default=true`` flips the level\'s default.
+     * Rename, recolor, or reorder an issue type.
      * @summary Patch Issue Type
      * @param {string} typeId 
      * @param {IssueTypePatch} issueTypePatch 
@@ -200,7 +200,7 @@ export interface IssueTypesApiInterface {
     updateIssueTypeRaw(requestParameters: UpdateIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<IssueTypeOut>>;
 
     /**
-     * Rename / recolor / reorder a type; ``is_default=true`` flips the level\'s default.
+     * Rename, recolor, or reorder an issue type.
      * Patch Issue Type
      */
     updateIssueType(requestParameters: UpdateIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<IssueTypeOut>;
@@ -254,7 +254,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
     }
 
     /**
-     * Create a non-default issue type at the tail of its level\'s order.
+     * Create an issue type at the tail of its level\'s order.
      * Create Issue Type
      */
     async createIssueTypeRaw(requestParameters: CreateIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<IssueTypeOut>> {
@@ -265,7 +265,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
     }
 
     /**
-     * Create a non-default issue type at the tail of its level\'s order.
+     * Create an issue type at the tail of its level\'s order.
      * Create Issue Type
      */
     async createIssueType(requestParameters: CreateIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<IssueTypeOut> {
@@ -309,7 +309,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
     }
 
     /**
-     * Delete a type; 409 if it is a default or in use without ``reassign_to``.
+     * Delete a type; 409 if it is in use without ``reassign_to``.
      * Delete Issue Type
      */
     async deleteIssueTypeRaw(requestParameters: DeleteIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
@@ -320,7 +320,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
     }
 
     /**
-     * Delete a type; 409 if it is a default or in use without ``reassign_to``.
+     * Delete a type; 409 if it is in use without ``reassign_to``.
      * Delete Issue Type
      */
     async deleteIssueType(requestParameters: DeleteIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
@@ -481,7 +481,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
     }
 
     /**
-     * Rename / recolor / reorder a type; ``is_default=true`` flips the level\'s default.
+     * Rename, recolor, or reorder an issue type.
      * Patch Issue Type
      */
     async updateIssueTypeRaw(requestParameters: UpdateIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<IssueTypeOut>> {
@@ -492,7 +492,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
     }
 
     /**
-     * Rename / recolor / reorder a type; ``is_default=true`` flips the level\'s default.
+     * Rename, recolor, or reorder an issue type.
      * Patch Issue Type
      */
     async updateIssueType(requestParameters: UpdateIssueTypeRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<IssueTypeOut> {

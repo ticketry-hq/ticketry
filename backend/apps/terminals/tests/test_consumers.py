@@ -70,10 +70,7 @@ def _stub_task_details(task_id: str = "t1"):
         name="Stub task",
         sequence_id=42,
         state=TaskState(id="s1", name="Todo", group="unstarted"),
-        assignees=[],
         description="A stub.",
-        description_html=None,
-        description_stripped=None,
         project_id="p1",
         parent_id=None,
         module_ids=["m1"],
@@ -359,11 +356,16 @@ async def test_max_sessions_guard(configured, monkeypatch):
 
 
 async def test_dimensions_ordering(configured, monkeypatch):
-    """spawn() must receive dimensions=(rows, cols), not (cols, rows)."""
+    """Viewer spawn receives xterm geometry and a Finder-safe environment."""
     import apps.terminals.consumers as consumers
 
     _patch_repo(monkeypatch)
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["printf", "x"])
+    monkeypatch.setenv("TERM", "dumb")
+    monkeypatch.setenv("LC_ALL", "C")
+    monkeypatch.delenv("LC_CTYPE", raising=False)
+    monkeypatch.setenv("TERMINFO", "/tmp/inherited-terminfo")
+    monkeypatch.setenv("TERMINFO_DIRS", "/tmp/inherited-terminfo-dirs")
 
     monkeypatch.setattr(
         consumers.tmux,
@@ -378,6 +380,7 @@ async def test_dimensions_ordering(configured, monkeypatch):
 
     def spy_spawn(argv, **kwargs):
         captured["dimensions"] = kwargs.get("dimensions")
+        captured["environment"] = kwargs.get("env")
         return real_spawn(argv, **kwargs)
 
     monkeypatch.setattr(consumers.ptyprocess.PtyProcessUnicode, "spawn", spy_spawn)
@@ -389,6 +392,11 @@ async def test_dimensions_ordering(configured, monkeypatch):
     await _drain_until_close(communicator)
 
     assert captured["dimensions"] == (24, 80)
+    assert captured["environment"]["TERM"] == "xterm-256color"
+    assert captured["environment"]["LC_CTYPE"] == consumers._VIEWER_LC_CTYPE
+    assert "LC_ALL" not in captured["environment"]
+    assert "TERMINFO" not in captured["environment"]
+    assert "TERMINFO_DIRS" not in captured["environment"]
     await communicator.disconnect()
 
 

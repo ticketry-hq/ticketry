@@ -30,7 +30,7 @@ class ModuleWorkItemIn(BaseModel):
     Body for a module-scoped task create (parent is the module).
     """ # noqa: E501
     description: Optional[StrictStr] = None
-    issue_type_id: Optional[UUID] = None
+    issue_type_id: UUID
     name: StrictStr
     __properties: ClassVar[List[str]] = ["description", "issue_type_id", "name"]
 
@@ -77,11 +77,6 @@ class ModuleWorkItemIn(BaseModel):
         # and model_fields_set contains the field
         if self.description is None and "description" in self.model_fields_set:
             _dict['description'] = None
-
-        # set to None if issue_type_id (nullable) is None
-        # and model_fields_set contains the field
-        if self.issue_type_id is None and "issue_type_id" in self.model_fields_set:
-            _dict['issue_type_id'] = None
 
         return _dict
 

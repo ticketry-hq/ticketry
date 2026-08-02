@@ -2,14 +2,20 @@ import uuid
 
 import pytest
 
-from worktracker.models import Issue
+from worktracker.models import Issue, IssueType
 
 
 def _issue(project, type, sequence_id, parent=None, name="x"):
+    issue_type, _ = IssueType.objects.get_or_create(
+        project=project,
+        name=f"Test {type}",
+        defaults={"id": uuid.uuid4(), "level": type},
+    )
     return Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
         type=type,
+        issue_type=issue_type,
         name=name,
         sequence_id=sequence_id,
         parent=parent,
@@ -30,12 +36,17 @@ def test_issue_tree_module_task_subtask(project):
 
 
 @pytest.mark.django_db
-def test_uuid_pk_accepts_supplied_uuid(project):
+def test_uuid_pk_accepts_supplied_uuid(project, task_type):
     """A create with an explicit uuid reads back unchanged (C10-ready)."""
 
     supplied = uuid.uuid4()
     Issue.objects.create(
-        id=supplied, project=project, type="task", name="x", sequence_id=7
+        id=supplied,
+        project=project,
+        type="task",
+        issue_type=task_type,
+        name="x",
+        sequence_id=7,
     )
 
     assert Issue.objects.get(pk=supplied).id == supplied

@@ -143,6 +143,9 @@ pub struct SupervisorOptions {
     /// Testable MCP port-selection candidates with the same semantics as
     /// `port_candidates`.
     pub mcp_port_candidates: Vec<u16>,
+    /// Whether an MCP startup failure must also fail the primary backend
+    /// launch. Desktop builds may keep the application usable without MCP.
+    pub mcp_required: bool,
 }
 
 impl Default for SupervisorOptions {
@@ -169,6 +172,7 @@ impl Default for SupervisorOptions {
             sidecar_log_generations: 3,
             port_candidates: Vec::new(),
             mcp_port_candidates: Vec::new(),
+            mcp_required: true,
         }
     }
 }
@@ -617,13 +621,20 @@ impl Supervisor {
         &mut self,
         allow_persisted_fallback: bool,
     ) -> Result<(), SupervisorError> {
-        let mcp_reservation = self
+        let mcp_reservation = match self
             .commands
             .mcp
             .as_ref()
             .map(|_| self.reserve_mcp_port(allow_persisted_fallback))
             .transpose()
-            .map_err(|error| self.record_service_failure("mcp", error))?;
+        {
+            Ok(reservation) => reservation,
+            Err(error) if !self.options.mcp_required => {
+                self.record_service_failure("mcp", error);
+                None
+            }
+            Err(error) => return Err(self.record_service_failure("mcp", error)),
+        };
         let mcp_port = mcp_reservation.as_ref().map(|reservation| {
             reservation
                 .listener
@@ -647,17 +658,23 @@ impl Supervisor {
                         if let Some(mut mcp) = self.running_mcp.take() {
                             let _ = stop_and_reap(&mut mcp.child);
                         }
-                        if let Some(mut backend) = self.running.take() {
-                            let _ = stop_and_reap(&mut backend.child);
+                        let error = self.record_service_failure("mcp", error);
+                        if self.options.mcp_required {
+                            if let Some(mut backend) = self.running.take() {
+                                let _ = stop_and_reap(&mut backend.child);
+                            }
+                            return Err(error);
                         }
-                        return Err(self.record_service_failure("mcp", error));
                     }
                 }
                 Err(error) => {
-                    if let Some(mut backend) = self.running.take() {
-                        let _ = stop_and_reap(&mut backend.child);
+                    let error = self.record_service_failure("mcp", error);
+                    if self.options.mcp_required {
+                        if let Some(mut backend) = self.running.take() {
+                            let _ = stop_and_reap(&mut backend.child);
+                        }
+                        return Err(error);
                     }
-                    return Err(self.record_service_failure("mcp", error));
                 }
             }
         }
@@ -1670,6 +1687,7 @@ mod tests {
             sidecar_log_generations: 3,
             port_candidates: vec![0],
             mcp_port_candidates: vec![0],
+            mcp_required: true,
         }
     }
 
@@ -1763,6 +1781,40 @@ mod tests {
 
         supervisor.launch().expect("retries MCP port");
         assert_ne!(supervisor.mcp_port(), Some(blocked_port));
+        supervisor.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn contract_optional_mcp_bind_failure_keeps_the_backend_ready() {
+        let _guard = MCP_TEST_LOCK.lock().expect("MCP test lock");
+        let occupied = TcpListener::bind("127.0.0.1:0").expect("reserve MCP port");
+        let blocked_port = occupied.local_addr().expect("address").port();
+        let mut options = fast_options();
+        options.mcp_port_candidates = vec![blocked_port];
+        options.mcp_required = false;
+        let mut table = stub_table_with_mcp();
+        table.backend.environment =
+            vec![(OsString::from("MUXED_STUB_MODE"), OsString::from("ready"))];
+        let mut supervisor = Supervisor::new(table, options);
+
+        supervisor
+            .launch()
+            .expect("optional MCP collision must not block the backend");
+
+        assert!(supervisor.port().is_some());
+        assert_eq!(supervisor.mcp_port(), None);
+        assert!(supervisor.events().iter().any(|event| matches!(
+            event,
+            SupervisorEvent::Failed {
+                service,
+                kind: FailureKind::Bind,
+                ..
+            } if service == "mcp"
+        )));
+        assert!(supervisor.events().iter().any(|event| matches!(
+            event,
+            SupervisorEvent::Ready { service, .. } if service == "backend"
+        )));
         supervisor.shutdown().expect("shutdown");
     }
 

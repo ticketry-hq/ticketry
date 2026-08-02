@@ -1,6 +1,7 @@
 #import <AppKit/AppKit.h>
 #import <dispatch/dispatch.h>
 #import <ghostty.h>
+#import <stdlib.h>
 
 #import "libghostty_host.h"
 
@@ -68,6 +69,27 @@ static void runtime_write_clipboard(
 static void runtime_close_surface(void *userdata, bool process_alive) {
   (void)userdata;
   (void)process_alive;
+}
+
+static void configure_bundled_ghostty_environment(void) {
+  NSString *resources = NSBundle.mainBundle.resourcePath;
+  if (resources == nil) return;
+
+  NSString *terminfo =
+      [resources stringByAppendingPathComponent:@"terminfo"];
+  NSString *sentinel =
+      [terminfo stringByAppendingPathComponent:@"78/xterm-ghostty"];
+  NSString *ghostty =
+      [resources stringByAppendingPathComponent:@"ghostty"];
+  if (![[NSFileManager defaultManager] fileExistsAtPath:sentinel] ||
+      ![[NSFileManager defaultManager] fileExistsAtPath:ghostty])
+    return;
+
+  // Finder launches do not inherit the Ghostty environment variables that a
+  // development launch gets from its parent shell. Always select Ticketry's
+  // pinned resources so native initialization is launch-method independent.
+  setenv("GHOSTTY_RESOURCES_DIR", ghostty.fileSystemRepresentation, 1);
+  setenv("TERMINFO", terminfo.fileSystemRepresentation, 1);
 }
 
 @interface MuxedGhosttyView : NSView {
@@ -227,6 +249,7 @@ static void runtime_close_surface(void *userdata, bool process_alive) {
 @end
 
 void *muxed_ghostty_runtime_new(void) {
+  configure_bundled_ghostty_environment();
   static dispatch_once_t initialized;
   static int initialization_result = -1;
   dispatch_once(&initialized, ^{

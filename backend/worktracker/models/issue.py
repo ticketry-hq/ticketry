@@ -2,9 +2,7 @@ from django.db import models, transaction
 from .project import Project
 from .issue_type import IssueType
 from .state import State
-from .assignee import Assignee
-from .label import Label
-from .constants import TYPE_CHOICES, LIFECYCLE_CHOICES
+from .constants import TYPE_CHOICES
 from worktracker.state_identity import normalize_state_id
 
 
@@ -28,9 +26,7 @@ class Issue(models.Model):
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     issue_type = models.ForeignKey(
         IssueType,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="issues",
     )
     parent = models.ForeignKey(
@@ -51,17 +47,6 @@ class Issue(models.Model):
     # with Project.state_revision this row is the compact replay projection.
     state_revision = models.PositiveBigIntegerField(default=0)
     name = models.CharField(max_length=512)
-    # Internal planning-lifecycle axis (#758), orthogonal to the visible
-    # ``state`` FK above. A raw idea has no pipeline, so it defaults NULL; the
-    # 19-value machine and its pairing rules live in ``worktracker.lifecycle``,
-    # the sole writer of this field (``set_lifecycle``). Never set via CRUD.
-    lifecycle_state = models.CharField(
-        max_length=32,
-        choices=LIFECYCLE_CHOICES,
-        null=True,
-        blank=True,
-        default=None,
-    )
     sequence_id = models.PositiveIntegerField()
     is_archived = models.BooleanField(default=False)
     # Fractional-index sort key for manual within-column reorder (#626). A
@@ -71,11 +56,7 @@ class Issue(models.Model):
     # (worktracker.ranking.key_between); the migration backfills it in
     # ``sequence_id`` order so nothing moves on first load.
     rank = models.CharField(max_length=64, blank=True, default="", db_index=True)
-    description_html = models.TextField(blank=True, default="")
-    description_stripped = models.TextField(blank=True, default="")
     description = models.TextField(blank=True, default="")
-    assignees = models.ManyToManyField(Assignee, blank=True, related_name="issues")
-    labels = models.ManyToManyField(Label, blank=True, related_name="issues")
     # A directed Issue↔Issue blocker relation (#624), orthogonal to the parent
     # tree. ``blocked_by`` = the issues blocking this one; the reverse
     # ``blocks`` manager (free, from related_name) = the issues this one blocks.

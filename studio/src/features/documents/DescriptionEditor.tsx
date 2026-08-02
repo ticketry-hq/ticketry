@@ -1,6 +1,6 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { IconPencil } from "../../shared/ui/icons";
-import { htmlToMarkdown, markdownToHtml, renderMarkdown, sanitizeHtml } from "./markdown";
+import { htmlToMarkdown, renderMarkdown, sanitizeHtml } from "./markdown";
 
 const RichMarkdownEditor = lazy(() => import("./RichMarkdownEditor"));
 
@@ -8,34 +8,30 @@ function looksLikeHtml(value: string): boolean {
   return /<\/?[a-z][\s\S]*>/i.test(value);
 }
 
-// Ticket descriptions remain HTML-backed: reading is sanitized, editing is
-// Markdown, and saving renders the draft back through `description_html`.
+// Ticket descriptions are Markdown-backed. Legacy HTML remains readable and
+// is normalized to Markdown the first time it is edited and saved.
 export default function DescriptionEditor({
-  html,
+  value,
   onSave,
-  format = "html",
 }: {
-  html: string | null;
+  value: string | null;
   onSave: (v: string) => void;
-  format?: "html" | "markdown";
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [sourceFallback, setSourceFallback] = useState(false);
   const initial = useRef("");
 
-  const storedAsMarkdown = async (value: string) =>
-    format === "markdown" || !looksLikeHtml(value)
-      ? value
-      : htmlToMarkdown(value);
-  const storedAsHtml = (value: string) =>
-    format === "markdown" || !looksLikeHtml(value)
-      ? renderMarkdown(value)
-      : sanitizeHtml(value);
+  const storedAsMarkdown = async (description: string) =>
+    looksLikeHtml(description) ? htmlToMarkdown(description) : description;
+  const storedAsHtml = (description: string) =>
+    looksLikeHtml(description)
+      ? sanitizeHtml(description)
+      : renderMarkdown(description);
 
   if (!editing) {
     const startEditing = async () => {
-      const markdown = html ? await storedAsMarkdown(html) : "";
+      const markdown = value ? await storedAsMarkdown(value) : "";
       initial.current = markdown;
       setDraft(markdown);
       setSourceFallback(false);
@@ -45,17 +41,17 @@ export default function DescriptionEditor({
     return (
       <div
         className={`min-h-[48px] cursor-text rounded-md px-2 py-1.5 text-base leading-relaxed text-text-primary transition-colors ${
-          html
+          value
             ? "border border-transparent hover:border-pane-border"
             : "border border-dashed border-pane-border hover:border-focus-accent"
         }`}
         onClick={() => void startEditing()}
         data-testid="issue-description"
       >
-        {html ? (
+        {value ? (
           <div
             className="md-body"
-            dangerouslySetInnerHTML={{ __html: storedAsHtml(html) }}
+            dangerouslySetInnerHTML={{ __html: storedAsHtml(value) }}
           />
         ) : (
           <span className="inline-flex items-center gap-1.5 text-text-muted">
@@ -72,13 +68,7 @@ export default function DescriptionEditor({
     if (draft === initial.current) return;
 
     const markdown = draft.trim();
-    onSave(
-      format === "markdown"
-        ? markdown
-        : markdown
-          ? markdownToHtml(markdown)
-          : "",
-    );
+    onSave(markdown);
   };
 
   return (

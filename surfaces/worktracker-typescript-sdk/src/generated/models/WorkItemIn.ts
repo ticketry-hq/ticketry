@@ -35,7 +35,7 @@ export interface WorkItemIn {
      * @type {string}
      * @memberof WorkItemIn
      */
-    issue_type_id?: string | null;
+    issue_type_id: string;
     /**
      * 
      * @type {string}
@@ -60,6 +60,7 @@ export interface WorkItemIn {
  * Check if a given object implements the WorkItemIn interface.
  */
 export function instanceOfWorkItemIn(value: object): value is WorkItemIn {
+    if (!('issue_type_id' in value) || value['issue_type_id'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     return true;
 }
@@ -75,7 +76,7 @@ export function WorkItemInFromJSONTyped(json: any, ignoreDiscriminator: boolean)
     return {
         
         'description': json['description'] == null ? undefined : json['description'],
-        'issue_type_id': json['issue_type_id'] == null ? undefined : json['issue_type_id'],
+        'issue_type_id': json['issue_type_id'],
         'name': json['name'],
         'parent_id': json['parent_id'] == null ? undefined : json['parent_id'],
         'state_id': json['state_id'] == null ? undefined : json['state_id'],

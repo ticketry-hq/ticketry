@@ -7,9 +7,9 @@ import type {
   RunChip,
   TabKind,
 } from "../../../agents/types";
-import type { WorkItem } from "../../../../shared/api/types";
 import { resolveIssueWorkspaceContext } from "./issueWorkspaceContext";
 import type { IssueWorkspaceModuleContext } from "./issueWorkspaceContext";
+import { useIssueStore } from "./issueStore";
 
 type ResourceStatus = "idle" | "loading" | "ready" | "not_ready" | "degraded" | "error";
 
@@ -31,7 +31,8 @@ export interface DrawerLaunchContext {
 
 export interface IssueDrawerWorkspaceViewModel {
   issueKey: string;
-  task: WorkItem | null;
+  /** Identifier only; the canonical work-item store owns the record. */
+  taskId: string | null;
   projectId: string | null;
   module: IssueWorkspaceModuleContext | null;
   profile: ResourceState & { profile: Profile | null };
@@ -93,7 +94,7 @@ function message(error: unknown): string {
 function emptyView(issueKey: string): IssueDrawerWorkspaceViewModel {
   return {
     issueKey,
-    task: null,
+    taskId: null,
     projectId: null,
     module: null,
     profile: { status: "idle", error: null, profile: null },
@@ -329,6 +330,7 @@ export const useIssueDrawerWorkspaceStore = create<DrawerWorkspaceState>((set, g
       if (run !== hydrateRuns.get(issueKey)) return;
 
       const taskId = context.task.id;
+      useIssueStore.getState().hydrateWorkItems([context.task]);
       get().ensureWorkspace(taskId);
 
       const profile = configResult.ok
@@ -341,7 +343,7 @@ export const useIssueDrawerWorkspaceStore = create<DrawerWorkspaceState>((set, g
           [issueKey]: {
             ...emptyView(issueKey),
             loading: true,
-            task: context.task,
+            taskId,
             projectId: context.projectId,
             module: context.module,
             profile,

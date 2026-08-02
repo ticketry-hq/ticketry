@@ -20,8 +20,8 @@ http://127.0.0.1:8787/api/work-tracker
 | `WORKTRACKER_API_KEY` | _unset_ | Optional. When unset, the `x-api-key` header is omitted (dev mode) |
 | `STUDIO_RUN_CONTROL_URL` | `http://127.0.0.1:8787/api/terminals/self-terminate` | Studio's authenticated current-run termination endpoint |
 | `MCP_TRANSPORT` | `http` | FastMCP transport |
-| `MCP_HOST` | `0.0.0.0` | Bind host for http/sse |
-| `MCP_PORT` | `8124` | Standalone bind port; the repo supervisor uses `8123` |
+| `MCP_HOST` | `127.0.0.1` | Bind host for http/sse |
+| `MCP_PORT` | `8123` | Pinned WorkTracker MCP port |
 
 ## Running
 

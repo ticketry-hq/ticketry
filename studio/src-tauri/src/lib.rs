@@ -33,6 +33,9 @@ const SMOKE_SIDECAR_BINARY: &str = "MUXED_DESKTOP_SMOKE_SIDECAR_BINARY";
 const PACKAGED_HOOK_RUNNER_ENV: &str = "MUXED_PACKAGED_HOOK_RUNNER";
 const HOOK_RUNNER_BINARY: &str = "ticketry-hook";
 const DEVELOPMENT_BACKEND_PORT_ENV: &str = "MUXED_DESKTOP_BACKEND_PORT";
+const WORKTRACKER_MCP_PORT: u16 = 8123;
+const WORKTRACKER_MCP_ENABLED: bool = true;
+const WORKTRACKER_MCP_REQUIRED: bool = false;
 const HEALTH_EVENT: &str = "desktop-service-health";
 const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 const DEVELOPMENT_WEBVIEW_ORIGIN: &str = "http://127.0.0.1:5174";
@@ -215,8 +218,6 @@ impl ServiceHealth {
     }
 }
 
-const WORKTRACKER_MCP_REQUIRED: bool = true;
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RuntimeEndpoints {
@@ -299,7 +300,7 @@ impl DesktopServiceState {
             .expect("user notice id lock poisoned");
         let notices = events
             .iter()
-            .filter_map(mcp_port_rollover_notice)
+            .filter_map(supervisor_notice)
             .filter(|notice| notice_ids.insert(notice.id.clone()))
             .collect::<Vec<_>>();
         if !notices.is_empty() {
@@ -342,6 +343,41 @@ impl DesktopServiceState {
             .clone();
         Ok(configuration)
     }
+}
+
+fn supervisor_notice(event: &SupervisorEvent) -> Option<UserNotice> {
+    mcp_unavailable_notice(event).or_else(|| mcp_port_rollover_notice(event))
+}
+
+fn mcp_unavailable_notice(event: &SupervisorEvent) -> Option<UserNotice> {
+    let SupervisorEvent::Failed {
+        service,
+        kind,
+        message,
+    } = event
+    else {
+        return None;
+    };
+    if service != "mcp" {
+        return None;
+    }
+
+    let recovery = if *kind == supervisor::FailureKind::Bind {
+        format!(
+            "Port {WORKTRACKER_MCP_PORT} is already in use. Stop the service using that port and restart Ticketry to restore external MCP connections."
+        )
+    } else {
+        "Restart Ticketry to retry the external MCP service.".to_owned()
+    };
+    Some(UserNotice {
+        id: "mcp-unavailable".to_owned(),
+        severity: UserNoticeSeverity::Warning,
+        title: "External MCP unavailable".to_owned(),
+        message: format!(
+            "Ticketry is running, but external MCP connections are unavailable: {message}. {recovery}"
+        ),
+        acknowledgement_label: "Continue without MCP".to_owned(),
+    })
 }
 
 fn mcp_port_rollover_notice(event: &SupervisorEvent) -> Option<UserNotice> {
@@ -551,6 +587,11 @@ fn desktop_webview_origin() -> Result<String, String> {
 
 fn development_supervisor_options() -> Result<SupervisorOptions, String> {
     let mut options = SupervisorOptions::default();
+    // External MCP clients get one stable endpoint in both development and
+    // packaged launches. An occupied port is an actionable startup error; the
+    // supervisor must not silently move a public endpoint.
+    options.mcp_port_candidates = vec![WORKTRACKER_MCP_PORT];
+    options.mcp_required = WORKTRACKER_MCP_REQUIRED;
     if cfg!(debug_assertions) {
         match (
             optional_port(DEVELOPMENT_BACKEND_PORT_ENV)?,
@@ -596,7 +637,7 @@ fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
     let hook_runner = hook_runner_binary(application)?;
     let data_dir = established_data_directory().map_err(|error| error.to_string())?;
     let origin = desktop_webview_origin()?;
-    let commands = if WORKTRACKER_MCP_REQUIRED {
+    let commands = if WORKTRACKER_MCP_ENABLED {
         CommandTable::packaged_services(binary, data_dir, &origin)
     } else {
         CommandTable::packaged_backend(binary, data_dir, &origin)
@@ -1209,6 +1250,35 @@ mod tests {
         assert!(!notice.message.contains('<'));
         assert!(!notice.message.contains("Authorization"));
         assert!(!notice.message.contains("credential"));
+    }
+
+    #[test]
+    fn mcp_bind_failure_notice_keeps_the_desktop_usable() {
+        let notice = mcp_unavailable_notice(&supervisor::SupervisorEvent::Failed {
+            service: "mcp".to_owned(),
+            kind: supervisor::FailureKind::Bind,
+            message: "could not reserve a loopback port after the configured retries".to_owned(),
+        })
+        .expect("MCP failure becomes a user notice");
+
+        assert_eq!(notice.id, "mcp-unavailable");
+        assert_eq!(notice.severity, UserNoticeSeverity::Warning);
+        assert_eq!(notice.title, "External MCP unavailable");
+        assert!(notice.message.contains("Ticketry is running"));
+        assert!(notice.message.contains("Port 8123 is already in use"));
+        assert_eq!(notice.acknowledgement_label, "Continue without MCP");
+    }
+
+    #[test]
+    fn backend_failure_does_not_become_an_optional_mcp_notice() {
+        assert!(
+            mcp_unavailable_notice(&supervisor::SupervisorEvent::Failed {
+                service: "backend".to_owned(),
+                kind: supervisor::FailureKind::Bind,
+                message: "backend bind failed".to_owned(),
+            })
+            .is_none()
+        );
     }
 
     #[test]

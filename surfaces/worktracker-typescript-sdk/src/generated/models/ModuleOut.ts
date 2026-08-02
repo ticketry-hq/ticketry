@@ -46,7 +46,7 @@ export interface ModuleOut {
      * @type {IssueTypeOut}
      * @memberof ModuleOut
      */
-    issue_type?: IssueTypeOut | null;
+    issue_type: IssueTypeOut;
     /**
      * 
      * @type {string}
@@ -78,6 +78,7 @@ export interface ModuleOut {
  */
 export function instanceOfModuleOut(value: object): value is ModuleOut {
     if (!('id' in value) || value['id'] === undefined) return false;
+    if (!('issue_type' in value) || value['issue_type'] === undefined) return false;
     if (!('key' in value) || value['key'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if (!('project_id' in value) || value['project_id'] === undefined) return false;
@@ -97,7 +98,7 @@ export function ModuleOutFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         
         'id': json['id'],
         'is_archived': json['is_archived'] == null ? undefined : json['is_archived'],
-        'issue_type': json['issue_type'] == null ? undefined : IssueTypeOutFromJSON(json['issue_type']),
+        'issue_type': IssueTypeOutFromJSON(json['issue_type']),
         'key': json['key'],
         'name': json['name'],
         'project_id': json['project_id'],

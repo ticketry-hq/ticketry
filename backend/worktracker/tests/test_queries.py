@@ -11,7 +11,14 @@ import uuid
 
 import pytest
 
-from worktracker.models import Assignee, Issue, Label, Project, State, Workspace
+from worktracker.models import (
+    Issue,
+    IssueType,
+    IssueTypeTransition,
+    Project,
+    State,
+    Workspace,
+)
 from worktracker.services import queries
 from worktracker.services.errors import NotFoundError
 from worktracker.services.work_items import create_project_work_item
@@ -38,12 +45,13 @@ def test_list_projects_shape(project):
 
 
 @pytest.mark.django_db
-def test_list_modules_excludes_archived(project):
-    live = queries.create_module_and_serialize(project.id, "Live")
+def test_list_modules_excludes_archived(project, module_type):
+    live = queries.create_module_and_serialize(project.id, "Live", module_type.id)
     archived = Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
         type="module",
+        issue_type=module_type,
         name="Gone",
         sequence_id=99,
         is_archived=True,
@@ -75,15 +83,22 @@ def test_list_states_ordered_by_sort_order(project, states):
 @pytest.mark.django_db
 def test_work_item_dict_shape_and_relations(project, states):
     backlog, _ = states
-    assignee = Assignee.objects.create(
-        id=uuid.uuid4(), display_name="Ada", email="ada@example.com"
+    task_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Story", level="task"
     )
-    label = Label.objects.create(id=uuid.uuid4(), project=project, name="urgent")
 
-    parent = create_project_work_item(project.id, name="Parent", state_id=backlog.id)
-    parent.assignees.add(assignee)
-    parent.labels.add(label)
-    create_project_work_item(project.id, name="Child", parent_id=parent.id)
+    parent = create_project_work_item(
+        project.id,
+        name="Parent",
+        state_id=backlog.id,
+        issue_type_id=task_type.id,
+    )
+    create_project_work_item(
+        project.id,
+        name="Child",
+        parent_id=parent.id,
+        issue_type_id=task_type.id,
+    )
 
     [row] = queries.list_subtasks(project.id, parent.id) or []  # child only
     # Re-fetch the parent via retrieve to assert its full shape + child_count.
@@ -95,18 +110,16 @@ def test_work_item_dict_shape_and_relations(project, states):
         "group": "backlog",
         "color": backlog.color,
     }
-    assert parent_row["assignees"] == [
-        {"display_name": "Ada", "email": "ada@example.com"}
-    ]
-    assert parent_row["labels"] == [{"name": "urgent"}]
     assert parent_row["sub_issues_count"] == 1
     assert row["name"] == "Child"
     assert row["parent_id"] == parent.id
 
 
 @pytest.mark.django_db
-def test_state_none_serializes_to_none(project):
-    issue = create_project_work_item(project.id, name="Stateless")
+def test_state_none_serializes_to_none(project, task_type):
+    issue = create_project_work_item(
+        project.id, name="Stateless", issue_type_id=task_type.id
+    )
     issue.state = None
     issue.save(update_fields=["state"])
 
@@ -116,11 +129,19 @@ def test_state_none_serializes_to_none(project):
 
 
 @pytest.mark.django_db
-def test_module_subtree_vs_direct_children(project):
-    module = queries.create_module_and_serialize(project.id, "M")
-    child = create_project_work_item(project.id, name="Child", parent_id=module["id"])
+def test_module_subtree_vs_direct_children(project, module_type, task_type):
+    module = queries.create_module_and_serialize(project.id, "M", module_type.id)
+    child = create_project_work_item(
+        project.id,
+        name="Child",
+        parent_id=module["id"],
+        issue_type_id=task_type.id,
+    )
     grandchild = create_project_work_item(
-        project.id, name="Grandchild", parent_id=child.id
+        project.id,
+        name="Grandchild",
+        parent_id=child.id,
+        issue_type_id=task_type.id,
     )
 
     subtree = queries.list_module_task_subtree(module["id"])
@@ -134,10 +155,14 @@ def test_module_subtree_vs_direct_children(project):
 
 
 @pytest.mark.django_db
-def test_module_subtree_excludes_archived(project):
-    module = queries.create_module_and_serialize(project.id, "M")
-    live = create_project_work_item(project.id, name="Live", parent_id=module["id"])
-    gone = create_project_work_item(project.id, name="Gone", parent_id=module["id"])
+def test_module_subtree_excludes_archived(project, module_type, task_type):
+    module = queries.create_module_and_serialize(project.id, "M", module_type.id)
+    live = create_project_work_item(
+        project.id, name="Live", parent_id=module["id"], issue_type_id=task_type.id
+    )
+    gone = create_project_work_item(
+        project.id, name="Gone", parent_id=module["id"], issue_type_id=task_type.id
+    )
     gone.is_archived = True
     gone.save(update_fields=["is_archived"])
 
@@ -147,10 +172,16 @@ def test_module_subtree_excludes_archived(project):
 
 
 @pytest.mark.django_db
-def test_subtasks_ordered_and_exclude_archived(project):
-    parent = create_project_work_item(project.id, name="Parent")
-    create_project_work_item(project.id, name="A", parent_id=parent.id)
-    create_project_work_item(project.id, name="B", parent_id=parent.id)
+def test_subtasks_ordered_and_exclude_archived(project, task_type):
+    parent = create_project_work_item(
+        project.id, name="Parent", issue_type_id=task_type.id
+    )
+    create_project_work_item(
+        project.id, name="A", parent_id=parent.id, issue_type_id=task_type.id
+    )
+    create_project_work_item(
+        project.id, name="B", parent_id=parent.id, issue_type_id=task_type.id
+    )
 
     rows = queries.list_subtasks(project.id, parent.id)
 
@@ -164,9 +195,19 @@ def test_retrieve_unknown_raises_not_found(project):
 
 
 @pytest.mark.django_db
-def test_apply_state_and_reload_returns_reloaded_dict(project, states):
+def test_apply_state_and_reload_returns_reloaded_dict(project, states, task_type):
     backlog, todo = states
-    issue = create_project_work_item(project.id, name="Move", state_id=backlog.id)
+    task_type.start_state = backlog
+    task_type.save(update_fields=["start_state"])
+    IssueTypeTransition.objects.create(
+        issue_type=task_type, from_state=backlog, to_state=todo
+    )
+    issue = create_project_work_item(
+        project.id,
+        name="Move",
+        state_id=backlog.id,
+        issue_type_id=task_type.id,
+    )
 
     row = queries.apply_state_and_reload(issue.id, todo.id)
 

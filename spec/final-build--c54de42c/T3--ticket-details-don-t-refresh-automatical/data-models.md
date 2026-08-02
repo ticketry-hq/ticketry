@@ -68,7 +68,6 @@ class IssueTypeModel {
   +CharField name
   +CharField level
   +CharField color
-  +CharField icon
   +PositiveInteger sort_order
   +Boolean is_default
   +StateFKOrNull start_state

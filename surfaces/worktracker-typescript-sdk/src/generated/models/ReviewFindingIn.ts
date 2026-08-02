@@ -21,9 +21,7 @@ import { mapValues } from '../runtime.js';
  * ``parent_id`` is the Story-in-``Review`` the finding attaches to; the child
  * is always born in the Implementation workflow's start stage and typed
  * ``Implementation`` server-side. ``description`` carries the caller-rendered
- * ``Path`` / ``Lines`` / ``Note`` evidence block verbatim. ``issue_type_id``
- * is optional and, if present, must resolve to the project's
- * ``Implementation`` type.
+ * ``Path`` / ``Lines`` / ``Note`` evidence block verbatim.
  * @export
  * @interface ReviewFindingIn
  */
@@ -34,12 +32,6 @@ export interface ReviewFindingIn {
      * @memberof ReviewFindingIn
      */
     description: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof ReviewFindingIn
-     */
-    issue_type_id?: string | null;
     /**
      * 
      * @type {string}
@@ -75,7 +67,6 @@ export function ReviewFindingInFromJSONTyped(json: any, ignoreDiscriminator: boo
     return {
         
         'description': json['description'],
-        'issue_type_id': json['issue_type_id'] == null ? undefined : json['issue_type_id'],
         'name': json['name'],
         'parent_id': json['parent_id'],
     };
@@ -93,7 +84,6 @@ export function ReviewFindingInToJSONTyped(value?: ReviewFindingIn | null, ignor
     return {
         
         'description': value['description'],
-        'issue_type_id': value['issue_type_id'],
         'name': value['name'],
         'parent_id': value['parent_id'],
     };

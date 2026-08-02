@@ -11,7 +11,7 @@ def _is_complete(state: EngineState, event: SeamEvent) -> bool:
     if state.phase == "refine":
         return event.from_group == "backlog" and event.to_group == "unstarted"
     if state.phase == "split":
-        return event.lifecycle_state == "hld_approved"
+        return event.from_group == "unstarted" and event.to_group == "unstarted"
     return False
 
 
@@ -53,7 +53,7 @@ def decide(state: EngineState, event: SeamEvent) -> Decision:
             )
         )
 
-    if event.kind in {"issue_state_changed", "lifecycle_changed"}:
+    if event.kind == "issue_state_changed":
         if state.status == "running" and _is_complete(state, event):
             return Decision(next=replace(state, status="done", error=None))
         return Decision(next=state)

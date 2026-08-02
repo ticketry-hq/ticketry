@@ -59,11 +59,8 @@ function task(
     name: `Task ${id}`,
     project_id: "project-1",
     sequence_id: Number(id),
+    issue_type: { id: "type-story", name: "Story", level: "task" },
     state,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: parentId,
     sub_issues_count: subIssuesCount,
@@ -228,7 +225,6 @@ describe("Studio status-update reconciliation", () => {
       "project-1",
       "2",
       "review",
-      true,
     );
     const state = useTasksStore.getState();
     expect(state.subtasks["1"].find((item) => item.id === "2")?.state).toEqual(

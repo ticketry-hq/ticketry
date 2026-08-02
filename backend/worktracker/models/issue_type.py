@@ -10,8 +10,7 @@ class IssueType(models.Model):
     Layered *on top of* the binary ``Issue.type`` discriminator, never
     replacing it: ``level`` pins each named type ("Module", "Story", "Bug") to
     exactly one binary bucket, so the tree and every route keep branching on
-    ``Issue.type`` unchanged. Exactly one type per level is the default — new
-    issues land on their bucket's default when the caller names none.
+    ``Issue.type`` unchanged. Every issue selects exactly one type explicitly.
     """
 
     id = models.UUIDField(primary_key=True)
@@ -21,9 +20,7 @@ class IssueType(models.Model):
     name = models.CharField(max_length=255)
     level = models.CharField(max_length=10, choices=LEVEL_CHOICES)
     color = models.CharField(max_length=32, blank=True, default="")
-    icon = models.CharField(max_length=64, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
-    is_default = models.BooleanField(default=False)
     start_state = models.ForeignKey(
         State,
         on_delete=models.SET_NULL,

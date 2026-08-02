@@ -39,15 +39,6 @@ export interface TaskState {
   sort_order?: number;
 }
 
-export interface AssigneeSummary {
-  display_name: string | null;
-  email: string | null;
-}
-
-export interface LabelSummary {
-  name: string;
-}
-
 export interface TaskSummary {
   id: string;
   name: string;
@@ -60,14 +51,8 @@ export interface TaskSummary {
   // synthetic rows such as Scratch.
   rank?: string;
   state: TaskState;
-  // The task tree needs the configured type to distinguish a runnable Story
-  // root from its Implementation descendants. Optional while older cached
-  // summaries and the synthetic scratch row are still tolerated.
-  issue_type?: IssueTypeOut | null;
-  assignees: AssigneeSummary[];
-  labels: LabelSummary[];
-  description_html: string | null;
-  description_stripped: string | null;
+  // Every persisted or synthetic task summary carries an explicit type.
+  issue_type: IssueTypeOut;
   description: string | null;
   parent_id: string | null;
   sub_issues_count: number;

@@ -3,16 +3,13 @@
 /* tslint:disable */
 /* eslint-disable */
 export * from './AddWorkflowTransitionIn.js';
-export * from './AssigneeOut.js';
 export * from './AttachmentOut.js';
 export * from './ConfigBody.js';
 export * from './FeaturesBody.js';
 export * from './IssueTypeIn.js';
 export * from './IssueTypeOut.js';
 export * from './IssueTypePatch.js';
-export * from './LabelOut.js';
 export * from './LaunchBindingOut.js';
-export * from './LifecycleIn.js';
 export * from './MessageError.js';
 export * from './ModuleIn.js';
 export * from './ModuleOut.js';

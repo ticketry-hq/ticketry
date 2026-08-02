@@ -9,9 +9,12 @@ from worktracker.tests.conftest import BASE, post_json
 
 
 @pytest.fixture
-def task(client, project, auth):
+def task(client, project, task_type, auth):
     return post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": "T"}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        {"name": "T", "issue_type_id": str(task_type.id)},
+        auth,
     ).json()
 
 

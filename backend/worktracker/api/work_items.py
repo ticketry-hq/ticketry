@@ -6,10 +6,8 @@ from ninja import Status
 
 from worktracker.api.router import _http_errors, router
 from worktracker.models import Issue
-from worktracker.lifecycle import set_lifecycle
 from worktracker.workflow import InvalidTransition
 from worktracker.schemas import (
-    LifecycleIn,
     ModuleWorkItemIn,
     ReviewFindingIn,
     ScopeContextOut,
@@ -30,7 +28,6 @@ from worktracker.services.work_items import (
 from worktracker.work_items import (
     build_scope_context,
     resolve_issue,
-    state_group_for_state_id,
     task_qs,
 )
 
@@ -127,9 +124,8 @@ def create_review_finding(request, project_id: uuid.UUID, payload: ReviewFinding
 
     The dedicated validated finding surface: the child is born in the
     Implementation workflow's start stage and typed ``Implementation``
-    server-side. A parent that is not a Story, not in ``Review``, in a foreign
-    project, or a non-Implementation type override is rejected *before any
-    write* with the workflow gate's structured 422 body
+    server-side. A parent that is not a Story, not in ``Review``, or in a foreign
+    project is rejected *before any write* with the workflow gate's structured 422 body
     (``detail``/``code``/``from``/``to``) — identical to the status gate.
     This surface never launches an agent, moves the parent, or draws a
     dependency edge.
@@ -141,7 +137,6 @@ def create_review_finding(request, project_id: uuid.UUID, payload: ReviewFinding
                 parent_id=payload.parent_id,
                 name=payload.name,
                 description=payload.description,
-                issue_type_id=payload.issue_type_id,
             )
         except InvalidTransition as exc:
             return JsonResponse(exc.as_body(), status=422)
@@ -240,10 +235,9 @@ def work_item_scope_context(request, issue_id: str):
 
     Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its
     **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first),
-    ``blocks`` becomes ``depended_by`` (waits on this). Any neighbor carrying a
-    non-empty ``assignees`` set is also flagged ``owned_elsewhere``, and a short
-    ``advisory`` summarizes the unresolved-blocker situation. Derived entirely
-    from existing edges + the ``assignees`` M2M — no writes, no new field.
+    ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory``
+    summarizes the unresolved-blocker situation. Derived entirely from existing
+    edges; it performs no writes.
 
     ``prefetch_related`` (with ``select_related`` folded into each neighbor
     queryset) bounds this to a handful of queries regardless of edge count.
@@ -265,7 +259,7 @@ def patch_work_item(request, issue_id: str, payload: WorkItemPatch):
     A ``state_id`` move routes through the workflow gate (#860) and must be its
     own PATCH — a rejected move returns a structured 422 (``detail``/``code``/
     ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are
-    checked against edge permissions and cannot use ``force``.
+    checked against edge permissions.
     """
 
     data = payload.dict(exclude_unset=True)
@@ -325,26 +319,3 @@ def delete_work_item(request, issue_id: uuid.UUID):
         delete_work_item_service(issue_id)
 
     return Status(204, None)
-
-
-@router.post(
-    "/work-items/{issue_id}/lifecycle",
-    response=WorkItemOut,
-    operation_id="setWorkItemLifecycle",
-    tags=["WorkItems"],
-)
-def set_work_item_lifecycle(request, issue_id: str, payload: LifecycleIn):
-    """Advance the issue's internal lifecycle to ``target`` (#758), guarded.
-
-    The single write path for ``Issue.lifecycle_state``: ``set_lifecycle``
-    validates the transition and the ``(lifecycle_state, state)`` pairing,
-    raising ``InvalidTransition`` (a ``ValidationError`` → 422) on any illegal
-    move. Resolves modules too (``task_only=False``); a missing id/key
-    404s. Returns the hydrated item carrying the new state + fresh transitions.
-    """
-
-    with _http_errors():
-        issue = resolve_issue(issue_id, task_only=False)
-        set_lifecycle(issue, payload.target)
-
-    return resolve_issue(str(issue.id), task_only=False)

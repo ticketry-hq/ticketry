@@ -115,8 +115,13 @@ def update_project(project_id, *, name=None, description=None):
 
 
 def delete_project(project_id):
-    try:
-        project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        raise NotFoundError("Project not found.")
-    project.delete()
+    with transaction.atomic():
+        try:
+            project = Project.objects.select_for_update().get(pk=project_id)
+        except Project.DoesNotExist:
+            raise NotFoundError("Project not found.")
+        # IssueType is intentionally PROTECTed while any work item selects it.
+        # Whole-project deletion is the explicit aggregate teardown: remove the
+        # issues first, then let the project cascade its now-unreferenced types.
+        project.issues.all().delete()
+        project.delete()

@@ -139,11 +139,8 @@ const taskSummaries: TaskSummary[] = [TASK_ID, NEXT_TASK_ID].map(
     project_id: "project-1",
     sequence_id: index + 3,
     key: `MEML-${index + 3}`,
+    issue_type: { id: "type-story", name: "Story", level: "task" },
     state: { id: "state-1", name: "Todo", group: "backlog", color: null },
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -1996,6 +1993,10 @@ describe("Studio workspace context restoration", () => {
 
     mount(TASK_ID, 0, "studio");
     expect(selectedTab()).toHaveAccessibleName("Details");
+    expect(screen.getByTestId("workspace-details-surface")).toHaveTextContent(
+      "Task details",
+    );
+    expect(screen.queryByTestId("workspace-restore-skeleton")).toBeNull();
 
     resolveDocuments({
       documents: [
@@ -2040,6 +2041,10 @@ describe("Studio workspace context restoration", () => {
 
     mount(TASK_ID, 0, "studio");
     expect(selectedTab()).toHaveAccessibleName("Details");
+    expect(screen.getByTestId("workspace-details-surface")).toHaveTextContent(
+      "Task details",
+    );
+    expect(screen.queryByTestId("workspace-restore-skeleton")).toBeNull();
 
     resolveSessions([
       {
@@ -2215,8 +2220,16 @@ describe("Studio workspace context restoration", () => {
     vi.mocked(agentApi.getTerminals)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([resumed]);
-    vi.mocked(agentApi.listResumableTerminals).mockResolvedValue([]);
+    vi.mocked(agentApi.listResumableTerminals).mockResolvedValue(
+      useTerminalStore.getState().resumableSessions[TASK_ID],
+    );
     mount(TASK_ID, 0, "studio");
+
+    // The initial discovery is debounced; let it settle before exercising the
+    // independent explicit-resume flow.
+    await waitFor(() =>
+      expect(agentApi.getTerminals).toHaveBeenCalledTimes(1),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "↻ gemini" }));
 

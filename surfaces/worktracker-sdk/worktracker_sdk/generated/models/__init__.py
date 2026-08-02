@@ -15,16 +15,13 @@
 
 # import models into model package
 from worktracker_sdk.generated.models.add_workflow_transition_in import AddWorkflowTransitionIn
-from worktracker_sdk.generated.models.assignee_out import AssigneeOut
 from worktracker_sdk.generated.models.attachment_out import AttachmentOut
 from worktracker_sdk.generated.models.config_body import ConfigBody
 from worktracker_sdk.generated.models.features_body import FeaturesBody
 from worktracker_sdk.generated.models.issue_type_in import IssueTypeIn
 from worktracker_sdk.generated.models.issue_type_out import IssueTypeOut
 from worktracker_sdk.generated.models.issue_type_patch import IssueTypePatch
-from worktracker_sdk.generated.models.label_out import LabelOut
 from worktracker_sdk.generated.models.launch_binding_out import LaunchBindingOut
-from worktracker_sdk.generated.models.lifecycle_in import LifecycleIn
 from worktracker_sdk.generated.models.message_error import MessageError
 from worktracker_sdk.generated.models.module_in import ModuleIn
 from worktracker_sdk.generated.models.module_out import ModuleOut

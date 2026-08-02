@@ -7,6 +7,7 @@ import { useConfigStore } from "../../agents/stores/configStore";
 import { toast } from "../../../app/stores/toastStore";
 import { apiErrorMessage } from "../../../shared/api/client";
 import { rankBetween } from "../../work-items";
+import { useIssueStore } from "../../work-items/issue-detail/internal/issueStore";
 import type {
   ProjectCreate,
   State,
@@ -43,11 +44,8 @@ function makeScratchTask(): TaskSummary {
     name: "Local scratch workspace",
     project_id: "",
     sequence_id: null,
+    issue_type: { id: "scratch", name: "Scratch", level: "task" },
     state: SCRATCH_STATE,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -72,6 +70,14 @@ interface PendingStateDelta {
   revision: number;
 }
 
+export type WorkspaceSelection =
+  | { kind: "task" }
+  | {
+      kind: "state-configuration";
+      projectId: string;
+      stateId: string;
+    };
+
 interface TasksStoreState {
   projects: ProjectSummary[];
   selectedProjectId: string | null;
@@ -80,6 +86,7 @@ interface TasksStoreState {
   tasks: TaskSummary[];
   states: TaskState[];
   selectedTaskId: string | null;
+  workspaceSelection: WorkspaceSelection;
   subtasks: Record<TaskId, TaskSummary[]>;
   details: TaskDetails | null;
   loading: LoadingFlags;
@@ -104,6 +111,8 @@ interface TasksStoreState {
   selectModule: (id: string) => Promise<void>;
   loadTasks: (projectId: string, moduleId: string) => Promise<void>;
   selectTask: (id: string) => Promise<void>;
+  toggleStateConfiguration: (projectId: string, stateId: string) => void;
+  dismissStateConfiguration: () => void;
   loadDetails: (projectId: string, taskId: string) => Promise<void>;
   loadSubtasks: (projectId: string, taskId: string) => Promise<void>;
   updateTaskStatus: (projectId: string, taskId: string, stateId: string) => Promise<void>;
@@ -346,6 +355,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   tasks: [],
   states: [],
   selectedTaskId: null,
+  workspaceSelection: { kind: "task" },
   subtasks: {},
   details: null,
   loading: {
@@ -387,6 +397,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
       tasks: [],
       subtasks: {},
       selectedTaskId: null,
+      workspaceSelection: { kind: "task" },
       details: null,
       // Revisions are project-monotonic; another project's guards are noise.
       seenStateRevisions: {},
@@ -453,7 +464,12 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
 
   async createModule(projectId: string, name: string) {
     // Create in the owned work tracker, refresh, then auto-select the module.
-    const created = await api.createModule(projectId, name);
+    const issueTypes = await api.getIssueTypes(projectId);
+    const moduleType = issueTypes.find(
+      (issueType) => issueType.level === "module" && issueType.name === "Module",
+    );
+    if (!moduleType) throw new Error("The Module issue type is unavailable.");
+    const created = await api.createModule(projectId, name, moduleType.id);
 
     // Keep the work-items project context in sync when it already owns this
     // project. Issue details derive a Story's module from that list, including
@@ -510,6 +526,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
       tasks: [],
       subtasks: {},
       selectedTaskId: null,
+      workspaceSelection: { kind: "task" },
       details: null,
     });
     if (projectId) {
@@ -567,13 +584,17 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
     const catalogRevision = stateCatalogRevision(projectId);
     set((s) => ({ loading: { ...s.loading, tasks: true } }));
     try {
-      const { tasks, states, subtasks } = await api.getTasks(projectId, moduleId);
+      const { tasks, states, subtasks, workItems } = await api.getTasks(projectId, moduleId);
       // Prepend the scratch task/state so it is always the first row and every
       // consumer (AgentPicker, TasksPane) sees it consistently across refreshes.
       set((state) => {
         if (!isCurrentTasksLoad(state, projectId, moduleId, generation)) {
           return state;
         }
+        // The module endpoint already returned every descendant in its full
+        // WorkItem shape. Feed that canonical owner before retaining the
+        // legacy summary projection required by planning surfaces.
+        useIssueStore.getState().hydrateWorkItems(workItems ?? []);
         const catalogChanged = stateCatalogChangedSince(
           projectId,
           catalogRevision,
@@ -633,14 +654,40 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
     // The scratch task is not a real work item: just select it and skip the
     // details + persisted-session fetches (no real id to query).
     if (id === TEMP_TASK_ID) {
-      set({ selectedTaskId: id, details: null });
+      set({
+        selectedTaskId: id,
+        details: null,
+        workspaceSelection: { kind: "task" },
+      });
       return;
     }
-    const projectId = get().selectedProjectId;
-    set({ selectedTaskId: id, details: null });
-    if (projectId) {
-      await get().loadDetails(projectId, id);
-    }
+    set({
+      selectedTaskId: id,
+      details: null,
+      workspaceSelection: { kind: "task" },
+    });
+    // The Details panel resolves the canonical record synchronously. Its
+    // single debounced request is a background refresh, owned by issueStore.
+    await useIssueStore.getState().openIssue(id);
+  },
+
+  toggleStateConfiguration(projectId, stateId) {
+    set((state) => ({
+      workspaceSelection:
+        state.workspaceSelection.kind === "state-configuration" &&
+        state.workspaceSelection.projectId === projectId &&
+        state.workspaceSelection.stateId === stateId
+          ? { kind: "task" }
+          : { kind: "state-configuration", projectId, stateId },
+    }));
+  },
+
+  dismissStateConfiguration() {
+    set((state) =>
+      state.workspaceSelection.kind === "task"
+        ? state
+        : { workspaceSelection: { kind: "task" } },
+    );
   },
 
   async loadDetails(projectId: string, taskId: string) {
@@ -686,12 +733,18 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   },
 
   async updateTaskStatus(projectId: string, taskId: string, stateId: string) {
-    const returned = await api.postTaskStatus(
-      projectId,
-      taskId,
-      stateId,
-      true,
-    );
+    // Work-item state is record data, not planning placement. Prefer the
+    // canonical owner; the fallback only serves an unhydrated legacy tree.
+    const owner = useIssueStore.getState();
+    const owned = owner.getWorkItem(taskId);
+    let returned: TaskSummary;
+    if (owned) {
+      const updated = await owner.setWorkItemState(taskId, stateId);
+      if (!updated) return;
+      returned = normalizeTask(updated);
+    } else {
+      returned = await api.postTaskStatus(projectId, taskId, stateId);
+    }
     set((state) => {
       let subtasks = state.subtasks;
       for (const [parentId, children] of Object.entries(state.subtasks)) {
@@ -713,7 +766,12 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   },
 
   async updateTaskParent(projectId: string, taskId: string, parentId: string | null) {
-    await api.updateTaskParent(projectId, taskId, parentId);
+    const owner = useIssueStore.getState();
+    if (owner.getWorkItem(taskId)) {
+      await owner.patchWorkItem(taskId, { parent_id: parentId });
+    } else {
+      await api.updateTaskParent(projectId, taskId, parentId);
+    }
     // Refresh the module tree (membership may have changed) and the open
     // details so the Parent field reflects the new parent immediately. The
     // two refreshes are independent, so run them in parallel.
@@ -820,7 +878,6 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
           projectId,
           taskId,
           destinationState.id,
-          true,
         );
         transitionAccepted = true;
         const current = get();

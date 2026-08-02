@@ -81,7 +81,7 @@ export function buildCardMeta(
 // the old parent-resolves-to-a-loaded-item ("sub-task") visibility test: typed
 // children remain hidden as top-level rows on every planning surface.
 export function isStory(item: WorkItem): boolean {
-  return item.issue_type?.name === "Story";
+  return item.issue_type.name === "Story";
 }
 
 // Sentinel epic-filter value selecting the trailing "No Epic" group (tasks

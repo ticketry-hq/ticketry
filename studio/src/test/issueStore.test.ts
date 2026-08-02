@@ -34,10 +34,6 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
     project_id: "p1",
     sequence_id: 1,
     state: null,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -47,6 +43,7 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
     updated_at: "2026-06-01T00:00:00Z",
     key: `MEML-${partial.id}`,
     ...partial,
+    issue_type: partial.issue_type ?? { id: "type-task", name: "Task", level: "task" },
   };
 }
 
@@ -60,12 +57,17 @@ beforeEach(() => {
   createWorkItem.mockReset();
   listProjectWorkItems.mockReset().mockResolvedValue([]);
   useIssueStore.setState({
+    workItemsById: {},
+    workItemIdByKey: {},
+    childWorkItemIds: {},
     open: null,
     children: [],
     loading: false,
     notFound: false,
     error: null,
     saving: {},
+    seenStateRevisions: {},
+    pendingStateDeltas: {},
   });
   // Pre-select the project so openIssue skips the project/backlog hydration.
   useStudioStore.setState({ selectedProjectId: "p1", modules: [] });
@@ -75,7 +77,14 @@ beforeEach(() => {
 describe("deriveEpic", () => {
   it("walks the parent chain up to the owning module", () => {
     const modules: Module[] = [
-      { id: "m1", name: "Epic", project_id: "p1", sequence_id: 1, key: "MEML-1" },
+      {
+        id: "m1",
+        name: "Epic",
+        project_id: "p1",
+        sequence_id: 1,
+        key: "MEML-1",
+        issue_type: { id: "type-module", name: "Module", level: "module" },
+      },
     ];
     const story = wi({ id: "s1", parent_id: "m1" });
     const sub = wi({ id: "st1", parent_id: "s1" });
@@ -89,6 +98,30 @@ describe("deriveEpic", () => {
 });
 
 describe("issueStore", () => {
+  it("owns faithful keyed records and resolves their canonical child relationships", () => {
+    const parent = wi({
+      id: "parent",
+      key: "MEML-41",
+      state: null,
+      is_archived: true,
+      blocked_by_ids: ["blocker"],
+      blocks_ids: ["dependent"],
+    });
+    const child = wi({ id: "child", key: "MEML-42", parent_id: "parent" });
+
+    useIssueStore.getState().hydrateWorkItems([parent, child]);
+
+    expect(useIssueStore.getState().getWorkItem("parent")).toBe(parent);
+    expect(useIssueStore.getState().getWorkItemByKey("MEML-41")).toBe(parent);
+    expect(useIssueStore.getState().getChildWorkItems("parent")).toEqual([child]);
+    expect(useIssueStore.getState().getWorkItem("parent")).toMatchObject({
+      state: null,
+      is_archived: true,
+      blocked_by_ids: ["blocker"],
+      blocks_ids: ["dependent"],
+    });
+  });
+
   it("openIssue fetches by KEY-N and loads children", async () => {
     const task = wi({ id: "a", key: "MEML-7" });
     getWorkItem.mockResolvedValue(detail(task));
@@ -146,10 +179,54 @@ describe("issueStore", () => {
     useIssueStore.setState({ open: detail(task) });
     createWorkItem.mockResolvedValue(wi({ id: "c", parent_id: "a" }));
 
-    await useIssueStore.getState().addSubtask("New sub");
-    expect(createWorkItem).toHaveBeenCalledWith("p1", { name: "New sub", parent_id: "a" });
+    await useIssueStore.getState().addSubtask("New sub", "type-task");
+    expect(createWorkItem).toHaveBeenCalledWith("p1", {
+      name: "New sub",
+      parent_id: "a",
+      issue_type_id: "type-task",
+    });
     expect(useIssueStore.getState().children.map((c) => c.id)).toEqual(["c"]);
     expect(useIssueStore.getState().open?.task.sub_issues_count).toBe(1);
+    expect(useIssueStore.getState().getWorkItem("c")?.parent_id).toBe("a");
+  });
+
+  it("owns status-feed revisions and rejects older targeted reconciliation", () => {
+    const task = wi({ id: "a", state: TODO, state_revision: 2 });
+    useIssueStore.getState().hydrateWorkItems([task]);
+
+    expect(
+      useIssueStore.getState().applyWorkItemStateDelta(
+        "a",
+        { id: "st-done", name: "Done", group: "completed", color: null },
+        3,
+        "2026-06-01T00:01:00Z",
+      ),
+    ).toBe(true);
+    expect(useIssueStore.getState().getWorkItem("a")).toMatchObject({
+      state: { id: "st-done" },
+      state_revision: 3,
+    });
+    expect(
+      useIssueStore.getState().applyWorkItemStateDelta(
+        "a",
+        TODO,
+        2,
+        "2026-06-01T00:02:00Z",
+      ),
+    ).toBe(false);
+    expect(
+      useIssueStore.getState().reconcileWorkItem(
+        wi({ id: "a", state: TODO, state_revision: 2 }),
+        3,
+      ),
+    ).toBe("stale");
+    expect(
+      useIssueStore.getState().reconcileWorkItem(
+        wi({ id: "a", name: "confirmed", state_revision: 3 }),
+        3,
+      ),
+    ).toBe("applied");
+    expect(useIssueStore.getState().getWorkItem("a")?.name).toBe("confirmed");
   });
 
   it("patchBlockers PATCHes blocked_by_ids by UUID and mirrors the reverse edge", async () => {

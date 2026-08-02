@@ -26,11 +26,10 @@ import {
 /**
  * The read-only dependency slice a subagent consumes for a task (#667, B).
  * 
- * Derived entirely from the existing ``blocked_by``/``blocks`` edges (#624) and
- * the ``assignees`` M2M — no new field, no migration. ``depends_on`` are the
- * direct blockers (must land first), ``depended_by`` the direct dependents
- * (wait on this task), ``owned_elsewhere`` the subset of either with a
- * non-empty assignee set, and ``advisory`` a short natural-language summary.
+ * Derived entirely from the existing ``blocked_by``/``blocks`` edges (#624).
+ * ``depends_on`` are the direct blockers (must land first), ``depended_by`` the
+ * direct dependents (wait on this task), and ``advisory`` a short
+ * natural-language summary.
  * @export
  * @interface ScopeContextOut
  */
@@ -53,12 +52,6 @@ export interface ScopeContextOut {
      * @memberof ScopeContextOut
      */
     depends_on?: Array<ScopeRef>;
-    /**
-     * 
-     * @type {Array<ScopeRef>}
-     * @memberof ScopeContextOut
-     */
-    owned_elsewhere?: Array<ScopeRef>;
     /**
      * 
      * @type {ScopeRef}
@@ -89,7 +82,6 @@ export function ScopeContextOutFromJSONTyped(json: any, ignoreDiscriminator: boo
         'advisory': json['advisory'],
         'depended_by': json['depended_by'] == null ? undefined : ((json['depended_by'] as Array<any>).map(ScopeRefFromJSON)),
         'depends_on': json['depends_on'] == null ? undefined : ((json['depends_on'] as Array<any>).map(ScopeRefFromJSON)),
-        'owned_elsewhere': json['owned_elsewhere'] == null ? undefined : ((json['owned_elsewhere'] as Array<any>).map(ScopeRefFromJSON)),
         'task': ScopeRefFromJSON(json['task']),
     };
 }
@@ -108,7 +100,6 @@ export function ScopeContextOutToJSONTyped(value?: ScopeContextOut | null, ignor
         'advisory': value['advisory'],
         'depended_by': value['depended_by'] == null ? undefined : ((value['depended_by'] as Array<any>).map(ScopeRefToJSON)),
         'depends_on': value['depends_on'] == null ? undefined : ((value['depends_on'] as Array<any>).map(ScopeRefToJSON)),
-        'owned_elsewhere': value['owned_elsewhere'] == null ? undefined : ((value['owned_elsewhere'] as Array<any>).map(ScopeRefToJSON)),
         'task': ScopeRefToJSON(value['task']),
     };
 }

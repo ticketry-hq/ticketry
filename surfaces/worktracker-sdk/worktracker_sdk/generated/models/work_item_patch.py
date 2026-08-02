@@ -18,7 +18,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from uuid import UUID
 from typing import Optional, Set
@@ -30,15 +30,12 @@ class WorkItemPatch(BaseModel):
     PATCH body — every field optional; only present fields are applied.  ``parent_id`` reparents the issue (covers the absent reparent_tasks tool via data); ``state_id`` reassigns its state.
     """ # noqa: E501
     blocked_by_ids: Optional[List[UUID]] = None
-    description_html: Optional[StrictStr] = None
-    force: Optional[StrictBool] = False
-    force_if_completed: Optional[StrictBool] = False
-    labels: Optional[List[StrictStr]] = None
+    description: Optional[StrictStr] = None
     name: Optional[StrictStr] = None
     origin: Optional[StrictStr] = 'human'
     parent_id: Optional[UUID] = None
     state_id: Optional[UUID] = None
-    __properties: ClassVar[List[str]] = ["blocked_by_ids", "description_html", "force", "force_if_completed", "labels", "name", "origin", "parent_id", "state_id"]
+    __properties: ClassVar[List[str]] = ["blocked_by_ids", "description", "name", "origin", "parent_id", "state_id"]
 
     @field_validator('origin')
     def origin_validate_enum(cls, value):
@@ -94,15 +91,10 @@ class WorkItemPatch(BaseModel):
         if self.blocked_by_ids is None and "blocked_by_ids" in self.model_fields_set:
             _dict['blocked_by_ids'] = None
 
-        # set to None if description_html (nullable) is None
+        # set to None if description (nullable) is None
         # and model_fields_set contains the field
-        if self.description_html is None and "description_html" in self.model_fields_set:
-            _dict['description_html'] = None
-
-        # set to None if labels (nullable) is None
-        # and model_fields_set contains the field
-        if self.labels is None and "labels" in self.model_fields_set:
-            _dict['labels'] = None
+        if self.description is None and "description" in self.model_fields_set:
+            _dict['description'] = None
 
         # set to None if name (nullable) is None
         # and model_fields_set contains the field
@@ -132,10 +124,7 @@ class WorkItemPatch(BaseModel):
 
         _obj = cls.model_validate({
             "blocked_by_ids": obj.get("blocked_by_ids"),
-            "description_html": obj.get("description_html"),
-            "force": obj.get("force") if obj.get("force") is not None else False,
-            "force_if_completed": obj.get("force_if_completed") if obj.get("force_if_completed") is not None else False,
-            "labels": obj.get("labels"),
+            "description": obj.get("description"),
             "name": obj.get("name"),
             "origin": obj.get("origin") if obj.get("origin") is not None else 'human',
             "parent_id": obj.get("parent_id"),

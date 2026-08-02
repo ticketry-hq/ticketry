@@ -18,24 +18,21 @@ class WorktrackerIssueType(BaseModel):
 
     Mirrors the backend ``IssueTypeOut``. ``level`` is the frozen binary bucket
     (``module`` or ``task``) each named type pins to — the discriminator the
-    unified ``Issue`` table branches on. ``is_default`` marks the one type per
-    level a create lands on when the caller names none. This is the coherent
-    home CODIN-883 resolves a name against.
+    unified ``Issue`` table branches on. This is the coherent home CODIN-883
+    resolves an explicitly selected name against.
     """
 
     id: UUID
     name: str
     level: str
     color: Optional[str] = None
-    icon: Optional[str] = None
     sort_order: int = 0
-    is_default: bool = False
 
 class WorktrackerModule(BaseModel):
     """A module — an ``Issue`` of level ``module`` (CODIN-890).
 
     Modules are not a distinct kind: they are issues discriminated by
-    ``issue_type.level == "module"`` (default type Epic), addressed by the same
+    ``issue_type.level == "module"``, addressed by the same
     ``key``/``sequence_id`` scheme as any task. Mirrors the backend ``ModuleOut``.
     """
 
@@ -45,7 +42,7 @@ class WorktrackerModule(BaseModel):
     sequence_id: int
     key: str
     is_archived: bool = False
-    issue_type: Optional[WorktrackerIssueType] = None
+    issue_type: WorktrackerIssueType
 
 class WorktrackerState(BaseModel):
     id: UUID
@@ -65,16 +62,13 @@ class WorktrackerTask(BaseModel):
     # the backend); ``issue_type`` carries the named type + its ``level`` — the
     # real discriminator now that modules and tasks share one table.
     parent_id: Optional[UUID] = None
-    issue_type: Optional[WorktrackerIssueType] = None
+    issue_type: WorktrackerIssueType
     is_archived: bool = False
     # Directed blocker edges (#624). ``blocked_by_ids`` = tasks blocking this
     # one; ``blocks_ids`` = the reverse. Bare id arrays so an agent can see
     # existing dependencies without a separate call.
     blocked_by_ids: List[UUID] = Field(default_factory=list)
     blocks_ids: List[UUID] = Field(default_factory=list)
-    lifecycle_state: Optional[str] = None
-    lifecycle_transitions: List[str] = Field(default_factory=list)
-
 class WorktrackerAttachmentInfo(BaseModel):
     id: UUID
     name: str
@@ -100,7 +94,6 @@ class WorktrackerScopeRef(BaseModel):
     name: str
     state_group: Optional[str] = None
     resolved: bool = False
-    assignees: List[str] = Field(default_factory=list)
 
 
 class WorktrackerScopeContext(BaseModel):
@@ -109,5 +102,4 @@ class WorktrackerScopeContext(BaseModel):
     task: WorktrackerScopeRef
     depends_on: List[WorktrackerScopeRef] = Field(default_factory=list)
     depended_by: List[WorktrackerScopeRef] = Field(default_factory=list)
-    owned_elsewhere: List[WorktrackerScopeRef] = Field(default_factory=list)
     advisory: str

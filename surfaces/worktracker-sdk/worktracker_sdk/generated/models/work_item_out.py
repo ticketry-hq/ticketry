@@ -22,9 +22,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from uuid import UUID
-from worktracker_sdk.generated.models.assignee_out import AssigneeOut
 from worktracker_sdk.generated.models.issue_type_out import IssueTypeOut
-from worktracker_sdk.generated.models.label_out import LabelOut
 from worktracker_sdk.generated.models.state_out import StateOut
 from typing import Optional, Set
 from typing_extensions import Self
@@ -34,20 +32,14 @@ class WorkItemOut(BaseModel):
     """
     A task issue — mirrors core.TaskSummary exactly, plus additive ``key``.  ``state`` is always one nested object (or null), never a bare id and never a sibling ``state_detail`` — the schizophrenic-state branch is impossible here by construction.
     """ # noqa: E501
-    assignees: Optional[List[AssigneeOut]] = None
     blocked_by_ids: Optional[List[UUID]] = None
     blocks_ids: Optional[List[UUID]] = None
     created_at: datetime
     description: Optional[StrictStr] = None
-    description_html: Optional[StrictStr] = None
-    description_stripped: Optional[StrictStr] = None
     id: UUID
     is_archived: Optional[StrictBool] = False
-    issue_type: Optional[IssueTypeOut] = None
+    issue_type: IssueTypeOut
     key: StrictStr
-    labels: Optional[List[LabelOut]] = None
-    lifecycle_state: Optional[StrictStr] = None
-    lifecycle_transitions: Optional[List[StrictStr]] = None
     name: StrictStr
     parent_id: Optional[UUID] = None
     project_id: UUID
@@ -57,7 +49,7 @@ class WorkItemOut(BaseModel):
     state_revision: Optional[StrictInt] = 0
     sub_issues_count: Optional[StrictInt] = 0
     updated_at: datetime
-    __properties: ClassVar[List[str]] = ["assignees", "blocked_by_ids", "blocks_ids", "created_at", "description", "description_html", "description_stripped", "id", "is_archived", "issue_type", "key", "labels", "lifecycle_state", "lifecycle_transitions", "name", "parent_id", "project_id", "rank", "sequence_id", "state", "state_revision", "sub_issues_count", "updated_at"]
+    __properties: ClassVar[List[str]] = ["blocked_by_ids", "blocks_ids", "created_at", "description", "id", "is_archived", "issue_type", "key", "name", "parent_id", "project_id", "rank", "sequence_id", "state", "state_revision", "sub_issues_count", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -98,23 +90,9 @@ class WorkItemOut(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in assignees (list)
-        _items = []
-        if self.assignees:
-            for _item_assignees in self.assignees:
-                if _item_assignees:
-                    _items.append(_item_assignees.to_dict())
-            _dict['assignees'] = _items
         # override the default output from pydantic by calling `to_dict()` of issue_type
         if self.issue_type:
             _dict['issue_type'] = self.issue_type.to_dict()
-        # override the default output from pydantic by calling `to_dict()` of each item in labels (list)
-        _items = []
-        if self.labels:
-            for _item_labels in self.labels:
-                if _item_labels:
-                    _items.append(_item_labels.to_dict())
-            _dict['labels'] = _items
         # override the default output from pydantic by calling `to_dict()` of state
         if self.state:
             _dict['state'] = self.state.to_dict()
@@ -122,26 +100,6 @@ class WorkItemOut(BaseModel):
         # and model_fields_set contains the field
         if self.description is None and "description" in self.model_fields_set:
             _dict['description'] = None
-
-        # set to None if description_html (nullable) is None
-        # and model_fields_set contains the field
-        if self.description_html is None and "description_html" in self.model_fields_set:
-            _dict['description_html'] = None
-
-        # set to None if description_stripped (nullable) is None
-        # and model_fields_set contains the field
-        if self.description_stripped is None and "description_stripped" in self.model_fields_set:
-            _dict['description_stripped'] = None
-
-        # set to None if issue_type (nullable) is None
-        # and model_fields_set contains the field
-        if self.issue_type is None and "issue_type" in self.model_fields_set:
-            _dict['issue_type'] = None
-
-        # set to None if lifecycle_state (nullable) is None
-        # and model_fields_set contains the field
-        if self.lifecycle_state is None and "lifecycle_state" in self.model_fields_set:
-            _dict['lifecycle_state'] = None
 
         # set to None if parent_id (nullable) is None
         # and model_fields_set contains the field
@@ -170,20 +128,14 @@ class WorkItemOut(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "assignees": [AssigneeOut.from_dict(_item) for _item in obj["assignees"]] if obj.get("assignees") is not None else None,
             "blocked_by_ids": obj.get("blocked_by_ids"),
             "blocks_ids": obj.get("blocks_ids"),
             "created_at": obj.get("created_at"),
             "description": obj.get("description"),
-            "description_html": obj.get("description_html"),
-            "description_stripped": obj.get("description_stripped"),
             "id": obj.get("id"),
             "is_archived": obj.get("is_archived") if obj.get("is_archived") is not None else False,
             "issue_type": IssueTypeOut.from_dict(obj["issue_type"]) if obj.get("issue_type") is not None else None,
             "key": obj.get("key"),
-            "labels": [LabelOut.from_dict(_item) for _item in obj["labels"]] if obj.get("labels") is not None else None,
-            "lifecycle_state": obj.get("lifecycle_state"),
-            "lifecycle_transitions": obj.get("lifecycle_transitions"),
             "name": obj.get("name"),
             "parent_id": obj.get("parent_id"),
             "project_id": obj.get("project_id"),

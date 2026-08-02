@@ -13,6 +13,13 @@ use std::process::{Command, Stdio};
 
 const DEFAULT_TMUX_SOCKET: &str = "muxed";
 const TMUX_SOCKET_ENV: &str = "MUXED_TMUX_SOCKET";
+const VIEWER_TERM: &str = "xterm-256color";
+#[cfg(target_os = "macos")]
+const VIEWER_TERMINFO: &str = "/usr/share/terminfo";
+#[cfg(target_os = "macos")]
+const VIEWER_LC_CTYPE: &str = "UTF-8";
+#[cfg(not(target_os = "macos"))]
+const VIEWER_LC_CTYPE: &str = "C.UTF-8";
 const SESSION_PREFIX: &str = "pt-";
 const MAX_COLUMNS: u16 = 500;
 const MAX_ROWS: u16 = 500;
@@ -133,8 +140,7 @@ impl TmuxViewer {
         let reader = pair.master.try_clone_reader().map_err(pty_error)?;
         let writer = pair.master.take_writer().map_err(pty_error)?;
         let socket = tmux_socket()?;
-        let mut command = CommandBuilder::new(&tmux);
-        command.args(["-L", &socket, "attach-session", "-t", &session]);
+        let command = tmux_attach_command(&tmux, &socket, &session);
         let mut client = pair.slave.spawn_command(command).map_err(pty_error)?;
 
         // A session can disappear after the preflight check. Surface that race
@@ -360,6 +366,26 @@ fn approved_tmux_path() -> Result<PathBuf, TmuxViewerError> {
         .ok_or_else(|| TmuxViewerError::TmuxUnavailable("approved tmux has no path".into()))
 }
 
+fn tmux_attach_command(tmux: &Path, socket: &str, session: &str) -> CommandBuilder {
+    let mut command = CommandBuilder::new(tmux);
+    command.args(["-L", socket, "attach-session", "-t", session]);
+    // Finder launches do not provide a terminal environment. Conversely, a
+    // development shell can provide TERMINFO and locale overrides that are
+    // inappropriate for this internal PTY. Without a UTF-8 character type,
+    // tmux replaces Unicode cells with underscores before libghostty sees
+    // them. Pin both protocol and encoding regardless of launch method or
+    // libghostty initialization order.
+    command.env("TERM", VIEWER_TERM);
+    command.env_remove("LC_ALL");
+    command.env("LC_CTYPE", VIEWER_LC_CTYPE);
+    #[cfg(target_os = "macos")]
+    command.env("TERMINFO", VIEWER_TERMINFO);
+    #[cfg(not(target_os = "macos"))]
+    command.env_remove("TERMINFO");
+    command.env_remove("TERMINFO_DIRS");
+    command
+}
+
 fn session_exists(tmux: &Path, session: &str) -> Result<bool, TmuxViewerError> {
     let socket = tmux_socket()?;
     let status = Command::new(tmux)
@@ -484,6 +510,42 @@ mod tests {
     #[test]
     fn session_names_are_application_derived() {
         assert_eq!(session_name("run-123"), "pt-run-123");
+    }
+
+    #[test]
+    fn viewer_uses_a_launch_method_independent_terminal_environment() {
+        let command = tmux_attach_command(Path::new("/approved/tmux"), "muxed", "pt-run-123");
+
+        assert_eq!(
+            command.get_env("TERM"),
+            Some(std::ffi::OsStr::new(VIEWER_TERM))
+        );
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            command.get_env("TERMINFO"),
+            Some(std::ffi::OsStr::new(VIEWER_TERMINFO)),
+        );
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(command.get_env("TERMINFO"), None);
+        assert_eq!(command.get_env("TERMINFO_DIRS"), None);
+        assert_eq!(command.get_env("LC_ALL"), None);
+        assert_eq!(
+            command.get_env("LC_CTYPE"),
+            Some(std::ffi::OsStr::new(VIEWER_LC_CTYPE)),
+        );
+        assert_eq!(
+            command.get_argv(),
+            &[
+                "/approved/tmux",
+                "-L",
+                "muxed",
+                "attach-session",
+                "-t",
+                "pt-run-123",
+            ]
+            .map(std::ffi::OsString::from)
+            .to_vec(),
+        );
     }
 
     #[test]

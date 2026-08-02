@@ -30,7 +30,7 @@ class WorkItemIn(BaseModel):
     Body for a project-scoped task create.  ``parent_id`` is the module (a module id) or the parent task (a task id), or null for an unparented task.
     """ # noqa: E501
     description: Optional[StrictStr] = None
-    issue_type_id: Optional[UUID] = None
+    issue_type_id: UUID
     name: StrictStr
     parent_id: Optional[UUID] = None
     state_id: Optional[UUID] = None
@@ -79,11 +79,6 @@ class WorkItemIn(BaseModel):
         # and model_fields_set contains the field
         if self.description is None and "description" in self.model_fields_set:
             _dict['description'] = None
-
-        # set to None if issue_type_id (nullable) is None
-        # and model_fields_set contains the field
-        if self.issue_type_id is None and "issue_type_id" in self.model_fields_set:
-            _dict['issue_type_id'] = None
 
         # set to None if parent_id (nullable) is None
         # and model_fields_set contains the field

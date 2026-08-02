@@ -26,6 +26,7 @@ type NativeTerminalStatus = {
 type NativeTerminalFailure = {
   handle: string;
   runId: string;
+  reason?: string;
 };
 
 let availability: Promise<boolean> | null = null;
@@ -40,12 +41,16 @@ export function NativeGhosttyTerminal({
   sessionId,
   owner,
   focusSignal,
+  manageForegroundHost = true,
+  onReady,
   onUnavailable,
 }: {
   sessionId: string;
   owner: ForegroundOwner;
   focusSignal?: number;
-  onUnavailable?: () => void;
+  manageForegroundHost?: boolean;
+  onReady?: () => void;
+  onUnavailable?: (reason: string) => void;
 }) {
   const sessions = useTerminalStore((state) => state.sessions);
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
@@ -67,13 +72,18 @@ export function NativeGhosttyTerminal({
   const visible = !!runId && resolvedOwner === owner;
 
   useEffect(() => {
-    registerHost(owner, hostRef.current);
-    const releaseDriver = registerPoolDriver();
+    if (manageForegroundHost) registerHost(owner, hostRef.current);
+    const releaseDriver = manageForegroundHost ? registerPoolDriver() : null;
     return () => {
-      unregisterHost(owner);
-      releaseDriver();
+      if (manageForegroundHost) unregisterHost(owner);
+      releaseDriver?.();
     };
-  }, [owner, registerHost, unregisterHost]);
+  }, [
+    manageForegroundHost,
+    owner,
+    registerHost,
+    unregisterHost,
+  ]);
 
   useEffect(() => {
     if (!visible || !runId) return;
@@ -114,7 +124,11 @@ export function NativeGhosttyTerminal({
         unlisten = await listen<NativeTerminalFailure>(
           "native-terminal-failed",
           (event) => {
-            if (event.payload.runId === runId) onUnavailable?.();
+            if (event.payload.runId === runId) {
+              onUnavailable?.(
+                event.payload.reason ?? "the native terminal bridge disconnected",
+              );
+            }
           },
         );
         if (disposed) {
@@ -123,10 +137,6 @@ export function NativeGhosttyTerminal({
           return;
         }
 
-        // A newly-created run may have reached ready through xterm just before
-        // the renderer switches. End that transient viewer only after failure
-        // reporting is installed; tmux remains alive and authoritative.
-        releasePooledTransport(sessionId);
         const status = await invoke<NativeTerminalStatus>(
           "native_terminal_attach",
           { runId },
@@ -136,7 +146,43 @@ export function NativeGhosttyTerminal({
           return;
         }
         handleRef.current = status.handle;
+        const host = hostRef.current;
+        if (!host) throw new Error("native terminal host was not mounted");
+        const rect = host.getBoundingClientRect();
+        const x = Math.max(0, rect.left);
+        const y = Math.max(0, rect.top);
+        const right = Math.min(window.innerWidth, rect.right);
+        const bottom = Math.min(window.innerHeight, rect.bottom);
+        if (right <= x || bottom <= y) {
+          throw new Error("native terminal host has no visible frame");
+        }
+        const framed = await invoke<NativeTerminalStatus>(
+          "native_terminal_set_frame",
+          {
+            handle: status.handle,
+            frame: {
+              x,
+              y,
+              width: right - x,
+              height: bottom - y,
+              viewportWidth: window.innerWidth,
+              viewportHeight: window.innerHeight,
+            },
+          },
+        );
+        if (framed.columns <= 0 || framed.rows <= 0) {
+          throw new Error("native terminal renderer returned an empty grid");
+        }
+        if (disposed) {
+          handleRef.current = null;
+          void invoke("native_terminal_detach", { handle: status.handle });
+          return;
+        }
+        // Keep xterm's transport alive until the native surface and its bridge
+        // have both attached and accepted a visible frame.
+        releasePooledTransport(sessionId);
         setNativeHandle(status.handle);
+        onReady?.();
         observer = new ResizeObserver(scheduleFrame);
         if (hostRef.current) observer.observe(hostRef.current);
         window.addEventListener("resize", scheduleFrame);
@@ -147,7 +193,10 @@ export function NativeGhosttyTerminal({
         }
       } catch (error) {
         console.error("native libghostty attach failed", error);
-        if (!disposed) onUnavailable?.();
+        const handle = handleRef.current;
+        handleRef.current = null;
+        if (handle) void invoke("native_terminal_detach", { handle });
+        if (!disposed) onUnavailable?.(nativeFailureMessage(error));
       }
     };
     void attach();
@@ -165,7 +214,7 @@ export function NativeGhosttyTerminal({
       setNativeHandle(null);
       if (handle) void invoke("native_terminal_detach", { handle });
     };
-  }, [onUnavailable, runId, sessionId, visible]);
+  }, [onReady, onUnavailable, runId, sessionId, visible]);
 
   useEffect(() => {
     const handle = nativeHandle;
@@ -211,4 +260,10 @@ export function NativeGhosttyTerminal({
       ) : null}
     </div>
   );
+}
+
+function nativeFailureMessage(error: unknown): string {
+  if (typeof error === "string" && error.trim()) return error;
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return "native terminal attachment failed";
 }

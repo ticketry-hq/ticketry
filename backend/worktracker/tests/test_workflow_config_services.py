@@ -13,6 +13,7 @@ from contextlib import contextmanager
 import pytest
 
 from worktracker.models import Issue, IssueType, Project, State
+from worktracker.signals import issue_state_changed
 from worktracker.services import workflow_config as svc
 from worktracker.services.errors import NotFoundError, ServiceError, ValidationError
 
@@ -45,6 +46,13 @@ def conflict():
 
 
 def _issue(project, *, state=None, issue_type=None, type="task", seq=1):
+    if issue_type is None:
+        issue_type = IssueType.objects.create(
+            id=uuid.uuid4(),
+            project=project,
+            name=f"Test {type} {seq}",
+            level=type,
+        )
     return Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -66,7 +74,6 @@ def test_create_issue_type_appends_to_level_order(project):
 
     assert first.sort_order == 0
     assert second.sort_order == 1
-    assert second.is_default is False
 
 
 @pytest.mark.django_db
@@ -89,16 +96,6 @@ def test_create_issue_type_unknown_project_not_found():
 
 
 @pytest.mark.django_db
-def test_update_issue_type_clearing_default_conflicts(project):
-    t = svc.create_issue_type(project.id, name="Story", level="task")
-    t.is_default = True
-    t.save(update_fields=["is_default"])
-
-    with conflict():
-        svc.update_issue_type(t.id, {"is_default": False})
-
-
-@pytest.mark.django_db
 def test_update_issue_type_name_clash_conflicts(project):
     svc.create_issue_type(project.id, name="Story", level="task")
     bug = svc.create_issue_type(project.id, name="Bug", level="task")
@@ -108,34 +105,9 @@ def test_update_issue_type_name_clash_conflicts(project):
 
 
 @pytest.mark.django_db
-def test_update_issue_type_default_flips_other(project):
-    a = svc.create_issue_type(project.id, name="Story", level="task")
-    b = svc.create_issue_type(project.id, name="Bug", level="task")
-    a.is_default = True
-    a.save(update_fields=["is_default"])
-
-    svc.update_issue_type(b.id, {"is_default": True})
-
-    a.refresh_from_db()
-    b.refresh_from_db()
-    assert b.is_default is True
-    assert a.is_default is False
-
-
-@pytest.mark.django_db
 def test_update_issue_type_missing_not_found():
     with pytest.raises(NotFoundError):
         svc.update_issue_type(uuid.uuid4(), {"name": "X"})
-
-
-@pytest.mark.django_db
-def test_delete_default_issue_type_conflicts(project):
-    t = svc.create_issue_type(project.id, name="Story", level="task")
-    t.is_default = True
-    t.save(update_fields=["is_default"])
-
-    with conflict():
-        svc.delete_issue_type(t.id)
 
 
 @pytest.mark.django_db
@@ -335,7 +307,10 @@ def test_delete_last_state_in_group_conflicts(project):
 def test_delete_state_in_use_requires_reassign(project):
     s = svc.create_state(project.id, name="Backlog", group="backlog")
     svc.create_state(project.id, name="Icebox", group="backlog")
-    _issue(project, state=s)
+    issue_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Feature", level="task"
+    )
+    _issue(project, state=s, issue_type=issue_type)
 
     with conflict():
         svc.delete_state(s.id)
@@ -345,7 +320,10 @@ def test_delete_state_in_use_requires_reassign(project):
 def test_delete_state_reassigns_then_deletes(project):
     src = svc.create_state(project.id, name="Backlog", group="backlog")
     dst = svc.create_state(project.id, name="Icebox", group="backlog")
-    issue = _issue(project, state=src)
+    issue_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Feature", level="task"
+    )
+    issue = _issue(project, state=src, issue_type=issue_type)
 
     impact = svc.get_state_impact(src.id)
     svc.delete_state(
@@ -358,12 +336,10 @@ def test_delete_state_reassigns_then_deletes(project):
 
 
 @pytest.mark.django_db
-def test_delete_state_reassign_routes_through_sole_writer(project):
-    """Reassignment is a forced sole-writer move: audit trace + archive cascade
-    apply, instead of a signal-free queryset ``update`` (#871/#872)."""
-
-    from worktracker.models import ForceTransition
-
+def test_delete_state_reassign_preserves_state_change_invariants(
+    project, django_capture_on_commit_callbacks
+):
+    """Configuration repair preserves revisions and cancellation archiving."""
     src = svc.create_state(project.id, name="Backlog", group="backlog")
     svc.create_state(project.id, name="Icebox", group="backlog")
     dst = svc.create_state(project.id, name="Cancelled", group="cancelled")
@@ -371,20 +347,41 @@ def test_delete_state_reassign_routes_through_sole_writer(project):
         id=uuid.uuid4(), project=project, name="Story", level="task"
     )
     issue = _issue(project, state=src, issue_type=story_type)
+    previous_revision = issue.state_revision
+    events = []
+
+    def record_event(sender, **kwargs):
+        events.append(kwargs)
+
+    issue_state_changed.connect(
+        record_event,
+        dispatch_uid="state-deletion-reassignment",
+    )
 
     impact = svc.get_state_impact(src.id)
-    svc.delete_state(
-        src.id, reassign_to=dst.id, impact_token=impact["impact_token"]
-    )
+    try:
+        with django_capture_on_commit_callbacks(execute=True):
+            svc.delete_state(
+                src.id,
+                reassign_to=dst.id,
+                impact_token=impact["impact_token"],
+            )
+    finally:
+        issue_state_changed.disconnect(
+            record_event,
+            dispatch_uid="state-deletion-reassignment",
+        )
 
     issue.refresh_from_db()
     assert issue.state_id == dst.id
     # Entering a cancelled-group state must ride the archive cascade.
     assert issue.is_archived is True
-    trace = ForceTransition.objects.get(issue=issue)
-    assert trace.actor == "state-deletion"
-    assert trace.from_state == "Backlog"
-    assert trace.to_state == "Cancelled"
+    assert issue.state_revision > previous_revision
+    assert len(events) == 1
+    assert events[0]["issue_id"] == str(issue.id)
+    assert events[0]["from_state_id"] == str(src.id)
+    assert events[0]["to_state_id"] == str(dst.id)
+    assert events[0]["revision"] == issue.state_revision
 
 
 @pytest.mark.django_db

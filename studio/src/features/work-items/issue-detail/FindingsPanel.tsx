@@ -42,7 +42,7 @@ export default function FindingsPanel({ children, onCancel }: FindingsPanelProps
       </div>
       <div className="overflow-hidden rounded-lg border border-pane-border" data-testid="findings-list">
         {items.map((f) => {
-          const location = formatFindingLocation(f.description_html ?? f.description);
+          const location = formatFindingLocation(f.description);
           return (
             <div
               key={f.id}

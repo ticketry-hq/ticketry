@@ -201,7 +201,7 @@ sequenceDiagram
               </tr>
               <tr>
                 <td class="px-4 py-4"><code>transition_state</code> (<code>backend/worktracker/workflow.py:73</code>)</td>
-                <td class="px-4 py-4">Sets the root state, toggles root archive status on entry to or exit from cancelled, and optionally records a forced transition (<code>backend/worktracker/workflow.py:140</code>, <code>backend/worktracker/workflow.py:147</code>, <code>backend/worktracker/workflow.py:151</code>).</td>
+                <td class="px-4 py-4">Validates the configured edge, sets the root state, and toggles root archive status on entry to or exit from cancelled.</td>
                 <td class="px-4 py-4">Only when the assigned target changes state identity (<code>backend/worktracker/models/issue.py:137</code>).</td>
                 <td class="px-4 py-4">Only when the assigned target changes state identity (<code>backend/worktracker/signals.py:122</code>, <code>backend/worktracker/signals.py:127</code>, <code>backend/apps/runs/signals.py:42</code>).</td>
                 <td class="px-4 py-4">The root’s latest surviving state revision appears when it falls inside the replay interval (<code>backend/apps/runs/projections.py:78</code>).</td>

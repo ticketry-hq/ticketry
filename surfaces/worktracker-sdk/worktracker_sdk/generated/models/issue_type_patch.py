@@ -18,7 +18,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing import Optional, Set
 from typing_extensions import Self
@@ -29,11 +29,9 @@ class IssueTypePatch(BaseModel):
     PATCH body for an issue type — every field optional, level immutable.
     """ # noqa: E501
     color: Optional[StrictStr] = None
-    icon: Optional[StrictStr] = None
-    is_default: Optional[StrictBool] = None
     name: Optional[StrictStr] = None
     sort_order: Optional[StrictInt] = None
-    __properties: ClassVar[List[str]] = ["color", "icon", "is_default", "name", "sort_order"]
+    __properties: ClassVar[List[str]] = ["color", "name", "sort_order"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -79,16 +77,6 @@ class IssueTypePatch(BaseModel):
         if self.color is None and "color" in self.model_fields_set:
             _dict['color'] = None
 
-        # set to None if icon (nullable) is None
-        # and model_fields_set contains the field
-        if self.icon is None and "icon" in self.model_fields_set:
-            _dict['icon'] = None
-
-        # set to None if is_default (nullable) is None
-        # and model_fields_set contains the field
-        if self.is_default is None and "is_default" in self.model_fields_set:
-            _dict['is_default'] = None
-
         # set to None if name (nullable) is None
         # and model_fields_set contains the field
         if self.name is None and "name" in self.model_fields_set:
@@ -112,8 +100,6 @@ class IssueTypePatch(BaseModel):
 
         _obj = cls.model_validate({
             "color": obj.get("color"),
-            "icon": obj.get("icon"),
-            "is_default": obj.get("is_default"),
             "name": obj.get("name"),
             "sort_order": obj.get("sort_order")
         })

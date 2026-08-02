@@ -4,13 +4,22 @@ import uuid
 
 import pytest
 
+from worktracker.models import IssueType
 from worktracker.tests.conftest import BASE, post_json
 
 
 def _make(client, project, auth, name):
     """Create a project task and return its JSON (carrying id + rank)."""
+    issue_type, _ = IssueType.objects.get_or_create(
+        project=project,
+        name="Task",
+        defaults={"id": uuid.uuid4(), "level": "task"},
+    )
     return post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": name}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        {"name": name, "issue_type_id": str(issue_type.id)},
+        auth,
     ).json()
 
 
@@ -129,8 +138,14 @@ def test_neighbor_from_another_project_rejected(client, project, auth):
     other = Project.objects.create(
         id=uuid.uuid4(), workspace=project.workspace, name="other", slug="OTHER"
     )
+    foreign_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=other, name="Task", level="task"
+    )
     foreign = post_json(
-        client, f"{BASE}/projects/{other.id}/work-items", {"name": "F"}, auth
+        client,
+        f"{BASE}/projects/{other.id}/work-items",
+        {"name": "F", "issue_type_id": str(foreign_type.id)},
+        auth,
     ).json()
 
     r = _reorder(client, auth, a["id"], before=foreign["id"], after=None)

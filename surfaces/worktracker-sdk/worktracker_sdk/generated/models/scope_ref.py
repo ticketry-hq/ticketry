@@ -27,15 +27,14 @@ from pydantic_core import to_jsonable_python
 
 class ScopeRef(BaseModel):
     """
-    A compact, agent-readable reference to one issue in a scope-context (#667).  ``state_group`` is the issue's frozen group (``None`` when it has no state); ``resolved`` is ``True`` iff that group is completed/cancelled. ``assignees`` is the list of display names (or email fallback) — a non-empty list is what flags a neighbor as ``owned_elsewhere``.
+    A compact, agent-readable reference to one issue in a scope-context (#667).  ``state_group`` is the issue's frozen group (``None`` when it has no state); ``resolved`` is ``True`` iff that group is completed/cancelled.
     """ # noqa: E501
-    assignees: Optional[List[StrictStr]] = None
     id: UUID
     key: StrictStr
     name: StrictStr
     resolved: Optional[StrictBool] = False
     state_group: Optional[StrictStr] = None
-    __properties: ClassVar[List[str]] = ["assignees", "id", "key", "name", "resolved", "state_group"]
+    __properties: ClassVar[List[str]] = ["id", "key", "name", "resolved", "state_group"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -93,7 +92,6 @@ class ScopeRef(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "assignees": obj.get("assignees"),
             "id": obj.get("id"),
             "key": obj.get("key"),
             "name": obj.get("name"),

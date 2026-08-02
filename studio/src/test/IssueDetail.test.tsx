@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const launchAgent = vi.hoisted(() => vi.fn());
@@ -14,8 +14,10 @@ vi.mock("../shared/api/client", async () => {
   const actual = await vi.importActual<typeof import("../shared/api/client")>("../shared/api/client");
   return {
     ...actual,
+    getWorkItem: vi.fn(),
     patchWorkItem: vi.fn(),
     createWorkItem: vi.fn(),
+    listIssueTypes: vi.fn(async () => []),
     listProjectWorkItems: vi.fn(async () => []),
   };
 });
@@ -62,17 +64,19 @@ import { useIssueStore } from "../features/work-items/issue-detail";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useStudioStore } from "../features/projects/store";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
+import { DetailsTab } from "../features/studio/pages/workspace/tabs/DetailsTab";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import { useToastStore } from "../app/stores/toastStore";
 import { useSettingsStore } from "../features/settings/store";
 import { dialog } from "../app/stores/dialogStore";
-import { ApiError } from "../shared/api/client";
 import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
 import type { Attachment, Module, State, WorkItem, WorkItemDetail } from "../shared/api/types";
 
 const patchWorkItem = api.patchWorkItem as ReturnType<typeof vi.fn>;
+const getWorkItem = api.getWorkItem as ReturnType<typeof vi.fn>;
 const createWorkItem = api.createWorkItem as ReturnType<typeof vi.fn>;
 const listProjectWorkItems = api.listProjectWorkItems as ReturnType<typeof vi.fn>;
+const listIssueTypes = api.listIssueTypes as ReturnType<typeof vi.fn>;
 const getWorktree = worktreeApi.getWorktree as ReturnType<typeof vi.fn>;
 const deleteIssue = vi.fn();
 const confirmDelete = vi.spyOn(dialog, "confirm");
@@ -84,7 +88,8 @@ const IMPLEMENT: State = { id: "st-implement", name: "Implement", group: "starte
 const CANCELLED: State = { id: "st-cancelled", name: "Cancelled", group: "cancelled", color: null };
 const STORY_TYPE = { id: "ty-story", name: "Story", level: "task" } as WorkItem["issue_type"];
 const IMPL_TYPE = { id: "ty-impl", name: "Implementation", level: "task" } as WorkItem["issue_type"];
-const EPIC: Module = { id: "m1", name: "Epic One", project_id: "p1", sequence_id: 609, key: "MEML-609" };
+const MODULE_TYPE = { id: "ty-epic", name: "Epic", level: "module" } as Module["issue_type"];
+const EPIC: Module = { id: "m1", name: "Epic One", project_id: "p1", sequence_id: 609, key: "MEML-609", issue_type: MODULE_TYPE };
 
 function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
   return {
@@ -92,10 +97,7 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
     project_id: "p1",
     sequence_id: 7,
     state: TODO,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
+    issue_type: STORY_TYPE,
     description: null,
     parent_id: "m1",
     sub_issues_count: 0,
@@ -110,11 +112,6 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
 
 function detail(task: WorkItem, attachments: Attachment[] = []): WorkItemDetail {
   return { task, attachments };
-}
-
-function getAddLabelControl(): HTMLElement {
-  return screen.queryByTestId("add-label")
-    ?? screen.getByRole("button", { name: "Add label" });
 }
 
 function setup(
@@ -147,9 +144,12 @@ function setup(
 }
 
 beforeEach(() => {
+  useIssueStore.getState().closeIssue();
+  getWorkItem.mockReset().mockResolvedValue(detail(wi({ id: "a" })));
   patchWorkItem.mockReset().mockImplementation(async (_id, patch) => wi({ id: "a", ...patch }));
   createWorkItem.mockReset().mockResolvedValue(wi({ id: "c", parent_id: "a", key: "MEML-8" }));
   listProjectWorkItems.mockReset().mockResolvedValue([]);
+  listIssueTypes.mockReset().mockResolvedValue([STORY_TYPE, IMPL_TYPE]);
   getWorktree.mockReset();
   launchAgent.mockReset().mockResolvedValue({
     target_id: "a",
@@ -170,13 +170,134 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("IssueDetail", () => {
-  it("renders the two-pane fields and no assignee UI", async () => {
+  it("paints a loaded selection before its one debounced detail refresh", async () => {
+    vi.useFakeTimers();
+    const task = wi({ id: "a", name: "Already loaded" });
+    useIssueStore.setState({
+      workItemsById: { [task.id]: task },
+      workItemIdByKey: { [task.key]: task.id },
+      childWorkItemIds: {},
+      open: null,
+      children: [],
+      loading: false,
+      notFound: false,
+      loadError: null,
+    });
+    useBacklogStore.setState({
+      projectId: "p1",
+      items: [task],
+      states: [TODO, DONE],
+      filters: { query: "" },
+      deleteIssue,
+    });
+    useStudioStore.setState({
+      selectedProjectId: "p1",
+      modules: [EPIC],
+      projects: [{ id: "p1", name: "Worktracker", slug: "wt", description: "" }],
+    });
+    useTasksStore.setState({
+      selectedProjectId: "p1",
+      selectedModuleId: "m1",
+      selectedTaskId: task.id,
+    });
+
+    const view = render(<DetailsTab />);
+
+    expect(screen.getByTestId("issue-name")).toHaveTextContent("Already loaded");
+    expect(screen.queryByText("Loading issue…")).toBeNull();
+    expect(getWorkItem).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(150);
+    expect(getWorkItem).toHaveBeenCalledTimes(1);
+    expect(getWorkItem).toHaveBeenLastCalledWith(task.id, expect.any(AbortSignal));
+
+    view.unmount();
+    vi.useRealTimers();
+  });
+
+  it("keeps loading reserved for an absent record and hydrates it", async () => {
+    let resolveDetail!: (value: WorkItemDetail) => void;
+    getWorkItem.mockImplementation(
+      () => new Promise<WorkItemDetail>((resolve) => { resolveDetail = resolve; }),
+    );
+    useIssueStore.setState({
+      workItemsById: {},
+      workItemIdByKey: {},
+      childWorkItemIds: {},
+      open: null,
+      children: [],
+      loading: false,
+      notFound: false,
+      loadError: null,
+    });
+
+    render(<IssueDetail issueId="missing" />);
+    expect(screen.getByText("Loading issue…")).toBeInTheDocument();
+
+    const task = wi({ id: "missing", name: "Hydrated after cache miss" });
+    resolveDetail(detail(task));
+
+    expect(await screen.findByTestId("issue-name")).toHaveTextContent("Hydrated after cache miss");
+    expect(useIssueStore.getState().getWorkItem(task.id)).toMatchObject({ name: task.name });
+  });
+
+  it("aborts a superseded refresh and rejects its late response", async () => {
+    vi.useFakeTimers();
+    const first = wi({ id: "a", name: "First" });
+    const second = wi({ id: "b", key: "MEML-8", name: "Second" });
+    let resolveFirst!: (value: WorkItemDetail) => void;
+    let firstSignal: AbortSignal | undefined;
+    getWorkItem.mockImplementationOnce((_id: string, signal?: AbortSignal) => {
+      firstSignal = signal;
+      return new Promise<WorkItemDetail>((resolve) => { resolveFirst = resolve; });
+    }).mockResolvedValueOnce(detail(second));
+    useIssueStore.setState({
+      workItemsById: { [first.id]: first, [second.id]: second },
+      workItemIdByKey: { [first.key]: first.id, [second.key]: second.id },
+      childWorkItemIds: {},
+      open: null,
+      children: [],
+      loading: false,
+      notFound: false,
+      loadError: null,
+    });
+    useBacklogStore.setState({
+      projectId: "p1",
+      items: [first, second],
+      states: [TODO, DONE],
+      filters: { query: "" },
+      deleteIssue,
+    });
+    useStudioStore.setState({
+      selectedProjectId: "p1",
+      modules: [EPIC],
+      projects: [{ id: "p1", name: "Worktracker", slug: "wt", description: "" }],
+    });
+
+    const view = render(<IssueDetail issueId={first.id} />);
+    await vi.advanceTimersByTimeAsync(150);
+    view.rerender(<IssueDetail issueId={second.id} />);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(firstSignal?.aborted).toBe(true);
+    resolveFirst(detail({ ...first, name: "Late first response" }));
+    await Promise.resolve();
+    expect(screen.getByTestId("issue-name")).toHaveTextContent("Second");
+
+    view.unmount();
+    vi.useRealTimers();
+  });
+
+  it("renders the two-pane fields", async () => {
     setup(wi({ id: "a", name: "Build the thing" }));
     expect(screen.getByTestId("issue-name")).toHaveTextContent("Build the thing");
     expect(await screen.findByTestId("issue-description")).toBeInTheDocument();
     expect(screen.getByTestId("child-issues")).toBeInTheDocument();
-    expect(screen.queryByText(/assignee/i)).toBeNull();
     expect(screen.queryByTestId("blocks-row")).toBeNull();
   });
 
@@ -190,7 +311,6 @@ describe("IssueDetail", () => {
     const blocked = wi({ id: "c", key: "MEML-3" });
     const task = wi({
       id: "a",
-      labels: [{ name: "backend", color: null }],
       blocked_by_ids: ["b"],
       blocks_ids: ["c"],
     });
@@ -204,7 +324,6 @@ describe("IssueDetail", () => {
       "Type",
       "Parent",
       "Module",
-      "Labels",
       "Blocked by",
       "Blocks",
       "Created",
@@ -214,7 +333,6 @@ describe("IssueDetail", () => {
       "inline",
       "inline",
       "inline",
-      "stacked",
       "stacked",
       "stacked",
       "inline",
@@ -339,22 +457,20 @@ describe("IssueDetail", () => {
     const blocker = wi({ id: "b", key: "MEML-2" });
     const task = wi({
       id: "a",
-      labels: [{ name: "backend", color: null }],
       blocked_by_ids: ["b"],
     });
     setup(task, [], [task, blocker], {
       parent_id: true,
-      labels: true,
       blocked_by_ids: true,
     });
 
     const savingFields = within(screen.getByTestId("details-fields"))
       .getAllByTestId("details-field")
-      .filter((field) => ["Parent", "Labels", "Blocked by"].includes(
+      .filter((field) => ["Parent", "Blocked by"].includes(
         within(field).getByTestId("field-label").textContent ?? "",
       ));
 
-    expect(savingFields).toHaveLength(3);
+    expect(savingFields).toHaveLength(2);
     for (const field of savingFields) {
       const value = within(field).getByTestId("field-value");
       expect(value).toHaveClass("opacity-50");
@@ -363,39 +479,8 @@ describe("IssueDetail", () => {
         expect(control).toBeDisabled();
       }
     }
-    expect(getAddLabelControl()).toBeDisabled();
     expect(screen.queryByText("saving…")).toBeNull();
     expect(within(screen.getByTestId("details-fields")).queryByText("…")).toBeNull();
-  });
-
-  it("undims and re-enables a field after a rejected save while keeping the error toast", async () => {
-    let rejectPatch!: (error: unknown) => void;
-    patchWorkItem.mockImplementation(() => new Promise((_resolve, reject) => {
-      rejectPatch = reject;
-    }));
-    setup(wi({
-      id: "a",
-      labels: [{ name: "backend", color: null }],
-    }));
-
-    fireEvent.click(screen.getByTestId("remove-label"));
-    const value = screen.getByTestId("label-editor").closest('[data-testid="field-value"]')!;
-    await waitFor(() => {
-      expect(value).toHaveClass("opacity-50");
-      expect(getAddLabelControl()).toBeDisabled();
-    });
-
-    rejectPatch(new ApiError(500, "Could not save labels", {}));
-
-    await waitFor(() => {
-      expect(value).not.toHaveClass("opacity-50");
-      expect(getAddLabelControl()).toBeEnabled();
-      expect(screen.getByText("backend")).toBeInTheDocument();
-      expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
-        kind: "error",
-        message: "500: Could not save labels",
-      });
-    });
   });
 
   it("renders attachment rows with filename + human-readable size (G02)", () => {
@@ -440,7 +525,6 @@ describe("IssueDetail", () => {
     await waitFor(() =>
       expect(patchWorkItem).toHaveBeenCalledWith("a", {
         state_id: "st-done",
-        force_if_completed: true,
       }),
     );
   });
@@ -486,33 +570,6 @@ describe("IssueDetail", () => {
     expect(typeLabel.tagName).toBe("SPAN");
   });
 
-  it("shows Unspecified in task details when task type data is absent", () => {
-    setup(wi({ id: "a", issue_type: null }));
-
-    expect(
-      within(screen.getByTestId("details-fields")).getByTestId(
-        "issue-type-label",
-      ),
-    ).toHaveTextContent("Unspecified");
-  });
-
-  it("shows only the configured workflow state when lifecycle data is present", () => {
-    setup(wi({ id: "a", lifecycle_state: "backlog", lifecycle_transitions: ["refining"] }));
-    expect(screen.getByTestId("state-picker")).toHaveTextContent("Todo");
-    expect(screen.queryByTestId("lifecycle-picker")).toBeNull();
-    expect(screen.queryByText("Backlog")).toBeNull();
-  });
-
-  it("keeps lifecycle values out of the visible state picker", () => {
-    setup(wi({ id: "a", lifecycle_state: "prd_review", lifecycle_transitions: ["prd_approved"] }));
-    fireEvent.click(screen.getByTestId("state-picker").querySelector("button")!);
-    const picker = screen.getByTestId("state-picker");
-    expect(within(picker).getAllByText("Todo")).toHaveLength(2);
-    expect(within(picker).getByText("Done")).toBeInTheDocument();
-    expect(within(picker).queryByText("PRD in review")).not.toBeInTheDocument();
-    expect(within(picker).queryByText("PRD approved")).not.toBeInTheDocument();
-  });
-
   it("editing the name PATCHes name", async () => {
     setup(wi({ id: "a", name: "old" }));
     fireEvent.click(screen.getByTestId("issue-name"));
@@ -524,11 +581,18 @@ describe("IssueDetail", () => {
 
   it("adding a sub-task POSTs with the parent_id", async () => {
     setup(wi({ id: "a" }));
+    fireEvent.change(await screen.findByTestId("add-subtask-type"), {
+      target: { value: STORY_TYPE.id },
+    });
     const input = screen.getByTestId("add-subtask");
     fireEvent.change(input, { target: { value: "A sub-task" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() =>
-      expect(createWorkItem).toHaveBeenCalledWith("p1", { name: "A sub-task", parent_id: "a" }),
+      expect(createWorkItem).toHaveBeenCalledWith("p1", {
+        name: "A sub-task",
+        parent_id: "a",
+        issue_type_id: STORY_TYPE.id,
+      }),
     );
   });
 
@@ -540,66 +604,6 @@ describe("IssueDetail", () => {
     fireEvent.click(await screen.findByRole("button", { name: /MEML-8/ }));
 
     expect(useTasksStore.getState().selectedTaskId).toBe("child-id");
-  });
-
-  it("renders label chips (colored) and removes one via the × control (G06)", async () => {
-    patchWorkItem.mockResolvedValue(wi({ id: "a", labels: [] }));
-    setup(
-      wi({
-        id: "a",
-        labels: [
-          { name: "backend", color: "#7aa2f7" },
-          { name: "infra", color: null },
-        ],
-      }),
-    );
-    expect(screen.getByText("backend")).toBeInTheDocument();
-    const swatches = screen.getAllByTestId("label-swatch");
-    expect(swatches[0]).toHaveStyle({ backgroundColor: "#7aa2f7" });
-
-    const remove = screen.getAllByTestId("remove-label")[0];
-    expect(remove).not.toHaveAttribute("tabindex", "-1");
-    remove.focus();
-    expect(remove).toHaveFocus();
-    fireEvent.click(remove);
-    await waitFor(() =>
-      expect(patchWorkItem).toHaveBeenCalledWith("a", { labels: ["infra"] }),
-    );
-  });
-
-  it("adds a typed label name on Enter (G06)", async () => {
-    patchWorkItem.mockResolvedValue(wi({ id: "a", labels: [{ name: "urgent", color: "" }] }));
-    setup(wi({ id: "a", labels: [] }));
-
-    expect(screen.queryByTestId("add-label")).toBeNull();
-    const reveal = screen.getByRole("button", { name: "Add label" });
-    expect(reveal).toHaveTextContent("+");
-    fireEvent.click(reveal);
-
-    const input = screen.getByTestId("add-label");
-    expect(input).toHaveFocus();
-    fireEvent.change(input, { target: { value: " urgent " } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() =>
-      expect(patchWorkItem).toHaveBeenCalledWith("a", { labels: ["urgent"] }),
-    );
-    expect(screen.queryByTestId("add-label")).toBeNull();
-    expect(screen.getByRole("button", { name: "Add label" })).toBeInTheDocument();
-  });
-
-  it("collapses label editing on Escape or blur without PATCHing", () => {
-    setup(wi({ id: "a", labels: [] }));
-
-    fireEvent.click(screen.getByRole("button", { name: "Add label" }));
-    const escapedInput = screen.getByTestId("add-label");
-    fireEvent.change(escapedInput, { target: { value: "discard me" } });
-    fireEvent.keyDown(escapedInput, { key: "Escape" });
-    expect(screen.queryByTestId("add-label")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Add label" }));
-    fireEvent.blur(screen.getByTestId("add-label"));
-    expect(screen.queryByTestId("add-label")).toBeNull();
-    expect(patchWorkItem).not.toHaveBeenCalled();
   });
 
   it("toggles the Details sidebar and persists the preference (#837)", () => {
@@ -818,15 +822,15 @@ describe("FindingsPanel (#907)", () => {
     setupStory([
       finding({
         id: "f1", key: "MEML-11", name: "Fix null deref", state: IMPLEMENT,
-        description_html: "Path: src/auth/login.ts\nLines: 40-48\nNote: guard the token",
+        description: "Path: src/auth/login.ts\nLines: 40-48\nNote: guard the token",
       }),
       finding({
         id: "f2", key: "MEML-12", name: "Second fix", state: IMPLEMENT,
-        description_html: "Path: src/auth/session.ts\nLines: 10-10",
+        description: "Path: src/auth/session.ts\nLines: 10-10",
       }),
       finding({
         id: "f3", key: "MEML-13", name: "Under review", state: REVIEW,
-        description_html: "Path: src/x.ts\nLines: 1-2",
+        description: "Path: src/x.ts\nLines: 1-2",
       }),
     ]);
 
@@ -846,7 +850,7 @@ describe("FindingsPanel (#907)", () => {
 
   it("uses the singular label for a single queued fix", () => {
     setupStory([
-      finding({ id: "f1", key: "MEML-11", name: "Only fix", state: IMPLEMENT, description_html: "Path: a.ts\nLines: 1-2" }),
+      finding({ id: "f1", key: "MEML-11", name: "Only fix", state: IMPLEMENT, description: "Path: a.ts\nLines: 1-2" }),
     ]);
     expect(screen.getByTestId("findings-queued-count")).toHaveTextContent("1 fix queued");
   });
@@ -863,7 +867,7 @@ describe("FindingsPanel (#907)", () => {
 
   it("does not render the panel for a Story outside Review", () => {
     setupStory(
-      [finding({ id: "f1", key: "MEML-11", name: "Fix", state: IMPLEMENT, description_html: "Path: a.ts\nLines: 1-2" })],
+      [finding({ id: "f1", key: "MEML-11", name: "Fix", state: IMPLEMENT, description: "Path: a.ts\nLines: 1-2" })],
       TODO,
     );
     expect(screen.queryByTestId("findings-panel")).toBeNull();
@@ -883,21 +887,20 @@ describe("FindingsPanel (#907)", () => {
 
   it("cancels a queued finding via the child state-move path and reconciles the count", async () => {
     patchWorkItem.mockResolvedValue(
-      finding({ id: "f1", key: "MEML-11", name: "Fix null deref", state: CANCELLED, description_html: "Path: a.ts\nLines: 1-2" }),
+      finding({ id: "f1", key: "MEML-11", name: "Fix null deref", state: CANCELLED, description: "Path: a.ts\nLines: 1-2" }),
     );
     setupStory([
-      finding({ id: "f1", key: "MEML-11", name: "Fix null deref", state: IMPLEMENT, description_html: "Path: a.ts\nLines: 1-2" }),
-      finding({ id: "f2", key: "MEML-12", name: "Second", state: IMPLEMENT, description_html: "Path: b.ts\nLines: 3-4" }),
+      finding({ id: "f1", key: "MEML-11", name: "Fix null deref", state: IMPLEMENT, description: "Path: a.ts\nLines: 1-2" }),
+      finding({ id: "f2", key: "MEML-12", name: "Second", state: IMPLEMENT, description: "Path: b.ts\nLines: 3-4" }),
     ]);
     expect(screen.getByTestId("findings-queued-count")).toHaveTextContent("2 fixes queued");
 
     fireEvent.click(within(screen.getAllByTestId("finding-row")[0]).getByTestId("finding-cancel"));
 
-    // Cancel = move the child → Cancelled (no force; the gate folds it in).
+    // Cancel = a normal graph-governed move to Cancelled.
     await waitFor(() =>
       expect(patchWorkItem).toHaveBeenCalledWith("f1", {
         state_id: "st-cancelled",
-        force_if_completed: true,
       }),
     );
     // The parent detail reconciles: the cancelled finding drops out of the
@@ -911,58 +914,54 @@ describe("FindingsPanel (#907)", () => {
   });
 });
 
-// C5 (#640), CODIN-1382: sanitized reading and the shared rich editor's
-// HTML-backed ticket-description round trip.
+// Canonical Markdown descriptions retain sanitized legacy-HTML compatibility.
 describe("DescriptionEditor", () => {
-  it("renders stored HTML and strips dangerous markup", () => {
-    setup(wi({ id: "a", description_html: "<p>Hi <strong>there</strong></p><script>window.x=1</script>" }));
-    const view = screen.getByTestId("issue-description");
+  it("renders legacy stored HTML and strips dangerous markup", async () => {
+    setup(wi({ id: "a", description: "<p>Hi <strong>there</strong></p><script>window.x=1</script>" }));
+    const view = await screen.findByTestId("issue-description");
     expect(view).toHaveTextContent("Hi there");
     expect(view.querySelector("strong")).not.toBeNull();
     expect(view.querySelector("script")).toBeNull();
   });
 
-  it("renders markdown-shaped description_html as formatted markdown", () => {
-    setup(wi({ id: "a", description_html: "## Heading\n\n- One\n- **Two**" }));
-    const view = screen.getByTestId("issue-description");
+  it("renders markdown-shaped description as formatted markdown", async () => {
+    setup(wi({ id: "a", description: "## Heading\n\n- One\n- **Two**" }));
+    const view = await screen.findByTestId("issue-description");
     expect(view.querySelector("h2")).not.toBeNull();
     expect(view.querySelector("ul > li")?.textContent).toBe("One");
     expect(view.querySelector("strong")?.textContent).toBe("Two");
   });
 
-  it("falls back to legacy markdown description when description_html is empty", () => {
-    setup(wi({ id: "a", description_html: "", description: "## Legacy\n\n- Item" }));
-    const view = screen.getByTestId("issue-description");
-    expect(view.querySelector("h2")?.textContent).toBe("Legacy");
-    expect(view.querySelector("ul > li")?.textContent).toBe("Item");
+  it("shows the add-description affordance when canonical description is empty", async () => {
+    setup(wi({ id: "a", description: "" }));
+    expect(await screen.findByTestId("issue-description")).toHaveTextContent("Add a description…");
   });
 
   it("opens the compact rich editor with markdown converted from stored HTML", async () => {
-    setup(wi({ id: "a", description_html: "<p>Hi <strong>world</strong></p>" }));
-    fireEvent.click(screen.getByTestId("issue-description"));
+    setup(wi({ id: "a", description: "<p>Hi <strong>world</strong></p>" }));
+    fireEvent.click(await screen.findByTestId("issue-description"));
     // The HTML→markdown converter (turndown) loads on demand at first edit.
     const editor = await screen.findByTestId("rich-markdown-editor");
     expect(editor).toHaveAttribute("data-layout", "compact");
     expect(screen.getByLabelText("Ticket description Markdown")).toHaveValue("Hi **world**");
   });
 
-  it("saves rich-editor changes as rendered HTML in description_html", async () => {
-    setup(wi({ id: "a", description_html: null }));
-    fireEvent.click(screen.getByTestId("issue-description"));
+  it("saves rich-editor changes as canonical Markdown", async () => {
+    setup(wi({ id: "a", description: null }));
+    fireEvent.click(await screen.findByTestId("issue-description"));
     fireEvent.change(await screen.findByLabelText("Ticket description Markdown"), {
       target: { value: "# Title" },
     });
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() => expect(patchWorkItem).toHaveBeenCalled());
     const [, patch] = patchWorkItem.mock.calls[0];
-    expect(patch.description_html).toContain("<h1>");
-    expect(patch.description_html).toContain("Title");
+    expect(patch.description).toBe("# Title");
     expect(screen.getByTestId("issue-description")).toBeInTheDocument();
   });
 
   it("cancels a rich-editor draft without patching the work item", async () => {
-    setup(wi({ id: "a", description_html: "<p>Original</p>" }));
-    fireEvent.click(screen.getByTestId("issue-description"));
+    setup(wi({ id: "a", description: "<p>Original</p>" }));
+    fireEvent.click(await screen.findByTestId("issue-description"));
     fireEvent.change(await screen.findByLabelText("Ticket description Markdown"), {
       target: { value: "Changed" },
     });
@@ -974,8 +973,8 @@ describe("DescriptionEditor", () => {
   });
 
   it("preserves a parse-failing draft in source mode and can save it", async () => {
-    setup(wi({ id: "a", description_html: null }));
-    fireEvent.click(screen.getByTestId("issue-description"));
+    setup(wi({ id: "a", description: null }));
+    fireEvent.click(await screen.findByTestId("issue-description"));
     fireEvent.change(await screen.findByLabelText("Ticket description Markdown"), {
       target: { value: "<unsupported>draft</unsupported>" },
     });
@@ -993,7 +992,7 @@ describe("DescriptionEditor", () => {
       expect(patchWorkItem).toHaveBeenCalledWith(
         "a",
         expect.objectContaining({
-          description_html: expect.stringContaining("<h1>Recovered</h1>"),
+          description: "# Recovered",
         }),
       ),
     );

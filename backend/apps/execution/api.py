@@ -280,7 +280,7 @@ def create_launch_agent(request, issue_id: str, payload: LaunchAgentIn):
     """Launch one direct coding session for the target work item (CODIN-924).
 
     Not the execution engine: this seeds no graph/engine state and moves no
-    workflow/lifecycle state — it just starts a normal task-scoped run whose
+    workflow state — it just starts a normal task-scoped run whose
     prompt is built from the target ticket (no caller prompt). Returns 201 with
     the resolved target, the launched agent, and its ``agent_run_id``. Preserves
     the terminal-launch prerequisites as HTTP errors: ``task_not_found`` (404),

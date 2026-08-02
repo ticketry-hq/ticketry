@@ -94,7 +94,7 @@ export interface ProjectsApiInterface {
     deleteProjectRequestOpts(requestParameters: DeleteProjectRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project\'s States, IssueTypes, Labels and Issues (and each issue\'s Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
+     * Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project\'s States, IssueTypes and Issues (and each issue\'s Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
      * @summary Delete Project
      * @param {string} projectId 
      * @param {*} [options] Override http request option.
@@ -104,7 +104,7 @@ export interface ProjectsApiInterface {
     deleteProjectRaw(requestParameters: DeleteProjectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>>;
 
     /**
-     * Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project\'s States, IssueTypes, Labels and Issues (and each issue\'s Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
+     * Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project\'s States, IssueTypes and Issues (and each issue\'s Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
      * Delete Project
      */
     deleteProject(requestParameters: DeleteProjectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void>;
@@ -249,7 +249,7 @@ export class ProjectsApi extends runtime.BaseAPI implements ProjectsApiInterface
     }
 
     /**
-     * Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project\'s States, IssueTypes, Labels and Issues (and each issue\'s Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
+     * Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project\'s States, IssueTypes and Issues (and each issue\'s Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
      * Delete Project
      */
     async deleteProjectRaw(requestParameters: DeleteProjectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
@@ -260,7 +260,7 @@ export class ProjectsApi extends runtime.BaseAPI implements ProjectsApiInterface
     }
 
     /**
-     * Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project\'s States, IssueTypes, Labels and Issues (and each issue\'s Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
+     * Permanently delete a project and everything it owns (#665).  Unlike module/work-item delete, there is **no** child-count guard — this is the single-user local setup, and the operator gates the destruction with a typed-key confirm in the UI. The cascade is automatic: the project\'s States, IssueTypes and Issues (and each issue\'s Attachments) all declare ``on_delete=CASCADE``, so one delete clears the whole subtree.
      * Delete Project
      */
     async deleteProject(requestParameters: DeleteProjectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {

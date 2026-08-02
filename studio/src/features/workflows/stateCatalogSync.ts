@@ -111,34 +111,18 @@ export function synchronizeActiveStateCatalogs(
     };
   });
 
-  useBacklogStore.setState((current) => {
-    if (current.projectId !== projectId) return current;
-    return {
-      states: upsertCanonicalState(current.states, authoritative),
-      items: current.items.map((item) =>
-        replaceWorkItemState(item, authoritative)),
-      pendingStateDeltas: Object.fromEntries(
-        Object.entries(current.pendingStateDeltas).map(([itemId, delta]) => [
-          itemId,
-          delta.state?.id === authoritative.id
-            ? { ...delta, state: authoritative }
-            : delta,
-        ]),
-      ),
-    };
-  });
+  useBacklogStore.setState((current) =>
+    current.projectId === projectId
+      ? { states: upsertCanonicalState(current.states, authoritative) }
+      : current,
+  );
 
-  useIssueStore.setState((current) => {
-    if (current.open?.task.project_id !== projectId) return current;
-    return {
-      open: {
-        ...current.open,
-        task: replaceWorkItemState(current.open.task, authoritative),
-      },
-      children: current.children.map((item) =>
-        replaceWorkItemState(item, authoritative)),
-    };
-  });
+  const owner = useIssueStore.getState();
+  owner.hydrateWorkItems(
+    Object.values(owner.workItemsById)
+      .filter((item) => item.project_id === projectId)
+      .map((item) => replaceWorkItemState(item, authoritative)),
+  );
 
   if (previousName) {
     useUIStore.getState().renameCollapsedState(

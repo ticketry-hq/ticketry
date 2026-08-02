@@ -64,7 +64,7 @@ def test_artifact_vocabulary_matches_backend_canonical_definitions():
         for state in REVIEWED_DEFAULTS["states"]
     ]
     canonical_task_types = [
-        name for name, level, _is_default in DEFAULT_ISSUE_TYPES if level == "task"
+        name for name, level in DEFAULT_ISSUE_TYPES if level == "task"
     ]
 
     assert artifact_states == DEFAULT_STATES
@@ -340,9 +340,7 @@ def test_project_creation_only_adds_missing_seed_rows(monkeypatch):
             name="Story",
             level="task",
             color="#123456",
-            icon="custom-story",
             sort_order=17,
-            is_default=True,
             start_state=states[REVIEWED_DEFAULTS["workflows"]["Story"]["start"]],
             workflow_revision=9,
         )

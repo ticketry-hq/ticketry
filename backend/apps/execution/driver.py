@@ -6,7 +6,6 @@ from dataclasses import dataclass, replace
 
 from asgiref.sync import async_to_sync
 
-from worktracker.lifecycle import InvalidTransition, set_lifecycle
 from worktracker.models import Issue, LaunchBinding
 from worktracker.state_groups import state_group
 
@@ -25,13 +24,6 @@ logger = logging.getLogger(__name__)
 
 SpawnRun = Callable[..., Awaitable[str]]
 LiveRunFor = Callable[[str], AgentRun | None]
-LAUNCH_LIFECYCLE: dict[Phase, str | None] = {
-    "refine": "refining",
-    "split": "generating_hld",
-    "register": "registering_split",
-    "lld": "lld_generating",
-    "implement": None,
-}
 REVIEW_STATE_NAME = "Review"
 
 _registry: dict[str, EngineState] = {}
@@ -77,9 +69,9 @@ def launch_task_agent(
     Resolves the target task and its module ancestry, then invokes the terminal
     seam with ``scope="task"`` and *no* caller prompt — so the canonical task
     prompt (ticket context + SDLC), design-dir calculation, live-worktree
-    selection, AgentRun/terminal persistence, and lifecycle/MCP injection all run
+    selection, AgentRun/terminal persistence, and MCP injection all run
     exactly as the normal task launch. Deliberately outside the reducer: it seeds
-    no ``EngineRun``/``GraphRun`` state and moves no workflow/lifecycle state — a
+    no ``EngineRun``/``GraphRun`` state and moves no workflow state — a
     launch is just a launch. A caller may supply an immutable configuration it
     already resolved for a committed destination event; otherwise current-state
     policy is resolved here. Repeated calls each start a fresh detached run,
@@ -220,11 +212,7 @@ def reset_graph(root_id: str) -> GraphState:
         phase="implement",
         status__in=("failed", "halted"),
     )
-    reset_task_ids = set(reset_facts.values_list("task_id", flat=True))
     reset_facts.delete()
-    for issue in descendants:
-        if issue.id in reset_task_ids and issue.lifecycle_state == "failed":
-            _try_advance_lifecycle(issue, "lld_approved")
     graph = _build_graph_state(
         root,
         module_id,
@@ -331,8 +319,6 @@ def execute(
         raise ValueError("task_not_in_backlog")
     if phase == "split" and state_group(issue.state_id) != "unstarted":
         raise ValueError("task_not_in_todo")
-    if phase == "register" and issue.lifecycle_state != "hld_approved":
-        raise ValueError("task_hld_not_approved")
     if phase == "lld" and state_group(issue.state_id) != "unstarted":
         raise ValueError("task_not_in_todo")
 
@@ -349,7 +335,7 @@ def execute(
     state = _store(decision.next)
 
     for action in decision.actions:
-        state = _apply_launch_action(state, action, spawn or spawn_run, issue)
+        state = _apply_launch_action(state, action, spawn or spawn_run)
 
     return state
 
@@ -494,11 +480,6 @@ def observe_issue_state_changed(
         task_id=str(issue_id),
         from_group=from_group,
         to_group=to_group,
-        lifecycle_state=_lifecycle_for_state_seam(
-            str(issue_id),
-            from_group=from_group,
-            to_group=to_group,
-        ),
     )
 
     # Review satisfies graph dependencies without completing direct runs.
@@ -535,39 +516,6 @@ def observe_issue_state_changed(
         result = next_graph
 
     return result
-
-
-def observe_lifecycle_changed(
-    *,
-    issue_id: str,
-    lifecycle_state: str,
-    spawn: SpawnRun | None = None,
-) -> EngineState | None:
-    """Fold a durable lifecycle seam into active one-task state."""
-
-    event = SeamEvent(
-        kind="lifecycle_changed",
-        task_id=str(issue_id),
-        lifecycle_state=lifecycle_state,
-    )
-    state = get_state(str(issue_id))
-    if state is None:
-        return None
-
-    decision = decide(state, event)
-    next_state = _store(decision.next)
-    if (
-        state.phase == "split"
-        and state.status == "running"
-        and next_state.status == "done"
-    ):
-        return execute(
-            next_state.task_id,
-            agent=next_state.agent,
-            phase="register",
-            spawn=spawn,
-        )
-    return next_state
 
 
 def _build_graph_state(
@@ -753,10 +701,8 @@ def _apply_launch_action(
     state: EngineState,
     action: LaunchAction,
     spawn: SpawnRun,
-    issue: Issue,
 ) -> EngineState:
     try:
-        _advance_launch_lifecycle(issue, action.recipe)
         run_id = async_to_sync(spawn)(
             agent=action.agent,
             project_id=action.project_id,
@@ -766,7 +712,6 @@ def _apply_launch_action(
         )
     except Exception as exc:
         logger.exception("execution launch failed task=%s", action.task_id)
-        _try_advance_lifecycle(issue, "failed")
         decision = decide(
             state,
             SeamEvent(
@@ -818,7 +763,6 @@ def _apply_graph_launch_action(
         return _store_graph(decision.next)
 
     try:
-        _try_advance_lifecycle(issue, "implementing")
         run_id = async_to_sync(spawn)(
             agent=action.agent,
             project_id=action.project_id,
@@ -828,7 +772,6 @@ def _apply_graph_launch_action(
         )
     except Exception as exc:
         logger.exception("execution graph launch failed task=%s", action.task_id)
-        _try_advance_lifecycle(issue, "failed")
         decision = decide_graph(
             graph,
             SeamEvent(
@@ -847,60 +790,3 @@ def _apply_graph_launch_action(
             ),
         )
     return _store_graph(decision.next)
-
-
-def _lifecycle_for_state_seam(
-    issue_id: str,
-    *,
-    from_group: str | None,
-    to_group: str | None,
-) -> str | None:
-    target: str | None = None
-    if from_group == "backlog" and to_group == "unstarted":
-        target = "prd_approved"
-    elif to_group == "completed":
-        target = "done"
-    elif to_group == "cancelled":
-        target = "cancelled"
-
-    if target is None:
-        return None
-
-    issue = Issue.objects.filter(pk=issue_id, type="task").first()
-    if issue is None:
-        return None
-    try:
-        _advance_lifecycle(issue, target)
-    except InvalidTransition:
-        logger.exception(
-            "execution lifecycle transition rejected task=%s target=%s",
-            issue_id,
-            target,
-        )
-        return None
-    return target
-
-
-def _advance_lifecycle(issue: Issue, target: str) -> Issue:
-    return set_lifecycle(issue, target)
-
-
-def _advance_launch_lifecycle(issue: Issue, phase: Phase) -> None:
-    target = LAUNCH_LIFECYCLE[phase]
-    # Skip when already at the target: a release-then-relaunch (CODIN-755) of the
-    # same phase re-enters launch with the lifecycle still parked at that phase's
-    # state, and set_lifecycle rejects a self-transition. Re-launching is
-    # idempotent for the lifecycle; the spawn below is what makes it a fresh run.
-    if target is not None and issue.lifecycle_state != target:
-        _advance_lifecycle(issue, target)
-
-
-def _try_advance_lifecycle(issue: Issue, target: str) -> None:
-    try:
-        _advance_lifecycle(issue, target)
-    except InvalidTransition:
-        logger.exception(
-            "execution lifecycle transition rejected task=%s target=%s",
-            issue.id,
-            target,
-        )

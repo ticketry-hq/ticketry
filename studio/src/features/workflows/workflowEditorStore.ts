@@ -56,6 +56,7 @@ interface WorkflowEditorState {
   error: string | null;
   controlErrors: Record<string, string>;
   load: (projectId: string) => Promise<void>;
+  loadWorkflows: (typeIds: string[]) => Promise<void>;
   refreshProviderCapabilities: () => Promise<void>;
   selectType: (typeId: string) => Promise<void>;
   stageState: (typeId: string, stateId: string | null) => void;
@@ -221,6 +222,29 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     } catch {
       // A stale capability list is better than clearing the editor's options;
       // the next load() refetches anyway.
+    }
+  },
+
+  async loadWorkflows(typeIds) {
+    const missingTypeIds = typeIds.filter((typeId) => !get().workflows[typeId]);
+    if (missingTypeIds.length === 0) return;
+    const projectId = get().projectId;
+    set({ action: "load:workflows", notice: null, error: null });
+    try {
+      const rows = await Promise.all(missingTypeIds.map((typeId) =>
+        api.getIssueTypeWorkflowSettings(typeId)));
+      if (get().projectId !== projectId) return;
+      set((state) => ({
+        workflows: {
+          ...state.workflows,
+          ...Object.fromEntries(rows.map((row) => [row.issue_type_id, row])),
+        },
+        action: null,
+      }));
+    } catch (error) {
+      if (get().projectId === projectId) {
+        set({ action: null, error: errorMessage(error) });
+      }
     }
   },
 

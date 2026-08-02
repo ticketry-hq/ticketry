@@ -84,12 +84,12 @@ describe("Studio idea capture API", () => {
   it("lists project issue types and sends the explicit Story type on create", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse([
-        { id: "type-story", name: "Story", level: "task", is_default: false },
+        { id: "type-story", name: "Story", level: "task" },
       ]),
     );
 
     await expect(getIssueTypes("project-1")).resolves.toEqual([
-      { id: "type-story", name: "Story", level: "task", is_default: false },
+      { id: "type-story", name: "Story", level: "task" },
     ]);
     expect(fetchMock.mock.calls[0][0]).toBe(
       "/api/work-tracker/projects/project-1/issue-types",
@@ -102,10 +102,6 @@ describe("Studio idea capture API", () => {
         project_id: "project-1",
         sequence_id: 42,
         state: { id: "idea", name: "Idea", group: "backlog", color: null },
-        assignees: [],
-        labels: [],
-        description_html: null,
-        description_stripped: null,
         description: null,
         parent_id: "module-1",
         sub_issues_count: 0,
@@ -124,7 +120,7 @@ describe("Studio idea capture API", () => {
     });
   });
 
-  it("preserves task key, rank, and type while normalizing an absent type to null", () => {
+  it("preserves task key, rank, and explicit type while normalizing", () => {
     const baseTask = {
       id: "task-1",
       key: "CODIN-1",
@@ -132,10 +128,6 @@ describe("Studio idea capture API", () => {
       project_id: "project-1",
       sequence_id: 1,
       state: { id: "todo", name: "Todo", group: "backlog", color: null },
-      assignees: [],
-      labels: [],
-      description_html: null,
-      description_stripped: null,
       description: null,
       parent_id: "module-1",
       sub_issues_count: 0,
@@ -143,6 +135,11 @@ describe("Studio idea capture API", () => {
       blocks_ids: [],
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
+      issue_type: {
+        id: "type-task",
+        name: "Task",
+        level: "task",
+      },
     } satisfies WorkItem;
     const customType = {
       id: "type-investigation",
@@ -158,7 +155,7 @@ describe("Studio idea capture API", () => {
     expect(normalized.key).toBe("CODIN-1");
     expect(normalized.rank).toBe("rank-7");
     expect(normalized.issue_type).toEqual(customType);
-    expect(normalizeTask(baseTask).issue_type).toBeNull();
+    expect(normalizeTask(baseTask).issue_type).toEqual(baseTask.issue_type);
   });
 
   it("stamps human origin on the Studio status-change request", async () => {
@@ -168,22 +165,17 @@ describe("Studio idea capture API", () => {
       project_id: "project-1",
       sequence_id: 1,
       state: { id: "review", name: "Review", group: "started", color: null },
-      assignees: [],
-      labels: [],
-      description_html: null,
-      description_stripped: null,
       description: null,
       parent_id: "module-1",
       sub_issues_count: 0,
     }));
 
-    await postTaskStatus("project-1", "task-1", "review", true);
+    await postTaskStatus("project-1", "task-1", "review");
 
     const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse(init.body)).toEqual({
       state_id: "review",
       origin: "human",
-      force_if_completed: true,
     });
   });
 });

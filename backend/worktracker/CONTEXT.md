@@ -23,6 +23,13 @@ _Avoid_: Human gate, automation gate, prompt restriction
 The directed graph a work-item type defines over a subset of the project's shared workflow states. Different types may reuse the same states while allowing different destinations from each state.
 _Avoid_: Project state list, linear state order, duplicated type state, agent lifecycle
 
+**Issue type**:
+The required, explicit project-scoped classification of one work item. Every
+module and task has exactly one issue type whose level matches the work item's
+structural level. Selecting the type is a prerequisite to creation; the type's
+start state then determines where the work item is born.
+_Avoid_: Default type, inferred type, optional type, module/task discriminator
+
 **Scoped apply**:
 The workflow-settings edit model in which each edit validates only the configuration scope it changes and, on success, immediately becomes active project policy. There is no intermediate saved-but-inactive configuration.
 _Avoid_: Draft save, publish, auto-publish, validate action
@@ -86,8 +93,9 @@ _Avoid_: fix campaign, bulk move, review batch, persisted member list, queue dra
 
 **Workflow stage**:
 A named workflow state as a person reads it in the task tree: an ordered position
-carrying its own icon, its own launch prompt, and at most one pinned upstream
-skill. Stage is the presentation-and-launch reading of a workflow state; it adds
+with its own launch prompt and at most one pinned upstream skill. The task tree
+may choose a decorative icon from the state's name, but the stage owns no icon
+data. Stage is the presentation-and-launch reading of a workflow state; it adds
 no second identity and no separate storage.
 _Avoid_: phase, step, lifecycle stage, column
 
@@ -133,8 +141,7 @@ _Avoid_: actor, user identity, auth principal
 
 **Human-only transition**:
 A transition whose edge disallows agents: agent-origin writes are rejected at
-enforcement, and `force` never rescues them — force is a human-only recovery
-hatch. It is a brake on chained automation, not an approval flow.
+enforcement. It is a brake on chained automation, not an approval flow.
 _Avoid_: approval gate, protected state, locked edge
 
 **State-entry auto-start**:
@@ -177,3 +184,13 @@ subtree run to start from a work item in that cell. Unlike state-entry
 auto-start, it is not gated on launch configuration, survives clearing the
 cell's launch binding, and arms no agent or other automation on its own.
 _Avoid_: state-entry auto-start, Story-only run rule, subtree auto-start
+
+**Work-item archive**:
+The one-way visibility flag that hides a work item and every one of its
+descendants from the planning surfaces and from execution selection. It is
+independent of workflow state — a module carries no state at all and an
+archived task keeps whatever state it was in — and it is refused outright
+while any item in the subtree has live agent work. Cancellation also archives,
+but as a side effect of entering a cancelled state; archiving is the direct
+act, and it says nothing about whether the work was finished or abandoned.
+_Avoid_: delete, cancel, done, soft delete, hidden state, archived state

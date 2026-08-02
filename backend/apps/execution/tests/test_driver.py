@@ -59,7 +59,6 @@ def task():
         type="task",
         parent=module,
         state=backlog,
-        lifecycle_state="backlog",
         name="Task",
         sequence_id=2,
         description="Raw idea",
@@ -126,8 +125,6 @@ def test_execute_refine_leaves_prompt_authority_to_current_state_binding(task):
 
     assert state.status == "running"
     assert state.phase == "refine"
-    task.refresh_from_db()
-    assert task.lifecycle_state == "refining"
     call = _successful_spawn.calls[0]
     assert call["agent"] == "codex"
     assert call["task_id"] == str(task.id)
@@ -171,19 +168,6 @@ def test_execute_records_launch_failure(task):
     assert driver.get_state(str(task.id)) == state
 
 
-def test_execute_refine_launch_failure_writes_failed_lifecycle(task):
-    state = driver.execute(
-        str(task.id),
-        agent="codex",
-        phase="refine",
-        spawn=_failing_spawn,
-    )
-
-    assert state.status == "failed"
-    task.refresh_from_db()
-    assert task.lifecycle_state == "failed"
-
-
 def test_execute_rejects_missing_or_non_module_task():
     with pytest.raises(ValueError, match="task_not_found"):
         driver.execute(str(uuid.uuid4()), agent="codex", spawn=_successful_spawn)
@@ -197,8 +181,7 @@ def test_observe_issue_state_changed_flips_running_task_to_done(task):
         group="completed",
     )
     task.state = done
-    task.lifecycle_state = "implementing"
-    task.save(update_fields=["state", "lifecycle_state"])
+    task.save(update_fields=["state"])
     state = driver.execute(str(task.id), agent="codex", spawn=_successful_spawn)
     assert state.status == "running"
 
@@ -209,8 +192,6 @@ def test_observe_issue_state_changed_flips_running_task_to_done(task):
     )
 
     assert observed.status == "done"
-    task.refresh_from_db()
-    assert task.lifecycle_state == "done"
     assert driver.get_state(str(task.id)).status == "done"
 
 
@@ -239,8 +220,7 @@ def _move_to_todo(task):
         group="unstarted",
     )
     task.state = todo
-    task.lifecycle_state = "prd_approved"
-    task.save(update_fields=["state", "lifecycle_state"])
+    task.save(update_fields=["state"])
     return todo
 
 
@@ -257,8 +237,6 @@ def test_execute_split_leaves_prompt_authority_to_current_state_binding(task):
 
     assert state.status == "running"
     assert state.phase == "split"
-    task.refresh_from_db()
-    assert task.lifecycle_state == "generating_hld"
     assert task.state_id == todo.id
     call = _successful_spawn.calls[0]
     assert call["agent"] == "codex"
@@ -272,125 +250,6 @@ def test_execute_split_rejects_non_todo_task(task):
 
     with pytest.raises(ValueError, match="task_not_in_todo"):
         driver.execute(str(task.id), agent="codex", phase="split", spawn=_successful_spawn)
-
-    assert _successful_spawn.calls == []
-
-
-def test_observe_split_completes_on_hld_approved_lifecycle(task):
-    _move_to_todo(task)
-    state = driver.execute(
-        str(task.id),
-        agent="codex",
-        phase="split",
-        spawn=_successful_spawn,
-    )
-    assert state.status == "running"
-
-    task.lifecycle_state = "hld_approved"
-    task.save(update_fields=["lifecycle_state"])
-
-    observed = driver.observe_lifecycle_changed(
-        issue_id=str(task.id),
-        lifecycle_state="hld_approved",
-        spawn=_successful_spawn,
-    )
-
-    # Split completion is transient: it immediately chains into the register
-    # launch (#745), so the observable outcome is the register-phase state.
-    assert observed.phase == "register"
-    assert observed.status == "running"
-    task.refresh_from_db()
-    assert task.lifecycle_state == "registering_split"
-
-
-def test_observe_split_ignores_non_hld_approved_lifecycle(task):
-    _move_to_todo(task)
-    state = driver.execute(
-        str(task.id),
-        agent="codex",
-        phase="split",
-        spawn=_successful_spawn,
-    )
-
-    observed = driver.observe_lifecycle_changed(
-        issue_id=str(task.id),
-        lifecycle_state="hld_review",
-    )
-
-    assert observed == state
-
-
-def test_observe_split_completion_immediately_launches_register(task):
-    _successful_spawn.calls.clear()
-    _move_to_todo(task)
-    driver.execute(str(task.id), agent="codex", phase="split", spawn=_successful_spawn)
-    task.lifecycle_state = "hld_approved"
-    task.save(update_fields=["lifecycle_state"])
-
-    observed = driver.observe_lifecycle_changed(
-        issue_id=str(task.id),
-        lifecycle_state="hld_approved",
-        spawn=_successful_spawn,
-    )
-
-    assert observed.phase == "register"
-    assert observed.status == "running"
-    assert driver.get_state(str(task.id)).phase == "register"
-    assert len(_successful_spawn.calls) == 2
-    register_call = _successful_spawn.calls[1]
-    assert register_call["task_id"] == str(task.id)
-    assert "initial_prompt" not in register_call
-
-
-def test_replayed_hld_approval_does_not_relaunch_register(task):
-    _successful_spawn.calls.clear()
-    _move_to_todo(task)
-    driver.execute(str(task.id), agent="codex", phase="split", spawn=_successful_spawn)
-    task.lifecycle_state = "hld_approved"
-    task.save(update_fields=["lifecycle_state"])
-    driver.observe_lifecycle_changed(
-        issue_id=str(task.id),
-        lifecycle_state="hld_approved",
-        spawn=_successful_spawn,
-    )
-    assert len(_successful_spawn.calls) == 2
-
-    replayed = driver.observe_lifecycle_changed(
-        issue_id=str(task.id),
-        lifecycle_state="hld_approved",
-        spawn=_successful_spawn,
-    )
-
-    assert replayed.phase == "register"
-    assert replayed.status == "running"
-    assert len(_successful_spawn.calls) == 2
-
-
-def test_register_launch_failure_is_recorded(task):
-    _move_to_todo(task)
-    driver.execute(str(task.id), agent="codex", phase="split", spawn=_successful_spawn)
-    task.lifecycle_state = "hld_approved"
-    task.save(update_fields=["lifecycle_state"])
-
-    observed = driver.observe_lifecycle_changed(
-        issue_id=str(task.id),
-        lifecycle_state="hld_approved",
-        spawn=_failing_spawn,
-    )
-
-    assert observed.phase == "register"
-    assert observed.status == "failed"
-    assert "tmux unavailable" in observed.error
-
-
-def test_execute_register_rejects_task_without_hld_approval(task):
-    _successful_spawn.calls.clear()
-    _move_to_todo(task)
-
-    with pytest.raises(ValueError, match="task_hld_not_approved"):
-        driver.execute(
-            str(task.id), agent="codex", phase="register", spawn=_successful_spawn
-        )
 
     assert _successful_spawn.calls == []
 
@@ -411,9 +270,6 @@ def _leaf(task, todo, *, seq, name="Leaf", state=None, archived=False):
         type="task",
         parent=task,
         state=state if state is not None else todo,
-        lifecycle_state="split_created"
-        if (state is None or state.group == "unstarted")
-        else None,
         name=name,
         sequence_id=seq,
         description=f"{name} scope",
@@ -439,10 +295,6 @@ def test_generate_leaf_llds_launches_one_lld_run_per_todo_leaf(task):
     assert all(state.phase == "lld" for state in launched)
     assert all(state.status == "running" for state in launched)
     assert len(_successful_spawn.calls) == 3
-    for leaf in (a, b, c):
-        leaf.refresh_from_db()
-        assert leaf.lifecycle_state == "lld_generating"
-
     call = next(c for c in _successful_spawn.calls if c["task_id"] == str(a.id))
     assert call["scope"] == "task"
     assert "initial_prompt" not in call
@@ -527,8 +379,7 @@ def test_observe_issue_state_changed_refine_requires_backlog_to_unstarted(task):
         group="unstarted",
     )
     task.state = todo
-    task.lifecycle_state = "prd_review"
-    task.save(update_fields=["state", "lifecycle_state"])
+    task.save(update_fields=["state"])
     observed = driver.observe_issue_state_changed(
         issue_id=str(task.id),
         from_group="backlog",
@@ -536,8 +387,6 @@ def test_observe_issue_state_changed_refine_requires_backlog_to_unstarted(task):
     )
 
     assert observed.status == "done"
-    task.refresh_from_db()
-    assert task.lifecycle_state == "prd_approved"
     assert driver.get_state(str(task.id)).status == "done"
 
 

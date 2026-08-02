@@ -61,7 +61,7 @@ class IssueTypesApi:
     ) -> IssueTypeOut:
         """Create Issue Type
 
-        Create a non-default issue type at the tail of its level's order.
+        Create an issue type at the tail of its level's order.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -136,7 +136,7 @@ class IssueTypesApi:
     ) -> ApiResponse[IssueTypeOut]:
         """Create Issue Type
 
-        Create a non-default issue type at the tail of its level's order.
+        Create an issue type at the tail of its level's order.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -211,7 +211,7 @@ class IssueTypesApi:
     ) -> RESTResponseType:
         """Create Issue Type
 
-        Create a non-default issue type at the tail of its level's order.
+        Create an issue type at the tail of its level's order.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -362,7 +362,7 @@ class IssueTypesApi:
     ) -> None:
         """Delete Issue Type
 
-        Delete a type; 409 if it is a default or in use without ``reassign_to``.
+        Delete a type; 409 if it is in use without ``reassign_to``.
 
         :param type_id: (required)
         :type type_id: UUID
@@ -437,7 +437,7 @@ class IssueTypesApi:
     ) -> ApiResponse[None]:
         """Delete Issue Type
 
-        Delete a type; 409 if it is a default or in use without ``reassign_to``.
+        Delete a type; 409 if it is in use without ``reassign_to``.
 
         :param type_id: (required)
         :type type_id: UUID
@@ -512,7 +512,7 @@ class IssueTypesApi:
     ) -> RESTResponseType:
         """Delete Issue Type
 
-        Delete a type; 409 if it is a default or in use without ``reassign_to``.
+        Delete a type; 409 if it is in use without ``reassign_to``.
 
         :param type_id: (required)
         :type type_id: UUID
@@ -1217,7 +1217,7 @@ class IssueTypesApi:
     ) -> IssueTypeOut:
         """Patch Issue Type
 
-        Rename / recolor / reorder a type; ``is_default=true`` flips the level's default.
+        Rename, recolor, or reorder an issue type.
 
         :param type_id: (required)
         :type type_id: UUID
@@ -1292,7 +1292,7 @@ class IssueTypesApi:
     ) -> ApiResponse[IssueTypeOut]:
         """Patch Issue Type
 
-        Rename / recolor / reorder a type; ``is_default=true`` flips the level's default.
+        Rename, recolor, or reorder an issue type.
 
         :param type_id: (required)
         :type type_id: UUID
@@ -1367,7 +1367,7 @@ class IssueTypesApi:
     ) -> RESTResponseType:
         """Patch Issue Type
 
-        Rename / recolor / reorder a type; ``is_default=true`` flips the level's default.
+        Rename, recolor, or reorder an issue type.
 
         :param type_id: (required)
         :type type_id: UUID

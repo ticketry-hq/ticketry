@@ -13,6 +13,7 @@ function mod(partial: Partial<Module> & { id: string }): Module {
     sequence_id: 1,
     key: `MEML-${partial.id}`,
     ...partial,
+    issue_type: partial.issue_type ?? { id: "type-module", name: "Module", level: "module" },
   };
 }
 

@@ -2,9 +2,8 @@
 
 Exercises ``worktracker.workflow`` directly (no HTTP): persisted per-type graphs,
 forward-skip / illegal-backward / terminal rejection, ``→Cancelled`` from
-non-Done states, foreign-state rejection, the structured rejection, the ``force``
-bypass + audit trace, and the non-SDLC ungated fallback. HTTP-seam behavior lives
-in ``test_workflow_api``.
+non-Done states, foreign-state rejection, the structured rejection, and the
+non-SDLC ungated fallback. HTTP-seam behavior lives in ``test_workflow_api``.
 """
 
 import uuid
@@ -13,7 +12,6 @@ import pytest
 
 from worktracker.models import (
     DEFAULT_STATES,
-    ForceTransition,
     Issue,
     IssueType,
     IssueTypeTransition,
@@ -237,19 +235,6 @@ def test_human_only_transition_rejects_agent_but_allows_human(project, sdlc):
     agent_issue.refresh_from_db()
     assert agent_issue.state.name == "Tickets"
 
-    forced_agent_issue = _issue(project, states, types["Story"], state="Tickets")
-    with pytest.raises(InvalidTransition) as forced_exc:
-        transition_state(
-            forced_agent_issue,
-            states["Implement"].id,
-            origin="agent",
-            force=True,
-        )
-
-    assert forced_exc.value.code == "agent_force_forbidden"
-    forced_agent_issue.refresh_from_db()
-    assert forced_agent_issue.state.name == "Tickets"
-
     human_issue = _issue(project, states, types["Story"], state="Tickets")
     transition_state(human_issue, states["Implement"].id, origin="human")
     human_issue.refresh_from_db()
@@ -362,107 +347,31 @@ def test_allowed_transitions_respects_each_type_graph(project, sdlc):
     assert allowed_transitions(pathfind) == {"Done", "Cancelled"}
 
 
-# --- force bypass + audit ---------------------------------------------------
+# --- no graph means no transition ------------------------------------------
 
 
 @pytest.mark.django_db
-def test_force_bypasses_gate_and_records_trace(project, sdlc):
-    states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Grill")
-
-    transition_state(issue, states["Done"].id, force=True, actor="alice")
-
-    issue.refresh_from_db()
-    assert issue.state.name == "Done"
-    trace = ForceTransition.objects.get(issue=issue)
-    assert (trace.from_state, trace.to_state, trace.actor) == ("Grill", "Done", "alice")
-
-
-@pytest.mark.django_db
-def test_force_leaves_a_terminal_state(project, sdlc):
-    states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Done")
-
-    transition_state(issue, states["Grill"].id, force=True)
-
-    issue.refresh_from_db()
-    assert issue.state.name == "Grill"
-    assert ForceTransition.objects.filter(issue=issue).count() == 1
-
-
-@pytest.mark.django_db
-def test_agent_origin_force_is_rejected(project, sdlc):
-    states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Grill")
-
-    with pytest.raises(InvalidTransition) as exc:
-        transition_state(
-            issue,
-            states["Done"].id,
-            force=True,
-            origin="agent",
-        )
-
-    assert exc.value.code == "agent_force_forbidden"
-    assert "Force is human-only" in exc.value.message
-    issue.refresh_from_db()
-    assert issue.state.name == "Grill"
-    assert not ForceTransition.objects.filter(issue=issue).exists()
-
-
-@pytest.mark.django_db
-def test_legal_move_records_no_force_trace(project, sdlc):
-    states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Grill")
-
-    transition_state(issue, states["Spec"].id)
-
-    assert not ForceTransition.objects.filter(issue=issue).exists()
-
-
-# --- non-SDLC fallback ------------------------------------------------------
-
-
-@pytest.mark.django_db
-def test_untyped_issue_writes_through_ungated(project, sdlc):
+def test_unconfigured_issue_type_rejects_state_changes(project, sdlc):
     states, _types = sdlc
-    # issue_type=None → no table → the Story-illegal Grill→Done writes through.
+    unconfigured = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Unconfigured", level="task"
+    )
     issue = Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
         type="task",
-        issue_type=None,
+        issue_type=unconfigured,
         name="X",
         sequence_id=99,
         state=states["Grill"],
     )
 
-    transition_state(issue, states["Done"].id)
+    with pytest.raises(InvalidTransition) as exc:
+        transition_state(issue, states["Done"].id)
 
+    assert exc.value.code == "illegal_transition"
     issue.refresh_from_db()
-    assert issue.state.name == "Done"
-
-
-@pytest.mark.django_db
-def test_epic_type_writes_through_ungated(project, sdlc):
-    states, _types = sdlc
-    epic = IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Epic", level="module"
-    )
-    issue = Issue.objects.create(
-        id=uuid.uuid4(),
-        project=project,
-        type="module",
-        issue_type=epic,
-        name="E",
-        sequence_id=98,
-        state=states["Grill"],
-    )
-
-    transition_state(issue, states["Done"].id)
-
-    issue.refresh_from_db()
-    assert issue.state.name == "Done"
+    assert issue.state.name == "Grill"
 
 
 # --- cancel cascade ---------------------------------------------------------

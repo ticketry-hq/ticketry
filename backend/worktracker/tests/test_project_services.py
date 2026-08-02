@@ -160,15 +160,19 @@ def test_update_project_description_only(project):
 
 @pytest.mark.django_db
 def test_delete_project_cascades_owned_rows(project):
-    from worktracker.models import Issue, IssueType, Label
+    from worktracker.models import Issue, IssueType
 
     State.objects.create(id=uuid.uuid4(), project=project, name="Todo", group="unstarted")
-    IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Story", level="task"
+    module_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Module", level="module"
     )
-    Label.objects.create(id=uuid.uuid4(), project=project, name="infra")
     Issue.objects.create(
-        id=uuid.uuid4(), project=project, type="module", name="Epic", sequence_id=1
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        issue_type=module_type,
+        name="Epic",
+        sequence_id=1,
     )
 
     delete_project(project.id)
@@ -176,7 +180,6 @@ def test_delete_project_cascades_owned_rows(project):
     assert not Project.objects.filter(id=project.id).exists()
     assert State.objects.filter(project_id=project.id).count() == 0
     assert IssueType.objects.filter(project_id=project.id).count() == 0
-    assert Label.objects.filter(project_id=project.id).count() == 0
     assert Issue.objects.filter(project_id=project.id).count() == 0
 
 

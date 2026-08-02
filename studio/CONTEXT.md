@@ -285,3 +285,38 @@ Because acknowledgement has no inverse, this is how onboarding is seen twice; it
 is confined to development instances and never touches the shared data
 directory.
 _Avoid_: Onboarding reset, re-arming onboarding, replaying the tour
+
+**Work item**:
+The aggregate the backend owns and serves as `WorkItemOut` — the thing a Story,
+Implementation, or Module all are. Studio holds exactly one client-side copy of
+each, keyed by id; every surface that needs one reads it by id rather than
+carrying its own. Older Studio code names the same aggregate Task or Issue in
+type and store names; those spellings survive only where they already exist and
+name the surface, not the record.
+_Avoid_: Task record, issue record, task summary
+
+**Work-item store**:
+The single owner of every work-item record Studio holds. Panes, trees, and
+pickers keep the ids they need and resolve records through it, so a record can
+never exist in two places and disagree with itself. It is the only place a
+work-item record is written, and the status-feed revision guards live alongside
+it because a guard held apart from its data protects nothing.
+_Avoid_: Detail store, issue cache, work-item cache
+
+**Selection paint**:
+Rendering the newly selected work item's panel from the record Studio already
+holds, in the same frame as the selection, with no request in the way. Anything
+still missing — attachments, edits made elsewhere — arrives afterwards and
+patches in. A loading state is correct only when the record is genuinely absent,
+such as a deep link into an unloaded module; it is never correct for cycling
+through a loaded list.
+_Avoid_: Detail load, panel fetch, loading the selected task
+
+**State configuration panel**:
+The workspace-pane surface that presents one workflow state's agent policy for
+one issue type — what launches there, and which moves lead in and out. It is
+reached from that state in the Stories pane, names the state and issue type it
+belongs to, and is the same policy the Settings workflow editor shows; neither
+is a copy of the other. It configures a state, never a work item, so nothing it
+shows or changes depends on which Story is selected.
+_Avoid_: State settings modal, launch popover, per-state details tab

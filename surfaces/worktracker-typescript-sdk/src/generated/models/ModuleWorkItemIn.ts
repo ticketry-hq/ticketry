@@ -32,7 +32,7 @@ export interface ModuleWorkItemIn {
      * @type {string}
      * @memberof ModuleWorkItemIn
      */
-    issue_type_id?: string | null;
+    issue_type_id: string;
     /**
      * 
      * @type {string}
@@ -45,6 +45,7 @@ export interface ModuleWorkItemIn {
  * Check if a given object implements the ModuleWorkItemIn interface.
  */
 export function instanceOfModuleWorkItemIn(value: object): value is ModuleWorkItemIn {
+    if (!('issue_type_id' in value) || value['issue_type_id'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     return true;
 }
@@ -60,7 +61,7 @@ export function ModuleWorkItemInFromJSONTyped(json: any, ignoreDiscriminator: bo
     return {
         
         'description': json['description'] == null ? undefined : json['description'],
-        'issue_type_id': json['issue_type_id'] == null ? undefined : json['issue_type_id'],
+        'issue_type_id': json['issue_type_id'],
         'name': json['name'],
     };
 }

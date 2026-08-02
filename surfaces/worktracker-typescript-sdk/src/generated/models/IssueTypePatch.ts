@@ -32,18 +32,6 @@ export interface IssueTypePatch {
      * @type {string}
      * @memberof IssueTypePatch
      */
-    icon?: string | null;
-    /**
-     * 
-     * @type {boolean}
-     * @memberof IssueTypePatch
-     */
-    is_default?: boolean | null;
-    /**
-     * 
-     * @type {string}
-     * @memberof IssueTypePatch
-     */
     name?: string | null;
     /**
      * 
@@ -71,8 +59,6 @@ export function IssueTypePatchFromJSONTyped(json: any, ignoreDiscriminator: bool
     return {
         
         'color': json['color'] == null ? undefined : json['color'],
-        'icon': json['icon'] == null ? undefined : json['icon'],
-        'is_default': json['is_default'] == null ? undefined : json['is_default'],
         'name': json['name'] == null ? undefined : json['name'],
         'sort_order': json['sort_order'] == null ? undefined : json['sort_order'],
     };
@@ -90,8 +76,6 @@ export function IssueTypePatchToJSONTyped(value?: IssueTypePatch | null, ignoreD
     return {
         
         'color': value['color'],
-        'icon': value['icon'],
-        'is_default': value['is_default'],
         'name': value['name'],
         'sort_order': value['sort_order'],
     };

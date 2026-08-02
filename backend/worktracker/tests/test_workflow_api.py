@@ -1,7 +1,7 @@
 """The workflow gate over HTTP (#860, Slice 1): ``PATCH /work-items/{id}``.
 
 200 on a legal move, a structured 422 on an illegal one, the state-is-its-own-
-operation rule, the ``force`` bypass, the non-SDLC pass-through, and the
+operation rule, the non-SDLC pass-through, and the
 silent-rollback regression — a failing post-commit subscriber leaves the write
 committed and the response truthful, while a gate rejection leaves the row
 provably unchanged.
@@ -13,7 +13,6 @@ import pytest
 
 from worktracker.models import (
     DEFAULT_STATES,
-    ForceTransition,
     Issue,
     IssueType,
     IssueTypeTransition,
@@ -182,25 +181,15 @@ def test_bundled_edit_is_rejected(client, project, sdlc, auth):
 
 
 @pytest.mark.django_db
-def test_force_via_patch_bypasses_and_records(client, project, sdlc, auth):
-    states, story = sdlc
-    issue = _story(project, states, story, state="Grill")
-
-    r = patch_json(
-        client,
-        f"{BASE}/work-items/{issue.id}",
-        {"state_id": str(states["Done"].id), "force": True},
-        auth,
-    )
-
-    assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Done"
-    assert ForceTransition.objects.filter(issue=issue).count() == 1
-
-
-@pytest.mark.django_db
-def test_force_if_completed_is_decided_from_locked_destination(
-    client, project, sdlc, auth
+@pytest.mark.parametrize(
+    "origin",
+    [
+        pytest.param("human", id="human"),
+        pytest.param("agent", id="agent"),
+    ],
+)
+def test_completed_state_moves_obey_the_graph_for_every_origin(
+    client, project, sdlc, auth, origin
 ):
     states, story = sdlc
     issue = _story(project, states, story, state="Grill")
@@ -210,74 +199,44 @@ def test_force_if_completed_is_decided_from_locked_destination(
         f"{BASE}/work-items/{issue.id}",
         {
             "state_id": str(states["Done"].id),
-            "force_if_completed": True,
-        },
-        auth,
-    )
-
-    assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Done"
-    assert ForceTransition.objects.filter(issue=issue).count() == 1
-
-
-@pytest.mark.django_db
-def test_force_if_completed_does_not_force_after_destination_group_changes(
-    client, project, sdlc, auth
-):
-    states, story = sdlc
-    issue = _story(project, states, story, state="Grill")
-    states["Done"].group = "started"
-    states["Done"].save(update_fields=["group", "updated_at"])
-
-    r = patch_json(
-        client,
-        f"{BASE}/work-items/{issue.id}",
-        {
-            "state_id": str(states["Done"].id),
-            "force_if_completed": True,
+            "origin": origin,
         },
         auth,
     )
 
     assert r.status_code == 422
-    assert r.json()["code"] == "illegal_transition"
-    assert not ForceTransition.objects.filter(issue=issue).exists()
-
-
-@pytest.mark.django_db
-def test_agent_force_via_patch_is_rejected(client, project, sdlc, auth):
-    states, story = sdlc
-    issue = _story(project, states, story, state="Grill")
-
-    r = patch_json(
-        client,
-        f"{BASE}/work-items/{issue.id}",
-        {
-            "state_id": str(states["Done"].id),
-            "origin": "agent",
-            "force": True,
-        },
-        auth,
-    )
-
-    assert r.status_code == 422
-    assert r.json()["code"] == "agent_force_forbidden"
+    assert r.json() == {
+        "detail": "A Story cannot move 'Grill' → 'Done'.",
+        "code": "illegal_transition",
+        "from": "Grill",
+        "to": "Done",
+    }
     issue.refresh_from_db()
     assert issue.state.name == "Grill"
-    assert not ForceTransition.objects.filter(issue=issue).exists()
 
 
 @pytest.mark.django_db
-def test_untyped_issue_patches_through_ungated(client, project, sdlc, auth):
+def test_unconfigured_issue_type_patch_is_rejected(client, project, sdlc, auth):
     states, _ = sdlc
-    issue = _story(project, states, None, state="Grill", issue_type_override=None)
+    unconfigured = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Unconfigured", level="task"
+    )
+    issue = _story(
+        project,
+        states,
+        None,
+        state="Grill",
+        issue_type_override=unconfigured,
+    )
 
     r = patch_json(
         client, f"{BASE}/work-items/{issue.id}", {"state_id": str(states["Done"].id)}, auth
     )
 
-    assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Done"
+    assert r.status_code == 422
+    assert r.json()["code"] == "illegal_transition"
+    issue.refresh_from_db()
+    assert issue.state.name == "Grill"
 
 
 # --- silent-rollback regression ---------------------------------------------

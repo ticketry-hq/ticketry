@@ -12,7 +12,12 @@ from worktracker.tests.conftest import BASE, patch_json, post_json
 
 
 def _make_task(client, project, auth, name="T", parent_id=None):
-    body = {"name": name}
+    issue_type, _ = IssueType.objects.get_or_create(
+        project=project,
+        name="Task",
+        defaults={"id": uuid.uuid4(), "level": "task"},
+    )
+    body = {"name": name, "issue_type_id": str(issue_type.id)}
     if parent_id:
         body["parent_id"] = parent_id
     r = post_json(client, f"{BASE}/projects/{project.id}/work-items", body, auth)
@@ -38,9 +43,28 @@ def _make_pathfind(
 
 
 def _make_module(client, project, auth, name="Epic"):
-    r = post_json(client, f"{BASE}/projects/{project.id}/modules", {"name": name}, auth)
+    issue_type, _ = IssueType.objects.get_or_create(
+        project=project,
+        name="Module",
+        defaults={"id": uuid.uuid4(), "level": "module"},
+    )
+    r = post_json(
+        client,
+        f"{BASE}/projects/{project.id}/modules",
+        {"name": name, "issue_type_id": str(issue_type.id)},
+        auth,
+    )
     assert r.status_code == 200
     return r.json()
+
+
+def _task_type(project):
+    issue_type, _ = IssueType.objects.get_or_create(
+        project=project,
+        name="Task",
+        defaults={"id": uuid.uuid4(), "level": "task"},
+    )
+    return issue_type
 
 
 # --- G3: project create / rename --------------------------------------------
@@ -177,7 +201,7 @@ def test_patch_project_description_keeps_slug_immutable(client, project, auth):
 
 @pytest.mark.django_db
 def test_delete_project_cascades_all_owned_rows(client, project, auth):
-    from worktracker.models import Issue, IssueType, Label
+    from worktracker.models import Issue, IssueType
 
     # Seed one of every project-owned row (the fixture project is created raw,
     # not via the route, so its states/types aren't auto-seeded — make them).
@@ -187,7 +211,6 @@ def test_delete_project_cascades_all_owned_rows(client, project, auth):
     )
     module = _make_module(client, project, auth)
     _make_task(client, project, auth, parent_id=module["id"])
-    Label.objects.create(id=uuid.uuid4(), project=project, name="infra")
     pid = project.id
     assert State.objects.filter(project_id=pid).exists()
     assert IssueType.objects.filter(project_id=pid).exists()
@@ -200,7 +223,6 @@ def test_delete_project_cascades_all_owned_rows(client, project, auth):
     assert not Project.objects.filter(id=pid).exists()
     assert State.objects.filter(project_id=pid).count() == 0
     assert IssueType.objects.filter(project_id=pid).count() == 0
-    assert Label.objects.filter(project_id=pid).count() == 0
     assert Issue.objects.filter(project_id=pid).count() == 0
 
 
@@ -232,7 +254,13 @@ def test_archive_hides_from_project_list(client, project, auth):
 def test_archive_hides_from_module_list(client, project, auth):
     module = _make_module(client, project, auth)
     task = post_json(
-        client, f"{BASE}/modules/{module['id']}/work-items", {"name": "T"}, auth
+        client,
+        f"{BASE}/modules/{module['id']}/work-items",
+        {
+            "name": "T",
+            "issue_type_id": str(_task_type(project).id),
+        },
+        auth,
     ).json()
 
     Issue.objects.filter(pk=task["id"]).update(is_archived=True)

@@ -13,7 +13,7 @@ interface RunSubtreeActionProps {
     parent_id: string | null;
     sub_issues_count: number;
     state?: { id: string | null; name?: string | null } | null;
-    issue_type?: { id: string; name: string } | null;
+    issue_type: { id: string; name: string };
   };
   moduleId: string | null;
 }
@@ -33,10 +33,9 @@ export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
     void ensureSettings(task.project_id);
   }, [ensureSettings, task.project_id]);
 
-  const enabledStates =
-    capabilityProjectId === task.project_id && task.issue_type
-      ? capabilityMap[task.issue_type.id]
-      : undefined;
+  const enabledStates = capabilityProjectId === task.project_id
+    ? capabilityMap[task.issue_type.id]
+    : undefined;
   const eligible =
     task.id !== TEMP_TASK_ID &&
     moduleId !== null &&

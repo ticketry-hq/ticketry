@@ -4,6 +4,8 @@ import test from "node:test";
 
 import {
   buildWebFrontendCommand,
+  buildWebMcpCommand,
+  buildWebRuntimeEnvironment,
   buildWebDevelopmentEnvironment,
   selectWebPort,
 } from "./web-dev.mjs";
@@ -50,6 +52,30 @@ test("the frontend opens the ready page in the default browser", () => {
   assert.match(command, /(?:^|\s)--open(?:\s|$)/);
   assert.match(command, /--strictPort/);
   assert.match(command, /--port 5191/);
+});
+
+test("web development launches the owned WorkTracker MCP package", () => {
+  assert.equal(
+    buildWebMcpCommand(),
+    "uv run --project surfaces/worktracker-agent python -m worktracker_agent.mcp.main",
+  );
+});
+
+test("web services share one backend and the pinned MCP endpoint", () => {
+  const environment = buildWebRuntimeEnvironment({
+    environment: { PRESERVED: "yes", WORKTRACKER_API_TOKEN: "development-token" },
+    backendPort: 8788,
+  });
+
+  assert.equal(environment.PRESERVED, "yes");
+  assert.equal(environment.MCP_HOST, "127.0.0.1");
+  assert.equal(environment.MCP_PORT, "8123");
+  assert.equal(environment.WORKTRACKER_API_KEY, "development-token");
+  assert.equal(
+    environment.WORKTRACKER_BASE_URL,
+    "http://127.0.0.1:8788/api/work-tracker",
+  );
+  assert.equal(environment.WORKTRACKER_MCP_URL, "http://127.0.0.1:8123/mcp");
 });
 
 test("web services select the next free ports", async () => {

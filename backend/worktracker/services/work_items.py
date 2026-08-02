@@ -5,13 +5,12 @@ import uuid
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 
-from worktracker.models import Issue, IssueType, Project, State
+from worktracker.models import Issue, IssueType, Project
 from worktracker.ranking import key_between
 from worktracker.sequences import allocate_sequence_id
 from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
 from worktracker.work_items import (
     append_rank,
-    apply_label_names,
     blocker_would_cycle,
     resolve_issue_type,
 )
@@ -26,7 +25,7 @@ def create_project_work_item(
     project_id: uuid.UUID,
     *,
     name: str,
-    issue_type_id=None,
+    issue_type_id,
     state_id=None,
     description=None,
     parent_id=None,
@@ -39,9 +38,6 @@ def create_project_work_item(
         raise NotFoundError("Project not found.") from exc
 
     issue_type = resolve_issue_type(project.id, issue_type_id, "task")
-    if issue_type_id and issue_type is None:
-        raise ValidationError("Invalid issue type.")
-
     issue = Issue(
         id=uuid.uuid4(),
         project=project,
@@ -52,11 +48,7 @@ def create_project_work_item(
     )
 
     if description is not None:
-        # description_html is what every reader (API detail, MCP agent,
-        # studio) surfaces; a create that only filled ``description``
-        # looked like silent data loss (#775).
         issue.description = description
-        issue.description_html = description
     if parent_id:
         issue.parent_id = parent_id
     # Birth is gated like the move is (#870): a typed item is born in its
@@ -83,7 +75,6 @@ def create_review_finding(
     parent_id: uuid.UUID,
     name: str,
     description: str,
-    issue_type_id=None,
 ):
     """Create an Implementation finding under a Story in Review (#905).
 
@@ -95,13 +86,11 @@ def create_review_finding(
     Every parent / type / state / project precondition is checked **before any
     write**; a rejection raises :class:`~worktracker.workflow.InvalidTransition`
     so the caller receives the same machine-readable 422 body
-    (``detail``/``code``/``from``/``to``) the workflow status gate emits. The
-    ``issue_type_id`` argument is optional and, when present, must resolve to the
-    project's ``Implementation`` type — a foreign type is rejected.
+    (``detail``/``code``/``from``/``to``) the workflow status gate emits.
 
     Inert by contract: no agent launch, no parent state move, no scheduler, and
     no blocker/dependency edge — just the parented child. The actual write reuses
-    :func:`create_project_work_item`, so description-html handling, rank, and
+    :func:`create_project_work_item`, so description handling, rank, and
     sequence allocation stay identical to a generic create.
     """
 
@@ -125,7 +114,7 @@ def create_review_finding(
             to_state=_FINDING_STAGE,
         )
 
-    parent_type = parent.issue_type.name if parent.issue_type_id else None
+    parent_type = parent.issue_type.name
     if parent_type != "Story":
         raise InvalidTransition(
             "A review finding can only be created under a Story.",
@@ -153,14 +142,6 @@ def create_review_finding(
         raise ValidationError(
             f"Project has no {_FINDING_TYPE!r} issue type to type the finding."
         )
-    if issue_type_id is not None and str(issue_type_id) != str(impl_type.id):
-        raise InvalidTransition(
-            f"A review finding must be an {_FINDING_TYPE} child.",
-            code="child_not_implementation",
-            from_state=parent_state,
-            to_state=_FINDING_STAGE,
-        )
-
     return create_project_work_item(
         project.id,
         name=name,
@@ -174,7 +155,7 @@ def create_module_work_item(
     module_id: uuid.UUID,
     *,
     name: str,
-    issue_type_id=None,
+    issue_type_id,
     description=None,
 ):
     """Create a task under a module and return the saved issue."""
@@ -193,9 +174,7 @@ def create_module_work_item(
     )
 
     if description is not None:
-        # Mirror create_project_work_item: fill description_html too (#775).
         issue.description = description
-        issue.description_html = description
     # Resolve the type BEFORE the state: the birth state depends on it, so an
     # Implementation lands at its workflow start instead of a generic default.
     issue.issue_type = resolve_issue_type(module.project_id, issue_type_id, "task")
@@ -207,8 +186,8 @@ def create_module_work_item(
     return issue
 
 
-def update_work_item(issue_id: uuid.UUID, *, actor=None, **data):
-    """Apply a work-item patch and persist lifecycle side effects.
+def update_work_item(issue_id: uuid.UUID, **data):
+    """Apply a work-item patch and persist workflow side effects.
 
     A workflow **state change is its own operation**: when ``state_id`` is
     present it routes through the sole-writer (:func:`transition_state`, #860),
@@ -217,47 +196,32 @@ def update_work_item(issue_id: uuid.UUID, *, actor=None, **data):
     other field edit — that would let a caller smuggle a gated move past inside a
     larger PATCH — so a mixed patch is rejected. ``origin`` identifies the
     transition caller and defaults to ``human`` for REST compatibility.
-    ``force`` is a human-only modifier that bypasses the graph and is recorded.
     """
 
     issue = get_object_or_404(Issue, pk=issue_id)
 
     if "state_id" in data:
-        force = bool(data.pop("force", False))
-        force_if_completed = bool(data.pop("force_if_completed", False))
         origin = data.pop("origin", "human")
         if set(data) - {"state_id"}:
             raise ValidationError(
                 "A state change must be its own PATCH — send state_id alone."
             )
         with transaction.atomic():
-            if force_if_completed:
-                target_group = (
-                    State.objects.select_for_update()
-                    .filter(pk=data["state_id"], project_id=issue.project_id)
-                    .values_list("group", flat=True)
-                    .first()
-                )
-                force = force or target_group == "completed"
             return transition_state(
                 issue,
                 data["state_id"],
-                force=force,
-                actor=actor,
                 origin=origin,
             )
 
-    # No state move: transition modifiers are meaningless for a plain field edit.
-    data.pop("force", None)
-    data.pop("force_if_completed", None)
+    # No state move: origin is meaningless for a plain field edit.
     data.pop("origin", None)
 
     if "parent_id" in data:
         issue.parent_id = data["parent_id"]
     if "name" in data:
         issue.name = data["name"]
-    if "description_html" in data:
-        issue.description_html = data["description_html"]
+    if "description" in data:
+        issue.description = data["description"]
 
     with transaction.atomic():
         issue.save()
@@ -269,9 +233,6 @@ def update_work_item(issue_id: uuid.UUID, *, actor=None, **data):
             if blocker_would_cycle(str(issue.id), new_ids):
                 raise ValidationError("That blocker would create a cycle.")
             issue.blocked_by.set(new_ids)
-
-        if "labels" in data:
-            apply_label_names(issue, data["labels"])
 
     return issue
 

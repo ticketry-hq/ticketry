@@ -149,14 +149,7 @@ export function normalizeTask(task: WorkItem): TaskSummary {
         group: "",
         color: null,
       },
-    issue_type: task.issue_type ?? null,
-    assignees: task.assignees.map((a) => ({
-      display_name: a.display_name ?? null,
-      email: a.email ?? null,
-    })),
-    labels: task.labels.map((l) => ({ name: l.name })),
-    description_html: task.description_html,
-    description_stripped: task.description_stripped,
+    issue_type: task.issue_type,
     description: task.description,
     parent_id: task.parent_id,
     sub_issues_count: task.sub_issues_count,
@@ -262,12 +255,16 @@ export const getModuleActivity = (
     `/api/runs/module-activity?project_id=${encodeURIComponent(projectId)}`,
   ).catch(() => ({}));
 
-export const createModule = (projectId: string, name: string) =>
+export const createModule = (
+  projectId: string,
+  name: string,
+  issueTypeId: string,
+) =>
   call(async () =>
     normalizeModule(
       (await worktrackerClient().modules.createModule({
         projectId,
-        moduleIn: { name },
+        moduleIn: { name, issue_type_id: issueTypeId },
       })) as Module,
     ),
   );
@@ -280,7 +277,9 @@ export const getTasks = async (projectId: string, moduleId: string) => {
     getStates(projectId),
   ]);
 
-  return { ...normalizeModuleTaskTree(moduleId, tasks), states };
+  // Keep the raw module response alongside the legacy presentation tree. The
+  // work-item store hydrates this exact collection during the expand phase.
+  return { ...normalizeModuleTaskTree(moduleId, tasks), states, workItems: tasks };
 };
 
 export const getProjectWorkItems = (projectId: string): Promise<WorkItem[]> =>
@@ -512,19 +511,15 @@ export const postTaskStatus = (
   _projectId: string,
   taskId: string,
   stateId: string,
-  forceIfCompleted = false,
 ) =>
   call(async () =>
     normalizeTask(
       (await worktrackerClient().workItems.updateWorkItem({
         issueId: taskId,
-        workItemPatch: forceIfCompleted
-          ? {
-              state_id: stateId,
-              origin: WorkItemPatchOriginEnum.human,
-              force_if_completed: true,
-            }
-          : { state_id: stateId, origin: WorkItemPatchOriginEnum.human },
+        workItemPatch: {
+          state_id: stateId,
+          origin: WorkItemPatchOriginEnum.human,
+        },
       })) as WorkItem,
     ),
   );
@@ -549,8 +544,8 @@ export const updateTaskParent = (
 export const createTask = (
   projectId: string,
   name: string,
-  parentId?: string | null,
-  issueTypeId?: string | null,
+  parentId: string | null,
+  issueTypeId: string,
 ) =>
   call(async () =>
     normalizeTask(
@@ -559,7 +554,7 @@ export const createTask = (
         workItemIn: {
           name,
           parent_id: parentId ?? null,
-          issue_type_id: issueTypeId ?? null,
+          issue_type_id: issueTypeId,
         },
       })) as WorkItem,
     ),

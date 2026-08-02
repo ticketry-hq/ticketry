@@ -29,10 +29,9 @@ class IssueTypeIn(BaseModel):
     Body for issue-type create — name + level required, the rest optional.
     """ # noqa: E501
     color: Optional[StrictStr] = None
-    icon: Optional[StrictStr] = None
     level: StrictStr
     name: StrictStr
-    __properties: ClassVar[List[str]] = ["color", "icon", "level", "name"]
+    __properties: ClassVar[List[str]] = ["color", "level", "name"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -78,11 +77,6 @@ class IssueTypeIn(BaseModel):
         if self.color is None and "color" in self.model_fields_set:
             _dict['color'] = None
 
-        # set to None if icon (nullable) is None
-        # and model_fields_set contains the field
-        if self.icon is None and "icon" in self.model_fields_set:
-            _dict['icon'] = None
-
         return _dict
 
     @classmethod
@@ -96,7 +90,6 @@ class IssueTypeIn(BaseModel):
 
         _obj = cls.model_validate({
             "color": obj.get("color"),
-            "icon": obj.get("icon"),
             "level": obj.get("level"),
             "name": obj.get("name")
         })

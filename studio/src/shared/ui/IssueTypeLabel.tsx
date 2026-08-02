@@ -1,13 +1,13 @@
 import type { IssueTypeOut } from "@worktracker/typescript-sdk/models";
 
 interface IssueTypeLabelProps {
-  issueType?: Pick<IssueTypeOut, "level" | "name"> | null;
+  issueType: Pick<IssueTypeOut, "level" | "name">;
 }
 
 export function IssueTypeLabel({ issueType }: IssueTypeLabelProps) {
   if (issueType?.level === "module") return null;
 
-  const label = issueType?.name.trim() ? issueType.name : "Unspecified";
+  const label = issueType.name;
 
   return (
     <span

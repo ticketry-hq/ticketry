@@ -71,6 +71,8 @@ describe("desktop shell security contract", () => {
         "allow-native-terminal-set-frame",
         "allow-native-terminal-focus",
         "allow-native-terminal-detach",
+        "core:event:allow-listen",
+        "core:event:allow-unlisten",
         "core:webview:allow-set-webview-zoom",
       ],
     });
@@ -92,6 +94,26 @@ describe("desktop shell security contract", () => {
     expect(app.windows).toEqual([
       expect.objectContaining({ label: "main", dragDropEnabled: false }),
     ]);
+  });
+
+  it("uses the pooled WebSocket terminal while native Ghostty is disabled", async () => {
+    const presenter = await text(
+      "../../src/features/agents/terminal/Terminal.tsx",
+    );
+
+    expect(presenter).toContain("return <XtermTerminal");
+    expect(presenter).not.toContain("NativeGhosttyTerminal");
+    expect(presenter).not.toContain("nativeGhosttyAvailable");
+  });
+
+  it("initializes packaged libghostty from Ticketry's bundled resources", async () => {
+    const host = await text("../../src-tauri/native/libghostty_host.m");
+
+    expect(host).toContain('setenv("GHOSTTY_RESOURCES_DIR"');
+    expect(host).toContain('setenv("TERMINFO"');
+    expect(host.indexOf("configure_bundled_ghostty_environment();")).toBeLessThan(
+      host.indexOf("ghostty_init(1, argv)"),
+    );
   });
 
   it("keeps the service retry command free of webview-supplied values", async () => {
@@ -140,6 +162,9 @@ describe("desktop shell security contract", () => {
       active: true,
       targets: ["app", "dmg"],
       icon: ["icons/icon.icns", "icons/icon.png"],
+      resources: {
+        "vendor/libghostty/resources/": "",
+      },
       externalBin: ["binaries/muxed-backend", "binaries/ticketry-hook"],
       macOS: {
         minimumSystemVersion: "11.0",

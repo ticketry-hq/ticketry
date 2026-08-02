@@ -41,30 +41,36 @@ class GeneratedModuleTree:
 
 
 @pytest.fixture
-def generated_module_tree(live_server, project):
+def generated_module_tree(live_server, project, module_type, task_type):
     """Create a module, task, and child through the generated SDK."""
     with sdk(live_server) as client:
         modules = ModulesApi(client)
         work_items = WorkItemsApi(client)
-        module = modules.create_module(project.id, ModuleIn(name="SDK"))
+        module = modules.create_module(
+            project.id, ModuleIn(name="SDK", issue_type_id=module_type.id)
+        )
         task = work_items.create_module_work_item(
             module.id,
-            ModuleWorkItemIn(name="Implement"),
+            ModuleWorkItemIn(name="Implement", issue_type_id=task_type.id),
         )
         child = work_items.create_project_work_item(
             project.id,
-            WorkItemIn(name="Test", parent_id=task.id),
+            WorkItemIn(name="Test", parent_id=task.id, issue_type_id=task_type.id),
         )
         yield GeneratedModuleTree(work_items, module, task, child)
 
 
 @pytest.mark.django_db(transaction=True)
-def test_generated_sdk_lists_owned_resources(live_server, project, state):
+def test_generated_sdk_lists_owned_resources(
+    live_server, project, state, module_type
+):
     with sdk(live_server) as client:
         projects = ProjectsApi(client)
         modules = ModulesApi(client)
         states = StatesApi(client)
-        module = modules.create_module(project.id, ModuleIn(name="SDK"))
+        module = modules.create_module(
+            project.id, ModuleIn(name="SDK", issue_type_id=module_type.id)
+        )
 
         assert {
             "projects": [item.id for item in projects.list_projects()],
@@ -116,14 +122,16 @@ def test_generated_sdk_updates_work_item_state(generated_module_tree, state):
 def test_generated_sdk_updates_work_item_description(generated_module_tree):
     updated = generated_module_tree.work_items.update_work_item(
         str(generated_module_tree.task.id),
-        WorkItemPatch(description_html="<p>SDK note</p>"),
+        WorkItemPatch(description="## SDK note"),
     )
 
-    assert updated.description_html == "<p>SDK note</p>"
+    assert updated.description == "## SDK note"
 
 
 @pytest.mark.django_db(transaction=True)
-def test_sdk_multipart_upload_and_detail_read(live_server, project, tmp_path, settings):
+def test_sdk_multipart_upload_and_detail_read(
+    live_server, project, task_type, tmp_path, settings
+):
     settings.MEDIA_ROOT = str(tmp_path / "media")
     source = tmp_path / "notes.txt"
     source.write_text("hello")
@@ -133,7 +141,7 @@ def test_sdk_multipart_upload_and_detail_read(live_server, project, tmp_path, se
         attachments = AttachmentsApi(client)
         task = work_items.create_project_work_item(
             project.id,
-            WorkItemIn(name="Upload"),
+            WorkItemIn(name="Upload", issue_type_id=task_type.id),
         )
         attachment = attachments.upload_attachment(
             task.id,

@@ -48,7 +48,10 @@ export function selectedTaskIndex(
 export function selectTaskAt(rows: Row[], index: number): void {
   const row = rows[index];
   if (!row || !("task" in row)) return;
-  useTasksStore.setState({ selectedTaskId: row.task.id });
+  useTasksStore.setState({
+    selectedTaskId: row.task.id,
+    workspaceSelection: { kind: "task" },
+  });
 }
 
 export function moveTaskSelection(

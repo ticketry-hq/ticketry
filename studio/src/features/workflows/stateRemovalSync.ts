@@ -50,11 +50,10 @@ function collectAffectedIds(projectId: string, removedStateId: string): Set<stri
 
   const backlog = useBacklogStore.getState();
   if (backlog.projectId === projectId) {
-    for (const item of backlog.items) {
-      if (item.state?.id === removedStateId) affected.add(item.id);
-    }
-    for (const [itemId, delta] of Object.entries(backlog.pendingStateDeltas)) {
-      if (delta.state?.id === removedStateId) affected.add(itemId);
+    const owner = useIssueStore.getState();
+    for (const itemId of backlog.itemIds) {
+      const item = owner.workItemsById[itemId];
+      if (item?.state?.id === removedStateId) affected.add(item.id);
     }
   }
 
@@ -131,41 +130,18 @@ export function prepareActiveStateRemoval(
     };
   });
 
-  useBacklogStore.setState((current) => {
-    if (current.projectId !== projectId) return current;
-    const pendingStateDeltas = Object.fromEntries(
-      Object.entries(current.pendingStateDeltas).flatMap(([itemId, delta]) => {
-        if (delta.state?.id !== removedStateId) return [[itemId, delta]];
-        return replacement
-          ? [[itemId, { ...delta, state: replacement }]]
-          : [];
-      }),
-    );
-    return {
-      states: current.states.filter((state) => state.id !== removedStateId),
-      items: current.items.map((item) =>
-        replaceRemovedWorkItemState(item, removedStateId, replacement)),
-      pendingStateDeltas,
-    };
-  });
+  useBacklogStore.setState((current) =>
+    current.projectId === projectId
+      ? { states: current.states.filter((state) => state.id !== removedStateId) }
+      : current,
+  );
 
-  useIssueStore.setState((current) => ({
-    open:
-      current.open?.task.project_id === projectId
-        ? {
-            ...current.open,
-            task: replaceRemovedWorkItemState(
-              current.open.task,
-              removedStateId,
-              replacement,
-            ),
-          }
-        : current.open,
-    children: current.children.map((item) =>
-      item.project_id === projectId
-        ? replaceRemovedWorkItemState(item, removedStateId, replacement)
-        : item),
-  }));
+  const owner = useIssueStore.getState();
+  owner.hydrateWorkItems(
+    Object.values(owner.workItemsById)
+      .filter((item) => item.project_id === projectId)
+      .map((item) => replaceRemovedWorkItemState(item, removedStateId, replacement)),
+  );
 
   return { affectedIds, workflowStates: nextWorkflowStates };
 }
@@ -214,29 +190,6 @@ export function reconcileActiveStateRemoval(
     useBacklogStore.getState().reconcileTargetedItem(item, revision);
     useTasksStore.getState().reconcileTargetedTask(item, revision);
   }
-
-  useIssueStore.setState((current) => {
-    const reconcile = (item: WorkItem): WorkItem | null => {
-      if (item.project_id !== projectId || !reconciledIds.has(item.id)) {
-        return item;
-      }
-      const authoritative = authoritativeById.get(item.id);
-      if (!authoritative) return null;
-      return (authoritative.state_revision ?? 0) >= (item.state_revision ?? 0)
-        ? authoritative
-        : item;
-    };
-    const openTask = current.open ? reconcile(current.open.task) : null;
-    return {
-      open: current.open && openTask
-        ? { ...current.open, task: openTask }
-        : null,
-      children: current.children.flatMap((item) => {
-        const reconciled = reconcile(item);
-        return reconciled ? [reconciled] : [];
-      }),
-    };
-  });
 
   return orderedStates;
 }

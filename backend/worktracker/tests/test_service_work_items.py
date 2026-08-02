@@ -7,7 +7,7 @@ import pytest
 from worktracker.models import (
     Issue,
     IssueType,
-    Label,
+    IssueTypeTransition,
     Project,
     State,
 )
@@ -22,18 +22,33 @@ from worktracker.services.work_items import (
 from worktracker.workflow import InvalidTransition
 
 
+def _issue(*, project, type="task", **data):
+    issue_type = data.pop("issue_type", None)
+    if issue_type is None:
+        issue_type, _ = IssueType.objects.get_or_create(
+            project=project,
+            name=f"Test {type}",
+            defaults={"id": uuid.uuid4(), "level": type},
+        )
+    return Issue.objects.create(
+        project=project, type=type, issue_type=issue_type, **data
+    )
+
+
 @pytest.mark.django_db
-def test_create_project_work_item_uses_project_defaults(project):
+def test_create_project_work_item_requires_explicit_type(project, task_type):
     backlog = State.objects.create(
         id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
     )
-    issue = create_project_work_item(project.id, name="New")
+    issue = create_project_work_item(
+        project.id, name="New", issue_type_id=task_type.id
+    )
 
     assert issue.project_id == project.id
     assert issue.sequence_id == 1
     assert issue.rank != ""
     assert issue.state_id == backlog.id
-    assert issue.issue_type is None
+    assert issue.issue_type_id == task_type.id
 
 
 @pytest.mark.django_db
@@ -59,14 +74,14 @@ def test_create_project_work_item_honors_explicit_state_and_type(project):
     assert issue.state_id == backlog.id
     assert issue.issue_type_id == task_type.id
     assert issue.description == "hello"
-    # #775: readers surface description_html, so create must fill it too.
-    assert issue.description_html == "hello"
 
 
 @pytest.mark.django_db
 def test_create_project_work_item_missing_project_raises():
     with pytest.raises(ServiceError) as excinfo:
-        create_project_work_item(uuid.uuid4(), name="New")
+        create_project_work_item(
+            uuid.uuid4(), name="New", issue_type_id=uuid.uuid4()
+        )
 
     assert excinfo.value.status_code == 404
 
@@ -136,7 +151,7 @@ def test_create_module_implementation_born_ready_not_default(project):
         start_state=ready,
         workflow_revision=1,
     )
-    module = Issue.objects.create(
+    module = _issue(
         id=uuid.uuid4(), project=project, type="module", name="M", sequence_id=999
     )
 
@@ -149,7 +164,7 @@ def test_create_module_implementation_born_ready_not_default(project):
 
 @pytest.mark.django_db
 def test_reorder_work_item_allocates_rank_between_neighbors(project):
-    issue_a = Issue.objects.create(
+    issue_a = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -157,7 +172,7 @@ def test_reorder_work_item_allocates_rank_between_neighbors(project):
         sequence_id=1,
         rank="a",
     )
-    issue_b = Issue.objects.create(
+    issue_b = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -165,7 +180,7 @@ def test_reorder_work_item_allocates_rank_between_neighbors(project):
         sequence_id=2,
         rank="c",
     )
-    moving = Issue.objects.create(
+    moving = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -188,7 +203,7 @@ def test_reorder_work_item_rejects_foreign_neighbor(project):
         workspace=project.workspace,
         name="Other",
     )
-    moving = Issue.objects.create(
+    moving = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -196,7 +211,7 @@ def test_reorder_work_item_rejects_foreign_neighbor(project):
         sequence_id=1,
         rank="b",
     )
-    foreign = Issue.objects.create(
+    foreign = _issue(
         id=uuid.uuid4(),
         project=other_project,
         type="task",
@@ -213,14 +228,14 @@ def test_reorder_work_item_rejects_foreign_neighbor(project):
 
 @pytest.mark.django_db
 def test_delete_work_item_rejects_children(project):
-    parent = Issue.objects.create(
+    parent = _issue(
         id=uuid.uuid4(),
         project=project,
         type="module",
         name="Parent",
         sequence_id=1,
     )
-    Issue.objects.create(
+    _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -238,7 +253,7 @@ def test_delete_work_item_rejects_children(project):
 
 @pytest.mark.django_db
 def test_delete_work_item_deletes_empty_issue(project):
-    issue = Issue.objects.create(
+    issue = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -260,15 +275,26 @@ def test_update_work_item_archives_on_cancelled_and_cascades_descendants(project
     cancelled = State.objects.create(
         id=uuid.uuid4(), project=project, name="Cancelled", group="cancelled"
     )
-    parent = Issue.objects.create(
+    workflow_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Archivable",
+        level="task",
+        start_state=backlog,
+    )
+    IssueTypeTransition.objects.create(
+        issue_type=workflow_type, from_state=backlog, to_state=cancelled
+    )
+    parent = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
         name="Parent",
         sequence_id=1,
         state=backlog,
+        issue_type=workflow_type,
     )
-    child = Issue.objects.create(
+    child = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -276,6 +302,7 @@ def test_update_work_item_archives_on_cancelled_and_cascades_descendants(project
         sequence_id=2,
         parent=parent,
         state=backlog,
+        issue_type=workflow_type,
     )
 
     issue = update_work_item(parent.id, state_id=cancelled.id)
@@ -295,7 +322,17 @@ def test_update_work_item_unarchives_only_moved_issue(project):
     backlog = State.objects.create(
         id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
     )
-    parent = Issue.objects.create(
+    workflow_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Restorable",
+        level="task",
+        start_state=cancelled,
+    )
+    IssueTypeTransition.objects.create(
+        issue_type=workflow_type, from_state=cancelled, to_state=backlog
+    )
+    parent = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -303,8 +340,9 @@ def test_update_work_item_unarchives_only_moved_issue(project):
         sequence_id=1,
         state=cancelled,
         is_archived=True,
+        issue_type=workflow_type,
     )
-    child = Issue.objects.create(
+    child = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -313,6 +351,7 @@ def test_update_work_item_unarchives_only_moved_issue(project):
         parent=parent,
         state=cancelled,
         is_archived=True,
+        issue_type=workflow_type,
     )
 
     update_work_item(parent.id, state_id=backlog.id)
@@ -324,43 +363,22 @@ def test_update_work_item_unarchives_only_moved_issue(project):
 
 
 @pytest.mark.django_db
-def test_update_work_item_replaces_labels_and_preserves_existing_when_omitted(project):
-    issue = Issue.objects.create(
-        id=uuid.uuid4(),
-        project=project,
-        type="task",
-        name="Task",
-        sequence_id=1,
-    )
-    keep = Label.objects.create(id=uuid.uuid4(), project=project, name="keep")
-    issue.labels.add(keep)
-
-    update_work_item(issue.id, labels=["x", "x", " tidy "])
-    issue.refresh_from_db()
-    assert sorted(label.name for label in issue.labels.all()) == ["tidy", "x"]
-
-    update_work_item(issue.id, name="renamed")
-    issue.refresh_from_db()
-    assert sorted(label.name for label in issue.labels.all()) == ["tidy", "x"]
-
-
-@pytest.mark.django_db
 def test_update_work_item_rejects_self_block_and_cycles(project):
-    a = Issue.objects.create(
+    a = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
         name="A",
         sequence_id=1,
     )
-    b = Issue.objects.create(
+    b = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
         name="B",
         sequence_id=2,
     )
-    c = Issue.objects.create(
+    c = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
@@ -379,14 +397,14 @@ def test_update_work_item_rejects_self_block_and_cycles(project):
 
 @pytest.mark.django_db
 def test_update_work_item_omitted_blockers_do_not_clear(project):
-    blocker = Issue.objects.create(
+    blocker = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",
         name="Blocker",
         sequence_id=1,
     )
-    issue = Issue.objects.create(
+    issue = _issue(
         id=uuid.uuid4(),
         project=project,
         type="task",

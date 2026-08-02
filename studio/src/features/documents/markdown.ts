@@ -2,10 +2,8 @@ import { marked } from "marked";
 import type TurndownService from "turndown";
 import DOMPurify from "isomorphic-dompurify";
 
-// C5 (#640): pure-FE markdown round-trip for the issue-description drawer.
-// `description_html` stays the only persisted field — we render markdown to
-// HTML on save and turn the stored HTML back into markdown to seed re-edits.
-// Both directions are best-effort/lossy by design (basic CommonMark scope).
+// Markdown rendering for descriptions and documents. The HTML-to-Markdown
+// direction exists only to normalize legacy HTML descriptions on first edit.
 
 marked.setOptions({ gfm: false, breaks: true });
 
@@ -22,12 +20,12 @@ const loadTurndown = () =>
       }),
   ));
 
-// markdown source → HTML string to persist as `description_html`.
+// Markdown source → HTML for sanitized presentation.
 export function markdownToHtml(md: string): string {
   return marked.parse(md, { async: false }) as string;
 }
 
-// stored `description_html` → markdown to seed the editor textarea.
+// Legacy stored HTML → Markdown to seed the editor textarea.
 export async function htmlToMarkdown(html: string): Promise<string> {
   return (await loadTurndown()).turndown(html);
 }

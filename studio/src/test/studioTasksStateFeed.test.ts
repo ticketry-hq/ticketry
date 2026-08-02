@@ -65,15 +65,12 @@ function taskRow(partial: Partial<TaskSummary> = {}): TaskSummary {
     project_id: "project-1",
     sequence_id: 1,
     state: TODO,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
     state_revision: 1,
     ...partial,
+    issue_type: partial.issue_type ?? { id: "type-story", name: "Story", level: "task" },
   };
 }
 
@@ -87,10 +84,6 @@ function workItem(partial: Partial<WorkItem> = {}): WorkItem {
     issue_type: { id: "story", name: "Story", level: "task" },
     state: TODO,
     state_revision: 1,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,

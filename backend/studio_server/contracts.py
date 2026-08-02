@@ -22,26 +22,13 @@ class TaskState(BaseModel):
     color: Optional[str] = None
 
 
-class AssigneeSummary(BaseModel):
-    display_name: Optional[str] = None
-    email: Optional[str] = None
-
-
-class LabelSummary(BaseModel):
-    name: str
-
-
 class TaskSummary(BaseModel):
     id: str
     name: str
     project_id: str
     sequence_id: Optional[int] = None
     state: TaskState
-    issue_type: Optional[str] = None
-    assignees: List[AssigneeSummary] = Field(default_factory=list)
-    labels: List[LabelSummary] = Field(default_factory=list)
-    description_html: Optional[str] = None
-    description_stripped: Optional[str] = None
+    issue_type: str
     description: Optional[str] = None
     parent_id: Optional[str] = None
     sub_issues_count: int = 0

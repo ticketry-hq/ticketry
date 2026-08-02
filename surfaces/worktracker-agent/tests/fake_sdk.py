@@ -86,6 +86,7 @@ def make_work_item(**over) -> WorkItemOut:
         name="T",
         project_id=UUID("22222222-2222-2222-2222-222222222222"),
         key="MEML-1",
+        issue_type=make_issue_type(),
         created_at=_TS,
         updated_at=_TS,
     )
@@ -134,9 +135,7 @@ def make_issue_type(**over) -> IssueTypeOut:
         name="Story",
         level="task",
         color="#222",
-        icon="",
         sort_order=0,
-        is_default=True,
     )
     data.update(over)
     return IssueTypeOut(**data)
@@ -168,7 +167,6 @@ def make_scope_ref(**over) -> ScopeRef:
         name="blocker",
         state_group="started",
         resolved=False,
-        assignees=["Ada"],
     )
     data.update(over)
     return ScopeRef(**data)
@@ -192,11 +190,9 @@ def make_scope_context(**over) -> ScopeContextOut:
             key="CODIN-1",
             name="T",
             state_group=None,
-            assignees=[],
         ),
         depends_on=[ref],
         depended_by=[],
-        owned_elsewhere=[ref],
         advisory="1 of 1 blocker(s) unresolved.",
     )
     data.update(over)

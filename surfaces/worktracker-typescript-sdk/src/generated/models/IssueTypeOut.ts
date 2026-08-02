@@ -32,19 +32,7 @@ export interface IssueTypeOut {
      * @type {string}
      * @memberof IssueTypeOut
      */
-    icon?: string | null;
-    /**
-     * 
-     * @type {string}
-     * @memberof IssueTypeOut
-     */
     id: string;
-    /**
-     * 
-     * @type {boolean}
-     * @memberof IssueTypeOut
-     */
-    is_default?: boolean;
     /**
      * 
      * @type {string}
@@ -86,9 +74,7 @@ export function IssueTypeOutFromJSONTyped(json: any, ignoreDiscriminator: boolea
     return {
         
         'color': json['color'] == null ? undefined : json['color'],
-        'icon': json['icon'] == null ? undefined : json['icon'],
         'id': json['id'],
-        'is_default': json['is_default'] == null ? undefined : json['is_default'],
         'level': json['level'],
         'name': json['name'],
         'sort_order': json['sort_order'] == null ? undefined : json['sort_order'],
@@ -107,9 +93,7 @@ export function IssueTypeOutToJSONTyped(value?: IssueTypeOut | null, ignoreDiscr
     return {
         
         'color': value['color'],
-        'icon': value['icon'],
         'id': value['id'],
-        'is_default': value['is_default'],
         'level': value['level'],
         'name': value['name'],
         'sort_order': value['sort_order'],

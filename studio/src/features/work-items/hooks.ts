@@ -1,4 +1,5 @@
 import { useBacklogStore } from "./internal/backlogStore";
+import { useIssueStore } from "./issue-detail/internal/issueStore";
 
 // The work-items query surface: the loaded project's planning data as one
 // read-only view model. Hosts and sibling modules read THIS instead of the
@@ -8,7 +9,11 @@ import { useBacklogStore } from "./internal/backlogStore";
 // stale project can (re)load without reaching for the store.
 export function useWorkItems() {
   const projectId = useBacklogStore((s) => s.projectId);
-  const items = useBacklogStore((s) => s.items);
+  const itemIds = useBacklogStore((s) => s.itemIds);
+  const workItemsById = useIssueStore((s) => s.workItemsById);
+  const items = itemIds
+    .map((id) => workItemsById[id])
+    .filter((item): item is NonNullable<typeof item> => item !== undefined);
   const states = useBacklogStore((s) => s.states);
   const loading = useBacklogStore((s) => s.loading);
   const loadError = useBacklogStore((s) => s.loadError);

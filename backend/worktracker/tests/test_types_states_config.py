@@ -15,6 +15,7 @@ from worktracker.models import (
     State,
 )
 from worktracker.seed import ensure_issue_types, ensure_state_order
+from worktracker.schemas import IssueTypeIn, IssueTypeOut, IssueTypePatch
 from worktracker.tests.conftest import BASE, patch_json, post_json
 
 
@@ -61,8 +62,9 @@ def _states(client, project, auth):
     return client.get(f"{BASE}/projects/{project.id}/states", headers=auth).json()
 
 
-def _make_task(client, project, auth, **body):
+def _make_task(client, project, auth, *, issue_type_id, **body):
     body.setdefault("name", "T")
+    body["issue_type_id"] = str(issue_type_id)
     r = post_json(client, f"{BASE}/projects/{project.id}/work-items", body, auth)
     assert r.status_code == 200, r.content
     return r.json()
@@ -72,18 +74,14 @@ def _make_task(client, project, auth, **body):
 
 
 @pytest.mark.django_db
-def test_seed_creates_defaults(client, project, auth):
+def test_seed_creates_explicit_issue_types(client, project, auth):
     _seed(project)
     types = _types(client, project, auth)
     by_name = {t["name"]: t for t in types}
-    assert by_name["Module"]["level"] == "module" and by_name["Module"]["is_default"]
-    assert by_name["Story"]["level"] == "task" and by_name["Story"]["is_default"]
-    # PathFind and Implementation are task-level but never the default.
-    assert by_name["PathFind"]["level"] == "task" and not by_name["PathFind"]["is_default"]
-    assert (
-        by_name["Implementation"]["level"] == "task"
-        and not by_name["Implementation"]["is_default"]
-    )
+    assert by_name["Module"]["level"] == "module"
+    assert by_name["Story"]["level"] == "task"
+    assert by_name["PathFind"]["level"] == "task"
+    assert by_name["Implementation"]["level"] == "task"
 
     states = _states(client, project, auth)
     assert [s["sort_order"] for s in states] == sorted(s["sort_order"] for s in states)
@@ -95,17 +93,18 @@ def test_seed_is_idempotent(project):
     _seed(project)
     _seed(project)
     assert IssueType.objects.filter(project=project).count() == 4
-    assert (
-        IssueType.objects.filter(project=project, level="module", is_default=True).count()
-        == 1
-    )
+
+
+def test_issue_type_contract_has_no_icon_field():
+    for schema in (IssueTypeIn, IssueTypeOut, IssueTypePatch):
+        assert "icon" not in schema.model_fields
 
 
 # --- create type ------------------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_create_type_appends_non_default(client, project, auth):
+def test_create_type_appends_to_level(client, project, auth):
     _seed(project)
     r = post_json(
         client,
@@ -115,7 +114,6 @@ def test_create_type_appends_non_default(client, project, auth):
     )
     assert r.status_code == 200
     body = r.json()
-    assert body["is_default"] is False
     # Task-level seeds are Story(1), PathFind(2), Implementation(3), so the new
     # task type lands at 4.
     assert body["sort_order"] == 4
@@ -145,40 +143,6 @@ def test_create_type_bad_level_422(client, project, auth):
     assert r.status_code == 422
 
 
-# --- set default flips ------------------------------------------------------
-
-
-@pytest.mark.django_db
-def test_set_default_flips_prior(client, project, auth):
-    _seed(project)
-    spike = post_json(
-        client,
-        f"{BASE}/projects/{project.id}/issue-types",
-        {"name": "Spike", "level": "task"},
-        auth,
-    ).json()
-
-    r = patch_json(
-        client, f"{BASE}/issue-types/{spike['id']}", {"is_default": True}, auth
-    )
-    assert r.status_code == 200
-    assert r.json()["is_default"] is True
-
-    defaults = IssueType.objects.filter(
-        project=project, level="task", is_default=True
-    )
-    assert defaults.count() == 1
-    assert str(defaults.first().id) == spike["id"]
-
-
-@pytest.mark.django_db
-def test_clearing_default_directly_409(client, project, auth):
-    _seed(project)
-    module_type = IssueType.objects.get(project=project, name="Module")
-    r = patch_json(client, f"{BASE}/issue-types/{module_type.id}", {"is_default": False}, auth)
-    assert r.status_code == 409
-
-
 # --- derive on create -------------------------------------------------------
 
 
@@ -193,10 +157,16 @@ def test_create_with_type_sets_binary(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_create_without_type_uses_bucket_default(client, project, auth):
+def test_create_without_type_is_rejected(client, project, auth):
     _seed(project)
-    task = _make_task(client, project, auth)
-    assert task["issue_type"]["name"] == "Story"
+    response = post_json(
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        {"name": "Untyped"},
+        auth,
+    )
+    assert response.status_code == 422
+    assert not Issue.objects.filter(project=project, name="Untyped").exists()
 
 
 @pytest.mark.django_db
@@ -216,11 +186,11 @@ def test_create_with_wrong_level_type_422(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_delete_default_type_409(client, project, auth):
+def test_delete_unused_type_has_no_default_restriction(client, project, auth):
     _seed(project)
     module_type = IssueType.objects.get(project=project, name="Module")
     r = client.delete(f"{BASE}/issue-types/{module_type.id}", headers=auth)
-    assert r.status_code == 409
+    assert r.status_code == 204
 
 
 @pytest.mark.django_db
@@ -237,12 +207,12 @@ def test_delete_type_in_use_409_then_reassign(client, project, auth):
     blocked = client.delete(f"{BASE}/issue-types/{bug['id']}", headers=auth)
     assert blocked.status_code == 409
 
-    default_task = IssueType.objects.get(project=project, name="Story")
+    story_type = IssueType.objects.get(project=project, name="Story")
     ok = client.delete(
-        f"{BASE}/issue-types/{bug['id']}?reassign_to={default_task.id}", headers=auth
+        f"{BASE}/issue-types/{bug['id']}?reassign_to={story_type.id}", headers=auth
     )
     assert ok.status_code == 204
-    assert Issue.objects.get(pk=task["id"]).issue_type_id == default_task.id
+    assert Issue.objects.get(pk=task["id"]).issue_type_id == story_type.id
 
 
 @pytest.mark.django_db
@@ -474,16 +444,12 @@ def test_reorder_states_incomplete_set_422(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_workitem_out_carries_nullable_issue_type(client, project, auth):
+def test_workitem_out_carries_required_nested_issue_type(client, project, auth):
     _seed(project)
-    task = _make_task(client, project, auth)
-    # Present and nested (default), never a bare id.
+    story = IssueType.objects.get(project=project, name="Story")
+    task = _make_task(client, project, auth, issue_type_id=story.id)
+    # Present and nested, never null or a bare id.
     assert task["issue_type"]["level"] == "task"
-
-    # An issue created before seeding (no type) still serializes as null.
-    Issue.objects.filter(pk=task["id"]).update(issue_type=None)
-    r = client.get(f"{BASE}/work-items/{task['id']}", headers=auth)
-    assert r.json()["task"]["issue_type"] is None
 
 
 @pytest.mark.django_db

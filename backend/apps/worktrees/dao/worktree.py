@@ -21,8 +21,8 @@ def get_by_task(task_id: str) -> Optional[Worktree]:
     Unlike the write helpers, this getter must NOT close connections: it runs
     synchronously inside the ``integrate_on_complete`` post_save handler, which
     fires while the workflow transition's transaction is still open. Closing the
-    connection there breaks that transaction — a later write in the same atomic
-    (e.g. the ForceTransition audit row on a forced move) hits a closed database.
+    connection there breaks that transaction — any later write in the same atomic
+    block hits a closed database.
     Thread-boundary connection cleanup for the integrate path is handled by
     ``_safe_integrate``.
     """

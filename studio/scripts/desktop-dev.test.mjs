@@ -78,7 +78,7 @@ test("resolution outside a Git worktree fails closed with the launch directory",
 });
 
 test("development services select distinct available ports for each launch", async () => {
-  const firstOccupied = new Set([8787, 8797]);
+  const firstOccupied = new Set([8787, 8123]);
   const first = await selectDevelopmentServicePorts({
     environment: {},
     isAvailable: async (port) => !firstOccupied.has(port),
@@ -89,8 +89,8 @@ test("development services select distinct available ports for each launch", asy
     isAvailable: async (port) => !secondOccupied.has(port),
   });
 
-  assert.deepEqual(first, { backend: 8788, mcp: 8798 });
-  assert.deepEqual(second, { backend: 8789, mcp: 8799 });
+  assert.deepEqual(first, { backend: 8788, mcp: 8124 });
+  assert.deepEqual(second, { backend: 8789, mcp: 8125 });
 });
 
 test("explicit development service ports fail instead of shifting", async () => {

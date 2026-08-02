@@ -157,7 +157,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   async createModuleForProjectWithError(projectId, name) {
-    const created = await api.createModule(projectId, name);
+    const issueTypes = await api.listIssueTypes(projectId);
+    const moduleType = issueTypes.find(
+      (issueType) => issueType.level === "module" && issueType.name === "Module",
+    );
+    if (!moduleType) throw new Error("The Module issue type is unavailable.");
+    const created = await api.createModule(projectId, name, moduleType.id);
     // Reload so both normal create and guided create preserve the same ordering.
     if (get().selectedProjectId === projectId) await get().reloadModules();
     return created;

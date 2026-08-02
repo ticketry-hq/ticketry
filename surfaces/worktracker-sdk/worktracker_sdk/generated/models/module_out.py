@@ -32,7 +32,7 @@ class ModuleOut(BaseModel):
     """ # noqa: E501
     id: UUID
     is_archived: Optional[StrictBool] = False
-    issue_type: Optional[IssueTypeOut] = None
+    issue_type: IssueTypeOut
     key: StrictStr
     name: StrictStr
     project_id: UUID
@@ -81,11 +81,6 @@ class ModuleOut(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of issue_type
         if self.issue_type:
             _dict['issue_type'] = self.issue_type.to_dict()
-        # set to None if issue_type (nullable) is None
-        # and model_fields_set contains the field
-        if self.issue_type is None and "issue_type" in self.model_fields_set:
-            _dict['issue_type'] = None
-
         return _dict
 
     @classmethod

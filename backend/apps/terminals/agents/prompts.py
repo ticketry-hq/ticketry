@@ -55,21 +55,7 @@ def build_context_prompt(
     state_name = task.state.name if task.state else "Unknown"
     issue_type_name = task.issue_type or "Unknown"
 
-    assignees_list = []
-    for a in task.assignees:
-        if a.display_name:
-            assignees_list.append(a.display_name)
-        elif a.email:
-            assignees_list.append(a.email)
-
-    assignees = ", ".join(assignees_list) or "Unassigned"
-
-    raw_desc = (
-        task.description_html
-        or task.description_stripped
-        or task.description
-        or ""
-    )
+    raw_desc = task.description or ""
     desc = _strip_html(raw_desc) if raw_desc else "No description provided."
 
     project_id = task.project_id
@@ -104,8 +90,7 @@ def build_context_prompt(
         f"Module ID: {module_id or ''}\n"
         f"Local Module Folder: {module_folder or ''}\n"
         f"State: {state_name}\n"
-        f"Type: {issue_type_name}\n"
-        f"Assignees: {assignees}\n\n"
+        f"Type: {issue_type_name}\n\n"
         f"Description:\n{desc}\n\n"
     )
 

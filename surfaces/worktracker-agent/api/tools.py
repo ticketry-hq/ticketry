@@ -36,9 +36,8 @@ class WorktrackerToolset:
     ) -> List[WorktrackerIssueType]:
         """List a project's configurable issue types.
 
-        Each row carries its ``level`` bucket (``module`` vs ``task``) and
-        ``is_default`` flag. Use it to map a type name to the id the create
-        tools accept, or to see which type a create defaults to per level."""
+        Each row carries its ``level`` bucket (``module`` vs ``task``). Use it
+        to map a selected type name to the id the create tools require."""
         return self.service.list_issue_types(project_id)
 
     def list_tasks_tool(
@@ -186,20 +185,20 @@ class WorktrackerToolset:
         ctx: Any,
         project_id: str,
         name: str,
+        issue_type: str,
         description: str = "",
         module_id: Optional[str] = None,
-        issue_type: Optional[str] = None,
         state_name: Optional[str] = None,
     ) -> str:
-        """Create a new task, optionally in a named workflow state. Returns its ID."""
+        """Create a task with an explicit type, optionally in a named state."""
         return str(
             self.service.create_task(
-                project_id,
-                name,
-                description,
-                module_id,
-                issue_type,
-                state_name,
+                project_id=project_id,
+                name=name,
+                issue_type=issue_type,
+                description=description,
+                module_id=module_id,
+                state_name=state_name,
             )
         )
 
@@ -209,14 +208,19 @@ class WorktrackerToolset:
         project_id: str,
         parent_id: str,
         name: str,
+        issue_type: str,
         description: str = "",
-        issue_type: Optional[str] = None,
         state_name: Optional[str] = None,
     ) -> str:
-        """Create a sub-task, optionally in a named workflow state."""
+        """Create a sub-task with an explicit type, optionally in a named state."""
         return str(
             self.service.create_sub_task(
-                project_id, parent_id, name, description, issue_type, state_name
+                project_id=project_id,
+                parent_id=parent_id,
+                name=name,
+                issue_type=issue_type,
+                description=description,
+                state_name=state_name,
             )
         )
 
@@ -243,9 +247,8 @@ class WorktrackerToolset:
         returns ``{"ok": False, ...}`` with a machine-readable reason instead of
         raising: malformed evidence locally (implausible path, or a
         non-inclusive / non-positive line range), and — from the backend gate — a
-        parent that is not a Story, a parent not in ``Review``, a foreign-project
-        parent, or a non-Implementation child (``detail``/``code``/``from``/
-        ``to``).
+        parent that is not a Story, a parent not in ``Review``, or a
+        foreign-project parent (``detail``/``code``/``from``/``to``).
 
         Inert by contract: it never launches an agent, moves the parent's state,
         touches the scheduler, or draws a blocker/dependency edge.
@@ -267,8 +270,8 @@ class WorktrackerToolset:
         the gate's structured reason (``detail``/``code``/``from``/``to``) when
         the backend refuses an illegal workflow move (#872).
 
-        This tool always identifies the write as agent-origin and exposes no
-        force bypass.
+        This tool always identifies the write as agent-origin, so the configured
+        graph and its agent permissions govern the move.
         """
         return self.service.update_task_status(project_id, task_id, status_name)
 
@@ -291,15 +294,6 @@ class WorktrackerToolset:
     ) -> Dict[str, Any]:
         """Replace a task's supplied title and/or full description."""
         return self.service.update_task(id_or_key, name, description)
-
-    def set_lifecycle_tool(
-        self,
-        ctx: Any,
-        work_item_id: str,
-        target: str,
-    ) -> dict:
-        """Advance a work item's internal planning lifecycle state."""
-        return self.service.set_lifecycle(work_item_id, target)
 
     def set_task_blockers_tool(
         self,
@@ -409,7 +403,7 @@ class WorktrackerToolset:
         instead of raising (unknown target, no module ancestry, no selected
         profile). This is a single interactive launch: it starts no orchestration
         run, dependency graph, or planning phase, and never moves the target's
-        workflow/lifecycle state. Repeated calls each start a fresh run.
+        workflow state. Repeated calls each start a fresh run.
         """
         return self.service.launch_default_coding_agent(id_or_key)
 

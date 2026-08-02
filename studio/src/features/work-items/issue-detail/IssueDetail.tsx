@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import {
   useIssueStore, deriveEpic, resolveBlockerChips, } from "./internal/issueStore";
 import { useBacklogStore } from "../internal/backlogStore";
+import { useWorkItems } from "../hooks";
 import { usePlanningFilterStore } from "../internal/planningFilterStore";
 import { dialog } from "../../../app/stores/dialogStore";
 import { useStudioStore } from "../../projects/store";
@@ -26,14 +27,15 @@ const DescriptionEditor = lazy(() => import("../../documents/DescriptionEditor")
 // across every host of this component (drawer and Backlog pane).
 const SIDEBAR_KEY = "studio.issueDetail.sidebarVisible:v1";
 const LEGACY_SIDEBAR_KEYS = ["studio.issueDetail.sidebarVisible"];
+const NO_CHILD_IDS: string[] = [];
 
 function readSidebarVisible(): boolean {
   return readVersionedItem(SIDEBAR_KEY, LEGACY_SIDEBAR_KEYS) !== "0";
 }
 
 // The two-pane issue body: left = summary / status / description / child
-// issues; right = the relationship-led Details panel (no assignees — personal
-// tracker). Each editable field PATCHes optimistically via issueStore.
+// issues; right = the relationship-led Details panel. Each editable field
+// PATCHes optimistically via issueStore.
 //
 // Host-agnostic (#827): takes the issue's key-or-id and loads it itself, so
 // the Studio drawer and Backlog details render the identical component.
@@ -41,6 +43,15 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   const open = useIssueStore((s) => s.open);
   const openIssue = useIssueStore((s) => s.openIssue);
   const children = useIssueStore((s) => s.children);
+  const cachedTask = useIssueStore((s) => {
+    const id = s.workItemIdByKey[issueId] ?? issueId;
+    return s.workItemsById[id] ?? null;
+  });
+  const cachedChildIds = useIssueStore((s) => {
+    const id = s.workItemIdByKey[issueId] ?? issueId;
+    return s.childWorkItemIds[id] ?? NO_CHILD_IDS;
+  });
+  const workItemsById = useIssueStore((s) => s.workItemsById);
   const loading = useIssueStore((s) => s.loading);
   const notFound = useIssueStore((s) => s.notFound);
   const loadError = useIssueStore((s) => s.loadError);
@@ -52,7 +63,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
 
   const modules = useStudioStore((s) => s.modules);
   const projects = useStudioStore((s) => s.projects);
-  const items = useBacklogStore((s) => s.items);
+  const { items } = useWorkItems();
   const deleteIssue = useBacklogStore((s) => s.deleteIssue);
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
 
@@ -73,12 +84,23 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
     void openIssue(issueId);
   }, [issueId, openIssue]);
 
-  // A leftover `open` from another issue (host switched ids this render) is
-  // treated as still-loading; the effect above is fetching the right one.
-  const stale =
-    open !== null && open.task.id !== issueId && open.task.key !== issueId;
+  const openMatchesSelection =
+    open !== null && (open.task.id === issueId || open.task.key === issueId);
+  const detail = openMatchesSelection
+    ? open
+    : cachedTask
+      ? { task: cachedTask, attachments: [] }
+      : null;
+  const displayedChildren = openMatchesSelection
+    ? children
+    : cachedChildIds
+        .map((id) => workItemsById[id])
+        .filter((item): item is NonNullable<typeof item> => item !== undefined);
 
-  if (loading || stale) {
+  // A loaded selection paints from the canonical record immediately. Loading
+  // is reserved for a true cache miss, including a deep-link outside the
+  // module currently held by the work-item store.
+  if (!cachedTask && loading) {
     return <div className="grid h-full place-items-center text-base text-text-muted">Loading issue…</div>;
   }
   if (notFound) {
@@ -91,7 +113,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
       </div>
     );
   }
-  if (!open) {
+  if (!detail) {
     // A non-404 load failure (the 404 path renders the not-found block above).
     // Mutation errors never reach here — those surface as toasts (#638).
     if (loadError) {
@@ -107,14 +129,11 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
     return null;
   }
 
-  const task = open.task;
-  const attachments = open.attachments;
+  const task = detail.task;
+  const attachments = detail.attachments;
   const epic = deriveEpic(task, modules, items);
   const project = projects.find((p) => p.id === task.project_id) ?? null;
-  const descriptionValue =
-    [task.description_html, task.description, task.description_stripped].find(
-      (value) => value?.trim(),
-    ) ?? null;
+  const descriptionValue = task.description?.trim() ? task.description : null;
 
   // Resolve blocker/blocks ids → navigable chips from the loaded project tree.
   const blockedByChips = resolveBlockerChips(task.blocked_by_ids, items, modules);
@@ -209,8 +228,8 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           <div className="mb-1 text-xs uppercase tracking-wider text-text-secondary">Description</div>
           <Suspense fallback={null}>
             <DescriptionEditor
-              html={descriptionValue}
-              onSave={(description_html) => patchField({ description_html })}
+              value={descriptionValue}
+              onSave={(description) => patchField({ description })}
             />
           </Suspense>
         </div>
@@ -218,10 +237,14 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
         <Attachments attachments={attachments} />
 
         {hasFindingsPanel(task) && (
-          <FindingsPanel children={children} onCancel={(id) => void cancelChild(id)} />
+          <FindingsPanel children={displayedChildren} onCancel={(id) => void cancelChild(id)} />
         )}
 
-        <ChildIssues children={children} onAddSubtask={(name) => void addSubtask(name)} />
+        <ChildIssues
+          children={displayedChildren}
+          projectId={task.project_id}
+          onAddSubtask={(name, issueTypeId) => void addSubtask(name, issueTypeId)}
+        />
       </div>
 
       {sidebarVisible && (

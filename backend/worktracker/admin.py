@@ -1,11 +1,9 @@
 from django.contrib import admin
 
 from worktracker.models import (
-    Assignee,
     Attachment,
     Issue,
     IssueType,
-    Label,
     LaunchBinding,
     Project,
     State,
@@ -34,8 +32,8 @@ class StateAdmin(admin.ModelAdmin):
 
 @admin.register(IssueType)
 class IssueTypeAdmin(admin.ModelAdmin):
-    list_display = ("name", "level", "project", "is_default", "sort_order", "color")
-    list_filter = ("level", "project", "is_default")
+    list_display = ("name", "level", "project", "sort_order", "color")
+    list_filter = ("level", "project")
     search_fields = ("name",)
 
 
@@ -53,22 +51,10 @@ class IssueAdmin(admin.ModelAdmin):
     list_display = ("sequence_id", "type", "issue_type", "name", "project", "parent", "state")
     list_filter = ("type", "project", "state")
     search_fields = ("name",)
-    raw_id_fields = ("parent", "state", "issue_type", "assignees", "labels")
+    raw_id_fields = ("parent", "state", "issue_type")
 
 
 @admin.register(Attachment)
 class AttachmentAdmin(admin.ModelAdmin):
     list_display = ("filename", "issue", "mime_type", "size")
     raw_id_fields = ("issue",)
-
-
-@admin.register(Assignee)
-class AssigneeAdmin(admin.ModelAdmin):
-    list_display = ("display_name", "email")
-    search_fields = ("display_name", "email")
-
-
-@admin.register(Label)
-class LabelAdmin(admin.ModelAdmin):
-    list_display = ("name", "project")
-    search_fields = ("name",)

@@ -19,32 +19,6 @@ TYPE_CHOICES = [
 
 LEVEL_CHOICES = TYPE_CHOICES
 
-# The internal planning-lifecycle axis (#758), separate from the visible
-# ``Issue.state`` FK. 19 values, one guarded machine (see ``worktracker.lifecycle``);
-# ``max_length=32`` covers the longest value. Written only through
-# ``lifecycle.set_lifecycle``; never client-writable via CRUD.
-LIFECYCLE_CHOICES = [
-    ("backlog", "Backlog"),
-    ("refining", "Refining"),
-    ("prd_generated", "PRD generated"),
-    ("prd_review", "PRD in review"),
-    ("prd_approved", "PRD approved"),
-    ("generating_hld", "Generating HLD"),
-    ("hld_generated", "HLD generated"),
-    ("hld_review", "HLD in review"),
-    ("hld_approved", "HLD approved"),
-    ("registering_split", "Registering split"),
-    ("split_created", "Split created"),
-    ("lld_generating", "Generating LLD"),
-    ("lld_generated", "LLD generated"),
-    ("lld_review", "LLD in review"),
-    ("lld_approved", "LLD approved"),
-    ("implementing", "Implementing"),
-    ("done", "Done"),
-    ("failed", "Failed"),
-    ("cancelled", "Cancelled"),
-]
-
 # The canonical workflow in exact left-to-right board order. Each entry is
 # ``(name, group, color)`` and is projected from the reviewed defaults artifact.
 DEFAULT_STATES = list(REVIEWED_STATES)
@@ -74,11 +48,8 @@ PROTECTED_STATE_KEYS = {(name, group) for name, group, _ in DEFAULT_STATES}
 
 # The canonical issue types (CODIN-859, CODIN-954). The module/container type
 # remains model-owned; task-level work kinds and their order come from the
-# reviewed defaults artifact. The artifact's first task type is the default.
+# reviewed defaults artifact.
 DEFAULT_ISSUE_TYPES = [
-    ("Module", "module", True),
-    *[
-        (name, "task", index == 0)
-        for index, name in enumerate(REVIEWED_TASK_ISSUE_TYPES)
-    ],
+    ("Module", "module"),
+    *[(name, "task") for name in REVIEWED_TASK_ISSUE_TYPES],
 ]

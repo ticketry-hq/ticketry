@@ -91,11 +91,6 @@ def task(project, module, state, sequence_id=2):
         issue_type=issue_type,
         parent=module,
         state=state,
-        lifecycle_state="backlog"
-        if state.group == "backlog"
-        else "prd_approved"
-        if state.group == "unstarted"
-        else None,
         name="Task",
         sequence_id=sequence_id,
         description="Raw idea",
@@ -117,7 +112,6 @@ def _child(project, parent, state, sequence_id, name="Child"):
         type="task",
         parent=parent,
         state=state,
-        lifecycle_state="split_created" if state.group == "unstarted" else None,
         name=name,
         sequence_id=sequence_id,
     )
@@ -685,66 +679,6 @@ def test_reset_execute_graph_without_header_returns_graph_not_found(
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_reset_execute_graph_recovers_only_failed_lifecycles_in_reset_scope(
-    client, project, module, todo, done
-):
-    from apps.execution.models import EngineRun, GraphRun
-
-    root = task(project, module, todo, sequence_id=2)
-    failed = _child(project, root, todo, 3, name="Failed")
-    halted = _child(project, root, todo, 4, name="Halted")
-    unset = _child(project, root, todo, 5, name="Unset")
-    non_failed = _child(project, root, todo, 6, name="Non-failed")
-    completed = _child(project, root, done, 7, name="Done")
-    running = _child(project, root, todo, 8, name="Running")
-    other_root = task(project, module, todo, sequence_id=9)
-    outside = _child(project, other_root, todo, 10, name="Other root")
-
-    failed.lifecycle_state = "failed"
-    halted.lifecycle_state = "failed"
-    unset.lifecycle_state = None
-    completed.lifecycle_state = "failed"
-    running.lifecycle_state = "failed"
-    outside.lifecycle_state = "failed"
-    Issue.objects.bulk_update(
-        [failed, halted, unset, completed, running, outside],
-        ["lifecycle_state"],
-    )
-
-    GraphRun.objects.create(root=root, project=project, module=module, agent="codex")
-    for issue, status in (
-        (failed, "failed"),
-        (halted, "halted"),
-        (unset, "failed"),
-        (non_failed, "failed"),
-        (completed, "done"),
-        (running, "running"),
-        (outside, "failed"),
-    ):
-        EngineRun.objects.create(
-            task=issue,
-            project=project,
-            module=module,
-            agent="codex",
-            phase="implement",
-            status=status,
-        )
-
-    response = client.delete(f"/api/work-items/{root.id}/execute-graph")
-
-    assert response.status_code == 200
-    for issue in (failed, halted, unset, non_failed, completed, running, outside):
-        issue.refresh_from_db()
-    assert failed.lifecycle_state == "lld_approved"
-    assert halted.lifecycle_state == "lld_approved"
-    assert unset.lifecycle_state is None
-    assert non_failed.lifecycle_state == "split_created"
-    assert completed.lifecycle_state == "failed"
-    assert running.lifecycle_state == "failed"
-    assert outside.lifecycle_state == "failed"
-
-
-@override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_reset_execute_graph_changes_only_failed_and_halted_implement_facts(
     client, project, module, todo, done, monkeypatch
 ):
@@ -1119,10 +1053,9 @@ def test_launch_agent_does_not_move_target_state(client, project, module, todo, 
         content_type="application/json",
     )
 
-    # A launch is just a launch: no workflow/lifecycle move, no engine state.
+    # A launch is just a launch: no workflow move and no engine state.
     issue.refresh_from_db()
     assert issue.state.group == "unstarted"
-    assert issue.lifecycle_state == "prd_approved"
     assert driver.get_state(str(issue.id)) is None
 
 
@@ -1240,7 +1173,6 @@ def test_release_planning_run_missing_returns_404_and_no_mutation(client, projec
     assert response.json()["error"] == "planning_run_not_found"
     issue.refresh_from_db()
     assert issue.state.group == "backlog"
-    assert issue.lifecycle_state == "backlog"
     assert successful_spawn.calls == []
 
 

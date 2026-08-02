@@ -16,6 +16,7 @@ import { KeyedRetryService } from "../../../shared/async/keyedRetry";
 import { scratchBucketId, useTerminalStore } from "../terminal";
 import { SCRATCH_RUN_TASK_ID } from "../types";
 import { useBacklogStore, useIssueDrawerWorkspaceStore } from "../../work-items";
+import { useIssueStore } from "../../work-items/issue-detail/internal/issueStore";
 import { useTasksStore } from "../../studio/stores/tasksStore";
 import { synchronizeActiveStateCatalogs } from "../../workflows/stateCatalogSync";
 import { useWorkflowEditorStore } from "../../workflows/workflowEditorStore";
@@ -97,10 +98,22 @@ function routeWorkItemStateFrame(frame: WorkItemStateFrame): void {
   // The socket is project-scoped, but this second guard rejects a queued frame
   // after project switch and makes direct dispatch safe in tests.
   if (active && active.projectId !== frame.project_id) return;
-  // Two surfaces render workflow state: the Backlog store and the studio
-  // Stories tree (CODIN-1102). Route the delta into whichever ones are scoped
-  // to this project; either acceptance schedules the shared targeted refetch.
-  let accepted = false;
+  // Revision ordering belongs to the record owner. Compatibility projections
+  // are updated below only while they still exist; they do not decide whether
+  // this frame is current.
+  const owner = useIssueStore.getState();
+  const cached = owner.getWorkItem(frame.work_item_id);
+  // An id is globally unique, so a cached record for another project is
+  // proof that this frame belongs to a stale socket scope. Do not let that
+  // frame mutate the canonical record (or every id-derived surface).
+  let accepted = !cached || cached.project_id === frame.project_id
+    ? owner.applyWorkItemStateDelta(
+        frame.work_item_id,
+        frame.state,
+        frame.revision,
+        frame.updated_at,
+      )
+    : false;
   const backlog = useBacklogStore.getState();
   if (backlog.projectId === frame.project_id) {
     accepted = backlog.applyStateDelta(
@@ -108,16 +121,15 @@ function routeWorkItemStateFrame(frame: WorkItemStateFrame): void {
       frame.state,
       frame.revision,
       frame.updated_at,
-    );
+    ) || accepted;
   }
   const tasks = useTasksStore.getState();
   if (tasks.selectedProjectId === frame.project_id) {
-    accepted =
-      tasks.applyWorkItemStateDelta(
-        frame.work_item_id,
-        frame.state,
-        frame.revision,
-      ) || accepted;
+    accepted = tasks.applyWorkItemStateDelta(
+      frame.work_item_id,
+      frame.state,
+      frame.revision,
+    ) || accepted;
   }
   if (accepted) active?.reconcileWorkItem(frame);
 }
@@ -265,7 +277,10 @@ export const statusFeed = {
               detail = await getWorkItem(frame.work_item_id, signal);
             } catch (error) {
               if (error instanceof ApiError && error.status === 404) {
-                if (!stopped && active?.projectId === projectId) {
+              if (!stopped && active?.projectId === projectId) {
+                  useIssueStore
+                    .getState()
+                    .removeReconciledWorkItem(frame.work_item_id, frame.revision);
                   useBacklogStore
                     .getState()
                     .removeReconciledItem(frame.work_item_id, frame.revision);
@@ -279,11 +294,14 @@ export const statusFeed = {
             }
             if (stopped || signal.aborted || active?.projectId !== projectId) return;
             let stale = false;
+            stale =
+              useIssueStore.getState().reconcileWorkItem(detail.task, frame.revision) ===
+              "stale";
             const backlog = useBacklogStore.getState();
             if (backlog.projectId === projectId) {
               stale =
                 backlog.reconcileTargetedItem(detail.task, frame.revision) ===
-                "stale";
+                "stale" || stale;
             }
             const tasks = useTasksStore.getState();
             if (tasks.selectedProjectId === projectId) {

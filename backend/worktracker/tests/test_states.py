@@ -27,9 +27,12 @@ def test_list_states(client, project, state, auth):
 
 
 @pytest.mark.django_db
-def test_assign_state_via_patch(client, project, state, auth):
+def test_assign_state_via_patch(client, project, state, task_type, auth):
     task = post_json(
-        client, f"{BASE}/projects/{project.id}/work-items", {"name": "T"}, auth
+        client,
+        f"{BASE}/projects/{project.id}/work-items",
+        {"name": "T", "issue_type_id": str(task_type.id)},
+        auth,
     ).json()
 
     patch_json(client, f"{BASE}/work-items/{task['id']}", {"state_id": str(state.id)}, auth)

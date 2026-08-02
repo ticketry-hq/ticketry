@@ -312,9 +312,19 @@ interface TerminalStoreState {
   focusSession: (sessionId: SessionId) => void;
   fetchPersistedSessions: (
     taskId: TaskId,
+    signal?: AbortSignal,
   ) => Promise<PersistedSessionsFetchOutcome>;
-  refreshResumable: (taskId?: TaskId, projectId?: string, moduleId?: string) => Promise<void>;
-  fetchScratchSessions: (projectId: string, moduleId?: string) => Promise<void>;
+  refreshResumable: (
+    taskId?: TaskId,
+    projectId?: string,
+    moduleId?: string,
+    signal?: AbortSignal,
+  ) => Promise<void>;
+  fetchScratchSessions: (
+    projectId: string,
+    moduleId?: string,
+    signal?: AbortSignal,
+  ) => Promise<void>;
   restoreLiveSessions: (taskId: TaskId) => void;
   attachPersisted: (session: PersistedTerminalSession) => SessionId;
   terminatePersisted: (agentRunId: string, taskId: TaskId) => Promise<void>;
@@ -725,15 +735,20 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     useWorkspaceTabsStore.getState().tabFocused(bucketOfMeta(meta), sessionId);
   },
 
-  async fetchPersistedSessions(taskId) {
+  async fetchPersistedSessions(taskId, signal) {
     const generation = ++_persistedFetchGeneration;
     latestPersistedFetch.set(taskId, generation);
     try {
       // The resumable list is independent of the persisted list; start it
       // first so the two requests overlap (refreshResumable handles its own
       // errors, so partial success is preserved).
-      const resumable = get().refreshResumable(taskId);
-      const list = await api.getTerminals(taskId);
+      const resumable = signal
+        ? get().refreshResumable(taskId, undefined, undefined, signal)
+        : get().refreshResumable(taskId);
+      const list = signal
+        ? await api.getTerminals(taskId, signal)
+        : await api.getTerminals(taskId);
+      if (signal?.aborted) return "superseded";
       if (latestPersistedFetch.get(taskId) !== generation) return "superseded";
       get().setPersisted(taskId, list);
       // Silently re-attach any of this task's previously-live tabs.
@@ -751,7 +766,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     }
   },
 
-  async refreshResumable(taskId, projectId, moduleId) {
+  async refreshResumable(taskId, projectId, moduleId, signal) {
     // A real task always owns the result even when its caller also carries
     // project/module context. Only a genuinely taskless request is scratch.
     const key = taskId ?? (
@@ -761,8 +776,13 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     if (key && generation) latestResumableFetch.set(key, generation);
     try {
       const list = taskId
-        ? await api.listResumableTerminals(taskId)
-        : await api.listResumableTerminals(undefined, projectId, moduleId);
+        ? signal
+          ? await api.listResumableTerminals(taskId, undefined, undefined, signal)
+          : await api.listResumableTerminals(taskId)
+        : signal
+          ? await api.listResumableTerminals(undefined, projectId, moduleId, signal)
+          : await api.listResumableTerminals(undefined, projectId, moduleId);
+      if (signal?.aborted) return;
       if (key && latestResumableFetch.get(key) !== generation) return;
       if (key) get().setResumable(key, list);
     } catch (err) {
@@ -774,17 +794,24 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     }
   },
 
-  async fetchScratchSessions(projectId, moduleId) {
+  async fetchScratchSessions(projectId, moduleId, signal) {
     const fetchKey = scratchFetchKey(projectId, moduleId);
     const generation = ++_persistedFetchGeneration;
     latestPersistedFetch.set(fetchKey, generation);
     try {
       // Independent of the scratch list below — start it first so the two
       // requests overlap; it swallows its own errors.
-      const resumable = get().refreshResumable(undefined, projectId, moduleId);
+      const resumable = signal
+        ? get().refreshResumable(undefined, projectId, moduleId, signal)
+        : get().refreshResumable(undefined, projectId, moduleId);
       const list = moduleId
-        ? await api.getScratchTerminals(projectId, moduleId)
-        : await api.getScratchTerminals(projectId);
+        ? signal
+          ? await api.getScratchTerminals(projectId, moduleId, signal)
+          : await api.getScratchTerminals(projectId, moduleId)
+        : signal
+          ? await api.getScratchTerminals(projectId, undefined, signal)
+          : await api.getScratchTerminals(projectId);
+      if (signal?.aborted) return;
       if (latestPersistedFetch.get(fetchKey) !== generation) return;
       // Scratch rows are bucketed per module (CODIN-986): a project-wide
       // hydration and a module-scoped fetch write disjoint keys instead of

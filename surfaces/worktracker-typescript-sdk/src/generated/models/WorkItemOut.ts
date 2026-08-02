@@ -22,13 +22,6 @@ import {
     StateOutToJSON,
     StateOutToJSONTyped,
 } from './StateOut.js';
-import type { AssigneeOut } from './AssigneeOut.js';
-import {
-    AssigneeOutFromJSON,
-    AssigneeOutFromJSONTyped,
-    AssigneeOutToJSON,
-    AssigneeOutToJSONTyped,
-} from './AssigneeOut.js';
 import type { IssueTypeOut } from './IssueTypeOut.js';
 import {
     IssueTypeOutFromJSON,
@@ -36,13 +29,6 @@ import {
     IssueTypeOutToJSON,
     IssueTypeOutToJSONTyped,
 } from './IssueTypeOut.js';
-import type { LabelOut } from './LabelOut.js';
-import {
-    LabelOutFromJSON,
-    LabelOutFromJSONTyped,
-    LabelOutToJSON,
-    LabelOutToJSONTyped,
-} from './LabelOut.js';
 
 /**
  * A task issue — mirrors core.TaskSummary exactly, plus additive ``key``.
@@ -54,12 +40,6 @@ import {
  * @interface WorkItemOut
  */
 export interface WorkItemOut {
-    /**
-     * 
-     * @type {Array<AssigneeOut>}
-     * @memberof WorkItemOut
-     */
-    assignees?: Array<AssigneeOut>;
     /**
      * 
      * @type {Array<string>}
@@ -89,18 +69,6 @@ export interface WorkItemOut {
      * @type {string}
      * @memberof WorkItemOut
      */
-    description_html?: string | null;
-    /**
-     * 
-     * @type {string}
-     * @memberof WorkItemOut
-     */
-    description_stripped?: string | null;
-    /**
-     * 
-     * @type {string}
-     * @memberof WorkItemOut
-     */
     id: string;
     /**
      * 
@@ -113,31 +81,13 @@ export interface WorkItemOut {
      * @type {IssueTypeOut}
      * @memberof WorkItemOut
      */
-    issue_type?: IssueTypeOut | null;
+    issue_type: IssueTypeOut;
     /**
      * 
      * @type {string}
      * @memberof WorkItemOut
      */
     key: string;
-    /**
-     * 
-     * @type {Array<LabelOut>}
-     * @memberof WorkItemOut
-     */
-    labels?: Array<LabelOut>;
-    /**
-     * 
-     * @type {string}
-     * @memberof WorkItemOut
-     */
-    lifecycle_state?: string | null;
-    /**
-     * 
-     * @type {Array<string>}
-     * @memberof WorkItemOut
-     */
-    lifecycle_transitions?: Array<string>;
     /**
      * 
      * @type {string}
@@ -200,6 +150,7 @@ export interface WorkItemOut {
 export function instanceOfWorkItemOut(value: object): value is WorkItemOut {
     if (!('created_at' in value) || value['created_at'] === undefined) return false;
     if (!('id' in value) || value['id'] === undefined) return false;
+    if (!('issue_type' in value) || value['issue_type'] === undefined) return false;
     if (!('key' in value) || value['key'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if (!('project_id' in value) || value['project_id'] === undefined) return false;
@@ -217,20 +168,14 @@ export function WorkItemOutFromJSONTyped(json: any, ignoreDiscriminator: boolean
     }
     return {
         
-        'assignees': json['assignees'] == null ? undefined : ((json['assignees'] as Array<any>).map(AssigneeOutFromJSON)),
         'blocked_by_ids': json['blocked_by_ids'] == null ? undefined : json['blocked_by_ids'],
         'blocks_ids': json['blocks_ids'] == null ? undefined : json['blocks_ids'],
         'created_at': json['created_at'],
         'description': json['description'] == null ? undefined : json['description'],
-        'description_html': json['description_html'] == null ? undefined : json['description_html'],
-        'description_stripped': json['description_stripped'] == null ? undefined : json['description_stripped'],
         'id': json['id'],
         'is_archived': json['is_archived'] == null ? undefined : json['is_archived'],
-        'issue_type': json['issue_type'] == null ? undefined : IssueTypeOutFromJSON(json['issue_type']),
+        'issue_type': IssueTypeOutFromJSON(json['issue_type']),
         'key': json['key'],
-        'labels': json['labels'] == null ? undefined : ((json['labels'] as Array<any>).map(LabelOutFromJSON)),
-        'lifecycle_state': json['lifecycle_state'] == null ? undefined : json['lifecycle_state'],
-        'lifecycle_transitions': json['lifecycle_transitions'] == null ? undefined : json['lifecycle_transitions'],
         'name': json['name'],
         'parent_id': json['parent_id'] == null ? undefined : json['parent_id'],
         'project_id': json['project_id'],
@@ -254,20 +199,14 @@ export function WorkItemOutToJSONTyped(value?: WorkItemOut | null, ignoreDiscrim
 
     return {
         
-        'assignees': value['assignees'] == null ? undefined : ((value['assignees'] as Array<any>).map(AssigneeOutToJSON)),
         'blocked_by_ids': value['blocked_by_ids'],
         'blocks_ids': value['blocks_ids'],
         'created_at': value['created_at'],
         'description': value['description'],
-        'description_html': value['description_html'],
-        'description_stripped': value['description_stripped'],
         'id': value['id'],
         'is_archived': value['is_archived'],
         'issue_type': IssueTypeOutToJSON(value['issue_type']),
         'key': value['key'],
-        'labels': value['labels'] == null ? undefined : ((value['labels'] as Array<any>).map(LabelOutToJSON)),
-        'lifecycle_state': value['lifecycle_state'],
-        'lifecycle_transitions': value['lifecycle_transitions'],
         'name': value['name'],
         'parent_id': value['parent_id'],
         'project_id': value['project_id'],

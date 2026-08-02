@@ -23,11 +23,8 @@ function task(state: TaskState): TaskSummary {
     name: "Story",
     project_id: "project-1",
     sequence_id: 1,
+    issue_type: { id: "type-story", name: "Story", level: "task" },
     state,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -46,7 +43,7 @@ describe("Studio authoritative status transition", () => {
     });
   });
 
-  it("delegates completed-force selection to the authoritative server write", async () => {
+  it("delegates state selection to the authoritative server write", async () => {
     const authoritative = { ...STALE_REVIEW, group: "completed" };
     api.postTaskStatus.mockResolvedValue(task(authoritative));
 
@@ -58,7 +55,6 @@ describe("Studio authoritative status transition", () => {
       "project-1",
       "task-1",
       "review",
-      true,
     );
   });
 });

@@ -421,6 +421,24 @@ describe("terminalStore", () => {
     ).toBe("latest-run");
   });
 
+  it("does not write a terminal discovery result after its selection aborts", async () => {
+    let resolve!: (list: PersistedTerminalSession[]) => void;
+    vi.spyOn(api, "getTerminals").mockImplementation(
+      () => new Promise((done) => { resolve = done; }),
+    );
+    const controller = new AbortController();
+    const pending = useTerminalStore.getState().fetchPersistedSessions(
+      "task-1",
+      controller.signal,
+    );
+
+    controller.abort();
+    resolve([makePersisted({ agent_run_id: "stale-run" })]);
+
+    await expect(pending).resolves.toBe("superseded");
+    expect(useTerminalStore.getState().persistedSessions["task-1"]).toBeUndefined();
+  });
+
   it("fetchScratchSessions stores no-task sessions under the scratch bucket", async () => {
     const list = [
       makePersisted({

@@ -19,19 +19,11 @@ import { mapValues } from '../runtime.js';
  * A compact, agent-readable reference to one issue in a scope-context (#667).
  * 
  * ``state_group`` is the issue's frozen group (``None`` when it has no state);
- * ``resolved`` is ``True`` iff that group is completed/cancelled. ``assignees``
- * is the list of display names (or email fallback) — a non-empty list is what
- * flags a neighbor as ``owned_elsewhere``.
+ * ``resolved`` is ``True`` iff that group is completed/cancelled.
  * @export
  * @interface ScopeRef
  */
 export interface ScopeRef {
-    /**
-     * 
-     * @type {Array<string>}
-     * @memberof ScopeRef
-     */
-    assignees?: Array<string>;
     /**
      * 
      * @type {string}
@@ -84,7 +76,6 @@ export function ScopeRefFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
     }
     return {
         
-        'assignees': json['assignees'] == null ? undefined : json['assignees'],
         'id': json['id'],
         'key': json['key'],
         'name': json['name'],
@@ -104,7 +95,6 @@ export function ScopeRefToJSONTyped(value?: ScopeRef | null, ignoreDiscriminator
 
     return {
         
-        'assignees': value['assignees'],
         'id': value['id'],
         'key': value['key'],
         'name': value['name'],

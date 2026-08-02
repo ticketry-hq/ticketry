@@ -3,8 +3,7 @@
 A review finding is a direct Implementation child, born in the Implementation
 workflow's start stage, under a Story that is currently in ``Review``. Creation
 is validated *before any write*: a parent that is not a Story, not in
-``Review``, in a foreign project, or a non-Implementation type override is
-rejected with the workflow gate's structured 422 body
+``Review``, or in a foreign project is rejected with the workflow gate's structured 422 body
 (``detail``/``code``/``from``/``to``). Creation is inert — it never moves the
 parent or draws an edge.
 """
@@ -58,7 +57,7 @@ def _story(project, states, types, *, state, issue_type="Story"):
         id=uuid.uuid4(),
         project=project,
         type="task",
-        issue_type=types[issue_type] if issue_type else None,
+        issue_type=types[issue_type],
         name="Parent",
         sequence_id=allocate_sequence_id(project.id),
         state=states[state],
@@ -84,8 +83,7 @@ def test_create_review_finding_births_implementation_at_start_stage(project, sdl
     assert "Ready" not in states
     assert finding.state_id == states["Implement"].id
     assert finding.issue_type_id == types["Implementation"].id
-    # #775: readers surface description_html, so the evidence block must land there.
-    assert finding.description_html == "Path: src/loader.py\nLines: 10-12"
+    assert finding.description == "Path: src/loader.py\nLines: 10-12"
 
 
 @pytest.mark.django_db
@@ -104,22 +102,6 @@ def test_create_review_finding_leaves_parent_untouched(project, sdlc):
     assert list(parent.blocked_by.all()) == []
     assert list(finding.blocked_by.all()) == []
     assert not AutomationAttempt.objects.filter(issue=finding).exists()
-
-
-@pytest.mark.django_db
-def test_create_review_finding_accepts_explicit_implementation_type(project, sdlc):
-    states, types = sdlc
-    parent = _story(project, states, types, state="Review")
-
-    finding = create_review_finding(
-        project.id,
-        parent_id=parent.id,
-        name="F",
-        description="Path: a.py\nLines: 1-1",
-        issue_type_id=types["Implementation"].id,
-    )
-
-    assert finding.issue_type_id == types["Implementation"].id
 
 
 # --- service: rejections ----------------------------------------------------
@@ -170,25 +152,6 @@ def test_reject_foreign_project_parent(project, sdlc):
     assert excinfo.value.code == "foreign_project"
 
 
-@pytest.mark.django_db
-def test_reject_non_implementation_type_override(project, sdlc):
-    states, types = sdlc
-    parent = _story(project, states, types, state="Review")
-
-    with pytest.raises(InvalidTransition) as excinfo:
-        create_review_finding(
-            project.id,
-            parent_id=parent.id,
-            name="F",
-            description="d",
-            issue_type_id=types["Story"].id,
-        )
-
-    assert excinfo.value.code == "child_not_implementation"
-    assert not Issue.objects.filter(parent_id=parent.id).exists()
-
-
-@pytest.mark.django_db
 # --- HTTP surface -----------------------------------------------------------
 
 

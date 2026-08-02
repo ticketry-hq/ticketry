@@ -9,7 +9,7 @@ import { isResolved } from "../../../../shared/utilities/display";
 
 /** Findings are the Story's direct Implementation children (CODIN-905). */
 export function isFinding(item: WorkItem): boolean {
-  return item.issue_type?.name === "Implementation";
+  return item.issue_type.name === "Implementation";
 }
 
 /** Queued = Implementation AND still at the Implementation start stage. */
@@ -19,7 +19,7 @@ export function isQueuedFinding(item: WorkItem): boolean {
 
 /** The panel is Review-scoped on a Story; hidden for every other type/state. */
 export function hasFindingsPanel(item: WorkItem): boolean {
-  return item.issue_type?.name === "Story" && item.state?.name === "Review";
+  return item.issue_type.name === "Story" && item.state?.name === "Review";
 }
 
 /** The Story's Implementation children, in the order the API returned them. */
@@ -45,7 +45,7 @@ export interface FindingLocation {
 }
 
 // Parse the fixed `Path:` / `Lines: start-end` block CODIN-905 writes into the
-// finding's description (verbatim in description_html). There is no structured
+// finding's canonical description. There is no structured
 // location field on the WorkItem, so the panel reads it back out of the text.
 // Returns null when either line is absent or malformed — the panel then simply
 // omits the location rather than showing a broken one.

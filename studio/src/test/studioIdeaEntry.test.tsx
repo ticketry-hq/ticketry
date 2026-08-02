@@ -43,14 +43,11 @@ function story(overrides: Partial<TaskSummary> = {}): TaskSummary {
     project_id: "project-1",
     sequence_id: 41,
     state: IDEA,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: "module-1",
     sub_issues_count: 0,
     ...overrides,
+    issue_type: overrides.issue_type ?? { id: "type-story", name: "Story", level: "task" },
   };
 }
 
@@ -87,8 +84,8 @@ describe("Studio Stories idea entry", () => {
   beforeEach(() => {
     api.createTask.mockReset();
     api.getIssueTypes.mockReset().mockResolvedValue([
-      { id: "type-task", name: "Task", level: "task", is_default: true },
-      { id: "type-story", name: "Story", level: "task", is_default: false },
+      { id: "type-task", name: "Task", level: "task" },
+      { id: "type-story", name: "Story", level: "task" },
     ]);
     useToastStore.setState({ toasts: [] });
     useOnboardingTourStore.getState().reset();

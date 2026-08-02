@@ -32,12 +32,6 @@ export interface IssueTypeIn {
      * @type {string}
      * @memberof IssueTypeIn
      */
-    icon?: string | null;
-    /**
-     * 
-     * @type {string}
-     * @memberof IssueTypeIn
-     */
     level: string;
     /**
      * 
@@ -67,7 +61,6 @@ export function IssueTypeInFromJSONTyped(json: any, ignoreDiscriminator: boolean
     return {
         
         'color': json['color'] == null ? undefined : json['color'],
-        'icon': json['icon'] == null ? undefined : json['icon'],
         'level': json['level'],
         'name': json['name'],
     };
@@ -85,7 +78,6 @@ export function IssueTypeInToJSONTyped(value?: IssueTypeIn | null, ignoreDiscrim
     return {
         
         'color': value['color'],
-        'icon': value['icon'],
         'level': value['level'],
         'name': value['name'],
     };

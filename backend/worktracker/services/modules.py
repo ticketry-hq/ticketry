@@ -8,7 +8,7 @@ from worktracker.services.errors import NotFoundError
 from worktracker.work_items import resolve_issue_type
 
 
-def create_module(project_id: uuid.UUID, name: str, issue_type_id=None):
+def create_module(project_id: uuid.UUID, name: str, issue_type_id):
     """Create a module issue for a project."""
 
     try:

@@ -18,7 +18,7 @@ const mappings = [
   },
   {
     concept: 'Work-item detail',
-    backend: 'Issue · Attachment · Assignee · Label · blocker edges',
+    backend: 'Issue · Attachment · blocker edges',
     contract: 'WorkItemDetailOut',
     frontend: 'IssueStore.open/children plus a separate BacklogStore copy',
     identity: 'work_item.id or work_item.key',
@@ -91,15 +91,12 @@ const backendGroups = [
     models: [
       ['Workspace', 'id · slug · name · onboarding_required · timestamps', 'owns Projects'],
       ['Project', 'id · workspace · name · slug · description · seq_counter · state_revision · timestamps', 'belongs to Workspace; owns Issues, States, IssueTypes'],
-      ['Issue', 'id · project · type · issue_type · parent · state · state_revision · lifecycle_state · sequence_id · rank · descriptions · archived · timestamps', 'self tree; M:N Assignees, Labels, blockers'],
+      ['Issue', 'id · project · type · issue_type · parent · state · state_revision · sequence_id · rank · description · archived · timestamps', 'self tree; M:N blockers'],
       ['State', 'id · project · name · group · color · sort_order · protected · timestamps', 'project workflow node; referenced by Issues and workflows'],
-      ['IssueType', 'id · project · name · level · presentation · sort_order · default · start_state · workflow_revision · timestamps', 'owns transitions and launch bindings'],
+      ['IssueType', 'id · project · name · level · color · sort_order · start_state · workflow_revision · timestamps', 'owns transitions and launch bindings'],
       ['IssueTypeTransition', 'issue_type · from_state · to_state · agent_allowed', 'directed workflow edge'],
       ['LaunchBinding', 'issue_type · state · prompt · skills · agent · model · reasoning · auto_start · subtree_run_enabled · timestamps', 'unique policy for type × current state'],
-      ['Assignee', 'id · display_name · email', 'M:N Issue'],
-      ['Label', 'id · project · name · color', 'M:N Issue'],
       ['Attachment', 'id · issue · file · filename · mime_type · size · created_at', 'belongs to Issue'],
-      ['ForceTransition', 'id · issue · from_state · to_state · actor · created_at', 'audit trace for a forced move'],
     ],
   },
   {

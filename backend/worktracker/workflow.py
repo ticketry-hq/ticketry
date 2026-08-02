@@ -8,7 +8,7 @@ changing creation or transition behaviour until publication succeeds.
 from django.db import transaction
 from django.db.models import Q
 
-from worktracker.models import ForceTransition, IssueType, IssueTypeTransition, State
+from worktracker.models import IssueType, IssueTypeTransition, State
 from worktracker.services.errors import ValidationError
 from worktracker.work_items import cascade_archive, default_state_id
 
@@ -36,7 +36,7 @@ def _graph_node_ids(issue_type_id):
 
 def allowed_transitions(issue):
     """Return per-type transition destinations as state names for presentation."""
-    if not issue.issue_type_id or not issue.state_id:
+    if not issue.state_id:
         return set()
     ids = IssueTypeTransition.objects.filter(
         issue_type_id=issue.issue_type_id, from_state_id=issue.state_id
@@ -45,13 +45,11 @@ def allowed_transitions(issue):
 
 
 def resolve_birth_state(project_id, issue_type, state_id=None):
-    """Use the issue type's start pointer; unconfigured types use generic creation."""
+    """Use the explicitly selected issue type's start pointer for creation."""
     start_id = (
         IssueType.objects.filter(pk=issue_type.id)
         .values_list("start_state_id", flat=True)
         .first()
-        if issue_type
-        else None
     )
     if not start_id:
         return state_id or default_state_id(project_id)
@@ -74,30 +72,25 @@ def transition_state(
     issue,
     target_state,
     *,
-    force=False,
-    actor=None,
     origin="human",
 ):
-    if force and origin == "agent":
-        raise InvalidTransition(
-            "Force is human-only; an agent-origin state change cannot use it.",
-            code="agent_force_forbidden",
-            from_state=issue.state.name if issue.state_id else None,
-            to_state=str(target_state) if target_state else None,
-        )
-
     target = _resolve_target(issue, target_state)
     from_name = issue.state.name if issue.state_id else None
     to_name = target.name if target else None
-    start_state_id = (
-        IssueType.objects.filter(pk=issue.issue_type_id)
-        .values_list("start_state_id", flat=True)
-        .first()
-        if issue.issue_type_id
-        else None
-    )
+    start_state_id = IssueType.objects.filter(pk=issue.issue_type_id).values_list(
+        "start_state_id", flat=True
+    ).first()
 
-    if start_state_id and not force:
+    if not start_state_id:
+        raise InvalidTransition(
+            f"A {issue.issue_type.name} cannot move {from_name!r} → {to_name!r}: "
+            "its workflow has no configured transition graph.",
+            code="illegal_transition",
+            from_state=from_name,
+            to_state=to_name,
+        )
+
+    if start_state_id:
         if issue.state_id is None or target is None:
             raise InvalidTransition("Published workflows require an explicit graph edge.", code="illegal_transition", from_state=from_name, to_state=to_name)
         nodes = _graph_node_ids(issue.issue_type_id)
@@ -148,8 +141,6 @@ def transition_state(
         issue.save()
         if cascade:
             cascade_archive(issue)
-        if force:
-            ForceTransition.objects.create(issue=issue, from_state=from_name, to_state=to_name, actor=actor or "")
     return issue
 
 

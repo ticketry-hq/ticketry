@@ -1,16 +1,36 @@
-import { useState } from "react";
-import { type WorkItem } from "../../../shared/api/types";
+import { useEffect, useState } from "react";
+import * as api from "../../../shared/api/client";
+import { type IssueType, type WorkItem } from "../../../shared/api/types";
 import { stateColor } from "../../../shared/utilities/display";
 import { useTasksStore } from "../../studio/stores/tasksStore";
 
 interface ChildIssuesProps {
   children: WorkItem[];
-  onAddSubtask: (name: string) => void;
+  projectId: string;
+  onAddSubtask: (name: string, issueTypeId: string) => void;
 }
 
-export default function ChildIssues({ children, onAddSubtask }: ChildIssuesProps) {
+export default function ChildIssues({
+  children,
+  projectId,
+  onAddSubtask,
+}: ChildIssuesProps) {
   const selectTask = useTasksStore((state) => state.selectTask);
   const [newSub, setNewSub] = useState("");
+  const [issueTypes, setIssueTypes] = useState<IssueType[]>([]);
+  const [issueTypeId, setIssueTypeId] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setIssueTypes([]);
+    setIssueTypeId("");
+    void api.listIssueTypes(projectId).then((types) => {
+      if (active) setIssueTypes(types.filter((type) => type.level === "task"));
+    });
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
 
   return (
     <div className="mt-8">
@@ -41,12 +61,24 @@ export default function ChildIssues({ children, onAddSubtask }: ChildIssuesProps
           ))
         )}
         <div className="flex items-center gap-2 px-3 py-2">
+          <select
+            value={issueTypeId}
+            onChange={(event) => setIssueTypeId(event.target.value)}
+            aria-label="Child issue type"
+            data-testid="add-subtask-type"
+            className="rounded border border-pane-border bg-pane-bg px-2 py-1 text-sm text-text-primary outline-none focus:border-focus-accent"
+          >
+            <option value="">Select type…</option>
+            {issueTypes.map((type) => (
+              <option key={type.id} value={type.id}>{type.name}</option>
+            ))}
+          </select>
           <input
             value={newSub}
             onChange={(e) => setNewSub(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && newSub.trim()) {
-                void onAddSubtask(newSub);
+              if (e.key === "Enter" && newSub.trim() && issueTypeId) {
+                void onAddSubtask(newSub, issueTypeId);
                 setNewSub("");
               }
             }}

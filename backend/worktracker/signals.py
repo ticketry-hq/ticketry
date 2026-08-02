@@ -148,7 +148,7 @@ def _emit_on_state_change(sender, instance, **kwargs):
 def _transition_snapshot(instance, from_state_id, to_state_id):
     """Freeze destination entry policy and revision observed by this transition."""
 
-    if not instance.issue_type_id or not from_state_id or not to_state_id:
+    if not from_state_id or not to_state_id:
         return None
     workflow_revision = IssueType.objects.filter(pk=instance.issue_type_id).values_list(
         "workflow_revision", flat=True

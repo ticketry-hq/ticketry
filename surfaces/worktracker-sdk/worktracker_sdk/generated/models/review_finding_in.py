@@ -19,7 +19,7 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List
 from uuid import UUID
 from typing import Optional, Set
 from typing_extensions import Self
@@ -27,13 +27,12 @@ from pydantic_core import to_jsonable_python
 
 class ReviewFindingIn(BaseModel):
     """
-    Body for the dedicated review-finding create (#905).  ``parent_id`` is the Story-in-``Review`` the finding attaches to; the child is always born in the Implementation workflow's start stage and typed ``Implementation`` server-side. ``description`` carries the caller-rendered ``Path`` / ``Lines`` / ``Note`` evidence block verbatim. ``issue_type_id`` is optional and, if present, must resolve to the project's ``Implementation`` type.
+    Body for the dedicated review-finding create (#905).  ``parent_id`` is the Story-in-``Review`` the finding attaches to; the child is always born in the Implementation workflow's start stage and typed ``Implementation`` server-side. ``description`` carries the caller-rendered ``Path`` / ``Lines`` / ``Note`` evidence block verbatim.
     """ # noqa: E501
     description: StrictStr
-    issue_type_id: Optional[UUID] = None
     name: StrictStr
     parent_id: UUID
-    __properties: ClassVar[List[str]] = ["description", "issue_type_id", "name", "parent_id"]
+    __properties: ClassVar[List[str]] = ["description", "name", "parent_id"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -74,11 +73,6 @@ class ReviewFindingIn(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # set to None if issue_type_id (nullable) is None
-        # and model_fields_set contains the field
-        if self.issue_type_id is None and "issue_type_id" in self.model_fields_set:
-            _dict['issue_type_id'] = None
-
         return _dict
 
     @classmethod
@@ -92,7 +86,6 @@ class ReviewFindingIn(BaseModel):
 
         _obj = cls.model_validate({
             "description": obj.get("description"),
-            "issue_type_id": obj.get("issue_type_id"),
             "name": obj.get("name"),
             "parent_id": obj.get("parent_id")
         })

@@ -74,10 +74,6 @@ function workItem(partial: Partial<WorkItem> = {}): WorkItem {
     issue_type: { id: "story", name: "Story", level: "task" },
     state: TODO,
     state_revision: 1,
-    assignees: [],
-    labels: [],
-    description_html: null,
-    description_stripped: null,
     description: null,
     parent_id: null,
     sub_issues_count: 0,
@@ -373,8 +369,7 @@ describe("statusFeed", () => {
       key: "MEML-1",
       issue_type: { id: "story", name: "Story", level: "task" },
       state: { id: "todo", name: "Todo", group: "unstarted", color: null },
-      assignees: [], labels: [], description_html: "<p>unchanged</p>",
-      description_stripped: "unchanged", description: "unchanged", parent_id: null,
+      description: "<p>unchanged</p>", parent_id: null,
       sub_issues_count: 4, blocked_by_ids: ["blocker"], blocks_ids: ["dependent"],
       created_at: "2026-07-12T09:00:00Z", updated_at: "2026-07-12T10:00:00Z",
     } satisfies WorkItem;
@@ -389,7 +384,7 @@ describe("statusFeed", () => {
     const updated = useBacklogStore.getState().items[0];
     expect(updated.state?.id).toBe("done");
     expect(updated.updated_at).toBe("2026-07-12T10:01:00Z");
-    expect(updated.description_html).toBe("<p>unchanged</p>");
+    expect(updated.description).toBe("<p>unchanged</p>");
     expect(updated.blocked_by_ids).toEqual(["blocker"]);
 
     dispatchStatusFrame({
@@ -522,7 +517,7 @@ describe("statusFeed", () => {
       state: DONE,
       state_revision: 2,
       name: "Authoritative Story",
-      description_html: "<p>complete</p>",
+      description: "<p>complete</p>",
       sub_issues_count: 5,
       updated_at: "2026-07-12T10:01:00Z",
     })));
@@ -530,7 +525,7 @@ describe("statusFeed", () => {
       expect(useBacklogStore.getState().items[0].name).toBe("Authoritative Story"),
     );
     expect(useBacklogStore.getState().items[0]).toMatchObject({
-      description_html: "<p>complete</p>",
+      description: "<p>complete</p>",
       sub_issues_count: 5,
     });
   });

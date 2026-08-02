@@ -8,8 +8,6 @@ from asgiref.sync import sync_to_async
 from worktracker.services import queries
 
 from studio_server.contracts import (
-    AssigneeSummary,
-    LabelSummary,
     ModuleSummary,
     TaskDetails,
     TaskState,
@@ -38,13 +36,6 @@ def _task(item: dict) -> TaskSummary:
         sequence_id=item.get("sequence_id"),
         state=_state(item.get("state")),
         issue_type=issue_type,
-        assignees=[
-            AssigneeSummary(display_name=a.get("display_name"), email=a.get("email"))
-            for a in item.get("assignees", [])
-        ],
-        labels=[LabelSummary(name=label.get("name", "")) for label in item.get("labels", [])],
-        description_html=item.get("description_html"),
-        description_stripped=item.get("description_stripped"),
         description=item.get("description"),
         parent_id=str(item["parent_id"]) if item.get("parent_id") else None,
         sub_issues_count=item.get("sub_issues_count", 0),

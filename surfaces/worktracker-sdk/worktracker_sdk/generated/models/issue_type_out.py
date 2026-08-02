@@ -18,7 +18,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from uuid import UUID
 from typing import Optional, Set
@@ -30,13 +30,11 @@ class IssueTypeOut(BaseModel):
     A configurable issue type (G1, S6). ``level`` is the frozen binary bucket.
     """ # noqa: E501
     color: Optional[StrictStr] = None
-    icon: Optional[StrictStr] = None
     id: UUID
-    is_default: Optional[StrictBool] = False
     level: StrictStr
     name: StrictStr
     sort_order: Optional[StrictInt] = 0
-    __properties: ClassVar[List[str]] = ["color", "icon", "id", "is_default", "level", "name", "sort_order"]
+    __properties: ClassVar[List[str]] = ["color", "id", "level", "name", "sort_order"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -82,11 +80,6 @@ class IssueTypeOut(BaseModel):
         if self.color is None and "color" in self.model_fields_set:
             _dict['color'] = None
 
-        # set to None if icon (nullable) is None
-        # and model_fields_set contains the field
-        if self.icon is None and "icon" in self.model_fields_set:
-            _dict['icon'] = None
-
         return _dict
 
     @classmethod
@@ -100,9 +93,7 @@ class IssueTypeOut(BaseModel):
 
         _obj = cls.model_validate({
             "color": obj.get("color"),
-            "icon": obj.get("icon"),
             "id": obj.get("id"),
-            "is_default": obj.get("is_default") if obj.get("is_default") is not None else False,
             "level": obj.get("level"),
             "name": obj.get("name"),
             "sort_order": obj.get("sort_order") if obj.get("sort_order") is not None else 0

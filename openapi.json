@@ -31,35 +31,6 @@
         "title": "AddWorkflowTransitionIn",
         "type": "object"
       },
-      "AssigneeOut": {
-        "description": "A display-only assignee — mirrors core.AssigneeSummary.",
-        "properties": {
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          }
-        },
-        "title": "AssigneeOut",
-        "type": "object"
-      },
       "AttachmentOut": {
         "description": "One stored attachment, with a resolvable media URL (C6).",
         "properties": {
@@ -165,17 +136,6 @@
             ],
             "title": "Color"
           },
-          "icon": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Icon"
-          },
           "level": {
             "title": "Level",
             "type": "string"
@@ -206,26 +166,10 @@
             ],
             "title": "Color"
           },
-          "icon": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Icon"
-          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
-          },
-          "is_default": {
-            "default": false,
-            "title": "Is Default",
-            "type": "boolean"
           },
           "level": {
             "title": "Level",
@@ -263,28 +207,6 @@
             ],
             "title": "Color"
           },
-          "icon": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Icon"
-          },
-          "is_default": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Default"
-          },
           "name": {
             "anyOf": [
               {
@@ -309,31 +231,6 @@
           }
         },
         "title": "IssueTypePatch",
-        "type": "object"
-      },
-      "LabelOut": {
-        "description": "A label projected by name + color (G06). ``color`` is read-only; a\nname-created label starts blank, which the FE renders as a neutral chip.",
-        "properties": {
-          "color": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Color"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "LabelOut",
         "type": "object"
       },
       "LaunchBindingOut": {
@@ -402,20 +299,6 @@
         "title": "LaunchBindingOut",
         "type": "object"
       },
-      "LifecycleIn": {
-        "description": "Body for the guarded lifecycle-advance route (#758): the target state.\n\nDeliberately not part of ``WorkItemPatch`` — the lifecycle axis is not\nclient-writable via CRUD; ``POST …/lifecycle`` is its only write path.",
-        "properties": {
-          "target": {
-            "title": "Target",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target"
-        ],
-        "title": "LifecycleIn",
-        "type": "object"
-      },
       "MessageError": {
         "properties": {
           "detail": {
@@ -428,19 +311,12 @@
         "type": "object"
       },
       "ModuleIn": {
-        "description": "Body for module create — name, optional module-level issue type.",
+        "description": "Body for module create — name and explicit module-level issue type.",
         "properties": {
           "issue_type_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Type Id"
+            "format": "uuid",
+            "title": "Issue Type Id",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -448,7 +324,8 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "issue_type_id"
         ],
         "title": "ModuleIn",
         "type": "object"
@@ -467,14 +344,7 @@
             "type": "boolean"
           },
           "issue_type": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/IssueTypeOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/IssueTypeOut"
           },
           "key": {
             "title": "Key",
@@ -499,7 +369,8 @@
           "name",
           "project_id",
           "sequence_id",
-          "key"
+          "key",
+          "issue_type"
         ],
         "title": "ModuleOut",
         "type": "object"
@@ -519,16 +390,9 @@
             "title": "Description"
           },
           "issue_type_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Type Id"
+            "format": "uuid",
+            "title": "Issue Type Id",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -536,7 +400,8 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "issue_type_id"
         ],
         "title": "ModuleWorkItemIn",
         "type": "object"
@@ -768,23 +633,11 @@
         "type": "object"
       },
       "ReviewFindingIn": {
-        "description": "Body for the dedicated review-finding create (#905).\n\n``parent_id`` is the Story-in-``Review`` the finding attaches to; the child\nis always born in the Implementation workflow's start stage and typed\n``Implementation`` server-side. ``description`` carries the caller-rendered\n``Path`` / ``Lines`` / ``Note`` evidence block verbatim. ``issue_type_id``\nis optional and, if present, must resolve to the project's\n``Implementation`` type.",
+        "description": "Body for the dedicated review-finding create (#905).\n\n``parent_id`` is the Story-in-``Review`` the finding attaches to; the child\nis always born in the Implementation workflow's start stage and typed\n``Implementation`` server-side. ``description`` carries the caller-rendered\n``Path`` / ``Lines`` / ``Note`` evidence block verbatim.",
         "properties": {
           "description": {
             "title": "Description",
             "type": "string"
-          },
-          "issue_type_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Type Id"
           },
           "name": {
             "title": "Name",
@@ -805,7 +658,7 @@
         "type": "object"
       },
       "ScopeContextOut": {
-        "description": "The read-only dependency slice a subagent consumes for a task (#667, B).\n\nDerived entirely from the existing ``blocked_by``/``blocks`` edges (#624) and\nthe ``assignees`` M2M — no new field, no migration. ``depends_on`` are the\ndirect blockers (must land first), ``depended_by`` the direct dependents\n(wait on this task), ``owned_elsewhere`` the subset of either with a\nnon-empty assignee set, and ``advisory`` a short natural-language summary.",
+        "description": "The read-only dependency slice a subagent consumes for a task (#667, B).\n\nDerived entirely from the existing ``blocked_by``/``blocks`` edges (#624).\n``depends_on`` are the direct blockers (must land first), ``depended_by`` the\ndirect dependents (wait on this task), and ``advisory`` a short\nnatural-language summary.",
         "properties": {
           "advisory": {
             "title": "Advisory",
@@ -827,14 +680,6 @@
             "title": "Depends On",
             "type": "array"
           },
-          "owned_elsewhere": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ScopeRef"
-            },
-            "title": "Owned Elsewhere",
-            "type": "array"
-          },
           "task": {
             "$ref": "#/components/schemas/ScopeRef"
           }
@@ -847,16 +692,8 @@
         "type": "object"
       },
       "ScopeRef": {
-        "description": "A compact, agent-readable reference to one issue in a scope-context (#667).\n\n``state_group`` is the issue's frozen group (``None`` when it has no state);\n``resolved`` is ``True`` iff that group is completed/cancelled. ``assignees``\nis the list of display names (or email fallback) — a non-empty list is what\nflags a neighbor as ``owned_elsewhere``.",
+        "description": "A compact, agent-readable reference to one issue in a scope-context (#667).\n\n``state_group`` is the issue's frozen group (``None`` when it has no state);\n``resolved`` is ``True`` iff that group is completed/cancelled.",
         "properties": {
-          "assignees": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Assignees",
-            "type": "array"
-          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1615,16 +1452,9 @@
             "title": "Description"
           },
           "issue_type_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Type Id"
+            "format": "uuid",
+            "title": "Issue Type Id",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -1656,7 +1486,8 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "issue_type_id"
         ],
         "title": "WorkItemIn",
         "type": "object"
@@ -1664,14 +1495,6 @@
       "WorkItemOut": {
         "description": "A task issue — mirrors core.TaskSummary exactly, plus additive ``key``.\n\n``state`` is always one nested object (or null), never a bare id and never\na sibling ``state_detail`` — the schizophrenic-state branch is impossible\nhere by construction.",
         "properties": {
-          "assignees": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/AssigneeOut"
-            },
-            "title": "Assignees",
-            "type": "array"
-          },
           "blocked_by_ids": {
             "default": [],
             "items": {
@@ -1706,28 +1529,6 @@
             ],
             "title": "Description"
           },
-          "description_html": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description Html"
-          },
-          "description_stripped": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description Stripped"
-          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1739,45 +1540,11 @@
             "type": "boolean"
           },
           "issue_type": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/IssueTypeOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/IssueTypeOut"
           },
           "key": {
             "title": "Key",
             "type": "string"
-          },
-          "labels": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/LabelOut"
-            },
-            "title": "Labels",
-            "type": "array"
-          },
-          "lifecycle_state": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lifecycle State"
-          },
-          "lifecycle_transitions": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Lifecycle Transitions",
-            "type": "array"
           },
           "name": {
             "title": "Name",
@@ -1848,7 +1615,8 @@
           "project_id",
           "key",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "issue_type"
         ],
         "title": "WorkItemOut",
         "type": "object"
@@ -1871,7 +1639,7 @@
             ],
             "title": "Blocked By Ids"
           },
-          "description_html": {
+          "description": {
             "anyOf": [
               {
                 "type": "string"
@@ -1880,31 +1648,7 @@
                 "type": "null"
               }
             ],
-            "title": "Description Html"
-          },
-          "force": {
-            "default": false,
-            "title": "Force",
-            "type": "boolean"
-          },
-          "force_if_completed": {
-            "default": false,
-            "title": "Force If Completed",
-            "type": "boolean"
-          },
-          "labels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Labels"
+            "title": "Description"
           },
           "name": {
             "anyOf": [
@@ -2108,7 +1852,7 @@
   "paths": {
     "/issue-types/{type_id}": {
       "delete": {
-        "description": "Delete a type; 409 if it is a default or in use without ``reassign_to``.",
+        "description": "Delete a type; 409 if it is in use without ``reassign_to``.",
         "operationId": "deleteIssueType",
         "parameters": [
           {
@@ -2195,7 +1939,7 @@
         ]
       },
       "patch": {
-        "description": "Rename / recolor / reorder a type; ``is_default=true`` flips the level's default.",
+        "description": "Rename, recolor, or reorder an issue type.",
         "operationId": "updateIssueType",
         "parameters": [
           {
@@ -3587,7 +3331,7 @@
     },
     "/projects/{project_id}": {
       "delete": {
-        "description": "Permanently delete a project and everything it owns (#665).\n\nUnlike module/work-item delete, there is **no** child-count guard — this is\nthe single-user local setup, and the operator gates the destruction with a\ntyped-key confirm in the UI. The cascade is automatic: the project's States,\nIssueTypes, Labels and Issues (and each issue's Attachments) all\ndeclare ``on_delete=CASCADE``, so one delete clears the whole subtree.",
+        "description": "Permanently delete a project and everything it owns (#665).\n\nUnlike module/work-item delete, there is **no** child-count guard — this is\nthe single-user local setup, and the operator gates the destruction with a\ntyped-key confirm in the UI. The cascade is automatic: the project's States,\nIssueTypes and Issues (and each issue's Attachments) all\ndeclare ``on_delete=CASCADE``, so one delete clears the whole subtree.",
         "operationId": "deleteProject",
         "parameters": [
           {
@@ -3787,7 +3531,7 @@
         ]
       },
       "post": {
-        "description": "Create a non-default issue type at the tail of its level's order.",
+        "description": "Create an issue type at the tail of its level's order.",
         "operationId": "createIssueType",
         "parameters": [
           {
@@ -4171,7 +3915,7 @@
     },
     "/projects/{project_id}/review-findings": {
       "post": {
-        "description": "Create an Implementation finding under a Story in Review (#905).\n\nThe dedicated validated finding surface: the child is born in the\nImplementation workflow's start stage and typed ``Implementation``\nserver-side. A parent that is not a Story, not in ``Review``, in a foreign\nproject, or a non-Implementation type override is rejected *before any\nwrite* with the workflow gate's structured 422 body\n(``detail``/``code``/``from``/``to``) — identical to the status gate.\nThis surface never launches an agent, moves the parent, or draws a\ndependency edge.",
+        "description": "Create an Implementation finding under a Story in Review (#905).\n\nThe dedicated validated finding surface: the child is born in the\nImplementation workflow's start stage and typed ``Implementation``\nserver-side. A parent that is not a Story, not in ``Review``, or in a foreign\nproject is rejected *before any write* with the workflow gate's structured 422 body\n(``detail``/``code``/``from``/``to``) — identical to the status gate.\nThis surface never launches an agent, moves the parent, or draws a\ndependency edge.",
         "operationId": "createReviewFinding",
         "parameters": [
           {
@@ -5101,7 +4845,7 @@
         ]
       },
       "patch": {
-        "description": "Apply only the present patch fields; ``parent_id`` reparents the issue.\n\nA ``state_id`` move routes through the workflow gate (#860) and must be its\nown PATCH — a rejected move returns a structured 422 (``detail``/``code``/\n``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are\nchecked against edge permissions and cannot use ``force``.",
+        "description": "Apply only the present patch fields; ``parent_id`` reparents the issue.\n\nA ``state_id`` move routes through the workflow gate (#860) and must be its\nown PATCH — a rejected move returns a structured 422 (``detail``/``code``/\n``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are\nchecked against edge permissions.",
         "operationId": "updateWorkItem",
         "parameters": [
           {
@@ -5278,84 +5022,6 @@
         ]
       }
     },
-    "/work-items/{issue_id}/lifecycle": {
-      "post": {
-        "description": "Advance the issue's internal lifecycle to ``target`` (#758), guarded.\n\nThe single write path for ``Issue.lifecycle_state``: ``set_lifecycle``\nvalidates the transition and the ``(lifecycle_state, state)`` pairing,\nraising ``InvalidTransition`` (a ``ValidationError`` → 422) on any illegal\nmove. Resolves modules too (``task_only=False``); a missing id/key\n404s. Returns the hydrated item carrying the new state + fresh transitions.",
-        "operationId": "setWorkItemLifecycle",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "title": "Issue Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LifecycleIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkItemOut"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageError"
-                }
-              }
-            },
-            "description": "Invalid or missing API key"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageError"
-                }
-              }
-            },
-            "description": "Resource not found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                }
-              }
-            },
-            "description": "Request validation failed"
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "summary": "Set Work Item Lifecycle",
-        "tags": [
-          "WorkItems"
-        ]
-      }
-    },
     "/work-items/{issue_id}/reorder": {
       "post": {
         "description": "Set the moved issue's rank strictly between its destination neighbors (#626).\n\n``before_id`` / ``after_id`` are the issue's new column neighbors (the rows\nit lands below / above); either is null for the top, the bottom, or an empty\ncolumn. Only the moved row is written — the neighbors are untouched, so two\nusers reordering the same column never corrupt each other's keys. A\ncross-column move PATCHes ``state_id`` first, then calls this\nwith the destination neighbors. Reorder is the sole rank write path, so the\nfractional-key algebra (and its strict ordering) can't be bypassed.",
@@ -5437,7 +5103,7 @@
     },
     "/work-items/{issue_id}/scope-context": {
       "get": {
-        "description": "Read-only dependency slice a subagent consumes for a task (#667, B).\n\nResolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its\n**direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first),\n``blocks`` becomes ``depended_by`` (waits on this). Any neighbor carrying a\nnon-empty ``assignees`` set is also flagged ``owned_elsewhere``, and a short\n``advisory`` summarizes the unresolved-blocker situation. Derived entirely\nfrom existing edges + the ``assignees`` M2M — no writes, no new field.\n\n``prefetch_related`` (with ``select_related`` folded into each neighbor\nqueryset) bounds this to a handful of queries regardless of edge count.\nTransitive upstream is a noted later toggle; v1 is the direct edge sets.",
+        "description": "Read-only dependency slice a subagent consumes for a task (#667, B).\n\nResolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its\n**direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first),\n``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory``\nsummarizes the unresolved-blocker situation. Derived entirely from existing\nedges; it performs no writes.\n\n``prefetch_related`` (with ``select_related`` folded into each neighbor\nqueryset) bounds this to a handful of queries regardless of edge count.\nTransitive upstream is a noted later toggle; v1 is the direct edge sets.",
         "operationId": "getWorkItemScopeContext",
         "parameters": [
           {

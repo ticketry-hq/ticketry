@@ -23,6 +23,7 @@ import apps.terminals.launch as launch
 import apps.terminals.validation as validation
 from apps.terminals.agents.injectors.agy import _AGY_SYSTEM_SETTINGS_ENV
 from apps.terminals.authorization import verify_run_authorization
+from apps.terminals.tmux import sessions as tmux_sessions
 from apps.terminals.agents.registry import (
     AgentAdapter,
     UnknownAgent,
@@ -187,7 +188,7 @@ async def _launch_and_capture(monkeypatch, slug, argv) -> str:
         captured.update(kwargs)
         return _fake_tmux_session(kwargs["agent_run_id"])
 
-    monkeypatch.setattr(launch.tmux, "create_session", fake_create_session)
+    monkeypatch.setattr(tmux_sessions, "create_session", fake_create_session)
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
 
     await launch._launch(
@@ -214,7 +215,7 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
             return argv
 
     monkeypatch.setattr(
-        launch.tmux,
+        tmux_sessions,
         "create_session",
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )

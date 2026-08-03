@@ -9,6 +9,7 @@ import apps.terminals.launch as launch
 import apps.terminals.agents.registry as agent_registry
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
+from apps.terminals.tmux import sessions as tmux_sessions
 from apps.terminals.agents.registry import (
     cleanup_temporary_artifacts,
     get_adapter,
@@ -326,7 +327,7 @@ async def test_overlay_failure_happens_before_agent_run_or_tmux(
         raise OSError("overlay unavailable")
 
     monkeypatch.setattr(type(adapter), "augment_launch", fail_augmentation)
-    monkeypatch.setattr(launch.tmux, "create_session", create_session)
+    monkeypatch.setattr(tmux_sessions, "create_session", create_session)
 
     with pytest.raises(RequiredSkillUnavailable) as caught:
         await launch._launch(
@@ -361,7 +362,7 @@ async def test_tmux_launch_failure_removes_run_session_and_overlay(
     def fail_create_session(**kwargs):
         raise RuntimeError("tmux refused launch")
 
-    monkeypatch.setattr(launch.tmux, "create_session", fail_create_session)
+    monkeypatch.setattr(tmux_sessions, "create_session", fail_create_session)
     run_id = f"tmux-failure-{provider}"
 
     with pytest.raises(launch.LaunchUnavailable):

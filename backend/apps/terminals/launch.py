@@ -52,7 +52,6 @@ from studio_server.contracts import AgentLifecycleFrame, RunRecord
 from worktracker.models import Issue
 
 logger = logging.getLogger(__name__)
-tmux = tmux_sessions
 
 _APPROVED_AGENT_PATHS = {
     "claude": "MUXED_APPROVED_CLAUDE_PATH",

@@ -13,6 +13,7 @@ from apps.terminals.launch_configuration import (
     resolve_task_launch_configuration as real_resolve_task_launch_configuration,
 )
 from apps.terminals.session import LaunchIntent
+from apps.terminals.tmux import sessions as tmux_sessions
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
 from worktracker.models import Issue, IssueType, LaunchBinding, Project, State, Workspace
 
@@ -322,7 +323,7 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         captured.update(kwargs)
         return _fake_tmux_session(kwargs["agent_run_id"])
 
-    monkeypatch.setattr(launch.tmux, "create_session", create_session)
+    monkeypatch.setattr(tmux_sessions, "create_session", create_session)
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kwargs: None)
 
     await session_module.session.spawn(

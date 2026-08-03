@@ -32,7 +32,6 @@ import ptyprocess
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from apps.terminals.control_plane import create_terminal_run, launch_intent_from_spawn
-from apps.terminals import session as session_module
 from apps.terminals.session import (
     LaunchUnavailable,
     SessionNotFound,
@@ -74,58 +73,6 @@ def _viewer_environment() -> dict[str, str]:
     return environment
 
 
-class _TmuxCompat:
-    """Compatibility shim for tests that patch the pre-session tmux surface."""
-
-    _session_names = {
-        "create_session",
-        "list_sessions",
-        "get_session",
-        "terminate_session",
-        "reconcile_sessions",
-        "ReconcileResult",
-    }
-    _client_names = {"attach_argv", "scroll", "refresh_client_size"}
-
-    def __init__(self) -> None:
-        self._created_sessions = {}
-
-    def __getattr__(self, name):
-        if name in self._session_names:
-            return getattr(session_module.tmux_sessions, name)
-        if name in self._client_names:
-            return getattr(session_module.tmux_client, name)
-        if name == "TmuxSessionError":
-            return session_module.TerminalSessionError
-        if name == "TmuxSession":
-            return session_module.TmuxSession
-        raise AttributeError(name)
-
-    def __setattr__(self, name, value):
-        if name in {"_session_names", "_client_names", "_created_sessions"}:
-            super().__setattr__(name, value)
-        elif name == "create_session":
-            self._created_sessions = {}
-
-            def create_and_cache(**kwargs):
-                created = value(**kwargs)
-                self._created_sessions[kwargs["agent_run_id"]] = created
-                return created
-
-            def get_cached(agent_run_id):
-                return self._created_sessions.get(agent_run_id)
-
-            setattr(session_module.tmux_sessions, "create_session", create_and_cache)
-            setattr(session_module.tmux_sessions, "get_session", get_cached)
-        elif name in self._session_names:
-            setattr(session_module.tmux_sessions, name, value)
-        elif name in self._client_names:
-            setattr(session_module.tmux_client, name, value)
-        else:
-            super().__setattr__(name, value)
-
-
-tmux = _TmuxCompat()
 
 
 class TerminalConsumer(AsyncWebsocketConsumer):

@@ -19,6 +19,9 @@ from channels.testing.websocket import WebsocketCommunicator
 from studio_server.asgi import application
 from apps.runs.models import AgentRun
 from apps.terminals.dao import SCRATCH_TASK_ID
+from apps.terminals.tmux import client as tmux_client
+from apps.terminals.tmux import sessions as tmux_sessions
+from apps.terminals.tmux._core import TmuxSessionError
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 from apps.terminals.tests.conftest import write_profiles
@@ -98,6 +101,31 @@ def _fake_tmux_session(agent_run_id="run-abc"):
         created_at=datetime.now(timezone.utc),
         scope="task",
     )
+
+
+def _patch_tmux_create(monkeypatch, create):
+    """Patch ``create_session`` and ``get_session`` as a matched pair.
+
+    The consumer creates a tmux session and then reads it back by id, so a test
+    that fabricates the create must also serve the read. The deleted
+    compatibility shim in ``consumers`` did this implicitly, by writing a cache
+    wrapper into the shared tmux module behind ``monkeypatch``'s back; here the
+    caching is test state, scoped by ``monkeypatch`` like everything else.
+
+    :param create: The test's ``create_session`` replacement.
+    :return: The ``{agent_run_id: session}`` map the fake read serves from.
+    """
+
+    created: dict = {}
+
+    def create_and_record(**kwargs):
+        session = create(**kwargs)
+        created[kwargs["agent_run_id"]] = session
+        return session
+
+    monkeypatch.setattr(tmux_sessions, "create_session", create_and_record)
+    monkeypatch.setattr(tmux_sessions, "get_session", created.get)
+    return created
 
 
 async def _communicator():
@@ -187,13 +215,12 @@ async def test_init_roundtrip_and_clean_exit(configured, monkeypatch):
     _patch_repo(monkeypatch)
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["printf", "ready"])
 
-    monkeypatch.setattr(
-        consumers.tmux,
-        "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["printf", "ready"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ready"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_init_frame()))
@@ -336,12 +363,12 @@ async def test_max_sessions_guard(configured, monkeypatch):
     _patch_repo(monkeypatch)
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["sleep", "30"])
     monkeypatch.setattr(consumers, "MAX_SESSIONS", 1)
-    monkeypatch.setattr(
-        consumers.tmux, "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_init_frame()))
@@ -373,13 +400,12 @@ async def test_dimensions_ordering(configured, monkeypatch):
     monkeypatch.setenv("TERMINFO", "/tmp/inherited-terminfo")
     monkeypatch.setenv("TERMINFO_DIRS", "/tmp/inherited-terminfo-dirs")
 
-    monkeypatch.setattr(
-        consumers.tmux,
-        "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["printf", "x"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "x"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     captured: dict = {}
     real_spawn = consumers.ptyprocess.PtyProcessUnicode.spawn
@@ -412,12 +438,11 @@ async def test_resize_calls_setwinsize(configured, monkeypatch):
     _patch_repo(monkeypatch)
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["sleep", "5"])
 
-    monkeypatch.setattr(
-        consumers.tmux,
-        "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "5"])
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "5"])
 
     captured: list[tuple[int, int]] = []
     original = consumers.PtySession.setwinsize
@@ -432,7 +457,7 @@ async def test_resize_calls_setwinsize(configured, monkeypatch):
     # frame must drive it or the window never grows (the dotted dead band).
     refreshed: list[tuple[int, int]] = []
     monkeypatch.setattr(
-        consumers.tmux,
+        tmux_client,
         "refresh_client_size",
         lambda rid, cols, rows: refreshed.append((cols, rows)),
     )
@@ -457,13 +482,12 @@ async def test_client_disconnect_terminates_pty(configured, monkeypatch):
     _patch_repo(monkeypatch)
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["sleep", "30"])
 
-    monkeypatch.setattr(
-        consumers.tmux,
-        "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     terminate_calls: list[bool] = []
     original_terminate = consumers.PtySession.terminate
@@ -490,7 +514,6 @@ async def test_instant_mode_builds_prompt_and_launches(configured, monkeypatch):
     """is_instant=true + non-empty instant_prompt + no task_id → uses build_instant_change_prompt."""
     from studio_server.contracts import ModuleSummary
     from apps import worktracker_queries
-    import apps.terminals.consumers as consumers
 
     async def fake_get_modules(project_id):
         return [ModuleSummary(id=MODULE_ID, name="Mod One", project_id=project_id)]
@@ -526,12 +549,12 @@ async def test_instant_mode_builds_prompt_and_launches(configured, monkeypatch):
         return ["printf", "ok"]
 
     _patch_agent_argv(monkeypatch)(argv)
-    monkeypatch.setattr(
-        consumers.tmux, "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["printf", "ok"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     communicator = await _communicator()
     await communicator.send_to(
@@ -566,9 +589,9 @@ async def test_task_spawn_creates_persisted_tmux_session(configured, monkeypatch
         created.update(kwargs)
         return _fake_tmux_session(kwargs["agent_run_id"])
 
-    monkeypatch.setattr(consumers.tmux, "create_session", fake_create_session)
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["printf", "ok"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    _patch_tmux_create(monkeypatch, fake_create_session)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_init_frame()))
@@ -591,22 +614,20 @@ async def test_task_spawn_creates_persisted_tmux_session(configured, monkeypatch
 
 async def test_scroll_frame_drives_tmux_copy_mode(configured, monkeypatch):
     """A scroll frame bridges to tmux.scroll for a tmux-backed session (#578)."""
-    import apps.terminals.consumers as consumers
 
     _patch_repo(monkeypatch)
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["claude", "--prompt", prompt])
-    monkeypatch.setattr(
-        consumers.tmux,
-        "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
     # Long-lived attach so the pump is alive when the scroll frame arrives.
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "5"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "5"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     scrolls: list[tuple[str, str, int]] = []
     monkeypatch.setattr(
-        consumers.tmux,
+        tmux_client,
         "scroll",
         lambda rid, direction, lines: scrolls.append((rid, direction, lines)),
     )
@@ -644,9 +665,9 @@ async def test_task_spawn_errors_when_tmux_unavailable(configured, monkeypatch):
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["printf", "ready"])
 
     def boom(**kwargs):
-        raise consumers.tmux.TmuxSessionError("no tmux server")
+        raise TmuxSessionError("no tmux server")
 
-    monkeypatch.setattr(consumers.tmux, "create_session", boom)
+    _patch_tmux_create(monkeypatch, boom)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_init_frame()))
@@ -678,9 +699,9 @@ async def test_instant_spawn_persists_under_scratch_sentinel(configured, monkeyp
         created.update(kwargs)
         return _fake_tmux_session(kwargs["agent_run_id"])
 
-    monkeypatch.setattr(consumers.tmux, "create_session", fake_create_session)
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["printf", "ok"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    _patch_tmux_create(monkeypatch, fake_create_session)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     communicator = await _communicator()
     await communicator.send_to(
@@ -707,12 +728,12 @@ async def test_initial_persisted_spawn_reserves_and_releases_agent_run(configure
     _patch_repo(monkeypatch)
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["claude", "--prompt", prompt])
 
-    monkeypatch.setattr(
-        consumers.tmux, "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_init_frame()))
@@ -732,16 +753,16 @@ async def test_initial_persisted_spawn_resize_failure_releases_reservation(confi
     _patch_repo(monkeypatch)
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["claude", "--prompt", prompt])
 
-    monkeypatch.setattr(
-        consumers.tmux, "create_session",
+    _patch_tmux_create(
+        monkeypatch,
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
 
     def fail_refresh(rid, cols, rows):
-        raise consumers.tmux.TmuxSessionError("bad geometry")
+        raise TmuxSessionError("bad geometry")
 
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", fail_refresh)
+    monkeypatch.setattr(tmux_client, "refresh_client_size", fail_refresh)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_init_frame()))
@@ -760,15 +781,15 @@ async def test_initial_persisted_spawn_resize_failure_releases_reservation(confi
 async def test_attach_uses_attach_argv_and_spawns(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
     captured: dict = {}
 
     def fake_attach_argv(rid):
         captured["rid"] = rid
         return ["printf", "ok"]
 
-    monkeypatch.setattr(consumers.tmux, "attach_argv", fake_attach_argv)
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_client, "attach_argv", fake_attach_argv)
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-xyz")))
@@ -788,7 +809,7 @@ async def test_attach_uses_attach_argv_and_spawns(configured, monkeypatch):
 async def test_attach_session_not_found(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: None)
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: None)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="missing")))
@@ -803,9 +824,9 @@ async def test_attach_respects_max_sessions(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
     monkeypatch.setattr(consumers, "MAX_SESSIONS", 1)
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="r1")))
@@ -824,12 +845,12 @@ async def test_attach_respects_max_sessions(configured, monkeypatch):
 async def test_attach_resize_calls_setwinsize(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "5"])
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "5"])
 
     refreshed: list[tuple[int, int]] = []
     monkeypatch.setattr(
-        consumers.tmux,
+        tmux_client,
         "refresh_client_size",
         lambda rid, cols, rows: refreshed.append((cols, rows)),
     )
@@ -861,9 +882,9 @@ async def test_attach_resize_calls_setwinsize(configured, monkeypatch):
 async def test_attach_close_does_not_terminate_tmux_session(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     terminate_calls: list[str] = []
 
@@ -871,7 +892,7 @@ async def test_attach_close_does_not_terminate_tmux_session(configured, monkeypa
         terminate_calls.append(rid)
         return True
 
-    monkeypatch.setattr(consumers.tmux, "terminate_session", fake_terminate_session)
+    monkeypatch.setattr(tmux_sessions, "terminate_session", fake_terminate_session)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="r-keep")))
@@ -886,14 +907,13 @@ async def test_attach_close_does_not_terminate_tmux_session(configured, monkeypa
 
 
 async def test_attach_calls_refresh_client_size_with_init_geometry(configured, monkeypatch):
-    import apps.terminals.consumers as consumers
 
     captured: list[tuple[str, int, int]] = []
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["printf", "ok"])
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
     monkeypatch.setattr(
-        consumers.tmux, "refresh_client_size",
+        tmux_client, "refresh_client_size",
         lambda rid, cols, rows: captured.append((rid, cols, rows)),
     )
 
@@ -910,13 +930,13 @@ async def test_attach_calls_refresh_client_size_with_init_geometry(configured, m
 async def test_attach_resize_failure_releases_reservation(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
 
     def fail_refresh(rid, cols, rows):
-        raise consumers.tmux.TmuxSessionError("bad geometry")
+        raise TmuxSessionError("bad geometry")
 
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", fail_refresh)
+    monkeypatch.setattr(tmux_client, "refresh_client_size", fail_refresh)
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-bad-size")))
@@ -932,9 +952,9 @@ async def test_attach_resize_failure_releases_reservation(configured, monkeypatc
 async def test_second_attach_same_agent_run_replaces_existing_viewer(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="same-run")))
@@ -957,17 +977,17 @@ async def test_second_attach_same_agent_run_replaces_existing_viewer(configured,
 async def test_failed_replacement_keeps_existing_viewer(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
     resize_calls = 0
 
     def fail_second_resize(rid, cols, rows):
         nonlocal resize_calls
         resize_calls += 1
         if resize_calls == 2:
-            raise consumers.tmux.TmuxSessionError("bad replacement geometry")
+            raise TmuxSessionError("bad replacement geometry")
 
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", fail_second_resize)
+    monkeypatch.setattr(tmux_client, "refresh_client_size", fail_second_resize)
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="same-run")))
@@ -991,9 +1011,9 @@ async def test_failed_replacement_keeps_existing_viewer(configured, monkeypatch)
 async def test_concurrent_attach_different_agent_run_succeeds(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-a")))
@@ -1011,9 +1031,9 @@ async def test_concurrent_attach_different_agent_run_succeeds(configured, monkey
 async def test_attach_reservation_released_after_close(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(consumers.tmux, "get_session", lambda rid: _fake_tmux_session(rid))
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-reopen")))
@@ -1458,9 +1478,9 @@ async def test_doc_chat_spawn_persists_scope_and_doc_path(configured, monkeypatc
         created.update(kwargs)
         return _fake_tmux_session(kwargs["agent_run_id"])
 
-    monkeypatch.setattr(consumers.tmux, "create_session", fake_create_session)
-    monkeypatch.setattr(consumers.tmux, "attach_argv", lambda rid: ["printf", "ok"])
-    monkeypatch.setattr(consumers.tmux, "refresh_client_size", lambda rid, cols, rows: None)
+    _patch_tmux_create(monkeypatch, fake_create_session)
+    monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
+    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
 
     communicator = await _communicator()
     await communicator.send_to(

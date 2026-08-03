@@ -46,14 +46,21 @@ from worktracker.services.launch_bindings import (
 
 from apps.terminals.launch_configuration import LaunchConfigurationError
 
-from apps.terminals.agents.injectors.agy import inject_agy_lifecycle_settings
+from apps.terminals.agents.injectors import InjectedLaunch
+from apps.terminals.agents.injectors.agy import (
+    inject_agy_launch,
+    inject_agy_lifecycle_settings,
+)
 from apps.terminals.agents.injectors.claude import (
     inject_claude_lifecycle_settings,
 )
 from apps.terminals.agents.injectors.codex import (
     inject_codex_lifecycle_settings,
 )
-from apps.terminals.agents.injectors.gemini import inject_gemini_lifecycle_settings
+from apps.terminals.agents.injectors.gemini import (
+    inject_gemini_launch,
+    inject_gemini_lifecycle_settings,
+)
 from apps.terminals.agents.skills.preflight import (
     ResolvedSkills,
     WORKTRACKER_TOOLS,
@@ -146,6 +153,9 @@ class AgentAdapter:
     _resume_command: Callable[[str], list[str]] | None = None
     supports_worktracker_mcp: bool = False
     supports_required_skills: bool = True
+    #: Providers with no inline settings flag write a run-scoped settings file
+    #: and point an env var at it. ``None`` means the provider injects inline.
+    _inject_with_settings_file: Callable[..., InjectedLaunch] | None = None
 
     def command(
         self,
@@ -209,53 +219,37 @@ class AgentAdapter:
 
         Required skills are installed persistently during Ticketry startup.
         Launch augmentation is limited to lifecycle and MCP configuration.
+
+        Which of the two paths a provider takes is registry data, not a slug
+        comparison: an adapter without ``_inject_with_settings_file`` injects
+        inline and owns no temp artifacts.
         """
         del skills
 
-        if self.slug == "claude":
-            injected = self.inject(
-                argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
+        if self._inject_with_settings_file is None:
+            return LaunchAugmentation(
+                tuple(
+                    self.inject(
+                        argv,
+                        agent_run_id,
+                        lifecycle_url=lifecycle_url,
+                        mcp_url=mcp_url,
+                    )
+                )
             )
-            return LaunchAugmentation(tuple(injected))
-
-        if self.slug == "codex":
-            injected = self.inject(
-                argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-            )
-            return LaunchAugmentation(tuple(injected))
 
         root = _artifact_root(agent_run_id)
         try:
-            settings_path = root / "settings.json"
-            if self.slug == "agy":
-                injected = inject_agy_lifecycle_settings(
-                    argv,
-                    agent_run_id,
-                    lifecycle_url=lifecycle_url,
-                    mcp_url=mcp_url,
-                    settings_path=settings_path,
-                )
-                environment = {
-                    injected[1].split("=", 1)[0]: injected[1].split("=", 1)[1]
-                }
-                provider_argv = injected[2:]
-            elif self.slug == "gemini":
-                injected = inject_gemini_lifecycle_settings(
-                    argv,
-                    agent_run_id,
-                    lifecycle_url=lifecycle_url,
-                    mcp_url=mcp_url,
-                    settings_path=settings_path,
-                )
-                environment = {
-                    injected[1].split("=", 1)[0]: injected[1].split("=", 1)[1]
-                }
-                provider_argv = injected[2:]
-            else:
-                raise RuntimeError(f"no launch augmenter registered for {self.slug}")
+            result = self._inject_with_settings_file(
+                argv,
+                agent_run_id,
+                lifecycle_url=lifecycle_url,
+                mcp_url=mcp_url,
+                settings_path=root / "settings.json",
+            )
             return LaunchAugmentation(
-                tuple(provider_argv),
-                tuple(environment.items()),
+                tuple(result.argv),
+                tuple(result.environment.items()),
                 (root,),
             )
         except Exception:
@@ -277,33 +271,6 @@ class AgentAdapter:
         if self._resume_command is None:
             raise ResumeUnsupported(self.slug)
         return self._resume_command(provider_session_id)
-
-
-def _inject_claude(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    return inject_claude_lifecycle_settings(
-        argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-    )
-
-
-def _inject_agy(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    return inject_agy_lifecycle_settings(
-        argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-    )
-
-
-def _inject_codex(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    return inject_codex_lifecycle_settings(
-        argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-    )
-
-
-def _inject_gemini(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    return inject_gemini_lifecycle_settings(
-        argv,
-        agent_run_id,
-        lifecycle_url=lifecycle_url,
-        mcp_url=mcp_url,
-    )
 
 
 def _resume_claude(provider_session_id: str) -> list[str]:
@@ -370,30 +337,32 @@ _REGISTRY: dict[str, AgentAdapter] = {
     "claude": AgentAdapter(
         "claude",
         _command_claude,
-        _inject_claude,
+        inject_claude_lifecycle_settings,
         _resume_command=_resume_claude,
         supports_worktracker_mcp=True,
     ),
     "agy": AgentAdapter(
         "agy",
         _command_agy,
-        _inject_agy,
+        inject_agy_lifecycle_settings,
         _resume_command=_resume_agy,
         supports_worktracker_mcp=True,
+        _inject_with_settings_file=inject_agy_launch,
     ),
     "codex": AgentAdapter(
         "codex",
         _command_codex,
-        _inject_codex,
+        inject_codex_lifecycle_settings,
         _resume_command=_resume_codex,
         supports_worktracker_mcp=True,
     ),
     "gemini": AgentAdapter(
         "gemini",
         _command_gemini,
-        _inject_gemini,
+        inject_gemini_lifecycle_settings,
         _resume_command=_resume_gemini,
         supports_worktracker_mcp=True,
+        _inject_with_settings_file=inject_gemini_launch,
     ),
 }
 

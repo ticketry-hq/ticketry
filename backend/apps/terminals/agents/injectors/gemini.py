@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 from apps.terminals.agents.injectors import DEFAULT_LIFECYCLE_URL, HOOKS_DIR, hook_argv
-from apps.terminals.agents.injectors import DEFAULT_MCP_URL
+from apps.terminals.agents.injectors import DEFAULT_MCP_URL, InjectedLaunch
 from apps.terminals.authorization import issue_run_authorization
 
 
@@ -87,13 +87,14 @@ def build_gemini_mcp_servers(mcp_url: str, mcp_authorization: str) -> dict:
     }
 
 
-def inject_gemini_lifecycle_settings(
+def inject_gemini_launch(
     argv: list[str],
     agent_run_id: str,
+    *,
     lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
     mcp_url: str = DEFAULT_MCP_URL,
     settings_path: Path | None = None,
-) -> list[str]:
+) -> InjectedLaunch:
     """Splice an invocation-level lifecycle hooks override into a Gemini command.
 
     Gemini has no inline settings flag (unlike Claude's ``--settings`` or Codex's
@@ -111,9 +112,8 @@ def inject_gemini_lifecycle_settings(
         :func:`terminals.agents.commands.get_agent_command`.
     :param agent_run_id: Durable id for this run's lifecycle events.
     :param lifecycle_url: Ingress URL the hook posts events to.
-    :return: The argv prefixed with an
-        ``env GEMINI_CLI_SYSTEM_SETTINGS_PATH=...`` wrapper and
-        ``--skip-trust``.
+    :return: The argv with ``--skip-trust`` spliced in, plus the settings-file
+        environment variable.
     """
 
     settings = build_gemini_lifecycle_settings(agent_run_id, lifecycle_url)
@@ -139,10 +139,34 @@ def inject_gemini_lifecycle_settings(
     # Relocate the system settings layer for this process only, then trust the
     # workspace so the wired hooks execute without an interactive prompt.
 
+    return InjectedLaunch(
+        argv=(argv[0], "--skip-trust", *argv[1:]),
+        environment={"GEMINI_CLI_SYSTEM_SETTINGS_PATH": str(settings_path)},
+    )
+
+
+def inject_gemini_lifecycle_settings(
+    argv: list[str],
+    agent_run_id: str,
+    lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
+    mcp_url: str = DEFAULT_MCP_URL,
+    settings_path: Path | None = None,
+) -> list[str]:
+    """:func:`inject_gemini_launch` encoded as a shell ``env`` wrapper argv.
+
+    The form callers use when they can only pass an argv and have nowhere to
+    put process environment.
+    """
+
+    result = inject_gemini_launch(
+        argv,
+        agent_run_id,
+        lifecycle_url=lifecycle_url,
+        mcp_url=mcp_url,
+        settings_path=settings_path,
+    )
     return [
         "env",
-        f"GEMINI_CLI_SYSTEM_SETTINGS_PATH={settings_path}",
-        argv[0],
-        "--skip-trust",
-        *argv[1:],
+        *(f"{name}={value}" for name, value in result.environment.items()),
+        *result.argv,
     ]

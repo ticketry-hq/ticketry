@@ -23,7 +23,7 @@ Recorded decisions:
   never touch ``os.environ``.
 - **Test seam.** Override an adapter for one test with
   ``monkeypatch.setitem(registry._REGISTRY, slug, fake)`` (see
-  :class:`apps.terminals.fakes.FakeAdapter`). Fakes must *replace* an existing
+  :class:`apps.terminals.tests.fakes.FakeAdapter`). Fakes must *replace* an existing
   slug, never add a new one — ``validation.VALID_AGENTS`` is an import-time
   snapshot of :func:`all_slugs`.
 """

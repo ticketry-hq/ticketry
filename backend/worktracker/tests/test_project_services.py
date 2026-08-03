@@ -1,13 +1,10 @@
-from concurrent.futures import ThreadPoolExecutor
 import uuid
 
 import pytest
-from django.db import close_old_connections
 
 from worktracker.models import (
     IssueType,
     IssueTypeTransition,
-    LaunchBinding,
     Project,
     State,
     Workspace,
@@ -16,7 +13,6 @@ from worktracker.services.errors import ConflictError, NotFoundError, ServiceErr
 from worktracker.services.projects import (
     create_project,
     delete_project,
-    resolve_current_project,
     update_project,
 )
 
@@ -75,77 +71,6 @@ def test_create_project_rejects_duplicate_slug(project):
 
     assert excinfo.value.status_code == 409
     assert Project.objects.filter(slug="MEML").count() == 1
-
-
-@pytest.mark.django_db
-def test_resolve_current_project_creates_fully_seeded_cdn_project():
-    Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-
-    resolved = resolve_current_project()
-
-    assert resolved.name == "coding"
-    assert resolved.slug == "CDN"
-    assert Project.objects.filter(slug="CDN").count() == 1
-    assert State.objects.filter(project=resolved).count() == 7
-    assert IssueType.objects.filter(project=resolved).count() == 4
-    assert LaunchBinding.objects.filter(issue_type__project=resolved).count() == 21
-    assert all(
-        issue_type.start_state_id is not None
-        and issue_type.workflow_revision == 1
-        and IssueTypeTransition.objects.filter(issue_type=issue_type).exists()
-        for issue_type in IssueType.objects.filter(project=resolved, level="task")
-    )
-
-
-@pytest.mark.django_db
-def test_resolve_current_project_returns_existing_cdn_project():
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    existing = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="Existing", slug="CDN"
-    )
-
-    resolved = resolve_current_project()
-
-    assert resolved.id == existing.id
-    assert resolved.name == "Existing"
-    assert list(Project.objects.values_list("id", flat=True)) == [existing.id]
-
-
-@pytest.mark.django_db
-def test_resolve_current_project_preserves_other_projects_and_is_idempotent(project):
-    original = {
-        "id": project.id,
-        "workspace_id": project.workspace_id,
-        "name": project.name,
-        "slug": project.slug,
-        "description": project.description,
-    }
-
-    first = resolve_current_project()
-    second = resolve_current_project()
-
-    assert first.id == second.id
-    assert first.slug == "CDN"
-    assert Project.objects.count() == 2
-    assert Project.objects.filter(**original).exists()
-
-
-@pytest.mark.django_db(transaction=True)
-def test_resolve_current_project_is_safe_for_concurrent_callers():
-    Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-
-    def resolve_in_thread():
-        close_old_connections()
-        try:
-            return resolve_current_project().id
-        finally:
-            close_old_connections()
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        resolved_ids = list(executor.map(lambda _: resolve_in_thread(), range(2)))
-
-    assert resolved_ids[0] == resolved_ids[1]
-    assert Project.objects.filter(slug="CDN").count() == 1
 
 
 @pytest.mark.django_db

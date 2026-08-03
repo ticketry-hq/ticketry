@@ -22,11 +22,16 @@ from worktracker.models import (
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
+def _clear_registry():
+    LaunchedTask.objects.all().delete()
+    GraphRun.objects.all().delete()
+
+
 @pytest.fixture(autouse=True)
 def clean_registry():
-    driver.clear_registry()
+    _clear_registry()
     yield
-    driver.clear_registry()
+    _clear_registry()
 
 
 @pytest.fixture

@@ -59,19 +59,13 @@ class SaveDocumentResult:
     digest: str
 
 
-def doc_label(rel_path: str) -> str:
-    """Human tab label for a document: the filename stem."""
-
-    return Path(rel_path).stem
-
-
 def _doc_payload(row: DesignDocument) -> dict:
     """Shape one registry row for the workspace document list."""
 
     return {
         "id": row.id,
         "rel_path": row.rel_path,
-        "label": doc_label(row.rel_path),
+        "label": design_docs.doc_label(row.rel_path),
     }
 
 

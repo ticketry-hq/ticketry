@@ -29,6 +29,7 @@ from apps.terminals.tmux._core import (
 from apps.terminals.tmux.client import attach_argv, refresh_client_size, scroll
 from apps.terminals.tmux.metadata import TmuxSession, _parse_show_options
 from apps.terminals.models import AgentTerminalSession
+from worktracker.tests.factories import fixture_issue_id
 
 
 pytestmark = [
@@ -79,15 +80,17 @@ def agent_run_id():
 
     AgentRun.objects.create(
         id=rid,
-        workspace_slug="meml",
-        project_id="project-789",
-        module_id="module-456",
-        task_id="task-123",
+        issue_id=fixture_issue_id(
+            project_id="project-789",
+            module_id="module-456",
+            task_id="task-123",
+        ),
         ticket_seq=484,
         agent="claude-code",
         status="running",
         started_at="2026-05-29T10:00:00",
         cwd="/tmp",
+        scope="task",
     )
     yield rid
 

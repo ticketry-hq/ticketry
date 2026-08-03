@@ -30,6 +30,7 @@ from apps.terminals.agents.registry import (
     all_slugs,
     get_adapter,
 )
+from worktracker.tests.factories import fixture_issue_id
 
 from .test_consumers import _fake_tmux_session
 
@@ -191,15 +192,12 @@ async def _launch_and_capture(monkeypatch, slug, argv) -> str:
 
     await launch._launch(
         adapter=get_adapter(slug),
-        project_id="p1",
-        module_id="m1",
-        task_id="t1",
+        issue_id=fixture_issue_id(project_id="p1", module_id="m1", task_id="t1"),
         argv=argv,
         cwd="/tmp",
         design_dir=None,
         scope="task",
         doc_rel_path=None,
-        workspace_slug="ws",
         agent_run_id="deadbeef",
     )
     return captured["command"]
@@ -229,15 +227,14 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
 
     await launch._launch(
         adapter=RecordingAdapter(),
-        project_id="p1",
-        module_id="m1",
-        task_id="t-runtime-urls",
+        issue_id=fixture_issue_id(
+            project_id="p1", module_id="m1", task_id="t-runtime-urls"
+        ),
         argv=["codex", "hello"],
         cwd="/tmp",
         design_dir=None,
         scope="task",
         doc_rel_path=None,
-        workspace_slug="ws",
         agent_run_id="runtime-urls-run",
     )
 
@@ -249,10 +246,10 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
 
 
 def _wrapped_settings_path(argv: list[str]) -> pathlib.Path | None:
-    if argv and argv[0] == "env" and argv[1].startswith(
+    if argv[:3] == ["env", "-u", "NO_COLOR"] and argv[3].startswith(
         f"{_AGY_SYSTEM_SETTINGS_ENV}="
     ):
-        return pathlib.Path(argv[1].split("=", 1)[1])
+        return pathlib.Path(argv[3].split("=", 1)[1])
     return None
 
 
@@ -289,21 +286,21 @@ async def test_packaged_absolute_agent_path_keeps_hook_injection(
 
     try:
         if slug == "claude":
-            assert launched[0] == approved
+            assert launched[:4] == ["env", "-u", "NO_COLOR", approved]
             settings = json.loads(launched[launched.index("--settings") + 1])
             hook_command = settings["hooks"]["SessionStart"][0]["hooks"][0][
                 "command"
             ]
             assert settings["env"]["MUXED_LIFECYCLE_URL"] == lifecycle_url
         elif slug == "codex":
-            assert launched[0] == approved
+            assert launched[:4] == ["env", "-u", "NO_COLOR", approved]
             serialized = next(value for value in launched if value.startswith("hooks="))
             hooks = tomllib.loads(serialized)["hooks"]
             hook_command = hooks["SessionStart"][0]["hooks"][0]["command"]
             assert lifecycle_url in hook_command
         else:
-            assert launched[0] == "env"
-            assert launched[2] == approved
+            assert launched[:3] == ["env", "-u", "NO_COLOR"]
+            assert launched[4] == approved
             assert settings_path is not None
             settings = json.loads(settings_path.read_text())
             hook_command = settings["hooks"]["SessionStart"][0]["hooks"][0][
@@ -389,10 +386,10 @@ async def test_gemini_real_injection_has_authenticated_mcp(monkeypatch):
     command = await _launch_and_capture(
         monkeypatch, "gemini", await _command("gemini")
     )
-    assert command.startswith("env GEMINI_CLI_SYSTEM_SETTINGS_PATH=")
+    assert command.startswith("env -u NO_COLOR GEMINI_CLI_SYSTEM_SETTINGS_PATH=")
     assert "--skip-trust" in command
     launched = shlex.split(command)
-    settings_path = pathlib.Path(launched[1].split("=", 1)[1])
+    settings_path = pathlib.Path(launched[3].split("=", 1)[1])
     settings = json.loads(settings_path.read_text())
     server = settings["mcpServers"]["worktracker-agent"]
     assert server["httpUrl"].endswith("/mcp")
@@ -404,7 +401,7 @@ async def test_agy_real_injection(monkeypatch):
     command = await _launch_and_capture(
         monkeypatch, "agy", await _command("agy")
     )
-    assert command.startswith(f"env {_AGY_SYSTEM_SETTINGS_ENV}=")
+    assert command.startswith(f"env -u NO_COLOR {_AGY_SYSTEM_SETTINGS_ENV}=")
 
 
 @pytest.mark.parametrize(

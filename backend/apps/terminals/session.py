@@ -59,11 +59,16 @@ class LaunchIntent:
     project_id: str
     module_id: str | None
     task_id: str
+    issue_id: str | None = None
     scope: str = "task"
     initial_prompt: str | None = None
     doc_rel_path: str | None = None
     doc_id: str | None = None
     launch_configuration: ResolvedLaunchConfiguration | None = None
+
+    def __post_init__(self) -> None:
+        if self.issue_id is None:
+            object.__setattr__(self, "issue_id", self.task_id)
 
 
 class SessionNotFound(Exception):
@@ -268,15 +273,12 @@ class TerminalSessionService:
 
         return await _launch(
             adapter=adapter,
-            project_id=intent.project_id,
-            module_id=intent.module_id,
-            task_id=intent.task_id,
+            issue_id=intent.issue_id,
             argv=argv,
             cwd=cwd,
             design_dir=design_dir,
             scope=intent.scope,
             doc_rel_path=intent.doc_rel_path,
-            workspace_slug=getattr(profile, "workspace_slug", None),
             agent_run_id=agent_run_id,
             resolved_skills=resolved_skills,
         )
@@ -315,22 +317,19 @@ class TerminalSessionService:
             .order_by("-created_at")
             .afirst()
         )
-        scope = terminal_session.scope if terminal_session is not None else "task"
+        scope = run.scope
         doc_rel_path = (
             terminal_session.doc_rel_path if terminal_session is not None else None
         )
         new_run_id = uuid.uuid4().hex
         return await _launch(
             adapter=adapter,
-            project_id=run.project_id,
-            module_id=run.module_id,
-            task_id=run.task_id,
+            issue_id=str(run.issue_id),
             argv=argv,
             cwd=run.cwd,
             design_dir=run.design_dir,
             scope=scope,
             doc_rel_path=doc_rel_path,
-            workspace_slug=run.workspace_slug,
             agent_run_id=new_run_id,
             resumed_from=agent_run_id,
             resolved_skills=ResolvedSkills((), (), frozenset(), ""),
@@ -340,7 +339,7 @@ class TerminalSessionService:
         ended_at = datetime.now(timezone.utc).isoformat()
         project_id = (
             AgentRun.objects.filter(id=agent_run_id)
-            .values_list("project_id", flat=True)
+            .values_list("issue__project_id", flat=True)
             .first()
         )
         active = (
@@ -381,12 +380,12 @@ class TerminalSessionService:
             close_old_connections()
         if project_id:
             publish_backend_session_sync(
-                project_id, agent_run_id, "exited", at=ended_at
+                str(project_id), agent_run_id, "exited", at=ended_at
             )
 
     def live_run_for(self, task_id: str) -> AgentRun | None:
         return (
-            AgentRun.objects.filter(task_id=task_id, status="running")
+            AgentRun.objects.filter(issue_id=task_id, status="running")
             .order_by("-started_at", "-id")
             .first()
         )
@@ -413,11 +412,12 @@ class TerminalSessionService:
             ended_run_ids = [*result.soft_deleted, *result.exited]
             if ended_run_ids:
                 ended_at = datetime.now(timezone.utc).isoformat()
-                projects = dict(
-                    AgentRun.objects.filter(id__in=ended_run_ids).values_list(
-                        "id", "project_id"
-                    )
-                )
+                projects = {
+                    run_id: str(project_id)
+                    for run_id, project_id in AgentRun.objects.filter(
+                        id__in=ended_run_ids
+                    ).values_list("id", "issue__project_id")
+                }
                 for agent_run_id in ended_run_ids:
                     documents_watch.stop_watch(agent_run_id)
                     cleanup_temporary_artifacts_for_run(agent_run_id)

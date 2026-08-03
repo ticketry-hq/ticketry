@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from django.db.models import Q, Value
+from django.db.models import Q
 from django.db.models.functions import Coalesce
 
 from apps.runs.models import AgentRun
@@ -89,10 +89,18 @@ async def set_lifecycle_state(
 async def get_run_routing(run_id: str) -> Optional[tuple[Optional[str], str]]:
     """Return a run's task and module routing keys."""
 
-    return (
+    routing = (
         await AgentRun.objects.filter(id=run_id)
-        .values_list("task_id", "module_id")
+        .annotate(run_module_id=Coalesce("issue__module_id", "issue_id"))
+        .values_list("issue_id", "issue__module_id", "run_module_id")
         .afirst()
+    )
+    if routing is None:
+        return None
+    issue_id, parent_module_id, module_id = routing
+    return (
+        str(issue_id) if parent_module_id else None,
+        str(module_id),
     )
 
 
@@ -101,22 +109,26 @@ async def get_status_routing(
 ) -> Optional[tuple[str, Optional[str], str, str]]:
     """Return a run's project, task, module, and durable scope routing keys."""
 
-    return (
+    routing = (
         await AgentRun.objects.filter(id=run_id)
-        .annotate(
-            run_scope=Coalesce(
-                "scope",
-                "agentterminalsession__scope",
-                Value("task"),
-            )
-        )
+        .annotate(run_module_id=Coalesce("issue__module_id", "issue_id"))
         .values_list(
-            "project_id",
-            "task_id",
-            "module_id",
-            "run_scope",
+            "issue__project_id",
+            "issue_id",
+            "issue__module_id",
+            "run_module_id",
+            "scope",
         )
         .afirst()
+    )
+    if routing is None:
+        return None
+    project_id, issue_id, parent_module_id, module_id, scope = routing
+    return (
+        str(project_id),
+        str(issue_id) if parent_module_id else None,
+        str(module_id),
+        scope,
     )
 
 
@@ -127,7 +139,7 @@ async def list_agent_runs_for_task(
 ) -> list[AgentRun]:
     """Return a task's runs ordered newest-first."""
 
-    rows = AgentRun.objects.filter(task_id=task_id).order_by("-started_at")
+    rows = AgentRun.objects.filter(issue_id=task_id).order_by("-started_at")
     if limit is not None:
         rows = rows[:limit]
     return [row async for row in rows]

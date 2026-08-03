@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from django.db.models import Max, Q, Value
+from django.db.models import Max, Q
 from django.db.models.functions import Coalesce, Greatest
 
 from apps.runs.models import AgentRun
@@ -18,9 +18,9 @@ async def list_design_dirs_for_task(
 ) -> list[str]:
     """Return distinct non-null design directories for a task."""
 
-    rows = AgentRun.objects.filter(task_id=task_id, design_dir__isnull=False)
+    rows = AgentRun.objects.filter(issue_id=task_id, design_dir__isnull=False)
     if module_id is not None:
-        rows = rows.filter(module_id=module_id)
+        rows = rows.filter(issue__module_id=module_id)
     values = rows.values_list("design_dir", flat=True).distinct()
     return [value async for value in values]
 
@@ -49,13 +49,16 @@ async def last_activity_by_module(
 
     cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=window_days)).isoformat()
     rows = (
-        AgentRun.objects.filter(project_id=project_id, started_at__gte=cutoff)
-        .values("module_id")
+        AgentRun.objects.filter(
+            issue__project_id=project_id, started_at__gte=cutoff
+        )
+        .annotate(module_key=Coalesce("issue__module_id", "issue_id"))
+        .values("module_key")
         .annotate(
             last_activity=Max(Coalesce("lifecycle_updated_at", "started_at"))
         )
     )
-    return {row["module_id"]: row["last_activity"] async for row in rows}
+    return {str(row["module_key"]): row["last_activity"] async for row in rows}
 
 
 async def agent_status_records(
@@ -67,15 +70,13 @@ async def agent_status_records(
 ) -> list[RunRecord]:
     """Return active runs plus recent ended tombstones for a status scope."""
 
-    rows = AgentRun.objects.filter(project_id=project_id)
+    rows = AgentRun.objects.filter(issue__project_id=project_id).select_related(
+        "issue"
+    )
     if task_id is not None:
-        rows = rows.filter(task_id=task_id)
+        rows = rows.filter(issue_id=task_id)
     rows = rows.annotate(
-        run_scope=Coalesce(
-            "scope",
-            "agentterminalsession__scope",
-            Value("task"),
-        ),
+        run_module_id=Coalesce("issue__module_id", "issue_id"),
         status_updated_at=Greatest(
             Coalesce("lifecycle_updated_at", "started_at"),
             Coalesce("ended_at", "started_at"),
@@ -102,9 +103,9 @@ async def agent_status_records(
         records.append(
             RunRecord(
                 agent_run_id=run.id,
-                task_id=run.task_id,
-                module_id=run.module_id,
-                scope=run.run_scope,
+                task_id=str(run.issue_id) if run.issue.module_id else None,
+                module_id=str(run.run_module_id),
+                scope=run.scope,
                 state=state,
                 updated_at=updated_at,
             )

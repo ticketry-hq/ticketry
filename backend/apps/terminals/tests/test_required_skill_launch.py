@@ -17,6 +17,7 @@ from apps.terminals.agents.skills import (
     CatalogValidationError,
     package_path,
     tree_digest,
+    verify_catalog,
 )
 from apps.terminals.agents.skills import preflight
 from apps.terminals.agents.skills.installation import (
@@ -30,6 +31,7 @@ from apps.terminals.agents.skills.preflight import (
     skill_prompt_envelope,
 )
 from worktracker.required_skills import DEFAULT_REQUIRED_SKILLS
+from worktracker.tests.factories import fixture_issue_id
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -286,7 +288,9 @@ def test_adapter_uses_persistent_exact_locked_installation(
                 Path(environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"]).read_text()
             )
             assert "worktracker-agent" in settings["mcpServers"]
-        assert exposed == set(resolved.names)
+        assert exposed == {
+            package["name"] for package in verify_catalog()["packages"]
+        }
         assert all(
             tree_digest(path) == tree_digest(package_path(path.name))
             for path in exposed_root.iterdir()
@@ -327,15 +331,12 @@ async def test_overlay_failure_happens_before_agent_run_or_tmux(
     with pytest.raises(RequiredSkillUnavailable) as caught:
         await launch._launch(
             adapter=adapter,
-            project_id="p1",
-            module_id="m1",
-            task_id="t1",
+            issue_id=fixture_issue_id(project_id="p1", module_id="m1", task_id="t1"),
             argv=[provider, "prompt"],
             cwd="/tmp",
             design_dir=None,
             scope="task",
             doc_rel_path=None,
-            workspace_slug="ws",
             agent_run_id=f"preflight-failure-{provider}",
             resolved_skills=resolved,
         )
@@ -366,15 +367,12 @@ async def test_tmux_launch_failure_removes_run_session_and_overlay(
     with pytest.raises(launch.LaunchUnavailable):
         await launch._launch(
             adapter=adapter,
-            project_id="p1",
-            module_id="m1",
-            task_id="t1",
+            issue_id=fixture_issue_id(project_id="p1", module_id="m1", task_id="t1"),
             argv=[provider, "prompt"],
             cwd=str(tmp_path),
             design_dir=None,
             scope="task",
             doc_rel_path=None,
-            workspace_slug="ws",
             agent_run_id=run_id,
             resolved_skills=resolved,
         )

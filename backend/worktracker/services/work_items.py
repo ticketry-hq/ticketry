@@ -21,6 +21,16 @@ from worktracker.workflow import (
 )
 
 
+def resolve_module_id(parent: Issue | None) -> uuid.UUID | None:
+    """Return the denormalized module ancestor carried by ``parent``."""
+
+    if parent is None:
+        return None
+    if parent.type == "module":
+        return parent.id
+    return parent.module_id
+
+
 def create_project_work_item(
     project_id: uuid.UUID,
     *,
@@ -50,7 +60,9 @@ def create_project_work_item(
     if description is not None:
         issue.description = description
     if parent_id:
-        issue.parent_id = parent_id
+        parent = get_object_or_404(Issue, pk=parent_id)
+        issue.parent = parent
+        issue.module_id = resolve_module_id(parent)
     # Birth is gated like the move is (#870): a typed item is born in its
     # type's birth state, and an explicit state_id may not override it.
     issue.state_id = resolve_birth_state(project.id, issue_type, state_id)
@@ -170,6 +182,7 @@ def create_module_work_item(
         name=name,
         sequence_id=sequence_id,
         parent=module,
+        module=module,
         rank=append_rank(module.project_id),
     )
 
@@ -216,8 +229,12 @@ def update_work_item(issue_id: uuid.UUID, **data):
     # No state move: origin is meaningless for a plain field edit.
     data.pop("origin", None)
 
-    if "parent_id" in data:
-        issue.parent_id = data["parent_id"]
+    parent_changed = "parent_id" in data
+    if parent_changed:
+        parent_id = data["parent_id"]
+        parent = get_object_or_404(Issue, pk=parent_id) if parent_id else None
+        issue.parent = parent
+        issue.module_id = resolve_module_id(parent)
     if "name" in data:
         issue.name = data["name"]
     if "description" in data:
@@ -225,6 +242,22 @@ def update_work_item(issue_id: uuid.UUID, **data):
 
     with transaction.atomic():
         issue.save()
+
+        if parent_changed:
+            descendants = []
+            frontier = [issue]
+            while frontier:
+                module_ids_by_parent = {
+                    parent.id: resolve_module_id(parent) for parent in frontier
+                }
+                children = list(
+                    Issue.objects.filter(parent_id__in=module_ids_by_parent)
+                )
+                for child in children:
+                    child.module_id = module_ids_by_parent[child.parent_id]
+                descendants.extend(children)
+                frontier = children
+            Issue.objects.bulk_update(descendants, ["module"], batch_size=500)
 
         if "blocked_by_ids" in data:
             new_ids = [str(i) for i in (data["blocked_by_ids"] or [])]

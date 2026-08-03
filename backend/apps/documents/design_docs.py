@@ -34,6 +34,12 @@ PLANNING_SUBDIR = "planning"
 DOCUMENT_EXTENSIONS = {".html", ".md"}
 
 
+def doc_label(rel_path: str) -> str:
+    """Human tab label for a document: the filename stem."""
+
+    return Path(rel_path).stem
+
+
 def slugify(text: str, max_len: int) -> str:
     """Reduce free text to a filesystem-safe lowercase slug.
 

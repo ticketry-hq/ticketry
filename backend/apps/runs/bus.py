@@ -33,12 +33,6 @@ async def publish_status(project_id: str, frame: dict) -> None:
         logger.warning("failed to publish status frame: %s", exc)
 
 
-def publish_status_sync(project_id: str, frame: dict) -> None:
-    """Synchronous bridge for terminal-session lifecycle code."""
-
-    async_to_sync(publish_status)(project_id, frame)
-
-
 def publish_backend_session_sync(
     project_id: str,
     agent_run_id: str,

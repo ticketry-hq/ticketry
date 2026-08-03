@@ -9,10 +9,9 @@ class AgentRun(models.Model):
     """Persist one launched coding-agent run."""
 
     id = models.CharField(primary_key=True)
-    workspace_slug = models.CharField(null=True)
-    project_id = models.CharField()
-    module_id = models.CharField()
-    task_id = models.CharField(null=True)
+    issue = models.ForeignKey(
+        Issue, on_delete=models.CASCADE, related_name="agent_runs"
+    )
     ticket_seq = models.IntegerField(null=True)
     agent = models.CharField()
     status = models.CharField()
@@ -28,16 +27,10 @@ class AgentRun(models.Model):
     resumed_from = models.CharField(null=True)
     # Hooks can report lifecycle before the terminal-session mirror exists, so
     # the run itself owns the durable routing scope.
-    scope = models.CharField(null=True)
+    scope = models.CharField()
 
     class Meta:
         db_table = "agent_runs"
-        indexes = [
-            models.Index(
-                fields=["task_id", "-started_at"],
-                name="idx_agent_runs_task_started_at",
-            ),
-        ]
 
 
 class AutomationAttempt(models.Model):

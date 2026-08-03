@@ -37,13 +37,6 @@ async def list_scratch_terminal_sessions(
     return [row async for row in rows]
 
 
-async def list_active_terminal_sessions() -> list[AgentTerminalSession]:
-    """Return every active persisted terminal session."""
-
-    rows = AgentTerminalSession.objects.filter(terminated_at__isnull=True)
-    return [row async for row in rows]
-
-
 async def soft_delete_terminal_session(
     agent_run_id: str,
     *,

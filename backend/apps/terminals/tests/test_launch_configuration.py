@@ -32,11 +32,19 @@ def launch_policy():
     issue_type = IssueType.objects.create(
         id=uuid.uuid4(), project=project, name="Implementation", level="task"
     )
+    module_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Module", level="module"
+    )
     state = State.objects.create(
         id=uuid.uuid4(), project=project, name="Implement", group="started"
     )
     module = Issue.objects.create(
-        id=uuid.uuid4(), project=project, type="module", name="Module", sequence_id=1
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        issue_type=module_type,
+        name="Module",
+        sequence_id=1,
     )
     issue = Issue.objects.create(
         id=uuid.uuid4(),

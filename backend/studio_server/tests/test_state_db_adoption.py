@@ -27,11 +27,11 @@ from apps.documents.models import DesignDocument
 from apps.runs.models import AgentRun
 from apps.settings_store.models import AppSetting
 from apps.terminals.models import AgentTerminalSession
+from worktracker.models import Issue, IssueType, Project, Workspace
 
 
 _SCHEMA_OBJECTS = (
     "agent_runs",
-    "idx_agent_runs_task_started_at",
     "agent_terminal_sessions",
     "idx_agent_terminal_sessions_task_created",
     "app_settings",
@@ -127,22 +127,40 @@ def _build_legacy_database(db_connection, db_path):
         conn.execute(
             """
             INSERT INTO agent_runs (
-                id, workspace_slug, project_id, module_id, task_id, ticket_seq,
+                id, issue_id, ticket_seq,
                 agent, status, started_at, design_dir
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "run-1",
-                "meml",
-                "project-1",
-                "module-1",
-                "task-1",
+                "11111111-1111-1111-1111-111111111111",
                 527,
                 "codex",
                 "running",
                 "2026-06-12T12:00:00+00:00",
                 "/tmp/designs",
             ),
+        )
+        # The seed above intentionally uses the current raw-SQL contract. Turn
+        # the table back into the pre-0008 shape before fake-initial adoption
+        # so the real migration still exercises its legacy-column backfill.
+        conn.execute('ALTER TABLE agent_runs RENAME COLUMN "issue_id" TO "task_id"')
+        conn.execute('ALTER TABLE agent_runs ADD COLUMN "workspace_slug" varchar')
+        conn.execute('ALTER TABLE agent_runs ADD COLUMN "project_id" varchar')
+        conn.execute('ALTER TABLE agent_runs ADD COLUMN "module_id" varchar')
+        conn.execute(
+            """
+            UPDATE agent_runs
+            SET workspace_slug = 'meml',
+                project_id = 'project-1',
+                module_id = 'module-1'
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX idx_agent_runs_task_started_at
+            ON agent_runs (task_id, started_at DESC)
+            """
         )
         conn.execute(
             """
@@ -194,7 +212,7 @@ def test_fake_initial_adopts_existing_database_without_data_change(
     tmp_path,
     isolated_database,
 ):
-    """Adopt a pre-Django database while preserving rows and version state."""
+    """Adopt a pre-Django database and discard an unreferencable run."""
 
     db_path = tmp_path / "state.db"
     alias, db_connection = isolated_database(db_path)
@@ -228,16 +246,18 @@ def test_fake_initial_adopts_existing_database_without_data_change(
             # ended_at, so the terminal-state backfill skips it and the rows
             # below still survive adoption untouched.
             ("runs", "0007_backfill_terminal_lifecycle_state"),
+            ("runs", "0008_agentrun_issue"),
             ("settings_store", "0001_initial"),
             ("settings_store", "0002_migrate_profile_prompt_authority"),
             ("terminals", "0001_initial"),
             ("terminals", "0002_agent_run_viewer_lease"),
         ]
 
-    # Seeded rows survive the adoption untouched.
+    # The unreferencable legacy run and its terminal mirror are intentionally
+    # removed by 0008; unrelated adopted rows survive untouched.
 
-    assert AgentRun.objects.using(alias).get().id == "run-1"
-    assert AgentTerminalSession.objects.using(alias).get().agent_run_id == "run-1"
+    assert not AgentRun.objects.using(alias).exists()
+    assert not AgentTerminalSession.objects.using(alias).exists()
     assert AppSetting.objects.using(alias).get().value == "42"
     assert DesignDocument.objects.using(alias).get().rel_path == "report.html"
 
@@ -265,13 +285,30 @@ def test_fresh_migrate_sets_pragmas_and_database_cascade(
         cursor.execute("PRAGMA foreign_keys")
         assert cursor.fetchone() == (1,)
 
+    workspace = Workspace.objects.using(alias).create(
+        id=uuid.uuid4(), slug="state-adoption", name="State adoption"
+    )
+    project = Project.objects.using(alias).create(
+        id=uuid.uuid4(), workspace=workspace, name="Project", slug="PROJECT"
+    )
+    issue_type = IssueType.objects.using(alias).create(
+        id=uuid.uuid4(), project=project, name="Module", level="module"
+    )
+    issue = Issue.objects.using(alias).create(
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        issue_type=issue_type,
+        name="Module",
+        sequence_id=1,
+    )
     run = AgentRun.objects.using(alias).create(
         id="run-1",
-        project_id="project-1",
-        module_id="module-1",
+        issue=issue,
         agent="codex",
         status="running",
         started_at="2026-06-12T12:00:00+00:00",
+        scope="plan",
     )
     AgentTerminalSession.objects.using(alias).create(
         agent_run=run,

@@ -21,11 +21,16 @@ from worktracker.signals import issue_state_changed
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
+def _clear_registry():
+    LaunchedTask.objects.all().delete()
+    GraphRun.objects.all().delete()
+
+
 @pytest.fixture(autouse=True)
 def clean_registry():
-    driver.clear_registry()
+    _clear_registry()
     yield
-    driver.clear_registry()
+    _clear_registry()
 
 
 @pytest.fixture(autouse=True)

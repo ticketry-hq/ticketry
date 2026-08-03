@@ -11,14 +11,7 @@ import uuid
 
 import pytest
 
-from worktracker.models import (
-    Issue,
-    IssueType,
-    IssueTypeTransition,
-    Project,
-    State,
-    Workspace,
-)
+from worktracker.models import Issue, IssueType, State
 from worktracker.services import queries
 from worktracker.services.errors import NotFoundError
 from worktracker.services.work_items import create_project_work_item
@@ -38,15 +31,15 @@ def states(project):
 
 
 @pytest.mark.django_db
-def test_list_projects_shape(project):
-    rows = queries.list_projects()
-
-    assert rows == [{"id": project.id, "name": project.name, "slug": project.slug}]
-
-
-@pytest.mark.django_db
 def test_list_modules_excludes_archived(project, module_type):
-    live = queries.create_module_and_serialize(project.id, "Live", module_type.id)
+    live = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        issue_type=module_type,
+        name="Live",
+        sequence_id=98,
+    )
     archived = Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -60,7 +53,7 @@ def test_list_modules_excludes_archived(project, module_type):
     rows = queries.list_modules(project.id)
 
     ids = {r["id"] for r in rows}
-    assert live["id"] in ids
+    assert live.id in ids
     assert archived.id not in ids
     assert rows[0]["project_id"] == project.id
 
@@ -93,16 +86,15 @@ def test_work_item_dict_shape_and_relations(project, states):
         state_id=backlog.id,
         issue_type_id=task_type.id,
     )
-    create_project_work_item(
+    child = create_project_work_item(
         project.id,
         name="Child",
         parent_id=parent.id,
         issue_type_id=task_type.id,
     )
 
-    [row] = queries.list_subtasks(project.id, parent.id) or []  # child only
-    # Re-fetch the parent via retrieve to assert its full shape + child_count.
     parent_row = queries.retrieve_work_item(str(parent.id))
+    row = queries.retrieve_work_item(str(child.id))
 
     assert parent_row["state"] == {
         "id": backlog.id,
@@ -129,12 +121,21 @@ def test_state_none_serializes_to_none(project, task_type):
 
 
 @pytest.mark.django_db
-def test_module_subtree_vs_direct_children(project, module_type, task_type):
-    module = queries.create_module_and_serialize(project.id, "M", module_type.id)
+def test_list_module_tasks_and_states_returns_subtree(
+    project, module_type, task_type
+):
+    module = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        issue_type=module_type,
+        name="M",
+        sequence_id=97,
+    )
     child = create_project_work_item(
         project.id,
         name="Child",
-        parent_id=module["id"],
+        parent_id=module.id,
         issue_type_id=task_type.id,
     )
     grandchild = create_project_work_item(
@@ -144,73 +145,12 @@ def test_module_subtree_vs_direct_children(project, module_type, task_type):
         issue_type_id=task_type.id,
     )
 
-    subtree = queries.list_module_task_subtree(module["id"])
-    items, _states = queries.list_module_tasks_and_states(project.id, module["id"])
+    items, _states = queries.list_module_tasks_and_states(project.id, module.id)
 
-    subtree_ids = {r["id"] for r in subtree}
-    assert subtree_ids == {child.id, grandchild.id}
-    # The query returns the full subtree; direct-children filtering is the
-    # adapter's job, so both methods share this full list.
-    assert {r["id"] for r in items} == subtree_ids
-
-
-@pytest.mark.django_db
-def test_module_subtree_excludes_archived(project, module_type, task_type):
-    module = queries.create_module_and_serialize(project.id, "M", module_type.id)
-    live = create_project_work_item(
-        project.id, name="Live", parent_id=module["id"], issue_type_id=task_type.id
-    )
-    gone = create_project_work_item(
-        project.id, name="Gone", parent_id=module["id"], issue_type_id=task_type.id
-    )
-    gone.is_archived = True
-    gone.save(update_fields=["is_archived"])
-
-    ids = {r["id"] for r in queries.list_module_task_subtree(module["id"])}
-
-    assert ids == {live.id}
-
-
-@pytest.mark.django_db
-def test_subtasks_ordered_and_exclude_archived(project, task_type):
-    parent = create_project_work_item(
-        project.id, name="Parent", issue_type_id=task_type.id
-    )
-    create_project_work_item(
-        project.id, name="A", parent_id=parent.id, issue_type_id=task_type.id
-    )
-    create_project_work_item(
-        project.id, name="B", parent_id=parent.id, issue_type_id=task_type.id
-    )
-
-    rows = queries.list_subtasks(project.id, parent.id)
-
-    assert [r["name"] for r in rows] == ["A", "B"]
+    assert {r["id"] for r in items} == {child.id, grandchild.id}
 
 
 @pytest.mark.django_db
 def test_retrieve_unknown_raises_not_found(project):
     with pytest.raises(NotFoundError):
         queries.retrieve_work_item(str(uuid.uuid4()))
-
-
-@pytest.mark.django_db
-def test_apply_state_and_reload_returns_reloaded_dict(project, states, task_type):
-    backlog, todo = states
-    task_type.start_state = backlog
-    task_type.save(update_fields=["start_state"])
-    IssueTypeTransition.objects.create(
-        issue_type=task_type, from_state=backlog, to_state=todo
-    )
-    issue = create_project_work_item(
-        project.id,
-        name="Move",
-        state_id=backlog.id,
-        issue_type_id=task_type.id,
-    )
-
-    row = queries.apply_state_and_reload(issue.id, todo.id)
-
-    assert row["id"] == issue.id
-    assert row["state"]["id"] == todo.id
-    assert row["state"]["name"] == "Todo"

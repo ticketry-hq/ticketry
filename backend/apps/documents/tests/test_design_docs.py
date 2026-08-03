@@ -31,6 +31,7 @@ def _task(name: str = "Display generated HTML", seq: int | None = 521) -> TaskSu
     return TaskSummary(
         id="1a25c66a-7979-47c7-a273-f317f121a1a4",
         name=name,
+        issue_type="Story",
         project_id="proj-1",
         sequence_id=seq,
         state=TaskState(name="Todo"),

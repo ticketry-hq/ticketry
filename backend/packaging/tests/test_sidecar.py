@@ -352,20 +352,64 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
     with _running_sidecar(
         tmp_path,
         MUXED_PACKAGED_HOOK_RUNNER=runner,
-    ):
+    ) as port:
+        headers = {"x-api-key": (tmp_path / "worktracker_token").read_text().strip()}
+        base_url = f"http://127.0.0.1:{port}/api/work-tracker"
+        project_response = httpx.post(
+            f"{base_url}/projects",
+            headers=headers,
+            json={"name": "Packaged hook", "slug": "PKG"},
+            timeout=5,
+        )
+        assert project_response.status_code == 200
+        project_id = project_response.json()["id"]
+
+        issue_types_response = httpx.get(
+            f"{base_url}/projects/{project_id}/issue-types",
+            headers=headers,
+            timeout=5,
+        )
+        assert issue_types_response.status_code == 200
+        issue_types = issue_types_response.json()
+        module_type_id = next(
+            issue_type["id"] for issue_type in issue_types if issue_type["level"] == "module"
+        )
+        task_type_id = next(
+            issue_type["id"] for issue_type in issue_types if issue_type["name"] == "Story"
+        )
+
+        module_response = httpx.post(
+            f"{base_url}/projects/{project_id}/modules",
+            headers=headers,
+            json={"name": "Packaged hook", "issue_type_id": module_type_id},
+            timeout=5,
+        )
+        assert module_response.status_code == 200
+        module_id = module_response.json()["id"]
+        task_response = httpx.post(
+            f"{base_url}/projects/{project_id}/work-items",
+            headers=headers,
+            json={
+                "name": "Packaged hook",
+                "parent_id": module_id,
+                "issue_type_id": task_type_id,
+            },
+            timeout=5,
+        )
+        assert task_response.status_code == 200
+        task_id = task_response.json()["id"]
+
         with sqlite3.connect(tmp_path / "state.db") as database:
             database.execute(
                 """
                 INSERT INTO agent_runs (
-                    id, project_id, module_id, task_id, agent, status,
+                    id, issue_id, agent, status,
                     started_at, lifecycle_state, lifecycle_updated_at, scope
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
-                    "project-packaged",
-                    "module-packaged",
-                    "task-packaged",
+                    task_id.replace("-", ""),
                     "codex",
                     "running",
                     "2020-01-01T00:00:00+00:00",
@@ -384,9 +428,9 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
                 (
                     run_id,
                     f"pt-{run_id}",
-                    "task-packaged",
-                    "module-packaged",
-                    "project-packaged",
+                    task_id,
+                    module_id,
+                    project_id,
                     "codex",
                     "2020-01-01T00:00:00+00:00",
                     "task",

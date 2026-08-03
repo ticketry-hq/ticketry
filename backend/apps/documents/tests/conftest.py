@@ -3,6 +3,15 @@ from pathlib import Path
 
 import pytest
 from django.test import Client
+from worktracker.tests.factories import ensure_issue
+
+
+@pytest.fixture(autouse=True)
+def seeded_agent_run_issues(request):
+    if request.node.get_closest_marker("django_db") is None:
+        return
+    ensure_issue(project_id="p1", module_id="m1", task_id="t1")
+    ensure_issue(project_id="p1", module_id="m2", task_id=None)
 
 
 @pytest.fixture

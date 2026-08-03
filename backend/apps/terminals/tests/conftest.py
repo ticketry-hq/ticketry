@@ -5,7 +5,46 @@ from django.test import Client
 
 import apps.terminals.session as session_module
 from apps.terminals.launch_configuration import ResolvedLaunchConfiguration
+from apps.terminals.tmux import sessions as tmux_sessions
+from worktracker.tests.factories import ensure_issue
 
+
+_REAL_CREATE_SESSION = tmux_sessions.create_session
+_REAL_GET_SESSION = tmux_sessions.get_session
+
+
+@pytest.fixture(autouse=True)
+def seeded_agent_run_issues(request):
+    """Seed the readable work-item ids used by terminal integration fixtures."""
+
+    if request.node.get_closest_marker("django_db") is None:
+        return
+    for project_id, module_id, task_ids in (
+        ("p1", "m1", ("t1", "t-runtime-urls")),
+        ("proj-1", "mod-1", ("task-1", "task-2")),
+        ("proj-1", "mod-2", ("task-2",)),
+        ("project-1", "module-1", ("task-1",)),
+        ("project-1", "module-2", ()),
+        ("project-2", "module-1", ()),
+        ("project-789", "module-456", ("task-123",)),
+    ):
+        ensure_issue(project_id=project_id, module_id=module_id, task_id=None)
+        for task_id in task_ids:
+            ensure_issue(
+                project_id=project_id, module_id=module_id, task_id=task_id
+            )
+
+
+@pytest.fixture(autouse=True)
+def restore_tmux_session_test_surface(monkeypatch):
+    """Prevent compatibility-shim patches from leaking into later tests."""
+
+    yield
+    # Undo first: restoring ``consumers.tmux.create_session`` itself mutates
+    # this shared module and installs a cached ``get_session`` test wrapper.
+    monkeypatch.undo()
+    tmux_sessions.create_session = _REAL_CREATE_SESSION
+    tmux_sessions.get_session = _REAL_GET_SESSION
 
 @pytest.fixture
 def tmp_config(tmp_path, monkeypatch):

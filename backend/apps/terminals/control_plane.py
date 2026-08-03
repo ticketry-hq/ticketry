@@ -20,18 +20,22 @@ def launch_intent_from_spawn(init: dict) -> LaunchIntent:
     )
     if scope == "task":
         persist_task_id = init["task_id"]
+        issue_id = init["task_id"]
     elif scope == "docchat":
         # A task-bound document chat remains associated with its task; a
         # scratch chat uses the existing sentinel bucket.
         persist_task_id = init["task_id"] or SCRATCH_TASK_ID
+        issue_id = init["task_id"] or init["module_id"]
     else:
         persist_task_id = SCRATCH_TASK_ID
+        issue_id = init["module_id"]
 
     return LaunchIntent(
         agent=init["agent"],
         project_id=init["project_id"],
         module_id=init["module_id"],
         task_id=persist_task_id,
+        issue_id=issue_id,
         initial_prompt=init["instant_prompt"]
         if scope == "instant"
         else init["initial_prompt"],

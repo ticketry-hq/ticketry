@@ -20,10 +20,8 @@ import uuid
 
 from django.http import Http404
 
-from worktracker.models import Issue, Project, State
+from worktracker.models import Issue, State
 from worktracker.services.errors import NotFoundError
-from worktracker.services.modules import create_module as create_module_service
-from worktracker.services.work_items import update_work_item
 from worktracker.work_items import resolve_issue, task_qs
 
 
@@ -70,19 +68,6 @@ def _work_item_dict(issue):
         "parent_id": issue.parent_id,
         "sub_issues_count": sub_issues_count,
     }
-
-
-def list_projects():
-    """List all projects (mirrors ``GET /projects``).
-
-    Returns ``[{id, name, slug}, …]``; the adapter maps ``slug`` onto
-    ``ProjectSummary.identifier``.
-    """
-
-    return [
-        {"id": p.id, "name": p.name, "slug": p.slug}
-        for p in Project.objects.all()
-    ]
 
 
 def list_modules(project_id: uuid.UUID, include_archived: bool = False):
@@ -138,16 +123,6 @@ def _module_subtree_qs(module_id: uuid.UUID, include_archived: bool):
     return qs.order_by("rank", "sequence_id")
 
 
-def list_module_task_subtree(module_id: uuid.UUID, include_archived: bool = False):
-    """Return the module's full task-descendant subtree (direct + subtasks).
-
-    Backs ``get_module_task_summaries``; the adapter keeps the whole subtree so
-    #516 roll-ups can walk it.
-    """
-
-    return [_work_item_dict(issue) for issue in _module_subtree_qs(module_id, include_archived)]
-
-
 def list_module_tasks_and_states(project_id: uuid.UUID, module_id: uuid.UUID):
     """Return ``(work-item dicts, state dicts)`` for a module in one hop.
 
@@ -162,22 +137,6 @@ def list_module_tasks_and_states(project_id: uuid.UUID, module_id: uuid.UUID):
     return items, states
 
 
-def list_subtasks(project_id: uuid.UUID, parent_id):
-    """List the direct task children of an issue (mirrors the ``parent`` filter).
-
-    Reproduces ``GET /projects/{id}/work-items?parent=…``: archived hidden,
-    ordered ``(rank, sequence_id)``.
-    """
-
-    qs = (
-        task_qs()
-        .filter(project_id=project_id, parent_id=parent_id)
-        .exclude(is_archived=True)
-        .order_by("rank", "sequence_id")
-    )
-    return [_work_item_dict(issue) for issue in qs]
-
-
 def retrieve_work_item(issue_id: str):
     """Retrieve one task by UUID or ``KEY-N`` (mirrors ``GET /work-items/{id}``).
 
@@ -190,30 +149,3 @@ def retrieve_work_item(issue_id: str):
     except Http404 as exc:
         raise NotFoundError("Work item not found.") from exc
     return _work_item_dict(issue)
-
-
-def create_module_and_serialize(
-    project_id: uuid.UUID,
-    name: str,
-    issue_type_id: uuid.UUID,
-):
-    """Create a module and return its module dict, in one ORM hop.
-
-    Routes through the existing ``services.modules.create_module`` mutation; the
-    returned ``Issue`` already carries ``id``/``name``/``project_id``.
-    """
-
-    module = create_module_service(project_id, name, issue_type_id)
-    return {"id": module.id, "name": module.name, "project_id": module.project_id}
-
-
-def apply_state_and_reload(issue_id, state_id):
-    """Apply a state change then return the reloaded work-item dict, in one hop.
-
-    Routes the write through ``services.work_items.update_work_item`` then
-    re-resolves via ``resolve_issue`` (exactly as the PATCH route does) to obtain
-    the annotated ``task_qs`` row before serializing.
-    """
-
-    issue = update_work_item(issue_id, state_id=state_id)
-    return _work_item_dict(resolve_issue(str(issue.id)))

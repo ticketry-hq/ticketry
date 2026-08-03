@@ -7,12 +7,12 @@ from worktracker.models import Issue, IssueType, LaunchBinding, State
 from worktracker.services.launch_bindings import (
     LaunchBindingError,
     get_launch_binding,
-    list_launch_bindings,
     resolve_issue_launch_binding,
-    upsert_launch_binding,
     validate_provider_options,
     validate_unattended_launch_binding,
 )
+from worktracker.services.errors import ValidationError as ServiceValidationError
+from worktracker.services.scoped_workflows import upsert_launch_binding
 
 
 @pytest.fixture
@@ -27,56 +27,21 @@ def launch_policy(project):
 
 
 @pytest.mark.django_db
-def test_upsert_edits_one_type_state_binding_and_preserves_opaque_prompt(
-    project, launch_policy
-):
-    issue_type, state = launch_policy
-
-    first = upsert_launch_binding(
-        project.id,
-        issue_type.id,
-        state.id,
-        prompt="Operate in our incident-response vocabulary.\n\nKeep this exact text.",
-        agent="claude",
-        model="sonnet",
-        reasoning="high",
-    )
-    second = upsert_launch_binding(
-        project.id,
-        issue_type.id,
-        state.id,
-        prompt="Replacement guidance",
-        agent="codex",
-        model="gpt-5.4",
-        reasoning="xhigh",
-    )
-
-    assert first.id == second.id
-    assert LaunchBinding.objects.count() == 1
-    assert list_launch_bindings(project.id) == [second]
-    assert second.prompt == "Replacement guidance"
-    assert (second.agent, second.model, second.reasoning) == (
-        "codex",
-        "gpt-5.4",
-        "xhigh",
-    )
-
-
-@pytest.mark.django_db
 def test_upsert_preserves_required_skill_order_and_rejects_invalid_catalog_entries(
     project, launch_policy
 ):
     issue_type, state = launch_policy
-    binding = upsert_launch_binding(
-        project.id,
+    upsert_launch_binding(
         issue_type.id,
         state.id,
         prompt="Refine the work",
         agent="codex",
         model=None,
         reasoning=None,
+        workflow_revision=issue_type.workflow_revision,
         required_skills=["to-tickets", "grill-with-docs", "to-spec"],
     )
+    binding = LaunchBinding.objects.get(issue_type=issue_type, state=state)
 
     assert binding.required_skills == [
         "to-tickets",
@@ -84,23 +49,20 @@ def test_upsert_preserves_required_skill_order_and_rejects_invalid_catalog_entri
         "to-spec",
     ]
 
-    for required_skills in (
-        ["to-spec", "to-spec"],
-        ["not-in-the-pinned-snapshot"],
-    ):
-        with pytest.raises(LaunchBindingError) as exc:
-            upsert_launch_binding(
-                project.id,
-                issue_type.id,
-                state.id,
-                prompt="Refine the work",
-                agent="codex",
-                model=None,
-                reasoning=None,
-                required_skills=required_skills,
-            )
-        assert exc.value.code == "invalid_required_skills"
-        assert exc.value.field == "required_skills"
+    issue_type.refresh_from_db()
+    with pytest.raises(LaunchBindingError) as exc:
+        upsert_launch_binding(
+            issue_type.id,
+            state.id,
+            prompt="Refine the work",
+            agent="codex",
+            model=None,
+            reasoning=None,
+            workflow_revision=issue_type.workflow_revision,
+            required_skills=["not-in-the-pinned-snapshot"],
+        )
+    assert exc.value.code == "invalid_required_skills"
+    assert exc.value.field == "required_skills"
 
 
 @pytest.mark.django_db
@@ -109,13 +71,13 @@ def test_required_skills_need_a_non_empty_prompt(project, launch_policy):
 
     with pytest.raises(LaunchBindingError) as exc:
         upsert_launch_binding(
-            project.id,
             issue_type.id,
             state.id,
             prompt=" ",
             agent="codex",
             model=None,
             reasoning=None,
+            workflow_revision=issue_type.workflow_revision,
             required_skills=["to-spec"],
         )
 
@@ -128,15 +90,16 @@ def test_resolution_uses_type_and_current_state_not_structural_parent_depth(
     project, launch_policy
 ):
     issue_type, state = launch_policy
-    binding = upsert_launch_binding(
-        project.id,
+    upsert_launch_binding(
         issue_type.id,
         state.id,
         prompt="Build it",
         agent="codex",
         model=None,
         reasoning=None,
+        workflow_revision=issue_type.workflow_revision,
     )
+    binding = LaunchBinding.objects.get(issue_type=issue_type, state=state)
     parent = Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -181,13 +144,13 @@ def test_unconfigured_custom_type_or_state_gets_no_invented_binding(
 def test_binding_without_prompt_is_not_launchable(project, launch_policy):
     issue_type, state = launch_policy
     upsert_launch_binding(
-        project.id,
         issue_type.id,
         state.id,
         prompt="  ",
         agent="codex",
         model=None,
         reasoning=None,
+        workflow_revision=issue_type.workflow_revision,
     )
     issue = Issue.objects.create(
         id=uuid.uuid4(),
@@ -212,13 +175,13 @@ def test_provider_reasoning_incompatibility_is_clear(project, launch_policy):
 
     with pytest.raises(LaunchBindingError) as exc:
         upsert_launch_binding(
-            project.id,
             issue_type.id,
             state.id,
             prompt="Investigate",
             agent="gemini",
             model="gemini-3.1-pro-preview",
             reasoning="high",
+            workflow_revision=issue_type.workflow_revision,
         )
 
     assert exc.value.code == "unsupported_reasoning"
@@ -232,13 +195,13 @@ def test_provider_model_incompatibility_is_clear(project, launch_policy):
 
     with pytest.raises(LaunchBindingError) as exc:
         upsert_launch_binding(
-            project.id,
             issue_type.id,
             state.id,
             prompt="Investigate",
             agent="gemini",
             model="gpt-5.4",
             reasoning=None,
+            workflow_revision=issue_type.workflow_revision,
         )
 
     assert exc.value.code == "unsupported_model"
@@ -327,18 +290,18 @@ def test_binding_rejects_cross_project_type_state_pair(project, launch_policy):
         id=uuid.uuid4(), project=other_project, name="Build", group="started"
     )
 
-    with pytest.raises(LaunchBindingError) as exc:
+    with pytest.raises(ServiceValidationError) as exc:
         upsert_launch_binding(
-            project.id,
             issue_type.id,
             foreign_state.id,
             prompt="Nope",
             agent="codex",
             model=None,
             reasoning=None,
+            workflow_revision=issue_type.workflow_revision,
         )
 
-    assert exc.value.code == "foreign_state"
+    assert exc.value.message == "State does not belong to this project."
 
 
 @pytest.mark.django_db

@@ -10,12 +10,13 @@ from asgiref.sync import async_to_sync
 import apps.terminals.session as session_module
 import apps.terminals.agents.registry as agent_registry
 from apps.runs.models import AgentRun
-from apps.terminals.fakes import InMemorySessionService
+from apps.terminals.tests.fakes import InMemorySessionService
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.session import LaunchIntent, TerminalSessionService
 from apps.terminals.session_registry import SESSIONS, TMUX_VIEWERS
 from apps.terminals.tmux.metadata import TmuxSession
 from apps.terminals.tmux.sessions import ReconcileResult
+from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -24,14 +25,14 @@ pytestmark = pytest.mark.django_db(transaction=True)
 def _insert_run(run_id: str, *, task_id: str = "task-1") -> None:
     AgentRun.objects.create(
         id=run_id,
-        workspace_slug="ws",
-        project_id="proj-1",
-        module_id="mod-1",
-        task_id=task_id,
+        issue_id=fixture_issue_id(
+            project_id="proj-1", module_id="mod-1", task_id=task_id
+        ),
         agent="claude",
         status="running",
         started_at="2026-07-05T10:00:00+00:00",
         cwd="/tmp",
+        scope="task",
     )
 
 
@@ -189,7 +190,7 @@ def test_reconcile_publishes_retained_provider_exit_as_exited(monkeypatch):
     assert result.exited == ["run-complete"]
     assert run.status == "exited"
     assert run.ended_at is not None
-    assert published == [("proj-1", "run-complete", "exited")]
+    assert published == [(fixture_uuid("proj-1"), "run-complete", "exited")]
 
 
 def test_reconcile_removes_stale_overlays_and_preserves_active_ones(
@@ -221,11 +222,14 @@ def test_live_run_for_returns_running_run_then_none_after_terminate(monkeypatch)
     monkeypatch.setattr(session_module.tmux_sessions, "terminate_session", lambda run_id: True)
     monkeypatch.setattr(session_module.documents_watch, "stop_watch", lambda run_id: None)
 
-    assert service.live_run_for("task-1").id == "run-live"
+    task_id = fixture_issue_id(
+        project_id="proj-1", module_id="mod-1", task_id="task-1"
+    )
+    assert service.live_run_for(task_id).id == "run-live"
 
     service.terminate("run-live")
 
-    assert service.live_run_for("task-1") is None
+    assert service.live_run_for(task_id) is None
 
 
 def test_reconcile_never_invokes_explicit_termination(monkeypatch):
@@ -306,7 +310,17 @@ def test_session_contract_shared_behaviors(adapter_kind, monkeypatch):
         run_id = async_to_sync(async_spawn_fake)(service)
         dead_run_id = async_to_sync(async_spawn_fake)(service, task_id="task-2")
 
-    assert service.live_run_for("task-1") is not None
+    task_1_lookup = (
+        fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1")
+        if adapter_kind == "real"
+        else "task-1"
+    )
+    task_2_lookup = (
+        fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-2")
+        if adapter_kind == "real"
+        else "task-2"
+    )
+    assert service.live_run_for(task_1_lookup) is not None
     first = service.attach(run_id)
     first_session = SimpleNamespace(
         agent_run_id=run_id,
@@ -327,7 +341,7 @@ def test_session_contract_shared_behaviors(adapter_kind, monkeypatch):
     if adapter_kind == "fake":
         service.sessions[dead_run_id].dead = True
     service.reconcile()
-    assert service.live_run_for("task-2") is None
+    assert service.live_run_for(task_2_lookup) is None
     if adapter_kind == "real":
         assert stopped == [dead_run_id]
     else:
@@ -336,7 +350,7 @@ def test_session_contract_shared_behaviors(adapter_kind, monkeypatch):
     # Terminate is idempotent (second call no-op) and the run is no longer live.
     service.terminate(run_id)
     service.terminate(run_id)
-    assert service.live_run_for("task-1") is None
+    assert service.live_run_for(task_1_lookup) is None
     if adapter_kind == "real":
         assert killed == [run_id]
         assert stopped == [dead_run_id, run_id]

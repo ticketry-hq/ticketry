@@ -24,10 +24,11 @@ import apps.terminals.prompt_builder as prompt_builder
 import apps.terminals.session as session_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
-from apps.terminals.fakes import FakeAdapter
+from apps.terminals.tests.fakes import FakeAdapter
 from apps.terminals.session import LaunchIntent
 from apps.settings_store.config import NoConfigurationSelected
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
+from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 from .conftest import write_profiles
 from .test_consumers import _fake_tmux_session
@@ -63,6 +64,9 @@ def _intent(**overrides) -> LaunchIntent:
         project_id=PROJECT_ID,
         module_id=MODULE_ID,
         task_id=TASK_ID,
+        issue_id=fixture_issue_id(
+            project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
+        ),
         scope="task",
     )
     kwargs.update(overrides)
@@ -91,6 +95,7 @@ def _task(task_id: str = TASK_ID) -> TaskSummary:
     return TaskSummary(
         id=task_id,
         name="Stub task",
+        issue_type="Story",
         sequence_id=42,
         state=TaskState(id="s1", name="Todo", group="unstarted"),
         project_id=PROJECT_ID,
@@ -160,20 +165,26 @@ async def test_spawn_happy_path_returns_id_and_persists(tmp_config, tmp_path, mo
     assert isinstance(run_id, str) and run_id
     int(run_id, 16)
 
-    # The persisted AgentRun is keyed by task_id and running.
+    # The persisted AgentRun is keyed by its task Issue and running.
     run = await AgentRun.objects.aget(id=run_id)
-    assert run.task_id == TASK_ID
+    assert str(run.issue_id) == fixture_issue_id(
+        project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
+    )
     assert run.status == "running"
     assert run.lifecycle_state == "starting"
     assert run.lifecycle_updated_at == run.started_at
-    assert run.project_id == PROJECT_ID
-    assert run.module_id == MODULE_ID
+    assert created["project_id"] == fixture_uuid(PROJECT_ID)
+    assert created["module_id"] == fixture_issue_id(
+        project_id=PROJECT_ID, module_id=MODULE_ID, task_id=None
+    )
 
     # create_session (which writes the AgentTerminalSession row) got the run
     # facts keyed by task_id, task scope, the module-folder cwd, and a command
     # built from the agent argv.
     assert created["agent_run_id"] == run_id
-    assert created["task_id"] == TASK_ID
+    assert created["task_id"] == fixture_issue_id(
+        project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
+    )
     assert created["scope"] == "task"
     assert created["cwd"] == str(module_folder)
     assert "claude" in created["command"]
@@ -203,11 +214,15 @@ async def test_spawn_publishes_a_starting_lifecycle_delta(tmp_config, tmp_path, 
     lifecycle = [f for _, f in published if f.get("type") == "agent_lifecycle"]
     assert len(lifecycle) == 1
     frame = lifecycle[0]
-    assert published[0][0] == PROJECT_ID
+    assert published[0][0] == fixture_uuid(PROJECT_ID)
     assert frame["run"] == {
         "agent_run_id": run_id,
-        "task_id": TASK_ID,
-        "module_id": MODULE_ID,
+        "task_id": fixture_issue_id(
+            project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
+        ),
+        "module_id": fixture_issue_id(
+            project_id=PROJECT_ID, module_id=MODULE_ID, task_id=None
+        ),
         "scope": "task",
         "state": "starting",
         "updated_at": frame["at"],
@@ -357,7 +372,9 @@ def test_spawn_sync_via_async_to_sync(tmp_config, tmp_path, monkeypatch):
     assert isinstance(run_id, str) and run_id
     assert created["agent_run_id"] == run_id
     run = AgentRun.objects.get(id=run_id)
-    assert run.task_id == TASK_ID
+    assert str(run.issue_id) == fixture_issue_id(
+        project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
+    )
 
 
 # ---------- host activation (ADR-0015) ----------

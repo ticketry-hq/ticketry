@@ -19,7 +19,6 @@ import uuid
 import pytest
 
 from worktracker.models import IssueType, Project
-from worktracker.services import exceptions as compat
 from worktracker.services.errors import (
     ConflictError,
     NotFoundError,
@@ -46,12 +45,6 @@ def test_conflict_error_is_a_service_error_carrying_message():
     assert err.status_code == 409
     assert err.message == "already exists"
     assert err.status == 409  # the alias property
-
-
-def test_exceptions_module_aliases_resolve_to_canonical_errors():
-    assert issubclass(compat.Conflict, ConflictError)
-    assert issubclass(compat.NotFound, NotFoundError)
-    assert issubclass(compat.Unprocessable, ValidationError)
 
 
 # --- the shared resolve_issue_type helper raises domain errors -------------

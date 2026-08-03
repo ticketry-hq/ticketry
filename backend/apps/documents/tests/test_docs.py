@@ -24,10 +24,15 @@ import pytest
 from apps.documents.models import DesignDocument
 from apps.documents.tests.conftest import write_profiles
 from apps.runs.models import AgentRun
+from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_uuid
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
 SCRATCH = "00000000-0000-0000-0000-000000000000"
+PROJECT_ID = fixture_uuid("p1")
+MODULE_ID = fixture_issue_id(project_id="p1", module_id="m1", task_id=None)
+OTHER_MODULE_ID = fixture_issue_id(project_id="p1", module_id="m2", task_id=None)
+TASK_ID = fixture_issue_id(project_id="p1", module_id="m1", task_id="t1")
 
 
 def _register_doc(
@@ -35,8 +40,8 @@ def _register_doc(
     doc_id: str,
     root_dir: str,
     rel_path: str,
-    task_id: str = "t1",
-    module_id: str = "m1",
+    task_id: str = TASK_ID,
+    module_id: str = MODULE_ID,
 ) -> None:
     DesignDocument.objects.create(
         id=doc_id,
@@ -52,17 +57,21 @@ def _register_doc(
 
 
 def _insert_run_with_design_dir(
-    run_id: str, design_dir: str, *, task_id: str = "t1", module_id: str = "m1"
+    run_id: str, design_dir: str, *, task_id: str = TASK_ID, module_id: str = MODULE_ID
 ) -> None:
+    issue = ensure_issue(
+        project_id="p1",
+        module_id="m1" if module_id == MODULE_ID else "m2",
+        task_id=None if task_id == SCRATCH else "t1",
+    )
     AgentRun.objects.create(
         id=run_id,
-        project_id="p1",
-        module_id=module_id,
-        task_id=task_id,
+        issue=issue,
         agent="claude",
         status="running",
         started_at="2026-06-11T10:00:00",
         design_dir=design_dir,
+        scope="plan" if task_id == SCRATCH else "task",
     )
 
 
@@ -311,7 +320,7 @@ def test_lists_registered_documents_for_task(client, tmp_path):
     root = _seed_design_dir(tmp_path)
     _register_doc(doc_id="d1", root_dir=str(root), rel_path="design.html")
 
-    resp = client.get("/api/documents", {"task_id": "t1"})
+    resp = client.get("/api/documents", {"task_id": TASK_ID})
     assert resp.status_code == 200
     docs = resp.json()["documents"]
     assert [d["rel_path"] for d in docs] == ["design.html"]
@@ -323,7 +332,7 @@ def test_listing_prunes_registered_documents_missing_on_disk(client, tmp_path):
     _register_doc(doc_id="d1", root_dir=str(root), rel_path="design.html")
     (root / "design.html").unlink()
 
-    resp = client.get("/api/documents", {"task_id": "t1"})
+    resp = client.get("/api/documents", {"task_id": TASK_ID})
 
     assert resp.status_code == 200
     assert resp.json()["documents"] == []
@@ -338,7 +347,7 @@ def test_rescan_registers_unseen_files_from_run_boundary(client, tmp_path):
     (root / "SPEC.MD").write_text("# Spec")
     _insert_run_with_design_dir("run-1", str(root))
 
-    resp = client.get("/api/documents", {"task_id": "t1"})
+    resp = client.get("/api/documents", {"task_id": TASK_ID})
     assert resp.status_code == 200
     docs = resp.json()["documents"]
     assert [d["rel_path"] for d in docs] == ["SPEC.MD", "design.html"]
@@ -352,26 +361,27 @@ def test_rescan_resolves_canonical_dir_with_zero_prior_rows(
     # directory is what discovers them.
 
     module_folder = tmp_path / "repo"
-    canonical = module_folder / "spec" / "platform--m1" / "T42--stub-task"
+    canonical = module_folder / "spec" / f"platform--{MODULE_ID[:8]}" / "T42--stub-task"
     canonical.mkdir(parents=True)
     (canonical / "plan.html").write_text("<html>plan</html>")
 
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
 
     from apps import worktracker_queries
     from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
 
     async def fake_get_modules(project_id):
-        return [ModuleSummary(id="m1", name="Platform", project_id="p1")]
+        return [ModuleSummary(id=MODULE_ID, name="Platform", project_id=PROJECT_ID)]
 
     async def fake_get_task_details(project_id, task_id):
         return TaskDetails(
             task=TaskSummary(
                 id=task_id,
                 name="Stub task",
-                project_id="p1",
+                issue_type="Story",
+                project_id=PROJECT_ID,
                 sequence_id=42,
                 state=TaskState(name="Todo"),
             )
@@ -382,7 +392,7 @@ def test_rescan_resolves_canonical_dir_with_zero_prior_rows(
 
     resp = client.get(
         "/api/documents",
-        {"task_id": "t1", "project_id": "p1", "module_id": "m1"},
+        {"task_id": TASK_ID, "project_id": PROJECT_ID, "module_id": MODULE_ID},
     )
     assert resp.status_code == 200
     docs = resp.json()["documents"]
@@ -400,11 +410,13 @@ def test_scratch_mode_lists_module_bucket(client, tmp_path):
         doc_id="d1", root_dir=str(root), rel_path="design.html", task_id=SCRATCH
     )
 
-    resp = client.get("/api/documents", {"scope": "scratch", "module_id": "m1"})
+    resp = client.get("/api/documents", {"scope": "scratch", "module_id": MODULE_ID})
     assert resp.status_code == 200
     assert [d["rel_path"] for d in resp.json()["documents"]] == ["design.html"]
 
-    other = client.get("/api/documents", {"scope": "scratch", "module_id": "m2"})
+    other = client.get(
+        "/api/documents", {"scope": "scratch", "module_id": OTHER_MODULE_ID}
+    )
     assert other.json()["documents"] == []
 
 
@@ -415,7 +427,7 @@ def test_scratch_listing_prunes_missing_documents(client, tmp_path):
     )
     (root / "design.html").unlink()
 
-    resp = client.get("/api/documents", {"scope": "scratch", "module_id": "m1"})
+    resp = client.get("/api/documents", {"scope": "scratch", "module_id": MODULE_ID})
 
     assert resp.status_code == 200
     assert resp.json()["documents"] == []

@@ -19,11 +19,16 @@ from channels.testing.websocket import WebsocketCommunicator
 from studio_server.asgi import application
 from apps.runs.models import AgentRun
 from apps.terminals.dao import SCRATCH_TASK_ID
+from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 from apps.terminals.tests.conftest import write_profiles
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
+
+PROJECT_ID = fixture_uuid("p1")
+MODULE_ID = fixture_issue_id(project_id="p1", module_id="m1", task_id=None)
+TASK_ID = fixture_issue_id(project_id="p1", module_id="m1", task_id="t1")
 
 
 # ---------- helpers ----------
@@ -34,9 +39,9 @@ def _init_frame(**overrides):
         "type": "init",
         "mode": "spawn",
         "agent": "claude",
-        "project_id": "p1",
-        "module_id": "m1",
-        "task_id": "t1",
+        "project_id": PROJECT_ID,
+        "module_id": MODULE_ID,
+        "task_id": TASK_ID,
         "initial_prompt": None,
         "cols": 80,
         "rows": 24,
@@ -61,19 +66,20 @@ def _attach_init(agent_run_id="run-abc", cols=80, rows=24):
     }
 
 
-def _stub_task_details(task_id: str = "t1"):
+def _stub_task_details(task_id: str = TASK_ID):
     """Build a TaskDetails object compatible with build_context_prompt."""
     from studio_server.contracts import TaskDetails, TaskState, TaskSummary
 
     task = TaskSummary(
         id=task_id,
         name="Stub task",
+        issue_type="Story",
         sequence_id=42,
         state=TaskState(id="s1", name="Todo", group="unstarted"),
         description="A stub.",
-        project_id="p1",
+        project_id=PROJECT_ID,
         parent_id=None,
-        module_ids=["m1"],
+        module_ids=[MODULE_ID],
         child_count=0,
     )
     return TaskDetails(task=task)
@@ -138,7 +144,7 @@ def _patch_agent_argv(monkeypatch):
     validates the slug before spawn.
     """
     import apps.terminals.agents.registry as registry
-    from apps.terminals.fakes import FakeAdapter
+    from apps.terminals.tests.fakes import FakeAdapter
 
     def factory(argv_factory):
         fake = FakeAdapter(
@@ -487,7 +493,7 @@ async def test_instant_mode_builds_prompt_and_launches(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
     async def fake_get_modules(project_id):
-        return [ModuleSummary(id="m1", name="Mod One", project_id=project_id)]
+        return [ModuleSummary(id=MODULE_ID, name="Mod One", project_id=project_id)]
 
     monkeypatch.setattr(worktracker_queries, "get_modules", fake_get_modules)
 
@@ -537,8 +543,8 @@ async def test_instant_mode_builds_prompt_and_launches(configured, monkeypatch):
     assert ready["type"] == "ready"
     await _drain_until_close(communicator)
 
-    assert captured["module_id"] == "m1"
-    assert captured["project_id"] == "p1"
+    assert captured["module_id"] == MODULE_ID
+    assert captured["project_id"] == PROJECT_ID
     assert captured["user_input"] == "rename foo to bar"
     assert captured_argv["prompt"] == "INSTANT_PROMPT_OK"
     await communicator.disconnect()
@@ -572,11 +578,11 @@ async def test_task_spawn_creates_persisted_tmux_session(configured, monkeypatch
     assert isinstance(run_id, str) and run_id
     await _drain_until_close(communicator)
 
-    assert created["task_id"] == "t1"
+    assert created["task_id"] == TASK_ID
     assert created["agent_run_id"] == run_id
     assert "claude" in created["command"]
 
-    runs = [r.id async for r in AgentRun.objects.filter(task_id="t1")]
+    runs = [r.id async for r in AgentRun.objects.filter(issue_id=TASK_ID)]
     assert runs == [run_id]
     await _wait_until(lambda: not consumers.SESSIONS)
     assert consumers.SESSIONS == {}
@@ -647,7 +653,7 @@ async def test_task_spawn_errors_when_tmux_unavailable(configured, monkeypatch):
     msg = json.loads(await communicator.receive_from(timeout=2))
     assert msg == {"type": "error", "message": "spawn_failed: no tmux server"}
 
-    runs = [r.id async for r in AgentRun.objects.filter(task_id="t1")]
+    runs = [r.id async for r in AgentRun.objects.filter(issue_id=TASK_ID)]
     assert runs == []
     assert consumers.SESSIONS == {}
     await communicator.disconnect()
@@ -660,7 +666,7 @@ async def test_instant_spawn_persists_under_scratch_sentinel(configured, monkeyp
     import apps.terminals.consumers as consumers
 
     async def fake_get_modules(project_id):
-        return [ModuleSummary(id="m1", name="Mod One", project_id=project_id)]
+        return [ModuleSummary(id=MODULE_ID, name="Mod One", project_id=project_id)]
 
     monkeypatch.setattr(worktracker_queries, "get_modules", fake_get_modules)
     monkeypatch.setattr("apps.terminals.prompt_builder.build_instant_change_prompt", lambda **kw: "INSTANT_OK")
@@ -688,7 +694,7 @@ async def test_instant_spawn_persists_under_scratch_sentinel(configured, monkeyp
 
     assert created["task_id"] == SCRATCH_TASK_ID
     assert created["scope"] == "instant"
-    runs = [r.id async for r in AgentRun.objects.filter(task_id=SCRATCH_TASK_ID)]
+    runs = [r.id async for r in AgentRun.objects.filter(issue_id=MODULE_ID)]
     assert runs == [run_id]
     await _wait_until(lambda: not consumers.SESSIONS)
     assert consumers.SESSIONS == {}
@@ -1033,14 +1039,12 @@ async def test_attach_live_tmux_session_survives_ws_close(configured):
     try:
         await sync_to_async(AgentRun.objects.create)(
             id=rid,
-            workspace_slug="ws",
-            project_id="proj-x",
-            module_id="mod-x",
-            task_id="task-x",
+            issue_id=TASK_ID,
             agent="claude-code",
             status="running",
             started_at="2026-05-29T10:00:00",
             cwd="/tmp",
+            scope="task",
         )
         await sync_to_async(tmux.create_session)(
             agent_run_id=rid,
@@ -1077,7 +1081,7 @@ def _patch_worktracker_for_design(monkeypatch):
     from studio_server.contracts import ModuleSummary
 
     async def fake_get_modules(project_id):
-        return [ModuleSummary(id="m1", name="Platform", project_id="p1")]
+        return [ModuleSummary(id=MODULE_ID, name="Platform", project_id=PROJECT_ID)]
 
     async def fake_get_task_details(project_id, task_id):
         return _stub_task_details(task_id)
@@ -1098,9 +1102,9 @@ async def _build(module_folder, **overrides):
         is_planning=False,
         is_instant=False,
         instant_prompt=None,
-        project_id="p1",
-        module_id="m1",
-        task_id="t1",
+        project_id=PROJECT_ID,
+        module_id=MODULE_ID,
+        task_id=TASK_ID,
         initial_prompt=None,
         agent_run_id="a3f9c2d1deadbeef",
         module_folder=module_folder,
@@ -1114,7 +1118,7 @@ async def test_task_prompt_injects_created_design_dir(tmp_config, sample_profile
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1122,7 +1126,7 @@ async def test_task_prompt_injects_created_design_dir(tmp_config, sample_profile
 
     assert err is None
     assert cwd is None
-    rel = "spec/platform--m1/T42--stub-task"
+    rel = f"spec/platform--{MODULE_ID[:8]}/T42--stub-task"
     assert f"Design directory: {rel}" in prompt
     assert design_dir == str((module_folder / rel).resolve())
     assert (module_folder / rel).is_dir()
@@ -1135,7 +1139,7 @@ async def test_task_prompt_ignores_legacy_profile_prompt_map(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     profile["agent_prompts"] = {"Todo": "SAVED PROMPT OVERRIDE"}
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
@@ -1152,14 +1156,14 @@ async def test_planning_prompt_uses_run_scoped_dir_and_move_contract(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
     prompt, design_dir, cwd, err = await _build(str(module_folder), is_planning=True, task_id=None)
 
     assert err is None
-    rel = "spec/platform--m1/planning/a3f9c2d1"
+    rel = f"spec/platform--{MODULE_ID[:8]}/planning/a3f9c2d1"
     assert f"Design directory: {rel}" in prompt
     assert "move" in prompt and "canonical design" in prompt
     assert (module_folder / rel).is_dir()
@@ -1170,7 +1174,7 @@ async def test_instant_prompt_gets_design_dir(tmp_config, sample_profile, tmp_pa
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1179,7 +1183,7 @@ async def test_instant_prompt_gets_design_dir(tmp_config, sample_profile, tmp_pa
     )
 
     assert err is None
-    assert "Design directory: spec/platform--m1/planning/a3f9c2d1" in prompt
+    assert f"Design directory: spec/platform--{MODULE_ID[:8]}/planning/a3f9c2d1" in prompt
     assert design_dir is not None
 
 
@@ -1189,7 +1193,7 @@ async def test_mcp_enabled_instant_prompt_requires_opt_in_before_self_terminatio
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1223,7 +1227,7 @@ async def test_gemini_instant_prompt_includes_self_termination_guidance(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1248,7 +1252,7 @@ async def test_self_termination_guidance_is_instant_only(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1287,7 +1291,7 @@ def test_validate_init_accepts_doc_chat():
     from apps.terminals import consumers
 
     init, err = consumers._validate_init(
-        _init_frame(is_doc_chat=True, doc_rel_path="LLD.html", task_id="t1")
+        _init_frame(is_doc_chat=True, doc_rel_path="LLD.html", task_id=TASK_ID)
     )
     assert err is None
     assert init["mode"] == "spawn"
@@ -1310,7 +1314,7 @@ def test_validate_init_rejects_unsafe_doc_path():
 
     for bad in ["/etc/passwd", "../escape.html", "a/../../b.html", "", "   "]:
         _, err = consumers._validate_init(
-            _init_frame(is_doc_chat=True, doc_rel_path=bad, task_id="t1")
+            _init_frame(is_doc_chat=True, doc_rel_path=bad, task_id=TASK_ID)
         )
         assert err == "bad_init", bad
 
@@ -1320,7 +1324,7 @@ def test_validate_init_doc_chat_mutually_exclusive_with_planning():
 
     _, err = consumers._validate_init(
         _init_frame(
-            is_doc_chat=True, doc_rel_path="LLD.html", is_planning=True, task_id="t1"
+            is_doc_chat=True, doc_rel_path="LLD.html", is_planning=True, task_id=TASK_ID
         )
     )
     assert err == "bad_init"
@@ -1335,15 +1339,15 @@ async def test_doc_chat_prompt_runs_in_doc_design_dir(
     design_dir.mkdir(parents=True)
     (design_dir / "LLD.html").write_text("<html></html>")
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
 
     from apps.documents import dao as ddao
 
     await ddao.upsert_document(
         doc_id="d1",
-        module_id="m1",
-        task_id="t1",
+        module_id=MODULE_ID,
+        task_id=TASK_ID,
         scope="task",
         root_dir=str(design_dir),
         rel_path="LLD.html",
@@ -1355,7 +1359,7 @@ async def test_doc_chat_prompt_runs_in_doc_design_dir(
         str(module_folder),
         is_doc_chat=True,
         doc_rel_path="LLD.html",
-        persist_task_id="t1",
+        persist_task_id=TASK_ID,
     )
 
     assert err is None
@@ -1376,7 +1380,7 @@ async def test_doc_chat_doc_id_disambiguates_among_multiple_roots(
     canonical.mkdir(parents=True)
     worktree.mkdir(parents=True)
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
 
     from apps.documents import dao as ddao
@@ -1385,8 +1389,8 @@ async def test_doc_chat_doc_id_disambiguates_among_multiple_roots(
     # copy is registered LAST, so a -updated_at tiebreak would pick it.
     await ddao.upsert_document(
         doc_id="canon",
-        module_id="m1",
-        task_id="t1",
+        module_id=MODULE_ID,
+        task_id=TASK_ID,
         scope="task",
         root_dir=str(canonical),
         rel_path="LLD.html",
@@ -1395,8 +1399,8 @@ async def test_doc_chat_doc_id_disambiguates_among_multiple_roots(
     )
     await ddao.upsert_document(
         doc_id="wt",
-        module_id="m1",
-        task_id="t1",
+        module_id=MODULE_ID,
+        task_id=TASK_ID,
         scope="task",
         root_dir=str(worktree),
         rel_path="LLD.html",
@@ -1411,7 +1415,7 @@ async def test_doc_chat_doc_id_disambiguates_among_multiple_roots(
         is_doc_chat=True,
         doc_rel_path="LLD.html",
         doc_id="canon",
-        persist_task_id="t1",
+        persist_task_id=TASK_ID,
     )
 
     assert err is None
@@ -1425,14 +1429,14 @@ async def test_doc_chat_prompt_degrades_without_registry_row(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {"m1": str(module_folder)}
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
     write_profiles(tmp_config, [profile], recent=0)
 
     prompt, design_abs, cwd, err = await _build(
         str(module_folder),
         is_doc_chat=True,
         doc_rel_path="never-registered.html",
-        persist_task_id="t1",
+        persist_task_id=TASK_ID,
     )
 
     assert err is None
@@ -1461,7 +1465,7 @@ async def test_doc_chat_spawn_persists_scope_and_doc_path(configured, monkeypatc
     communicator = await _communicator()
     await communicator.send_to(
         text_data=json.dumps(
-            _init_frame(is_doc_chat=True, doc_rel_path="LLD.html", task_id="t1")
+            _init_frame(is_doc_chat=True, doc_rel_path="LLD.html", task_id=TASK_ID)
         )
     )
     ready = json.loads(await communicator.receive_from(timeout=2))
@@ -1470,6 +1474,6 @@ async def test_doc_chat_spawn_persists_scope_and_doc_path(configured, monkeypatc
 
     assert created["scope"] == "docchat"
     assert created["doc_rel_path"] == "LLD.html"
-    assert created["task_id"] == "t1"
+    assert created["task_id"] == TASK_ID
     await _wait_until(lambda: not consumers.SESSIONS)
     await communicator.disconnect()

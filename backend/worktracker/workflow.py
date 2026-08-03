@@ -34,16 +34,6 @@ def _graph_node_ids(issue_type_id):
     return nodes
 
 
-def allowed_transitions(issue):
-    """Return per-type transition destinations as state names for presentation."""
-    if not issue.state_id:
-        return set()
-    ids = IssueTypeTransition.objects.filter(
-        issue_type_id=issue.issue_type_id, from_state_id=issue.state_id
-    ).values_list("to_state_id", flat=True)
-    return set(State.objects.filter(project_id=issue.project_id, id__in=ids).values_list("name", flat=True))
-
-
 def resolve_birth_state(project_id, issue_type, state_id=None):
     """Use the explicitly selected issue type's start pointer for creation."""
     start_id = (

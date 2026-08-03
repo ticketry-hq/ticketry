@@ -45,6 +45,9 @@ def _automation_policy(*, auto_start=True):
         level="task",
         workflow_revision=7,
     )
+    module_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Module", level="module"
+    )
     before = State.objects.create(
         id=uuid.uuid4(), project=project, name="Implement", group="started"
     )
@@ -69,6 +72,7 @@ def _automation_policy(*, auto_start=True):
         id=uuid.uuid4(),
         project=project,
         type="module",
+        issue_type=module_type,
         name="Module",
         sequence_id=1,
     )
@@ -144,6 +148,7 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
         updated_at="2026-07-27T00:00:00+00:00",
     )
     story_type = IssueType.objects.get(project=project, name="Story")
+    module_type = IssueType.objects.get(project=project, level="module")
     states = {
         state.name: state for state in State.objects.filter(project=project)
     }
@@ -151,6 +156,7 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
         id=uuid.uuid4(),
         project=project,
         type="module",
+        issue_type=module_type,
         name="Module",
         sequence_id=1,
     )
@@ -299,9 +305,14 @@ def test_state_without_binding_commits_without_creating_an_attempt(monkeypatch):
     assert not AutomationAttempt.objects.filter(issue=issue).exists()
 
 
-def test_project_without_typed_workflow_ignores_automation(monkeypatch):
+def test_issue_type_without_workflow_ignores_automation(monkeypatch):
     issue, after = _automation_policy()
-    issue.issue_type = None
+    issue.issue_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=issue.project,
+        name="Unconfigured task",
+        level="task",
+    )
     issue.save(update_fields=["issue_type", "updated_at"])
 
     async def unexpected_spawn(**kwargs):

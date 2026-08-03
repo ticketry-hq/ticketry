@@ -55,13 +55,11 @@ def _check_revision(issue_type: IssueType, workflow_revision: int) -> None:
         )
 
 
-def _reachable_state_ids(start_state_id, transitions) -> set:
-    if start_state_id is None:
-        return set()
+def _reachable(seed_ids: set, edges) -> set:
     outgoing = defaultdict(set)
-    for edge in transitions:
-        outgoing[edge.from_state_id].add(edge.to_state_id)
-    reachable = {start_state_id}
+    for from_id, to_id in edges:
+        outgoing[from_id].add(to_id)
+    reachable = set(seed_ids)
     queue = deque(reachable)
     while queue:
         current = queue.popleft()
@@ -69,6 +67,36 @@ def _reachable_state_ids(start_state_id, transitions) -> set:
             reachable.add(target)
             queue.append(target)
     return reachable
+
+
+def _reachable_state_ids(start_state_id, transitions) -> set:
+    if start_state_id is None:
+        return set()
+    return _reachable(
+        {start_state_id},
+        ((edge.from_state_id, edge.to_state_id) for edge in transitions),
+    )
+
+
+def _transition_payload(edge):
+    return {
+        "from_state_id": edge.from_state_id,
+        "to_state_id": edge.to_state_id,
+        "agent_allowed": edge.agent_allowed,
+    }
+
+
+def _launch_binding_payload(binding):
+    return {
+        "state_id": binding.state_id,
+        "prompt": binding.prompt,
+        "required_skills": binding.required_skills,
+        "agent": binding.agent,
+        "model": binding.model,
+        "reasoning": binding.reasoning,
+        "auto_start": binding.auto_start,
+        "subtree_run_enabled": binding.subtree_run_enabled,
+    }
 
 
 def _build_impact(
@@ -139,25 +167,10 @@ def _build_impact(
         "deleted_transition_rows": deleted_transitions,
         "deleted_binding_rows": deleted_bindings,
         "deleted_transitions": [
-            {
-                "from_state_id": edge.from_state_id,
-                "to_state_id": edge.to_state_id,
-                "agent_allowed": edge.agent_allowed,
-            }
-            for edge in deleted_transitions
+            _transition_payload(edge) for edge in deleted_transitions
         ],
         "deleted_launch_bindings": [
-            {
-                "state_id": binding.state_id,
-                "prompt": binding.prompt,
-                "required_skills": binding.required_skills,
-                "agent": binding.agent,
-                "model": binding.model,
-                "reasoning": binding.reasoning,
-                "auto_start": binding.auto_start,
-                "subtree_run_enabled": binding.subtree_run_enabled,
-            }
-            for binding in deleted_bindings
+            _launch_binding_payload(binding) for binding in deleted_bindings
         ],
         "disabled_auto_start_state_ids": [
             binding.state_id for binding in deleted_bindings if binding.auto_start
@@ -206,9 +219,6 @@ def preview_impact(
 
 def _standing_warnings(issue_type: IssueType, states, transitions):
     state_ids = {state.id for state in states}
-    outgoing = defaultdict(set)
-    for edge in transitions:
-        outgoing[edge.from_state_id].add(edge.to_state_id)
 
     if issue_type.start_state_id not in state_ids:
         return [
@@ -219,30 +229,23 @@ def _standing_warnings(issue_type: IssueType, states, transitions):
             }
         ]
 
-    members = {issue_type.start_state_id}
-    queue = deque(members)
-    while queue:
-        current = queue.popleft()
-        for target in outgoing[current] - members:
-            members.add(target)
-            queue.append(target)
+    members = _reachable(
+        {issue_type.start_state_id},
+        ((edge.from_state_id, edge.to_state_id) for edge in transitions),
+    )
 
     member_states = [state for state in states if state.id in members]
-    incoming = defaultdict(set)
-    for edge in transitions:
-        if edge.from_state_id in members and edge.to_state_id in members:
-            incoming[edge.to_state_id].add(edge.from_state_id)
-
     completed = {
         state.id for state in member_states if state.group == "completed"
     }
-    can_reach_completed = set(completed)
-    queue = deque(completed)
-    while queue:
-        current = queue.popleft()
-        for source in incoming[current] - can_reach_completed:
-            can_reach_completed.add(source)
-            queue.append(source)
+    can_reach_completed = _reachable(
+        completed,
+        (
+            (edge.to_state_id, edge.from_state_id)
+            for edge in transitions
+            if edge.from_state_id in members and edge.to_state_id in members
+        ),
+    )
     warnings = []
     for state in member_states:
         if state.id not in can_reach_completed:
@@ -332,26 +335,9 @@ def get_workflow(type_id):
         "issue_type_id": issue_type.id,
         "start_state_id": issue_type.start_state_id,
         "workflow_revision": issue_type.workflow_revision,
-        "transitions": [
-            {
-                "from_state_id": edge.from_state_id,
-                "to_state_id": edge.to_state_id,
-                "agent_allowed": edge.agent_allowed,
-            }
-            for edge in transitions
-        ],
+        "transitions": [_transition_payload(edge) for edge in transitions],
         "launch_bindings": [
-            {
-                "state_id": binding.state_id,
-                "prompt": binding.prompt,
-                "required_skills": binding.required_skills,
-                "agent": binding.agent,
-                "model": binding.model,
-                "reasoning": binding.reasoning,
-                "auto_start": binding.auto_start,
-                "subtree_run_enabled": binding.subtree_run_enabled,
-            }
-            for binding in bindings
+            _launch_binding_payload(binding) for binding in bindings
         ],
         "warnings": [
             *_standing_warnings(issue_type, states, transitions),

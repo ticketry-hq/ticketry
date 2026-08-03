@@ -213,25 +213,6 @@ def ensure_state_order(project, State):
             state.save(update_fields=["sort_order"])
 
 
-def ensure_state_colors(project, State):
-    """Stamp each canonical state's color from :data:`DEFAULT_STATES` by name.
-
-    Only canonical states (matched by name) are touched, and only when the
-    stored color differs. Custom/user-renamed states keep their own color.
-    Idempotent.
-
-    :param project: the project (live or historical instance).
-    :param State: the State model class (live or historical).
-    """
-
-    colors = {name: color for name, _, color in DEFAULT_STATES}
-    for state in State.objects.filter(project=project):
-        color = colors.get(state.name)
-        if color and state.color != color:
-            state.color = color
-            state.save(update_fields=["color"])
-
-
 def ensure_protected_states(project, State):
     """Stamp ``is_protected`` on the project's board-critical states (#629).
 

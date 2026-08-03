@@ -9,8 +9,9 @@ import apps.terminals.dao as terminals_dao
 import apps.terminals.session as session_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
-from apps.terminals.fakes import FakeAdapter
+from apps.terminals.tests.fakes import FakeAdapter
 from apps.terminals.models import AgentTerminalSession
+from worktracker.tests.factories import fixture_issue_id
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -32,10 +33,9 @@ def _run(
 ) -> AgentRun:
     return AgentRun(
         id=run_id,
-        workspace_slug="ws",
-        project_id=PROJECT_ID,
-        module_id=MODULE_ID,
-        task_id=TASK_ID,
+        issue_id=fixture_issue_id(
+            project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
+        ),
         agent=AGENT,
         status="terminated" if ended_at is not None else "running",
         started_at="2026-05-29T10:00:00",
@@ -43,6 +43,7 @@ def _run(
         cwd=cwd,
         provider_session_id=provider_session_id,
         design_dir="/repo/design",
+        scope="docchat",
     )
 
 
@@ -119,6 +120,9 @@ async def test_resume_happy_path_uses_resume_argv_and_copies_session_fields(
     assert captured["scope"] == "docchat"
     assert captured["doc_rel_path"] == "specs/notes.md"
     assert captured["resumed_from"] == OLD_RUN_ID
+    assert captured["issue_id"] == fixture_issue_id(
+        project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
+    )
 
 
 async def test_resume_unknown_run_raises_resume_unavailable() -> None:

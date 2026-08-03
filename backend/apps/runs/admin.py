@@ -9,19 +9,17 @@ class AgentRunAdmin(admin.ModelAdmin):
         "id",
         "agent",
         "status",
-        "project_id",
-        "module_id",
-        "task_id",
+        "issue",
         "started_at",
         "ended_at",
     )
-    list_filter = ("agent", "status", "project_id", "lifecycle_state")
+    list_filter = ("agent", "status", "issue__project", "lifecycle_state")
     search_fields = (
         "id",
         "provider_session_id",
-        "project_id",
-        "module_id",
-        "task_id",
+        "issue__id",
+        "issue__name",
+        "issue__project__name",
         "cwd",
         "error",
     )

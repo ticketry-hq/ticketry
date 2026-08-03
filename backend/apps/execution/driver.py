@@ -106,11 +106,6 @@ def launch_task_agent(
     return LaunchResult(target_id=str(issue.id), agent=agent, agent_run_id=run_id)
 
 
-def clear_registry() -> None:
-    LaunchedTask.objects.all().delete()
-    GraphRun.objects.all().delete()
-
-
 def get_dependency_graph(root_id: str) -> DependencyGraphState:
     """Read the factual workflow state and edges for a task subtree."""
 

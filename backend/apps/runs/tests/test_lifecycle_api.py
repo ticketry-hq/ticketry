@@ -15,11 +15,25 @@ from apps.runs import dao
 from apps.runs.api import router
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
+from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
 client = TestAsyncClient(router)
+PROJECT_ID = fixture_uuid("proj-1")
+MODULE_1_ID = fixture_issue_id(
+    project_id="proj-1", module_id="mod-1", task_id=None
+)
+MODULE_2_ID = fixture_issue_id(
+    project_id="proj-1", module_id="mod-2", task_id=None
+)
+
+
+def _task_id(label: str) -> str:
+    return fixture_issue_id(
+        project_id="proj-1", module_id="mod-1", task_id=label
+    )
 
 
 async def _seed_run(
@@ -34,12 +48,13 @@ async def _seed_run(
     await dao.insert_agent_run(
         AgentRun(
             id=run_id,
-            project_id="proj-1",
-            module_id=module_id,
-            task_id=task_id,
+            issue_id=fixture_issue_id(
+                project_id="proj-1", module_id=module_id, task_id=task_id
+            ),
             agent="codex",
             status="running",
             started_at="2026-06-02T10:00:00",
+            scope=scope,
         )
     )
     await AgentTerminalSession.objects.acreate(
@@ -66,12 +81,12 @@ async def test_module_activity_endpoint_returns_scoped_map(monkeypatch) -> None:
     await _seed_run("r1", module_id="mod-1")
     await _seed_run("r2", task_id=None, module_id="mod-2")
 
-    resp = await client.get("/runs/module-activity?project_id=proj-1")
+    resp = await client.get(f"/runs/module-activity?project_id={PROJECT_ID}")
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["mod-1"] == "2026-06-02T10:00:00"
-    assert body["mod-2"] == "2026-06-02T10:00:00"
+    assert body[MODULE_1_ID] == "2026-06-02T10:00:00"
+    assert body[MODULE_2_ID] == "2026-06-02T10:00:00"
 
 
 async def test_module_activity_window_param_excludes_old_runs(monkeypatch) -> None:
@@ -84,7 +99,9 @@ async def test_module_activity_window_param_excludes_old_runs(monkeypatch) -> No
 
     await _seed_run("r1", module_id="mod-1")  # started 2026-06-02, well past
 
-    resp = await client.get("/runs/module-activity?project_id=proj-1&window_days=1")
+    resp = await client.get(
+        f"/runs/module-activity?project_id={PROJECT_ID}&window_days=1"
+    )
 
     assert resp.status_code == 200
     assert resp.json() == {}
@@ -229,15 +246,16 @@ async def _seed_status_run(
     await dao.insert_agent_run(
         AgentRun(
             id=run_id,
-            project_id=project_id,
-            module_id="mod-1",
-            task_id=task_id,
+            issue_id=fixture_issue_id(
+                project_id=project_id, module_id="mod-1", task_id=task_id
+            ),
             agent="codex",
             status=status,
             started_at=started_at,
             ended_at=ended_at,
             lifecycle_state=lifecycle_state,
             lifecycle_updated_at=lifecycle_updated_at,
+            scope=scope,
         )
     )
     await AgentTerminalSession.objects.acreate(
@@ -274,24 +292,24 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
         scope="plan",
     )
 
-    response = await client.get("/runs/agent-status?project_id=proj-1")
+    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
 
     assert response.status_code == 200
     assert response.json() == {
-        "scope": {"project_id": "proj-1", "task_id": None},
+        "scope": {"project_id": PROJECT_ID, "task_id": None},
         "runs": [
             {
                 "agent_run_id": "pre-event",
-                "task_id": "t2",
-                "module_id": "mod-1",
+                "task_id": _task_id("t2"),
+                "module_id": MODULE_1_ID,
                 "scope": "plan",
                 "state": "unknown",
                 "updated_at": "2026-07-12T15:05:00+00:00",
             },
             {
                 "agent_run_id": "with-event",
-                "task_id": "t1",
-                "module_id": "mod-1",
+                "task_id": _task_id("t1"),
+                "module_id": MODULE_1_ID,
                 "scope": "task",
                 "state": "needs_input",
                 "updated_at": "2026-07-12T15:00:00+00:00",
@@ -322,7 +340,7 @@ async def test_agent_status_ended_run_is_an_exited_tombstone() -> None:
         ended_at="2026-07-12T14:20:00+00:00",
     )
 
-    response = await client.get("/runs/agent-status?project_id=proj-1")
+    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
 
     assert response.status_code == 200
     runs = {run["agent_run_id"]: run for run in response.json()["runs"]}
@@ -344,12 +362,12 @@ async def test_agent_status_optional_task_filter_is_authoritative_scope() -> Non
     )
 
     response = await client.get(
-        "/runs/agent-status?project_id=proj-1&task_id=t1"
+        f"/runs/agent-status?project_id={PROJECT_ID}&task_id={_task_id('t1')}"
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["scope"] == {"project_id": "proj-1", "task_id": "t1"}
+    assert body["scope"] == {"project_id": PROJECT_ID, "task_id": _task_id("t1")}
     assert [run["agent_run_id"] for run in body["runs"]] == ["wanted"]
 
 
@@ -381,7 +399,7 @@ async def test_agent_status_omits_old_ended_runs_but_keeps_old_active_runs(
         status="completed", ended_at="2026-07-12T15:00:00+00:00",
     )
 
-    response = await client.get("/runs/agent-status?project_id=proj-1")
+    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
 
     assert [run["agent_run_id"] for run in response.json()["runs"]] == [
         "recently-ended", "old-active",
@@ -402,7 +420,7 @@ async def test_older_lifecycle_event_does_not_regress_snapshot_state() -> None:
     )
 
     response = await client.get(
-        "/runs/agent-status?project_id=proj-1&task_id=t1"
+        f"/runs/agent-status?project_id={PROJECT_ID}&task_id={_task_id('t1')}"
     )
 
     assert response.json()["runs"][0]["state"] == "turn_complete"

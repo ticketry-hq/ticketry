@@ -5,10 +5,8 @@ from __future__ import annotations
 from collections.abc import Set
 from typing import TYPE_CHECKING
 
-from django.db import transaction
-
 from worktracker.launch_capabilities import PROVIDER_CAPABILITIES
-from worktracker.models import IssueType, LaunchBinding, Project, State
+from worktracker.models import LaunchBinding
 from worktracker.required_skills import (
     RequiredSkillsValidationError,
     normalize_required_skills,
@@ -31,30 +29,6 @@ def _optional_text(value: str | None) -> str | None:
         return None
     value = value.strip()
     return value or None
-
-
-def _project_pair(project_id, issue_type_id, state_id):
-    try:
-        Project.objects.get(pk=project_id)
-    except Project.DoesNotExist as exc:
-        raise LaunchBindingError("project_not_found", "Project not found.") from exc
-    try:
-        issue_type = IssueType.objects.get(pk=issue_type_id, project_id=project_id)
-    except IssueType.DoesNotExist as exc:
-        raise LaunchBindingError(
-            "foreign_issue_type",
-            "Work-item type does not belong to this project.",
-            field="issue_type_id",
-        ) from exc
-    try:
-        state = State.objects.get(pk=state_id, project_id=project_id)
-    except State.DoesNotExist as exc:
-        raise LaunchBindingError(
-            "foreign_state",
-            "Current state does not belong to this project.",
-            field="state_id",
-        ) from exc
-    return issue_type, state
 
 
 def validate_provider_options(
@@ -169,45 +143,6 @@ def apply_global_launch_default(
         default.model if model is None else model,
         default.reasoning if reasoning is None else reasoning,
     )
-
-
-@transaction.atomic
-def upsert_launch_binding(
-    project_id,
-    issue_type_id,
-    state_id,
-    *,
-    prompt: str | None,
-    agent: str | None,
-    model: str | None,
-    reasoning: str | None,
-    required_skills=None,
-) -> LaunchBinding:
-    issue_type, state = _project_pair(project_id, issue_type_id, state_id)
-    agent, model, reasoning = validate_provider_options(
-        agent=agent, model=model, reasoning=reasoning
-    )
-    current = LaunchBinding.objects.filter(
-        issue_type=issue_type, state=state
-    ).first()
-    if required_skills is None:
-        required_skills = current.required_skills if current is not None else []
-    required_skills = validate_required_skills(
-        required_skills=required_skills,
-        prompt=prompt,
-    )
-    binding, _ = LaunchBinding.objects.update_or_create(
-        issue_type=issue_type,
-        state=state,
-        defaults={
-            "prompt": prompt or "",
-            "required_skills": required_skills,
-            "agent": agent,
-            "model": model,
-            "reasoning": reasoning,
-        },
-    )
-    return binding
 
 
 def list_launch_bindings(project_id) -> list[LaunchBinding]:

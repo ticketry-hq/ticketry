@@ -49,12 +49,6 @@ class _Watch:
 _WATCHES: Dict[str, _Watch] = {}
 
 
-def doc_label(rel_path: str) -> str:
-    """Human tab label for a document: the filename stem."""
-
-    return Path(rel_path).stem
-
-
 async def _register_document(
     *,
     agent_run_id: Optional[str],
@@ -98,7 +92,7 @@ async def _register_document(
             "doc": {
                 "id": row.id,
                 "rel_path": row.rel_path,
-                "label": doc_label(row.rel_path),
+                "label": design_docs.doc_label(row.rel_path),
             },
         },
     )

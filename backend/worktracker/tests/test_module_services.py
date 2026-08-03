@@ -15,6 +15,7 @@ def test_create_module_service_allocates_sequence_and_issue_type(project, module
     assert module.project_id == project.id
     assert module.sequence_id == 1
     assert module.issue_type_id == module_type.id
+    assert module.module_id is None
 
 
 @pytest.mark.django_db

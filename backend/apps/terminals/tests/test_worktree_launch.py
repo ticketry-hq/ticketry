@@ -33,6 +33,7 @@ def _task(task_id: str, *, parent_id=None, name: str = "Stub task") -> TaskSumma
     return TaskSummary(
         id=task_id,
         name=name,
+        issue_type="Story",
         sequence_id=42,
         state=TaskState(id="s1", name="Todo", group="unstarted"),
         project_id=PROJECT_ID,

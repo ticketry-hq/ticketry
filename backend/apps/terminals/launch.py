@@ -43,11 +43,13 @@ from apps.terminals.agents.skills.preflight import (
     RequiredSkillUnavailable,
     ResolvedSkills,
 )
+from apps.terminals.dao.constants import SCRATCH_TASK_ID
 from apps.documents import watch as documents_watch
 from apps.runs.bus import publish_document, publish_status
 from apps.runs.models import AgentRun
 from apps.terminals.tmux import sessions as tmux_sessions
 from studio_server.contracts import AgentLifecycleFrame, RunRecord
+from worktracker.models import Issue
 
 logger = logging.getLogger(__name__)
 tmux = tmux_sessions
@@ -137,15 +139,12 @@ def _delete_agent_run(run_id: str) -> None:
 async def _launch(
     *,
     adapter: AgentAdapter,
-    project_id: str,
-    module_id: str,
-    task_id: str,
+    issue_id: str,
     argv: list[str],
     cwd: str,
     design_dir: Optional[str],
     scope: str,
     doc_rel_path: Optional[str],
-    workspace_slug: Optional[str],
     agent_run_id: str,
     resumed_from: Optional[str] = None,
     resolved_skills: ResolvedSkills | None = None,
@@ -165,8 +164,7 @@ async def _launch(
         ``None`` when the module folder is unset.
     :param scope: run scope (``"task"`` / ``"plan"`` / ``"instant"`` /
         ``"docchat"``).
-    :param workspace_slug: the run's workspace slug, read off the caller's
-        profile (replaces the old inline ``getattr(profile, ...)``).
+    :param issue_id: the task or module Issue anchoring the run.
     :param agent_run_id: pre-minted, non-null run id (callers mint it upstream).
     :return: ``agent_run_id`` — the persisted, live run.
     :raises LaunchUnavailable: on persist/tmux failure; the orphan row is
@@ -230,30 +228,33 @@ async def _launch(
 
     run = AgentRun(
         id=agent_run_id,
-        project_id=project_id,
-        module_id=module_id,
+        issue_id=issue_id,
         agent=agent,
         status="running",
         started_at=started_at,
         lifecycle_state="starting",
         lifecycle_updated_at=started_at,
-        workspace_slug=workspace_slug,
-        task_id=task_id,
         cwd=cwd,
         design_dir=design_dir,
         resumed_from=resumed_from,
         scope=scope,
     )
 
-    def _persist_and_create() -> None:
+    def _persist_and_create() -> tuple[str, str, str | None]:
         # Runs in a to_thread worker: direct sync ORM insert then
         # create_session, which runs the agent command inside tmux and
         # writes its own terminal-session row. Close the thread connection.
         try:
+            issue = Issue.objects.only("id", "project_id", "module_id").get(
+                id=issue_id
+            )
+            project_id = str(issue.project_id)
+            module_id = str(issue.module_id or issue.id)
+            task_id = str(issue.id) if issue.module_id else None
             run.save(force_insert=True)
             tmux_sessions.create_session(
                 agent_run_id=agent_run_id,
-                task_id=task_id,
+                task_id=task_id or SCRATCH_TASK_ID,
                 module_id=module_id,
                 project_id=project_id,
                 agent=agent,
@@ -262,11 +263,14 @@ async def _launch(
                 scope=scope,
                 doc_rel_path=doc_rel_path,
             )
+            return project_id, module_id, task_id
         finally:
             close_old_connections()
 
     try:
-        await asyncio.to_thread(_persist_and_create)
+        project_id, module_id, task_id = await asyncio.to_thread(
+            _persist_and_create
+        )
     except Exception as exc:
         # tmux missing/broken, or persistence failed — delete the half-created
         # row so no orphan remains, then signal the caller to decide.

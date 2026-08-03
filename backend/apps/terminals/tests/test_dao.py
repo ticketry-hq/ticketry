@@ -6,6 +6,7 @@ from apps.runs import dao as runs_dao
 from apps.runs.models import AgentRun
 from apps.terminals import dao
 from apps.terminals.models import AgentTerminalSession
+from worktracker.tests.factories import fixture_issue_id
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -15,22 +16,25 @@ def _make_run(
     run_id: str,
     *,
     task_id: str = "task-1",
+    module_id: str = "mod-1",
     lifecycle_state: str | None = None,
 ) -> AgentRun:
     """Build a parent agent run."""
 
     return AgentRun(
         id=run_id,
-        workspace_slug="meml",
-        project_id="proj-1",
-        module_id="mod-1",
-        task_id=task_id,
+        issue_id=fixture_issue_id(
+            project_id="proj-1",
+            module_id=module_id,
+            task_id=None if task_id == dao.SCRATCH_TASK_ID else task_id,
+        ),
         ticket_seq=484,
         agent="claude",
         status="running",
         started_at="2026-05-29T10:00:00",
         cwd="/tmp/work",
         lifecycle_state=lifecycle_state,
+        scope="plan" if task_id == dao.SCRATCH_TASK_ID else "task",
     )
 
 
@@ -57,8 +61,14 @@ def _make_session(
 
 
 async def _insert(run_id: str, task_id: str, created_at: str, **kwargs) -> None:
+    module_id = kwargs.get("module_id", "mod-1")
     await runs_dao.insert_agent_run(
-        _make_run(run_id, task_id=task_id, lifecycle_state=kwargs.pop("state", None))
+        _make_run(
+            run_id,
+            task_id=task_id,
+            module_id=module_id,
+            lifecycle_state=kwargs.pop("state", None),
+        )
     )
     await dao.insert_terminal_session(
         _make_session(run_id, task_id=task_id, created_at=created_at, **kwargs)

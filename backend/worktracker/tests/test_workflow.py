@@ -20,7 +20,6 @@ from worktracker.models import (
 from worktracker.seed import ensure_type_workflows
 from worktracker.workflow import (
     InvalidTransition,
-    allowed_transitions,
     transition_state,
 )
 
@@ -333,18 +332,6 @@ def test_non_canonical_target_rejected_for_gated_type(project, sdlc):
     with pytest.raises(InvalidTransition) as exc:
         transition_state(issue, custom.id)
     assert exc.value.code == "unknown_state"
-
-
-@pytest.mark.django_db
-def test_allowed_transitions_respects_each_type_graph(project, sdlc):
-    states, types = sdlc
-    story = _issue(project, states, types["Story"], state="Grill")
-    impl = _issue(project, states, types["Implementation"], state="Implement")
-    pathfind = _issue(project, states, types["PathFind"], state="Spec")
-
-    assert allowed_transitions(story) == {"Spec", "Cancelled"}
-    assert allowed_transitions(impl) == {"Review", "Cancelled"}
-    assert allowed_transitions(pathfind) == {"Done", "Cancelled"}
 
 
 # --- no graph means no transition ------------------------------------------

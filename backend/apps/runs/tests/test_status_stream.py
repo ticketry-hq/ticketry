@@ -20,11 +20,31 @@ from apps.terminals.models import AgentTerminalSession
 from studio_server.asgi import application
 from studio_server.contracts import AutomationAttemptRecord, LifecycleEvent
 from django.db import OperationalError, close_old_connections, transaction
-from worktracker.models import Issue, Project, State, Workspace
+from worktracker.models import Issue, IssueType, Project, State, Workspace
 from worktracker.services import workflow_config
+from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
+PROJECT_1_ID = fixture_uuid("proj-1")
+PROJECT_2_ID = fixture_uuid("proj-2")
+MODULE_1_ID = fixture_issue_id(
+    project_id="proj-1", module_id="mod-1", task_id=None
+)
+TASK_1_ID = fixture_issue_id(
+    project_id="proj-1", module_id="mod-1", task_id="task-1"
+)
+
+
+async def _issue_type(project: Project, *, level: str = "task") -> IssueType:
+    """Create the explicit type required by current work-item fixtures."""
+
+    return await sync_to_async(IssueType.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        name="Task" if level == "task" else "Module",
+        level=level,
+    )
 
 
 async def _seed_run(
@@ -33,12 +53,13 @@ async def _seed_run(
     await dao.insert_agent_run(
         AgentRun(
             id=run_id,
-            project_id=project_id,
-            module_id="mod-1",
-            task_id="task-1",
+            issue_id=fixture_issue_id(
+                project_id=project_id, module_id="mod-1", task_id="task-1"
+            ),
             agent="codex",
             status="running",
             started_at="2026-07-12T10:00:00+00:00",
+            scope=scope,
         )
     )
     await AgentTerminalSession.objects.acreate(
@@ -74,14 +95,14 @@ async def test_connect_sends_versioned_authoritative_snapshot() -> None:
     await _seed_run("run-1")
     await _seed_run("other", project_id="proj-2")
 
-    socket = await _connect("proj-1")
+    socket = await _connect(PROJECT_1_ID)
     connected, _ = await socket.connect()
     assert connected
 
     frame = await socket.receive_json_from()
     assert frame["v"] == 1
     assert frame["type"] == "snapshot"
-    assert frame["scope"] == {"project_id": "proj-1", "task_id": None}
+    assert frame["scope"] == {"project_id": PROJECT_1_ID, "task_id": None}
     assert frame["work_item_cursor"] == 0
     assert frame["workflow_states"] == []
     assert [run["agent_run_id"] for run in frame["runs"]] == ["run-1"]
@@ -261,10 +282,12 @@ async def test_connect_reconciles_unresolved_automation_attempts() -> None:
     project = await sync_to_async(Project.objects.create)(
         id=uuid.uuid4(), workspace=workspace, name="Attempt status", slug="ATTEMPT"
     )
+    issue_type = await _issue_type(project)
     issue = await sync_to_async(Issue.objects.create)(
         id=uuid.uuid4(),
         project=project,
         type="task",
+        issue_type=issue_type,
         name="Failed automation",
         sequence_id=1,
     )
@@ -299,7 +322,7 @@ async def test_connect_reconciles_unresolved_automation_attempts() -> None:
 
 async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
     await _seed_run("run-1", scope="docchat")
-    socket = await _connect("proj-1")
+    socket = await _connect(PROJECT_1_ID)
     assert (await socket.connect())[0]
     await socket.receive_json_from()  # snapshot
 
@@ -319,8 +342,8 @@ async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
         "at": "2026-07-12T10:01:00+00:00",
         "run": {
             "agent_run_id": "run-1",
-            "task_id": "task-1",
-            "module_id": "mod-1",
+            "task_id": TASK_1_ID,
+            "module_id": MODULE_1_ID,
             "scope": "docchat",
             "state": "working",
             "updated_at": "2026-07-12T10:01:00+00:00",
@@ -330,11 +353,11 @@ async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
 
 
 async def test_backend_and_document_frames_are_project_scoped() -> None:
-    socket = await _connect("proj-1")
+    socket = await _connect(PROJECT_1_ID)
     assert (await socket.connect())[0]
     await socket.receive_json_from()
 
-    await publish_backend_session("proj-1", "run-1", "lost", at="now")
+    await publish_backend_session(PROJECT_1_ID, "run-1", "lost", at="now")
     assert await socket.receive_json_from() == {
         "v": 1,
         "type": "backend_session",
@@ -344,7 +367,7 @@ async def test_backend_and_document_frames_are_project_scoped() -> None:
     }
 
     await publish_document(
-        "proj-1",
+        PROJECT_1_ID,
         {"type": "document", "task_id": "task-1", "doc": {"id": "d1"}},
         at="now",
     )
@@ -359,15 +382,15 @@ async def test_backend_and_document_frames_are_project_scoped() -> None:
 
 
 async def test_automation_attempt_frame_is_typed_and_project_scoped() -> None:
-    socket = await _connect("proj-1")
+    socket = await _connect(PROJECT_1_ID)
     assert (await socket.connect())[0]
     await socket.receive_json_from()
-    other_project_socket = await _connect("proj-2")
+    other_project_socket = await _connect(PROJECT_2_ID)
     assert (await other_project_socket.connect())[0]
     await other_project_socket.receive_json_from()
 
     await publish_automation_attempt(
-        "proj-1",
+        PROJECT_1_ID,
         AutomationAttemptRecord(
             attempt_id="attempt-2",
             root_attempt_id="attempt-1",
@@ -383,7 +406,7 @@ async def test_automation_attempt_frame_is_typed_and_project_scoped() -> None:
     assert await socket.receive_json_from() == {
         "v": 1,
         "type": "automation_attempt",
-        "project_id": "proj-1",
+        "project_id": PROJECT_1_ID,
         "attempt": {
             "attempt_id": "attempt-2",
             "root_attempt_id": "attempt-1",
@@ -421,10 +444,12 @@ async def test_committed_state_change_publishes_complete_project_delta() -> None
         sort_order=7,
         is_protected=True,
     )
+    issue_type = await _issue_type(project)
     issue = await sync_to_async(Issue.objects.create)(
         id=uuid.uuid4(),
         project=project,
         type="task",
+        issue_type=issue_type,
         name="Item",
         sequence_id=1,
         state=before,
@@ -433,7 +458,7 @@ async def test_committed_state_change_publishes_complete_project_delta() -> None
     socket = await _connect(str(project.id))
     assert (await socket.connect())[0]
     await socket.receive_json_from()
-    other_project_socket = await _connect("other-project")
+    other_project_socket = await _connect(fixture_uuid("other-project"))
     assert (await other_project_socket.connect())[0]
     await other_project_socket.receive_json_from()
 
@@ -482,16 +507,21 @@ async def test_cursor_reconnect_replays_latest_project_projections_in_order() ->
     other_state = await sync_to_async(State.objects.create)(
         id=uuid.uuid4(), project=other_project, name="Other", group="started"
     )
+    issue_type = await _issue_type(project)
+    other_issue_type = await _issue_type(other_project)
     first = await sync_to_async(Issue.objects.create)(
-        id=uuid.uuid4(), project=project, type="task", name="First", sequence_id=1
+        id=uuid.uuid4(), project=project, type="task", issue_type=issue_type,
+        name="First", sequence_id=1
     )
     second = await sync_to_async(Issue.objects.create)(
-        id=uuid.uuid4(), project=project, type="task", name="Second", sequence_id=2
+        id=uuid.uuid4(), project=project, type="task", issue_type=issue_type,
+        name="Second", sequence_id=2
     )
     foreign = await sync_to_async(Issue.objects.create)(
         id=uuid.uuid4(),
         project=other_project,
         type="task",
+        issue_type=other_issue_type,
         name="Foreign",
         sequence_id=1,
     )
@@ -551,11 +581,13 @@ async def test_concurrent_project_transitions_publish_distinct_revisions() -> No
         )
         for index in range(2)
     ]
+    issue_type = await _issue_type(project)
     issues = [
         await sync_to_async(Issue.objects.create)(
             id=uuid.uuid4(),
             project=project,
             type="task",
+            issue_type=issue_type,
             name=f"Item {index}",
             sequence_id=index + 1,
         )
@@ -613,10 +645,12 @@ async def test_one_transaction_publishes_each_frozen_destination_after_commit() 
             ("Done", "completed"),
         )
     ]
+    issue_type = await _issue_type(project)
     issue = await sync_to_async(Issue.objects.create)(
         id=uuid.uuid4(),
         project=project,
         type="task",
+        issue_type=issue_type,
         name="Item",
         sequence_id=1,
         state=states[0],
@@ -653,10 +687,12 @@ async def test_unset_destination_is_live_and_replayable() -> None:
     state = await sync_to_async(State.objects.create)(
         id=uuid.uuid4(), project=project, name="Todo", group="unstarted"
     )
+    issue_type = await _issue_type(project)
     issue = await sync_to_async(Issue.objects.create)(
         id=uuid.uuid4(),
         project=project,
         type="task",
+        issue_type=issue_type,
         name="Item",
         sequence_id=1,
         state=state,

@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404
 from worktracker.models import Issue, IssueType, State
 from worktracker.ranking import key_between
 from worktracker.services.errors import NotFoundError, ValidationError
-from worktracker.state_groups import RESOLVED_GROUPS, state_group
+from worktracker.state_groups import RESOLVED_GROUPS
 
 
 # A KEY-N segment is a single hyphen between a non-hyphen prefix and digits;
@@ -83,20 +83,6 @@ def append_rank(project_id):
     return key_between(last_rank or None, None)
 
 
-def reorder_neighbor(issue, neighbor_id):
-    """Resolve a reorder neighbor id to a same-project issue, or ``None``."""
-
-    if neighbor_id is None:
-        return None
-    try:
-        neighbor = Issue.objects.get(pk=neighbor_id)
-    except Issue.DoesNotExist as exc:
-        raise NotFoundError("Neighbor not found.") from exc
-    if neighbor.project_id != issue.project_id:
-        raise ValidationError("Neighbor belongs to another project.")
-    return neighbor
-
-
 def resolve_issue_type(project_id, issue_type_id, bucket):
     """Resolve an explicitly selected IssueType for the requested level."""
 
@@ -148,12 +134,6 @@ def blocker_would_cycle(issue_id, new_blocker_ids):
         frontier.extend(str(b) for b in blockers)
 
     return False
-
-
-def state_group_for_state_id(state_id):
-    """Return the frozen state group for a state id."""
-
-    return state_group(state_id)
 
 
 def scope_ref(issue):

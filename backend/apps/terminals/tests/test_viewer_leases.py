@@ -11,6 +11,7 @@ from apps.terminals.models import AgentRunViewerLease
 from apps.terminals import viewer_leases
 from apps.terminals.session import AttachHandle
 from apps.terminals.session_registry import PtySession, SESSIONS, TMUX_VIEWERS
+from worktracker.tests.factories import fixture_issue_id
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -19,14 +20,14 @@ pytestmark = pytest.mark.django_db(transaction=True)
 def _run(run_id: str = "run-lease") -> AgentRun:
     return AgentRun.objects.create(
         id=run_id,
-        workspace_slug="ws",
-        project_id="project-1",
-        module_id="module-1",
-        task_id="task-1",
+        issue_id=fixture_issue_id(
+            project_id="project-1", module_id="module-1", task_id="task-1"
+        ),
         agent="claude",
         status="running",
         started_at="2026-07-22T00:00:00+00:00",
         cwd="/tmp",
+        scope="task",
     )
 
 

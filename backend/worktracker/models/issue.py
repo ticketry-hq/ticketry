@@ -36,6 +36,14 @@ class Issue(models.Model):
         blank=True,
         related_name="children",
     )
+    module = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="module_members",
+        limit_choices_to={"type": "module"},
+    )
     state = models.ForeignKey(
         State,
         on_delete=models.SET_NULL,
@@ -76,6 +84,7 @@ class Issue(models.Model):
         indexes = [
             models.Index(fields=["project", "type"]),
             models.Index(fields=["parent"]),
+            models.Index(fields=["module"]),
             models.Index(
                 fields=["project", "state_revision"],
                 name="wt_issue_proj_state_rev_idx",

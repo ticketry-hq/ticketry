@@ -163,6 +163,156 @@ def test_create_module_implementation_born_ready_not_default(project):
 
 
 @pytest.mark.django_db
+def test_create_module_work_item_sets_module_ancestor(project):
+    State.objects.create(
+        id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
+    )
+    task_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Task", level="task"
+    )
+    module = _issue(
+        id=uuid.uuid4(), project=project, type="module", name="M", sequence_id=999
+    )
+
+    issue = create_module_work_item(module.id, name="Child", issue_type_id=task_type.id)
+
+    assert issue.module_id == module.id
+
+
+@pytest.mark.django_db
+def test_create_project_work_item_resolves_module_through_deep_subtasks(
+    project, task_type
+):
+    State.objects.create(
+        id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
+    )
+    module = _issue(
+        id=uuid.uuid4(), project=project, type="module", name="M", sequence_id=999
+    )
+    parent = module
+    for depth in range(1, 4):
+        parent = create_project_work_item(
+            project.id,
+            name=f"Level {depth}",
+            issue_type_id=task_type.id,
+            parent_id=parent.id,
+        )
+
+    assert parent.module_id == module.id
+
+
+@pytest.mark.django_db
+def test_reparent_work_item_rewrites_module_on_descendant_subtree(project, task_type):
+    State.objects.create(
+        id=uuid.uuid4(), project=project, name="Backlog", group="backlog"
+    )
+    module_a = _issue(
+        id=uuid.uuid4(), project=project, type="module", name="A", sequence_id=998
+    )
+    module_b = _issue(
+        id=uuid.uuid4(), project=project, type="module", name="B", sequence_id=999
+    )
+    root = create_project_work_item(
+        project.id,
+        name="Root",
+        issue_type_id=task_type.id,
+        parent_id=module_a.id,
+    )
+    child = create_project_work_item(
+        project.id,
+        name="Child",
+        issue_type_id=task_type.id,
+        parent_id=root.id,
+    )
+    grandchild = create_project_work_item(
+        project.id,
+        name="Grandchild",
+        issue_type_id=task_type.id,
+        parent_id=child.id,
+    )
+
+    update_work_item(root.id, parent_id=module_b.id)
+
+    module_ids = set(
+        Issue.objects.filter(id__in=[root.id, child.id, grandchild.id]).values_list(
+            "module_id", flat=True
+        )
+    )
+    assert module_ids == {module_b.id}
+
+
+@pytest.mark.django_db
+def test_reparent_module_preserves_module_on_descendant_subtree(project):
+    module = _issue(
+        id=uuid.uuid4(), project=project, type="module", name="M", sequence_id=997
+    )
+    child = _issue(
+        id=uuid.uuid4(),
+        project=project,
+        name="Child",
+        sequence_id=998,
+        parent=module,
+        module=module,
+    )
+    grandchild = _issue(
+        id=uuid.uuid4(),
+        project=project,
+        name="Grandchild",
+        sequence_id=999,
+        parent=child,
+        module=module,
+    )
+
+    update_work_item(module.id, parent_id=None)
+
+    child.refresh_from_db()
+    grandchild.refresh_from_db()
+    assert child.module_id == module.id
+    assert grandchild.module_id == module.id
+
+
+@pytest.mark.django_db
+def test_reparent_work_item_reroots_descendants_at_nested_module(project):
+    module_a = _issue(
+        id=uuid.uuid4(), project=project, type="module", name="A", sequence_id=995
+    )
+    module_d = _issue(
+        id=uuid.uuid4(), project=project, type="module", name="D", sequence_id=996
+    )
+    task = _issue(
+        id=uuid.uuid4(),
+        project=project,
+        name="T",
+        sequence_id=997,
+        parent=module_a,
+        module=module_a,
+    )
+    nested_module = _issue(
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        name="B",
+        sequence_id=998,
+        parent=task,
+    )
+    child = _issue(
+        id=uuid.uuid4(),
+        project=project,
+        name="C",
+        sequence_id=999,
+        parent=nested_module,
+        module=nested_module,
+    )
+
+    update_work_item(task.id, parent_id=module_d.id)
+
+    task.refresh_from_db()
+    child.refresh_from_db()
+    assert task.module_id == module_d.id
+    assert child.module_id == nested_module.id
+
+
+@pytest.mark.django_db
 def test_reorder_work_item_allocates_rank_between_neighbors(project):
     issue_a = _issue(
         id=uuid.uuid4(),

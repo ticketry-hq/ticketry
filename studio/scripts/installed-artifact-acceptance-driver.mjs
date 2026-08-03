@@ -418,13 +418,10 @@ export async function durableAgentTerminalFlowScenario(context) {
     await context.sqlite(
       context.databasePath,
       "INSERT INTO agent_runs "
-        + "(id, workspace_slug, project_id, module_id, task_id, agent, status, "
+        + "(id, issue_id, agent, status, "
         + "started_at, cwd, lifecycle_state, lifecycle_updated_at, scope) VALUES ("
         + [
           runId,
-          "meml",
-          projectId,
-          moduleId,
           taskId,
           "codex",
           "running",

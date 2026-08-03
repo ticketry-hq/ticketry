@@ -266,12 +266,11 @@ async def list_resumable_terminals(
     def _load_resumable_runs() -> list[AgentRun]:
         try:
             if task_id:
-                scope = {"task_id": task_id}
+                scope = {"issue_id": task_id}
             elif project_id and module_id:
                 scope = {
-                    "task_id": dao.SCRATCH_TASK_ID,
-                    "project_id": project_id,
-                    "module_id": module_id,
+                    "issue_id": module_id,
+                    "issue__project_id": project_id,
                 }
             else:
                 return []
@@ -281,7 +280,7 @@ async def list_resumable_terminals(
             # any future scratch-only mode) must not consume a resume chip.
             if not task_id:
                 terminated_query = terminated_query.filter(
-                    agentterminalsession__scope__in=("plan", "instant"),
+                    scope__in=("plan", "instant"),
                 )
             terminated_runs = list(
                 terminated_query.exclude(ended_at="")
@@ -325,6 +324,7 @@ async def list_resumable_terminals(
             "ended_at": run.ended_at,
             "provider_session_id": run.provider_session_id,
             "resumed_from": run.resumed_from,
+            "scope": run.scope,
         }
         for run in runs
     ]

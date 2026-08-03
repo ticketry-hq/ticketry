@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import uuid
 
 import pytest
+from django.db import connection
 
 import apps.terminals.agents.registry as registry
 import apps.terminals.api as terminals_api
@@ -14,11 +16,33 @@ import apps.terminals.session as session_module
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.authorization import issue_run_authorization
 from apps.runs.models import AgentRun
+from worktracker.models import Issue, IssueType, Project, Workspace
+from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_uuid
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
 SCRATCH_TASK_ID = dao.SCRATCH_TASK_ID
+
+
+def _create_module_issue() -> Issue:
+    workspace = Workspace.objects.create(
+        id=uuid.uuid4(), slug=f"ws-{uuid.uuid4().hex}", name="Workspace"
+    )
+    project = Project.objects.create(
+        id=uuid.uuid4(), workspace=workspace, name="Project", slug="PROJ"
+    )
+    module_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Module", level="module"
+    )
+    return Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="module",
+        issue_type=module_type,
+        name="Module",
+        sequence_id=1,
+    )
 
 
 def _insert_run(
@@ -36,12 +60,14 @@ def _insert_run(
 ):
     """Insert a parent agent_run for terminal-session rows."""
 
-    AgentRun.objects.create(
-        id=run_id,
-        workspace_slug="ws",
+    issue = ensure_issue(
         project_id=project_id,
         module_id=module_id,
-        task_id=task_id,
+        task_id=None if task_id == SCRATCH_TASK_ID else task_id,
+    )
+    AgentRun.objects.create(
+        id=run_id,
+        issue=issue,
         ticket_seq=484,
         agent="claude-code",
         status=status or ("terminated" if ended_at is not None else "running"),
@@ -51,6 +77,7 @@ def _insert_run(
         provider_session_id=provider_session_id,
         lifecycle_state=lifecycle_state,
         resumed_from=resumed_from,
+        scope="plan" if task_id == SCRATCH_TASK_ID else "task",
     )
 
 
@@ -78,6 +105,7 @@ def _insert_session(
         terminated_at=terminated_at,
         doc_rel_path=doc_rel_path,
     )
+    AgentRun.objects.filter(id=run_id).update(scope=scope)
 
 
 def _no_reconcile(monkeypatch):
@@ -454,7 +482,14 @@ def test_list_resumable_terminals_filters_collapses_and_excludes_live(client):
         provider_session_id=None,
     )
 
-    response = client.get("/api/terminals/resumable", {"task_id": "task-1"})
+    response = client.get(
+        "/api/terminals/resumable",
+        {
+            "task_id": fixture_issue_id(
+                project_id="proj-1", module_id="mod-1", task_id="task-1"
+            )
+        },
+    )
 
     assert response.status_code == 200
     assert response.json() == [
@@ -466,6 +501,7 @@ def test_list_resumable_terminals_filters_collapses_and_excludes_live(client):
             "ended_at": "2026-05-29T13:00:00",
             "provider_session_id": "sess-chain",
             "resumed_from": "chain-a",
+            "scope": "task",
         },
         {
             "agent_run_id": "plain-run",
@@ -475,6 +511,7 @@ def test_list_resumable_terminals_filters_collapses_and_excludes_live(client):
             "ended_at": "2026-05-29T12:00:00",
             "provider_session_id": "sess-plain",
             "resumed_from": None,
+            "scope": "task",
         },
     ]
 
@@ -497,7 +534,14 @@ def test_list_resumable_terminals_excludes_run_resumed_by_live_successor(client)
         resumed_from="old-resumed",
     )
 
-    response = client.get("/api/terminals/resumable", {"task_id": "task-1"})
+    response = client.get(
+        "/api/terminals/resumable",
+        {
+            "task_id": fixture_issue_id(
+                project_id="proj-1", module_id="mod-1", task_id="task-1"
+            )
+        },
+    )
 
     assert response.status_code == 200
     assert response.json() == []
@@ -514,7 +558,14 @@ def test_list_resumable_terminals_orders_newest_first_and_caps_at_ten(client):
             resumed_from=None,
         )
 
-    response = client.get("/api/terminals/resumable", {"task_id": "task-2"})
+    response = client.get(
+        "/api/terminals/resumable",
+        {
+            "task_id": fixture_issue_id(
+                project_id="proj-1", module_id="mod-1", task_id="task-2"
+            )
+        },
+    )
 
     assert response.status_code == 200
     rows = response.json()
@@ -590,7 +641,12 @@ def test_list_resumable_terminals_can_scope_scratch_runs_by_project_and_module(c
 
     response = client.get(
         "/api/terminals/resumable",
-        {"project_id": "project-1", "module_id": "module-1"},
+        {
+            "project_id": fixture_uuid("project-1"),
+            "module_id": fixture_issue_id(
+                project_id="project-1", module_id="module-1", task_id=None
+            ),
+        },
     )
 
     assert response.status_code == 200
@@ -598,6 +654,67 @@ def test_list_resumable_terminals_can_scope_scratch_runs_by_project_and_module(c
         "scratch-instant",
         "scratch-plan",
     ]
+
+
+def test_list_resumable_module_runs_preserves_plan_and_instant_scope(client):
+    module = _create_module_issue()
+    for run_id, scope, hour in (
+        ("module-plan", "plan", 10),
+        ("module-instant", "instant", 11),
+    ):
+        AgentRun.objects.create(
+            id=run_id,
+            issue=module,
+            agent="claude",
+            status="terminated",
+            scope=scope,
+            started_at=f"2026-05-29T{hour:02d}:00:00",
+            ended_at=f"2026-05-29T{hour:02d}:30:00",
+            provider_session_id=f"provider-{scope}",
+        )
+
+    response = client.get(
+        "/api/terminals/resumable",
+        {"project_id": str(module.project_id), "module_id": str(module.id)},
+    )
+
+    assert response.status_code == 200
+    assert [
+        (row["agent_run_id"], row["scope"]) for row in response.json()
+    ] == [
+        ("module-instant", "instant"),
+        ("module-plan", "plan"),
+    ]
+
+
+def test_deleting_issue_cascades_to_agent_runs():
+    module = _create_module_issue()
+    AgentRun.objects.create(
+        id="cascading-run",
+        issue=module,
+        agent="claude",
+        status="running",
+        scope="plan",
+        started_at="2026-05-29T10:00:00",
+    )
+
+    # The unrelated execution app's model state currently references a
+    # pre-existing missing `launched_tasks` table. Supply its minimal test-only
+    # shape so Django's deletion collector can exercise this FK cascade.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS launched_tasks (
+                task_id char(32) PRIMARY KEY,
+                root_id char(32) NOT NULL,
+                agent_run_id varchar(255) NOT NULL,
+                launched_at datetime NOT NULL
+            )
+            """
+        )
+    module.delete()
+
+    assert not AgentRun.objects.filter(id="cascading-run").exists()
 
 
 def test_list_resumable_scratch_runs_filters_scopes_and_caps_newest_ten(client):
@@ -666,7 +783,12 @@ def test_list_resumable_scratch_runs_filters_scopes_and_caps_newest_ten(client):
 
     response = client.get(
         "/api/terminals/resumable",
-        {"project_id": "project-1", "module_id": "module-1"},
+        {
+            "project_id": fixture_uuid("project-1"),
+            "module_id": fixture_issue_id(
+                project_id="project-1", module_id="module-1", task_id=None
+            ),
+        },
     )
 
     assert response.status_code == 200
@@ -933,7 +1055,11 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(client, monkeypatch
     }
     assert AgentRun.objects.get(id="run-e2e").status == "terminated"
     assert stopped_watches == ["run-e2e"]
-    assert published[0][0][:3] == ("proj-1", "run-e2e", "exited")
+    assert published[0][0][:3] == (
+        fixture_uuid("proj-1"),
+        "run-e2e",
+        "exited",
+    )
 
 
 def dao_soft_delete(agent_run_id, terminated_at):

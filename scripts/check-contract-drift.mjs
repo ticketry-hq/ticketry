@@ -66,7 +66,6 @@ if (serverPython) {
     cwd: serverDir,
     env: {
       ...process.env,
-      MUXED_SKIP_LOCAL_STATE_MIGRATION: "1",
       MUXED_STATE_DB: resolve(temp, "state.db"),
     },
   });

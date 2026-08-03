@@ -43,7 +43,6 @@ jobs:
       - name: Backend tests
         working-directory: backend
         env:
-          MUXED_SKIP_LOCAL_STATE_MIGRATION: "1"
           MUXED_DATA_DIR: ${{ runner.temp }}/ticketry-contract-data
           MUXED_STATE_DB: ${{ runner.temp }}/ticketry-contract-state.db
         run: uv run --extra dev pytest -q

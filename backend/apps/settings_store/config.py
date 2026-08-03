@@ -4,21 +4,19 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 from studio_server.atomic_files import atomic_write_json
 
-from apps.settings_store.local_state_migration import (
-    CONFIG_DIR as CONFIG_DIR,
-    ConfigMigrationConflict as ConfigMigrationConflict,
-    migrate_local_state as migrate_local_state,
-)
-
-# This must run before studio_server.settings derives database, token, and media paths.
-# Contract generation is read-only and supplies its own temporary database.
-if os.environ.get("MUXED_SKIP_LOCAL_STATE_MIGRATION") != "1":
-    migrate_local_state()
-
+# The packaged sidecar supplies this before Django imports settings.  Keeping
+# the default preserves the browser/development runtime's established state
+# location while allowing the desktop supervisor to own its data directory.
+# ``studio_server.settings`` derives the database, token, and media paths from
+# it, so this definition must exist by import time.
+CONFIG_DIR = Path(
+    os.environ.get("MUXED_DATA_DIR", Path.home() / ".config" / "worktracker-studio")
+).expanduser()
 
 CONFIG_FILE = CONFIG_DIR / "profiles.json"
 FEATURES_FILE = CONFIG_DIR / "features.json"

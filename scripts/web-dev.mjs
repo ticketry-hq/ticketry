@@ -188,7 +188,6 @@ export function buildWebDevelopmentEnvironment({
       MUXED_ADMIN_ENABLED: "true",
       MUXED_DATA_DIR: dataDirectory,
       MUXED_DESKTOP_ORIGIN: "",
-      MUXED_SKIP_LOCAL_STATE_MIGRATION: "1",
       MUXED_STATE_DB: path.join(dataDirectory, "state.db"),
       MUXED_TMUX_SOCKET: tmuxSocket,
       // This stack only listens on loopback. Developers can explicitly set

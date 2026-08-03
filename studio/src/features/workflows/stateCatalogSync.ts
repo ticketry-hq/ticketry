@@ -2,9 +2,9 @@ import type { State, WorkItem } from "../../shared/api/types";
 import { compareStateOrder } from "../../shared/utilities/display";
 import { useTasksStore } from "../studio/stores/tasksStore";
 import { useUIStore } from "../studio/stores/uiStore";
-import { useBacklogStore } from "../work-items";
 import { useIssueStore } from "../work-items/issue-detail";
 import { advanceStateCatalogRevision } from "../../shared/stateCatalogRevision";
+import { getStatesSnapshot, setStates } from "../../shared/query/stateCatalog";
 
 type CatalogState = Pick<State, "id" | "group"> & {
   sort_order?: number;
@@ -67,14 +67,12 @@ export function synchronizeActiveStateCatalogs(
 ): State[] {
   advanceStateCatalogRevision(projectId, authoritative);
   const taskCatalog = useTasksStore.getState();
-  const backlogCatalog = useBacklogStore.getState();
   const previousName =
     (taskCatalog.selectedProjectId === projectId
       ? taskCatalog.states.find((state) => state.id === authoritative.id)?.name
       : undefined) ??
-    (backlogCatalog.projectId === projectId
-      ? backlogCatalog.states.find((state) => state.id === authoritative.id)?.name
-      : undefined) ??
+    getStatesSnapshot(projectId).find((state) => state.id === authoritative.id)
+      ?.name ??
     workflowStates.find((state) => state.id === authoritative.id)?.name;
 
   useTasksStore.setState((current) => {
@@ -111,10 +109,11 @@ export function synchronizeActiveStateCatalogs(
     };
   });
 
-  useBacklogStore.setState((current) =>
-    current.projectId === projectId
-      ? { states: upsertCanonicalState(current.states, authoritative) }
-      : current,
+  // One shared catalog, one write — every surface reading it (the backlog,
+  // planning views, settings) sees the rename without its own copy to patch.
+  setStates(
+    projectId,
+    upsertCanonicalState(getStatesSnapshot(projectId), authoritative),
   );
 
   const owner = useIssueStore.getState();
@@ -153,9 +152,7 @@ export function synchronizeActiveStateCatalogOrder(
     };
   });
 
-  useBacklogStore.setState((current) =>
-    current.projectId === projectId ? { states: ordered } : current,
-  );
+  setStates(projectId, ordered);
 
   return ordered;
 }

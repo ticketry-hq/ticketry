@@ -46,7 +46,7 @@ const itemsById = () =>
 beforeEach(() => {
   patchWorkItem.mockReset();
   deleteWorkItem.mockReset();
-  useBacklogStore.setState({ items: [], states: [TODO, DONE], error: null });
+  useBacklogStore.setState({ projectId: "p1", items: [], states: [TODO, DONE], error: null });
 });
 
 describe("bulkSetState (#637)", () => {

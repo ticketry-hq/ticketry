@@ -9,6 +9,8 @@ import type { State } from "../api/types";
 // there is deliberately no second copy to keep agreed. Entries are stored in
 // canonical sort order so every consumer inherits it.
 
+const EMPTY_STATES: State[] = [];
+
 const bySortOrder = (rows: State[]): State[] =>
   [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
@@ -39,6 +41,23 @@ export function reloadStates(projectId: string): Promise<State[]> {
     queryFn: () => fetchStates(projectId),
     staleTime: 0,
   });
+}
+
+/**
+ * Subscribe to the cached catalog WITHOUT triggering a fetch. For surfaces that
+ * read along with whoever owns the load (the backlog, planning views): they
+ * must re-render when the catalog changes, but must not issue their own request.
+ */
+export function useCachedStates(projectId: string | null): State[] {
+  const { data } = useQuery(
+    {
+      queryKey: queryKeys.states.byProject(projectId ?? "none"),
+      queryFn: () => fetchStates(projectId!),
+      enabled: false,
+    },
+    queryClient,
+  );
+  return data ?? EMPTY_STATES;
 }
 
 export function useStatesQuery(projectId: string | null) {

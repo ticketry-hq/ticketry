@@ -1,5 +1,6 @@
 import { useBacklogStore } from "./internal/backlogStore";
 import { useIssueStore } from "./issue-detail/internal/issueStore";
+import { useCachedStates } from "../../shared/query/stateCatalog";
 
 // The work-items query surface: the loaded project's planning data as one
 // read-only view model. Hosts and sibling modules read THIS instead of the
@@ -14,7 +15,10 @@ export function useWorkItems() {
   const items = itemIds
     .map((id) => workItemsById[id])
     .filter((item): item is NonNullable<typeof item> => item !== undefined);
-  const states = useBacklogStore((s) => s.states);
+  // The catalog is query-cached, so subscribe to it there: a rename or reorder
+  // notifies query subscribers, not the backlog store's. loadBacklog owns the
+  // fetch, so this only reads along.
+  const states = useCachedStates(projectId);
   const loading = useBacklogStore((s) => s.loading);
   const loadError = useBacklogStore((s) => s.loadError);
   const loadBacklog = useBacklogStore((s) => s.loadBacklog);

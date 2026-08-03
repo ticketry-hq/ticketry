@@ -4,6 +4,11 @@ import { ApiError } from "../../../shared/api/client";
 import type { State, WorkItem, WorkItemCreate } from "../../../shared/api/types";
 import { useIssueStore } from "../issue-detail/internal/issueStore";
 import { rankBetween } from "../utilities/rank";
+import {
+  getStatesSnapshot,
+  reloadStates,
+  setStates,
+} from "../../../shared/query/stateCatalog";
 
 export {
   compareRank,
@@ -53,7 +58,12 @@ export interface BacklogState {
   /** Derived compatibility aliases for the canonical owner's revision guards. */
   readonly seenStateRevisions: Record<string, number>;
   readonly pendingStateDeltas: Record<string, StateRevisionDelta>;
-  states: State[];
+  /**
+   * Derived from the one shared workflow-state catalog — the backlog holds no
+   * copy. React surfaces must read it through useStatesQuery instead of this
+   * accessor: a catalog change notifies query subscribers, not zustand's.
+   */
+  readonly states: State[];
   filters: BacklogFilters;
   loading: boolean;
   error: string | null;
@@ -113,13 +123,17 @@ function attachDerivedItems(state: BacklogState): void {
       enumerable: false,
       get: () => useIssueStore.getState().pendingStateDeltas,
     },
+    states: {
+      configurable: true,
+      enumerable: false,
+      get: () => getStatesSnapshot(state.projectId),
+    },
   });
 }
 
 const createBacklogState = (set: (partial: Partial<BacklogState>) => void, get: () => BacklogState): BacklogState => ({
   projectId: null,
   itemIds: [],
-  states: [],
   filters: EMPTY_FILTERS,
   loading: false,
   error: null,
@@ -134,15 +148,14 @@ const createBacklogState = (set: (partial: Partial<BacklogState>) => void, get: 
       ...(switchingProject ? { itemIds: [] } : {}),
     });
     try {
-      const [items, states] = await Promise.all([
+      const [items] = await Promise.all([
         api.listProjectWorkItems(projectId, { includePathfind: true }),
-        api.listStates(projectId),
+        reloadStates(projectId),
       ]);
       if (get().projectId !== projectId) return;
       useIssueStore.getState().hydrateWorkItems(items);
       set({
         itemIds: items.filter((item) => !item.is_archived).map((item) => item.id),
-        states,
         loading: false,
         ...(switchingProject ? { filters: EMPTY_FILTERS } : {}),
       });
@@ -309,6 +322,7 @@ const createBacklogState = (set: (partial: Partial<BacklogState>) => void, get: 
   items: [] as WorkItem[],
   seenStateRevisions: {},
   pendingStateDeltas: {},
+  states: [] as State[],
 });
 
 export const useBacklogStore = create<BacklogState>()((set, get, api) => {
@@ -329,11 +343,18 @@ useBacklogStore.setState = ((partial, replace) => {
     items,
     seenStateRevisions,
     pendingStateDeltas,
+    states,
     ...withoutItems
   } = next;
   if (items !== undefined) {
     useIssueStore.getState().hydrateWorkItems(items);
     withoutItems.itemIds = items.map((item) => item.id);
+  }
+  if (states !== undefined) {
+    // The backlog owns no catalog copy, so a `states` write lands in the one
+    // shared catalog for whichever project this write is about.
+    const projectId = withoutItems.projectId ?? current.projectId;
+    if (projectId) setStates(projectId, states);
   }
   if (seenStateRevisions !== undefined || pendingStateDeltas !== undefined) {
     useIssueStore.setState({

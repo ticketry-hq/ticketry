@@ -523,7 +523,7 @@ describe("revisioned targeted reconciliation (#1170)", () => {
 
 describe("setItemState", () => {
   it("moves the item to the target state optimistically and PATCHes by UUID", async () => {
-    useBacklogStore.setState({ items: [wi({ id: "a", state: TODO })], states: [TODO, DONE] });
+    useBacklogStore.setState({ projectId: "p1", items: [wi({ id: "a", state: TODO })], states: [TODO, DONE] });
     // Never resolves immediately — assert the optimistic swap happened first.
     let resolve!: (v: WorkItem) => void;
     patchWorkItem.mockReturnValue(new Promise<WorkItem>((r) => (resolve = r)));
@@ -537,14 +537,14 @@ describe("setItemState", () => {
   });
 
   it("is a no-op when dropped on the item's current state (no PATCH)", async () => {
-    useBacklogStore.setState({ items: [wi({ id: "a", state: TODO })], states: [TODO, DONE] });
+    useBacklogStore.setState({ projectId: "p1", items: [wi({ id: "a", state: TODO })], states: [TODO, DONE] });
     await useBacklogStore.getState().setItemState("a", "st-todo");
     expect(patchWorkItem).not.toHaveBeenCalled();
     expect(useBacklogStore.getState().items[0].state?.id).toBe("st-todo");
   });
 
   it("reconciles items[id] with the returned WorkItemOut on success", async () => {
-    useBacklogStore.setState({ items: [wi({ id: "a", state: TODO })], states: [TODO, DONE] });
+    useBacklogStore.setState({ projectId: "p1", items: [wi({ id: "a", state: TODO })], states: [TODO, DONE] });
     patchWorkItem.mockResolvedValue(wi({ id: "a", state: DONE, sub_issues_count: 4 }));
     await useBacklogStore.getState().setItemState("a", "st-done");
     const item = useBacklogStore.getState().items.find((i) => i.id === "a")!;
@@ -553,7 +553,7 @@ describe("setItemState", () => {
   });
 
   it("restores the snapshot and sets error on ApiError", async () => {
-    useBacklogStore.setState({ items: [wi({ id: "a", state: TODO })], states: [TODO, DONE] });
+    useBacklogStore.setState({ projectId: "p1", items: [wi({ id: "a", state: TODO })], states: [TODO, DONE] });
     patchWorkItem.mockRejectedValue(new ApiError(422, "bad state", {}));
     await useBacklogStore.getState().setItemState("a", "st-done");
     expect(useBacklogStore.getState().items[0].state?.id).toBe("st-todo");

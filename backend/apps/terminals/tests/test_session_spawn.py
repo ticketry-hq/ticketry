@@ -26,6 +26,8 @@ import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
 from apps.terminals.tests.fakes import FakeAdapter
 from apps.terminals.session import LaunchIntent
+from apps.terminals.tmux import sessions as tmux_sessions
+from apps.terminals.tmux._core import TmuxSessionError
 from apps.settings_store.config import NoConfigurationSelected
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
@@ -130,7 +132,7 @@ def _capture_create_session(monkeypatch) -> dict:
         created.update(kwargs)
         return _fake_tmux_session(kwargs["agent_run_id"])
 
-    monkeypatch.setattr(launch.tmux, "create_session", fake_create_session)
+    monkeypatch.setattr(tmux_sessions, "create_session", fake_create_session)
     # Don't start a real design-dir watcher thread in tests.
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
     return created
@@ -298,9 +300,9 @@ async def test_spawn_tmux_failure_raises_and_no_orphan(tmp_config, tmp_path, mon
     _patch_argv(monkeypatch)
 
     def boom(**kwargs):
-        raise launch.tmux.TmuxSessionError("no tmux server")
+        raise TmuxSessionError("no tmux server")
 
-    monkeypatch.setattr(launch.tmux, "create_session", boom)
+    monkeypatch.setattr(tmux_sessions, "create_session", boom)
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
 
     with pytest.raises(launch.LaunchUnavailable):

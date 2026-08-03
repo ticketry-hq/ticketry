@@ -31,7 +31,7 @@ def list_projects(request):
     tags=["Projects"],
 )
 def create_project(request, payload: ProjectIn):
-    """Create a project under a workspace and seed its 5 default states (G3).
+    """Create a project under a workspace and seed the reviewed default states (G3).
 
     The workspace is named explicitly via ``workspace_slug`` or resolved to the
     sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected

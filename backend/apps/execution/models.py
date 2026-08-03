@@ -44,7 +44,12 @@ class GraphRun(models.Model):
 
 
 class LaunchedTask(models.Model):
-    """One durable fact: this task was launched by a subtree run. Never relaunched."""
+    """One durable fact: this task was launched by a subtree run.
+
+    Its presence prevents relaunch until the subtree ledger is reset — see
+    ``apps.execution.driver.reset_subtree``, which deletes these rows so the
+    children become launchable again.
+    """
 
     task = models.OneToOneField(
         Issue,

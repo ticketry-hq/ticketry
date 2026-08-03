@@ -187,7 +187,7 @@ def ensure_state_order(project, State):
     """Stamp ``sort_order`` on the project's states in canonical workflow order.
 
     States are ranked by their *name's* position in :data:`DEFAULT_STATES` (so
-    Refinement precedes Ready and Implement precedes Review even though each pair
+    Spec precedes Tickets and Implement precedes Review even though each pair
     shares a group). Non-canonical/custom states fall back to their group's rank
     and sort after all canonical states; ties break on ``created_at``. States are
     numbered ``0..n-1``; only rows whose order changes are written.

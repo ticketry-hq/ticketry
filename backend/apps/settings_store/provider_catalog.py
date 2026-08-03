@@ -15,9 +15,6 @@ from pydantic import (
     model_validator,
 )
 
-from worktracker.launch_capabilities import PROVIDER_CAPABILITIES
-
-
 Provider = Literal["claude", "codex", "gemini"]
 PROVIDER_ORDER: tuple[Provider, ...] = ("claude", "codex", "gemini")
 PROVIDER_CATALOG_SCOPE = "host"
@@ -106,6 +103,14 @@ def load_provider_catalog() -> "ProviderCatalog":
 
 
 class GlobalLaunchDefault(BaseModel):
+    """The catalog's optional launch default.
+
+    Only normalizes here. Whether the provider/model/reasoning triple is
+    *valid* is decided once, by ``ProviderCatalog``, through the canonical
+    ``services.launch_bindings.validate_provider_options`` — which also checks
+    activation and produces the better error messages.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     provider: Provider
@@ -123,20 +128,6 @@ class GlobalLaunchDefault(BaseModel):
         if not isinstance(value, str):
             return value
         return value.strip() or None
-
-    @model_validator(mode="after")
-    def validate_provider_options(self):
-        capability = PROVIDER_CAPABILITIES[self.provider]
-        if self.model is not None and not capability.accepts(self.model):
-            raise ValueError(f"model is not valid for provider '{self.provider}'")
-        if (
-            self.reasoning is not None
-            and self.reasoning not in capability.reasoning_levels
-        ):
-            raise ValueError(
-                f"reasoning is not valid for provider '{self.provider}'"
-            )
-        return self
 
 
 class ProviderCatalog(BaseModel):

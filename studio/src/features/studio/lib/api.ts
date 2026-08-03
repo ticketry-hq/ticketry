@@ -42,7 +42,7 @@ async function request<T>(
   path: string,
   init?: RequestInit & { signal?: AbortSignal },
 ): Promise<T> {
-  const key = await studioApiKey();
+  const key = studioApiKey();
   const resp = await fetch(agentApiUrl(path), {
     ...init,
     headers: {
@@ -71,24 +71,17 @@ async function request<T>(
   return body as T;
 }
 
-async function studioApiKey(): Promise<string | undefined> {
-  const { useConfigStore } = await import("../stores/configStore");
-  const { profiles, recentProfileIndex } = useConfigStore.getState();
-  const profile =
-    recentProfileIndex === null ? null : profiles[recentProfileIndex] ?? null;
-  return profile?.api_key || runtimeConfiguration().values.workTrackerApiKey || undefined;
+function studioApiKey(): string | undefined {
+  return runtimeConfiguration().values.workTrackerApiKey || undefined;
 }
 
 // ---------- WorkTracker SDK client (the /api/work-tracker/* surface) ----------
 // The studio surface owns its own SDK client (it does not reuse Studio's
-// module-level sdk(), which authenticates from a static env key). The key here
-// is resolved from the active profile, then the runtime when no profile key is
-// available. A custom fetch wrapper injects it on every request — the same auth
-// logic the old worktrackerRequest carried, just relocated to the SDK's
-// documented `fetch` extension point. The singleton tracks the active profile
-// with no rebuild on profile switch.
+// module-level sdk(), which authenticates from a static env key). A custom
+// fetch wrapper injects the runtime key through the SDK's documented `fetch`
+// extension point, preserving header injection without profile-owned secrets.
 const worktrackerFetch: typeof fetch = async (input, init) => {
-  const key = await studioApiKey();
+  const key = studioApiKey();
   const headers = new Headers(init?.headers);
   if (key) headers.set("x-api-key", key);
   return fetch(input, { ...init, headers });
@@ -196,18 +189,16 @@ function normalizeModuleTaskTree(moduleId: string, tasks: WorkItem[]) {
 // ---------- Config ----------
 // gated: CODIN-668 — host /api/config surface is not in the OpenAPI the SDK is
 // generated from; stays on raw fetch until host-surface SDK coverage is taken up.
-// Coalesced with the agents config store's identical bootstrap GET so the
-// two stores share one round trip (the key is shared across both API layers).
 export const getConfig = () =>
   dedupeInFlight("GET /api/config", () => request<ConfigPayload>("/api/config"));
 
-export const postProfile = (body: Partial<Profile> & { api_key: string }) =>
+export const postProfile = (body: Partial<Profile>) =>
   request<ConfigPayload>("/api/config/profiles", {
     method: "POST",
     body: JSON.stringify(body),
   });
 
-export const putProfile = (index: number, body: Partial<Profile> & { api_key: string }) =>
+export const putProfile = (index: number, body: Partial<Profile>) =>
   request<ConfigPayload>(`/api/config/profiles/${index}`, {
     method: "PUT",
     body: JSON.stringify(body),
@@ -573,30 +564,6 @@ export const executeTaskSubtree = (taskId: string) =>
 
 // ---------- Settings ----------
 // gated: CODIN-668 — host /api/settings surface is not in the SDK's OpenAPI.
-export const getPanelWidths = () =>
-  request<{ value: unknown }>("/api/settings/panel_widths");
-
-export const putPanelWidths = (value: number[]) =>
-  request<{ value: unknown }>("/api/settings/panel_widths", {
-    method: "PUT",
-    body: JSON.stringify({ value }),
-  });
-
-// Per-module expanded sub-task ids, scoped so modules never share a set.
-export const getExpandedSubtasks = (moduleId: string) =>
-  request<{ value: unknown }>(
-    `/api/settings/expanded_subtasks?module_id=${encodeURIComponent(moduleId)}`,
-  );
-
-export const putExpandedSubtasks = (moduleId: string, value: string[]) =>
-  request<{ value: unknown }>(
-    `/api/settings/expanded_subtasks?module_id=${encodeURIComponent(moduleId)}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ value }),
-    },
-  );
-
 export const getKeybindingOverrides = () =>
   request<{ value: unknown }>("/api/settings/keybindings");
 

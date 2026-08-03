@@ -4,8 +4,6 @@ import { BootstrapGate } from "../app/studio/BootstrapGate";
 
 const mocks = vi.hoisted(() => ({
   studioLoadConfig: vi.fn(),
-  agentLoadConfig: vi.fn(),
-  hydratePanelLayout: vi.fn(),
   selectProfile: vi.fn(),
   selectProject: vi.fn(),
   createProject: vi.fn(),
@@ -50,12 +48,6 @@ vi.mock("../features/studio/stores/configStore", () => ({
   },
 }));
 
-vi.mock("../features/agents/stores/configStore", () => ({
-  useConfigStore: {
-    getState: () => ({ loadConfig: mocks.agentLoadConfig }),
-  },
-}));
-
 vi.mock("../features/studio/stores/tasksStore", () => ({
   useTasksStore: {
     getState: () => ({
@@ -72,7 +64,6 @@ vi.mock("../features/studio/stores/uiStore", () => ({
   useUIStore: {
     getState: () => ({
       sidebarVisible: true,
-      hydratePanelLayout: mocks.hydratePanelLayout,
       setSidebarVisible: mocks.setSidebarVisible,
       setFocusedPane: mocks.setFocusedPane,
     }),
@@ -103,8 +94,6 @@ describe("BootstrapGate", () => {
     projects = [];
     selectedProjectId = null;
     mocks.studioLoadConfig.mockResolvedValue(undefined);
-    mocks.agentLoadConfig.mockResolvedValue(undefined);
-    mocks.hydratePanelLayout.mockResolvedValue(null);
     mocks.selectProfile.mockResolvedValue(undefined);
     mocks.selectProject.mockImplementation(async (id: string) => {
       selectedProjectId = id;

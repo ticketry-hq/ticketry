@@ -10,16 +10,16 @@ vi.mock("../shared/api/client", async () => {
   };
 });
 
-vi.mock("../features/agents/api/agentApi", async () => {
-  const actual = await vi.importActual<typeof import("../features/agents/api/agentApi")>(
-    "../features/agents/api/agentApi",
+vi.mock("../features/studio/lib/api", async () => {
+  const actual = await vi.importActual<typeof import("../features/studio/lib/api")>(
+    "../features/studio/lib/api",
   );
   return { ...actual, getConfig: vi.fn() };
 });
 
 import * as api from "../shared/api/client";
-import * as studioApi from "../features/agents/api/agentApi";
-import { useConfigStore } from "../features/agents/stores/configStore";
+import * as studioApi from "../features/studio/lib/api";
+import { useConfigStore } from "../features/studio/stores/configStore";
 import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail/internal/drawerWorkspaceStore";
 import { useIssueStore } from "../features/work-items/issue-detail/internal/issueStore";
 import type { Module, State, WorkItem } from "../shared/api/types";
@@ -79,6 +79,7 @@ beforeEach(() => {
   listProjectWorkItems.mockReset().mockResolvedValue([]);
   getConfig.mockReset().mockResolvedValue({
     recent_profile_index: 0,
+    features: { sidebar: false, projects: false },
     profiles: [{
       name: "Studio",
       workspace_slug: "meml",
@@ -113,6 +114,7 @@ describe("issue drawer workspace orchestration", () => {
   it("treats a selected local profile as launch-ready", async () => {
     getConfig.mockResolvedValueOnce({
       recent_profile_index: 0,
+      features: { sidebar: false, projects: false },
       profiles: [{
         name: "Studio",
         workspace_slug: "meml",

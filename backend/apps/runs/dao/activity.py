@@ -103,7 +103,7 @@ async def agent_status_records(
         records.append(
             RunRecord(
                 agent_run_id=run.id,
-                task_id=str(run.issue_id) if run.issue.module_id else None,
+                task_id=str(run.issue_id) if run.issue.type == "task" else None,
                 module_id=str(run.run_module_id),
                 scope=run.scope,
                 state=state,

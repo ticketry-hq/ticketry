@@ -1,11 +1,5 @@
 import { create } from "zustand";
 import type { TaskId } from "../lib/types";
-import {
-  getPanelWidths,
-  putPanelWidths,
-  getExpandedSubtasks,
-  putExpandedSubtasks,
-} from "../lib/api";
 import { taskRevealPath } from "../lib/taskTree";
 import {
   isSidebarEnabled,
@@ -41,12 +35,12 @@ const SIDEBAR_KEY = "studio.sidebarVisible:v1";
 const LEGACY_SIDEBAR_KEYS = ["plane-tui:sidebar-visible"];
 const LAYOUT_KEY = "studio.panelLayout:v1";
 const LEGACY_LAYOUT_KEYS = ["plane-tui:panel-layout"];
+const EXPANDED_SUBTASKS_KEY = "studio.expandedSubtasks:v1";
 const COLLAPSED_STATES_KEY = "studio.collapsedStates:v1";
 const LEGACY_COLLAPSED_STATES_KEYS = ["plane-tui:collapsed-states"];
 const PANEL_LAYOUT_SAVE_DELAY_MS = 400;
 
 let panelLayoutSaveTimer: ReturnType<typeof setTimeout> | null = null;
-let expandedHydrationGeneration = 0;
 
 function readSidebar(): boolean {
   const v = readVersionedItem(SIDEBAR_KEY, LEGACY_SIDEBAR_KEYS);
@@ -118,9 +112,7 @@ function persistPanelLayout(sizes: number[]): void {
   }
   panelLayoutSaveTimer = setTimeout(() => {
     panelLayoutSaveTimer = null;
-    void putPanelWidths(sizes).catch((err) => {
-      console.warn("[uiStore] panel layout persist failed", err);
-    });
+    writeLayout(sizes);
   }, PANEL_LAYOUT_SAVE_DELAY_MS);
 }
 
@@ -128,13 +120,35 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string");
 }
 
-// Fire-and-forget write of the expanded set for one module. Kept side-effect
-// free (no focus/selection changes) to avoid the #435 collapse-handler
-// regression where toggling rippled into unrelated UI.
+function readExpandedByModule(): Record<string, string[]> {
+  try {
+    const value = localStorage.getItem(EXPANDED_SUBTASKS_KEY);
+    if (!value) return {};
+    const parsed: unknown = JSON.parse(value);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      Object.values(parsed).every(isStringArray)
+    ) {
+      return parsed as Record<string, string[]>;
+    }
+  } catch {
+    /* ignore unavailable/corrupt storage */
+  }
+  return {};
+}
+
+// Write the expanded set for one module without changing any other module.
 function persistExpanded(moduleId: string, ids: string[]): void {
-  void putExpandedSubtasks(moduleId, ids).catch((err) => {
-    console.warn("[uiStore] expanded subtasks persist failed", err);
-  });
+  try {
+    localStorage.setItem(
+      EXPANDED_SUBTASKS_KEY,
+      JSON.stringify({ ...readExpandedByModule(), [moduleId]: ids }),
+    );
+  } catch {
+    /* ignore unavailable storage */
+  }
 }
 
 function selectedTaskAncestorIds(moduleId: string): Set<TaskId> {
@@ -194,12 +208,11 @@ interface UIStoreState {
   popModal: () => void;
   pushBindings: (arr: KeyBinding[]) => void;
   popBindings: () => void;
-  hydratePanelLayout: () => Promise<number[] | null>;
   setPanelLayout: (sizes: number[]) => void;
   toggleExpanded: (taskId: TaskId) => void;
   setExpanded: (taskId: TaskId, expanded: boolean) => void;
   expandTasks: (taskIds: readonly TaskId[]) => void;
-  hydrateExpandedForModule: (moduleId: string) => Promise<void>;
+  hydrateExpandedForModule: (moduleId: string) => void;
   toggleStateCollapsed: (stateName: string) => void;
   renameCollapsedState: (previousName: string, nextName: string) => void;
   setStorySearchQuery: (query: string) => void;
@@ -404,26 +417,10 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
     });
   },
 
-  async hydratePanelLayout() {
-    try {
-      const { value } = await getPanelWidths();
-      if (!isPanelLayout(value)) {
-        return null;
-      }
-      writeLayout(value);
-      set({ panelLayout: value });
-      return value;
-    } catch (err) {
-      console.warn("[uiStore] panel layout hydrate failed", err);
-      return null;
-    }
-  },
-
   setPanelLayout(sizes) {
     if (!isPanelLayout(sizes)) {
       return;
     }
-    writeLayout(sizes);
     persistPanelLayout(sizes);
     set({ panelLayout: sizes });
   },
@@ -503,34 +500,13 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
     });
   },
 
-  async hydrateExpandedForModule(moduleId) {
-    const generation = ++expandedHydrationGeneration;
+  hydrateExpandedForModule(moduleId) {
     const required = selectedTaskAncestorIds(moduleId);
-    // Reflect the module switch immediately: bind the new scope and clear the
-    // prior module's set so collapsed sets never mix across modules.
-    set({ expandedModuleId: moduleId, expandedTaskIds: required });
-
-    let value: unknown;
-    try {
-      ({ value } = await getExpandedSubtasks(moduleId));
-    } catch (err) {
-      console.warn("[uiStore] expanded subtasks hydrate failed", err);
-      return;
-    }
-
-    // A newer module switch may have landed while awaiting; drop stale results.
-    if (
-      generation !== expandedHydrationGeneration ||
-      get().expandedModuleId !== moduleId ||
-      useTasksStore.getState().selectedModuleId !== moduleId
-    ) {
-      return;
-    }
-    if (!isStringArray(value)) {
-      return;
-    }
-
-    set({ expandedTaskIds: new Set<TaskId>([...value, ...required]) });
+    const remembered = readExpandedByModule()[moduleId] ?? [];
+    set({
+      expandedModuleId: moduleId,
+      expandedTaskIds: new Set<TaskId>([...remembered, ...required]),
+    });
   },
 
   setStorySearchQuery(query) {

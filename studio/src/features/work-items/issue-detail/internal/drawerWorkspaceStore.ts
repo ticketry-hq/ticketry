@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { useConfigStore } from "../../../agents/stores/configStore";
+import { useConfigStore } from "../../../studio/stores/configStore";
 import type {
   DesignDoc,
   DocTabState,

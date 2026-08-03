@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useConfigStore as useAgentConfigStore } from "../features/agents/stores/configStore";
 import {
   isSidebarEnabled,
-  useConfigStore as useStudioConfigStore,
+  useConfigStore,
 } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 
@@ -32,21 +31,10 @@ describe("Studio profile persistence", () => {
       recent_project_id: "project-1",
       recent_module_ids: {},
     };
-    useAgentConfigStore.setState({
-      recentProfileIndex: 0,
-      profiles: [currentProfile],
-    });
-    useStudioConfigStore.setState({
+    useConfigStore.setState({
       recentProfileIndex: 0,
       features: { sidebar: false, projects: false },
-      profiles: [
-        {
-          ...currentProfile,
-          api_url: "http://tracker.test",
-          api_key: "",
-          agent_prompts: {},
-        },
-      ],
+      profiles: [currentProfile],
     });
     useTasksStore.setState({
       selectedProjectId: null,
@@ -98,13 +86,13 @@ describe("Studio profile persistence", () => {
       );
     });
 
-    await useStudioConfigStore.getState().loadConfig();
+    await useConfigStore.getState().loadConfig();
 
-    expect(useStudioConfigStore.getState().features).toEqual({
+    expect(useConfigStore.getState().features).toEqual({
       sidebar: true,
       projects: false,
     });
     expect(isSidebarEnabled()).toBe(true);
-    expect(isSidebarEnabled(useStudioConfigStore.getState())).toBe(true);
+    expect(isSidebarEnabled(useConfigStore.getState())).toBe(true);
   });
 });

@@ -3,10 +3,12 @@
 from datetime import datetime, timezone
 
 import pytest
+from asgiref.sync import sync_to_async
 from django.db import IntegrityError
 
 from apps.runs import dao
 from apps.runs.models import AgentRun
+from worktracker.models import Issue
 from worktracker.tests.factories import (
     ensure_issue,
     fixture_issue_id,
@@ -358,4 +360,48 @@ async def test_status_routing_uses_run_scope_before_terminal_session_exists() ->
         fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1"),
         fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None),
         "plan",
+    )
+
+
+async def test_parentless_task_run_routes_as_a_task() -> None:
+    scaffold_task = await sync_to_async(ensure_issue)(
+        project_id="parentless-project",
+        module_id="scaffold-module",
+        task_id="scaffold-task",
+    )
+    task_id = fixture_uuid("parentless-task")
+    task = await Issue.objects.acreate(
+        id=task_id,
+        project_id=scaffold_task.project_id,
+        type="task",
+        issue_type_id=scaffold_task.issue_type_id,
+        parent=None,
+        module=None,
+        name="Parentless task",
+        sequence_id=3,
+    )
+    run = AgentRun(
+        id="parentless-task-run",
+        issue=task,
+        agent="codex",
+        status="running",
+        started_at="2026-08-03T10:00:00+00:00",
+        scope="task",
+    )
+    await dao.insert_agent_run(run)
+
+    records = await dao.agent_status_records(
+        str(task.project_id),
+        now=datetime(2026, 8, 3, 11, tzinfo=timezone.utc),
+    )
+
+    assert len(records) == 1
+    assert records[0].task_id == task_id
+    assert records[0].module_id == task_id
+    assert await dao.get_run_routing(run.id) == (task_id, task_id)
+    assert await dao.get_status_routing(run.id) == (
+        str(task.project_id),
+        task_id,
+        task_id,
+        "task",
     )

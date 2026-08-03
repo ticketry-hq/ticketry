@@ -10,7 +10,7 @@ import type {
   TerminalCreateRequest,
 } from "../../agents/terminal/create/types";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { useConfigStore as useAgentConfigStore } from "../../agents/stores/configStore";
+import { useConfigStore } from "../stores/configStore";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { useTasksStore } from "../stores/tasksStore";
 
@@ -34,7 +34,7 @@ function studioPlanFlow(): TerminalCreateFlow {
   });
   return {
     hasModuleFolder(moduleId) {
-      const { recentProfileIndex, profiles } = useAgentConfigStore.getState();
+      const { recentProfileIndex, profiles } = useConfigStore.getState();
       const profile =
         recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
       return Boolean(profile?.module_folders?.[moduleId]);
@@ -91,7 +91,7 @@ export function startPlanFlow(): void {
  * 2) Otherwise push PromptInput with `next: agent-picker, mode: instant`.
  */
 export function startInstantChangeFlow(): void {
-  const cfg = useAgentConfigStore.getState();
+  const cfg = useConfigStore.getState();
   const tasks = useTasksStore.getState();
   const modal = useModalStore.getState();
 
@@ -156,7 +156,7 @@ function selectedTaskLaunchContext(): {
 
 /** Equivalent entry for `o` (open agent on selected task). */
 export function startOpenFlow(): void {
-  const cfg = useAgentConfigStore.getState();
+  const cfg = useConfigStore.getState();
   const modal = useModalStore.getState();
   const { recentProfileIndex, profiles } = cfg;
   const context = selectedTaskLaunchContext();
@@ -183,7 +183,7 @@ export function startOpenFlow(): void {
 
 /** Entry for shift+enter (open with prompt). */
 export function startOpenWithPromptFlow(): void {
-  const cfg = useAgentConfigStore.getState();
+  const cfg = useConfigStore.getState();
   const modal = useModalStore.getState();
   const { recentProfileIndex, profiles } = cfg;
   const context = selectedTaskLaunchContext();

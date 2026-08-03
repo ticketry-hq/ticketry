@@ -227,6 +227,10 @@ describe("Studio module task-tree hydration", () => {
       "studio.selectedTaskByModule:v1",
       JSON.stringify({ "module-1": "3" }),
     );
+    localStorage.setItem(
+      "studio.expandedSubtasks:v1",
+      JSON.stringify({ "module-1": ["4"] }),
+    );
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/modules/module-1/work-items")) {
@@ -242,9 +246,6 @@ describe("Studio module task-tree hydration", () => {
       }
       if (url.endsWith("/projects/project-1/states")) {
         return Promise.resolve(jsonResponse(states));
-      }
-      if (url === "/api/settings/expanded_subtasks?module_id=module-1") {
-        return Promise.resolve(jsonResponse({ value: ["4"] }));
       }
       throw new Error(`Unexpected request: ${url}`);
     });
@@ -393,9 +394,6 @@ describe("Studio module task-tree hydration", () => {
       if (url.endsWith("/projects/project-1/states")) {
         return Promise.resolve(jsonResponse(states));
       }
-      if (url.includes("/api/settings/expanded_subtasks")) {
-        return Promise.resolve(jsonResponse({}));
-      }
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -493,104 +491,33 @@ describe("Studio module task-tree hydration", () => {
     expect(useTasksStore.getState().subtasks).toEqual({});
   });
 
-  it("ignores expansion hydration from a module switched away from", async () => {
-    let resolveOldExpansions!: (response: Response) => void;
-    let resolveActiveTasks!: (response: Response) => void;
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/modules/module-1/work-items")) {
-        return Promise.resolve(
-          jsonResponse([workItem("1", "Old root", "module-1", 0)]),
-        );
-      }
-      if (url.endsWith("/modules/module-2/work-items")) {
-        return new Promise<Response>((resolve) => {
-          resolveActiveTasks = resolve;
-        });
-      }
-      if (url.endsWith("/projects/project-1/states")) {
-        return Promise.resolve(jsonResponse(states));
-      }
-      if (url === "/api/settings/expanded_subtasks?module_id=module-1") {
-        return new Promise<Response>((resolve) => {
-          resolveOldExpansions = resolve;
-        });
-      }
-      if (url === "/api/settings/expanded_subtasks?module_id=module-2") {
-        return Promise.resolve(jsonResponse({ value: [] }));
-      }
-      throw new Error(`Unexpected request: ${url}`);
-    });
-
-    const oldSelection = useTasksStore.getState().selectModule("module-1");
-    await vi.waitFor(() => expect(resolveOldExpansions).toBeTypeOf("function"));
-
-    const activeSelection = useTasksStore.getState().selectModule("module-2");
-    await vi.waitFor(() => expect(resolveActiveTasks).toBeTypeOf("function"));
-    resolveOldExpansions(jsonResponse({ value: ["old-expanded-branch"] }));
-    await oldSelection;
-
-    expect(useTasksStore.getState().selectedModuleId).toBe("module-2");
-    expect(useUIStore.getState().expandedTaskIds).not.toContain(
-      "old-expanded-branch",
+  it("restores and persists expanded branches independently by module", () => {
+    localStorage.setItem(
+      "studio.expandedSubtasks:v1",
+      JSON.stringify({
+        "module-1": ["module-one-branch"],
+        "module-2": ["module-two-branch"],
+      }),
     );
 
-    resolveActiveTasks(
-      jsonResponse([workItem("4", "Active root", "module-2", 0)]),
+    useTasksStore.setState({ selectedModuleId: "module-1" });
+    useUIStore.getState().hydrateExpandedForModule("module-1");
+    expect(useUIStore.getState().expandedTaskIds).toEqual(
+      new Set(["module-one-branch"]),
     );
-    await activeSelection;
-  });
 
-  it("ignores old expansion hydration after switching away and back", async () => {
-    let resolveFirstModuleOneExpansions!: (response: Response) => void;
-    let moduleOneExpansionRequests = 0;
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/modules/module-1/work-items")) {
-        return Promise.resolve(
-          jsonResponse([workItem("1", "Module-one root", "module-1", 0)]),
-        );
-      }
-      if (url.endsWith("/modules/module-2/work-items")) {
-        return Promise.resolve(
-          jsonResponse([workItem("4", "Module-two root", "module-2", 0)]),
-        );
-      }
-      if (url.endsWith("/projects/project-1/states")) {
-        return Promise.resolve(jsonResponse(states));
-      }
-      if (url === "/api/settings/expanded_subtasks?module_id=module-1") {
-        moduleOneExpansionRequests += 1;
-        if (moduleOneExpansionRequests === 1) {
-          return new Promise<Response>((resolve) => {
-            resolveFirstModuleOneExpansions = resolve;
-          });
-        }
-        return Promise.resolve(jsonResponse({ value: ["current-branch"] }));
-      }
-      if (url === "/api/settings/expanded_subtasks?module_id=module-2") {
-        return Promise.resolve(jsonResponse({ value: [] }));
-      }
-      throw new Error(`Unexpected request: ${url}`);
-    });
-
-    const firstModuleOneSelection = useTasksStore
-      .getState()
-      .selectModule("module-1");
-    await vi.waitFor(() =>
-      expect(resolveFirstModuleOneExpansions).toBeTypeOf("function"),
-    );
-    await useTasksStore.getState().selectModule("module-2");
-    await useTasksStore.getState().selectModule("module-1");
-
-    resolveFirstModuleOneExpansions(
-      jsonResponse({ value: ["stale-branch"] }),
-    );
-    await firstModuleOneSelection;
+    useTasksStore.setState({ selectedModuleId: "module-2" });
+    useUIStore.getState().hydrateExpandedForModule("module-2");
+    useUIStore.getState().toggleExpanded("new-module-two-branch");
 
     expect(useUIStore.getState().expandedTaskIds).toEqual(
-      new Set(["current-branch"]),
+      new Set(["module-two-branch", "new-module-two-branch"]),
     );
+    expect(JSON.parse(localStorage.getItem("studio.expandedSubtasks:v1")!))
+      .toEqual({
+        "module-1": ["module-one-branch"],
+        "module-2": ["module-two-branch", "new-module-two-branch"],
+      });
   });
 
   it("ignores an old response after switching away from and back to its module", async () => {

@@ -25,8 +25,8 @@ interface ConfigStoreState {
 
   loadConfig: () => Promise<void>;
   selectProfile: (index: number) => Promise<void>;
-  createProfile: (body: Partial<Profile> & { api_key: string }) => Promise<void>;
-  updateProfile: (index: number, body: Partial<Profile> & { api_key: string }) => Promise<void>;
+  createProfile: (body: Partial<Profile>) => Promise<void>;
+  updateProfile: (index: number, body: Partial<Profile>) => Promise<void>;
   deleteProfile: (index: number) => Promise<void>;
   setModuleFolder: (moduleId: string, path: string) => Promise<void>;
 }
@@ -75,17 +75,9 @@ export const useConfigStore = create<ConfigStoreState>((set, get) => ({
     if (recentProfileIndex === null) return;
     const profile = profiles[recentProfileIndex];
     if (!profile) return;
-    const nextFolders = { ...profile.module_folders, [moduleId]: path };
     await get().updateProfile(recentProfileIndex, {
-      name: profile.name,
-      api_url: profile.api_url,
-      api_key: profile.api_key ?? "",
-      workspace_slug: profile.workspace_slug,
-      agent_prompt: profile.agent_prompt,
-      agent_prompts: profile.agent_prompts,
-      module_folders: nextFolders,
-      recent_project_id: profile.recent_project_id ?? null,
-      recent_module_ids: profile.recent_module_ids ?? {},
+      ...profile,
+      module_folders: { ...profile.module_folders, [moduleId]: path },
     });
   },
 }));

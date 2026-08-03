@@ -18,7 +18,6 @@ import type { Row } from "../features/studio/pages/tasks/TasksPane";
 import { useConfigStore as useStudioConfigStore } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
-import { useConfigStore as useAgentConfigStore } from "../features/agents/stores/configStore";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import {
   useTerminalStore,
@@ -106,26 +105,12 @@ describe("Studio task keymap", () => {
       tasks: [selectedTask],
       states: [selectedTask.state],
     });
-    useAgentConfigStore.setState({
-      recentProfileIndex: 0,
-      profiles: [
-        {
-          name: "Local",
-          workspace_slug: "local",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_folders: { "module-1": "/workspace" },
-        },
-      ],
-    });
     useStudioConfigStore.setState({
       recentProfileIndex: 0,
       features: { sidebar: true, projects: true },
       profiles: [
         {
           name: "Local",
-          api_url: "http://tracker.test",
-          api_key: "",
           workspace_slug: "local",
           agent_prompt: null,
           agent_prompts: {},

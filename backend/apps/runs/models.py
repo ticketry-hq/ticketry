@@ -31,6 +31,12 @@ class AgentRun(models.Model):
 
     class Meta:
         db_table = "agent_runs"
+        indexes = [
+            models.Index(
+                fields=["issue", "-started_at"],
+                name="idx_agent_runs_issue_started",
+            )
+        ]
 
 
 class AutomationAttempt(models.Model):

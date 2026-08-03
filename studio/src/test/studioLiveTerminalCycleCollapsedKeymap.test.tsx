@@ -1,4 +1,4 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAgentStatusStore } from "../features/agents/status";
 import {
@@ -163,6 +163,7 @@ function setLiveTerminals(taskIds: string[]): void {
 describe("Studio live-terminal cycle through collapsed rows", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    localStorage.clear();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation(() =>
@@ -230,17 +231,8 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
     expect(useWorkspaceTabsStore.getState().activeByTask[leaf.id]).toBe(
       `session-${leaf.id}`,
     );
-    await waitFor(() => {
-      const fetchMock = vi.mocked(fetch);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock).toHaveBeenLastCalledWith(
-        "/api/settings/expanded_subtasks?module_id=module-1",
-        expect.objectContaining({
-          method: "PUT",
-          body: JSON.stringify({ value: [parent.id, root.id] }),
-        }),
-      );
-    });
+    expect(JSON.parse(localStorage.getItem("studio.expandedSubtasks:v1")!))
+      .toEqual({ "module-1": [parent.id, root.id] });
   });
 
   it("lands inside a collapsed workflow-state section and leaves it expanded", () => {

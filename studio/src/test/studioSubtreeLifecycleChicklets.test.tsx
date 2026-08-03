@@ -210,9 +210,6 @@ describe("Studio subtree lifecycle chicklets", () => {
           ]),
         );
       }
-      if (url.includes("/api/settings/expanded_subtasks")) {
-        return Promise.resolve(jsonResponse({}));
-      }
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -313,9 +310,6 @@ describe("Studio subtree lifecycle chicklets", () => {
           ]),
         );
       }
-      if (url.includes("/api/settings/expanded_subtasks")) {
-        return Promise.resolve(jsonResponse({}));
-      }
       throw new Error(`Unexpected request: ${url}`);
     });
     await useTasksStore.getState().loadTasks("project-1", "module-1");
@@ -388,12 +382,6 @@ describe("Studio subtree lifecycle chicklets", () => {
   });
 
   it("counts every descendant once when malformed parentage contains a cycle", () => {
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
-      if (String(input).includes("/api/settings/expanded_subtasks")) {
-        return Promise.resolve(jsonResponse({}));
-      }
-      throw new Error(`Unexpected request: ${String(input)}`);
-    });
     const root = workItem("1", "Root story", "module-1", 1);
     const child = workItem("2", "Implementation child", "1", 1);
     useTasksStore.setState({

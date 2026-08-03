@@ -3,7 +3,7 @@ import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useTasksStore } from "../stores/tasksStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
-import { useConfigStore } from "../../agents/stores/configStore";
+import { useConfigStore } from "../stores/configStore";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,

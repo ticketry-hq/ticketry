@@ -7,7 +7,6 @@ import { useUIStore } from "../features/studio/stores/uiStore";
 
 const api = vi.hoisted(() => ({
   postTaskStatus: vi.fn(),
-  putExpandedSubtasks: vi.fn(),
   reorderTask: vi.fn(),
 }));
 
@@ -341,7 +340,6 @@ describe("TasksPane within-state ticket dragging", () => {
 
     expect(JSON.stringify([...useUIStore.getState().expandedTaskIds]))
       .toBe(persistedBefore);
-    expect(api.putExpandedSubtasks).not.toHaveBeenCalled();
   });
 
   it("leaves a previously collapsed dragged root collapsed", () => {
@@ -360,6 +358,5 @@ describe("TasksPane within-state ticket dragging", () => {
     expect(screen.queryByRole("treeitem", { name: /middle-child/ }))
       .not.toBeInTheDocument();
     expect(useUIStore.getState().expandedTaskIds).toEqual(new Set());
-    expect(api.putExpandedSubtasks).not.toHaveBeenCalled();
   });
 });

@@ -5,8 +5,6 @@ import type { IssueTypeOut } from "@worktracker/typescript-sdk/models";
 
 export interface Profile {
   name: string;
-  api_url: string;
-  api_key?: string;
   workspace_slug: string;
   agent_prompt: string | null;
   agent_prompts: Record<string, string>;

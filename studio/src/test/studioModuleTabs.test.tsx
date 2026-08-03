@@ -8,7 +8,6 @@ import { ModulesPane } from "../features/studio/pages/modules/ModulesPane";
 import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
 import { useStudioStore } from "../features/projects/store";
 import { useConfigStore as useStudioConfigStore } from "../features/studio/stores/configStore";
-import { useConfigStore as useAgentConfigStore } from "../features/agents/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { Layout } from "../app/studio/layout/Layout";
@@ -124,8 +123,6 @@ function run(
 function localProfile() {
   return {
     name: "Local",
-    api_url: "http://tracker.test",
-    api_key: "",
     workspace_slug: "meml",
     agent_prompt: null,
     agent_prompts: {},
@@ -143,6 +140,11 @@ function mockModuleCreation({
   let folderPutCount = 0;
   fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url === "/api/work-tracker/projects/project-1/issue-types") {
+      return Promise.resolve(
+        jsonResponse([{ id: "module-type", name: "Module", level: "module" }]),
+      );
+    }
     if (
       url === "/api/work-tracker/projects/project-1/modules" &&
       init?.method === "POST"
@@ -196,9 +198,6 @@ function mockModuleCreation({
     if (url.endsWith("/projects/project-1/states")) {
       return Promise.resolve(jsonResponse([]));
     }
-    if (url === "/api/settings/expanded_subtasks?module_id=module-new") {
-      return Promise.resolve(jsonResponse({ value: [] }));
-    }
     throw new Error(`Unexpected request: ${url}`);
   });
 }
@@ -218,7 +217,6 @@ describe("Studio module tab strip", () => {
       recentProfileIndex: null,
       features: { sidebar: true, projects: true },
     });
-    useAgentConfigStore.setState({ profiles: [], recentProfileIndex: null });
     useStudioStore.setState({ selectedProjectId: null, modules: [] });
     useModalStore.setState({ modalStack: [], activeBindings: null });
     useAgentStatusStore.setState({
@@ -235,7 +233,6 @@ describe("Studio module tab strip", () => {
       expandedModuleId: null,
       collapsedStateNames: new Set(),
       panelLayout: [18, 18, 36, 28],
-      hydratePanelLayout: async () => null,
     });
     useTasksStore.setState({
       selectedProjectId: "project-1",
@@ -444,7 +441,6 @@ describe("Studio module tab strip", () => {
   it("creates a module from the strip and saves its selected folder in the same flow", async () => {
     const profile = localProfile();
     useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
-    useAgentConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
     useStudioStore.setState({
       selectedProjectId: "project-1",
       modules: [],
@@ -477,7 +473,7 @@ describe("Studio module tab strip", () => {
         expect.objectContaining({ id: "module-new", project_id: "project-1" }),
       ]),
     );
-    expect(useAgentConfigStore.getState().profiles[0]?.module_folders).toEqual({
+    expect(useStudioConfigStore.getState().profiles[0]?.module_folders).toEqual({
       "module-new": "/repos/new-module",
     });
     expect(
@@ -491,7 +487,7 @@ describe("Studio module tab strip", () => {
 
   it("creates with a blank folder without adding a mapping or follow-up modal", async () => {
     const profile = localProfile();
-    useAgentConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
+    useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
     mockModuleCreation();
     render(
       <>
@@ -508,7 +504,7 @@ describe("Studio module tab strip", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(useAgentConfigStore.getState().profiles[0]?.module_folders).toEqual({});
+    expect(useStudioConfigStore.getState().profiles[0]?.module_folders).toEqual({});
     expect(useModalStore.getState().modalStack).toEqual([]);
     expect(
       fetchMock.mock.calls.some(
@@ -523,7 +519,7 @@ describe("Studio module tab strip", () => {
 
   it("retries only folder persistence after the module has been created", async () => {
     const profile = localProfile();
-    useAgentConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
+    useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
     mockModuleCreation({ folderPutFailures: 1 });
     render(
       <>
@@ -630,7 +626,6 @@ describe("Studio module tab strip", () => {
   it("switches modules with the existing selection behavior", async () => {
     const profile = localProfile();
     useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
-    useAgentConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
     localStorage.setItem(
       "studio.studio.selectedTaskByModule",
       JSON.stringify({ "module-old": "story-old" }),
@@ -648,20 +643,12 @@ describe("Studio module tab strip", () => {
       if (url.endsWith("/modules/module-old/work-items")) {
         return Promise.resolve(jsonResponse([workItem("story-old", "Remembered story", "module-old")]));
       }
-      if (url.endsWith("/work-items/story-old")) {
-        return Promise.resolve(
-          jsonResponse({ task: workItem("story-old", "Remembered story", "module-old") }),
-        );
-      }
       if (url.endsWith("/projects/project-1/states")) {
         return Promise.resolve(
           jsonResponse([
             { id: "todo", name: "Todo", group: "backlog", color: null, sort_order: 0 },
           ]),
         );
-      }
-      if (url === "/api/settings/expanded_subtasks?module_id=module-old") {
-        return Promise.resolve(jsonResponse({ value: [] }));
       }
       throw new Error(`Unexpected request: ${url}`);
     });
@@ -692,7 +679,7 @@ describe("Studio module tab strip", () => {
         sidebarVisible: false,
         focusedPane: "tasks",
       });
-      expect(useTasksStore.getState().details?.task.id).toBe("story-old");
+      expect(useTasksStore.getState().selectedTaskId).toBe("story-old");
     });
     const profileWrite = fetchMock.mock.calls.find(
       ([input, init]) =>
@@ -842,7 +829,6 @@ describe("Studio module tab strip", () => {
   it("shows the recent module as active after project-load restoration", async () => {
     const profile = localProfile();
     useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
-    useAgentConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/work-tracker/projects/project-1/modules") {
@@ -875,9 +861,6 @@ describe("Studio module tab strip", () => {
       }
       if (url.endsWith("/projects/project-1/states")) {
         return Promise.resolve(jsonResponse([]));
-      }
-      if (url === "/api/settings/expanded_subtasks?module_id=module-middle") {
-        return Promise.resolve(jsonResponse({ value: [] }));
       }
       throw new Error(`Unexpected request: ${url}`);
     });

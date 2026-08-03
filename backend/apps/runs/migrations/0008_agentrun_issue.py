@@ -91,6 +91,13 @@ class Migration(migrations.Migration):
             model_name="agentrun",
             name="idx_agent_runs_task_started_at",
         ),
+        migrations.AddIndex(
+            model_name="agentrun",
+            index=models.Index(
+                fields=["issue", "-started_at"],
+                name="idx_agent_runs_issue_started",
+            ),
+        ),
         migrations.RemoveField(model_name="agentrun", name="project_id"),
         migrations.RemoveField(model_name="agentrun", name="module_id"),
         migrations.RemoveField(model_name="agentrun", name="task_id"),

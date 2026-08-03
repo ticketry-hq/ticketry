@@ -3,7 +3,7 @@ import * as api from "../lib/api";
 import { normalizeTask } from "../lib/api";
 import { sortModulesByRecency, useStudioStore } from "../../projects";
 import { TEMP_TASK_ID } from "../../agents/types";
-import { useConfigStore } from "../../agents/stores/configStore";
+import { useConfigStore } from "./configStore";
 import { toast } from "../../../app/stores/toastStore";
 import { apiErrorMessage } from "../../../shared/api/client";
 import { rankBetween } from "../../work-items";

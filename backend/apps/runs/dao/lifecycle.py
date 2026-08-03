@@ -92,14 +92,14 @@ async def get_run_routing(run_id: str) -> Optional[tuple[Optional[str], str]]:
     routing = (
         await AgentRun.objects.filter(id=run_id)
         .annotate(run_module_id=Coalesce("issue__module_id", "issue_id"))
-        .values_list("issue_id", "issue__module_id", "run_module_id")
+        .values_list("issue_id", "issue__type", "run_module_id")
         .afirst()
     )
     if routing is None:
         return None
-    issue_id, parent_module_id, module_id = routing
+    issue_id, issue_type, module_id = routing
     return (
-        str(issue_id) if parent_module_id else None,
+        str(issue_id) if issue_type == "task" else None,
         str(module_id),
     )
 
@@ -115,7 +115,7 @@ async def get_status_routing(
         .values_list(
             "issue__project_id",
             "issue_id",
-            "issue__module_id",
+            "issue__type",
             "run_module_id",
             "scope",
         )
@@ -123,10 +123,10 @@ async def get_status_routing(
     )
     if routing is None:
         return None
-    project_id, issue_id, parent_module_id, module_id, scope = routing
+    project_id, issue_id, issue_type, module_id, scope = routing
     return (
         str(project_id),
-        str(issue_id) if parent_module_id else None,
+        str(issue_id) if issue_type == "task" else None,
         str(module_id),
         scope,
     )

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore, type StandardModalType } from "../../../app/modal/modalStore";
-import { useConfigStore as useAgentConfigStore } from "../stores/configStore";
+import { useConfigStore as defaultConfigStore } from "../../studio/stores/configStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import {
@@ -10,7 +10,7 @@ import {
 } from "./ModuleFolderSelection";
 
 type FolderConfigState = Pick<
-  ReturnType<typeof useAgentConfigStore.getState>,
+  ReturnType<typeof defaultConfigStore.getState>,
   "profiles" | "recentProfileIndex" | "setModuleFolder"
 >;
 
@@ -26,7 +26,7 @@ export interface ModuleFolderPayload {
 
 export function ModuleFolder({
   payload,
-  useConfigStore = useAgentConfigStore,
+  useConfigStore = defaultConfigStore,
   runtime = studioRuntime(),
 }: {
   payload?: ModuleFolderPayload;

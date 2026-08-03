@@ -1,8 +1,6 @@
 import type {
-  ConfigPayload,
   DesignDoc,
   PersistedTerminalSession,
-  Profile,
   ResumableTerminalSession,
 } from "../types";
 import { dedupeInFlight } from "../../../shared/api/dedupe";
@@ -42,19 +40,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return body as T;
 }
-
-// Same key as the studio API layer's getConfig: both stores bootstrap from
-// GET /api/config, so concurrent loads share one request.
-export const getConfig = () =>
-  dedupeInFlight("GET /api/config", () => request<ConfigPayload>("/api/config"));
-export const postProfile = (body: Partial<Profile>) =>
-  request<ConfigPayload>("/api/config/profiles", { method: "POST", body: JSON.stringify(body) });
-export const putProfile = (index: number, body: Partial<Profile>) =>
-  request<ConfigPayload>(`/api/config/profiles/${index}`, { method: "PUT", body: JSON.stringify(body) });
-export const deleteProfile = (index: number) =>
-  request<ConfigPayload>(`/api/config/profiles/${index}`, { method: "DELETE" });
-export const patchConfig = (body: { recent_profile_index: number }) =>
-  request<ConfigPayload>("/api/config", { method: "PATCH", body: JSON.stringify(body) });
 
 export const getModuleActivity = (projectId: string): Promise<Record<string, string>> =>
   request<Record<string, string>>(`/api/runs/module-activity?project_id=${encodeURIComponent(projectId)}`).catch(() => ({}));

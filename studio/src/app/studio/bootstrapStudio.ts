@@ -1,4 +1,3 @@
-import { useConfigStore as useAgentConfigStore } from "../../features/agents/stores/configStore";
 import { useOnboardingStore } from "../onboarding/onboardingStore";
 import {
   isSidebarEnabled,
@@ -38,8 +37,6 @@ export async function bootstrapStudio(): Promise<BootstrapOutcome> {
 async function loadBootstrapData(): Promise<void> {
   await Promise.all([
     useConfigStore.getState().loadConfig(),
-    useAgentConfigStore.getState().loadConfig(),
-    useUIStore.getState().hydratePanelLayout(),
     loadKeybindingOverrides(),
     // Never rejects: the store swallows its own failure so a flaky workspace
     // endpoint cannot flip the bootstrap outcome away from "ready".

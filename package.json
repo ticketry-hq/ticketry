@@ -24,6 +24,7 @@
     "contract:generate": "npm run openapi:export && npm run sdk:generate && npm run python-sdk:generate && npm run wire:export",
     "contract:check": "node scripts/check-contract-drift.mjs",
     "boundary:check": "node scripts/check-boundary.mjs",
+    "prototype:supabase": "node backend/prototypes/supabase-migration/tui.mjs",
     "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
     "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio",
     "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",

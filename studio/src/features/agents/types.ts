@@ -11,24 +11,11 @@ export type LifecycleState =
   | "error"
   | "unknown";
 
-export interface Profile {
-  name: string;
-  workspace_slug: string;
-  agent_prompt: string | null;
-  agent_prompts: Record<string, string>;
-  module_folders: Record<string, string>;
-  recent_project_id?: string | null;
-  recent_module_ids?: Record<string, string>;
-}
+export type { Profile } from "../studio/lib/types";
 
 export type AgentName = "claude" | "agy" | "codex" | "gemini";
 export type TaskId = string;
 export type SessionId = string;
-
-export interface ConfigPayload {
-  recent_profile_index: number | null;
-  profiles: Profile[];
-}
 
 export interface PersistedTerminalSession {
   agent_run_id: string;

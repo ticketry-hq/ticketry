@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import { ModuleFolder } from "../features/agents/terminal/ModuleFolder";
 import { ModalHost } from "../app/modal";
-import { useConfigStore } from "../features/agents/stores/configStore";
+import { useConfigStore } from "../features/studio/stores/configStore";
 import { useModalStore } from "../app/modal";
 import * as agentApi from "../features/agents/api/agentApi";
+import * as studioApi from "../features/studio/lib/api";
 import type { StudioRuntime } from "../runtime";
 
 function folderPickerRuntime(
@@ -97,7 +98,7 @@ describe("ModuleFolder modal", () => {
 
   it("drafts a desktop-picked folder without persisting it", async () => {
     const pickFolder = vi.fn().mockResolvedValue("/repos/picked");
-    const putSpy = vi.spyOn(agentApi, "putProfile");
+    const putSpy = vi.spyOn(studioApi, "putProfile");
 
     render(
       <ModuleFolder
@@ -119,8 +120,9 @@ describe("ModuleFolder modal", () => {
 
   it("saves a picked folder through the profile flow and preserves modal follow-up chaining", async () => {
     const pickFolder = vi.fn().mockResolvedValue("/repos/picked");
-    const putSpy = vi.spyOn(agentApi, "putProfile").mockResolvedValue({
+    const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
+      features: useConfigStore.getState().features,
       profiles: useConfigStore.getState().profiles,
     });
     useModalStore.setState({
@@ -165,7 +167,7 @@ describe("ModuleFolder modal", () => {
       ],
     }));
     const pickFolder = vi.fn().mockResolvedValue(null);
-    const putSpy = vi.spyOn(agentApi, "putProfile");
+    const putSpy = vi.spyOn(studioApi, "putProfile");
 
     render(
       <ModuleFolder
@@ -246,8 +248,9 @@ describe("ModuleFolder modal", () => {
         },
       ],
     }));
-    const putSpy = vi.spyOn(agentApi, "putProfile").mockResolvedValue({
+    const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
+      features: useConfigStore.getState().features,
       profiles: useConfigStore.getState().profiles,
     });
 
@@ -282,8 +285,9 @@ describe("ModuleFolder modal", () => {
         },
       ],
     }));
-    const putSpy = vi.spyOn(agentApi, "putProfile").mockResolvedValue({
+    const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
+      features: useConfigStore.getState().features,
       profiles: useConfigStore.getState().profiles,
     });
 
@@ -342,7 +346,7 @@ describe("ModuleFolder modal", () => {
         },
       ],
     }));
-    const putSpy = vi.spyOn(agentApi, "putProfile");
+    const putSpy = vi.spyOn(studioApi, "putProfile");
 
     render(<ModuleFolder payload={{ moduleId: "mod-2" }} />);
     fireEvent.click(screen.getByText("/repos/one"));
@@ -356,7 +360,7 @@ describe("ModuleFolder modal", () => {
 
   it("discards a native folder selection on Cancel", async () => {
     const pickFolder = vi.fn().mockResolvedValue("/repos/picked");
-    const putSpy = vi.spyOn(agentApi, "putProfile");
+    const putSpy = vi.spyOn(studioApi, "putProfile");
 
     render(
       <ModuleFolder
@@ -376,8 +380,9 @@ describe("ModuleFolder modal", () => {
   });
 
   it("Enter on unchanged value calls api.putProfile with module_folders updated", async () => {
-    const putSpy = vi.spyOn(agentApi, "putProfile").mockResolvedValue({
+    const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
+      features: useConfigStore.getState().features,
       profiles: [
         {
           name: "p",
@@ -420,8 +425,9 @@ describe("ModuleFolder modal", () => {
     useModalStore.setState({
       modalStack: [{ type: "module-folder", payload: { moduleId: "mod-1" } }],
     });
-    const putSpy = vi.spyOn(agentApi, "putProfile").mockResolvedValue({
+    const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
+      features: useConfigStore.getState().features,
       profiles: useConfigStore.getState().profiles,
     });
 

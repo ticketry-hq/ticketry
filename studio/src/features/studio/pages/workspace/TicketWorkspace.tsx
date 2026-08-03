@@ -2,7 +2,7 @@ import { TEMP_TASK_ID } from "../../../agents/types";
 import { scratchBucketId } from "../../../agents/terminal";
 import { PaneShell } from "../../components/PaneShell";
 import { useConfig } from "../../stores/configStore";
-import { useTasksStore } from "../../stores/tasksStore";
+import { useTaskStates, useTasksStore } from "../../stores/tasksStore";
 import type {
   WorkspaceLauncherContext,
 } from "../../../work-items/issue-detail";
@@ -20,7 +20,7 @@ export function TicketWorkspace() {
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
   const workspaceSelection = useTasksStore((s) => s.workspaceSelection);
-  const states = useTasksStore((s) => s.states);
+  const states = useTaskStates();
   const dismissStateConfiguration = useTasksStore(
     (s) => s.dismissStateConfiguration,
   );

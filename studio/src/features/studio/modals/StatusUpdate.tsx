@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { useTasksStore } from "../stores/tasksStore";
+import { useTaskStates, useTasksStore } from "../stores/tasksStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 
 export function StatusUpdate() {
-  const allStates = useTasksStore((s) => s.states);
+  const allStates = useTaskStates();
   // Only real, settable Plane states (the synthetic scratch state has no id).
   const states = allStates.filter((st) => st.id !== null);
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);

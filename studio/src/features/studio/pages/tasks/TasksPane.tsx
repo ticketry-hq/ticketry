@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useTasksStore } from "../../stores/tasksStore";
+import { useTaskStates, useTasksStore } from "../../stores/tasksStore";
 import { useUIStore } from "../../stores/uiStore";
 import { TEMP_TASK_ID } from "../../../agents/types";
 import type { TaskSummary } from "../../lib/types";
@@ -93,7 +93,7 @@ export function TasksPane() {
   const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
   const moveTaskWithinState = useTasksStore((s) => s.moveTaskWithinState);
   const moveTaskToState = useTasksStore((s) => s.moveTaskToState);
-  const states = useTasksStore((s) => s.states);
+  const states = useTaskStates();
   const pendingReorderTaskIds = useTasksStore(
     (s) => s.pendingReorderTaskIds,
   );

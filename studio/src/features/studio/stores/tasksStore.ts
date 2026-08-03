@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import * as api from "../lib/api";
 import { normalizeTask } from "../lib/api";
@@ -18,6 +19,11 @@ import {
   stateCatalogChangedSince,
   stateCatalogRevision,
 } from "../../../shared/stateCatalogRevision";
+import {
+  getStatesSnapshot,
+  setStatesSorted,
+  useCachedStates,
+} from "../../../shared/query/stateCatalog";
 import {
   type ModuleSummary,
   type ProjectSummary,
@@ -84,7 +90,12 @@ interface TasksStoreState {
   modules: ModuleSummary[];
   selectedModuleId: string | null;
   tasks: TaskSummary[];
-  states: TaskState[];
+  /**
+   * Derived from the one shared workflow-state catalog, with the local-only
+   * Scratch section in front. React surfaces read useTaskStates() instead —
+   * a catalog change notifies query subscribers, not this store's.
+   */
+  readonly states: TaskState[];
   selectedTaskId: string | null;
   workspaceSelection: WorkspaceSelection;
   subtasks: Record<TaskId, TaskSummary[]>;
@@ -353,7 +364,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   modules: [],
   selectedModuleId: null,
   tasks: [],
-  states: [],
+  states: [] as TaskState[],
   selectedTaskId: null,
   workspaceSelection: { kind: "task" },
   subtasks: {},
@@ -627,11 +638,12 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
             : rememberedTaskId && loadedTaskIds.has(rememberedTaskId)
               ? rememberedTaskId
               : null;
+        // The module response carries the project's states. Publish them to
+        // the one shared catalog unless a workflow edit landed while this fetch
+        // was in flight, in which case the catalog is already newer.
+        if (!catalogChanged) setStatesSorted(projectId, states as State[]);
         return {
           tasks: nextTasks,
-          states: catalogChanged
-            ? state.states
-            : [SCRATCH_STATE, ...states],
           subtasks: nextSubtasks,
           selectedTaskId,
         };
@@ -1072,6 +1084,56 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
     return true;
   },
 }));
+
+// `states` is derived, never stored: one catalog, plus the local-only Scratch
+// section this store owns.
+function attachDerivedStates(state: TasksStoreState): void {
+  Object.defineProperty(state, "states", {
+    configurable: true,
+    enumerable: false,
+    get: () => [
+      SCRATCH_STATE,
+      ...(getStatesSnapshot(state.selectedProjectId) as TaskState[]),
+    ],
+  });
+}
+
+attachDerivedStates(useTasksStore.getState());
+useTasksStore.subscribe((state) => attachDerivedStates(state));
+
+// A `states` write has no local home any more; route it to the shared catalog
+// for whichever project the write is about, dropping the local-only Scratch
+// entry (id === null) which this store re-adds on read.
+const rawSetState = useTasksStore.setState;
+useTasksStore.setState = ((partial, replace) => {
+  const current = useTasksStore.getState();
+  const next = typeof partial === "function" ? partial(current) : partial;
+  const { states, ...withoutStates } = next as Partial<TasksStoreState>;
+  if (states !== undefined) {
+    const projectId = withoutStates.selectedProjectId ?? current.selectedProjectId;
+    if (projectId) {
+      setStatesSorted(
+        projectId,
+        states.filter((state) => state.id !== null) as State[],
+      );
+    }
+  }
+  rawSetState(withoutStates as typeof next, replace);
+  attachDerivedStates(useTasksStore.getState());
+}) as typeof useTasksStore.setState;
+
+/**
+ * Reactive read of the task-pane state list. Subscribes to the shared catalog,
+ * so a workflow rename or reorder re-renders the panes.
+ */
+export function useTaskStates(): TaskState[] {
+  const projectId = useTasksStore((s) => s.selectedProjectId);
+  const catalog = useCachedStates(projectId);
+  return useMemo(
+    () => [SCRATCH_STATE, ...(catalog as TaskState[])],
+    [catalog],
+  );
+}
 
 useTasksStore.subscribe((state, previous) => {
   if (

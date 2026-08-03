@@ -206,10 +206,9 @@ describe("studio Stories tree status feed", () => {
       updated_at: "2026-07-25T10:01:00Z",
     });
 
-    expect(useTasksStore.getState().states[1]).toMatchObject({
-      id: "review",
-      group: "completed",
-    });
+    expect(
+      useTasksStore.getState().states.find((state) => state.id === "review"),
+    ).toMatchObject({ id: "review", group: "completed" });
     expect(useTasksStore.getState().tasks[0].state.group).toBe("completed");
     expect(useTasksStore.getState().subtasks["task-1"][0].state.group)
       .toBe("completed");
@@ -226,7 +225,10 @@ describe("studio Stories tree status feed", () => {
     expect(
       groupAndOrderTasks(
         useTasksStore.getState().tasks,
-        useTasksStore.getState().states.map(({ sort_order: _, ...state }) => state),
+        useTasksStore
+          .getState()
+          .states.filter((state) => state.id !== null)
+          .map(({ sort_order: _, ...state }) => state),
       ).orderedStates.map((state) => state.id),
     ).toEqual(["doing", "review"]);
   });
@@ -264,7 +266,10 @@ describe("studio Stories tree status feed", () => {
       }],
     });
 
-    expect(useTasksStore.getState().states[0].group).toBe("completed");
+    expect(
+      useTasksStore.getState().states.find((state) => state.id === "review")
+        ?.group,
+    ).toBe("completed");
     expect(useTasksStore.getState().tasks[0].state.group).toBe("completed");
     expect(useBacklogStore.getState().states[0].group).toBe("completed");
     expect(useBacklogStore.getState().items[0].state?.group).toBe("completed");

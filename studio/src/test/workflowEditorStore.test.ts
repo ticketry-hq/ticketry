@@ -341,7 +341,11 @@ describe("workflowEditorStore scoped apply", () => {
 
     await useWorkflowEditorStore.getState().createState("Review", "started");
 
-    expect(useTasksStore.getState().states).toEqual([otherState]);
+    // project-2's catalog is untouched; the Scratch section is local to the
+    // Stories pane and always present there.
+    expect(
+      useTasksStore.getState().states.filter((state) => state.id !== null),
+    ).toEqual([otherState]);
     expect(useBacklogStore.getState().states).toEqual([otherState]);
   });
 

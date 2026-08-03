@@ -77,14 +77,8 @@ export function synchronizeActiveStateCatalogs(
 
   useTasksStore.setState((current) => {
     if (current.selectedProjectId !== projectId) return current;
-    const localStates = current.states.filter((state) => state.id === null);
-    const realStates = current.states.filter((state) => state.id !== null);
     const taskState = toTaskState(authoritative);
     return {
-      states: [
-        ...localStates,
-        ...upsertCanonicalState(realStates, taskState),
-      ],
       tasks: current.tasks.map((task) => replaceTaskState(task, taskState)),
       subtasks: Object.fromEntries(
         Object.entries(current.subtasks).map(([parentId, children]) => [
@@ -143,14 +137,6 @@ export function synchronizeActiveStateCatalogOrder(
 ): State[] {
   advanceStateCatalogRevision(projectId, authoritative);
   const ordered = [...authoritative].sort(compareStateOrder);
-
-  useTasksStore.setState((current) => {
-    if (current.selectedProjectId !== projectId) return current;
-    const localStates = current.states.filter((state) => state.id === null);
-    return {
-      states: [...localStates, ...ordered.map(toTaskState)],
-    };
-  });
 
   setStates(projectId, ordered);
 

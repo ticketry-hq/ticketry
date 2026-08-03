@@ -22,7 +22,7 @@ from django.http import Http404
 
 from worktracker.models import Issue, State
 from worktracker.services.errors import NotFoundError
-from worktracker.work_items import resolve_issue, task_qs
+from worktracker.work_items import module_descendant_task_qs, resolve_issue
 
 
 def _state_dict(state):
@@ -101,23 +101,12 @@ def list_states(project_id: uuid.UUID):
 def _module_subtree_qs(module_id: uuid.UUID, include_archived: bool):
     """Build the ordered task-descendant subtree queryset for a module.
 
-    Reproduces ``api.work_items.list_module_work_items``: BFS-walk the parent
-    tree from the module, then return the annotated ``task_qs`` rows ordered
-    ``(rank, sequence_id)``. Archived tasks are excluded unless requested.
+    Shares the subtree walk with ``api.work_items.list_module_work_items`` via
+    ``module_descendant_task_qs``; the ordering and archived exclusion are this
+    caller's own.
     """
 
-    descendant_ids = []
-    frontier = [module_id]
-    while frontier:
-        children = list(
-            Issue.objects.filter(parent_id__in=frontier, type="task").values_list(
-                "id", flat=True
-            )
-        )
-        descendant_ids.extend(children)
-        frontier = children
-
-    qs = task_qs().filter(id__in=descendant_ids)
+    qs = module_descendant_task_qs(module_id)
     if not include_archived:
         qs = qs.exclude(is_archived=True)
     return qs.order_by("rank", "sequence_id")

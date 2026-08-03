@@ -18,6 +18,7 @@ from .catalog import (
     SNAPSHOT_PATH,
     UPSTREAM_LICENSE_PATH,
     UPSTREAM_REPOSITORY,
+    tree_digest,
     verify_catalog,
 )
 
@@ -35,22 +36,6 @@ def _run(*args: str, cwd: Path, env: dict[str, str] | None = None) -> str:
         stdout=subprocess.PIPE,
     )
     return completed.stdout.strip()
-
-
-def _file_map(root: Path) -> dict[str, bytes]:
-    return {
-        path.relative_to(root).as_posix(): path.read_bytes()
-        for path in sorted(root.rglob("*"))
-        if path.is_file()
-    }
-
-
-def _tree_digest(root: Path) -> str:
-    lines = [
-        f"{hashlib.sha256(contents).hexdigest()}  {relative}\n"
-        for relative, contents in _file_map(root).items()
-    ]
-    return "sha256:" + hashlib.sha256("".join(lines).encode()).hexdigest()
 
 
 def refresh() -> None:
@@ -118,7 +103,12 @@ def refresh() -> None:
             expected = EXPECTED_PACKAGES[name]
             source_path = Path(expected["source_path"])
             upstream = upstream_root / source_path
-            if _file_map(installed) != _file_map(upstream):
+            # Compare through the canonical digest rather than a private
+            # content map: same sorted walk, same manifest format, and it
+            # rejects symlinks — which the installed tree must be free of
+            # anyway, since verify_catalog digests it the same way.
+            installed_digest = tree_digest(installed)
+            if installed_digest != tree_digest(upstream):
                 raise RuntimeError(
                     f"installer output for {name} differs from upstream {commit}"
                 )
@@ -134,7 +124,7 @@ def refresh() -> None:
                     "source_path": source_path.as_posix(),
                     "path": f"snapshot/{name}",
                     "installer_hash": installer_lock[name]["computedHash"],
-                    "digest": _tree_digest(installed),
+                    "digest": installed_digest,
                     "dependencies": list(expected["dependencies"]),
                     "required_mcp_tools": list(expected["required_mcp_tools"]),
                 }

@@ -123,6 +123,22 @@ def test_resolves_by_key(client, project, auth):
 
 
 @pytest.mark.django_db
+def test_resolves_by_lowercase_key(client, project, auth):
+    """Keys are shown uppercase but typed however — slug match is case-blind.
+
+    Retrieval already matched ``project__slug__iexact``; scope-context carried
+    a second copy of the ``KEY-N`` parse that matched case-sensitively, so a
+    lowercase key resolved for one and 404'd for the other.
+    """
+
+    a = _task(client, project, auth, "A")
+
+    payload = _scope(client, a["key"].lower(), auth)
+
+    assert payload["task"]["id"] == a["id"]
+
+
+@pytest.mark.django_db
 def test_404_on_missing_id(client, auth):
     r = client.get(
         f"{BASE}/work-items/{uuid.uuid4()}/scope-context", headers=auth

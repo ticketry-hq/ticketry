@@ -100,20 +100,51 @@ def resolve_issue_type(project_id, issue_type_id, bucket):
     return issue_type
 
 
-def resolve_issue(id_or_key, *, task_only=True):
-    """Resolve an issue by UUID pk or by its ``KEY-N`` address."""
+def module_descendant_task_qs(module_id):
+    """Return every task descendant of a module, as an unordered ``task_qs``.
 
-    qs = task_qs() if task_only else issue_qs()
+    Membership rides the ``parent`` link, so this is a BFS over the parent tree
+    rather than a flat filter: direct children plus their subtasks, to any
+    depth. Callers apply their own archived/PathFind exclusions and ordering —
+    those differ between the route and the in-process query.
+    """
+
+    descendant_ids = []
+    frontier = [module_id]
+    while frontier:
+        children = list(
+            Issue.objects.filter(parent_id__in=frontier, type="task").values_list(
+                "id", flat=True
+            )
+        )
+        descendant_ids.extend(children)
+        frontier = children
+
+    return task_qs().filter(id__in=descendant_ids)
+
+
+def resolve_in(qs, id_or_key):
+    """Resolve an issue within ``qs`` by UUID pk or by its ``KEY-N`` address.
+
+    The one place the ``KEY-N`` form is parsed. Callers supply the queryset so
+    each keeps its own filtering and prefetching, without re-implementing (and
+    drifting on) the address grammar.
+    """
+
     match = _KEY_RE.match(id_or_key)
-
     if match:
         slug, sequence_id = match.group(1), int(match.group(2))
         # Keys are shown uppercase but typed however — match slug case-blind.
         return get_object_or_404(
             qs, project__slug__iexact=slug, sequence_id=sequence_id
         )
-
     return get_object_or_404(qs, pk=id_or_key)
+
+
+def resolve_issue(id_or_key, *, task_only=True):
+    """Resolve an issue by UUID pk or by its ``KEY-N`` address."""
+
+    return resolve_in(task_qs() if task_only else issue_qs(), id_or_key)
 
 
 def blocker_would_cycle(issue_id, new_blocker_ids):
@@ -162,12 +193,7 @@ def build_scope_context(issue_id):
         )
     )
 
-    match = _KEY_RE.match(issue_id)
-    if match:
-        slug, sequence_id = match.group(1), int(match.group(2))
-        issue = get_object_or_404(base, project__slug=slug, sequence_id=sequence_id)
-    else:
-        issue = get_object_or_404(base, pk=issue_id)
+    issue = resolve_in(base, issue_id)
 
     depends_on = [scope_ref(b) for b in issue.blocked_by.all()]
     depended_by = [scope_ref(b) for b in issue.blocks.all()]

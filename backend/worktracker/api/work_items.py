@@ -5,7 +5,6 @@ from django.http import JsonResponse
 from ninja import Status
 
 from worktracker.api.router import _http_errors, router
-from worktracker.models import Issue
 from worktracker.workflow import InvalidTransition
 from worktracker.schemas import (
     ModuleWorkItemIn,
@@ -27,6 +26,7 @@ from worktracker.services.work_items import (
 )
 from worktracker.work_items import (
     build_scope_context,
+    module_descendant_task_qs,
     resolve_issue,
     task_qs,
 )
@@ -169,19 +169,7 @@ def list_module_work_items(
     if retired_error is not None:
         return retired_error
 
-    descendant_ids = []
-    frontier = [module_id]
-
-    while frontier:
-        children = list(
-            Issue.objects.filter(parent_id__in=frontier, type="task").values_list(
-                "id", flat=True
-            )
-        )
-        descendant_ids.extend(children)
-        frontier = children
-
-    qs = task_qs().filter(id__in=descendant_ids)
+    qs = module_descendant_task_qs(module_id)
 
     if not include_archived:
         qs = qs.exclude(is_archived=True)

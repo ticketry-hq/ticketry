@@ -36,7 +36,6 @@ from apps.terminals.agents.injectors import (
 )
 from apps.terminals.agents.registry import (
     AgentAdapter,
-    LaunchAugmentation,
     cleanup_temporary_artifacts,
 )
 from apps.terminals.agents.skills.preflight import (
@@ -184,25 +183,13 @@ async def _launch(
     argv = _approved_agent_argv(agent, argv)
     resolved_skills = resolved_skills or ResolvedSkills((), (), frozenset(), "")
     try:
-        if hasattr(adapter, "augment_launch"):
-            augmentation = adapter.augment_launch(
-                argv,
-                agent_run_id,
-                lifecycle_url=lifecycle_url,
-                mcp_url=mcp_url,
-                skills=resolved_skills,
-            )
-        else:
-            augmentation = LaunchAugmentation(
-                tuple(
-                    adapter.inject(
-                        argv,
-                        agent_run_id,
-                        lifecycle_url=lifecycle_url,
-                        mcp_url=mcp_url,
-                    )
-                )
-            )
+        augmentation = adapter.augment_launch(
+            argv,
+            agent_run_id,
+            lifecycle_url=lifecycle_url,
+            mcp_url=mcp_url,
+            skills=resolved_skills,
+        )
     except RequiredSkillUnavailable:
         raise
     except Exception as exc:

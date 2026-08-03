@@ -62,7 +62,7 @@ class IssueTypeOut(Schema):
 
 
 class ProjectOut(Schema):
-    """A project — mirrors core.ProjectSummary (``slug`` is the project key).
+    """A project; ``slug`` is the project key.
 
     ``description`` is plain markdown text (the model field is ``blank=True``,
     so existing rows serialize as ``""``); rendering/sanitization is FE-only.
@@ -197,27 +197,6 @@ class ScopeContextOut(Schema):
     depends_on: List[ScopeRef] = []
     depended_by: List[ScopeRef] = []
     advisory: str
-
-
-class MessageErrorOut(Schema):
-    """Stable Django Ninja message-error payload."""
-
-    detail: str
-
-
-class ValidationErrorDetailOut(Schema):
-    """One Django Ninja request-validation failure."""
-
-    type: str
-    loc: List[str | int]
-    msg: str
-    ctx: Optional[dict] = None
-
-
-class ValidationErrorOut(Schema):
-    """Stable Django Ninja validation-error envelope."""
-
-    detail: List[ValidationErrorDetailOut]
 
 
 # --- Input shapes -----------------------------------------------------------
@@ -458,14 +437,6 @@ class SetWorkflowAutoStartIn(WorkflowRevisionIn):
 
 class SetWorkflowSubtreeRunIn(WorkflowRevisionIn):
     enabled: bool
-
-
-class LaunchBindingIn(Schema):
-    prompt: Optional[str] = None
-    required_skills: Optional[List[str]] = None
-    agent: Optional[str] = None
-    model: Optional[str] = None
-    reasoning: Optional[str] = None
 
 
 class LaunchBindingOut(Schema):

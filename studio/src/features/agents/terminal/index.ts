@@ -38,10 +38,7 @@ export type {
   LifecycleState,
   LifecycleTone,
 } from "./lifecycle";
-export type {
-  FolderConfigHook,
-  ModuleFolderPayload,
-} from "./ModuleFolder";
+export type { ModuleFolderPayload } from "./ModuleFolder";
 
 export {
   launchSession,

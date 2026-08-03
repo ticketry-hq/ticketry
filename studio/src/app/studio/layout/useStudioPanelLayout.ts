@@ -3,7 +3,7 @@ import type { ImperativePanelGroupHandle } from "react-resizable-panels";
 import {
   isSidebarEnabled,
   sidebarPaneComposition,
-  useConfigStore,
+  useConfig,
 } from "../../../features/studio/stores/configStore";
 import { useUIStore } from "../../../features/studio/stores/uiStore";
 import {
@@ -15,11 +15,10 @@ import {
 } from "./layoutMath";
 
 export function useStudioPanelLayout() {
-  const paneComposition = useConfigStore((state) =>
-    sidebarPaneComposition(
-      state.features.projects,
-      isSidebarEnabled(state),
-    ),
+  const config = useConfig();
+  const paneComposition = sidebarPaneComposition(
+    config.features.projects,
+    isSidebarEnabled(config),
   );
   const sidebarVisible = useUIStore((state) => state.sidebarVisible);
   const panelLayout = useUIStore((state) => state.panelLayout);

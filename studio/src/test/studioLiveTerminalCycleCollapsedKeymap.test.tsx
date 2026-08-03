@@ -18,7 +18,7 @@ import {
   HEADER,
   type Row,
 } from "../features/studio/pages/tasks/TasksPane";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
@@ -175,7 +175,7 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
         ),
       ),
     );
-    useConfigStore.setState({
+    seedConfig({
       features: { sidebar: true, projects: true },
     });
     useTasksStore.setState({

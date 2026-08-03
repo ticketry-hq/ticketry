@@ -1,20 +1,16 @@
 import { useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore, type StandardModalType } from "../../../app/modal/modalStore";
-import { useConfigStore as defaultConfigStore } from "../../studio/stores/configStore";
+import {
+  setModuleFolder,
+  useConfig,
+} from "../../studio/stores/configStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,
 } from "./ModuleFolderSelection";
-
-type FolderConfigState = Pick<
-  ReturnType<typeof defaultConfigStore.getState>,
-  "profiles" | "recentProfileIndex" | "setModuleFolder"
->;
-
-export type FolderConfigHook = <T>(selector: (state: FolderConfigState) => T) => T;
 
 export interface ModuleFolderPayload {
   /** Optional follow-up modal kind to push after saving. */
@@ -26,16 +22,12 @@ export interface ModuleFolderPayload {
 
 export function ModuleFolder({
   payload,
-  useConfigStore = defaultConfigStore,
   runtime = studioRuntime(),
 }: {
   payload?: ModuleFolderPayload;
-  useConfigStore?: FolderConfigHook;
   runtime?: StudioRuntime;
 }) {
-  const recentProfileIndex = useConfigStore((s) => s.recentProfileIndex);
-  const profiles = useConfigStore((s) => s.profiles);
-  const setModuleFolder = useConfigStore((s) => s.setModuleFolder);
+  const { profiles, recentProfileIndex } = useConfig();
   const popModal = useModalStore((s) => s.popModal);
   const pushModal = useModalStore((s) => s.pushModal);
 

@@ -122,7 +122,7 @@ import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { MODAL_ACTIONS } from "../app/navigation/keymapRegistry";
 import type { TaskSummary } from "../features/studio/lib/types";
 import type { Row } from "../features/studio/pages/tasks/TasksPane";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { useLaunchProviderCatalog } from "../features/workflows/launchProviderCatalog";
@@ -364,7 +364,7 @@ beforeEach(() => {
     focusRequest: null,
     focusSequence: 0,
   });
-  useConfigStore.setState({
+  seedConfig({
     features: { sidebar: true, projects: true },
   });
   useUIStore.setState({

@@ -3,7 +3,7 @@ import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useTasksStore } from "../stores/tasksStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
-import { useConfigStore } from "../stores/configStore";
+import { setModuleFolder, useConfig } from "../stores/configStore";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,
@@ -20,9 +20,7 @@ export function AddModule() {
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const createModule = useTasksStore((s) => s.createModule);
   const popModal = useModalStore((s) => s.popModal);
-  const profiles = useConfigStore((s) => s.profiles);
-  const recentProfileIndex = useConfigStore((s) => s.recentProfileIndex);
-  const setModuleFolder = useConfigStore((s) => s.setModuleFolder);
+  const { profiles, recentProfileIndex } = useConfig();
 
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);

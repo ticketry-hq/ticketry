@@ -15,7 +15,7 @@ import type {
   TaskSummary,
 } from "../features/studio/lib/types";
 import type { Row } from "../features/studio/pages/tasks/TasksPane";
-import { useConfigStore as useStudioConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig as seedStudioConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { TEMP_TASK_ID } from "../features/agents/types";
@@ -105,7 +105,7 @@ describe("Studio task keymap", () => {
       tasks: [selectedTask],
       states: [selectedTask.state],
     });
-    useStudioConfigStore.setState({
+    seedStudioConfig({
       recentProfileIndex: 0,
       features: { sidebar: true, projects: true },
       profiles: [
@@ -611,7 +611,7 @@ describe("Studio task keymap", () => {
       },
     };
     studioKeymapRegistry.setOverrides([reboundSidebarToggle]);
-    useStudioConfigStore.setState({
+    seedStudioConfig({
       features: { sidebar: false, projects: false },
     });
     useUIStore.setState({ sidebarVisible: true });
@@ -899,7 +899,7 @@ describe("Studio task keymap", () => {
   });
 
   it("cannot traverse left from Modules into Projects when the flag is off", () => {
-    useStudioConfigStore.setState({
+    seedStudioConfig({
       features: { sidebar: true, projects: false },
     });
     useUIStore.setState({ focusedPane: "modules" });
@@ -911,7 +911,7 @@ describe("Studio task keymap", () => {
   });
 
   it("keeps sidebar panes out of traversal when installation disables them", () => {
-    useStudioConfigStore.setState({
+    seedStudioConfig({
       features: { sidebar: false, projects: false },
     });
     useUIStore.setState({

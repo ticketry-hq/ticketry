@@ -4,7 +4,7 @@ import { useModalStore } from "../app/modal";
 import { SettingsModal } from "../features/studio/modals/SettingsModal";
 import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
 import { KeyboardSettingsPanel } from "../features/studio/modals/KeyboardSettingsPanel";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 
 vi.mock("../features/workflows/WorkflowSettingsPanel", () => ({
@@ -40,7 +40,7 @@ it("lists the sidebar toggle for rebinding only when the sidebar exists", () => 
       onRestoreDefaults={vi.fn()}
     />
   );
-  useConfigStore.setState({
+  seedConfig({
     features: { sidebar: false, projects: false },
   });
   const { rerender } = render(panel());
@@ -52,7 +52,7 @@ it("lists the sidebar toggle for rebinding only when the sidebar exists", () => 
     }),
   ).not.toBeInTheDocument();
 
-  useConfigStore.setState({
+  seedConfig({
     features: { sidebar: true, projects: false },
   });
   rerender(panel());

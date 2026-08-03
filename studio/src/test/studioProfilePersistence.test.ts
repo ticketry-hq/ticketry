@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   isSidebarEnabled,
-  useConfigStore,
+  getConfigSnapshot,
+  loadConfig,
+  seedConfig,
 } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 
@@ -31,7 +33,7 @@ describe("Studio profile persistence", () => {
       recent_project_id: "project-1",
       recent_module_ids: {},
     };
-    useConfigStore.setState({
+    seedConfig({
       recentProfileIndex: 0,
       features: { sidebar: false, projects: false },
       profiles: [currentProfile],
@@ -86,13 +88,13 @@ describe("Studio profile persistence", () => {
       );
     });
 
-    await useConfigStore.getState().loadConfig();
+    await loadConfig();
 
-    expect(useConfigStore.getState().features).toEqual({
+    expect(getConfigSnapshot().features).toEqual({
       sidebar: true,
       projects: false,
     });
     expect(isSidebarEnabled()).toBe(true);
-    expect(isSidebarEnabled(useConfigStore.getState())).toBe(true);
+    expect(isSidebarEnabled(getConfigSnapshot())).toBe(true);
   });
 });

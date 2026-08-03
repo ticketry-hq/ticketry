@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useModalStore } from "../app/modal";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { SettingsModal } from "../features/studio/modals/SettingsModal";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { ApiError } from "../shared/api/client";
@@ -99,7 +99,7 @@ describe("Studio workflow settings", () => {
     vi.resetAllMocks();
     useModalStore.setState({ modalStack: [{ type: "settings" }], activeBindings: null });
     useTasksStore.setState({ selectedProjectId: "project-1" });
-    useConfigStore.setState({
+    seedConfig({
       recentProfileIndex: 0,
       profiles: [{
         name: "Local",

@@ -8,7 +8,7 @@ import {
   postTaskStatus,
 } from "../features/studio/lib/api";
 import type { WorkItem } from "../shared/api/types";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { initializeBrowserRuntime, initializeStudioRuntime } from "../runtime";
 
 const fetchMock = vi.fn();
@@ -24,7 +24,7 @@ describe("Studio idea capture API", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
-    useConfigStore.setState({ profiles: [], recentProfileIndex: null });
+    seedConfig({ profiles: [], recentProfileIndex: null });
   });
 
   afterEach(() => {

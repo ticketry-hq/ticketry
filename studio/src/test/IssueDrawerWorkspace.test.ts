@@ -19,7 +19,7 @@ vi.mock("../features/studio/lib/api", async () => {
 
 import * as api from "../shared/api/client";
 import * as studioApi from "../features/studio/lib/api";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail/internal/drawerWorkspaceStore";
 import { useIssueStore } from "../features/work-items/issue-detail/internal/issueStore";
 import type { Module, State, WorkItem } from "../shared/api/types";
@@ -72,7 +72,7 @@ beforeEach(() => {
     workItemIdByKey: {},
     childWorkItemIds: {},
   });
-  useConfigStore.setState({ profiles: [], recentProfileIndex: null });
+  seedConfig({ profiles: [], recentProfileIndex: null });
 
   getWorkItem.mockReset().mockResolvedValue({ task: task(), attachments: [] });
   listModules.mockReset().mockResolvedValue([MODULE]);

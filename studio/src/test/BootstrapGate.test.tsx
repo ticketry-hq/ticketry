@@ -37,15 +37,13 @@ vi.mock("../features/studio/stores/configStore", () => ({
         ? "projects-and-modules"
         : "modules"
       : "absent",
-  useConfigStore: {
-    getState: () => ({
-      loadConfig: mocks.studioLoadConfig,
-      profiles,
-      features,
-      recentProfileIndex: null,
-      selectProfile: mocks.selectProfile,
-    }),
-  },
+  loadConfig: mocks.studioLoadConfig,
+  selectProfile: mocks.selectProfile,
+  getConfigSnapshot: () => ({
+    profiles,
+    features,
+    recentProfileIndex: null,
+  }),
 }));
 
 vi.mock("../features/studio/stores/tasksStore", () => ({

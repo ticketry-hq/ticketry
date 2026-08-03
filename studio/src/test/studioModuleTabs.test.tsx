@@ -7,7 +7,7 @@ import { ModuleTabStrip } from "../features/studio/components/ModuleTabStrip";
 import { ModulesPane } from "../features/studio/pages/modules/ModulesPane";
 import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
 import { useStudioStore } from "../features/projects/store";
-import { useConfigStore as useStudioConfigStore } from "../features/studio/stores/configStore";
+import { getConfigSnapshot as getStudioConfigSnapshot, seedConfig as seedStudioConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { Layout } from "../app/studio/layout/Layout";
@@ -212,7 +212,7 @@ describe("Studio module tab strip", () => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     localStorage.clear();
-    useStudioConfigStore.setState({
+    seedStudioConfig({
       profiles: [],
       recentProfileIndex: null,
       features: { sidebar: true, projects: true },
@@ -440,7 +440,7 @@ describe("Studio module tab strip", () => {
 
   it("creates a module from the strip and saves its selected folder in the same flow", async () => {
     const profile = localProfile();
-    useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
+    seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
     useStudioStore.setState({
       selectedProjectId: "project-1",
       modules: [],
@@ -473,7 +473,7 @@ describe("Studio module tab strip", () => {
         expect.objectContaining({ id: "module-new", project_id: "project-1" }),
       ]),
     );
-    expect(useStudioConfigStore.getState().profiles[0]?.module_folders).toEqual({
+    expect(getStudioConfigSnapshot().profiles[0]?.module_folders).toEqual({
       "module-new": "/repos/new-module",
     });
     expect(
@@ -487,7 +487,7 @@ describe("Studio module tab strip", () => {
 
   it("creates with a blank folder without adding a mapping or follow-up modal", async () => {
     const profile = localProfile();
-    useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
+    seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
     mockModuleCreation();
     render(
       <>
@@ -504,7 +504,7 @@ describe("Studio module tab strip", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(useStudioConfigStore.getState().profiles[0]?.module_folders).toEqual({});
+    expect(getStudioConfigSnapshot().profiles[0]?.module_folders).toEqual({});
     expect(useModalStore.getState().modalStack).toEqual([]);
     expect(
       fetchMock.mock.calls.some(
@@ -519,7 +519,7 @@ describe("Studio module tab strip", () => {
 
   it("retries only folder persistence after the module has been created", async () => {
     const profile = localProfile();
-    useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
+    seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
     mockModuleCreation({ folderPutFailures: 1 });
     render(
       <>
@@ -625,7 +625,7 @@ describe("Studio module tab strip", () => {
 
   it("switches modules with the existing selection behavior", async () => {
     const profile = localProfile();
-    useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
+    seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
     localStorage.setItem(
       "studio.studio.selectedTaskByModule",
       JSON.stringify({ "module-old": "story-old" }),
@@ -729,7 +729,7 @@ describe("Studio module tab strip", () => {
   });
 
   it("does not render the Projects pane or Add Project when the flag is off", () => {
-    useStudioConfigStore.setState({
+    seedStudioConfig({
       features: { sidebar: true, projects: false },
     });
     useUIStore.setState({ panelLayout: [20, 20, 35, 25] });
@@ -751,10 +751,10 @@ describe("Studio module tab strip", () => {
     expect(screen.getAllByTestId("pane-resize-handle")).toHaveLength(2);
   });
 
-  it("uses the full-width Edit view while preserving dormant sidebar state", () => {
+  it("uses the full-width Edit view while preserving dormant sidebar state", async () => {
     const persistedLayout = [15, 25, 35, 25];
     localStorage.setItem("studio.sidebarVisible:v1", "true");
-    useStudioConfigStore.setState({
+    seedStudioConfig({
       features: { sidebar: false, projects: false },
     });
     useUIStore.setState({
@@ -773,8 +773,8 @@ describe("Studio module tab strip", () => {
     expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("true");
     expect(useUIStore.getState().panelLayout).toEqual(persistedLayout);
 
-    act(() => {
-      useStudioConfigStore.setState({
+    await act(async () => {
+      seedStudioConfig({
         features: { sidebar: true, projects: true },
       });
     });
@@ -828,7 +828,7 @@ describe("Studio module tab strip", () => {
 
   it("shows the recent module as active after project-load restoration", async () => {
     const profile = localProfile();
-    useStudioConfigStore.setState({ profiles: [profile], recentProfileIndex: 0 });
+    seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/work-tracker/projects/project-1/modules") {

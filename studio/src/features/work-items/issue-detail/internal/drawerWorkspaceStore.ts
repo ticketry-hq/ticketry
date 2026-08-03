@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { useConfigStore } from "../../../studio/stores/configStore";
+import { getConfigSnapshot, loadConfig } from "../../../studio/stores/configStore";
 import type {
   DesignDoc,
   DocTabState,
@@ -105,7 +105,7 @@ function emptyView(issueKey: string): IssueDrawerWorkspaceViewModel {
 }
 
 function currentProfile(): Profile | null {
-  const { profiles, recentProfileIndex } = useConfigStore.getState();
+  const { profiles, recentProfileIndex } = getConfigSnapshot();
   return recentProfileIndex === null ? null : profiles[recentProfileIndex] ?? null;
 }
 
@@ -322,7 +322,7 @@ export const useIssueDrawerWorkspaceStore = create<DrawerWorkspaceState>((set, g
     try {
       const [context, configResult] = await Promise.all([
         resolveIssueWorkspaceContext(issueKey),
-        useConfigStore.getState().loadConfig().then(
+        loadConfig().then(
           () => ({ ok: true as const }),
           (error: unknown) => ({ ok: false as const, error }),
         ),

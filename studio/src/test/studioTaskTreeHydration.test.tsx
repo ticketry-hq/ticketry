@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { useIssueStore } from "../features/work-items/issue-detail";
@@ -52,7 +52,7 @@ describe("Studio module task-tree hydration", () => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     localStorage.clear();
-    useConfigStore.setState({ profiles: [], recentProfileIndex: null });
+    seedConfig({ profiles: [], recentProfileIndex: null });
     useUIStore.setState({
       collapsedStateNames: new Set(),
       expandedTaskIds: new Set(),

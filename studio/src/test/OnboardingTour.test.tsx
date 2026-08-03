@@ -10,7 +10,8 @@ import { ModulesPane } from "../features/studio/pages/modules/ModulesPane";
 import { ProjectsPane } from "../features/studio/pages/projects/ProjectsPane";
 import {
   isSidebarEnabled,
-  useConfigStore,
+  seedConfig,
+  useConfig,
 } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
@@ -28,14 +29,15 @@ function startTourFromLayout(
   features: Features = { sidebar: true, projects: true },
 ) {
   useOnboardingTourStore.getState().reset();
-  useConfigStore.setState({ features });
+  seedConfig({ features });
   useUIStore.setState({ sidebarVisible, panelLayout });
   useOnboardingTourStore.getState().start("project-created");
 }
 
 function TourSurface() {
-  const sidebarEnabled = useConfigStore((state) => isSidebarEnabled(state));
-  const projectsEnabled = useConfigStore((state) => state.features.projects);
+  const config = useConfig();
+  const sidebarEnabled = isSidebarEnabled(config);
+  const projectsEnabled = config.features.projects;
 
   return (
     <>

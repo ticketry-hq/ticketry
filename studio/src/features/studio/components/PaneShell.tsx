@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useRef } from "react";
 import {
   isSidebarEnabled,
-  useConfigStore,
+  useConfig,
 } from "../stores/configStore";
 import type { FocusedPane } from "../stores/uiStore";
 import { useUIStore } from "../stores/uiStore";
@@ -24,7 +24,7 @@ export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
     const editViewZone = useUIStore((s) => s.editViewZone);
     const navigationModality = useUIStore((s) => s.navigationModality);
     const sidebarVisible = useUIStore((s) => s.sidebarVisible);
-    const sidebarEnabled = useConfigStore(isSidebarEnabled);
+    const sidebarEnabled = isSidebarEnabled(useConfig());
     const setFocusedPane = useUIStore((s) => s.setFocusedPane);
     const setEditViewZone = useUIStore((s) => s.setEditViewZone);
     const setNavigationModality = useUIStore((s) => s.setNavigationModality);

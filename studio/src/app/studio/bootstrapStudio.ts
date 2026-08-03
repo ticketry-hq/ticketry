@@ -1,9 +1,11 @@
 import { useOnboardingStore } from "../onboarding/onboardingStore";
 import {
+  getConfigSnapshot,
   isSidebarEnabled,
+  loadConfig,
+  selectProfile,
   sidebarPaneComposition,
   type SidebarPaneComposition,
-  useConfigStore,
 } from "../../features/studio/stores/configStore";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";
 import { loadKeybindingOverrides } from "../navigation/keymapSettings";
@@ -25,7 +27,7 @@ export async function bootstrapStudio(): Promise<BootstrapOutcome> {
     const profileIndex = preferredProfileIndex();
     if (profileIndex === null) return "provisioning";
 
-    await useConfigStore.getState().selectProfile(profileIndex);
+    await selectProfile(profileIndex);
     await restoreWorkspace(profileIndex);
     return "ready";
   } catch (error) {
@@ -36,7 +38,7 @@ export async function bootstrapStudio(): Promise<BootstrapOutcome> {
 
 async function loadBootstrapData(): Promise<void> {
   await Promise.all([
-    useConfigStore.getState().loadConfig(),
+    loadConfig(),
     loadKeybindingOverrides(),
     // Never rejects: the store swallows its own failure so a flaky workspace
     // endpoint cannot flip the bootstrap outcome away from "ready".
@@ -45,7 +47,7 @@ async function loadBootstrapData(): Promise<void> {
 }
 
 function preferredProfileIndex(): number | null {
-  const { profiles, recentProfileIndex } = useConfigStore.getState();
+  const { profiles, recentProfileIndex } = getConfigSnapshot();
   if (profiles.length === 0) return null;
 
   const recentIndexIsValid =
@@ -57,7 +59,7 @@ function preferredProfileIndex(): number | null {
 }
 
 async function restoreWorkspace(profileIndex: number): Promise<void> {
-  const config = useConfigStore.getState();
+  const config = getConfigSnapshot();
   const projectsEnabled = config.features.projects;
   if (!isSidebarEnabled(config)) {
     await selectResolvedProject();
@@ -72,7 +74,7 @@ async function restoreWorkspace(profileIndex: number): Promise<void> {
     return;
   }
 
-  const profile = useConfigStore.getState().profiles[profileIndex];
+  const profile = getConfigSnapshot().profiles[profileIndex];
   const recentProject = useTasksStore
     .getState()
     .projects.find((project) => project.id === profile?.recent_project_id);
@@ -133,7 +135,7 @@ async function selectResolvedProject(): Promise<void> {
 function focusVisiblePane(preferredPane: FocusedPane): void {
   const { sidebarVisible, setFocusedPane } = useUIStore.getState();
   const projectIsSelected = useTasksStore.getState().selectedProjectId !== null;
-  const config = useConfigStore.getState();
+  const config = getConfigSnapshot();
   const paneComposition: SidebarPaneComposition = sidebarPaneComposition(
     config.features.projects,
     isSidebarEnabled(config),

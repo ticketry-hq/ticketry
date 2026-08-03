@@ -43,7 +43,7 @@ import {
 } from "../../workflows/launchProviderCatalog";
 import {
   isSidebarEnabled,
-  useConfigStore,
+  useConfig,
 } from "../../studio/stores/configStore";
 import { useUIStore } from "../../studio/stores/uiStore";
 import { formatChordSymbols } from "../../../app/navigation/chordLabel";
@@ -314,7 +314,7 @@ export function WorkspacePane({
   const [highlightedTab, setHighlightedTab] =
     useState<TaskWorkspaceTabIdentity>({ kind: "details" });
   const sidebarVisible = useUIStore((state) => state.sidebarVisible);
-  const sidebarEnabled = useConfigStore(isSidebarEnabled);
+  const sidebarEnabled = isSidebarEnabled(useConfig());
   const editViewZone = useUIStore((state) => state.editViewZone);
   const editViewBodyEngaged = useUIStore(
     (state) => state.editViewBodyEngaged,

@@ -17,7 +17,7 @@ vi.mock("../features/studio/lib/api", async (importOriginal) => ({
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { useOnboardingStore } from "../app/onboarding/onboardingStore";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import * as workspaceApi from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
@@ -88,7 +88,7 @@ beforeEach(() => {
   });
   useOnboardingStore.setState({ onboardingRequired: true });
   useOnboardingTourStore.getState().reset();
-  useConfigStore.setState({
+  seedConfig({
     features: { sidebar: true, projects: true },
   });
   useTasksStore.setState({ projects: [], selectedProjectId: null });

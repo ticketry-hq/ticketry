@@ -9,7 +9,7 @@ import {
   setIssueTypeWorkflowTransitionPermission,
   upsertIssueTypeWorkflowLaunchBinding,
 } from "../features/studio/workflowApi";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { seedConfig } from "../features/studio/stores/configStore";
 
 const fetchMock = vi.fn();
 
@@ -33,7 +33,7 @@ describe("scoped workflow-settings API", () => {
     fetchMock.mockImplementation(async () => response());
     vi.stubGlobal("fetch", fetchMock);
     vi.unstubAllEnvs();
-    useConfigStore.setState({ profiles: [], recentProfileIndex: null });
+    seedConfig({ profiles: [], recentProfileIndex: null });
   });
 
   it("routes reads through the runtime endpoint", async () => {

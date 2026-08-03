@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import { ModuleFolder } from "../features/agents/terminal/ModuleFolder";
 import { ModalHost } from "../app/modal";
-import { useConfigStore } from "../features/studio/stores/configStore";
+import { getConfigSnapshot, seedConfig } from "../features/studio/stores/configStore";
 import { useModalStore } from "../app/modal";
 import * as agentApi from "../features/agents/api/agentApi";
 import * as studioApi from "../features/studio/lib/api";
@@ -48,7 +48,7 @@ function folderPickerRuntime(
 describe("ModuleFolder modal", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    useConfigStore.setState({
+    seedConfig({
       profiles: [
         {
           name: "p",
@@ -65,7 +65,7 @@ describe("ModuleFolder modal", () => {
   });
 
   it("shows unique non-empty recent folders newest first", () => {
-    useConfigStore.setState({
+    seedConfig({
       profiles: [
         {
           name: "p",
@@ -122,8 +122,8 @@ describe("ModuleFolder modal", () => {
     const pickFolder = vi.fn().mockResolvedValue("/repos/picked");
     const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
-      features: useConfigStore.getState().features,
-      profiles: useConfigStore.getState().profiles,
+      features: getConfigSnapshot().features,
+      profiles: getConfigSnapshot().profiles,
     });
     useModalStore.setState({
       modalStack: [
@@ -158,7 +158,7 @@ describe("ModuleFolder modal", () => {
   });
 
   it("shows Pick Folder after recents and leaves the draft unchanged on picker cancellation", async () => {
-    useConfigStore.setState((state) => ({
+    seedConfig((state) => ({
       profiles: [
         {
           ...state.profiles[0],
@@ -194,7 +194,7 @@ describe("ModuleFolder modal", () => {
       "/repos/manual-draft",
     );
     expect(putSpy).not.toHaveBeenCalled();
-    expect(useConfigStore.getState().profiles[0].module_folders).toEqual({
+    expect(getConfigSnapshot().profiles[0].module_folders).toEqual({
       "mod-1": "/repos/recent",
     });
   });
@@ -211,7 +211,7 @@ describe("ModuleFolder modal", () => {
   it("does not request or render filesystem suggestions", async () => {
     // Arrange an available filesystem completion.
 
-    useConfigStore.setState((state) => ({
+    seedConfig((state) => ({
       profiles: [
         {
           ...state.profiles[0],
@@ -240,7 +240,7 @@ describe("ModuleFolder modal", () => {
   });
 
   it("fills a recent folder before Save persists it for the current module", async () => {
-    useConfigStore.setState((state) => ({
+    seedConfig((state) => ({
       profiles: [
         {
           ...state.profiles[0],
@@ -250,8 +250,8 @@ describe("ModuleFolder modal", () => {
     }));
     const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
-      features: useConfigStore.getState().features,
-      profiles: useConfigStore.getState().profiles,
+      features: getConfigSnapshot().features,
+      profiles: getConfigSnapshot().profiles,
     });
 
     render(<ModuleFolder payload={{ moduleId: "mod-2" }} />);
@@ -274,7 +274,7 @@ describe("ModuleFolder modal", () => {
   });
 
   it("selects then saves a recent folder with ArrowDown and Enter", async () => {
-    useConfigStore.setState((state) => ({
+    seedConfig((state) => ({
       profiles: [
         {
           ...state.profiles[0],
@@ -287,8 +287,8 @@ describe("ModuleFolder modal", () => {
     }));
     const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
-      features: useConfigStore.getState().features,
-      profiles: useConfigStore.getState().profiles,
+      features: getConfigSnapshot().features,
+      profiles: getConfigSnapshot().profiles,
     });
 
     render(<ModuleFolder payload={{ moduleId: "mod-3" }} />);
@@ -314,8 +314,8 @@ describe("ModuleFolder modal", () => {
   });
 
   it("shows recent folders from only the active profile", () => {
-    const firstProfile = useConfigStore.getState().profiles[0];
-    useConfigStore.setState({
+    const firstProfile = getConfigSnapshot().profiles[0];
+    seedConfig({
       profiles: [
         {
           ...firstProfile,
@@ -338,7 +338,7 @@ describe("ModuleFolder modal", () => {
   });
 
   it("discards a recent folder selection on Cancel", () => {
-    useConfigStore.setState((state) => ({
+    seedConfig((state) => ({
       profiles: [
         {
           ...state.profiles[0],
@@ -353,7 +353,7 @@ describe("ModuleFolder modal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(putSpy).not.toHaveBeenCalled();
-    expect(useConfigStore.getState().profiles[0].module_folders).toEqual({
+    expect(getConfigSnapshot().profiles[0].module_folders).toEqual({
       "mod-1": "/repos/one",
     });
   });
@@ -375,14 +375,14 @@ describe("ModuleFolder modal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(putSpy).not.toHaveBeenCalled();
-    expect(useConfigStore.getState().profiles[0].module_folders).toEqual({});
+    expect(getConfigSnapshot().profiles[0].module_folders).toEqual({});
     expect(useModalStore.getState().modalStack).toEqual([]);
   });
 
   it("Enter on unchanged value calls api.putProfile with module_folders updated", async () => {
     const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
-      features: useConfigStore.getState().features,
+      features: getConfigSnapshot().features,
       profiles: [
         {
           name: "p",
@@ -408,8 +408,8 @@ describe("ModuleFolder modal", () => {
   });
 
   it("Studio host reads and saves the restarted Studio profile store", async () => {
-    useConfigStore.setState({ profiles: [], recentProfileIndex: null });
-    useConfigStore.setState({
+    seedConfig({ profiles: [], recentProfileIndex: null });
+    seedConfig({
       profiles: [
         {
           name: "studio",
@@ -427,8 +427,8 @@ describe("ModuleFolder modal", () => {
     });
     const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
-      features: useConfigStore.getState().features,
-      profiles: useConfigStore.getState().profiles,
+      features: getConfigSnapshot().features,
+      profiles: getConfigSnapshot().profiles,
     });
 
     render(<ModalHost />);

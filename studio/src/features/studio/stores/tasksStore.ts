@@ -3,7 +3,7 @@ import * as api from "../lib/api";
 import { normalizeTask } from "../lib/api";
 import { sortModulesByRecency, useStudioStore } from "../../projects";
 import { TEMP_TASK_ID } from "../../agents/types";
-import { useConfigStore } from "./configStore";
+import { getConfigSnapshot, updateProfile } from "./configStore";
 import { toast } from "../../../app/stores/toastStore";
 import { apiErrorMessage } from "../../../shared/api/client";
 import { rankBetween } from "../../work-items";
@@ -407,14 +407,12 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
     // 308–311 of tui/ui/app.py). Persistence is non-fatal — if it fails we
     // still proceed with the in-memory selection. Profile data lives in the
     // config store; reach across to read + persist it.
-    const { recentProfileIndex, profiles } = useConfigStore.getState();
+    const { recentProfileIndex, profiles } = getConfigSnapshot();
     let persistRecentProject: Promise<void> = Promise.resolve();
     if (recentProfileIndex !== null && profiles[recentProfileIndex]) {
       const profile = profiles[recentProfileIndex];
       if (profile.recent_project_id !== id) {
-        persistRecentProject = useConfigStore
-          .getState()
-          .updateProfile(recentProfileIndex, {
+        persistRecentProject = updateProfile(recentProfileIndex, {
             name: profile.name,
             workspace_slug: profile.workspace_slug,
             agent_prompt: profile.agent_prompt,
@@ -433,7 +431,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
     await Promise.all([persistRecentProject, get().loadModules(id)]);
 
     // Auto-select module if we have a recent module ID for this project in the profile
-    const updatedProfiles = useConfigStore.getState().profiles;
+    const updatedProfiles = getConfigSnapshot().profiles;
     if (recentProfileIndex !== null && updatedProfiles[recentProfileIndex]) {
       const profile = updatedProfiles[recentProfileIndex];
       const recentModuleId = profile.recent_module_ids?.[id];
@@ -530,7 +528,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
       details: null,
     });
     if (projectId) {
-      const { recentProfileIndex, profiles } = useConfigStore.getState();
+      const { recentProfileIndex, profiles } = getConfigSnapshot();
       let persistRecentModule: Promise<void> = Promise.resolve();
       if (recentProfileIndex !== null && profiles[recentProfileIndex]) {
         const profile = profiles[recentProfileIndex];
@@ -538,9 +536,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
           ...(profile.recent_module_ids ?? {}),
           [projectId]: id,
         };
-        persistRecentModule = useConfigStore
-          .getState()
-          .updateProfile(recentProfileIndex, {
+        persistRecentModule = updateProfile(recentProfileIndex, {
             name: profile.name,
             workspace_slug: profile.workspace_slug,
             agent_prompt: profile.agent_prompt,

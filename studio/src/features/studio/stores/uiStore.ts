@@ -2,10 +2,10 @@ import { create } from "zustand";
 import type { TaskId } from "../lib/types";
 import { taskRevealPath } from "../lib/taskTree";
 import {
+  getConfigSnapshot,
   isSidebarEnabled,
   sidebarPaneComposition,
   type SidebarPaneComposition,
-  useConfigStore,
 } from "./configStore";
 import { useTasksStore } from "./tasksStore";
 import { readVersionedItem } from "../../../shared/storage/versioned";
@@ -244,7 +244,7 @@ function hasProject(): boolean {
 }
 
 function currentSidebarPaneComposition(): SidebarPaneComposition {
-  const config = useConfigStore.getState();
+  const config = getConfigSnapshot();
   return sidebarPaneComposition(
     config.features.projects,
     isSidebarEnabled(config),

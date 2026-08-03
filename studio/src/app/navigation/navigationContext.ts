@@ -1,4 +1,7 @@
-import { useConfigStore } from "../../features/studio/stores/configStore";
+import {
+  getConfigSnapshot,
+  type ConfigSnapshot,
+} from "../../features/studio/stores/configStore";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";
 import { useUIStore } from "../../features/studio/stores/uiStore";
 import type {
@@ -12,7 +15,7 @@ type Direction = 1 | -1;
 export interface NavigationContext {
   event: KeyboardEvent;
   taskRows: Row[];
-  cfg: ReturnType<typeof useConfigStore.getState>;
+  cfg: ConfigSnapshot;
   tasks: ReturnType<typeof useTasksStore.getState>;
   ui: ReturnType<typeof useUIStore.getState>;
 }
@@ -24,7 +27,7 @@ export function createNavigationContext(
   return {
     event,
     taskRows,
-    cfg: useConfigStore.getState(),
+    cfg: getConfigSnapshot(),
     tasks: useTasksStore.getState(),
     ui: useUIStore.getState(),
   };

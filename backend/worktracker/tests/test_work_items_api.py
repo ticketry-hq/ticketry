@@ -310,3 +310,23 @@ def test_delete_non_empty_issue_is_blocked(client, project, module, task_type, a
 def test_delete_missing_is_404(client, auth):
     r = client.delete(f"{BASE}/work-items/{uuid.uuid4()}", headers=auth)
     assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_missing_work_item_404_carries_the_domain_message(client, project, auth):
+    """A service not-found reaches the client with its own message, not "Not Found".
+
+    These routes reach the client through ``NotFoundError`` and the single
+    ``_http_errors()`` translation seam. A generic body here means a service
+    raised a framework 404 that bypassed the seam.
+    """
+
+    missing = uuid.uuid4()
+
+    patched = patch_json(client, f"{BASE}/work-items/{missing}", {"name": "x"}, auth)
+    assert patched.status_code == 404
+    assert patched.json()["detail"] == "Work item not found."
+
+    deleted = client.delete(f"{BASE}/work-items/{missing}", headers=auth)
+    assert deleted.status_code == 404
+    assert deleted.json()["detail"] == "Work item not found."

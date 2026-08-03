@@ -70,7 +70,7 @@ export interface ProjectsApiInterface {
     createProjectRequestOpts(requestParameters: CreateProjectRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Create a project under a workspace and seed its 5 default states (G3).  The workspace is named explicitly via ``workspace_slug`` or resolved to the sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected with ``409`` before insert; the new project starts at ``seq_counter = 0``.
+     * Create a project under a workspace and seed the reviewed default states (G3).  The workspace is named explicitly via ``workspace_slug`` or resolved to the sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected with ``409`` before insert; the new project starts at ``seq_counter = 0``.
      * @summary Create Project
      * @param {ProjectIn} projectIn 
      * @param {*} [options] Override http request option.
@@ -80,7 +80,7 @@ export interface ProjectsApiInterface {
     createProjectRaw(requestParameters: CreateProjectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProjectOut>>;
 
     /**
-     * Create a project under a workspace and seed its 5 default states (G3).  The workspace is named explicitly via ``workspace_slug`` or resolved to the sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected with ``409`` before insert; the new project starts at ``seq_counter = 0``.
+     * Create a project under a workspace and seed the reviewed default states (G3).  The workspace is named explicitly via ``workspace_slug`` or resolved to the sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected with ``409`` before insert; the new project starts at ``seq_counter = 0``.
      * Create Project
      */
     createProject(requestParameters: CreateProjectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProjectOut>;
@@ -198,7 +198,7 @@ export class ProjectsApi extends runtime.BaseAPI implements ProjectsApiInterface
     }
 
     /**
-     * Create a project under a workspace and seed its 5 default states (G3).  The workspace is named explicitly via ``workspace_slug`` or resolved to the sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected with ``409`` before insert; the new project starts at ``seq_counter = 0``.
+     * Create a project under a workspace and seed the reviewed default states (G3).  The workspace is named explicitly via ``workspace_slug`` or resolved to the sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected with ``409`` before insert; the new project starts at ``seq_counter = 0``.
      * Create Project
      */
     async createProjectRaw(requestParameters: CreateProjectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProjectOut>> {
@@ -209,7 +209,7 @@ export class ProjectsApi extends runtime.BaseAPI implements ProjectsApiInterface
     }
 
     /**
-     * Create a project under a workspace and seed its 5 default states (G3).  The workspace is named explicitly via ``workspace_slug`` or resolved to the sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected with ``409`` before insert; the new project starts at ``seq_counter = 0``.
+     * Create a project under a workspace and seed the reviewed default states (G3).  The workspace is named explicitly via ``workspace_slug`` or resolved to the sole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected with ``409`` before insert; the new project starts at ``seq_counter = 0``.
      * Create Project
      */
     async createProject(requestParameters: CreateProjectRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProjectOut> {

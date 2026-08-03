@@ -3263,7 +3263,7 @@
         ]
       },
       "post": {
-        "description": "Create a project under a workspace and seed its 5 default states (G3).\n\nThe workspace is named explicitly via ``workspace_slug`` or resolved to the\nsole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected\nwith ``409`` before insert; the new project starts at ``seq_counter = 0``.",
+        "description": "Create a project under a workspace and seed the reviewed default states (G3).\n\nThe workspace is named explicitly via ``workspace_slug`` or resolved to the\nsole workspace when omitted. A duplicate ``(workspace, slug)`` is rejected\nwith ``409`` before insert; the new project starts at ``seq_counter = 0``.",
         "operationId": "createProject",
         "parameters": [],
         "requestBody": {

@@ -60,7 +60,7 @@ export interface BacklogState {
   readonly pendingStateDeltas: Record<string, StateRevisionDelta>;
   /**
    * Derived from the one shared workflow-state catalog — the backlog holds no
-   * copy. React surfaces must read it through useStatesQuery instead of this
+   * copy. React surfaces must read it through useCachedStates instead of this
    * accessor: a catalog change notifies query subscribers, not zustand's.
    */
   readonly states: State[];

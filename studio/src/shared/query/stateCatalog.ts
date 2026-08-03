@@ -60,17 +60,6 @@ export function useCachedStates(projectId: string | null): State[] {
   return data ?? EMPTY_STATES;
 }
 
-export function useStatesQuery(projectId: string | null) {
-  return useQuery(
-    {
-      queryKey: queryKeys.states.byProject(projectId ?? "none"),
-      queryFn: () => fetchStates(projectId!),
-      enabled: projectId !== null,
-    },
-    queryClient,
-  );
-}
-
 /**
  * Write the catalog directly, preserving the caller's order. The workflow
  * editor's rename/reorder/delete flows use this so one authoritative server

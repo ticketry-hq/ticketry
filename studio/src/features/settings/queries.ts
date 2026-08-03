@@ -60,12 +60,6 @@ export function getCapabilitiesSnapshot(
   );
 }
 
-/** True once this project's capability map has been fetched at least once. */
-export function capabilitiesLoaded(projectId: string | null): boolean {
-  if (!projectId) return false;
-  return queryClient.getQueryState(capabilitiesKey(projectId))?.data !== undefined;
-}
-
 /**
  * Write the issue-type catalog, preserving the caller's order — an optimistic
  * reorder has to survive until the server responds.
@@ -148,17 +142,6 @@ export function synchronizeSubtreeRunCapabilities(
   if (enabledStateIds.length > 0) next[issueTypeId] = enabledStateIds;
   else delete next[issueTypeId];
   setCapabilities(projectId, next);
-}
-
-export function useIssueTypesQuery(projectId: string | null) {
-  return useQuery(
-    {
-      queryKey: issueTypesKey(projectId ?? "none"),
-      queryFn: () => fetchIssueTypes(projectId!),
-      enabled: projectId !== null,
-    },
-    queryClient,
-  );
 }
 
 export function useSubtreeRunCapabilitiesQuery(projectId: string | null) {

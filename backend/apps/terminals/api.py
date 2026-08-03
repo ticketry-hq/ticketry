@@ -25,7 +25,7 @@ from apps.terminals.session import (
     TerminalSessionError,
     session as terminal_session,
 )
-from apps.terminals.validation import _validate_init
+from apps.terminals.validation import SpawnRequest, _validate_init
 from apps.terminals import viewer_leases
 from apps.settings_store.config import NoConfigurationSelected
 from apps.runs.models import AgentRun
@@ -122,7 +122,9 @@ async def release_viewer_lease(request, body: ViewerLeaseReleaseBody):
     return {"released": released}
 
 
-def _create_request_as_spawn_init(body: CreateTerminalRunBody) -> tuple[dict | None, str | None]:
+def _create_request_as_spawn_init(
+    body: CreateTerminalRunBody,
+) -> tuple[SpawnRequest | None, str | None]:
     """Validate control-plane input with the established spawn contract."""
 
     # Creation has no viewer geometry. Supply harmless dimensions solely to

@@ -15,6 +15,7 @@ from apps.terminals import dao, tmux
 import apps.terminals.session as session_module
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.authorization import issue_run_authorization
+from apps.terminals.validation import SpawnRequest
 from apps.runs.models import AgentRun
 from worktracker.models import Issue, IssueType, Project, Workspace
 from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_uuid
@@ -137,10 +138,10 @@ def _create_body(**overrides):
 
 
 def test_create_terminal_run_calls_shared_control_plane(client, monkeypatch):
-    captured: dict = {}
+    captured: list = []
 
-    async def fake_create(init: dict) -> str:
-        captured.update(init)
+    async def fake_create(request) -> str:
+        captured.append(request)
         return "run-new"
 
     monkeypatch.setattr(terminals_api, "create_terminal_run", fake_create)
@@ -153,22 +154,25 @@ def test_create_terminal_run_calls_shared_control_plane(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"agent_run_id": "run-new"}
-    assert captured == {
-        "mode": "spawn",
-        "agent": "claude",
-        "project_id": "proj-1",
-        "module_id": "mod-1",
-        "task_id": "task-1",
-        "initial_prompt": "Start work",
-        "cols": 1,
-        "rows": 1,
-        "is_planning": False,
-        "is_instant": False,
-        "instant_prompt": None,
-        "is_doc_chat": False,
-        "doc_rel_path": None,
-        "doc_id": None,
-    }
+    # The control plane receives the same normalized value the WebSocket spawn
+    # branch builds — a typed request, not a dict of string keys.
+    assert captured == [
+        SpawnRequest(
+            agent="claude",
+            project_id="proj-1",
+            module_id="mod-1",
+            task_id="task-1",
+            initial_prompt="Start work",
+            cols=1,
+            rows=1,
+            is_planning=False,
+            is_instant=False,
+            instant_prompt=None,
+            is_doc_chat=False,
+            doc_rel_path=None,
+            doc_id=None,
+        )
+    ]
 
 
 def test_create_terminal_run_reuses_spawn_validation(client):
@@ -183,8 +187,8 @@ def test_create_terminal_run_reuses_spawn_validation(client):
 
 
 def test_create_terminal_run_surfaces_shared_launcher_failure(client, monkeypatch):
-    async def failed_create(init: dict) -> str:
-        del init
+    async def failed_create(request) -> str:
+        del request
         raise launch.LaunchUnavailable("tmux failed")
 
     monkeypatch.setattr(terminals_api, "create_terminal_run", failed_create)

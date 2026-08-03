@@ -6,6 +6,7 @@ import { useUIStore } from "../features/studio/stores/uiStore";
 import { synchronizeActiveStateCatalogs } from "../features/workflows/stateCatalogSync";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import { useSettingsStore } from "../features/settings/store";
+import { getCapabilitiesSnapshot, seedCapabilities } from "../features/settings/queries";
 import { ApiError } from "../shared/api/client";
 import type { State, WorkItem } from "../shared/api/types";
 import type { TaskSummary } from "../features/studio/lib/types";
@@ -104,9 +105,9 @@ describe("workflowEditorStore scoped apply", () => {
     });
     useSettingsStore.setState({
       projectId: "project-1",
-      subtreeRunCapabilities: {},
       refreshSubtreeRunCapabilities: vi.fn(),
     });
+    seedCapabilities("project-1", {});
   });
 
   it("loads the selected type's live workflow", async () => {
@@ -166,8 +167,7 @@ describe("workflowEditorStore scoped apply", () => {
     // editor blocked its spinner on it.
     expect(useSettingsStore.getState().refreshSubtreeRunCapabilities)
       .not.toHaveBeenCalled();
-    expect(useSettingsStore.getState().subtreeRunCapabilities)
-      .toEqual({ story: ["todo"] });
+    expect(getCapabilitiesSnapshot("project-1")).toEqual({ story: ["todo"] });
   });
 
   it("silently refreshes stale revisions", async () => {

@@ -26,7 +26,7 @@ import {
   prepareActiveStateRemoval,
   reconcileActiveStateRemoval,
 } from "./stateRemovalSync";
-import { useSettingsStore } from "../settings/store";
+import { synchronizeSubtreeRunCapabilities } from "../settings/queries";
 
 interface RemoveStateCommand {
   stateId: string;
@@ -301,7 +301,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       // capability map is derivable from it. Refetching the same fact — and
       // awaiting it before publishing — would make every control in the editor
       // block its spinner on a GET it does not need.
-      useSettingsStore.getState().synchronizeSubtreeRunCapabilities(
+      synchronizeSubtreeRunCapabilities(
         projectId,
         next.issue_type_id,
         next.launch_bindings

@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "../../../app/stores/toastStore";
 import { ApiError, apiErrorMessage } from "../../../shared/api/client";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { executeTaskSubtree } from "../../studio/lib/api";
-import { useSettingsStore } from "../../settings/store";
+import {
+  refreshSubtreeRunCapabilities,
+  useSubtreeRunCapabilitiesQuery,
+} from "../../settings/queries";
 import { useIssueStore } from "./internal/issueStore";
 
 interface RunSubtreeActionProps {
@@ -22,20 +25,12 @@ interface RunSubtreeActionProps {
 export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
   const [pending, setPending] = useState(false);
   const inFlightRef = useRef(false);
-  const capabilityProjectId = useSettingsStore((state) => state.projectId);
-  const capabilityMap = useSettingsStore(
-    (state) => state.subtreeRunCapabilities,
+  // One row per work item mounts this; the query dedups so they share a single
+  // request rather than each firing its own.
+  const { data: capabilityMap } = useSubtreeRunCapabilitiesQuery(
+    task.project_id,
   );
-  // One row per work item mounts this, so they share a single request rather
-  // than each firing its own (and each retrying after a failure).
-  const ensureSettings = useSettingsStore((state) => state.ensureSettings);
-  useEffect(() => {
-    void ensureSettings(task.project_id);
-  }, [ensureSettings, task.project_id]);
-
-  const enabledStates = capabilityProjectId === task.project_id
-    ? capabilityMap[task.issue_type.id]
-    : undefined;
+  const enabledStates = capabilityMap?.[task.issue_type.id];
   const eligible =
     task.id !== TEMP_TASK_ID &&
     moduleId !== null &&
@@ -63,7 +58,7 @@ export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
         (error.body as Record<string, unknown>).error === "subtree_run_not_enabled"
       ) {
         const [, refreshedIssue] = await Promise.all([
-          useSettingsStore.getState().refreshSubtreeRunCapabilities(task.project_id),
+          refreshSubtreeRunCapabilities(task.project_id),
           useIssueStore.getState().reloadIssue(task.id),
         ]);
         const stateName = refreshedIssue?.task.state?.name ?? task.state?.name;

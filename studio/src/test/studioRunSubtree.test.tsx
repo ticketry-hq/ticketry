@@ -7,6 +7,7 @@ import { RunSubtreeAction } from "../features/work-items/issue-detail/RunSubtree
 import { useIssueStore } from "../features/work-items/issue-detail/internal/issueStore";
 import { useToastStore } from "../app/stores/toastStore";
 import { useSettingsStore } from "../features/settings/store";
+import { seedCapabilities } from "../features/settings/queries";
 
 const fetchMock = vi.fn();
 const TODO = { id: "todo", name: "Todo", group: "backlog", color: null };
@@ -78,13 +79,8 @@ describe("Studio Run subtree action", () => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     useToastStore.setState({ toasts: [] });
-    useSettingsStore.setState({
-      projectId: "project-1",
-      subtreeRunCapabilities: { story: ["todo"] },
-      capabilitiesLoaded: true,
-      settingsLoaded: true,
-      loading: false,
-    });
+    useSettingsStore.setState({ projectId: "project-1" });
+    seedCapabilities("project-1", { story: ["todo"] });
     useIssueStore.setState({
       open: null,
       children: [],
@@ -109,16 +105,14 @@ describe("Studio Run subtree action", () => {
       view.unmount();
     }
 
-    useSettingsStore.setState({ subtreeRunCapabilities: {} });
+    seedCapabilities("project-1", {});
     const disabled = renderCandidate(story);
     expect(screen.queryByRole("button", { name: "Run subtree" })).toBeNull();
     disabled.unmount();
   });
 
   it("flips immediately from an optimistic state change without refetching", () => {
-    useSettingsStore.setState({
-      subtreeRunCapabilities: { story: ["review"] },
-    });
+    seedCapabilities("project-1", { story: ["review"] });
     const { story } = renderAction();
     const view = render(
       <RunSubtreeAction task={story} moduleId="module-1" />,

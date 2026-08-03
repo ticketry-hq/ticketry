@@ -69,6 +69,7 @@ import { DetailsTab } from "../features/studio/pages/workspace/tabs/DetailsTab";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import { useToastStore } from "../app/stores/toastStore";
 import { useSettingsStore } from "../features/settings/store";
+import { seedCapabilities } from "../features/settings/queries";
 import { dialog } from "../app/stores/dialogStore";
 import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
 import type { Attachment, Module, State, WorkItem, WorkItemDetail } from "../shared/api/types";
@@ -160,13 +161,8 @@ beforeEach(() => {
   useToastStore.setState({ toasts: [] });
   useTasksStore.setState({ selectedProjectId: null, selectedTaskId: null });
   useWorkflowEditorStore.setState({ projectId: null, states: [] });
-  useSettingsStore.setState({
-    projectId: "p1",
-    subtreeRunCapabilities: { "ty-story": ["st-todo"] },
-    capabilitiesLoaded: true,
-    settingsLoaded: true,
-    loading: false,
-  });
+  useSettingsStore.setState({ projectId: "p1" });
+  seedCapabilities("p1", { "ty-story": ["st-todo"] });
 });
 
 afterEach(() => {
@@ -426,9 +422,7 @@ describe("IssueDetail", () => {
     patchWorkItem.mockImplementation(
       () => new Promise<WorkItem>((resolve) => { resolvePatch = resolve; }),
     );
-    useSettingsStore.setState({
-      subtreeRunCapabilities: { "ty-story": ["st-done"] },
-    });
+    seedCapabilities("p1", { "ty-story": ["st-done"] });
     setup(wi({
       id: "story",
       issue_type: STORY_TYPE,

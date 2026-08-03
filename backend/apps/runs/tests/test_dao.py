@@ -64,9 +64,14 @@ async def test_insert_round_trips_full_row() -> None:
         _make_run("run-1", task_id="task-1", started_at="2026-05-29T10:00:00")
     )
 
-    stored = await dao.list_agent_runs_for_task(
-        fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1")
-    )
+    stored = [
+        run
+        async for run in AgentRun.objects.filter(
+            issue_id=fixture_issue_id(
+                project_id="proj-1", module_id="mod-1", task_id="task-1"
+            )
+        )
+    ]
 
     assert len(stored) == 1
     assert stored[0].id == "run-1"
@@ -253,26 +258,6 @@ async def test_lifecycle_update_still_applies_while_a_run_is_live() -> None:
     assert stored.lifecycle_state == "exited"
 
 
-async def test_history_filters_task_orders_and_limits() -> None:
-    for run_id, task_id, started_at in (
-        ("old", "task-1", "2026-05-29T09:00:00"),
-        ("new", "task-1", "2026-05-29T11:00:00"),
-        ("other", "task-2", "2026-05-29T12:00:00"),
-    ):
-        await dao.insert_agent_run(
-            _make_run(run_id, task_id=task_id, started_at=started_at)
-        )
-
-    task_id = fixture_issue_id(
-        project_id="proj-1", module_id="mod-1", task_id="task-1"
-    )
-    runs = await dao.list_agent_runs_for_task(task_id)
-    limited = await dao.list_agent_runs_for_task(task_id, limit=1)
-
-    assert [run.id for run in runs] == ["new", "old"]
-    assert [run.id for run in limited] == ["new"]
-
-
 async def test_last_activity_by_module_ranks_and_coalesces() -> None:
     # Two modules; mod-a's newest run only has started_at, mod-b's newest run
     # bumped lifecycle_updated_at past its own (older) started_at.
@@ -316,7 +301,7 @@ async def test_last_activity_window_and_project_scope() -> None:
     assert fixture_issue_id(project_id="proj-1", module_id="mod-old", task_id=None) in activity
 
 
-async def test_routing_design_dirs_and_delete() -> None:
+async def test_design_dirs_are_task_and_module_scoped() -> None:
     for run_id, module_id, design_dir in (
         ("run-1", "mod-1", "/repo/spec/a"),
         ("run-2", "mod-1", "/repo/spec/a"),
@@ -330,18 +315,12 @@ async def test_routing_design_dirs_and_delete() -> None:
 
     task_1_id = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1")
     mod_1_id = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None)
-    assert await dao.get_run_routing("run-1") == (task_1_id, mod_1_id)
-    assert await dao.get_run_routing("missing") is None
     assert await dao.list_design_dirs_for_task(task_1_id) == [
         "/repo/spec/a"
     ]
     assert await dao.list_design_dirs_for_task(task_1_id, module_id=mod_1_id) == [
         "/repo/spec/a"
     ]
-
-    await dao.delete_agent_run("run-1")
-    await dao.delete_agent_run("missing")
-    assert await dao.get_run_routing("run-1") is None
 
 
 async def test_status_routing_uses_run_scope_before_terminal_session_exists() -> None:

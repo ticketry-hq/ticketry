@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 import apps.runs.dao as runs_dao
-import apps.terminals.dao as terminals_dao
 import apps.terminals.session as session_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
@@ -75,7 +74,7 @@ async def _seed_run_and_session(
     await runs_dao.insert_agent_run(
         _run(cwd=cwd, provider_session_id=provider_session_id, ended_at=ended_at)
     )
-    await terminals_dao.insert_terminal_session(_session())
+    await _session().asave(force_insert=True)
 
 
 def _patch_resume_adapter(monkeypatch, *, resume_fn=None, slug: str = AGENT) -> None:

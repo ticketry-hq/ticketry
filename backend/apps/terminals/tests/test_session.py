@@ -36,6 +36,22 @@ def _insert_run(run_id: str, *, task_id: str = "task-1") -> None:
     )
 
 
+def _has_live_run(service, task_id: str, adapter_kind: str) -> bool:
+    """Whether a running run exists for ``task_id``.
+
+    Replaces the deleted ``TerminalSessionService.live_run_for``, which existed
+    only for these assertions. The real service is backed by the ORM; the
+    in-memory fake keeps its runs in a dict, so the probe has to know which.
+    """
+
+    if adapter_kind == "real":
+        return AgentRun.objects.filter(issue_id=task_id, status="running").exists()
+    return any(
+        run.task_id == task_id and run.status == "running"
+        for run in service.runs.values()
+    )
+
+
 def _insert_session(run_id: str, *, task_id: str = "task-1") -> None:
     AgentTerminalSession.objects.create(
         agent_run_id=run_id,
@@ -215,23 +231,6 @@ def test_reconcile_removes_stale_overlays_and_preserves_active_ones(
     assert not (tmp_path / "ticketry-agent-runs" / "run-stale").exists()
 
 
-def test_live_run_for_returns_running_run_then_none_after_terminate(monkeypatch):
-    service = TerminalSessionService()
-    _insert_run("run-live")
-    _insert_session("run-live")
-    monkeypatch.setattr(session_module.tmux_sessions, "terminate_session", lambda run_id: True)
-    monkeypatch.setattr(session_module.documents_watch, "stop_watch", lambda run_id: None)
-
-    task_id = fixture_issue_id(
-        project_id="proj-1", module_id="mod-1", task_id="task-1"
-    )
-    assert service.live_run_for(task_id).id == "run-live"
-
-    service.terminate("run-live")
-
-    assert service.live_run_for(task_id) is None
-
-
 def test_reconcile_never_invokes_explicit_termination(monkeypatch):
     service = TerminalSessionService()
 
@@ -320,7 +319,7 @@ def test_session_contract_shared_behaviors(adapter_kind, monkeypatch):
         if adapter_kind == "real"
         else "task-2"
     )
-    assert service.live_run_for(task_1_lookup) is not None
+    assert _has_live_run(service, task_1_lookup, adapter_kind)
     first = service.attach(run_id)
     first_session = SimpleNamespace(
         agent_run_id=run_id,
@@ -341,7 +340,7 @@ def test_session_contract_shared_behaviors(adapter_kind, monkeypatch):
     if adapter_kind == "fake":
         service.sessions[dead_run_id].dead = True
     service.reconcile()
-    assert service.live_run_for(task_2_lookup) is None
+    assert not _has_live_run(service, task_2_lookup, adapter_kind)
     if adapter_kind == "real":
         assert stopped == [dead_run_id]
     else:
@@ -350,7 +349,7 @@ def test_session_contract_shared_behaviors(adapter_kind, monkeypatch):
     # Terminate is idempotent (second call no-op) and the run is no longer live.
     service.terminate(run_id)
     service.terminate(run_id)
-    assert service.live_run_for(task_1_lookup) is None
+    assert not _has_live_run(service, task_1_lookup, adapter_kind)
     if adapter_kind == "real":
         assert killed == [run_id]
         assert stopped == [dead_run_id, run_id]

@@ -383,13 +383,6 @@ class TerminalSessionService:
                 str(project_id), agent_run_id, "exited", at=ended_at
             )
 
-    def live_run_for(self, task_id: str) -> AgentRun | None:
-        return (
-            AgentRun.objects.filter(issue_id=task_id, status="running")
-            .order_by("-started_at", "-id")
-            .first()
-        )
-
     def sessions_for(self, task_id: str) -> list[AgentTerminalSession]:
         return async_to_sync(session_dao.list_terminal_sessions_for_task)(task_id)
 

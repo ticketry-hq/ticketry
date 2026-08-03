@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from asgiref.sync import sync_to_async
 
-import apps.terminals.consumers as consumers
+from apps.terminals import prompt_builder
 from apps import worktracker_queries
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
 from apps.worktrees import dao as worktrees_dao
@@ -86,7 +86,7 @@ async def _worktree(tmp_path, task_id: str, *, status: str = "active", live: boo
 
 
 async def _build(module_folder, *, task_id="t1", is_planning=False, is_instant=False, instant_prompt=None):
-    return await consumers._build_prompt(
+    return await prompt_builder._build_prompt(
         0,
         is_planning=is_planning,
         is_instant=is_instant,

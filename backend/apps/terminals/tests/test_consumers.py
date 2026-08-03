@@ -18,6 +18,7 @@ from channels.testing.websocket import WebsocketCommunicator
 
 from studio_server.asgi import application
 from apps.runs.models import AgentRun
+from apps.terminals import prompt_builder, session_registry
 from apps.terminals.dao import SCRATCH_TASK_ID
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
@@ -170,12 +171,12 @@ def clean_terminal_state():
     import apps.terminals.consumers as consumers
 
     consumers.SESSIONS.clear()
-    consumers.TMUX_VIEWERS.clear()
+    session_registry.TMUX_VIEWERS.clear()
     yield
     for session in list(consumers.SESSIONS.values()):
         session.terminate(force=True)
     consumers.SESSIONS.clear()
-    consumers.TMUX_VIEWERS.clear()
+    session_registry.TMUX_VIEWERS.clear()
 
 
 # ---------- init validation / errors ----------
@@ -719,11 +720,11 @@ async def test_initial_persisted_spawn_reserves_and_releases_agent_run(configure
     ready = json.loads(await communicator.receive_from(timeout=2))
     assert ready["type"] == "ready"
     run_id = ready["agent_run_id"]
-    assert consumers.TMUX_VIEWERS == {run_id: ready["session_id"]}
+    assert session_registry.TMUX_VIEWERS == {run_id: ready["session_id"]}
 
     await communicator.disconnect()
-    await _wait_until(lambda: run_id not in consumers.TMUX_VIEWERS)
-    assert run_id not in consumers.TMUX_VIEWERS
+    await _wait_until(lambda: run_id not in session_registry.TMUX_VIEWERS)
+    assert run_id not in session_registry.TMUX_VIEWERS
 
 
 async def test_initial_persisted_spawn_resize_failure_releases_reservation(configured, monkeypatch):
@@ -750,7 +751,7 @@ async def test_initial_persisted_spawn_resize_failure_releases_reservation(confi
 
     await _wait_until(lambda: not consumers.SESSIONS)
     assert consumers.SESSIONS == {}
-    assert consumers.TMUX_VIEWERS == {}
+    assert session_registry.TMUX_VIEWERS == {}
     await communicator.disconnect()
 
 
@@ -925,7 +926,7 @@ async def test_attach_resize_failure_releases_reservation(configured, monkeypatc
 
     await _wait_until(lambda: not consumers.SESSIONS)
     assert consumers.SESSIONS == {}
-    assert consumers.TMUX_VIEWERS == {}
+    assert session_registry.TMUX_VIEWERS == {}
     await communicator.disconnect()
 
 
@@ -947,7 +948,7 @@ async def test_second_attach_same_agent_run_replaces_existing_viewer(configured,
     assert replacement["type"] == "ready"
 
     await _drain_until_close(first)
-    assert consumers.TMUX_VIEWERS == {"same-run": replacement["session_id"]}
+    assert session_registry.TMUX_VIEWERS == {"same-run": replacement["session_id"]}
     assert ready["session_id"] not in consumers.SESSIONS
 
     await first.disconnect()
@@ -981,7 +982,7 @@ async def test_failed_replacement_keeps_existing_viewer(configured, monkeypatch)
         "type": "error",
         "message": "attach_resize_failed: bad replacement geometry",
     }
-    assert consumers.TMUX_VIEWERS == {"same-run": ready["session_id"]}
+    assert session_registry.TMUX_VIEWERS == {"same-run": ready["session_id"]}
     assert ready["session_id"] in consumers.SESSIONS
 
     await second.disconnect()
@@ -1002,7 +1003,7 @@ async def test_concurrent_attach_different_agent_run_succeeds(configured, monkey
     second = await _communicator()
     await second.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-b")))
     assert json.loads(await second.receive_from(timeout=2))["type"] == "ready"
-    assert set(consumers.TMUX_VIEWERS) == {"run-a", "run-b"}
+    assert set(session_registry.TMUX_VIEWERS) == {"run-a", "run-b"}
 
     await second.disconnect()
     await first.disconnect()
@@ -1020,8 +1021,8 @@ async def test_attach_reservation_released_after_close(configured, monkeypatch):
     assert json.loads(await first.receive_from(timeout=2))["type"] == "ready"
 
     await first.disconnect()
-    await _wait_until(lambda: "run-reopen" not in consumers.TMUX_VIEWERS)
-    assert "run-reopen" not in consumers.TMUX_VIEWERS
+    await _wait_until(lambda: "run-reopen" not in session_registry.TMUX_VIEWERS)
+    assert "run-reopen" not in session_registry.TMUX_VIEWERS
 
     second = await _communicator()
     await second.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-reopen")))
@@ -1095,8 +1096,7 @@ def _patch_worktracker_for_design(monkeypatch):
 
 
 async def _build(module_folder, **overrides):
-    """Call consumers._build_prompt with task-mode defaults."""
-    import apps.terminals.consumers as consumers
+    """Call prompt_builder._build_prompt with task-mode defaults."""
 
     kwargs = dict(
         is_planning=False,
@@ -1111,7 +1111,7 @@ async def _build(module_folder, **overrides):
         agent="claude",
     )
     kwargs.update(overrides)
-    return await consumers._build_prompt(0, **kwargs)
+    return await prompt_builder._build_prompt(0, **kwargs)
 
 
 async def test_task_prompt_injects_created_design_dir(tmp_config, sample_profile, tmp_path, monkeypatch):

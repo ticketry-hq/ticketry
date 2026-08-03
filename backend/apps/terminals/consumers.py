@@ -38,11 +38,9 @@ from apps.terminals.session import (
     SessionNotFound,
     session as terminal_session,
 )
-from apps.terminals.prompt_builder import _build_prompt  # noqa: F401 - test seam
 from apps.terminals.session_registry import (
     PtySession,
     SESSIONS,
-    TMUX_VIEWERS,  # noqa: F401 - compatibility/test seam
 )
 from apps.terminals import viewer_leases
 from apps.terminals.validation import MAX_SESSIONS, _validate_init

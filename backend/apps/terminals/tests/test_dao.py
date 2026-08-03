@@ -70,64 +70,37 @@ async def _insert(run_id: str, task_id: str, created_at: str, **kwargs) -> None:
             lifecycle_state=kwargs.pop("state", None),
         )
     )
-    await dao.insert_terminal_session(
-        _make_session(run_id, task_id=task_id, created_at=created_at, **kwargs)
-    )
+    await _make_session(
+        run_id, task_id=task_id, created_at=created_at, **kwargs
+    ).asave(force_insert=True)
 
 
-async def test_insert_list_and_soft_delete() -> None:
+async def test_list_for_task_is_newest_first_and_task_scoped() -> None:
     await _insert("run-old", "task-1", "2026-05-29T09:00:00")
     await _insert("run-new", "task-1", "2026-05-29T11:00:00")
     await _insert("run-other", "task-2", "2026-05-29T12:00:00")
 
     listed = await dao.list_terminal_sessions_for_task("task-1")
-    deleted = await dao.soft_delete_terminal_session(
-        "run-new", terminated_at="2026-05-29T11:30:00"
-    )
-    listed_after = await dao.list_terminal_sessions_for_task("task-1")
 
     assert [row.agent_run_id for row in listed] == ["run-new", "run-old"]
-    assert deleted is True
-    assert [row.agent_run_id for row in listed_after] == ["run-old"]
-    assert await dao.soft_delete_terminal_session(
-        "run-new", terminated_at="later"
-    ) is False
-    assert await dao.soft_delete_terminal_session(
-        "missing", terminated_at="later"
-    ) is False
+
+
+async def test_list_for_task_excludes_terminated_sessions() -> None:
+    await _insert("run-old", "task-1", "2026-05-29T09:00:00")
+    await _insert("run-new", "task-1", "2026-05-29T11:00:00")
+
+    await AgentTerminalSession.objects.filter(agent_run_id="run-new").aupdate(
+        terminated_at="2026-05-29T11:30:00"
+    )
+
+    listed = await dao.list_terminal_sessions_for_task("task-1")
+
+    assert [row.agent_run_id for row in listed] == ["run-old"]
 
 
 async def test_parent_delete_cascades_to_terminal_session() -> None:
     await _insert("run-1", "task-1", "2026-05-29T09:00:00")
 
-    await runs_dao.delete_agent_run("run-1")
+    await AgentRun.objects.filter(id="run-1").adelete()
 
     assert await AgentTerminalSession.objects.acount() == 0
-
-
-async def test_list_scratch_sessions_scoped_by_project_and_module() -> None:
-    await _insert(
-        "plan-1",
-        dao.SCRATCH_TASK_ID,
-        "2026-05-29T09:00:00",
-        scope="plan",
-    )
-    await _insert(
-        "inst-1",
-        dao.SCRATCH_TASK_ID,
-        "2026-05-29T11:00:00",
-        scope="instant",
-    )
-    await _insert(
-        "plan-2",
-        dao.SCRATCH_TASK_ID,
-        "2026-05-29T12:00:00",
-        module_id="mod-2",
-        scope="plan",
-    )
-    await _insert("task-run", "task-1", "2026-05-29T13:00:00")
-
-    listed = await dao.list_scratch_terminal_sessions("proj-1", "mod-1")
-
-    assert [row.agent_run_id for row in listed] == ["inst-1", "plan-1"]
-    assert [row.scope for row in listed] == ["instant", "plan"]

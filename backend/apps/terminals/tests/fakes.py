@@ -196,14 +196,6 @@ class InMemorySessionService:
             session.terminated_at = "now"
         self.stopped_watchers.append(agent_run_id)
 
-    def live_run_for(self, task_id: str):
-        live = [
-            run
-            for run in self.runs.values()
-            if run.task_id == task_id and run.status == "running"
-        ]
-        return live[-1] if live else None
-
     def sessions_for(self, task_id: str):
         return [
             session

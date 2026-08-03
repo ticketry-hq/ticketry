@@ -25,6 +25,7 @@ from apps.terminals.agents.injectors.agy import _AGY_SYSTEM_SETTINGS_ENV
 from apps.terminals.authorization import verify_run_authorization
 from apps.terminals.agents.registry import (
     AgentAdapter,
+    LaunchAugmentation,
     UnknownAgent,
     ResumeUnsupported,
     all_slugs,
@@ -209,9 +210,11 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
     class RecordingAdapter:
         slug = "codex"
 
-        def inject(self, argv, agent_run_id, *, lifecycle_url, mcp_url):
+        def augment_launch(
+            self, argv, agent_run_id, *, lifecycle_url, mcp_url, skills
+        ):
             captured["injection"] = (agent_run_id, lifecycle_url, mcp_url)
-            return argv
+            return LaunchAugmentation(tuple(argv))
 
     monkeypatch.setattr(
         launch.tmux,

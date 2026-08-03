@@ -18,7 +18,10 @@ The flow, for one ``Issue`` save:
    if they differ it resolves the from/to groups *now* (inside the txn) and
    registers a ``transaction.on_commit`` callback that sends the signal — so a
    rolled-back transition never emits.
-3. ``_log_state_change`` is the single v1 receiver on the signal; it logs only.
+3. The signal fans out to logging plus the ``apps.runs`` status-feed and
+   ``apps.execution`` automation receivers. Grep the signal's ``dispatch_uid``
+   values to enumerate the current set — the no-synchronous-state-mutation rule
+   documented on ``_log_state_change`` binds all of them.
 
 It imports only tracker models and the router-free ``state_group`` helper
 (#705), so ``ready()`` can import it without dragging in the Ninja API surface.

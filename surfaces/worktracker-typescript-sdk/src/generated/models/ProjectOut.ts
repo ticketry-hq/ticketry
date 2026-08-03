@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * A project — mirrors core.ProjectSummary (``slug`` is the project key).
+ * A project; ``slug`` is the project key.
  * 
  * ``description`` is plain markdown text (the model field is ``blank=True``,
  * so existing rows serialize as ``""``); rendering/sanitization is FE-only.

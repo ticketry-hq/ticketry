@@ -17,5 +17,4 @@ DATABASES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
-ROOT_URLCONF = "worktracker.tests.urls"
 WORKTRACKER_API_TOKEN = ""

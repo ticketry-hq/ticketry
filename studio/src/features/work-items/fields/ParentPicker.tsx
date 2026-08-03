@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { useStudioStore } from "../../projects/store";
+import { useModulesQuery } from "../../projects";
+
+const EMPTY_MODULES: Module[] = [];
 import { useWorkItems } from "../hooks";
 import type { Module, WorkItem } from "../../../shared/api/types";
 import Popover, { PopoverOption } from "./Popover";
@@ -51,7 +54,8 @@ function matches(
 
 // Parent picker: an Epic (module) or a task. Reparents the tree.
 export default function ParentPicker({ value, currentId, onChange, saving }: Props) {
-  const modules = useStudioStore((s) => s.modules);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const modules = useModulesQuery(selectedProjectId).data ?? EMPTY_MODULES;
   const { items } = useWorkItems();
 
   const blocked = currentId

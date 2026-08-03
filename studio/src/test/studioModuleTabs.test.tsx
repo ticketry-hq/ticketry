@@ -7,6 +7,7 @@ import { ModuleTabStrip } from "../features/studio/components/ModuleTabStrip";
 import { ModulesPane } from "../features/studio/pages/modules/ModulesPane";
 import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
 import { useStudioStore } from "../features/projects/store";
+import { getModulesSnapshot, seedModules as seedProjectModules } from "../features/projects";
 import { getConfigSnapshot as getStudioConfigSnapshot, seedConfig as seedStudioConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
@@ -217,7 +218,7 @@ describe("Studio module tab strip", () => {
       recentProfileIndex: null,
       features: { sidebar: true, projects: true },
     });
-    useStudioStore.setState({ selectedProjectId: null, modules: [] });
+    useStudioStore.setState({ selectedProjectId: null });
     useModalStore.setState({ modalStack: [], activeBindings: null });
     useAgentStatusStore.setState({
       projectId: "project-1",
@@ -441,10 +442,8 @@ describe("Studio module tab strip", () => {
   it("creates a module from the strip and saves its selected folder in the same flow", async () => {
     const profile = localProfile();
     seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
-    useStudioStore.setState({
-      selectedProjectId: "project-1",
-      modules: [],
-    });
+    useStudioStore.setState({ selectedProjectId: "project-1" });
+    seedProjectModules("project-1", []);
     mockModuleCreation();
     render(
       <>
@@ -468,7 +467,7 @@ describe("Studio module tab strip", () => {
     expect(screen.getByRole("tab", { name: "New module" })).toHaveAttribute("aria-selected", "true");
     expect(useModalStore.getState().modalStack).toEqual([]);
     expect(useTasksStore.getState().selectedModuleId).toBe("module-new");
-    expect(useStudioStore.getState().modules).toEqual(
+    expect(getModulesSnapshot("project-1")).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: "module-new", project_id: "project-1" }),
       ]),

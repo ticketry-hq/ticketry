@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 import ParentPicker from "../features/work-items/fields/ParentPicker";
 import { useStudioStore } from "../features/projects/store";
+import { seedModules } from "../features/projects";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import type { Module } from "../shared/api/types";
 
@@ -18,7 +19,8 @@ function mod(partial: Partial<Module> & { id: string }): Module {
 }
 
 beforeEach(() => {
-  useStudioStore.setState({ modules: [] });
+  useStudioStore.setState({ selectedProjectId: "p1" });
+  seedModules("p1", []);
   useBacklogStore.setState({ projectId: "p1", items: [], states: [] });
 });
 
@@ -30,7 +32,8 @@ describe("ParentPicker search", () => {
   it("filters epics by sequence number", () => {
     const a = mod({ id: "a", key: "MEML-7", name: "Alpha epic", sequence_id: 7 });
     const b = mod({ id: "b", key: "MEML-42", name: "Beta epic", sequence_id: 42 });
-    useStudioStore.setState({ modules: [a, b] });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+  seedModules("p1", [a, b]);
 
     render(<ParentPicker value={null} onChange={() => {}} />);
     open();
@@ -45,7 +48,8 @@ describe("ParentPicker search", () => {
   it("filters by key and by name too", () => {
     const a = mod({ id: "a", key: "MEML-7", name: "Alpha epic", sequence_id: 7 });
     const b = mod({ id: "b", key: "MEML-42", name: "Beta epic", sequence_id: 42 });
-    useStudioStore.setState({ modules: [a, b] });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+  seedModules("p1", [a, b]);
 
     render(<ParentPicker value={null} onChange={() => {}} />);
     open();
@@ -62,7 +66,8 @@ describe("ParentPicker search", () => {
 
   it("picks the matched epic", () => {
     const a = mod({ id: "a", key: "MEML-7", name: "Alpha epic", sequence_id: 7 });
-    useStudioStore.setState({ modules: [a] });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+  seedModules("p1", [a]);
     const onChange = vi.fn();
 
     render(<ParentPicker value={null} onChange={onChange} />);

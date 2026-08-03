@@ -63,6 +63,7 @@ import IssueDetail from "../features/work-items/issue-detail/IssueDetail";
 import { useIssueStore } from "../features/work-items/issue-detail";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useStudioStore } from "../features/projects/store";
+import { seedModules, seedProjects } from "../features/projects";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { DetailsTab } from "../features/studio/pages/workspace/tabs/DetailsTab";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
@@ -135,11 +136,9 @@ function setup(
     filters: { query: "" },
     deleteIssue,
   });
-  useStudioStore.setState({
-    selectedProjectId: "p1",
-    modules: [EPIC],
-    projects: [{ id: "p1", name: "Worktracker", slug: "wt", description: "" }],
-  });
+  useStudioStore.setState({ selectedProjectId: "p1" });
+  seedModules("p1", [EPIC]);
+  seedProjects([{ id: "p1", name: "Worktracker", slug: "wt", description: "" }]);
   return render(<IssueDetail issueId={task.id} />);
 }
 
@@ -195,11 +194,9 @@ describe("IssueDetail", () => {
       filters: { query: "" },
       deleteIssue,
     });
-    useStudioStore.setState({
-      selectedProjectId: "p1",
-      modules: [EPIC],
-      projects: [{ id: "p1", name: "Worktracker", slug: "wt", description: "" }],
-    });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    seedModules("p1", [EPIC]);
+    seedProjects([{ id: "p1", name: "Worktracker", slug: "wt", description: "" }]);
     useTasksStore.setState({
       selectedProjectId: "p1",
       selectedModuleId: "m1",
@@ -273,11 +270,9 @@ describe("IssueDetail", () => {
       filters: { query: "" },
       deleteIssue,
     });
-    useStudioStore.setState({
-      selectedProjectId: "p1",
-      modules: [EPIC],
-      projects: [{ id: "p1", name: "Worktracker", slug: "wt", description: "" }],
-    });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    seedModules("p1", [EPIC]);
+    seedProjects([{ id: "p1", name: "Worktracker", slug: "wt", description: "" }]);
 
     const view = render(<IssueDetail issueId={first.id} />);
     await vi.advanceTimersByTimeAsync(150);
@@ -709,7 +704,8 @@ describe("IssueDetail", () => {
       states: [TODO, DONE],
       filters: { query: "" },
     });
-    useStudioStore.setState({ selectedProjectId: "p1", modules: [EPIC] });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    seedModules("p1", [EPIC]);
     render(<IssueDetail issueId="a" />);
     const row = screen.getByTestId("blocked-by-row");
     const chip = within(row).getByTestId("blocker-chip");
@@ -741,7 +737,8 @@ describe("IssueDetail", () => {
       states: [TODO, DONE],
       filters: { query: "" },
     });
-    useStudioStore.setState({ selectedProjectId: "p1", modules: [EPIC] });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    seedModules("p1", [EPIC]);
     render(<IssueDetail issueId="a" />);
     const blockedByChip = within(screen.getByTestId("blocked-by-row")).getByTestId("blocker-chip");
     expect(blockedByChip).toHaveAttribute("data-warn", "false");
@@ -762,7 +759,8 @@ describe("IssueDetail", () => {
       states: [TODO, DONE],
       filters: { query: "" },
     });
-    useStudioStore.setState({ selectedProjectId: "p1", modules: [EPIC] });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    seedModules("p1", [EPIC]);
     render(<IssueDetail issueId="a" />);
     fireEvent.click(screen.getByTestId("remove-blocker"));
     await waitFor(() =>
@@ -810,11 +808,9 @@ describe("FindingsPanel (#907)", () => {
       states: [TODO, DONE, REVIEW, IMPLEMENT, CANCELLED],
       filters: { query: "" },
     });
-    useStudioStore.setState({
-      selectedProjectId: "p1",
-      modules: [EPIC],
-      projects: [{ id: "p1", name: "Worktracker", slug: "wt", description: "" }],
-    });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    seedModules("p1", [EPIC]);
+    seedProjects([{ id: "p1", name: "Worktracker", slug: "wt", description: "" }]);
     return render(<IssueDetail issueId="a" />);
   }
 
@@ -880,7 +876,8 @@ describe("FindingsPanel (#907)", () => {
       projectId: "p1", items: [task], states: [TODO, DONE, REVIEW, IMPLEMENT, CANCELLED],
       filters: { query: "" },
     });
-    useStudioStore.setState({ selectedProjectId: "p1", modules: [EPIC] });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    seedModules("p1", [EPIC]);
     render(<IssueDetail issueId="a" />);
     expect(screen.queryByTestId("findings-panel")).toBeNull();
   });

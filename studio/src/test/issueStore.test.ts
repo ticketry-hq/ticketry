@@ -19,6 +19,7 @@ import {
   deriveEpic, resolveBlockerChips, useIssueStore, } from "../features/work-items/issue-detail";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useStudioStore } from "../features/projects/store";
+import { seedModules } from "../features/projects";
 import type { Module, State, WorkItem, WorkItemDetail } from "../shared/api/types";
 
 const getWorkItem = api.getWorkItem as ReturnType<typeof vi.fn>;
@@ -70,7 +71,8 @@ beforeEach(() => {
     pendingStateDeltas: {},
   });
   // Pre-select the project so openIssue skips the project/backlog hydration.
-  useStudioStore.setState({ selectedProjectId: "p1", modules: [] });
+  useStudioStore.setState({ selectedProjectId: "p1" });
+  seedModules("p1", []);
   useBacklogStore.setState({ projectId: "p1", items: [], states: [TODO] });
 });
 

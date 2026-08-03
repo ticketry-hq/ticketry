@@ -6,6 +6,11 @@ import { useWorkItems } from "../hooks";
 import { usePlanningFilterStore } from "../internal/planningFilterStore";
 import { dialog } from "../../../app/stores/dialogStore";
 import { useStudioStore } from "../../projects/store";
+import { useModulesQuery, useProjectsQuery } from "../../projects";
+import type { Module, Project } from "../../../shared/api/types";
+
+const EMPTY_MODULES: Module[] = [];
+const EMPTY_PROJECTS: Project[] = [];
 import StatePicker from "../fields/StatePicker";
 import { IconPanelLeft } from "../../../shared/ui/icons";
 
@@ -61,11 +66,11 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   const addSubtask = useIssueStore((s) => s.addSubtask);
   const cancelChild = useIssueStore((s) => s.cancelChild);
 
-  const modules = useStudioStore((s) => s.modules);
-  const projects = useStudioStore((s) => s.projects);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const modules = useModulesQuery(selectedProjectId).data ?? EMPTY_MODULES;
+  const projects = useProjectsQuery().data ?? EMPTY_PROJECTS;
   const { items } = useWorkItems();
   const deleteIssue = useBacklogStore((s) => s.deleteIssue);
-  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
 
   const [sidebarVisible, setSidebarVisible] = useState(readSidebarVisible);
   const toggleSidebar = () =>

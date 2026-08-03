@@ -35,3 +35,6 @@ studio/src-tauri/binaries/
 
 # Editor / OS
 .DS_Store
+
+# Local scratch notes
+simplify/

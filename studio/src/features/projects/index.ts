@@ -3,7 +3,6 @@
 export { normalizeView, useStudioStore } from "./store";
 export type { DeleteProjectResult } from "./store";
 export {
-  createProjectRecord,
   getModulesSnapshot,
   getProjectsSnapshot,
   loadModules,

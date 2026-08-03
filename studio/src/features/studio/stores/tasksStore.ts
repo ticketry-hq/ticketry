@@ -1193,7 +1193,7 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
 // Studio's panes want a slimmer row than the backend record. Project the shared
 // cache lazily and memoize on the cached array's identity, so repeated reads
 // (and zustand selector comparisons) keep returning the same objects.
-export function normalizeProjectSummary(project: Project): ProjectSummary {
+function normalizeProjectSummary(project: Project): ProjectSummary {
   return { id: project.id, name: project.name, identifier: project.slug };
 }
 

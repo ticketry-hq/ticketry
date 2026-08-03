@@ -5,7 +5,7 @@ import pytest
 
 from apps.settings_store.profile_prompt_migration import migrate_profile_prompts
 from worktracker.models import IssueType, LaunchBinding, Project, State, Workspace
-from worktracker.launch_seeds import DEFAULT_AGENT_PROMPTS
+from worktracker.launch_seeds import default_agent_prompt
 
 
 @pytest.mark.django_db
@@ -20,17 +20,21 @@ def test_legacy_profile_prompts_move_to_existing_known_project_bindings(tmp_path
     incident = IssueType.objects.create(
         id=uuid.uuid4(), project=project, name="Incident", level="task"
     )
-    idea = State.objects.create(
-        id=uuid.uuid4(), project=project, name="Idea", group="backlog"
+    grill = State.objects.create(
+        id=uuid.uuid4(), project=project, name="Grill", group="backlog"
     )
     implement = State.objects.create(
         id=uuid.uuid4(), project=project, name="Implement", group="started"
     )
-    story_idea = LaunchBinding.objects.create(
-        issue_type=story, state=idea, prompt=DEFAULT_AGENT_PROMPTS["Idea"]
+    # Seeded, unedited bindings: the migration only moves a profile prompt onto
+    # a binding whose text still matches its seed.
+    story_grill = LaunchBinding.objects.create(
+        issue_type=story, state=grill, prompt=default_agent_prompt("Story", "Grill")
     )
     story_implement = LaunchBinding.objects.create(
-        issue_type=story, state=implement, prompt=DEFAULT_AGENT_PROMPTS["Implement"]
+        issue_type=story,
+        state=implement,
+        prompt=default_agent_prompt("Story", "Implement"),
     )
     custom = LaunchBinding.objects.create(
         issue_type=incident, state=implement, prompt="Incident-specific"
@@ -57,11 +61,11 @@ def test_legacy_profile_prompts_move_to_existing_known_project_bindings(tmp_path
         config_file, Workspace=Workspace, LaunchBinding=LaunchBinding
     )
 
-    story_idea.refresh_from_db()
+    story_grill.refresh_from_db()
     story_implement.refresh_from_db()
     custom.refresh_from_db()
     assert migrated == 2
-    assert story_idea.prompt == "Profile default"
+    assert story_grill.prompt == "Profile default"
     assert story_implement.prompt == "Profile implement"
     assert custom.prompt == "Incident-specific"
     profile = json.loads(config_file.read_text())["profiles"][0]

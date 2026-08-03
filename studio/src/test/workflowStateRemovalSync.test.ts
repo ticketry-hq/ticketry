@@ -172,6 +172,7 @@ describe("workflow state removal synchronization", () => {
 
     useTasksStore.setState({
       selectedProjectId: "project-1",
+      selectedModuleId: "module-1",
       selectedTaskId: stale.id,
       states: [SCRATCH, DOING, REVIEW, DONE],
       tasks: [taskRow(stale)],
@@ -242,6 +243,7 @@ describe("workflow state removal synchronization", () => {
     workflowApi.getProjectWorkItems.mockResolvedValue([fetchedItem]);
     useTasksStore.setState({
       selectedProjectId: "project-1",
+      selectedModuleId: "module-1",
       states: [SCRATCH, DOING, REVIEW, DONE],
       tasks: [taskRow(feedItem)],
       pendingStateDeltas: {
@@ -374,6 +376,7 @@ describe("workflow state removal synchronization", () => {
     workflowApi.getProjectWorkItems.mockResolvedValue([]);
     useTasksStore.setState({
       selectedProjectId: "project-1",
+      selectedModuleId: "module-1",
       selectedTaskId: stale.id,
       tasks: [taskRow(stale)],
     });

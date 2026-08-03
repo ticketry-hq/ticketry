@@ -2,7 +2,11 @@ import { TEMP_TASK_ID } from "../../../agents/types";
 import { scratchBucketId } from "../../../agents/terminal";
 import { PaneShell } from "../../components/PaneShell";
 import { useConfig } from "../../stores/configStore";
-import { useTaskStates, useTasksStore } from "../../stores/tasksStore";
+import {
+  useStudioTaskTree,
+  useTaskStates,
+  useTasksStore,
+} from "../../stores/tasksStore";
 import type {
   WorkspaceLauncherContext,
 } from "../../../work-items/issue-detail";
@@ -24,7 +28,7 @@ export function TicketWorkspace() {
   const dismissStateConfiguration = useTasksStore(
     (s) => s.dismissStateConfiguration,
   );
-  const tasks = useTasksStore((s) => s.tasks);
+  const { tasks } = useStudioTaskTree();
   const { profiles, recentProfileIndex } = useConfig();
   const task = tasks.find((candidate) => candidate.id === selectedTaskId);
   const profile = recentProfileIndex === null ? null : profiles[recentProfileIndex] ?? null;

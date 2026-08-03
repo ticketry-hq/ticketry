@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { useStudioModules, useTasksStore } from "../stores/tasksStore";
+import {
+  useStudioModules,
+  useStudioTaskDetails,
+  useStudioTaskTree,
+  useTasksStore,
+} from "../stores/tasksStore";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 
@@ -24,12 +29,11 @@ export interface ParentUpdatePayload {
  */
 export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
   const mode = payload?.mode ?? "parent";
-  const tasks = useTasksStore((s) => s.tasks);
-  const subtasks = useTasksStore((s) => s.subtasks);
+  const { tasks, subtasks } = useStudioTaskTree();
   const modules = useStudioModules();
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
-  const details = useTasksStore((s) => s.details);
+  const details = useStudioTaskDetails();
   const updateTaskParent = useTasksStore((s) => s.updateTaskParent);
   const popModal = useModalStore((s) => s.popModal);
 

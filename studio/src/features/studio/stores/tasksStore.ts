@@ -39,6 +39,14 @@ import {
   useCachedStates,
 } from "../../../shared/query/stateCatalog";
 import {
+  getTaskDetails,
+  getTaskTree,
+  setTaskDetails,
+  setTaskTree,
+  useCachedTaskDetails,
+  useCachedTaskTree,
+} from "./taskTreeCache";
+import {
   type ModuleSummary,
   type ProjectSummary,
   type TaskDetails,
@@ -115,7 +123,8 @@ interface TasksStoreState {
   selectedProjectId: string | null;
   readonly modules: ModuleSummary[];
   selectedModuleId: string | null;
-  tasks: TaskSummary[];
+  /** Derived from the module tree cache; see ./taskTreeCache. */
+  readonly tasks: TaskSummary[];
   /**
    * Derived from the one shared workflow-state catalog, with the local-only
    * Scratch section in front. React surfaces read useTaskStates() instead —
@@ -124,8 +133,14 @@ interface TasksStoreState {
   readonly states: TaskState[];
   selectedTaskId: string | null;
   workspaceSelection: WorkspaceSelection;
-  subtasks: Record<TaskId, TaskSummary[]>;
-  details: TaskDetails | null;
+  readonly subtasks: Record<TaskId, TaskSummary[]>;
+  readonly details: TaskDetails | null;
+  /**
+   * Which task's details are currently loaded. Client state: the details record
+   * itself is cached per task id, and this says which entry the pane is showing
+   * — they can differ from the selection while a load or a move is in flight.
+   */
+  detailsTaskId: string | null;
   loading: LoadingFlags;
   // Status-feed ordering guards (CODIN-1102): project-monotonic revisions,
   // never arrival order, decide whether a workflow-state write may land. The
@@ -384,7 +399,70 @@ function overlayAuthoritativeCatalog(
   }));
 }
 
-export const useTasksStore = create<TasksStoreState>((set, get) => ({
+/**
+ * Strip the derived keys out of a state write and route each to the cache entry
+ * that actually owns it. Both the store's internal `set` and the external
+ * `setState` go through here, so no write can land on a shadowed own-property
+ * that the accessors would then discard.
+ */
+function routeDerivedWrites(
+  next: Partial<TasksStoreState>,
+  current: TasksStoreState,
+): Partial<TasksStoreState> {
+  const { states, projects, modules, tasks, subtasks, details, ...rest } = next;
+  const projectId = rest.selectedProjectId ?? current.selectedProjectId;
+  const moduleId =
+    rest.selectedModuleId !== undefined
+      ? rest.selectedModuleId
+      : current.selectedModuleId;
+
+  if ((tasks !== undefined || subtasks !== undefined) && projectId && moduleId) {
+    const existing = getTaskTree(projectId, moduleId);
+    setTaskTree(projectId, moduleId, {
+      tasks: tasks ?? existing.tasks,
+      subtasks: subtasks ?? existing.subtasks,
+    });
+  }
+  if (details !== undefined) {
+    // A null write clears the pane; a record write both caches it and records
+    // whose details are now on screen.
+    rest.detailsTaskId = details?.task.id ?? null;
+    if (projectId && details) setTaskDetails(projectId, details.task.id, details);
+  }
+  if (projects !== undefined) {
+    seedProjects(
+      projects.map((summary) => ({
+        id: summary.id,
+        name: summary.name,
+        slug: summary.identifier,
+        description: "",
+      })),
+    );
+  }
+  if (modules !== undefined && projectId) {
+    seedModules(projectId, modules as unknown as Module[]);
+  }
+  if (states !== undefined && projectId) {
+    setStatesSorted(
+      projectId,
+      states.filter((state) => state.id !== null) as State[],
+    );
+  }
+  return rest;
+}
+
+export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
+  // The actions' `set` must route derived writes too — zustand hands the
+  // creator the raw setter, which would otherwise bypass the interception the
+  // external setState performs.
+  const set: typeof rawSet = ((partial, replace) => {
+    const current = store.getState();
+    const next = typeof partial === "function" ? (partial as (s: TasksStoreState) => Partial<TasksStoreState>)(current) : partial;
+    rawSet(routeDerivedWrites(next as Partial<TasksStoreState>, current) as typeof next, replace as never);
+    attachDerivedStates(store.getState());
+  }) as typeof rawSet;
+
+  return {
   projects: [] as ProjectSummary[],
   selectedProjectId: null,
   modules: [] as ModuleSummary[],
@@ -395,6 +473,7 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   workspaceSelection: { kind: "task" },
   subtasks: {},
   details: null,
+  detailsTaskId: null,
   loading: {
     projects: false,
     modules: false,
@@ -1108,7 +1187,8 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
     });
     return true;
   },
-}));
+  };
+});
 
 // Studio's panes want a slimmer row than the backend record. Project the shared
 // cache lazily and memoize on the cached array's identity, so repeated reads
@@ -1182,6 +1262,23 @@ function attachDerivedStates(state: TasksStoreState): void {
       enumerable: false,
       get: () => moduleSummaries(state.selectedProjectId),
     },
+    tasks: {
+      configurable: true,
+      enumerable: false,
+      get: () =>
+        getTaskTree(state.selectedProjectId, state.selectedModuleId).tasks,
+    },
+    subtasks: {
+      configurable: true,
+      enumerable: false,
+      get: () =>
+        getTaskTree(state.selectedProjectId, state.selectedModuleId).subtasks,
+    },
+    details: {
+      configurable: true,
+      enumerable: false,
+      get: () => getTaskDetails(state.selectedProjectId, state.detailsTaskId),
+    },
   });
 }
 
@@ -1195,34 +1292,29 @@ const rawSetState = useTasksStore.setState;
 useTasksStore.setState = ((partial, replace) => {
   const current = useTasksStore.getState();
   const next = typeof partial === "function" ? partial(current) : partial;
-  const { states, projects, modules, ...withoutStates } =
-    next as Partial<TasksStoreState>;
-  if (projects !== undefined) {
-    seedProjects(
-      projects.map((summary) => ({
-        id: summary.id,
-        name: summary.name,
-        slug: summary.identifier,
-        description: "",
-      })),
-    );
-  }
-  if (modules !== undefined) {
-    const projectId = withoutStates.selectedProjectId ?? current.selectedProjectId;
-    if (projectId) seedModules(projectId, modules as unknown as Module[]);
-  }
-  if (states !== undefined) {
-    const projectId = withoutStates.selectedProjectId ?? current.selectedProjectId;
-    if (projectId) {
-      setStatesSorted(
-        projectId,
-        states.filter((state) => state.id !== null) as State[],
-      );
-    }
-  }
-  rawSetState(withoutStates as typeof next, replace);
+  rawSetState(routeDerivedWrites(next, current) as typeof next, replace);
   attachDerivedStates(useTasksStore.getState());
 }) as typeof useTasksStore.setState;
+
+/**
+ * Reactive reads of the Stories tree. The store's actions own the fetches; these
+ * subscribe to the cache entries those fetches populate, so a feed delta or a
+ * reorder re-renders the panes.
+ */
+export function useStudioTaskTree(): {
+  tasks: TaskSummary[];
+  subtasks: Record<TaskId, TaskSummary[]>;
+} {
+  const projectId = useTasksStore((s) => s.selectedProjectId);
+  const moduleId = useTasksStore((s) => s.selectedModuleId);
+  return useCachedTaskTree(projectId, moduleId);
+}
+
+export function useStudioTaskDetails(): TaskDetails | null {
+  const projectId = useTasksStore((s) => s.selectedProjectId);
+  const taskId = useTasksStore((s) => s.selectedTaskId);
+  return useCachedTaskDetails(projectId, taskId);
+}
 
 /** Reactive read of Studio's project rows. */
 export function useStudioProjects(): ProjectSummary[] {

@@ -1,5 +1,9 @@
 import { useMemo } from "react";
-import { useTaskStates, useTasksStore } from "../../../stores/tasksStore";
+import {
+  useStudioTaskTree,
+  useTaskStates,
+  useTasksStore,
+} from "../../../stores/tasksStore";
 import { useUIStore } from "../../../stores/uiStore";
 import { orderedTaskSections } from "../../../lib/taskTree";
 import { type TaskSummary } from "../../../lib/types";
@@ -13,9 +17,8 @@ import {
 } from "../TasksPane";
 
 export function useTaskTree() {
-  const tasks = useTasksStore((s) => s.tasks);
+  const { tasks, subtasks } = useStudioTaskTree();
   const states = useTaskStates();
-  const subtasks = useTasksStore((s) => s.subtasks);
   const loadingTasks = useTasksStore((s) => s.loading.tasks);
   const loadingSubtasks = useTasksStore((s) => s.loading.subtasks);
   const expandedTaskIds = useUIStore((s) => s.expandedTaskIds);

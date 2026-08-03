@@ -4,53 +4,54 @@ from __future__ import annotations
 
 from apps.terminals.dao import SCRATCH_TASK_ID
 from apps.terminals.session import LaunchIntent, session as terminal_session
+from apps.terminals.validation import SpawnRequest
 
 
-def launch_intent_from_spawn(init: dict) -> LaunchIntent:
+def launch_intent_from_spawn(request: SpawnRequest) -> LaunchIntent:
     """Translate a validated spawn request into the shared session intent."""
 
     scope = (
         "docchat"
-        if init["is_doc_chat"]
+        if request.is_doc_chat
         else "plan"
-        if init["is_planning"]
+        if request.is_planning
         else "instant"
-        if init["is_instant"]
+        if request.is_instant
         else "task"
     )
     if scope == "task":
-        persist_task_id = init["task_id"]
-        issue_id = init["task_id"]
+        persist_task_id = request.task_id
+        issue_id = request.task_id
     elif scope == "docchat":
         # A task-bound document chat remains associated with its task; a
         # scratch chat uses the existing sentinel bucket.
-        persist_task_id = init["task_id"] or SCRATCH_TASK_ID
-        issue_id = init["task_id"] or init["module_id"]
+        persist_task_id = request.task_id or SCRATCH_TASK_ID
+        issue_id = request.task_id or request.module_id
     else:
         persist_task_id = SCRATCH_TASK_ID
-        issue_id = init["module_id"]
+        issue_id = request.module_id
 
     return LaunchIntent(
-        agent=init["agent"],
-        project_id=init["project_id"],
-        module_id=init["module_id"],
+        agent=request.agent,
+        project_id=request.project_id,
+        module_id=request.module_id,
         task_id=persist_task_id,
         issue_id=issue_id,
-        initial_prompt=init["instant_prompt"]
+        initial_prompt=request.instant_prompt
         if scope == "instant"
-        else init["initial_prompt"],
+        else request.initial_prompt,
         scope=scope,
-        doc_rel_path=init["doc_rel_path"],
-        doc_id=init["doc_id"],
+        doc_rel_path=request.doc_rel_path,
+        doc_id=request.doc_id,
     )
 
 
-async def create_terminal_run(init: dict) -> str:
+async def create_terminal_run(request: SpawnRequest) -> str:
     """Create the AgentRun and detached tmux session before transport attach.
 
     ``TerminalSessionService.spawn`` is the one launcher responsible for
-    persisting the run and deleting it if tmux setup fails. ``init`` must have
-    passed terminal spawn validation before reaching this operation.
+    persisting the run and deleting it if tmux setup fails. ``request`` must
+    have passed terminal spawn validation before reaching this operation.
     """
 
-    return await terminal_session.spawn(launch_intent_from_spawn(init))
+    return await terminal_session.spawn(launch_intent_from_spawn(request))

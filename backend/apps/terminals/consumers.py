@@ -45,7 +45,11 @@ from apps.terminals.session_registry import (
     TMUX_VIEWERS,  # noqa: F401 - compatibility/test seam
 )
 from apps.terminals import viewer_leases
-from apps.terminals.validation import MAX_SESSIONS, _validate_init
+from apps.terminals.validation import (
+    MAX_SESSIONS,
+    AttachRequest,
+    _validate_init,
+)
 from apps.settings_store.config import NoConfigurationSelected
 
 
@@ -218,7 +222,7 @@ class TerminalConsumer(AsyncWebsocketConsumer):
             await self._send_error("too_many_sessions", close_code=1013)
             return
 
-        if init["mode"] == "attach":
+        if isinstance(init, AttachRequest):
             await self._handle_attach(init)
             return
 
@@ -249,12 +253,12 @@ class TerminalConsumer(AsyncWebsocketConsumer):
 
         await self._attach_run(
             agent_run_id=agent_run_id,
-            cols=init["cols"],
-            rows=init["rows"],
-            fallback_agent=init["agent"],
+            cols=init.cols,
+            rows=init.rows,
+            fallback_agent=init.agent,
             fallback_task_id=launch_intent_from_spawn(init).task_id,
-            fallback_module_id=init["module_id"],
-            fallback_project_id=init["project_id"],
+            fallback_module_id=init.module_id,
+            fallback_project_id=init.project_id,
         )
 
     async def _attach_run(
@@ -341,11 +345,11 @@ class TerminalConsumer(AsyncWebsocketConsumer):
             return
         await self._pump(session)
 
-    async def _handle_attach(self, init: dict) -> None:
+    async def _handle_attach(self, request: AttachRequest) -> None:
         await self._attach_run(
-            agent_run_id=init["agent_run_id"],
-            cols=init["cols"],
-            rows=init["rows"],
+            agent_run_id=request.agent_run_id,
+            cols=request.cols,
+            rows=request.rows,
         )
 
     async def _pump(self, session: PtySession) -> None:

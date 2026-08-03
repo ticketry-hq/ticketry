@@ -19,6 +19,7 @@ from channels.testing.websocket import WebsocketCommunicator
 from studio_server.asgi import application
 from apps.runs.models import AgentRun
 from apps.terminals.dao import SCRATCH_TASK_ID
+from apps.terminals.validation import SpawnRequest
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 from apps.terminals.tests.conftest import write_profiles
@@ -1294,9 +1295,9 @@ def test_validate_init_accepts_doc_chat():
         _init_frame(is_doc_chat=True, doc_rel_path="LLD.html", task_id=TASK_ID)
     )
     assert err is None
-    assert init["mode"] == "spawn"
-    assert init["is_doc_chat"] is True
-    assert init["doc_rel_path"] == "LLD.html"
+    assert isinstance(init, SpawnRequest)
+    assert init.is_doc_chat is True
+    assert init.doc_rel_path == "LLD.html"
 
 
 def test_validate_init_doc_chat_allows_no_task():
@@ -1306,7 +1307,7 @@ def test_validate_init_doc_chat_allows_no_task():
         _init_frame(is_doc_chat=True, doc_rel_path="LLD.html", task_id=None)
     )
     assert err is None
-    assert init["task_id"] is None
+    assert init.task_id is None
 
 
 def test_validate_init_rejects_unsafe_doc_path():

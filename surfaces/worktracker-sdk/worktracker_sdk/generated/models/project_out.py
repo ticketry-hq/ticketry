@@ -27,7 +27,7 @@ from pydantic_core import to_jsonable_python
 
 class ProjectOut(BaseModel):
     """
-    A project — mirrors core.ProjectSummary (``slug`` is the project key).  ``description`` is plain markdown text (the model field is ``blank=True``, so existing rows serialize as ``\"\"``); rendering/sanitization is FE-only.
+    A project; ``slug`` is the project key.  ``description`` is plain markdown text (the model field is ``blank=True``, so existing rows serialize as ``\"\"``); rendering/sanitization is FE-only.
     """ # noqa: E501
     description: Optional[StrictStr] = ''
     id: UUID

@@ -3,12 +3,6 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class ProjectSummary(BaseModel):
-    id: str
-    name: str
-    identifier: str = ""
-
-
 class ModuleSummary(BaseModel):
     id: str
     name: str

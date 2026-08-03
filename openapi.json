@@ -509,7 +509,7 @@
         "type": "object"
       },
       "ProjectOut": {
-        "description": "A project — mirrors core.ProjectSummary (``slug`` is the project key).\n\n``description`` is plain markdown text (the model field is ``blank=True``,\nso existing rows serialize as ``\"\"``); rendering/sanitization is FE-only.",
+        "description": "A project; ``slug`` is the project key.\n\n``description`` is plain markdown text (the model field is ``blank=True``,\nso existing rows serialize as ``\"\"``); rendering/sanitization is FE-only.",
         "properties": {
           "description": {
             "default": "",

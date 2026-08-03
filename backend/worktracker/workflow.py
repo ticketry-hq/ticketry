@@ -80,45 +80,44 @@ def transition_state(
             to_state=to_name,
         )
 
-    if start_state_id:
-        if issue.state_id is None or target is None:
-            raise InvalidTransition("Published workflows require an explicit graph edge.", code="illegal_transition", from_state=from_name, to_state=to_name)
-        nodes = _graph_node_ids(issue.issue_type_id)
-        if target.id not in nodes:
-            other_type_ids = IssueType.objects.filter(
-                project_id=issue.project_id
-            ).exclude(pk=issue.issue_type_id)
-            target_used_elsewhere = other_type_ids.filter(
-                Q(start_state_id=target.id)
-                | Q(transitions__from_state_id=target.id)
-                | Q(transitions__to_state_id=target.id)
-            ).exists()
-            code = (
-                "foreign_state"
-                if target_used_elsewhere
-                else "unknown_state"
-            )
-            raise InvalidTransition(
-                f"{target.name!r} is not a state in the published workflow.",
-                code=code, from_state=from_name, to_state=to_name,
-            )
-        edge = IssueTypeTransition.objects.filter(
-            issue_type_id=issue.issue_type_id,
-            from_state_id=issue.state_id,
-            to_state_id=target.id,
-        ).first()
-        if edge is None:
-            raise InvalidTransition(
-                f"A {issue.issue_type.name} cannot move {from_name!r} → {to_name!r}.",
-                code="illegal_transition", from_state=from_name, to_state=to_name,
-            )
-        if origin == "agent" and not edge.agent_allowed:
-            raise InvalidTransition(
-                f"The {from_name!r} → {to_name!r} edge is a human-only transition; agents are not allowed to take it.",
-                code="human_only_transition",
-                from_state=from_name,
-                to_state=to_name,
-            )
+    if issue.state_id is None or target is None:
+        raise InvalidTransition("Published workflows require an explicit graph edge.", code="illegal_transition", from_state=from_name, to_state=to_name)
+    nodes = _graph_node_ids(issue.issue_type_id)
+    if target.id not in nodes:
+        other_type_ids = IssueType.objects.filter(
+            project_id=issue.project_id
+        ).exclude(pk=issue.issue_type_id)
+        target_used_elsewhere = other_type_ids.filter(
+            Q(start_state_id=target.id)
+            | Q(transitions__from_state_id=target.id)
+            | Q(transitions__to_state_id=target.id)
+        ).exists()
+        code = (
+            "foreign_state"
+            if target_used_elsewhere
+            else "unknown_state"
+        )
+        raise InvalidTransition(
+            f"{target.name!r} is not a state in the published workflow.",
+            code=code, from_state=from_name, to_state=to_name,
+        )
+    edge = IssueTypeTransition.objects.filter(
+        issue_type_id=issue.issue_type_id,
+        from_state_id=issue.state_id,
+        to_state_id=target.id,
+    ).first()
+    if edge is None:
+        raise InvalidTransition(
+            f"A {issue.issue_type.name} cannot move {from_name!r} → {to_name!r}.",
+            code="illegal_transition", from_state=from_name, to_state=to_name,
+        )
+    if origin == "agent" and not edge.agent_allowed:
+        raise InvalidTransition(
+            f"The {from_name!r} → {to_name!r} edge is a human-only transition; agents are not allowed to take it.",
+            code="human_only_transition",
+            from_state=from_name,
+            to_state=to_name,
+        )
 
     old_group, new_group = (issue.state.group if issue.state_id else None), (target.group if target else None)
     issue.state = target

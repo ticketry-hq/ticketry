@@ -12,7 +12,7 @@ from apps.terminals.agents.prompts import (
     build_planning_context_prompt,
 )
 from apps.settings_store.config import config
-from apps.settings_store.defaults import DEFAULT_AGENT_PROMPTS
+from worktracker.launch_seeds import DEFAULT_AGENT_PROMPTS
 from studio_server.contracts import ModuleSummary, TaskState, TaskSummary
 
 

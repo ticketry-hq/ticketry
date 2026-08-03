@@ -104,7 +104,6 @@ def _prepare_pending_database(data_dir: Path) -> Path:
         {
             "MUXED_DATA_DIR": str(data_dir),
             "MUXED_STATE_DB": str(database_path),
-            "MUXED_SKIP_LOCAL_STATE_MIGRATION": "1",
         }
     )
     subprocess.run(

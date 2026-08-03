@@ -26,7 +26,6 @@ test("web development uses an isolated explicit data directory", () => {
     launch.environment.MUXED_STATE_DB,
     path.join("/ticketry-web-data", "state.db"),
   );
-  assert.equal(launch.environment.MUXED_SKIP_LOCAL_STATE_MIGRATION, "1");
   assert.equal(launch.environment.WORKTRACKER_DISABLE_AUTH, "true");
   assert.match(
     launch.environment.MUXED_TMUX_SOCKET,

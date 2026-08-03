@@ -339,7 +339,6 @@ def smoke_skill_providers() -> int:
         smoke_root = Path(temporary)
         os.environ.setdefault("MUXED_DATA_DIR", str(smoke_root / "data"))
         os.environ.setdefault("MUXED_STATE_DB", str(smoke_root / "data/state.db"))
-        os.environ.setdefault("MUXED_SKIP_LOCAL_STATE_MIGRATION", "1")
         os.environ.setdefault("DJANGO_SETTINGS_MODULE", "studio_server.settings")
 
         import django

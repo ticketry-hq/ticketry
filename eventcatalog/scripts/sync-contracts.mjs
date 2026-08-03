@@ -31,7 +31,6 @@ const result = spawnSync(python, ['-c', exporter], {
     ...process.env,
     DJANGO_SETTINGS_MODULE: 'studio_server.settings',
     MUXED_DATA_DIR: resolve(catalogRoot, '.eventcatalog-core'),
-    MUXED_SKIP_LOCAL_STATE_MIGRATION: '1',
     MUXED_STATE_DB: resolve(catalogRoot, '.eventcatalog-core', 'catalog-state.db'),
   },
   encoding: 'utf8',

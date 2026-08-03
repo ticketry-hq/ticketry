@@ -59,8 +59,12 @@ class SaveDocumentResult:
     digest: str
 
 
-def _doc_payload(row: DesignDocument) -> dict:
-    """Shape one registry row for the workspace document list."""
+def doc_payload(row: DesignDocument) -> dict:
+    """Shape one registry row for the wire.
+
+    Shared with :mod:`apps.documents.watch` so a field added to the listing
+    shape also reaches live watch frames.
+    """
 
     return {
         "id": row.id,
@@ -132,7 +136,7 @@ async def list_scratch_documents(module_id: str) -> list[dict]:
     rows = await documents_dao.list_for_scratch(module_id, SCRATCH_TASK_ID)
     await _prune_missing_documents(rows)
     rows = await documents_dao.list_for_scratch(module_id, SCRATCH_TASK_ID)
-    return [_doc_payload(r) for r in rows]
+    return [doc_payload(r) for r in rows]
 
 
 async def list_task_documents(
@@ -182,7 +186,7 @@ async def list_task_documents(
     rows = await documents_dao.list_for_task(task_id)
     await _prune_missing_documents(rows)
     rows = await documents_dao.list_for_task(task_id)
-    return [_doc_payload(r) for r in rows]
+    return [doc_payload(r) for r in rows]
 
 
 async def read_document_asset(

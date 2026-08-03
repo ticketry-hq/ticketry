@@ -290,8 +290,7 @@ async def _launch(
 
     # Watch the run's design directory for generated HTML for the rest of the
     # run (#521).
-    async def publish_document_frame(frame_module_id: str, frame: dict) -> None:
-        del frame_module_id
+    async def publish_document_frame(frame: dict) -> None:
         await publish_document(project_id, frame)
 
     documents_watch.start_watch(

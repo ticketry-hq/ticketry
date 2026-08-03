@@ -29,6 +29,7 @@ from typing import Dict, Optional
 from watchfiles import Change, awatch
 
 from apps.documents import dao, design_docs
+from apps.documents.service import doc_payload
 
 logger = logging.getLogger(__name__)
 
@@ -62,12 +63,12 @@ async def _register_document(
     """Upsert one discovered document and relay a typed frame.
 
     :param agent_run_id: originating run for provenance, ``None`` on rescan.
-    :param module_id: bus topic and workspace owner.
+    :param module_id: workspace owner, also carried inside the frame.
     :param task_id: work-item id or the scratch sentinel.
     :param scope: ``task`` / ``plan`` / ``instant``.
     :param root: absolute registered design directory.
     :param rel_path: document path relative to ``root``.
-    :param publish: async document-frame publisher.
+    :param publish: async single-argument document-frame publisher.
     """
 
     now = datetime.now(timezone.utc).isoformat()
@@ -83,18 +84,13 @@ async def _register_document(
     )
 
     await publish(
-        module_id,
         {
             "type": "document",
             "event": "created" if created else "updated",
             "task_id": task_id,
             "module_id": module_id,
-            "doc": {
-                "id": row.id,
-                "rel_path": row.rel_path,
-                "label": design_docs.doc_label(row.rel_path),
-            },
-        },
+            "doc": doc_payload(row),
+        }
     )
 
 
@@ -179,7 +175,7 @@ def start_watch(
     :param module_id: bus topic for relayed frames.
     :param task_id: work-item id or the scratch sentinel.
     :param scope: ``task`` / ``plan`` / ``instant``.
-    :param publish: async document-frame publisher.
+    :param publish: async single-argument document-frame publisher.
     :return: ``True`` when a watcher task was started.
     """
 

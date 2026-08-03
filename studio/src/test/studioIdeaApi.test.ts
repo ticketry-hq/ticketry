@@ -3,10 +3,10 @@ import {
   createTask,
   getConfig,
   getIssueTypes,
-  getProjects,
   normalizeTask,
   postTaskStatus,
 } from "../features/studio/lib/api";
+import { listProjects } from "../shared/api/client";
 import type { WorkItem } from "../shared/api/types";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { initializeBrowserRuntime, initializeStudioRuntime } from "../runtime";
@@ -69,7 +69,7 @@ describe("Studio idea capture API", () => {
       .mockResolvedValueOnce(jsonResponse([]));
 
     await getConfig();
-    await getProjects();
+    await listProjects();
 
     const [agentUrl, agentInit] = fetchMock.mock.calls[0];
     expect(agentUrl).toBe("http://127.0.0.1:8787/api/config");

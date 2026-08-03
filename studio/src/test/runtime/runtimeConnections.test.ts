@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { listProjects } from "../../shared/api/client";
 import { docUrl as agentDocUrl } from "../../features/agents/api/agentApi";
 import {
   docUrl as studioDocUrl,
-  getProjects,
 } from "../../features/studio/lib/api";
 
 const fetchMock = vi.fn();
@@ -24,7 +24,7 @@ describe("runtime-routed connections", () => {
       headers: { "content-type": "application/json" },
     }));
 
-    await expect(getProjects()).resolves.toEqual([]);
+    await expect(listProjects()).resolves.toEqual([]);
 
     expect(fetchMock.mock.calls[0][0]).toBe(
       "https://tracker.example.test/work-tracker/projects",

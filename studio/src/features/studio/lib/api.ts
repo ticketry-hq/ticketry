@@ -214,24 +214,14 @@ export const patchConfig = (body: { recent_profile_index: number }) =>
   });
 
 // ---------- Work tracker (SDK-covered, contract-checked) ----------
-export const getProjects = () =>
-  call(async () =>
-    ((await worktrackerClient().projects.listProjects()) as Project[]).map(normalizeProject),
-  );
-
+// Project and module LISTS come from the shared caches in features/projects;
+// only the writes that Studio's own flows perform live here.
 export const createProject = (body: ProjectCreate) =>
   call(async () =>
     normalizeProject(
       (await worktrackerClient().projects.createProject({
         projectIn: body,
       })) as Project,
-    ),
-  );
-
-export const getModules = (projectId: string) =>
-  call(async () =>
-    ((await worktrackerClient().modules.listModules({ projectId })) as Module[]).map(
-      normalizeModule,
     ),
   );
 

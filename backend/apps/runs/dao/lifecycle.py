@@ -57,7 +57,7 @@ async def set_lifecycle_state(
     lifecycle_state: str,
     *,
     updated_at: str,
-) -> bool:
+) -> Optional[str]:
     """Record a run's latest reduced lifecycle state.
 
     Only a run that has not ended can move: process exit is authoritative over
@@ -68,6 +68,15 @@ async def set_lifecycle_state(
     clears the monotonicity check, resurrecting a finished run into an active
     state. Terminal runs are therefore frozen here rather than in the caller,
     so every ingress path inherits the guard.
+
+    This is the single normalization boundary for lifecycle timestamps: the
+    monotonicity guard compares ``lifecycle_updated_at`` as a *string*, so an
+    un-normalized input would sort wrong. Callers pass whatever the emitter
+    sent and take the normalized form back.
+
+    :param updated_at: The emitter's timestamp, in any ISO-8601 spelling.
+    :return: The normalized UTC timestamp actually persisted, or ``None`` if
+        the write was skipped (unknown run, ended run, or a stale event).
     """
 
     updated_at = normalize_utc_timestamp(updated_at)
@@ -83,7 +92,7 @@ async def set_lifecycle_state(
             lifecycle_updated_at=updated_at,
         )
     )
-    return updated > 0
+    return updated_at if updated > 0 else None
 
 
 async def get_run_routing(run_id: str) -> Optional[tuple[Optional[str], str]]:

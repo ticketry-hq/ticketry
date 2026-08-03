@@ -147,14 +147,14 @@ async def test_update_on_exit_patches_only_terminal_fields() -> None:
     )
 
 
-async def test_targeted_updates_return_false_for_unknown_id() -> None:
+async def test_targeted_updates_report_no_write_for_unknown_id() -> None:
     assert await dao.update_agent_run_exit(
         "missing", status="exited", ended_at="2026-05-29T10:05:00"
     ) is False
     assert await dao.set_provider_session_id("missing", "abc") is False
     assert await dao.set_lifecycle_state(
         "missing", "working", updated_at="2026-05-29T10:05:00"
-    ) is False
+    ) is None
 
 
 async def test_provider_session_and_lifecycle_updates() -> None:
@@ -165,7 +165,7 @@ async def test_provider_session_and_lifecycle_updates() -> None:
     assert await dao.set_provider_session_id("run-1", "provider-1") is True
     assert await dao.set_lifecycle_state(
         "run-1", "needs_input", updated_at="2026-05-29T10:05:00"
-    ) is True
+    ) == "2026-05-29T10:05:00+00:00"
     stored = await AgentRun.objects.aget(id="run-1")
 
     assert stored.provider_session_id == "provider-1"
@@ -178,12 +178,15 @@ async def test_lifecycle_timestamp_normalizes_naive_and_zulu_input() -> None:
         _make_run("normalized", task_id="task-1", started_at="2026-05-29T10:00:00")
     )
 
+    # The DAO is the normalization boundary, so it hands the caller back
+    # exactly the value it stored — naive input and Zulu input both land in
+    # the one sortable UTC spelling the monotonicity check compares on.
     assert await dao.set_lifecycle_state(
         "normalized", "working", updated_at="2026-05-29T10:05:00"
-    ) is True
+    ) == "2026-05-29T10:05:00+00:00"
     assert await dao.set_lifecycle_state(
         "normalized", "turn_complete", updated_at="2026-05-29T10:06:00Z"
-    ) is True
+    ) == "2026-05-29T10:06:00+00:00"
 
     stored = await AgentRun.objects.aget(id="normalized")
     assert stored.lifecycle_updated_at == "2026-05-29T10:06:00+00:00"
@@ -195,11 +198,11 @@ async def test_older_lifecycle_update_is_ignored() -> None:
     )
     assert await dao.set_lifecycle_state(
         "run-ordered", "turn_complete", updated_at="2026-05-29T10:05:00+00:00"
-    ) is True
+    ) == "2026-05-29T10:05:00+00:00"
 
     assert await dao.set_lifecycle_state(
         "run-ordered", "working", updated_at="2026-05-29T10:04:00+00:00"
-    ) is False
+    ) is None
     stored = await AgentRun.objects.aget(id="run-ordered")
     assert stored.lifecycle_state == "turn_complete"
 
@@ -218,7 +221,7 @@ async def test_lifecycle_update_is_refused_once_a_run_has_ended() -> None:
     )
     assert await dao.set_lifecycle_state(
         "run-ended", "permission_required", updated_at="2026-05-29T10:05:00+00:00"
-    ) is True
+    ) == "2026-05-29T10:05:00+00:00"
 
     await dao.update_agent_run_exit(
         "run-ended", status="exited", ended_at="2026-05-29T10:06:00+00:00"
@@ -228,7 +231,7 @@ async def test_lifecycle_update_is_refused_once_a_run_has_ended() -> None:
     # ended_at guard can reject it.
     assert await dao.set_lifecycle_state(
         "run-ended", "working", updated_at="2026-06-12T09:00:00+00:00"
-    ) is False
+    ) is None
 
     stored = await AgentRun.objects.aget(id="run-ended")
     assert stored.lifecycle_state == "permission_required"
@@ -244,10 +247,10 @@ async def test_lifecycle_update_still_applies_while_a_run_is_live() -> None:
 
     assert await dao.set_lifecycle_state(
         "run-live", "working", updated_at="2026-05-29T10:05:00+00:00"
-    ) is True
+    ) == "2026-05-29T10:05:00+00:00"
     assert await dao.set_lifecycle_state(
         "run-live", "exited", updated_at="2026-05-29T10:07:00+00:00"
-    ) is True
+    ) == "2026-05-29T10:07:00+00:00"
 
     stored = await AgentRun.objects.aget(id="run-live")
     assert stored.lifecycle_state == "exited"

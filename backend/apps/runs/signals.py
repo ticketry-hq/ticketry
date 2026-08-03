@@ -43,10 +43,10 @@ def publish_authoritative_workflow_state(
 def publish_work_item_state(
     *,
     issue_id: str,
-    project_id: str | None = None,
-    to_state_id: str | None = None,
-    revision: int | None = None,
-    updated_at: str | None = None,
+    project_id: str,
+    to_state_id: str | None,
+    revision: int,
+    updated_at: str,
     **kwargs,
 ) -> None:
     """Publish the durable post-commit state projection without affecting the write.
@@ -55,16 +55,14 @@ def publish_work_item_state(
     dispatch. This receiver deliberately reads the committed row, then treats
     feed publication as best-effort: a failed channel layer must never alter an
     already-successful workflow transition.
+
+    Every field above is part of the documented ``issue_state_changed`` payload
+    and is always sent, so they are required rather than defaulted. A caller
+    that omits one gets a logged failure, not a silent skip. ``to_state_id`` is
+    the one genuinely nullable field — a work item can move to no state.
     """
 
-    # Some isolated signal consumers exercise a deliberately partial payload.
-    # Real ``worktracker.signals`` events always include project_id.
-    if project_id is None:
-        return
-
     try:
-        if revision is None or updated_at is None:
-            return
         state = (
             State.objects.get(pk=to_state_id, project_id=project_id)
             if to_state_id is not None

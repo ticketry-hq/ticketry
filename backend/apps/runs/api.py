@@ -95,12 +95,14 @@ async def ingest_lifecycle_event(request, event: LifecycleEvent):
         # frame can be placed under the right task (#512).
 
         routing = None
+        event_at = None
         try:
-            event_at = dao.normalize_utc_timestamp(event.ts)
-            persisted = await dao.set_lifecycle_state(
-                event.agent_run_id, state, updated_at=event_at
+            # The DAO owns timestamp normalization and hands back the value it
+            # persisted, so the relayed frame carries exactly what was stored.
+            event_at = await dao.set_lifecycle_state(
+                event.agent_run_id, state, updated_at=event.ts
             )
-            if persisted:
+            if event_at is not None:
                 routing = await dao.get_status_routing(event.agent_run_id)
         except Exception as exc:
             logger.warning("failed to persist lifecycle_state: %s", exc)

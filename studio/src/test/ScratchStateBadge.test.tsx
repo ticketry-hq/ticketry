@@ -5,9 +5,9 @@ import { ScratchStateBadge } from "../features/agents/lifecycle";
 import { useAgentStatusStore } from "../features/agents/status";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import type { TaskSummary } from "../features/studio/lib/types";
-import type { FlatRow } from "../features/studio/pages/tasks/TasksPane";
-import { TaskRow } from "../features/studio/pages/tasks/components/TaskRow";
-import { DetailsTab } from "../features/studio/pages/workspace/tabs/DetailsTab";
+import type { FlatRow } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import { TaskRow } from "../app/shell/ticket-workspace/tasks/components/TaskRow";
+import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 
 function run(
@@ -63,7 +63,7 @@ function renderScratchRowAndDetails() {
         onClick={() => undefined}
         onToggleExpand={() => undefined}
       />
-      <DetailsTab />
+      <SelectedTicketDetails />
     </>,
   );
 }

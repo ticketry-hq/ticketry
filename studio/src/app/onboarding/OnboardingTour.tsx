@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";
 import CoachMark from "./CoachMark";
-import { useOnboardingStore } from "./onboardingStore";
+import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 
 interface Props {
@@ -20,7 +20,6 @@ export default function OnboardingTour({ onSelectStory }: Props) {
   const moduleCreated = useOnboardingTourStore((state) => state.moduleCreated);
   const reset = useOnboardingTourStore((state) => state.reset);
   const createModule = useTasksStore((state) => state.createModule);
-  const acknowledge = useOnboardingStore((state) => state.acknowledgeOnboarding);
   const [moduleName, setModuleName] = useState("General");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +36,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await acknowledge();
+      await acknowledgeOnboarding();
       reset();
     } catch (cause) {
       setError(apiErrorMessage(cause));

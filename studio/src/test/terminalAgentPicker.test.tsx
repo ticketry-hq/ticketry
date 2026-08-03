@@ -8,7 +8,7 @@ import {
   useWorkspaceTabsStore,
 } from "../features/agents/terminal";
 import { useModalStore } from "../app/modal";
-import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
+import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket";
 
 describe("AgentPicker doc-chat mode (#625)", () => {
   beforeEach(() => {
@@ -19,7 +19,7 @@ describe("AgentPicker doc-chat mode (#625)", () => {
       resumableSessions: {},
     });
     useWorkspaceTabsStore.setState({ byTaskId: {}, activeByTask: {}, chatByDoc: {} });
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     useModalStore.setState({ modalStack: [{ type: "agent-picker" }] });
   });
 
@@ -48,7 +48,7 @@ describe("AgentPicker doc-chat mode (#625)", () => {
     expect(tabs.activeByTask["task-1"]).toBeUndefined();
     // This document's overlay opened; modal dismissed.
     expect(
-      useIssueDrawerWorkspaceStore.getState().workspaces["task-1"].overlayOpenByDoc["doc-1"],
+      useTicketWorkspaceStore.getState().workspaces["task-1"].overlayOpenByDoc["doc-1"],
     ).toBe(true);
     expect(useModalStore.getState().modalStack).toHaveLength(0);
   });
@@ -70,7 +70,7 @@ describe("AgentPicker plan mode — shared launcher path (CODIN-839)", () => {
       resumableSessions: {},
     });
     useWorkspaceTabsStore.setState({ byTaskId: {}, activeByTask: {}, chatByDoc: {} });
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     useModalStore.setState({ modalStack: [{ type: "agent-picker" }] });
   });
 
@@ -99,7 +99,7 @@ describe("AgentPicker plan mode — shared launcher path (CODIN-839)", () => {
     fireEvent.click(screen.getByText("claude"));
 
     expect(
-      useIssueDrawerWorkspaceStore.getState().workspaces[scratchBucketId("mod-1")]?.active,
+      useTicketWorkspaceStore.getState().workspaces[scratchBucketId("mod-1")]?.active,
     ).toBe("terminal");
   });
 });
@@ -113,7 +113,7 @@ describe("AgentPicker instant mode — Studio instant-change (#925 Slice E)", ()
       resumableSessions: {},
     });
     useWorkspaceTabsStore.setState({ byTaskId: {}, activeByTask: {}, chatByDoc: {} });
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     useModalStore.setState({ modalStack: [{ type: "agent-picker" }] });
   });
 

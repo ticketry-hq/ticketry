@@ -11,6 +11,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# This gate exists only in source-tree development entrypoints. Packaged apps
+# do not set it and therefore always retain their private SQLite database.
+export MUXED_ENABLE_LOCAL_POSTGRES=true
+
 cmd="${1:-}"
 case "$cmd" in
   bootstrap)
@@ -30,7 +34,7 @@ case "$cmd" in
     ;;
   backend)
     backend_port="${MUXED_WEB_BACKEND_PORT:-8787}"
-    (cd "$ROOT/backend" && MUXED_ADMIN_ENABLED=true uv run python manage.py runserver "127.0.0.1:${backend_port}")
+    (cd "$ROOT/backend" && MUXED_ADMIN_ENABLED=true uv run uvicorn studio_server.asgi:application --host 127.0.0.1 --port "$backend_port" --reload)
     ;;
   studio)
     (cd "$ROOT/studio" && npm run dev)

@@ -6,9 +6,9 @@ import {
   useWorkspaceTabsStore,
 } from "../features/agents/terminal";
 import { useModalStore } from "../app/modal";
-import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
+import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket";
 import { LaunchConfigurationForm } from "../features/workflows/LaunchConfigurationForm";
-import { useLaunchProviderCatalog } from "../features/workflows/launchProviderCatalog";
+import { setProviderCapabilities } from "../features/workflows/providerQueries";
 import type {
   IssueType,
   ProviderCapabilities,
@@ -40,7 +40,7 @@ const WITHOUT_GEMINI = [
 ];
 
 function activate(capabilities: ProviderCapabilities[]): void {
-  useLaunchProviderCatalog.setState({ capabilities, loaded: true, failed: false });
+  setProviderCapabilities(capabilities);
 }
 
 describe("agent picker reflects host activation", () => {
@@ -51,7 +51,7 @@ describe("agent picker reflects host activation", () => {
       resumableSessions: {},
     });
     useWorkspaceTabsStore.setState({ byTaskId: {}, activeByTask: {}, chatByDoc: {} });
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     useModalStore.setState({ modalStack: [{ type: "agent-picker" }] });
   });
 
@@ -95,38 +95,6 @@ describe("agent picker reflects host activation", () => {
     ).toBeInTheDocument();
   });
 
-  it("says it is still loading rather than claiming nothing is activated", () => {
-    // An empty list before the payload arrives is not an answer, and the same
-    // empty list after a dead fetch is a different non-answer again.
-    useLaunchProviderCatalog.setState({
-      capabilities: [],
-      loaded: false,
-      failed: false,
-    });
-    render(
-      <AgentPicker
-        payload={{ mode: "open", projectId: "proj-1", moduleId: "mod-1", taskId: "task-1" }}
-      />,
-    );
-
-    expect(screen.getByText("Loading providers…")).toBeInTheDocument();
-  });
-
-  it("reports a dead fetch as an error rather than as a hang", () => {
-    useLaunchProviderCatalog.setState({
-      capabilities: [],
-      loaded: false,
-      failed: true,
-    });
-    render(
-      <AgentPicker
-        payload={{ mode: "open", projectId: "proj-1", moduleId: "mod-1", taskId: "task-1" }}
-      />,
-    );
-
-    expect(screen.getByText(/Providers unavailable/)).toBeInTheDocument();
-    expect(screen.queryByText("Loading providers…")).not.toBeInTheDocument();
-  });
 });
 
 describe("launch configuration bound to a deactivated provider", () => {

@@ -1,7 +1,6 @@
 import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
 import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
 import { WorkItemPatchOriginEnum } from "@worktracker/typescript-sdk/models";
-import { dedupeInFlight } from "./dedupe";
 import type {
   IssueType,
   IssueTypeCreate,
@@ -97,13 +96,8 @@ async function call<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-// Read paths below coalesce concurrent duplicates: parallel Zustand stores
-// (tasksStore, projects store, backlogStore, issueStore) can request the same
-// project resources at once when an issue surface opens (client-swr-dedup).
 export const listProjects = () =>
-  dedupeInFlight("wt:projects", () =>
-    call<Project[]>(async () => (await sdk().projects.listProjects()) as Project[]),
-  );
+  call<Project[]>(async () => (await sdk().projects.listProjects()) as Project[]);
 
 export const getWorkspace = () =>
   call<Workspace>(async () => (await sdk().workspace.getWorkspace()) as Workspace);
@@ -130,10 +124,8 @@ export const deleteProject = (id: string) =>
   call<void>(() => sdk().projects.deleteProject({ projectId: id }));
 
 export const listModules = (projectId: string) =>
-  dedupeInFlight(`wt:modules:${projectId}`, () =>
-    call<Module[]>(async () =>
-      (await sdk().modules.listModules({ projectId })) as Module[]
-    ),
+  call<Module[]>(async () =>
+    (await sdk().modules.listModules({ projectId })) as Module[]
   );
 
 export const createModule = (projectId: string, name: string, issueTypeId: string) =>
@@ -145,34 +137,21 @@ export const createModule = (projectId: string, name: string, issueTypeId: strin
   );
 
 export const listStates = (projectId: string) =>
-  dedupeInFlight(`wt:states:${projectId}`, () =>
-    call<State[]>(async () =>
-      (await sdk().states.listStates({ projectId })) as State[]
-    ),
+  call<State[]>(async () =>
+    (await sdk().states.listStates({ projectId })) as State[]
   );
 
 export const listProjectWorkItems = (
   projectId: string,
   filters?: WorkItemFilters,
 ) =>
-  dedupeInFlight(
-    `wt:project-work-items:${projectId}:${filters?.parent ?? ""}:${filters?.state ?? ""}:${filters?.includePathfind ?? ""}`,
-    () =>
-      call<WorkItem[]>(async () =>
-        (await sdk().workItems.listProjectWorkItems({
-          projectId,
-          parent: filters?.parent,
-          state: filters?.state,
-          includePathfind: filters?.includePathfind,
-        })) as WorkItem[]
-      ),
-  );
-
-export const listModuleWorkItems = (moduleId: string) =>
-  dedupeInFlight(`wt:module-work-items:${moduleId}`, () =>
-    call<WorkItem[]>(async () =>
-      (await sdk().workItems.listModuleWorkItems({ moduleId })) as WorkItem[]
-    ),
+  call<WorkItem[]>(async () =>
+    (await sdk().workItems.listProjectWorkItems({
+      projectId,
+      parent: filters?.parent,
+      state: filters?.state,
+      includePathfind: filters?.includePathfind,
+    })) as WorkItem[]
   );
 
 export const getWorkItem = (keyOrId: string, signal?: AbortSignal) =>

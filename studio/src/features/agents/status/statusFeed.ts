@@ -9,20 +9,25 @@ import {
   agentApiBase,
   apiKey,
   ApiError,
-  getWorkItem,
 } from "../../../shared/api/client";
 import { toast } from "../../../app/stores/toastStore";
 import { KeyedRetryService } from "../../../shared/async/keyedRetry";
 import { scratchBucketId, useTerminalStore } from "../terminal";
 import { SCRATCH_RUN_TASK_ID } from "../types";
-import { useBacklogStore, useIssueDrawerWorkspaceStore } from "../../work-items";
-import { useIssueStore } from "../../work-items/issue-detail/internal/issueStore";
+import {
+  useBacklogStore,
+} from "../../work-items";
+import { useTicketWorkspaceStore } from "../../../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
+import { useIssueStore } from "../../work-items/issueStore";
 import { useTasksStore } from "../../studio/stores/tasksStore";
 import { synchronizeActiveStateCatalogs } from "../../workflows/stateCatalogSync";
 import { useWorkflowEditorStore } from "../../workflows/workflowEditorStore";
 import type { DesignDoc } from "../types";
 import { useAgentStatusStore } from "./store";
 import { statusWebSocketUrl } from "../../../runtime";
+import { loadWorkItemDetail } from "../../work-items/queries";
+import { queryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/keys";
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_CAP_MS = 15_000;
@@ -177,7 +182,7 @@ function routeDocumentFrame(frame: StatusDocumentFrame): void {
     taskId === SCRATCH_RUN_TASK_ID
       ? scratchBucketId(frame.module_id ?? "")
       : taskId;
-  const workspace = useIssueDrawerWorkspaceStore.getState();
+  const workspace = useTicketWorkspaceStore.getState();
   workspace.ensureWorkspace(bucket);
   const designDoc: DesignDoc = {
     id: doc.id,
@@ -235,20 +240,25 @@ export const statusFeed = {
         : cachedBacklog.projectId === projectId && !cachedBacklog.loading
           ? 0
           : undefined;
-    let snapshotController: AbortController | null = null;
+    let snapshotRequest: object | null = null;
     const detailRetries = new KeyedRetryService<string, number, void>();
 
     const snapshot = () => {
-      snapshotController?.abort();
-      const controller = new AbortController();
-      snapshotController = controller;
-      void client
-        .getAgentStatus({ projectId, signal: controller.signal })
+      const request = {};
+      snapshotRequest = request;
+      const queryKey = queryKeys.agentStatus.byProject(projectId);
+      void queryClient.cancelQueries({ queryKey, exact: true }).then(() =>
+        queryClient.fetchQuery({
+          queryKey,
+          queryFn: ({ signal }) => client.getAgentStatus({ projectId, signal }),
+          staleTime: 0,
+        }),
+      )
         .then((body) => {
           // An abort only rejects an in-flight request; a response that has
           // already resolved would still dispatch after stop() or a project
           // switch. Gate on being the live controller of the live feed.
-          if (stopped || snapshotController !== controller) return;
+          if (stopped || snapshotRequest !== request) return;
           if (active?.projectId !== projectId) return;
           dispatch({ v: 1, type: "snapshot", ...body });
         })
@@ -274,7 +284,7 @@ export const statusFeed = {
           async (signal) => {
             let detail;
             try {
-              detail = await getWorkItem(frame.work_item_id, signal);
+              detail = await loadWorkItemDetail(frame.work_item_id, signal);
             } catch (error) {
               if (error instanceof ApiError && error.status === 404) {
               if (!stopped && active?.projectId === projectId) {
@@ -371,7 +381,11 @@ export const statusFeed = {
     const stop = () => {
       stopped = true;
       document.removeEventListener("visibilitychange", onVisibility);
-      snapshotController?.abort();
+      snapshotRequest = null;
+      void queryClient.cancelQueries({
+        queryKey: queryKeys.agentStatus.byProject(projectId),
+        exact: true,
+      });
       detailRetries.cancelAll();
       if (retry) clearTimeout(retry);
       const previous = socket;

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { isCancelledError } from "@tanstack/react-query";
 import { create } from "zustand";
 import * as api from "../lib/api";
 import { normalizeTask } from "../lib/api";
@@ -19,8 +20,11 @@ import { TEMP_TASK_ID } from "../../agents/types";
 import { getConfigSnapshot, updateProfile } from "./configStore";
 import { toast } from "../../../app/stores/toastStore";
 import { apiErrorMessage } from "../../../shared/api/client";
-import { rankBetween } from "../../work-items";
-import { useIssueStore } from "../../work-items/issue-detail/internal/issueStore";
+import {
+  loadChildWorkItems,
+  rankBetween,
+} from "../../work-items";
+import { useIssueStore } from "../../work-items/issueStore";
 import type {
   Module,
   Project,
@@ -41,11 +45,14 @@ import {
 import {
   getTaskDetails,
   getTaskTree,
+  loadTaskDetails as loadTaskDetailsData,
+  loadTaskTree as loadTaskTreeData,
   setTaskDetails,
   setTaskTree,
   useCachedTaskDetails,
   useCachedTaskTree,
 } from "./taskTreeCache";
+import { loadIssueTypes } from "../../settings";
 import {
   type ModuleSummary,
   type ProjectSummary,
@@ -577,7 +584,7 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
 
   async createModule(projectId: string, name: string) {
     // Create in the owned work tracker, refresh, then auto-select the module.
-    const issueTypes = await api.getIssueTypes(projectId);
+    const issueTypes = await loadIssueTypes(projectId, api.getIssueTypes);
     const moduleType = issueTypes.find(
       (issueType) => issueType.level === "module" && issueType.name === "Module",
     );
@@ -604,7 +611,7 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
   },
 
   async createStory(projectId: string, moduleId: string, name: string) {
-    const issueTypes = await api.getIssueTypes(projectId);
+    const issueTypes = await loadIssueTypes(projectId, api.getIssueTypes);
     const storyType = issueTypes.find(
       (issueType) => issueType.level === "task" && issueType.name === "Story",
     );
@@ -695,13 +702,10 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
     const catalogRevision = stateCatalogRevision(projectId);
     set((s) => ({ loading: { ...s.loading, tasks: true } }));
     try {
-      const { tasks, states, subtasks, workItems } = await api.getTasks(projectId, moduleId);
-      // Prepend the scratch task/state so it is always the first row and every
-      // consumer (AgentPicker, TasksPane) sees it consistently across refreshes.
-      set((state) => {
-        if (!isCurrentTasksLoad(state, projectId, moduleId, generation)) {
-          return state;
-        }
+      const tree = await loadTaskTreeData(projectId, moduleId, async () => {
+        const { tasks, states, subtasks, workItems } =
+          await api.getTasks(projectId, moduleId);
+        const state = get();
         // The module endpoint already returned every descendant in its full
         // WorkItem shape. Feed that canonical owner before retaining the
         // legacy summary projection required by planning surfaces.
@@ -731,27 +735,32 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
               : overlayPendingDeltas(children, state.pendingStateDeltas),
           ]),
         );
-        const loadedTaskIds = new Set(nextTasks.map((task) => task.id));
-        for (const children of Object.values(nextSubtasks)) {
-          for (const child of children) loadedTaskIds.add(child.id);
-        }
-        const rememberedTaskId = readTaskSelections()[moduleId];
-        const selectedTaskId =
-          state.selectedTaskId && loadedTaskIds.has(state.selectedTaskId)
-            ? state.selectedTaskId
-            : rememberedTaskId && loadedTaskIds.has(rememberedTaskId)
-              ? rememberedTaskId
-              : null;
         // The module response carries the project's states. Publish them to
         // the one shared catalog unless a workflow edit landed while this fetch
         // was in flight, in which case the catalog is already newer.
         if (!catalogChanged) setStatesSorted(projectId, states as State[]);
+        return { tasks: nextTasks, subtasks: nextSubtasks };
+      });
+      set((state) => {
+        if (!isCurrentTasksLoad(state, projectId, moduleId, generation)) {
+          return state;
+        }
+        const loadedTaskIds = new Set(tree.tasks.map((task) => task.id));
+        for (const children of Object.values(tree.subtasks)) {
+          for (const child of children) loadedTaskIds.add(child.id);
+        }
+        const rememberedTaskId = readTaskSelections()[moduleId];
         return {
-          tasks: nextTasks,
-          subtasks: nextSubtasks,
-          selectedTaskId,
+          selectedTaskId:
+            state.selectedTaskId && loadedTaskIds.has(state.selectedTaskId)
+              ? state.selectedTaskId
+              : rememberedTaskId && loadedTaskIds.has(rememberedTaskId)
+                ? rememberedTaskId
+                : null,
         };
       });
+    } catch (error) {
+      if (!isCancelledError(error)) throw error;
     } finally {
       set((state) => {
         if (!isCurrentTasksLoad(state, projectId, moduleId, generation)) {
@@ -806,7 +815,11 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
     const catalogRevision = stateCatalogRevision(projectId);
     set((s) => ({ loading: { ...s.loading, details: true } }));
     try {
-      const details = await api.getTaskDetails(projectId, taskId);
+      const details = await loadTaskDetailsData(
+        projectId,
+        taskId,
+        () => api.getTaskDetails(projectId, taskId),
+      );
       set({
         details: stateCatalogChangedSince(projectId, catalogRevision)
           ? {
@@ -830,7 +843,9 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
     const catalogRevision = stateCatalogRevision(projectId);
     set((s) => ({ loading: { ...s.loading, subtasks: true } }));
     try {
-      const subs = await api.getSubtasks(projectId, taskId);
+      const subs = (await loadChildWorkItems(projectId, taskId)).map(
+        normalizeTask,
+      );
       set((s) => ({
         subtasks: {
           ...s.subtasks,

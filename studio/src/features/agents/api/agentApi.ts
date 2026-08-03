@@ -3,7 +3,6 @@ import type {
   PersistedTerminalSession,
   ResumableTerminalSession,
 } from "../types";
-import { dedupeInFlight } from "../../../shared/api/dedupe";
 import { agentApiUrl } from "../../../runtime";
 export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
 
@@ -43,13 +42,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getModuleActivity = (projectId: string): Promise<Record<string, string>> =>
   request<Record<string, string>>(`/api/runs/module-activity?project_id=${encodeURIComponent(projectId)}`).catch(() => ({}));
-// The session/document GETs below coalesce by URL: the Studio workspace and
-// the drawer can mount panes for the same bucket at once, and each pane
-// otherwise issues its own copy of these reads.
 export const getTerminals = (taskId: string, signal?: AbortSignal) => {
   const url = `/api/terminals?task_id=${encodeURIComponent(taskId)}`;
-  if (signal) return request<PersistedTerminalSession[]>(url, { signal });
-  return dedupeInFlight(`GET ${url}`, () => request<PersistedTerminalSession[]>(url));
+  return request<PersistedTerminalSession[]>(url, { signal });
 };
 export const listResumableTerminals = (
   taskId?: string,
@@ -69,8 +64,7 @@ export const getScratchTerminals = (
   signal?: AbortSignal,
 ) => {
   const url = `/api/terminals/scratch?project_id=${encodeURIComponent(projectId)}${moduleId ? `&module_id=${encodeURIComponent(moduleId)}` : ""}`;
-  if (signal) return request<PersistedTerminalSession[]>(url, { signal });
-  return dedupeInFlight(`GET ${url}`, () => request<PersistedTerminalSession[]>(url));
+  return request<PersistedTerminalSession[]>(url, { signal });
 };
 export const terminateTerminal = (agentRunId: string) =>
   request<{ agent_run_id: string; terminated: boolean }>(`/api/terminals/?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "DELETE" });
@@ -107,13 +101,11 @@ export const getDocuments = (
   if (projectId) params.set("project_id", projectId);
   if (moduleId) params.set("module_id", moduleId);
   const url = `/api/documents?${params}`;
-  if (signal) return request<{ documents: DesignDoc[] }>(url, { signal });
-  return dedupeInFlight(`GET ${url}`, () => request<{ documents: DesignDoc[] }>(url));
+  return request<{ documents: DesignDoc[] }>(url, { signal });
 };
 export const getScratchDocuments = (moduleId: string, signal?: AbortSignal) => {
   const url = `/api/documents?scope=scratch&module_id=${encodeURIComponent(moduleId)}`;
-  if (signal) return request<{ documents: DesignDoc[] }>(url, { signal });
-  return dedupeInFlight(`GET ${url}`, () => request<{ documents: DesignDoc[] }>(url));
+  return request<{ documents: DesignDoc[] }>(url, { signal });
 };
 export const fsComplete = (path: string, signal?: AbortSignal) =>
   request<{ entries: string[] }>(`/api/fs/complete?path=${encodeURIComponent(path)}`, { signal });

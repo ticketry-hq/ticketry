@@ -12,10 +12,10 @@ import {
 import { TEMP_TASK_ID } from "../../features/agents/types";
 import {
   closeTerminalTab,
-  useIssueDrawerWorkspaceStore,
-} from "../../features/work-items/issue-detail/appNavigation";
-import type { Row } from "../../features/studio/pages/tasks/TasksPane";
-import { focusStoriesSearch } from "../../features/studio/pages/tasks/storiesFocus";
+  useTicketWorkspaceStore,
+} from "../shell/ticket-workspace/selected-ticket/appNavigation";
+import type { Row } from "../shell/ticket-workspace/tasks/TasksPane";
+import { focusStoriesSearch } from "../shell/ticket-workspace/tasks/storiesFocus";
 import {
   createNavigationContext,
   type NavigationContext,
@@ -142,7 +142,7 @@ function closeActiveWorkspaceTab(ctx: NavigationContext): void {
     ctx.tasks.selectedModuleId,
   );
 
-  const workspace = useIssueDrawerWorkspaceStore.getState();
+  const workspace = useTicketWorkspaceStore.getState();
   const current = workspace.workspaces[bucket];
   const active = current?.active ?? "details";
 

@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Sidebar } from "../app/studio/layout/Sidebar";
+import { StudioSidebar } from "../app/shell/sidebar/StudioSidebar";
 import {
   DEFAULT_PANEL_LAYOUT,
   mergeOuterPanelLayout,
   outerPanelLayout,
-} from "../app/studio/layout/layoutMath";
+} from "../app/shell/layout/layoutMath";
 import { sidebarPaneComposition } from "../features/studio/stores/configStore";
 import { visiblePaneOrder } from "../features/studio/stores/uiStore";
 
@@ -29,7 +29,7 @@ describe("sidebar pane composition", () => {
 
   it("renders no sidebar panes for the absent shape", () => {
     render(
-      <Sidebar
+      <StudioSidebar
         layout={DEFAULT_PANEL_LAYOUT}
         paneComposition="absent"
       />,

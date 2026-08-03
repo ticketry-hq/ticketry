@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { WorkspaceTerminalHost } from "../../features/agents/terminal/WorkspaceTerminalHost";
+import { SelectedTicketTerminal } from "../../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal";
 import {
   _entryCount,
   disposeAll,
@@ -16,7 +16,7 @@ import type {
   TerminalClientEvent,
 } from "../../features/agents/terminal/internal/terminalClient";
 import { useWorkspaceTabsStore } from "../../features/agents/terminal/internal/workspaceTabsStore";
-import { useIssueDrawerWorkspaceStore } from "../../features/work-items/issue-detail";
+import { useTicketWorkspaceStore } from "../../app/shell/ticket-workspace/selected-ticket";
 
 const mockState = vi.hoisted(() => ({
   attach: vi.fn(),
@@ -141,7 +141,7 @@ beforeEach(() => {
     chatByDoc: {},
     focusRequest: null,
   });
-  useIssueDrawerWorkspaceStore.setState({
+  useTicketWorkspaceStore.setState({
     workspaces: {
       "task-1": {
         active: "terminal",
@@ -170,7 +170,7 @@ describe("terminal launch lifecycle", () => {
 
     const view = render(
       <StrictMode>
-        <WorkspaceTerminalHost bucket="task-1" />
+        <SelectedTicketTerminal bucket="task-1" />
       </StrictMode>,
     );
 
@@ -211,7 +211,7 @@ describe("terminal launch lifecycle", () => {
       }),
     );
 
-    const view = render(<WorkspaceTerminalHost bucket="task-1" />);
+    const view = render(<SelectedTicketTerminal bucket="task-1" />);
     expect(mockState.createTerminalRun).toHaveBeenCalledTimes(1);
 
     view.unmount();

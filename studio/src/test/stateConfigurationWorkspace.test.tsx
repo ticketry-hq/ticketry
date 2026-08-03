@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
-import { TicketWorkspace } from "../features/studio/pages/workspace/TicketWorkspace";
+import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
 import type { TaskState, TaskSummary } from "../features/studio/lib/types";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
@@ -12,11 +12,11 @@ vi.mock("../features/agents/lifecycle", () => ({
   ScratchStateBadge: () => null,
 }));
 
-vi.mock("../features/work-items/issue-detail", async () => {
+vi.mock("../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent", async () => {
   const React = await import("react");
   let nextHostId = 0;
   return {
-    WorkspacePane: () => {
+    SelectedTicketContent: () => {
       const hostId = React.useRef<number | null>(null);
       const [value, setValue] = React.useState("live terminal and document");
       if (hostId.current === null) hostId.current = ++nextHostId;
@@ -133,7 +133,7 @@ describe("State configuration workspace selection", () => {
     render(
       <>
         <TasksPane />
-        <TicketWorkspace />
+        <SelectedTicket />
       </>,
     );
 

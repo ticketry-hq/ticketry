@@ -28,6 +28,7 @@ HOOK_SPOOL_DIR_ENV = "MUXED_HOOK_SPOOL_DIR"
 MIGRATION_FAILURE_LINE = "MUXED_FAILURE migration database could not be migrated"
 STARTUP_FAILURE_LINE = "MUXED_FAILURE crash sidecar could not start"
 SNAPSHOT_RETENTION = 3
+POSTGRES_MIGRATION_LOCK_ID = 0x5449434B45545259
 
 HOOK_MODULES = {
     "agy": "apps.terminals.agents.hooks.agy_hook",
@@ -167,34 +168,53 @@ def _verify_database_integrity(connection) -> None:
         raise RuntimeError(f"state database integrity check failed: {detail}")
 
 
+@contextlib.contextmanager
+def _database_migration_lock(connection):
+    """Serialize schema setup when several sidecars share one Postgres DB."""
+
+    if connection.vendor != "postgresql":
+        yield
+        return
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_lock(%s)", [POSTGRES_MIGRATION_LOCK_ID])
+    try:
+        yield
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_unlock(%s)", [POSTGRES_MIGRATION_LOCK_ID])
+
+
 def migrate_and_provision() -> None:
     import django
     from django.core.management import call_command
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
 
+    django.setup()
     database_path = Path(os.environ["MUXED_STATE_DB"])
     database_existed = database_path.is_file()
-    django.setup()
-    _verify_database_integrity(connection)
-    executor = MigrationExecutor(connection)
-    migrations_pending = bool(
-        executor.migration_plan(executor.loader.graph.leaf_nodes())
-    )
-    if database_existed and migrations_pending:
-        _create_pre_migration_snapshot(database_path, connection)
+    with _database_migration_lock(connection):
+        if connection.vendor == "sqlite":
+            _verify_database_integrity(connection)
+        executor = MigrationExecutor(connection)
+        migrations_pending = bool(
+            executor.migration_plan(executor.loader.graph.leaf_nodes())
+        )
+        if connection.vendor == "sqlite" and database_existed and migrations_pending:
+            _create_pre_migration_snapshot(database_path, connection)
 
-    call_command("migrate", interactive=False, verbosity=1)
-    provision_output = io.StringIO()
-    call_command("provision", stdout=provision_output)
+        call_command("migrate", interactive=False, verbosity=1)
+        provision_output = io.StringIO()
+        call_command("provision", stdout=provision_output)
 
-    from apps.settings_store import service as settings_service
+        from apps.settings_store import service as settings_service
 
-    provisioned = json.loads(provision_output.getvalue())
-    settings_service.ensure_local_profile(
-        name="Local",
-        workspace_slug=provisioned["workspace_slug"],
-    )
+        provisioned = json.loads(provision_output.getvalue())
+        settings_service.ensure_local_profile(
+            name="Local",
+            workspace_slug=provisioned["workspace_slug"],
+        )
 
 
 def readiness_line(port: int) -> str:

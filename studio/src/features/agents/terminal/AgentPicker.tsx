@@ -3,7 +3,7 @@ import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { launchScratchPlanning } from "./create/launchTerminalCreate";
 import { launchAgent, launchDocumentAgent } from "./internal/actions";
-import { useIssueDrawerWorkspaceStore } from "../../work-items";
+import { useTicketWorkspaceStore } from "../../../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
 import {
   providerListPlaceholder,
   useActivatedProviders,
@@ -61,7 +61,7 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
     }
     const mode = payload?.mode ?? "open";
     const prompt = payload?.initialPrompt ?? null;
-    const { setActive, setOverlayOpen } = useIssueDrawerWorkspaceStore.getState();
+    const { setActive, setOverlayOpen } = useTicketWorkspaceStore.getState();
     if (mode === "doc-chat") {
       // #625: summon a fresh, dedicated agent scoped to one document. It lives
       // in chatByDoc (the overlay) per document, never as a tab, and never

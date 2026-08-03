@@ -9,7 +9,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost, useModalStore } from "../app/modal";
 import { ApiError } from "../shared/api/client";
-import { ProjectsPane } from "../features/studio/pages/projects/ProjectsPane";
+import { ProjectsPane } from "../app/shell/sidebar/projects/ProjectsPane";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 
 vi.mock("../features/studio/lib/api", async (importOriginal) => ({

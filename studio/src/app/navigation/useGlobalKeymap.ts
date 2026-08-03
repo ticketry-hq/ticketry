@@ -16,7 +16,7 @@ import {
   routeModulePositionNavigation,
   routeSharedNavigation,
 } from "./sharedNavigation";
-import type { Row } from "../../features/studio/pages/tasks/TasksPane";
+import type { Row } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
 
 const EMPTY_TASK_ROWS: Row[] = [];

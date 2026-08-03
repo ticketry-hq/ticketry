@@ -68,11 +68,19 @@ export function useCachedStates(projectId: string | null): State[] {
  * must survive until the server answers, so this deliberately does not sort.
  */
 export function setStates(projectId: string, states: State[]): void {
+  void queryClient.cancelQueries({
+    queryKey: queryKeys.states.byProject(projectId),
+    exact: true,
+  });
   queryClient.setQueryData(queryKeys.states.byProject(projectId), states);
 }
 
 /** Write the catalog in canonical sort order (for server responses). */
 export function setStatesSorted(projectId: string, states: State[]): void {
+  void queryClient.cancelQueries({
+    queryKey: queryKeys.states.byProject(projectId),
+    exact: true,
+  });
   queryClient.setQueryData(
     queryKeys.states.byProject(projectId),
     bySortOrder(states),

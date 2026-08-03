@@ -31,7 +31,7 @@ vi.mock("../features/studio/workflowApi", async (importOriginal) => ({
   updateState: vi.fn(),
 }));
 
-vi.mock("../features/documents/RichMarkdownEditor", () => ({
+vi.mock("../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEditor", () => ({
   default: ({
     markdown,
     onChange,
@@ -59,13 +59,13 @@ vi.mock("../features/documents/RichMarkdownEditor", () => ({
 import * as api from "../shared/api/client";
 import * as worktreeApi from "../features/agents/worktrees/internal/api";
 import * as workflowApi from "../features/studio/workflowApi";
-import IssueDetail from "../features/work-items/issue-detail/IssueDetail";
-import { useIssueStore } from "../features/work-items/issue-detail";
+import IssueDetail from "../app/shell/ticket-workspace/selected-ticket/details/IssueDetail";
+import { useIssueStore } from "../app/shell/ticket-workspace/selected-ticket";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useStudioStore } from "../features/projects/store";
 import { seedModules, seedProjects } from "../features/projects";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { DetailsTab } from "../features/studio/pages/workspace/tabs/DetailsTab";
+import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import { useToastStore } from "../app/stores/toastStore";
 import { useSettingsStore } from "../features/settings/store";
@@ -199,7 +199,7 @@ describe("IssueDetail", () => {
       selectedTaskId: task.id,
     });
 
-    const view = render(<DetailsTab />);
+    const view = render(<SelectedTicketDetails />);
 
     expect(screen.getByTestId("issue-name")).toHaveTextContent("Already loaded");
     expect(screen.queryByText("Loading issue…")).toBeNull();

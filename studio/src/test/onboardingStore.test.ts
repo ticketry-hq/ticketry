@@ -12,7 +12,13 @@ vi.mock("../shared/api/client", async () => {
 });
 
 import * as api from "../shared/api/client";
-import { useOnboardingStore } from "../app/onboarding/onboardingStore";
+import {
+  acknowledgeOnboarding as acknowledgeOnboardingAction,
+  getOnboardingRequiredSnapshot,
+  loadWorkspaceState,
+} from "../app/onboarding/onboardingStore";
+import { queryClient } from "../shared/query/queryClient";
+import { queryKeys } from "../shared/query/keys";
 
 const getWorkspace = api.getWorkspace as ReturnType<typeof vi.fn>;
 const acknowledgeOnboarding = api.acknowledgeOnboarding as ReturnType<typeof vi.fn>;
@@ -27,37 +33,37 @@ const workspace = (onboarding_required: boolean) => ({
 beforeEach(() => {
   getWorkspace.mockReset();
   acknowledgeOnboarding.mockReset();
-  useOnboardingStore.setState({ onboardingRequired: false });
+  queryClient.setQueryData(queryKeys.workspace, false);
 });
 
 describe("onboardingStore", () => {
   it("maps the workspace flag onto onboardingRequired", async () => {
     getWorkspace.mockResolvedValue(workspace(true));
-    await useOnboardingStore.getState().loadWorkspaceState();
-    expect(useOnboardingStore.getState().onboardingRequired).toBe(true);
+    await loadWorkspaceState();
+    expect(getOnboardingRequiredSnapshot()).toBe(true);
 
     getWorkspace.mockResolvedValue(workspace(false));
-    await useOnboardingStore.getState().loadWorkspaceState();
-    expect(useOnboardingStore.getState().onboardingRequired).toBe(false);
+    await loadWorkspaceState();
+    expect(getOnboardingRequiredSnapshot()).toBe(false);
   });
 
   it("swallows a failing load: resolves and leaves onboarding not required", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    useOnboardingStore.setState({ onboardingRequired: true });
+    queryClient.setQueryData(queryKeys.workspace, true);
     getWorkspace.mockRejectedValue(new TypeError("Failed to fetch"));
 
     await expect(
-      useOnboardingStore.getState().loadWorkspaceState(),
+      loadWorkspaceState(),
     ).resolves.toBeUndefined();
-    expect(useOnboardingStore.getState().onboardingRequired).toBe(false);
+    expect(getOnboardingRequiredSnapshot()).toBe(false);
   });
 
   it("acknowledgement clears onboardingRequired", async () => {
-    useOnboardingStore.setState({ onboardingRequired: true });
+    queryClient.setQueryData(queryKeys.workspace, true);
     acknowledgeOnboarding.mockResolvedValue(workspace(false));
 
-    await useOnboardingStore.getState().acknowledgeOnboarding();
-    expect(useOnboardingStore.getState().onboardingRequired).toBe(false);
+    await acknowledgeOnboardingAction();
+    expect(getOnboardingRequiredSnapshot()).toBe(false);
     expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1);
   });
 });

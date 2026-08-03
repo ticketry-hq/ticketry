@@ -263,6 +263,29 @@ test("packaged sidecar smoke proves provider discovery, config preservation, and
   });
 });
 
+test("packaged sidecar smoke rejects a missing transitive skill", async () => {
+  await withFixture(async (context) => {
+    const run = context.run;
+    context.run = async (command, args) => {
+      const result = await run(command, args);
+      if (command !== context.sidecarExecutable
+        || args.join(" ") !== "skills smoke-providers") {
+        return result;
+      }
+      const evidence = JSON.parse(result.stdout);
+      evidence.providers.codex = evidence.providers.codex.filter(
+        (skill) => skill !== "domain-modeling",
+      );
+      return { ...result, stdout: `${JSON.stringify(evidence)}\n` };
+    };
+
+    await assert.rejects(
+      packagedSkillEvidenceScenario(context),
+      /did not expose required skills and MCP for codex/,
+    );
+  });
+});
+
 test("sandbox validation accepts a symlinked macOS temporary root", async () => {
   const temporary = await mkdtemp(path.join(tmpdir(), "ticketry-driver-realpath-"));
   const actualRoot = path.join(temporary, "actual");

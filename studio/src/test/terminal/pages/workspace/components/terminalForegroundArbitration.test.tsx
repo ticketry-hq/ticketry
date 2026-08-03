@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, act } from "@testing-library/react";
 
-import { WorkspaceTerminalHost as TerminalHost } from "../../../../../features/agents/terminal/WorkspaceTerminalHost";
+import { SelectedTicketTerminal as TerminalHost } from "../../../../../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal";
 import {
   _entryCount,
   getEntry,
@@ -10,7 +10,7 @@ import {
 } from "../../../../../features/agents/terminal/internal/entryPool";
 import { useTerminalStore } from "../../../../../features/agents/terminal";
 import type { SessionMeta } from "../../../../../features/agents/terminal";
-import { useIssueDrawerWorkspaceStore } from "../../../../../features/work-items/issue-detail";
+import { useTicketWorkspaceStore } from "../../../../../app/shell/ticket-workspace/selected-ticket";
 import {
   foregroundKey,
   resolveOwner,
@@ -141,7 +141,7 @@ function seedConnectingSession() {
     activeByTask: { "task-1": "sess-1" },
     chatByDoc: {},
   });
-  useIssueDrawerWorkspaceStore.setState({
+  useTicketWorkspaceStore.setState({
     workspaces: {
       "task-1": {
         active: "terminal",
@@ -322,9 +322,9 @@ describe("background transport suspension", () => {
 
   // Switch the ticket's workspace to a non-terminal tab so the fallback host stops
   // presenting the session (visibleId → null) without touching the session.
-  function switchToDetailsTab() {
+  function switchToSelectedTicketDetails() {
     act(() => {
-      useIssueDrawerWorkspaceStore.setState({
+      useTicketWorkspaceStore.setState({
         workspaces: {
           "task-1": {
             active: "details",
@@ -340,7 +340,7 @@ describe("background transport suspension", () => {
 
   function switchToTerminalTab() {
     act(() => {
-      useIssueDrawerWorkspaceStore.setState({
+      useTicketWorkspaceStore.setState({
         workspaces: {
           "task-1": {
             active: "terminal",
@@ -359,7 +359,7 @@ describe("background transport suspension", () => {
     const view = render(<TerminalHost bucket="task-1" />);
     driveReady();
 
-    switchToDetailsTab();
+    switchToSelectedTicketDetails();
     expect(H.suspendSpy).not.toHaveBeenCalled();
     act(() => {
       vi.advanceTimersByTime(SUSPEND_GRACE_MS);
@@ -408,7 +408,7 @@ describe("background transport suspension", () => {
     const view = render(<TerminalHost bucket="task-1" />);
     driveReady();
 
-    switchToDetailsTab();
+    switchToSelectedTicketDetails();
     act(() => {
       vi.advanceTimersByTime(SUSPEND_GRACE_MS);
     });
@@ -426,7 +426,7 @@ describe("background transport suspension", () => {
     const view = render(<TerminalHost bucket="task-1" />);
     driveReady();
 
-    switchToDetailsTab();
+    switchToSelectedTicketDetails();
     // Last driver unmounts → disposeAll clears the pending timer and closes.
     view.unmount();
     await act(async () => {});

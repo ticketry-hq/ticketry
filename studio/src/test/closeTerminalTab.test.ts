@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useToastStore } from "../app/stores/toastStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useWorkspaceTabsStore } from "../features/agents/terminal/internal/workspaceTabsStore";
-import { closeTerminalTab } from "../features/work-items/issue-detail/closeTerminalTab";
-import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail/internal/drawerWorkspaceStore";
+import { closeTerminalTab } from "../app/shell/ticket-workspace/selected-ticket/internal/closeTerminalTab";
+import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
 
 const terminatePersisted = useTerminalStore.getState().terminatePersisted;
 
@@ -22,8 +22,8 @@ describe("closeTerminalTab", () => {
       chatByDoc: {},
       focusRequest: null,
     });
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
-    useIssueDrawerWorkspaceStore.getState().ensureWorkspace("task-1");
+    useTicketWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.getState().ensureWorkspace("task-1");
     useToastStore.setState({ toasts: [] });
   });
 
@@ -46,7 +46,7 @@ describe("closeTerminalTab", () => {
     expect(failedTermination).toHaveBeenCalledWith("run-1", "task-1");
     expect(useTerminalStore.getState().sessions[sessionId]).toBeDefined();
     expect(
-      useIssueDrawerWorkspaceStore.getState().workspaces["task-1"].history,
+      useTicketWorkspaceStore.getState().workspaces["task-1"].history,
     ).toEqual([]);
     expect(useToastStore.getState().toasts).toEqual([
       expect.objectContaining({

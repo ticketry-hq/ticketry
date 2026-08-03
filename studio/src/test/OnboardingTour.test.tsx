@@ -1,13 +1,19 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const workspaceApi = vi.hoisted(() => ({ acknowledgeOnboarding: vi.fn() }));
+
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
+  ...workspaceApi,
+}));
+
 import OnboardingTour from "../app/onboarding/OnboardingTour";
-import { useOnboardingStore } from "../app/onboarding/onboardingStore";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
-import { DEFAULT_PANEL_LAYOUT } from "../app/studio/layout/layoutMath";
-import { ModuleTabStrip } from "../features/studio/components/ModuleTabStrip";
-import { ModulesPane } from "../features/studio/pages/modules/ModulesPane";
-import { ProjectsPane } from "../features/studio/pages/projects/ProjectsPane";
+import { DEFAULT_PANEL_LAYOUT } from "../app/shell/layout/layoutMath";
+import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
+import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
+import { ProjectsPane } from "../app/shell/sidebar/projects/ProjectsPane";
 import {
   isSidebarEnabled,
   seedConfig,
@@ -70,6 +76,12 @@ function renderTour(onSelectStory = vi.fn()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  workspaceApi.acknowledgeOnboarding.mockResolvedValue({
+    id: "workspace-1",
+    name: "Workspace",
+    slug: "workspace",
+    onboarding_required: false,
+  });
   useTasksStore.setState((state) => ({
     projects: [],
     modules: [],
@@ -94,9 +106,7 @@ describe("post-project onboarding tour", () => {
     const createModule = vi.fn(async () => {
       useTasksStore.setState({ selectedModuleId: "module-returned" });
     });
-    const acknowledgeOnboarding = vi.fn(async () => undefined);
     useTasksStore.setState({ createModule } as never);
-    useOnboardingStore.setState({ acknowledgeOnboarding } as never);
     const { onSelectStory } = renderTour();
 
     expect(useUIStore.getState()).toMatchObject({
@@ -146,7 +156,9 @@ describe("post-project onboarding tour", () => {
     );
 
     fireEvent.click(screen.getByTestId("onboarding-finish"));
-    await waitFor(() => expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(workspaceApi.acknowledgeOnboarding).toHaveBeenCalledTimes(1),
+    );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(useUIStore.getState()).toMatchObject({
       sidebarVisible: false,
@@ -246,10 +258,8 @@ describe("post-project onboarding tour", () => {
     "Skip at %s acknowledges and dismisses without creating a module",
     async (step) => {
       startTourFromLayout(false, CUSTOM_PANEL_LAYOUT);
-      const acknowledgeOnboarding = vi.fn(async () => undefined);
       const createModule = vi.fn();
       useTasksStore.setState({ createModule } as never);
-      useOnboardingStore.setState({ acknowledgeOnboarding } as never);
       useOnboardingTourStore.setState({
         step,
         projectId: "project-created",
@@ -262,7 +272,9 @@ describe("post-project onboarding tour", () => {
       renderTour();
 
       fireEvent.click(screen.getByTestId("onboarding-skip-tour"));
-      await waitFor(() => expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1));
+      await waitFor(() =>
+        expect(workspaceApi.acknowledgeOnboarding).toHaveBeenCalledTimes(1),
+      );
       expect(useOnboardingTourStore.getState().step).toBe("inactive");
       expect(createModule).not.toHaveBeenCalled();
       expect(useUIStore.getState()).toMatchObject({
@@ -273,13 +285,13 @@ describe("post-project onboarding tour", () => {
   );
 
   it("leaves an already-default layout unchanged after the tour", async () => {
-    const acknowledgeOnboarding = vi.fn(async () => undefined);
-    useOnboardingStore.setState({ acknowledgeOnboarding } as never);
     renderTour();
 
     fireEvent.click(screen.getByTestId("onboarding-skip-tour"));
 
-    await waitFor(() => expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(workspaceApi.acknowledgeOnboarding).toHaveBeenCalledTimes(1),
+    );
     expect(useUIStore.getState()).toMatchObject({
       sidebarVisible: true,
       panelLayout: DEFAULT_PANEL_LAYOUT,

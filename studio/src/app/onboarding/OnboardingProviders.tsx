@@ -14,7 +14,12 @@ import {
   CONFIGURABLE_PROVIDERS,
   validateLaunchBindingOptions,
 } from "../../features/workflows/launchBindingValidation";
-import { useLaunchProviderCatalog } from "../../features/workflows/launchProviderCatalog";
+import {
+  setProviderCatalog,
+  setProviderCapabilities,
+  useProviderCapabilitiesQuery,
+  useProviderCatalogQuery,
+} from "../../features/workflows/providerQueries";
 
 const EMPTY_DEFAULT: LaunchDefaultPickerValue = {
   provider: "",
@@ -52,20 +57,16 @@ export function OnboardingProviders({ onContinue }: Props) {
   const [activated, setActivated] = useState<ConfigurableProvider[]>([]);
   const [launchDefault, setLaunchDefault] =
     useState<LaunchDefaultPickerValue>(EMPTY_DEFAULT);
-  const [capabilities, setCapabilities] = useState<ProviderCapabilities[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const catalogQuery = useProviderCatalogQuery();
+  const capabilitiesQuery = useProviderCapabilitiesQuery();
+  const capabilities = capabilitiesQuery.data ?? [];
+  const loading = catalogQuery.isPending || capabilitiesQuery.isPending;
 
   useEffect(() => {
-    let cancelled = false;
-    void Promise.all([
-      api.getProviderCatalog(),
-      api.getLaunchProviderCapabilities(),
-    ])
-      .then(([{ value }, providerCapabilities]) => {
-        if (cancelled) return;
-        setCapabilities(providerCapabilities);
+    const value = catalogQuery.data;
+    if (value) {
         // An absent backend setting intentionally reads as all providers active
         // with no default for pre-onboarding compatibility. On a pending first
         // run that is not a declaration: only a catalog completed by this pane
@@ -77,17 +78,13 @@ export function OnboardingProviders({ onContinue }: Props) {
           setActivated([]);
           setLaunchDefault(EMPTY_DEFAULT);
         }
-      })
-      .catch((cause) => {
-        if (!cancelled) setError(apiErrorMessage(cause));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    }
+  }, [catalogQuery.data]);
+
+  useEffect(() => {
+    const cause = catalogQuery.error ?? capabilitiesQuery.error;
+    if (cause) setError(apiErrorMessage(cause));
+  }, [capabilitiesQuery.error, catalogQuery.error]);
 
   const pickerCapabilities = useMemo(
     () =>
@@ -163,14 +160,14 @@ export function OnboardingProviders({ onContinue }: Props) {
     setError(null);
     try {
       const { value } = await api.putProviderCatalog(draft);
-      useLaunchProviderCatalog.setState({
-        capabilities: capabilities.filter((capability) =>
+      setProviderCatalog(value);
+      setProviderCapabilities(
+        capabilities.filter((capability) =>
           value.activated_providers.includes(
             capability.agent as ConfigurableProvider,
           ),
         ),
-        loaded: true,
-      });
+      );
       onContinue();
     } catch (cause) {
       setError(apiErrorMessage(cause));

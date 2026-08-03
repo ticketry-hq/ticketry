@@ -2,13 +2,18 @@ import { create } from "zustand";
 import * as api from "../../../shared/api/client";
 import { ApiError } from "../../../shared/api/client";
 import type { State, WorkItem, WorkItemCreate } from "../../../shared/api/types";
-import { useIssueStore } from "../issue-detail/internal/issueStore";
+import { useIssueStore } from "../issueStore";
 import { rankBetween } from "../utilities/rank";
 import {
   getStatesSnapshot,
   reloadStates,
   setStates,
 } from "../../../shared/query/stateCatalog";
+import {
+  getProjectWorkItemsSnapshot,
+  loadProjectWorkItems,
+  setProjectWorkItems,
+} from "../queries";
 
 export {
   compareRank,
@@ -149,7 +154,7 @@ const createBacklogState = (set: (partial: Partial<BacklogState>) => void, get: 
     });
     try {
       const [items] = await Promise.all([
-        api.listProjectWorkItems(projectId, { includePathfind: true }),
+        loadProjectWorkItems(projectId, { includePathfind: true }),
         reloadStates(projectId),
       ]);
       if (get().projectId !== projectId) return;
@@ -172,7 +177,11 @@ const createBacklogState = (set: (partial: Partial<BacklogState>) => void, get: 
     try {
       const created = await api.createWorkItem(projectId, body);
       useIssueStore.getState().hydrateWorkItems([created]);
-      set({ itemIds: mergeIds(get().itemIds, [created.id]), error: null });
+      set({
+        projectId: get().projectId ?? projectId,
+        itemIds: mergeIds(get().itemIds, [created.id]),
+        error: null,
+      });
       return created;
     } catch (error) {
       set({ error: errMessage(error) });
@@ -335,6 +344,47 @@ export const useBacklogStore = create<BacklogState>()((set, get, api) => {
 
 attachDerivedItems(useBacklogStore.getState());
 
+let lastBacklogMembership: { source: WorkItem[]; ids: string[] } | null = null;
+const EMPTY_ITEM_IDS: string[] = [];
+
+function backlogMembership(projectId: string | null): string[] {
+  if (!projectId) return EMPTY_ITEM_IDS;
+  const source = getProjectWorkItemsSnapshot(projectId, {
+    includePathfind: true,
+  });
+  if (lastBacklogMembership?.source !== source) {
+    lastBacklogMembership = {
+      source,
+      ids: source.filter((item) => !item.is_archived).map((item) => item.id),
+    };
+  }
+  return lastBacklogMembership.ids;
+}
+
+function attachQueryBackedMembership(state: BacklogState): void {
+  const descriptor = Object.getOwnPropertyDescriptor(state, "itemIds");
+  if (state.projectId && descriptor && "value" in descriptor) {
+    const byId = useIssueStore.getState().workItemsById;
+    const items = (descriptor.value as string[])
+      .map((id) => byId[id])
+      .filter((item): item is WorkItem => item !== undefined);
+    setProjectWorkItems(
+      state.projectId,
+      { includePathfind: true },
+      items,
+    );
+  }
+  Object.defineProperty(state, "itemIds", {
+    configurable: true,
+    enumerable: true,
+    get: () => backlogMembership(state.projectId),
+  });
+  attachDerivedItems(state);
+}
+
+attachQueryBackedMembership(useBacklogStore.getState());
+useBacklogStore.subscribe(attachQueryBackedMembership);
+
 const rawSetState = useBacklogStore.setState;
 useBacklogStore.setState = ((partial, replace) => {
   const current = useBacklogStore.getState();
@@ -349,6 +399,12 @@ useBacklogStore.setState = ((partial, replace) => {
   if (items !== undefined) {
     useIssueStore.getState().hydrateWorkItems(items);
     withoutItems.itemIds = items.map((item) => item.id);
+    // Legacy/test callers often seed the compatibility `items` projection
+    // without first selecting a project. The records themselves carry the
+    // canonical scope, so route that write to the matching Query entry.
+    if (!withoutItems.projectId && !current.projectId && items[0]) {
+      withoutItems.projectId = items[0].project_id;
+    }
   }
   if (states !== undefined) {
     // The backlog owns no catalog copy, so a `states` write lands in the one
@@ -363,5 +419,5 @@ useBacklogStore.setState = ((partial, replace) => {
     });
   }
   rawSetState(withoutItems, replace);
-  attachDerivedItems(useBacklogStore.getState());
+  attachQueryBackedMembership(useBacklogStore.getState());
 }) as typeof useBacklogStore.setState;

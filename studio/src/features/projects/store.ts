@@ -19,6 +19,7 @@ import type {
   ProjectPatch,
   View,
 } from "../../shared/api/types";
+import { loadIssueTypes } from "../settings";
 
 const VIEWS: View[] = ["backlog", "settings"];
 
@@ -125,7 +126,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   async createModuleForProjectWithError(projectId, name) {
-    const issueTypes = await api.listIssueTypes(projectId);
+    const issueTypes = await loadIssueTypes(projectId);
     const moduleType = issueTypes.find(
       (issueType) => issueType.level === "module" && issueType.name === "Module",
     );

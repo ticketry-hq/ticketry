@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from apps.settings_store.config import CONFIG_DIR
+from studio_server.database import default_database_settings
 
 
 # Muxed is a localhost developer tool; these defaults match that posture.
@@ -91,18 +92,9 @@ WORKTRACKER_TOKEN_FILE = CONFIG_DIR / "worktracker_token"
 MUXED_DESKTOP_ORIGIN = os.environ.get("MUXED_DESKTOP_ORIGIN", "")
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": Path(os.environ.get("MUXED_STATE_DB", CONFIG_DIR / "state.db")),
-        "CONN_MAX_AGE": 0,
-        "OPTIONS": {
-            "init_command": (
-                "PRAGMA journal_mode=WAL; "
-                "PRAGMA busy_timeout=5000; "
-                "PRAGMA foreign_keys=ON;"
-            ),
-        },
-    },
+    "default": default_database_settings(
+        Path(os.environ.get("MUXED_STATE_DB", CONFIG_DIR / "state.db"))
+    )
 }
 
 CHANNEL_LAYERS = {

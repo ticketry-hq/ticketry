@@ -1,17 +1,28 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, symlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
   buildConnectLaunch,
+  createTemporarySqliteProfile,
   formatDevelopmentIdentity,
+  parseDesktopDevOptions,
   parseDesktopDevMode,
+  removeTemporarySqliteProfile,
   resolveDevelopmentDataDirectory,
   resolveDevelopmentTmuxSocket,
   resolveTauriCliPath,
   selectDevelopmentServicePorts,
+  stopTemporaryTmuxServer,
 } from "./desktop-dev.mjs";
 import { addLinkedWorktree, createRepository } from "./git-fixtures.mjs";
 
@@ -103,14 +114,79 @@ test("explicit development service ports fail instead of shifting", async () => 
   );
 });
 
-test("--connect is the only supported desktop development argument", () => {
+test("temporary SQLite desktop attempts only the optional MCP port 8123", async () => {
+  const checked = [];
+  const ports = await selectDevelopmentServicePorts({
+    environment: {},
+    temporarySqlite: true,
+    isAvailable: async (port) => {
+      checked.push(port);
+      return port !== 8123;
+    },
+  });
+
+  assert.deepEqual(ports, { backend: 8787, mcp: 8123 });
+  assert.deepEqual(checked, [8787]);
+});
+
+test("desktop development accepts connect or temporary SQLite mode", () => {
   assert.equal(parseDesktopDevMode([]), "isolated");
   assert.equal(parseDesktopDevMode(["--connect"]), "connect");
   assert.equal(parseDesktopDevMode(["--", "--connect"]), "connect");
+  assert.deepEqual(parseDesktopDevOptions(["--temp-sqlite"]), {
+    mode: "isolated",
+    temporarySqlite: true,
+  });
+  assert.deepEqual(parseDesktopDevOptions(["--", "--temp-sqlite"]), {
+    mode: "isolated",
+    temporarySqlite: true,
+  });
   assert.throws(
     () => parseDesktopDevMode(["--unknown"]),
-    /usage: pnpm --filter @worktracker\/studio desktop:dev -- --connect/,
+    /usage: pnpm --filter @worktracker\/studio desktop:dev -- \[--connect \| --temp-sqlite\]/,
   );
+});
+
+test("temporary SQLite profiles are unique and removed on shutdown", () => {
+  const temporaryRoot = mkdtempSync(path.join(tmpdir(), "ticketry-profile-test-"));
+  const first = createTemporarySqliteProfile({ temporaryRoot });
+  const second = createTemporarySqliteProfile({ temporaryRoot });
+  writeFileSync(path.join(first, "state.db"), "temporary database");
+
+  assert.notEqual(first, second);
+  assert.equal(existsSync(path.join(first, "state.db")), true);
+  removeTemporarySqliteProfile(first, { temporaryRoot });
+  assert.equal(existsSync(first), false);
+  assert.equal(existsSync(second), true);
+  removeTemporarySqliteProfile(second, { temporaryRoot });
+  rmSync(temporaryRoot, { recursive: true });
+});
+
+test("temporary SQLite cleanup refuses an unrelated directory", () => {
+  const temporaryRoot = mkdtempSync(path.join(tmpdir(), "ticketry-profile-test-"));
+  const unrelated = mkdtempSync(path.join(temporaryRoot, "unrelated-"));
+
+  assert.throws(
+    () => removeTemporarySqliteProfile(unrelated, { temporaryRoot }),
+    /refusing to remove non-temporary Ticketry profile/,
+  );
+  assert.equal(existsSync(unrelated), true);
+  rmSync(temporaryRoot, { recursive: true });
+});
+
+test("temporary SQLite shutdown stops only its unique tmux server", () => {
+  const calls = [];
+  stopTemporaryTmuxServer("muxed-dev-temporary", {
+    runner(command, args, options) {
+      calls.push({ command, args, options });
+    },
+  });
+
+  assert.deepEqual(calls, [{
+    command: "tmux",
+    args: ["-L", "muxed-dev-temporary", "kill-server"],
+    options: { stdio: "ignore" },
+  }]);
 });
 
 test("the Tauri CLI is resolved through the workspace dependency tree", () => {

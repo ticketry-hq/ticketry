@@ -198,6 +198,16 @@ def install_packaged_skills(
             name = package["name"]
             source = (catalog_root() / package["path"]).resolve()
             destination = root / name
+            if destination.is_symlink() or (
+                destination.exists() and not destination.is_dir()
+            ):
+                raise SkillInstallationError(
+                    provider=provider,
+                    skill=name,
+                    reason="collision",
+                    path=destination,
+                    message="Refusing to overwrite a user-owned skill path.",
+                )
             try:
                 actual = tree_digest(destination) if destination.is_dir() else None
             except (OSError, CatalogValidationError) as exc:

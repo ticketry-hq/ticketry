@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import ParentPicker from "../features/work-items/fields/ParentPicker";
+import ParentPicker from "../app/shell/ticket-workspace/selected-ticket/details/fields/ParentPicker";
 import { useStudioStore } from "../features/projects/store";
 import { seedModules } from "../features/projects";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";

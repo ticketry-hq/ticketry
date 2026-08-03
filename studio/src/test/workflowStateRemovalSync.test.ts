@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskSummary } from "../features/studio/lib/types";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useIssueStore } from "../features/work-items/issue-detail";
+import { useIssueStore } from "../app/shell/ticket-workspace/selected-ticket";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import type { State, WorkItem } from "../shared/api/types";

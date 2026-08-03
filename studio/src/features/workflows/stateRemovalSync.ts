@@ -2,7 +2,7 @@ import type { State, WorkItem } from "../../shared/api/types";
 import { compareStateOrder } from "../../shared/utilities/display";
 import { useTasksStore } from "../studio/stores/tasksStore";
 import { useBacklogStore } from "../work-items";
-import { useIssueStore } from "../work-items/issue-detail";
+import { useIssueStore } from "../work-items/issueStore";
 import {
   type TaskState,
   toTaskState,
@@ -149,7 +149,7 @@ export function prepareActiveStateRemoval(
 /**
  * Reconcile the optimistic removal snapshot with post-confirmation server
  * rows. Revision-aware stores retain a newer live-feed frame when one won the
- * race; the issue-detail cache takes the same authoritative work-item row.
+ * race; the selected-ticket cache takes the same authoritative work-item row.
  */
 export function reconcileActiveStateRemoval(
   projectId: string,

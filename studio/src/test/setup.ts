@@ -55,14 +55,10 @@ if (typeof globalThis.localStorage === "undefined") {
 // Imported lazily: a static import here would bind the real API module before
 // a test file's `vi.mock` of it is registered.
 beforeEach(async () => {
-  const { useLaunchProviderCatalog } = await import(
-    "../features/workflows/launchProviderCatalog"
+  const { setProviderCapabilities } = await import(
+    "../features/workflows/providerQueries"
   );
-  useLaunchProviderCatalog.setState({
-    capabilities: FIRST_RUN_CAPABILITIES,
-    loaded: true,
-    failed: false,
-  });
+  setProviderCapabilities(FIRST_RUN_CAPABILITIES);
 });
 
 afterEach(async () => {

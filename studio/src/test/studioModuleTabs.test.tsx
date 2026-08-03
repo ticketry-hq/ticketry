@@ -3,15 +3,15 @@ import type { RunRecord } from "@worktracker/typescript-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { dispatchStatusFrame } from "../features/agents/status/statusFeed";
 import { useAgentStatusStore } from "../features/agents/status";
-import { ModuleTabStrip } from "../features/studio/components/ModuleTabStrip";
-import { ModulesPane } from "../features/studio/pages/modules/ModulesPane";
-import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
+import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
+import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
+import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useStudioStore } from "../features/projects/store";
 import { getModulesSnapshot, seedModules as seedProjectModules } from "../features/projects";
 import { getConfigSnapshot as getStudioConfigSnapshot, seedConfig as seedStudioConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
-import { Layout } from "../app/studio/layout/Layout";
+import { StudioLayout } from "../app/shell/StudioLayout";
 import { ModalHost, useModalStore } from "../app/modal";
 
 vi.mock("../features/agents/lifecycle", () => ({
@@ -717,7 +717,7 @@ describe("Studio module tab strip", () => {
   });
 
   it("replaces only the Stories and Workspace headers with one shared strip", () => {
-    render(<Layout />);
+    render(<StudioLayout />);
 
     const region = screen.getByTestId("module-workspace-region");
     expect(within(region).getByRole("tablist", { name: "Project modules" })).toBeInTheDocument();
@@ -733,7 +733,7 @@ describe("Studio module tab strip", () => {
     });
     useUIStore.setState({ panelLayout: [20, 20, 35, 25] });
 
-    render(<Layout />);
+    render(<StudioLayout />);
 
     expect(screen.queryByTestId("pane-projects")).not.toBeInTheDocument();
     expect(screen.queryByText("Projects")).not.toBeInTheDocument();
@@ -761,7 +761,7 @@ describe("Studio module tab strip", () => {
       panelLayout: persistedLayout,
     });
 
-    render(<Layout />);
+    render(<StudioLayout />);
 
     expect(screen.queryByTestId("pane-projects")).not.toBeInTheDocument();
     expect(screen.queryByTestId("pane-modules")).not.toBeInTheDocument();
@@ -793,7 +793,7 @@ describe("Studio module tab strip", () => {
   });
 
   it("drives resize cursor behavior through every divider's expanded hover target", () => {
-    render(<Layout />);
+    render(<StudioLayout />);
 
     const handles = screen.getAllByTestId("pane-resize-handle");
     expect(handles).toHaveLength(3);
@@ -810,7 +810,7 @@ describe("Studio module tab strip", () => {
   it("keeps a persisted zero-width Projects pane above its visible minimum", () => {
     useUIStore.setState({ panelLayout: [0, 18, 44, 38] });
 
-    render(<Layout />);
+    render(<StudioLayout />);
 
     expect(screen.getByTestId("pane-projects")).toHaveAttribute(
       "data-default-size",

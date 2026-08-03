@@ -16,7 +16,7 @@ vi.mock("../shared/api/client", async () => {
 import * as api from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
 import {
-  deriveEpic, resolveBlockerChips, useIssueStore, } from "../features/work-items/issue-detail";
+  deriveEpic, resolveBlockerChips, useIssueStore, } from "../app/shell/ticket-workspace/selected-ticket";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useStudioStore } from "../features/projects/store";
 import { seedModules } from "../features/projects";

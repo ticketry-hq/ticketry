@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { QueryClientProvider } from "@tanstack/react-query";
-import StudioApp from "./app/studio/App";
+import StudioApp from "./app/StudioApp";
 import { ModalHost } from "./app/modal/ModalHost";
 import ToastHost from "./app/shell/ToastHost";
 import { queryClient } from "./shared/query/queryClient";

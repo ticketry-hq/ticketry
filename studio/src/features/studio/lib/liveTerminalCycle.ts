@@ -4,7 +4,7 @@ import {
 } from "../../agents/status";
 import type { SessionMeta } from "../../agents/terminal";
 import type { TaskId } from "./types";
-import type { Row } from "../pages/tasks/TasksPane";
+import type { Row } from "../../../app/shell/ticket-workspace/tasks/TasksPane";
 
 type CycleSession = Pick<
   SessionMeta,

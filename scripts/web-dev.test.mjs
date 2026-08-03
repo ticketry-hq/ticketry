@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
@@ -7,8 +10,14 @@ import {
   buildWebMcpCommand,
   buildWebRuntimeEnvironment,
   buildWebDevelopmentEnvironment,
+  cleanupTemporaryWebLaunch,
+  parseWebDevOptions,
+  selectTemporaryMcpPort,
   selectWebPort,
 } from "./web-dev.mjs";
+import { removeTemporarySqliteProfile } from "../studio/scripts/desktop-dev.mjs";
+
+const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 test("web development uses an isolated explicit data directory", () => {
   const launch = buildWebDevelopmentEnvironment({
@@ -31,6 +40,72 @@ test("web development uses an isolated explicit data directory", () => {
     launch.environment.MUXED_TMUX_SOCKET,
     /^muxed-dev-[0-9a-f]{16}$/,
   );
+});
+
+test("web development accepts a disposable SQLite launch flag", () => {
+  assert.deepEqual(parseWebDevOptions([]), { temporarySqlite: false });
+  assert.deepEqual(parseWebDevOptions(["--temp-sqlite"]), {
+    temporarySqlite: true,
+  });
+  assert.deepEqual(parseWebDevOptions(["--", "--temp-sqlite"]), {
+    temporarySqlite: true,
+  });
+  assert.throws(
+    () => parseWebDevOptions(["--unknown"]),
+    /usage: npm run web -- \[--temp-sqlite\]/,
+  );
+});
+
+test("temporary web development forces a fresh isolated SQLite profile", () => {
+  const temporaryRoot = mkdtempSync(path.join(tmpdir(), "ticketry-web-test-"));
+  const launch = buildWebDevelopmentEnvironment({
+    cwd: "/repository",
+    environment: {
+      MUXED_DATABASE_URL: "postgresql:///ticketry",
+      MUXED_ENABLE_LOCAL_POSTGRES: "true",
+    },
+    temporarySqlite: true,
+    temporaryRoot,
+  });
+
+  assert.equal(launch.temporarySqlite, true);
+  assert.equal(existsSync(launch.dataDirectory), true);
+  assert.equal(launch.environment.MUXED_FORCE_SQLITE, "true");
+  assert.equal(
+    launch.environment.MUXED_STATE_DB,
+    path.join(launch.dataDirectory, "state.db"),
+  );
+  assert.match(launch.environment.MUXED_TMUX_SOCKET, /^muxed-dev-[0-9a-f]{16}$/);
+
+  removeTemporarySqliteProfile(launch.dataDirectory, { temporaryRoot });
+  rmSync(temporaryRoot, { recursive: true });
+});
+
+test("temporary web shutdown stops its tmux server before removing its profile", () => {
+  const calls = [];
+  cleanupTemporaryWebLaunch(
+    {
+      dataDirectory: "/tmp/ticketry-temp-sqlite-example",
+      environment: { MUXED_TMUX_SOCKET: "muxed-dev-temporary" },
+    },
+    {
+      stopTmux(socket) {
+        calls.push(["stop-tmux", socket]);
+      },
+      removeProfile(dataDirectory) {
+        calls.push(["remove-profile", dataDirectory]);
+      },
+      log(message) {
+        calls.push(["log", message]);
+      },
+    },
+  );
+
+  assert.deepEqual(calls, [
+    ["stop-tmux", "muxed-dev-temporary"],
+    ["remove-profile", "/tmp/ticketry-temp-sqlite-example"],
+    ["log", "[web] Removed temporary SQLite profile: /tmp/ticketry-temp-sqlite-example"],
+  ]);
 });
 
 test("an explicit authentication choice is preserved", () => {
@@ -60,6 +135,16 @@ test("web development launches the owned WorkTracker MCP package", () => {
   );
 });
 
+test("web development serves the backend through its ASGI application", () => {
+  const devScript = readFileSync(path.join(scriptsDirectory, "dev.sh"), "utf8");
+
+  assert.match(
+    devScript,
+    /uv run uvicorn studio_server\.asgi:application[^\n]*--reload/,
+  );
+  assert.doesNotMatch(devScript, /manage\.py runserver/);
+});
+
 test("web services share one backend and the pinned MCP endpoint", () => {
   const environment = buildWebRuntimeEnvironment({
     environment: { PRESERVED: "yes", WORKTRACKER_API_TOKEN: "development-token" },
@@ -75,6 +160,37 @@ test("web services share one backend and the pinned MCP endpoint", () => {
     "http://127.0.0.1:8788/api/work-tracker",
   );
   assert.equal(environment.WORKTRACKER_MCP_URL, "http://127.0.0.1:8123/mcp");
+});
+
+test("temporary web MCP tries 8123 once and skips when it is occupied", async () => {
+  const checked = [];
+  const selected = await selectTemporaryMcpPort({
+    isAvailable: async (port) => {
+      checked.push(port);
+      return false;
+    },
+  });
+
+  assert.equal(selected, null);
+  assert.deepEqual(checked, [8123]);
+});
+
+test("a skipped temporary MCP removes inherited MCP configuration", () => {
+  const environment = buildWebRuntimeEnvironment({
+    environment: {
+      MCP_HOST: "stale-host",
+      MCP_PORT: "9999",
+      MCP_TRANSPORT: "http",
+      WORKTRACKER_MCP_URL: "http://stale.invalid/mcp",
+    },
+    backendPort: 8787,
+    mcpPort: null,
+  });
+
+  assert.equal(environment.MCP_HOST, undefined);
+  assert.equal(environment.MCP_PORT, undefined);
+  assert.equal(environment.MCP_TRANSPORT, undefined);
+  assert.equal(environment.WORKTRACKER_MCP_URL, undefined);
 });
 
 test("web services select the next free ports", async () => {

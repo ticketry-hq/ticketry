@@ -72,6 +72,8 @@ for package in (
     "burner_redis",
     "django",
     "channels",
+    "psycopg",
+    "psycopg_binary",
 ):
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
     datas += package_datas

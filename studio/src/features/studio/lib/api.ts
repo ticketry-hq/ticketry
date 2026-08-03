@@ -6,7 +6,6 @@ import type {
 } from "@worktracker/typescript-sdk/models";
 import { WorkItemPatchOriginEnum } from "@worktracker/typescript-sdk/models";
 import { ApiError } from "../../../shared/api/client";
-import { cachedFetch, dedupeInFlight } from "../../../shared/api/dedupe";
 export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
 import type {
   IssueType,
@@ -25,13 +24,9 @@ import type {
 import { agentApiUrl, runtimeConfiguration } from "../../../runtime";
 import type {
   ConfigPayload,
-  DesignDoc,
   ModuleSummary,
-  PersistedTerminalSession,
-  ResumableTerminalSession,
   Profile,
   ProjectSummary,
-  RunningAgentCountsPayload,
   TaskState,
   TaskSummary,
 } from "./types";
@@ -190,7 +185,7 @@ function normalizeModuleTaskTree(moduleId: string, tasks: WorkItem[]) {
 // gated: CODIN-668 — host /api/config surface is not in the OpenAPI the SDK is
 // generated from; stays on raw fetch until host-surface SDK coverage is taken up.
 export const getConfig = () =>
-  dedupeInFlight("GET /api/config", () => request<ConfigPayload>("/api/config"));
+  request<ConfigPayload>("/api/config");
 
 export const postProfile = (body: Partial<Profile>) =>
   request<ConfigPayload>("/api/config/profiles", {
@@ -271,14 +266,6 @@ export const getProjectWorkItems = (projectId: string): Promise<WorkItem[]> =>
       includePathfind: true,
     })) as WorkItem[]);
 
-export const getSubtasks = (projectId: string, taskId: string) =>
-  call(async () =>
-    ((await worktrackerClient().workItems.listProjectWorkItems({
-      projectId,
-      parent: taskId,
-    })) as WorkItem[]).map(normalizeTask),
-  );
-
 export const getTaskDetails = (
   _projectId: string,
   taskId: string,
@@ -334,14 +321,9 @@ export const reorderWorkflowStates = (
     })) as State[],
   );
 
-// Catalog data refetched as a serial prerequisite of every story creation;
-// a short TTL keeps that off the critical path without risking long-lived
-// staleness after workflow edits.
 export const getIssueTypes = (projectId: string): Promise<IssueType[]> =>
-  cachedFetch(`issue-types:${projectId}`, 60_000, () =>
-    call(async () =>
-      (await worktrackerClient().issueTypes.listIssueTypes({ projectId })) as IssueType[],
-    ),
+  call(async () =>
+    (await worktrackerClient().issueTypes.listIssueTypes({ projectId })) as IssueType[],
   );
 
 export const getLaunchProviderCapabilities = (): Promise<ProviderCapabilitiesOut[]> =>
@@ -581,66 +563,12 @@ export const previewProviderCatalogImpact = (value: ProviderCatalog) =>
     { method: "POST", body: JSON.stringify({ value }) },
   );
 
-// ---------- Persisted terminal sessions ----------
-// gated: CODIN-668 — host /api/terminals surface is not in the SDK's OpenAPI.
-export const getTerminals = (taskId: string) =>
-  request<PersistedTerminalSession[]>(
-    `/api/terminals?task_id=${encodeURIComponent(taskId)}`,
-  );
-
-export const listResumableTerminals = (taskId: string) =>
-  request<ResumableTerminalSession[]>(
-    `/api/terminals/resumable?task_id=${encodeURIComponent(taskId)}`,
-  );
-
-// Active no-task (plan/instant) sessions for a project. A module narrows the
-// list when opening one scratch workspace; omitting it hydrates Backlog badges.
-export const getScratchTerminals = (projectId: string, moduleId?: string) =>
-  request<PersistedTerminalSession[]>(
-    `/api/terminals/scratch?project_id=${encodeURIComponent(projectId)}${moduleId ? `&module_id=${encodeURIComponent(moduleId)}` : ""}`,
-  );
-
-export const getRunningAgentCounts = (projectId: string, moduleId: string) =>
-  request<RunningAgentCountsPayload>(
-    `/api/terminals/running-counts?project_id=${encodeURIComponent(projectId)}&module_id=${encodeURIComponent(moduleId)}`,
-  );
-
-export const terminateTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; terminated: boolean }>(
-    `/api/terminals/?agent_run_id=${encodeURIComponent(agentRunId)}`,
-    { method: "DELETE" },
-  );
-
-export const resumeTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; resumed_from: string }>(
-    `/api/terminals/resume?agent_run_id=${encodeURIComponent(agentRunId)}`,
-    { method: "POST" },
-  );
-
 // ---------- Documents (ticket #521) ----------
 // gated: CODIN-668 — host /api/docs · /api/documents · /api/fs surfaces are not
 // in the SDK's OpenAPI.
 // Builds the URL for a registered design document. Path-style so the doc's
 // directory levels are mirrored in the URL and its relative assets resolve
 // under the same prefix; used as an iframe `src` in a sandboxed opaque origin.
-// Registered documents for a task workspace, rescanned server-side on read.
-export const getDocuments = (
-  taskId: string,
-  projectId?: string,
-  moduleId?: string,
-) => {
-  const params = new URLSearchParams({ task_id: taskId });
-  if (projectId) params.set("project_id", projectId);
-  if (moduleId) params.set("module_id", moduleId);
-  return request<{ documents: DesignDoc[] }>(`/api/documents?${params}`);
-};
-
-// Registered documents for the scratch (plan/instant) bucket of a module.
-export const getScratchDocuments = (moduleId: string) =>
-  request<{ documents: DesignDoc[] }>(
-    `/api/documents?scope=scratch&module_id=${encodeURIComponent(moduleId)}`,
-  );
-
 export const saveDocument = (
   docId: string,
   body: { content: string; digest: string },
@@ -649,9 +577,3 @@ export const saveDocument = (
     method: "PUT",
     body: JSON.stringify(body),
   });
-
-export const fsComplete = (path: string, signal?: AbortSignal) =>
-  request<{ entries: string[] }>(
-    `/api/fs/complete?path=${encodeURIComponent(path)}`,
-    { signal },
-  );

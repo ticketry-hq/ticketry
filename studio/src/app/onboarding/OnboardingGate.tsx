@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useOnboardingStore } from "./onboardingStore";
+import { useOnboardingRequired } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 import OnboardingWelcome from "./OnboardingWelcome";
 
@@ -9,9 +9,7 @@ import OnboardingWelcome from "./OnboardingWelcome";
  * and bootstrap gates establish.
  */
 export function OnboardingGate({ children }: { children: ReactNode }) {
-  const onboardingRequired = useOnboardingStore(
-    (state) => state.onboardingRequired,
-  );
+  const onboardingRequired = useOnboardingRequired();
   const tourStep = useOnboardingTourStore((state) => state.step);
 
   if (!onboardingRequired || tourStep !== "inactive") return <>{children}</>;

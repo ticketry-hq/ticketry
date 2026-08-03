@@ -7,8 +7,8 @@ import { useUIStore } from "../../features/studio/stores/uiStore";
 import type {
   FlatRow,
   Row,
-} from "../../features/studio/pages/tasks/TasksPane";
-import { focusIdeaEntry } from "../../features/studio/pages/tasks/storiesFocus";
+} from "../shell/ticket-workspace/tasks/TasksPane";
+import { focusIdeaEntry } from "../shell/ticket-workspace/tasks/storiesFocus";
 
 type Direction = 1 | -1;
 

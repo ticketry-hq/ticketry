@@ -16,11 +16,13 @@ vi.mock("../features/studio/lib/api", async (importOriginal) => ({
 
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
-import { useOnboardingStore } from "../app/onboarding/onboardingStore";
+import { getOnboardingRequiredSnapshot } from "../app/onboarding/onboardingStore";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import * as workspaceApi from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
+import { queryClient } from "../shared/query/queryClient";
+import { queryKeys } from "../shared/query/keys";
 
 vi.mock("../shared/api/client", async () => {
   const actual = await vi.importActual<typeof import("../shared/api/client")>(
@@ -86,7 +88,7 @@ beforeEach(() => {
     slug: "meml",
     onboarding_required: false,
   });
-  useOnboardingStore.setState({ onboardingRequired: true });
+  queryClient.setQueryData(queryKeys.workspace, true);
   useOnboardingTourStore.getState().reset();
   seedConfig({
     features: { sidebar: true, projects: true },
@@ -217,7 +219,7 @@ describe("Onboarding welcome", () => {
       expect(catalogApi.putProviderCatalog).toHaveBeenCalledWith(emptyCatalog);
       expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1);
     });
-    expect(useOnboardingStore.getState().onboardingRequired).toBe(false);
+    expect(getOnboardingRequiredSnapshot()).toBe(false);
   });
 
   it("skip remains available after provider setup", async () => {
@@ -280,7 +282,7 @@ describe("Onboarding welcome", () => {
         projectId: "created-project",
       });
     });
-    expect(useOnboardingStore.getState().onboardingRequired).toBe(true);
+    expect(getOnboardingRequiredSnapshot()).toBe(true);
     expect(acknowledgeOnboarding).not.toHaveBeenCalled();
   });
 

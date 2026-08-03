@@ -54,6 +54,34 @@ For the desktop application, run either `npm run desktop:dev` or `pnpm run dev`
 from the repository root. Both commands rebuild the Python sidecar and launch
 the Tauri shell with its supervised backend and MCP services.
 
+### One shared local Postgres database
+
+By default, every development worktree keeps an isolated SQLite database. To
+instead share database-backed Ticketry work between local web and desktop
+development runs, install and configure a user-level Postgres database (no
+Docker required):
+
+```bash
+npm run db:setup
+```
+
+The command installs Homebrew `postgresql@17` when needed, starts it as a user
+service, creates the `ticketry` database, applies migrations, and writes the
+opt-in connection URL and enable marker under
+`~/.config/worktracker-studio/`. Source-tree development launchers and your
+installed Ticketry app on that macOS account read this machine-local opt-in.
+The marker is never included in an app bundle, so installations distributed to
+other users retain their private SQLite database. Use `npm run db:status` to
+check it. `npm run db:disable` removes only the opt-in files; it does not stop
+Postgres or delete either Postgres or SQLite data.
+
+This shares Django database records, not instance-owned files or processes:
+profiles, API-token files, attachments, tmux sessions, caches, and logs remain
+in each run's data directory. Avoid running code revisions with incompatible
+database migrations against the shared database at the same time. Set
+`MUXED_DATABASE_URL` for a one-launch override or `MUXED_DATABASE_URL_FILE` to
+use a different persistent URL file.
+
 Copy `studio/.env.example` to `studio/.env.local` and set `VITE_WT_API_KEY` when
 testing an authenticated Studio session. Studio proxies `/api` to the backend;
 `VITE_AGENT_API_BASE` defaults to `/api`.
@@ -75,6 +103,17 @@ run `npm run desktop:dev -- --connect`. Attach mode reuses the `5174` frontend,
 `8787` backend, and established data directory without rebuilding or launching
 the sidecar.
 
+To launch with a brand-new disposable SQLite database, run
+`npm run desktop:dev -- --temp-sqlite`. This mode ignores the local Postgres
+opt-in for that launch, creates an isolated temporary profile, and removes the
+database and the rest of that profile after the desktop process exits cleanly.
+Any tmux sessions created by that disposable launch are stopped during cleanup.
+The packaged executable accepts the same flag, for example
+`/Applications/Ticketry.app/Contents/MacOS/ticketry --temp-sqlite`.
+The browser development stack supports the same behavior with
+`npm run web -- --temp-sqlite`. Disposable launches attempt to expose MCP on
+port `8123`; when that port is occupied they continue without MCP.
+
 ## Validation
 
 ```bash
@@ -94,6 +133,10 @@ The existing public configuration remains unchanged:
 | `WORKTRACKER_API_TOKEN` | API `x-api-key` when authentication is enabled. |
 | `WORKTRACKER_DISABLE_AUTH` | Disable API-key checks for local use. |
 | `MUXED_STATE_DB` | SQLite state-database path. |
+| `MUXED_FORCE_SQLITE` | Force SQLite even when local Postgres is enabled; set automatically by `--temp-sqlite`. |
+| `MUXED_ENABLE_LOCAL_POSTGRES` | Source-development gate; installed use is enabled by this user's machine-local marker. |
+| `MUXED_DATABASE_URL` | Explicit local Postgres URL; effective only with the development gate or local marker. |
+| `MUXED_DATABASE_URL_FILE` | Persistent Postgres opt-in file (defaults to `~/.config/worktracker-studio/database-url`). |
 | `MUXED_WEB_MCP_PORT`, `MUXED_DESKTOP_MCP_PORT` | Explicit development override for the pinned MCP port (`8123` by default). |
 | `MUXED_SECRET_KEY`, `MUXED_DEBUG`, `MUXED_ALLOWED_HOSTS` | Django runtime settings. |
 | `MUXED_DESKTOP_*` | Optional desktop endpoint and smoke-test overrides. |

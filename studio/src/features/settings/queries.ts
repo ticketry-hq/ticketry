@@ -16,10 +16,21 @@ const issueTypesKey = (projectId: string) =>
   queryKeys.issueTypes.byProject(projectId);
 
 const capabilitiesKey = (projectId: string) =>
-  [...queryKeys.settings.byProject(projectId), "subtree-run"] as const;
+  ["settings", projectId, "subtree-run"] as const;
 
 async function fetchIssueTypes(projectId: string): Promise<IssueType[]> {
   return bySortOrder(await api.listIssueTypes(projectId));
+}
+
+export function loadIssueTypes(
+  projectId: string,
+  loader: (projectId: string) => Promise<IssueType[]> = fetchIssueTypes,
+): Promise<IssueType[]> {
+  return queryClient.fetchQuery({
+    queryKey: issueTypesKey(projectId),
+    queryFn: () => loader(projectId),
+    staleTime: 0,
+  });
 }
 
 // Local capability writes (a just-saved workflow binding, an explicit refresh)
@@ -149,6 +160,17 @@ export function useSubtreeRunCapabilitiesQuery(projectId: string | null) {
     {
       queryKey: capabilitiesKey(projectId ?? "none"),
       queryFn: () => fetchCapabilities(projectId!),
+      enabled: projectId !== null,
+    },
+    queryClient,
+  );
+}
+
+export function useIssueTypesQuery(projectId: string | null) {
+  return useQuery(
+    {
+      queryKey: issueTypesKey(projectId ?? "none"),
+      queryFn: () => fetchIssueTypes(projectId!),
       enabled: projectId !== null,
     },
     queryClient,

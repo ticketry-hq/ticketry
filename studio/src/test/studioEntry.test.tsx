@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../app/studio/App", () => ({
+vi.mock("../app/StudioApp", () => ({
   default: function TaskWorkspace() {
     return <div data-testid="studio-task-workspace">Task workspace</div>;
   },

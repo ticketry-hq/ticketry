@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import App from "../app/studio/App";
+import App from "../app/StudioApp";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 
 const feed = vi.hoisted(() => ({ start: vi.fn(), stop: vi.fn() }));
@@ -10,13 +10,13 @@ vi.mock("../features/agents/status/statusFeed", async (importOriginal) => ({
   statusFeed: feed,
 }));
 
-vi.mock("../app/studio/BootstrapGate", () => ({
+vi.mock("../app/startup/BootstrapGate", () => ({
   BootstrapGate: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock("../app/studio/layout/Layout", () => ({ Layout: () => null }));
-vi.mock("../app/studio/Footer", () => ({ Footer: () => null }));
+vi.mock("../app/shell/StudioLayout", () => ({ StudioLayout: () => null }));
+vi.mock("../app/shell/StudioFooter", () => ({ StudioFooter: () => null }));
 vi.mock("../app/navigation/useGlobalKeymap", () => ({ useGlobalKeymap: () => undefined }));
-vi.mock("../features/studio/pages/tasks/hooks/useTaskTree", () => ({
+vi.mock("../app/shell/ticket-workspace/tasks/hooks/useTaskTree", () => ({
   useTaskTree: () => ({ rows: [] }),
 }));
 

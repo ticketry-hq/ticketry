@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import DocViewer from "../features/documents/DocViewer";
-import { WorkspaceDocTab } from "../features/documents/WorkspaceDocTab";
+import DocViewer from "../app/shell/ticket-workspace/selected-ticket/documents/DocViewer";
+import { WorkspaceDocument } from "../app/shell/ticket-workspace/selected-ticket/documents/WorkspaceDocument";
 import type { DocTabState } from "../features/agents/types";
 
 const { confirmReload } = vi.hoisted(() => ({
@@ -13,7 +13,7 @@ vi.mock("../app/stores/dialogStore", () => ({
   dialog: { confirm: confirmReload },
 }));
 
-vi.mock("../features/documents/RichMarkdownEditor", () => ({
+vi.mock("../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEditor", () => ({
   default: ({
     markdown,
     onChange,
@@ -67,7 +67,7 @@ describe("DocViewer", () => {
       "https://example.com",
     );
     expect(document.querySelector("script")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("drawer-doc-frame")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workspace-doc-frame")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/docs/doc-1/SPEC.MD"),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -363,7 +363,7 @@ describe("DocViewer", () => {
     );
 
     render(
-      <WorkspaceDocTab
+      <WorkspaceDocument
         doc={markdownDoc}
         bucket="task-1"
         projectId="project-1"
@@ -478,7 +478,7 @@ describe("DocViewer", () => {
       />,
     );
 
-    const frame = screen.getByTestId("drawer-doc-frame");
+    const frame = screen.getByTestId("workspace-doc-frame");
     expect(frame).toHaveAttribute("sandbox", "allow-scripts");
     expect(frame).toHaveAttribute(
       "src",

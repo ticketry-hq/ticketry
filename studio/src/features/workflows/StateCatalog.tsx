@@ -3,13 +3,13 @@ import { useRef, useState } from "react";
 import { ApiError, apiErrorMessage } from "../../shared/api/client";
 import type { State } from "../../shared/api/types";
 import { STATE_GROUP_ORDER } from "../../shared/utilities/display";
-import * as api from "../studio/workflowApi";
 import {
   SETTINGS_FIELD_CLASS,
   SettingsStatusLine,
   settingsButtonClass,
 } from "../../shared/ui/SettingsPrimitives";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
+import { loadStateImpact } from "./queries";
 
 const GROUP_LABELS: Record<string, string> = {
   backlog: "Backlog",
@@ -58,7 +58,7 @@ export function StateCatalog() {
     setImpactConflict(null);
     setImpactLoading(true);
     try {
-      const nextImpact = await api.getStateImpact(stateId);
+      const nextImpact = await loadStateImpact(stateId);
       if (previewGeneration.current !== generation) return;
       setImpact(nextImpact);
       setReplacementId(nextImpact.valid_replacements?.[0]?.id ?? "");

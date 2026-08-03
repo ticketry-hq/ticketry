@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
+import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
-import { useIssueStore } from "../features/work-items/issue-detail";
+import { useIssueStore } from "../app/shell/ticket-workspace/selected-ticket";
 
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => null,

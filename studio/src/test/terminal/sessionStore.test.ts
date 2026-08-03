@@ -379,7 +379,12 @@ describe("terminalStore", () => {
     vi.spyOn(api, "getTerminals").mockResolvedValue(list);
     await useTerminalStore.getState().fetchPersistedSessions("task-1");
     expect(useTerminalStore.getState().persistedSessions["task-1"]).toEqual(list);
-    expect(api.listResumableTerminals).toHaveBeenCalledWith("task-1");
+    expect(api.listResumableTerminals).toHaveBeenCalledWith(
+      "task-1",
+      undefined,
+      undefined,
+      expect.any(AbortSignal),
+    );
   });
 
   it("fetchPersistedSessions swallows errors and leaves state intact", async () => {
@@ -408,7 +413,9 @@ describe("terminalStore", () => {
       );
 
     const first = useTerminalStore.getState().fetchPersistedSessions("task-1");
+    await vi.waitFor(() => expect(api.getTerminals).toHaveBeenCalledTimes(1));
     const second = useTerminalStore.getState().fetchPersistedSessions("task-1");
+    await vi.waitFor(() => expect(api.getTerminals).toHaveBeenCalledTimes(2));
     resolveFirst([makePersisted({ agent_run_id: "stale-run" })]);
 
     await expect(first).resolves.toBe("superseded");
@@ -432,6 +439,7 @@ describe("terminalStore", () => {
       controller.signal,
     );
 
+    await vi.waitFor(() => expect(api.getTerminals).toHaveBeenCalledTimes(1));
     controller.abort();
     resolve([makePersisted({ agent_run_id: "stale-run" })]);
 
@@ -499,7 +507,12 @@ describe("terminalStore", () => {
 
     await useTerminalStore.getState().fetchScratchSessions("proj-1", "mod-1");
 
-    expect(listResumable).toHaveBeenCalledWith(undefined, "proj-1", "mod-1");
+    expect(listResumable).toHaveBeenCalledWith(
+      undefined,
+      "proj-1",
+      "mod-1",
+      expect.any(AbortSignal),
+    );
     expect(
       useTerminalStore.getState().resumableSessions[`${TEMP_TASK_ID}:proj-1:mod-1`],
     ).toEqual(resumable);
@@ -528,7 +541,12 @@ describe("terminalStore", () => {
 
     await useTerminalStore.getState().refreshResumable("task-1", "proj-1", "mod-1");
 
-    expect(request).toHaveBeenCalledWith("task-1");
+    expect(request).toHaveBeenCalledWith(
+      "task-1",
+      undefined,
+      undefined,
+      expect.any(AbortSignal),
+    );
     expect(useTerminalStore.getState().resumableSessions["task-1"]).toEqual(list);
     expect(
       useTerminalStore.getState().resumableSessions[`${TEMP_TASK_ID}:proj-1:mod-1`],
@@ -547,6 +565,9 @@ describe("terminalStore", () => {
       .mockResolvedValueOnce(newer);
 
     const olderRequest = useTerminalStore.getState().refreshResumable("task-1");
+    await vi.waitFor(() =>
+      expect(api.listResumableTerminals).toHaveBeenCalledTimes(1),
+    );
     await useTerminalStore.getState().refreshResumable("task-1");
     resolveOlder(older);
     await olderRequest;
@@ -596,7 +617,11 @@ describe("terminalStore", () => {
     await useTerminalStore.getState().fetchScratchSessions("proj-1");
 
     expect(getScratch).toHaveBeenCalledOnce();
-    expect(getScratch).toHaveBeenCalledWith("proj-1");
+    expect(getScratch).toHaveBeenCalledWith(
+      "proj-1",
+      undefined,
+      expect.any(AbortSignal),
+    );
     expect(selectScratchAgentCount(useTerminalStore.getState(), "mod-1")).toBe(1);
     expect(selectScratchAgentCount(useTerminalStore.getState(), "mod-2")).toBe(1);
     expect(selectScratchAgentCount(useTerminalStore.getState(), "mod-3")).toBe(0);
@@ -712,7 +737,12 @@ describe("terminalStore", () => {
       .getState()
       .terminatePersisted("plan-1", scratchBucketId("mod-1"));
 
-    expect(refresh).toHaveBeenCalledWith(undefined, "proj-1", "mod-1");
+    expect(refresh).toHaveBeenCalledWith(
+      undefined,
+      "proj-1",
+      "mod-1",
+      expect.any(AbortSignal),
+    );
   });
 
   it("resumePersisted refreshes lists, reattaches the new run, and returns the new id", async () => {
@@ -778,8 +808,17 @@ describe("terminalStore", () => {
       "mod-1",
     );
 
-    expect(getScratch).toHaveBeenCalledWith("proj-1", "mod-1");
-    expect(listResumable).toHaveBeenCalledWith(undefined, "proj-1", "mod-1");
+    expect(getScratch).toHaveBeenCalledWith(
+      "proj-1",
+      "mod-1",
+      expect.any(AbortSignal),
+    );
+    expect(listResumable).toHaveBeenCalledWith(
+      undefined,
+      "proj-1",
+      "mod-1",
+      expect.any(AbortSignal),
+    );
     expect(
       useTerminalStore.getState().resumableSessions[`${TEMP_TASK_ID}:proj-1:mod-1`],
     ).toEqual([]);

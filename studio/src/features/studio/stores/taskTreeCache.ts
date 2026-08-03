@@ -38,6 +38,23 @@ export function setTaskTree(
   queryClient.setQueryData(treeKey(projectId, moduleId), tree);
 }
 
+export async function loadTaskTree(
+  projectId: string,
+  moduleId: string,
+  queryFn: () => Promise<TaskTree>,
+): Promise<TaskTree> {
+  const queryKey = treeKey(projectId, moduleId);
+  // A module can be left and revisited while its first request is still in
+  // flight. The revisited selection is a new explicit load, so cancel the old
+  // Query attempt instead of attaching the new selection to stale work.
+  await queryClient.cancelQueries({ queryKey, exact: true });
+  return queryClient.fetchQuery({
+    queryKey,
+    queryFn,
+    staleTime: 0,
+  });
+}
+
 export function getTaskDetails(
   projectId: string | null,
   taskId: string | null,
@@ -60,10 +77,22 @@ export function setTaskDetails(
   queryClient.setQueryData(detailsKey(projectId, taskId), details);
 }
 
+export function loadTaskDetails(
+  projectId: string,
+  taskId: string,
+  queryFn: () => Promise<TaskDetails>,
+): Promise<TaskDetails> {
+  return queryClient.fetchQuery({
+    queryKey: detailsKey(projectId, taskId),
+    queryFn,
+    staleTime: 0,
+  });
+}
+
 /**
- * Subscribe to a module's cached tree without fetching — tasksStore.loadTasks
- * owns the request; components only need to re-render when it lands or when a
- * feed delta patches a row.
+ * Subscribe to a module's cached tree. The imperative store action currently
+ * starts the fetch through loadTaskTree; TanStack owns the request and this
+ * hook owns reactive delivery to components.
  */
 export function useCachedTaskTree(
   projectId: string | null,

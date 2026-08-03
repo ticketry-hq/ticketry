@@ -1,8 +1,0 @@
-:root {
-  --ec-app-content-padding-left: 2rem;
-  --ec-app-content-padding-right: 2rem;
-}
-
-html {
-  scroll-behavior: smooth;
-}

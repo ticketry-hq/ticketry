@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useModalStore } from "../app/modal";
 import { StatusUpdate } from "../features/studio/modals/StatusUpdate";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import StatePicker from "../features/work-items/fields/StatePicker";
+import StatePicker from "../app/shell/ticket-workspace/selected-ticket/details/fields/StatePicker";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { synchronizeActiveStateCatalogOrder } from "../features/workflows/stateCatalogSync";
 

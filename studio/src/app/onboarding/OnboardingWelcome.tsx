@@ -3,8 +3,11 @@ import { apiErrorMessage } from "../../shared/api/client";
 import type { ProviderCatalog } from "../../shared/api/types";
 import * as api from "../../features/studio/lib/api";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";
-import { useLaunchProviderCatalog } from "../../features/workflows/launchProviderCatalog";
-import { useOnboardingStore } from "./onboardingStore";
+import {
+  setProviderCapabilities,
+  setProviderCatalog,
+} from "../../features/workflows/providerQueries";
+import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 import { OnboardingProviders } from "./OnboardingProviders";
 
@@ -16,9 +19,6 @@ const EMPTY_CATALOG: ProviderCatalog = {
 };
 
 export default function OnboardingWelcome() {
-  const acknowledgeOnboarding = useOnboardingStore(
-    (state) => state.acknowledgeOnboarding,
-  );
   const [pane, setPane] = useState<WelcomePane>("providers");
   const createProject = useTasksStore((state) => state.createProject);
   const startTour = useOnboardingTourStore((state) => state.start);
@@ -52,8 +52,9 @@ export default function OnboardingWelcome() {
     setSkipping(true);
     setSkipError(null);
     try {
-      await api.putProviderCatalog(EMPTY_CATALOG);
-      useLaunchProviderCatalog.setState({ capabilities: [], loaded: true });
+      const { value } = await api.putProviderCatalog(EMPTY_CATALOG);
+      setProviderCatalog(value);
+      setProviderCapabilities([]);
       await acknowledgeOnboarding();
     } catch (cause) {
       setSkipError(apiErrorMessage(cause));

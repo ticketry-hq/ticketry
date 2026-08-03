@@ -7,7 +7,7 @@ import type {
   TaskState,
   TaskSummary,
 } from "../features/studio/lib/types";
-import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
+import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";

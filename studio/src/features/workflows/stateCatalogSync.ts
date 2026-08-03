@@ -2,7 +2,7 @@ import type { State, WorkItem } from "../../shared/api/types";
 import { compareStateOrder } from "../../shared/utilities/display";
 import { useTasksStore } from "../studio/stores/tasksStore";
 import { useUIStore } from "../studio/stores/uiStore";
-import { useIssueStore } from "../work-items/issue-detail";
+import { useIssueStore } from "../work-items/issueStore";
 import { advanceStateCatalogRevision } from "../../shared/stateCatalogRevision";
 import { getStatesSnapshot, setStates } from "../../shared/query/stateCatalog";
 

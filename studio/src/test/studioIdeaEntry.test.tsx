@@ -6,8 +6,8 @@ import { ApiError } from "../shared/api/client";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import type { TaskSummary } from "../features/studio/lib/types";
-import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
-import { useTaskTree } from "../features/studio/pages/tasks/hooks/useTaskTree";
+import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import { useTaskTree } from "../app/shell/ticket-workspace/tasks/hooks/useTaskTree";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 

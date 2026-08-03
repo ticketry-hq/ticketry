@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskState, TaskSummary } from "../features/studio/lib/types";
-import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
+import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import {
   stageIconForName,
-} from "../features/studio/pages/tasks/components/StateHeaderRow";
+} from "../app/shell/ticket-workspace/tasks/components/StateHeaderRow";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import {

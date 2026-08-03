@@ -15,6 +15,7 @@ import {
   validateLaunchBindingOptions,
 } from "./launchBindingValidation";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
+import { loadProviderCatalog, setProviderCatalog } from "./providerQueries";
 import { ApiError } from "../../shared/api/client";
 import type {
   ConfigurableProvider,
@@ -167,8 +168,8 @@ export const ModelConfigurationPanel = forwardRef<
     let cancelled = false;
     void (async () => {
       try {
-        const [{ value }] = await Promise.all([
-          api.getProviderCatalog(),
+        const [value] = await Promise.all([
+          loadProviderCatalog(),
           refreshProviderCapabilities(),
         ]);
         if (cancelled) return;
@@ -286,6 +287,7 @@ export const ModelConfigurationPanel = forwardRef<
         return;
       }
       const { value } = await api.putProviderCatalog(draft);
+      setProviderCatalog(value);
       const appliedChanges = describeModelConfigurationChanges(saved, value);
       onChangesApplied?.(appliedChanges);
       setSaved(value);

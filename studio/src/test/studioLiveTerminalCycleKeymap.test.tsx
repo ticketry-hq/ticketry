@@ -8,14 +8,14 @@ import {
   useWorkspaceTabsStore,
   type SessionMeta,
 } from "../features/agents/terminal";
-import { WorkspaceTerminalHost } from "../features/agents/terminal/WorkspaceTerminalHost";
+import { SelectedTicketTerminal } from "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import type { TaskSummary } from "../features/studio/lib/types";
-import type { Row } from "../features/studio/pages/tasks/TasksPane";
+import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
-import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
+import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket";
 
 vi.mock("xterm", () => ({
   Terminal: class {
@@ -140,7 +140,7 @@ const rows = [taskRow(firstTask), taskRow(secondTask)];
 function Harness() {
   useGlobalKeymap(rows);
   const selectedTaskId = useTasksStore((state) => state.selectedTaskId);
-  return <WorkspaceTerminalHost bucket={selectedTaskId} />;
+  return <SelectedTicketTerminal bucket={selectedTaskId} />;
 }
 
 function pressCycle(
@@ -246,7 +246,7 @@ describe("Studio live-terminal cycle keymap", () => {
       chatByDoc: {},
       focusRequest: null,
     });
-    useIssueDrawerWorkspaceStore.setState({
+    useTicketWorkspaceStore.setState({
       workspaces: {
         "task-1": {
           active: "terminal",
@@ -310,7 +310,7 @@ describe("Studio live-terminal cycle keymap", () => {
         "session-2",
       );
       expect(
-        useIssueDrawerWorkspaceStore.getState().workspaces["task-2"].active,
+        useTicketWorkspaceStore.getState().workspaces["task-2"].active,
       ).toBe("terminal");
       expect(document.activeElement).toBe(
         document.querySelector(".xterm-helper-textarea"),
@@ -365,7 +365,7 @@ describe("Studio live-terminal cycle keymap", () => {
         "session-2b",
       );
       expect(
-        useIssueDrawerWorkspaceStore.getState().workspaces["task-2"].active,
+        useTicketWorkspaceStore.getState().workspaces["task-2"].active,
       ).toBe("terminal");
       expect(document.activeElement).toBe(
         document.querySelector(".xterm-helper-textarea"),
@@ -448,13 +448,13 @@ describe("Studio live-terminal cycle keymap", () => {
       "task-2": "session-2b",
     });
     expect(
-      useIssueDrawerWorkspaceStore.getState().workspaces["task-1"].active,
+      useTicketWorkspaceStore.getState().workspaces["task-1"].active,
     ).toBe("terminal");
     expect(document.activeElement).toBe(input);
   });
 
   it("advances from the selected work item's terminal while Details is foregrounded", () => {
-    useIssueDrawerWorkspaceStore.getState().setActive("task-1", "details");
+    useTicketWorkspaceStore.getState().setActive("task-1", "details");
     render(<Harness />);
 
     act(() => {

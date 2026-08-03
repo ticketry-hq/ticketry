@@ -1,7 +1,7 @@
 import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import RichMarkdownEditor from "../features/documents/RichMarkdownEditor";
+import RichMarkdownEditor from "../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEditor";
 
 describe("RichMarkdownEditor", () => {
   it("keeps editor layout classes off the popup layer", () => {

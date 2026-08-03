@@ -1,5 +1,15 @@
 import { create } from "zustand";
+import { isCancelledError } from "@tanstack/react-query";
 import * as api from "../../api/agentApi";
+import {
+  getPersistedTerminalSessionIndex,
+  getResumableTerminalSessionIndex,
+  loadPersistedTerminalSessions,
+  loadResumableTerminalSessions,
+  loadScratchTerminalSessions,
+  setPersistedTerminalSessionIndex,
+  setResumableTerminalSessionIndex,
+} from "../queries";
 import {
   TEMP_TASK_ID,
   type PersistedTerminalSession,
@@ -745,9 +755,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       const resumable = signal
         ? get().refreshResumable(taskId, undefined, undefined, signal)
         : get().refreshResumable(taskId);
-      const list = signal
-        ? await api.getTerminals(taskId, signal)
-        : await api.getTerminals(taskId);
+      const list = await loadPersistedTerminalSessions(taskId);
       if (signal?.aborted) return "superseded";
       if (latestPersistedFetch.get(taskId) !== generation) return "superseded";
       get().setPersisted(taskId, list);
@@ -756,6 +764,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       await resumable;
       return "applied";
     } catch (err) {
+      if (isCancelledError(err)) return "superseded";
       // Non-fatal: leave any previously-fetched list intact and log.
       console.warn("[terminalStore] fetchPersistedSessions failed", err);
       return "failed";
@@ -775,17 +784,18 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     const generation = key ? ++_resumableFetchGeneration : undefined;
     if (key && generation) latestResumableFetch.set(key, generation);
     try {
-      const list = taskId
-        ? signal
-          ? await api.listResumableTerminals(taskId, undefined, undefined, signal)
-          : await api.listResumableTerminals(taskId)
-        : signal
-          ? await api.listResumableTerminals(undefined, projectId, moduleId, signal)
-          : await api.listResumableTerminals(undefined, projectId, moduleId);
+      const list = await loadResumableTerminalSessions(
+        taskId,
+        projectId,
+        moduleId,
+      );
       if (signal?.aborted) return;
       if (key && latestResumableFetch.get(key) !== generation) return;
-      if (key) get().setResumable(key, list);
+      if (key) {
+        get().setResumable(key, list);
+      }
     } catch (err) {
+      if (isCancelledError(err)) return;
       console.warn("[terminalStore] refreshResumable failed", err);
     } finally {
       if (key && latestResumableFetch.get(key) === generation) {
@@ -804,13 +814,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       const resumable = signal
         ? get().refreshResumable(undefined, projectId, moduleId, signal)
         : get().refreshResumable(undefined, projectId, moduleId);
-      const list = moduleId
-        ? signal
-          ? await api.getScratchTerminals(projectId, moduleId, signal)
-          : await api.getScratchTerminals(projectId, moduleId)
-        : signal
-          ? await api.getScratchTerminals(projectId, undefined, signal)
-          : await api.getScratchTerminals(projectId);
+      const list = await loadScratchTerminalSessions(projectId, moduleId);
       if (signal?.aborted) return;
       if (latestPersistedFetch.get(fetchKey) !== generation) return;
       // Scratch rows are bucketed per module (CODIN-986): a project-wide
@@ -830,6 +834,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       }
       await resumable;
     } catch (err) {
+      if (isCancelledError(err)) return;
       // Non-fatal: leave any previously-fetched list intact and log.
       console.warn("[terminalStore] fetchScratchSessions failed", err);
     } finally {
@@ -982,3 +987,44 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     return result.agent_run_id;
   },
 }));
+
+function attachQueryBackedServerSessionIndexes(state: TerminalStoreState): void {
+  const persisted = Object.getOwnPropertyDescriptor(state, "persistedSessions");
+  if (persisted && "value" in persisted) {
+    setPersistedTerminalSessionIndex(persisted.value);
+  }
+  const resumable = Object.getOwnPropertyDescriptor(state, "resumableSessions");
+  if (resumable && "value" in resumable) {
+    setResumableTerminalSessionIndex(resumable.value);
+  }
+  Object.defineProperties(state, {
+    persistedSessions: {
+      configurable: true,
+      enumerable: true,
+      get: getPersistedTerminalSessionIndex,
+    },
+    resumableSessions: {
+      configurable: true,
+      enumerable: true,
+      get: getResumableTerminalSessionIndex,
+    },
+  });
+}
+
+attachQueryBackedServerSessionIndexes(useTerminalStore.getState());
+useTerminalStore.subscribe(attachQueryBackedServerSessionIndexes);
+
+const rawSetTerminalState = useTerminalStore.setState;
+useTerminalStore.setState = ((partial, replace) => {
+  const current = useTerminalStore.getState();
+  const next = typeof partial === "function" ? partial(current) : partial;
+  const { persistedSessions, resumableSessions, ...clientState } = next;
+  if (persistedSessions !== undefined) {
+    setPersistedTerminalSessionIndex(persistedSessions);
+  }
+  if (resumableSessions !== undefined) {
+    setResumableTerminalSessionIndex(resumableSessions);
+  }
+  rawSetTerminalState(clientState, replace);
+  attachQueryBackedServerSessionIndexes(useTerminalStore.getState());
+}) as typeof useTerminalStore.setState;

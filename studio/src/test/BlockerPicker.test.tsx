@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import BlockerPicker from "../features/work-items/fields/BlockerPicker";
+import BlockerPicker from "../app/shell/ticket-workspace/selected-ticket/details/fields/BlockerPicker";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import type { WorkItem } from "../shared/api/types";
 

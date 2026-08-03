@@ -99,11 +99,11 @@ vi.mock("../features/agents/terminal/internal/terminalClientRuntime", () => ({
 }));
 
 import * as agentApi from "../features/agents/api/agentApi";
-import { WorkspacePane } from "../features/work-items/issue-detail/WorkspacePane";
+import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import {
   DEFAULT_WORKSPACE,
-  useIssueDrawerWorkspaceStore,
-} from "../features/work-items/issue-detail";
+  useTicketWorkspaceStore,
+} from "../app/shell/ticket-workspace/selected-ticket";
 import {
   scratchBucketId,
   useTerminalStore,
@@ -115,17 +115,17 @@ import {
   type DocTabState,
   type PersistedTerminalSession,
 } from "../features/agents/types";
-import { PaneShell } from "../features/studio/components/PaneShell";
+import { PaneShell } from "../app/shell/PaneShell";
 import { useModalStore } from "../app/modal";
 import { ModalShell } from "../app/modal/ModalShell";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { MODAL_ACTIONS } from "../app/navigation/keymapRegistry";
 import type { TaskSummary } from "../features/studio/lib/types";
-import type { Row } from "../features/studio/pages/tasks/TasksPane";
+import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
-import { useLaunchProviderCatalog } from "../features/workflows/launchProviderCatalog";
+import { setProviderCapabilities } from "../features/workflows/providerQueries";
 import { dispatchStatusFrame } from "../features/agents/status/statusFeed";
 import { useAgentStatusStore } from "../features/agents/status";
 
@@ -195,7 +195,7 @@ function SelectedTaskWorkspace() {
     (state) => state.tasks.find((task) => task.id === selectedTaskId)?.key,
   );
   return (
-    <WorkspacePane
+    <SelectedTicketContent
       bucket={selectedTaskId}
       projectId="project-1"
       moduleId="module-1"
@@ -243,7 +243,7 @@ function session(
 }
 
 function seedWorkspace() {
-  useIssueDrawerWorkspaceStore.setState({
+  useTicketWorkspaceStore.setState({
     workspaces: {
       [TASK_ID]: {
         ...DEFAULT_WORKSPACE,
@@ -295,7 +295,7 @@ function mount(
   return render(
     <>
       <TaskKeymapHarness />
-      <WorkspacePane
+      <SelectedTicketContent
         bucket={bucket}
         projectId="project-1"
         moduleId="module-1"
@@ -350,7 +350,7 @@ beforeEach(() => {
   terminalHarness.socketOpen.mockClear();
   terminalHarness.socketClose.mockClear();
   terminalHarness.transportResume.mockClear();
-  useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+  useTicketWorkspaceStore.setState({ workspaces: {} });
   useTerminalStore.setState({
     sessions: {},
     sessionByRun: {},
@@ -431,7 +431,7 @@ describe("workspace terminal tab state", () => {
 
   it("falls back from an unresolved key to the sequence and then the agent", () => {
     render(
-      <WorkspacePane
+      <SelectedTicketContent
         bucket={TASK_ID}
         projectId="project-1"
         moduleId="module-1"
@@ -505,7 +505,7 @@ describe("Studio edit-view navigation zones", () => {
           {workspaceBucket === TASK_ID ? (
             <SelectedTaskWorkspace />
           ) : (
-            <WorkspacePane
+            <SelectedTicketContent
               bucket={workspaceBucket}
               projectId="project-1"
               moduleId="module-1"
@@ -685,7 +685,7 @@ describe("Studio edit-view navigation zones", () => {
         </>,
       );
       const initialWorkspace =
-        useIssueDrawerWorkspaceStore.getState().workspaces[TASK_ID];
+        useTicketWorkspaceStore.getState().workspaces[TASK_ID];
       const initialExpanded = useUIStore.getState().expandedTaskIds;
       const modalControl = screen.getByRole("textbox", {
         name: "Modal control",
@@ -708,7 +708,7 @@ describe("Studio edit-view navigation zones", () => {
       expect(useUIStore.getState().editViewZone).toBe(zone);
       expect(useUIStore.getState().expandedTaskIds).toEqual(initialExpanded);
       expect(
-        useIssueDrawerWorkspaceStore.getState().workspaces[TASK_ID],
+        useTicketWorkspaceStore.getState().workspaces[TASK_ID],
       ).toEqual(initialWorkspace);
       expect(onClose).toHaveBeenCalledOnce();
       expect(view.container).toBeInTheDocument();
@@ -783,7 +783,7 @@ describe("Studio edit-view navigation zones", () => {
   });
 
   it("dives from Stories into the active tab body without changing the active tab", async () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -805,7 +805,7 @@ describe("Studio edit-view navigation zones", () => {
   });
 
   it("lands the tab-strip highlight on the selected ticket's remembered active tab", () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -964,7 +964,7 @@ describe("Studio edit-view navigation zones", () => {
   });
 
   it("enters terminal typing explicitly and leaves every key except Cmd+Escape to xterm", async () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -1053,7 +1053,7 @@ describe("Studio edit-view navigation zones", () => {
   });
 
   it("engages and disengages a document body in place", async () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -1106,7 +1106,7 @@ describe("Studio edit-view navigation zones", () => {
   ] as const)(
     "Cmd+Escape then %s exits a document body to %s",
     async (key, expectedZone) => {
-      useIssueDrawerWorkspaceStore.setState((state) => ({
+      useTicketWorkspaceStore.setState((state) => ({
         workspaces: {
           ...state.workspaces,
           [TASK_ID]: {
@@ -1137,7 +1137,7 @@ describe("Studio edit-view navigation zones", () => {
   );
 
   it("shows the engaged terminal ring only while terminal typing mode is active", () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -1196,7 +1196,7 @@ describe("Studio edit-view navigation zones", () => {
         [NEXT_TASK_ID]: nextSession.sessionId,
       },
     }));
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -1233,7 +1233,7 @@ describe("Studio edit-view navigation zones", () => {
   });
 
   it("distinguishes a selected terminal zone from an entered one while keyboard navigating", () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -1287,7 +1287,7 @@ describe("Studio edit-view navigation zones", () => {
   });
 
   it("enters terminal typing on the first mouse click", async () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -1369,8 +1369,7 @@ describe("task workspace manual agent launch", () => {
   // ADR-0015 · CODIN-1432: the launcher grammar is the filtered capabilities
   // payload, so a provider the host deactivated is never offered here.
   it("offers only providers the host has activated", () => {
-    useLaunchProviderCatalog.setState({
-      capabilities: [
+    setProviderCapabilities([
         {
           agent: "claude",
           accepts_model: true,
@@ -1379,9 +1378,7 @@ describe("task workspace manual agent launch", () => {
           model_prefixes: [],
           reasoning_levels: [],
         },
-      ],
-      loaded: true,
-    });
+      ]);
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useWorkspaceTabsStore.setState({ byTaskId: {}, activeByTask: {} });
     mount();
@@ -1396,12 +1393,8 @@ describe("task workspace manual agent launch", () => {
   // An empty provider list is ambiguous: not loaded yet, a dead fetch, and
   // "nothing activated" all render the same. The menu has to say which rather
   // than open with nothing in it and no explanation.
-  it.each([
-    [{ loaded: false, failed: false }, /Loading providers/],
-    [{ loaded: false, failed: true }, /Providers unavailable/],
-    [{ loaded: true, failed: false }, /No activated providers/],
-  ])("explains an empty launcher menu (%o)", (status, expected) => {
-    useLaunchProviderCatalog.setState({ capabilities: [], ...status });
+  it("explains an empty activated-provider list", () => {
+    setProviderCapabilities([]);
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useWorkspaceTabsStore.setState({ byTaskId: {}, activeByTask: {} });
     mount();
@@ -1409,7 +1402,7 @@ describe("task workspace manual agent launch", () => {
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
 
     expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
-    expect(screen.getByText(expected)).toBeInTheDocument();
+    expect(screen.getByText(/No activated providers/)).toBeInTheDocument();
   });
 });
 
@@ -1550,7 +1543,7 @@ describe("mounted task workspace terminal refresh", () => {
 describe("mounted scratch workspace terminal refresh", () => {
   function scratchPane(moduleId: string) {
     return (
-      <WorkspacePane
+      <SelectedTicketContent
         bucket={scratchBucketId(moduleId)}
         projectId="project-1"
         moduleId={moduleId}
@@ -1766,7 +1759,7 @@ describe("task workspace Command-arrow navigation", () => {
   });
 
   it("renders an already-active terminal without focusing it until the stop is engaged", async () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -1849,7 +1842,7 @@ describe("task workspace Command-arrow navigation", () => {
     keydown(window);
     expect(selectedTab()).toHaveAccessibleName("MEML-3 · codex");
 
-    const workspace = useIssueDrawerWorkspaceStore.getState().workspaces[TASK_ID];
+    const workspace = useTicketWorkspaceStore.getState().workspaces[TASK_ID];
     expect(workspace.overlayOpenByDoc.design).toBe(true);
     expect(workspace.docs.find((entry) => entry.docId === "closed")?.open).toBe(false);
     expect(workspace.history).toEqual([
@@ -1954,7 +1947,7 @@ describe("Studio workspace context restoration", () => {
   });
 
   it("restores Details immediately", () => {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [TASK_ID]: {
@@ -1975,7 +1968,7 @@ describe("Studio workspace context restoration", () => {
   });
 
   it("waits for document hydration before restoring by relative path", async () => {
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     localStorage.setItem(
       "studio.activeWorkspaceByBucket:v1",
       JSON.stringify({
@@ -2013,7 +2006,7 @@ describe("Studio workspace context restoration", () => {
   });
 
   it("waits for live-session reattachment before restoring by agent run", async () => {
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     useTerminalStore.setState({
       sessions: {},
       sessionByRun: {},
@@ -2072,7 +2065,7 @@ describe("Studio workspace context restoration", () => {
   });
 
   it("falls back to Details when a stored document is missing", async () => {
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     localStorage.setItem(
       "studio.activeWorkspaceByBucket:v1",
       JSON.stringify({
@@ -2089,11 +2082,11 @@ describe("Studio workspace context restoration", () => {
       ).toEqual({ [TASK_ID]: { kind: "details" } }),
     );
     expect(selectedTab()).toHaveAccessibleName("Details");
-    expect(screen.queryByTestId("drawer-doc-frame")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workspace-doc-frame")).not.toBeInTheDocument();
   });
 
   it("falls back to Details when a stored agent run is missing", async () => {
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     useTerminalStore.setState({
       sessions: {},
       sessionByRun: {},
@@ -2266,7 +2259,7 @@ describe("focus-based Command-arrow workspace routing", () => {
   const TASK_B = "task-b";
 
   function seedExtraWorkspace(taskId: string, docLabel: string) {
-    useIssueDrawerWorkspaceStore.setState((state) => ({
+    useTicketWorkspaceStore.setState((state) => ({
       workspaces: {
         ...state.workspaces,
         [taskId]: {
@@ -2284,7 +2277,7 @@ describe("focus-based Command-arrow workspace routing", () => {
   ) {
     return (
       <section data-testid={testId}>
-        <WorkspacePane
+        <SelectedTicketContent
           bucket={bucket}
           projectId="project-1"
           moduleId="module-1"

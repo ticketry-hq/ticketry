@@ -18,6 +18,7 @@
 //                                  interface changes)
 
 export { LifecycleBadge } from "./LifecycleBadge";
+export { Terminal } from "./Terminal";
 // The modal bodies (AgentPicker, ModuleFolder, PromptInput) are deliberately
 // NOT value re-exported: ModalHost lazy-imports them from their own public
 // leaf entrypoints, and a value re-export here would drag their whole UI

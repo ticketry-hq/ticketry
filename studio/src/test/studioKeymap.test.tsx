@@ -8,13 +8,13 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost, useModalStore } from "../app/modal";
-import { Footer } from "../app/studio/Footer";
+import { StudioFooter } from "../app/shell/StudioFooter";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import type {
   ModuleSummary,
   TaskSummary,
 } from "../features/studio/lib/types";
-import type { Row } from "../features/studio/pages/tasks/TasksPane";
+import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig as seedStudioConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
@@ -23,7 +23,7 @@ import {
   useTerminalStore,
   useWorkspaceTabsStore,
 } from "../features/agents/terminal";
-import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
+import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket";
 import { studioKeymapRegistry } from "../app/navigation/keymapRegistry";
 import {
   createBrowserRuntime,
@@ -129,7 +129,7 @@ describe("Studio task keymap", () => {
       activeByTask: {},
       chatByDoc: {},
     });
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
   });
 
   afterEach(() => {
@@ -175,7 +175,7 @@ describe("Studio task keymap", () => {
       <>
         <KeymapHarness />
         <ModalHost />
-        <Footer />
+        <StudioFooter />
       </>,
     );
 
@@ -411,7 +411,7 @@ describe("Studio task keymap", () => {
       }),
     ]);
     expect(useModalStore.getState().modalStack).toEqual([]);
-    expect(useIssueDrawerWorkspaceStore.getState().workspaces["task-1"]).toMatchObject({
+    expect(useTicketWorkspaceStore.getState().workspaces["task-1"]).toMatchObject({
       active: "terminal",
     });
   });
@@ -531,7 +531,7 @@ describe("Studio task keymap", () => {
     render(
       <>
         <ModalHost />
-        <Footer />
+        <StudioFooter />
       </>,
     );
     const selection = {
@@ -570,7 +570,7 @@ describe("Studio task keymap", () => {
   });
 
   it("compacts the footer to Keyboard Shortcuts and Settings controls", () => {
-    render(<Footer />);
+    render(<StudioFooter />);
 
     expect(
       screen.getByRole("button", { name: "Open Keyboard Shortcuts" }),
@@ -584,7 +584,7 @@ describe("Studio task keymap", () => {
 
   it("names the sidebar key and flips its verb with the sidebar", () => {
     useUIStore.setState({ sidebarVisible: true });
-    render(<Footer />);
+    render(<StudioFooter />);
 
     expect(screen.getByText("— Close Menu").parentElement).toHaveTextContent(
       "\\— Close Menu",
@@ -620,7 +620,7 @@ describe("Studio task keymap", () => {
       <>
         <KeymapHarness />
         <ModalHost />
-        <Footer />
+        <StudioFooter />
       </>,
     );
 
@@ -660,7 +660,7 @@ describe("Studio task keymap", () => {
       editViewZone: "stories",
       editViewBodyEngaged: false,
     });
-    render(<Footer />);
+    render(<StudioFooter />);
 
     expect(screen.getByText("— Next Zone")).toBeInTheDocument();
     expect(screen.getByText("— Story").parentElement).toHaveTextContent("↑↓— Story");
@@ -713,7 +713,7 @@ describe("Studio task keymap", () => {
     render(
       <>
         <ModalHost />
-        <Footer />
+        <StudioFooter />
       </>,
     );
     const opener = screen.getByRole("button", {
@@ -945,7 +945,7 @@ describe("Studio task keymap", () => {
       agent: "codex",
       ticketSeq: 42,
     });
-    useIssueDrawerWorkspaceStore.getState().setActive("task-1", "terminal");
+    useTicketWorkspaceStore.getState().setActive("task-1", "terminal");
     render(<KeymapHarness />);
 
     fireEvent.keyDown(window, { key: "q" });

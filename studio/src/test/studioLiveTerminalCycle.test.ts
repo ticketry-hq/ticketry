@@ -4,7 +4,7 @@ import {
   selectLiveTerminalStop,
   type LiveTerminalStop,
 } from "../features/studio/lib/liveTerminalCycle";
-import type { Row } from "../features/studio/pages/tasks/TasksPane";
+import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
 
 function taskRow(taskId: string): Row {
   return { task: { id: taskId } } as Row;

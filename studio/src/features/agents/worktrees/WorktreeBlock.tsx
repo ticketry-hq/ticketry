@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   createWorktree,
   discardWorktree,
   getWorktree,
   type WorktreeContext,
-  type WorktreeStatus,
 } from "./internal/api";
+import { queryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/keys";
 
 interface WorktreeBlockProps {
   taskId: string;
@@ -27,8 +29,8 @@ interface WorktreeBlockProps {
  *   - no_repo   → a "changes not isolated" note with no controls.
  *
  * There is no "Land it" control: integration fires automatically when the
- * task is marked Done (a backend close hook). Local state only — one fetch on
- * mount / task change, refetched after Create and Discard.
+ * task is marked Done (a backend close hook). Query owns status reads; Create
+ * writes its authoritative response through and Discard refetches the key.
  */
 export function WorktreeBlock({
   taskId,
@@ -38,9 +40,8 @@ export function WorktreeBlock({
   ticketSeq,
   taskName,
 }: WorktreeBlockProps) {
-  const [status, setStatus] = useState<WorktreeStatus | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
   const ctx: WorktreeContext = {
@@ -51,30 +52,32 @@ export function WorktreeBlock({
     taskName,
   };
 
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      setStatus(await getWorktree(taskId, { parentId, moduleId }));
-    } catch {
-      setError("Could not load worktree status");
-    }
-    // ctx fields other than parent/module aren't used by the GET.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, parentId, moduleId]);
+  const statusKey = queryKeys.worktrees.status(taskId, parentId, moduleId);
+  const statusQuery = useQuery(
+    {
+      queryKey: statusKey,
+      queryFn: ({ signal }) =>
+        getWorktree(taskId, { parentId, moduleId }, signal),
+    },
+    queryClient,
+  );
+  const status = statusQuery.data ?? null;
+  const error =
+    mutationError ??
+    (statusQuery.isError ? "Could not load worktree status" : null);
 
   useEffect(() => {
-    setStatus(null);
     setConfirming(false);
-    void refresh();
-  }, [refresh]);
+    setMutationError(null);
+  }, [moduleId, parentId, taskId]);
 
   const onCreate = async () => {
     setBusy(true);
-    setError(null);
+    setMutationError(null);
     try {
-      setStatus(await createWorktree(taskId, ctx));
+      queryClient.setQueryData(statusKey, await createWorktree(taskId, ctx));
     } catch {
-      setError("Create failed");
+      setMutationError("Create failed");
     } finally {
       setBusy(false);
     }
@@ -82,13 +85,13 @@ export function WorktreeBlock({
 
   const onDiscard = async () => {
     setBusy(true);
-    setError(null);
+    setMutationError(null);
     try {
       await discardWorktree(taskId, { parentId, moduleId });
       setConfirming(false);
-      await refresh();
+      await statusQuery.refetch();
     } catch {
-      setError("Discard failed");
+      setMutationError("Discard failed");
     } finally {
       setBusy(false);
     }

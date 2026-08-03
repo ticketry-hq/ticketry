@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, act } from "@testing-library/react";
 
-import { WorkspaceTerminalHost as TerminalHost } from "../../../../../features/agents/terminal/WorkspaceTerminalHost";
+import { SelectedTicketTerminal as TerminalHost } from "../../../../../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal";
 import { docChatKey, useTerminalStore } from "../../../../../features/agents/terminal";
-import { useIssueDrawerWorkspaceStore } from "../../../../../features/work-items/issue-detail";
+import { useTicketWorkspaceStore } from "../../../../../app/shell/ticket-workspace/selected-ticket";
 import type { SessionMeta } from "../../../../../features/agents/terminal";
 import { useWorkspaceTabsStore } from "../../../../../features/agents/terminal/internal/workspaceTabsStore";
 
@@ -188,7 +188,7 @@ beforeEach(() => {
     byTaskId: { "task-1": ["sess-1"] },
     chatByDoc: {},
   });
-  useIssueDrawerWorkspaceStore.setState({
+  useTicketWorkspaceStore.setState({
     workspaces: {
       "task-1": {
         active: "terminal",
@@ -205,7 +205,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("WorkspaceTerminalHost fit lifecycle", () => {
+describe("SelectedTicketTerminal fit lifecycle", () => {
   it("opens the WS with the fitted geometry and sends no redundant resize", () => {
     render(<TerminalHost bucket="task-1" />);
     // Synchronous guarded fit seeded the PTY geometry at open time.
@@ -391,7 +391,7 @@ describe("WorkspaceTerminalHost fit lifecycle", () => {
       activeByTask: {}, // no terminal tab focused — only the overlay can resolve
       chatByDoc: { [docChatKey("task-1", DOC.relPath)]: "chat-1" },
     });
-    useIssueDrawerWorkspaceStore.setState({
+    useTicketWorkspaceStore.setState({
       workspaces: {
         "task-1": {
           active: "doc",
@@ -422,7 +422,7 @@ describe("WorkspaceTerminalHost fit lifecycle", () => {
       activeByTask: {},
       chatByDoc: { [docChatKey("task-1", DOC.relPath)]: "chat-1" },
     });
-    useIssueDrawerWorkspaceStore.setState({
+    useTicketWorkspaceStore.setState({
       workspaces: {
         "task-1": {
           active: "doc",

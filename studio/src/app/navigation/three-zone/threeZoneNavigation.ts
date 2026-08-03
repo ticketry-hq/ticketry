@@ -1,6 +1,6 @@
-import type { Row } from "../../../features/studio/pages/tasks/TasksPane";
+import type { Row } from "../../shell/ticket-workspace/tasks/TasksPane";
 import { useUIStore } from "../../../features/studio/stores/uiStore";
-import { routeTaskWorkspaceEditViewAction } from "../../../features/work-items/issue-detail/appNavigation";
+import { routeTaskWorkspaceEditViewAction } from "../../shell/ticket-workspace/selected-ticket/appNavigation";
 import { isTypingTarget } from "../../../shared/utilities/keyboard";
 import {
   consume,

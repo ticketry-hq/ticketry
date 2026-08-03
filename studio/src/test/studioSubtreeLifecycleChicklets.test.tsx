@@ -10,7 +10,7 @@ import type { AgentStatusSnapshot, RunRecord } from "@worktracker/typescript-sdk
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dispatchStatusFrame, statusFeed } from "../features/agents/status/statusFeed";
 import { useAgentStatusStore } from "../features/agents/status";
-import { TasksPane } from "../features/studio/pages/tasks/TasksPane";
+import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 

@@ -1,5 +1,5 @@
 import { useBacklogStore } from "./internal/backlogStore";
-import { useIssueStore } from "./issue-detail/internal/issueStore";
+import { useIssueStore } from "./issueStore";
 import { useCachedStates } from "../../shared/query/stateCatalog";
 
 // The work-items query surface: the loaded project's planning data as one

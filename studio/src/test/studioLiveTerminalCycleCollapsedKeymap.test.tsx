@@ -17,11 +17,11 @@ import type {
 import {
   HEADER,
   type Row,
-} from "../features/studio/pages/tasks/TasksPane";
+} from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
-import { useIssueDrawerWorkspaceStore } from "../features/work-items/issue-detail";
+import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket";
 
 const todoState: TaskState = {
   id: "todo",
@@ -195,7 +195,7 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
       collapsedStateNames: new Set(),
       storySearchQuery: "",
     });
-    useIssueDrawerWorkspaceStore.setState({ workspaces: {} });
+    useTicketWorkspaceStore.setState({ workspaces: {} });
     useTerminalForegroundStore.setState({ claims: {}, hostTargets: {} });
   });
 

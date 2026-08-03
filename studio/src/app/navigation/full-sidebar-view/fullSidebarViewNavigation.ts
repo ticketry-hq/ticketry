@@ -15,9 +15,9 @@ import {
 } from "../../../features/studio/stores/uiStore";
 import {
   routeTaskWorkspaceTabAction,
-  useIssueDrawerWorkspaceStore,
-} from "../../../features/work-items/issue-detail/appNavigation";
-import type { Row } from "../../../features/studio/pages/tasks/TasksPane";
+  useTicketWorkspaceStore,
+} from "../../shell/ticket-workspace/selected-ticket/appNavigation";
+import type { Row } from "../../shell/ticket-workspace/tasks/TasksPane";
 import {
   selectLiveTerminalStops,
   selectLiveTerminalStop,
@@ -106,7 +106,7 @@ function cycleLiveTerminal(
   const tasks = useTasksStore.getState();
   const terminal = useTerminalStore.getState();
   const tabs = useWorkspaceTabsStore.getState();
-  const workspace = useIssueDrawerWorkspaceStore.getState();
+  const workspace = useTicketWorkspaceStore.getState();
   const ui = useUIStore.getState();
   const stops = selectLiveTerminalStops({
     moduleId: tasks.selectedModuleId,

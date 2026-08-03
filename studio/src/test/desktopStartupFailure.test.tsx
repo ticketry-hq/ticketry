@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   isTauri: () => true,
 }));
 
-vi.mock("../app/studio/App", () => ({
+vi.mock("../app/StudioApp", () => ({
   default: () => <div>Studio application</div>,
 }));
 

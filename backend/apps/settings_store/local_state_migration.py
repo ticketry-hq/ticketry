@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import tempfile
 from pathlib import Path
+
+from studio_server.atomic_files import atomic_write_json
 
 
 LEGACY_CONFIG_DIR = Path.home() / ".config" / "plane-tui"
@@ -48,24 +49,6 @@ def _rewrite_nested_paths(value, old_root: str, new_root: str):
     return value
 
 
-def _atomic_write_json(path: Path, value) -> None:
-    payload = json.dumps(value, indent=4)
-    fd, tmp_path = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
-    )
-    tmp = Path(tmp_path)
-    try:
-        with os.fdopen(fd, "w") as handle:
-            handle.write(payload)
-        os.replace(tmp, path)
-    except Exception:
-        try:
-            tmp.unlink()
-        except FileNotFoundError:
-            pass
-        raise
-
-
 def _rewrite_profiles(path: Path, old_root: str, new_root: str) -> None:
     if not path.exists():
         return
@@ -85,7 +68,7 @@ def _rewrite_profiles(path: Path, old_root: str, new_root: str) -> None:
             profile["module_folders"] = rewritten
             changed = True
     if changed:
-        _atomic_write_json(path, data)
+        atomic_write_json(path, data, indent=4)
 
 
 _PATH_COLUMNS = {

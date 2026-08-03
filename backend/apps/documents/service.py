@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
-import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -27,6 +26,7 @@ from apps.runs import dao as runs_dao
 from apps.terminals.dao import SCRATCH_TASK_ID
 from apps import worktracker_queries
 from apps.settings_store.config import resolve_profile
+from studio_server.atomic_files import atomic_write_bytes
 
 
 # Asset types servable from inside a registered design directory. Anything
@@ -272,20 +272,7 @@ def _digest_guarded_atomic_replace(
     if normalized_digest != current_digest:
         return SaveDocumentResult(status="conflict", digest=current_digest)
 
-    fd, temporary_path = tempfile.mkstemp(
-        prefix=f"{target.name}.", suffix=".tmp", dir=target.parent
-    )
-    temporary = Path(temporary_path)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(content)
-        os.replace(temporary, target)
-    except Exception:
-        try:
-            temporary.unlink()
-        except FileNotFoundError:
-            pass
-        raise
+    atomic_write_bytes(target, content)
 
     return SaveDocumentResult(
         status="saved", digest=hashlib.sha256(content).hexdigest()

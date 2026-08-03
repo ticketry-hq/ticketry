@@ -14,6 +14,7 @@ from apps.terminals.agents.injectors import (
     DEFAULT_LIFECYCLE_URL,
     DEFAULT_MCP_URL,
     HOOKS_DIR,
+    InjectedLaunch,
     hook_argv,
 )
 from apps.terminals.authorization import issue_run_authorization
@@ -97,13 +98,14 @@ def build_agy_mcp_servers(mcp_url: str, mcp_authorization: str) -> dict:
     }
 
 
-def inject_agy_lifecycle_settings(
+def inject_agy_launch(
     argv: list[str],
     agent_run_id: str,
+    *,
     lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
     mcp_url: str = DEFAULT_MCP_URL,
     settings_path: Path | None = None,
-) -> list[str]:
+) -> InjectedLaunch:
     """Relocate agy's settings layer to a temp file wiring hooks and MCP.
 
     agy has no inline settings flag, so the hooks are written to a temporary
@@ -119,7 +121,7 @@ def inject_agy_lifecycle_settings(
         :func:`terminals.agents.commands.get_agent_command`.
     :param agent_run_id: Durable id for this run's lifecycle events.
     :param lifecycle_url: Ingress URL the hook posts events to.
-    :return: The argv prefixed with an ``env <settings-env>=...`` wrapper.
+    :return: The unchanged argv plus the settings-file environment variable.
     """
 
     settings = build_agy_lifecycle_settings(agent_run_id, lifecycle_url)
@@ -142,8 +144,34 @@ def inject_agy_lifecycle_settings(
 
     # Relocate the settings layer for this process only; add no CLI flags.
 
+    return InjectedLaunch(
+        argv=tuple(argv),
+        environment={_AGY_SYSTEM_SETTINGS_ENV: str(settings_path)},
+    )
+
+
+def inject_agy_lifecycle_settings(
+    argv: list[str],
+    agent_run_id: str,
+    lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
+    mcp_url: str = DEFAULT_MCP_URL,
+    settings_path: Path | None = None,
+) -> list[str]:
+    """:func:`inject_agy_launch` encoded as a shell ``env`` wrapper argv.
+
+    The form callers use when they can only pass an argv and have nowhere to
+    put process environment.
+    """
+
+    result = inject_agy_launch(
+        argv,
+        agent_run_id,
+        lifecycle_url=lifecycle_url,
+        mcp_url=mcp_url,
+        settings_path=settings_path,
+    )
     return [
         "env",
-        f"{_AGY_SYSTEM_SETTINGS_ENV}={settings_path}",
-        *argv,
+        *(f"{name}={value}" for name, value in result.environment.items()),
+        *result.argv,
     ]

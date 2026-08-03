@@ -10,7 +10,7 @@ import uuid
 import pytest
 
 from worktracker.models import State
-from worktracker.state_groups import RESOLVED_GROUPS, state_group
+from worktracker.state import RESOLVED_GROUPS, state_group
 
 
 @pytest.mark.django_db

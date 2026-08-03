@@ -37,10 +37,6 @@ from apps.worktrees import service as worktrees_service
 
 logger = logging.getLogger(__name__)
 
-# Serializes the brief window where the active profile index is set on the
-# process-global config before reading the profile back out (see _build_prompt).
-_singleton_lock = asyncio.Lock()
-
 
 def _resolve_profile_index() -> Optional[int]:
     cfg = cfgmod.Config()
@@ -126,153 +122,152 @@ async def _build_prompt(
     worktree (#587), else ``None`` so the caller keeps the module-folder cwd.
     On error, prompt is None and error is a code string.
     """
-    async with _singleton_lock:
-        config = cfgmod.Config()
-        config.current_profile_index = profile_index
-        profile = config.current_profile
-        if profile is None:
-            return None, None, None, "no_profile_selected"
+    config = cfgmod.Config()
+    config.current_profile_index = profile_index
+    profile = config.current_profile
+    if profile is None:
+        return None, None, None, "no_profile_selected"
 
-        if is_doc_chat:
-            # #625: a fresh, dedicated agent scoped to one generated document.
-            # The frontend's doc_rel_path is relative to the doc's design dir
-            # (root_dir); the registry is the source of truth for where that
-            # directory lives (module folder or a worktree). Running there gives
-            # the #521 watcher live-reload for free.
-            if not doc_rel_path:
-                return None, None, None, "doc_rel_path_required"
-            # Resolve the doc's design dir (root_dir). The document id is a PK,
-            # so it pins the exact registered copy the user opened — a task can
-            # have the same rel_path under more than one root (a worktree and
-            # the canonical module folder). Fall back to the (task, module,
-            # rel_path) key only when no id is carried.
-            root_dir: Optional[str] = None
-            resolved_rel = doc_rel_path
-            if doc_id:
-                row = await documents_dao.get_document(doc_id)
-                if row is not None:
-                    root_dir = row.root_dir
-                    resolved_rel = row.rel_path
-            if root_dir is None:
-                lookup_task_id = persist_task_id or task_id or SCRATCH_TASK_ID
-                root_dir = await documents_dao.get_document_root(
-                    task_id=lookup_task_id,
-                    module_id=module_id,
-                    rel_path=doc_rel_path,
-                )
-            design_abs: Optional[str] = None
-            cwd: Optional[str] = None
-            if root_dir and os.path.isdir(root_dir):
-                design_abs = root_dir
-                cwd = root_dir
-            # No registry row / directory gone: degrade to the module folder so
-            # the launch still proceeds; the prompt still names the target doc.
-            prompt = build_doc_chat_prompt(
-                doc_rel_path=resolved_rel,
+    if is_doc_chat:
+        # #625: a fresh, dedicated agent scoped to one generated document.
+        # The frontend's doc_rel_path is relative to the doc's design dir
+        # (root_dir); the registry is the source of truth for where that
+        # directory lives (module folder or a worktree). Running there gives
+        # the #521 watcher live-reload for free.
+        if not doc_rel_path:
+            return None, None, None, "doc_rel_path_required"
+        # Resolve the doc's design dir (root_dir). The document id is a PK,
+        # so it pins the exact registered copy the user opened — a task can
+        # have the same rel_path under more than one root (a worktree and
+        # the canonical module folder). Fall back to the (task, module,
+        # rel_path) key only when no id is carried.
+        root_dir: Optional[str] = None
+        resolved_rel = doc_rel_path
+        if doc_id:
+            row = await documents_dao.get_document(doc_id)
+            if row is not None:
+                root_dir = row.root_dir
+                resolved_rel = row.rel_path
+        if root_dir is None:
+            lookup_task_id = persist_task_id or task_id or SCRATCH_TASK_ID
+            root_dir = await documents_dao.get_document_root(
+                task_id=lookup_task_id,
                 module_id=module_id,
-                user_input=initial_prompt,
+                rel_path=doc_rel_path,
             )
-            return prompt, design_abs, cwd, None
-
-        if is_instant:
-            try:
-                modules = await worktracker_queries.get_modules(project_id)
-            except Exception as e:
-                return None, None, None, f"module_fetch_failed: {e!s}"
-            module = next((m for m in modules if m.id == module_id), None)
-            if module is None:
-                return None, None, None, "module_not_found"
-            folder = profile.module_folders.get(module_id) or None
-            design_rel = design_docs.planning_design_dir(module, agent_run_id)
-            design_abs = _prepare_design_dir(module_folder, design_rel)
-            prompt = build_instant_change_prompt(
-                module=module,
-                workspace_slug=profile.workspace_slug,
-                project_id=project_id,
-                folder=folder,
-                user_input=instant_prompt or "",
-                design_dir=design_rel if design_abs else None,
-                allow_self_termination=get_adapter(agent).supports_worktracker_mcp,
-            )
-            return prompt, design_abs, None, None
-
-        if is_planning:
-            try:
-                modules = await worktracker_queries.get_modules(project_id)
-            except Exception as e:
-                return None, None, None, f"module_fetch_failed: {e!s}"
-            module = next((m for m in modules if m.id == module_id), None)
-            if module is None:
-                return None, None, None, "module_not_found"
-            try:
-                tasks, _states = await worktracker_queries.get_tasks_and_states(
-                    project_id, module_id
-                )
-            except Exception as e:
-                return None, None, None, f"task_fetch_failed: {e!s}"
-            folder = profile.module_folders.get(module_id) or None
-            design_rel = design_docs.planning_design_dir(module, agent_run_id)
-            design_abs = _prepare_design_dir(module_folder, design_rel)
-            prompt = build_planning_context_prompt(
-                module=module,
-                tasks=tasks,
-                workspace_slug=profile.workspace_slug,
-                project_id=project_id,
-                folder=folder,
-                design_dir=design_rel if design_abs else None,
-            )
-            if initial_prompt:
-                prompt = f"{initial_prompt}\n\n{prompt}"
-            return prompt, design_abs, None, None
-
-        if not task_id:
-            return None, None, None, "task_id_required"
-        try:
-            details = await worktracker_queries.get_task_details(project_id, task_id)
-        except Exception as e:
-            return None, None, None, f"task_fetch_failed: {e!s}"
-
-        # W2 (#587): if the owning top-level task has an opt-in worktree, root
-        # the run there — both the agent cwd and the design dir — so generated
-        # Design docs ride the branch and land on integrate. A sub-task
-        # resolves up to its parent's tree; no worktree → the module folder,
-        # exactly as before. One root substitution re-homes both together.
-
-        cwd: Optional[str] = None
-        root = module_folder
-        if module_folder:
-            worktree_root = await asyncio.to_thread(
-                _worktree_root,
-                task_id=task_id,
-                parent_id=details.task.parent_id,
-                module_id=module_id,
-            )
-            if worktree_root:
-                root = worktree_root
-                cwd = worktree_root
-
-        # The canonical task dir needs the module's name; a module lookup
-        # failure only degrades document sourcing, never the launch.
-
         design_abs: Optional[str] = None
-        design_rel: Optional[str] = None
-        if root:
-            try:
-                modules = await worktracker_queries.get_modules(project_id)
-                module = next((m for m in modules if m.id == module_id), None)
-                if module is not None:
-                    design_rel = design_docs.resolve_task_design_dir(
-                        Path(root), module, details.task
-                    )
-                    design_abs = _prepare_design_dir(root, design_rel)
-            except Exception as exc:
-                logger.warning("design dir resolution failed: %s", exc)
-        prompt = build_context_prompt(
-            details.task,
+        cwd: Optional[str] = None
+        if root_dir and os.path.isdir(root_dir):
+            design_abs = root_dir
+            cwd = root_dir
+        # No registry row / directory gone: degrade to the module folder so
+        # the launch still proceeds; the prompt still names the target doc.
+        prompt = build_doc_chat_prompt(
+            doc_rel_path=resolved_rel,
             module_id=module_id,
-            additional_prompt=initial_prompt,
-            design_dir=design_rel if design_abs else None,
-            profile=profile,
-            workflow_prompt=workflow_prompt,
+            user_input=initial_prompt,
         )
         return prompt, design_abs, cwd, None
+
+    if is_instant:
+        try:
+            modules = await worktracker_queries.get_modules(project_id)
+        except Exception as e:
+            return None, None, None, f"module_fetch_failed: {e!s}"
+        module = next((m for m in modules if m.id == module_id), None)
+        if module is None:
+            return None, None, None, "module_not_found"
+        folder = profile.module_folders.get(module_id) or None
+        design_rel = design_docs.planning_design_dir(module, agent_run_id)
+        design_abs = _prepare_design_dir(module_folder, design_rel)
+        prompt = build_instant_change_prompt(
+            module=module,
+            workspace_slug=profile.workspace_slug,
+            project_id=project_id,
+            folder=folder,
+            user_input=instant_prompt or "",
+            design_dir=design_rel if design_abs else None,
+            allow_self_termination=get_adapter(agent).supports_worktracker_mcp,
+        )
+        return prompt, design_abs, None, None
+
+    if is_planning:
+        try:
+            modules = await worktracker_queries.get_modules(project_id)
+        except Exception as e:
+            return None, None, None, f"module_fetch_failed: {e!s}"
+        module = next((m for m in modules if m.id == module_id), None)
+        if module is None:
+            return None, None, None, "module_not_found"
+        try:
+            tasks, _states = await worktracker_queries.get_tasks_and_states(
+                project_id, module_id
+            )
+        except Exception as e:
+            return None, None, None, f"task_fetch_failed: {e!s}"
+        folder = profile.module_folders.get(module_id) or None
+        design_rel = design_docs.planning_design_dir(module, agent_run_id)
+        design_abs = _prepare_design_dir(module_folder, design_rel)
+        prompt = build_planning_context_prompt(
+            module=module,
+            tasks=tasks,
+            workspace_slug=profile.workspace_slug,
+            project_id=project_id,
+            folder=folder,
+            design_dir=design_rel if design_abs else None,
+        )
+        if initial_prompt:
+            prompt = f"{initial_prompt}\n\n{prompt}"
+        return prompt, design_abs, None, None
+
+    if not task_id:
+        return None, None, None, "task_id_required"
+    try:
+        details = await worktracker_queries.get_task_details(project_id, task_id)
+    except Exception as e:
+        return None, None, None, f"task_fetch_failed: {e!s}"
+
+    # W2 (#587): if the owning top-level task has an opt-in worktree, root
+    # the run there — both the agent cwd and the design dir — so generated
+    # Design docs ride the branch and land on integrate. A sub-task
+    # resolves up to its parent's tree; no worktree → the module folder,
+    # exactly as before. One root substitution re-homes both together.
+
+    cwd: Optional[str] = None
+    root = module_folder
+    if module_folder:
+        worktree_root = await asyncio.to_thread(
+            _worktree_root,
+            task_id=task_id,
+            parent_id=details.task.parent_id,
+            module_id=module_id,
+        )
+        if worktree_root:
+            root = worktree_root
+            cwd = worktree_root
+
+    # The canonical task dir needs the module's name; a module lookup
+    # failure only degrades document sourcing, never the launch.
+
+    design_abs: Optional[str] = None
+    design_rel: Optional[str] = None
+    if root:
+        try:
+            modules = await worktracker_queries.get_modules(project_id)
+            module = next((m for m in modules if m.id == module_id), None)
+            if module is not None:
+                design_rel = design_docs.resolve_task_design_dir(
+                    Path(root), module, details.task
+                )
+                design_abs = _prepare_design_dir(root, design_rel)
+        except Exception as exc:
+            logger.warning("design dir resolution failed: %s", exc)
+    prompt = build_context_prompt(
+        details.task,
+        module_id=module_id,
+        additional_prompt=initial_prompt,
+        design_dir=design_rel if design_abs else None,
+        profile=profile,
+        workflow_prompt=workflow_prompt,
+    )
+    return prompt, design_abs, cwd, None

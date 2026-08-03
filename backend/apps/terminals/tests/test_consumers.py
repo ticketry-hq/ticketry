@@ -1132,6 +1132,38 @@ async def test_task_prompt_injects_created_design_dir(tmp_config, sample_profile
     assert (module_folder / rel).is_dir()
 
 
+async def test_concurrent_task_prompt_builds_share_one_design_dir(
+    tmp_config, sample_profile, tmp_path, monkeypatch
+):
+    """Two spawns for the same task may build prompts concurrently.
+
+    ``_build_prompt`` used to hold a process-wide lock around its whole body,
+    so this could not race. Design-dir creation is idempotent —
+    ``resolve_task_design_dir`` is a pure read plus a deterministic name and
+    ``ensure_dir`` is ``mkdir(parents=True, exist_ok=True)`` — so both builds
+    must land on the same intact directory without it.
+    """
+
+    module_folder = tmp_path / "repo"
+    module_folder.mkdir()
+    profile = dict(sample_profile)
+    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    write_profiles(tmp_config, [profile], recent=0)
+    _patch_worktracker_for_design(monkeypatch)
+
+    first, second = await asyncio.gather(
+        _build(str(module_folder)),
+        _build(str(module_folder)),
+    )
+
+    rel = f"spec/platform--{MODULE_ID[:8]}/T42--stub-task"
+    for prompt, design_dir, _cwd, err in (first, second):
+        assert err is None
+        assert f"Design directory: {rel}" in prompt
+        assert design_dir == str((module_folder / rel).resolve())
+    assert (module_folder / rel).is_dir()
+
+
 async def test_task_prompt_ignores_legacy_profile_prompt_map(
     tmp_config, sample_profile, tmp_path, monkeypatch
 ):

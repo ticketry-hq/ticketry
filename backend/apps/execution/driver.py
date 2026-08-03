@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from asgiref.sync import async_to_sync
 
 from worktracker.models import Issue, LaunchBinding
-from worktracker.state_groups import state_group
+from worktracker.state import state_group
 
 from apps.execution.models import GraphRun, LaunchedTask
 from apps.terminals.session import LaunchIntent, session as terminal_session

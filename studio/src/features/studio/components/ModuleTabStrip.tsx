@@ -7,7 +7,7 @@ import {
   useAgentStatusStore,
 } from "../../agents/status";
 import { LifecycleBadge } from "../../agents/terminal";
-import { useTasksStore } from "../stores/tasksStore";
+import { useStudioModules, useTasksStore } from "../stores/tasksStore";
 
 function ModuleLifecycleChicklets({ moduleId }: { moduleId: string }) {
   const counts = useAgentStatusStore(
@@ -34,7 +34,7 @@ function ModuleLifecycleChicklets({ moduleId }: { moduleId: string }) {
 }
 
 export function ModuleTabStrip() {
-  const modules = useTasksStore((state) => state.modules);
+  const modules = useStudioModules();
   const selectedModuleId = useTasksStore((state) => state.selectedModuleId);
   const selectModule = useTasksStore((state) => state.selectModule);
   const loading = useTasksStore((state) => state.loading.modules);

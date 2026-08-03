@@ -1,10 +1,10 @@
 import { useModalStore } from "../../../../app/modal/modalStore";
-import { useTasksStore } from "../../stores/tasksStore";
+import { useStudioProjects, useTasksStore } from "../../stores/tasksStore";
 import { useUIStore } from "../../stores/uiStore";
 import { PaneShell } from "../../components/PaneShell";
 
 export function ProjectsPane() {
-  const projects = useTasksStore((s) => s.projects);
+  const projects = useStudioProjects();
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const selectProject = useTasksStore((s) => s.selectProject);
   const loading = useTasksStore((s) => s.loading.projects);

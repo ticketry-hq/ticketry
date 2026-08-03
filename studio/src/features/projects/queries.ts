@@ -17,6 +17,9 @@ import type {
 // queryKeys.modules. Full backend shapes (Project, Module) are the canonical
 // cache entries; surfaces needing a slimmer projection derive it at read time.
 
+const EMPTY_PROJECTS: Project[] = [];
+const EMPTY_MODULES: Module[] = [];
+
 async function fetchProjects(): Promise<Project[]> {
   return api.listProjects();
 }
@@ -60,6 +63,31 @@ export async function loadModules(projectId: string): Promise<Module[]> {
     queryFn: () => fetchModules(projectId),
     staleTime: 0,
   });
+}
+
+/**
+ * Subscribe to the cached lists WITHOUT fetching. Surfaces that read along with
+ * whoever owns the load (Studio's panes) use these so a create or refresh
+ * re-renders them, without each pane issuing its own request.
+ */
+export function useCachedProjects(): Project[] {
+  const { data } = useQuery(
+    { queryKey: queryKeys.projects.all, queryFn: fetchProjects, enabled: false },
+    queryClient,
+  );
+  return data ?? EMPTY_PROJECTS;
+}
+
+export function useCachedModules(projectId: string | null): Module[] {
+  const { data } = useQuery(
+    {
+      queryKey: queryKeys.modules.byProject(projectId ?? "none"),
+      queryFn: () => fetchModules(projectId!),
+      enabled: false,
+    },
+    queryClient,
+  );
+  return data ?? EMPTY_MODULES;
 }
 
 export function useProjectsQuery() {

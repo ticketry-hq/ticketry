@@ -2,7 +2,19 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import * as api from "../lib/api";
 import { normalizeTask } from "../lib/api";
-import { sortModulesByRecency, useStudioStore } from "../../projects";
+import {
+  getModulesSnapshot,
+  getProjectsSnapshot,
+  loadModules as loadModulesData,
+  loadProjects as loadProjectsData,
+  seedModules,
+  seedProjects,
+  registerModuleRecencyProvider,
+  sortModulesByRecency,
+  useCachedModules,
+  useCachedProjects,
+  useStudioStore,
+} from "../../projects";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { getConfigSnapshot, updateProfile } from "./configStore";
 import { toast } from "../../../app/stores/toastStore";
@@ -10,6 +22,8 @@ import { apiErrorMessage } from "../../../shared/api/client";
 import { rankBetween } from "../../work-items";
 import { useIssueStore } from "../../work-items/issue-detail/internal/issueStore";
 import type {
+  Module,
+  Project,
   ProjectCreate,
   State,
   WorkItem,
@@ -63,6 +77,13 @@ function makeScratchTask(): TaskSummary {
 // existing call sites and tests that import it from this store.
 export { sortModulesByRecency };
 
+// Supply the concrete recency signal to the shared module loader. The activity
+// map comes from the runs endpoint, which is host-specific and therefore lives
+// in this module's API client rather than features/projects — the provider seam
+// exists so that loader can stay independent of it. Without this the seam's
+// no-op default would leave every module list in plain API order.
+registerModuleRecencyProvider(api.getModuleActivity);
+
 interface LoadingFlags {
   projects: boolean;
   modules: boolean;
@@ -85,9 +106,14 @@ export type WorkspaceSelection =
     };
 
 interface TasksStoreState {
-  projects: ProjectSummary[];
+  /**
+   * Derived projections of the shared project/module caches — this store keeps
+   * no copy, so a switch between Studio surfaces cannot see two disagreeing
+   * lists. React surfaces read useStudioProjects()/useStudioModules().
+   */
+  readonly projects: ProjectSummary[];
   selectedProjectId: string | null;
-  modules: ModuleSummary[];
+  readonly modules: ModuleSummary[];
   selectedModuleId: string | null;
   tasks: TaskSummary[];
   /**
@@ -359,9 +385,9 @@ function overlayAuthoritativeCatalog(
 }
 
 export const useTasksStore = create<TasksStoreState>((set, get) => ({
-  projects: [],
+  projects: [] as ProjectSummary[],
   selectedProjectId: null,
-  modules: [],
+  modules: [] as ModuleSummary[],
   selectedModuleId: null,
   tasks: [],
   states: [] as TaskState[],
@@ -383,27 +409,32 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   async loadProjects() {
     set((s) => ({ loading: { ...s.loading, projects: true } }));
     try {
-      const projects = await api.getProjects();
-      set({ projects });
+      await loadProjectsData();
     } finally {
       set((s) => ({ loading: { ...s.loading, projects: false } }));
     }
   },
 
   async createProject(body) {
+    // Still the Studio client (its normalization and error surface are what the
+    // create flow expects); the result is published to the shared cache so both
+    // Studio surfaces see the new project without a refetch.
     const created = await api.createProject(body);
-    set((state) => ({
-      projects: state.projects.some((project) => project.id === created.id)
-        ? state.projects
-        : [...state.projects, created],
-    }));
+    seedProjects([
+      ...getProjectsSnapshot().filter((project) => project.id !== created.id),
+      {
+        id: created.id,
+        name: created.name,
+        slug: created.identifier,
+        description: "",
+      },
+    ]);
     return created;
   },
 
   async selectProject(id: string) {
     set({
       selectedProjectId: id,
-      modules: [],
       selectedModuleId: null,
       tasks: [],
       subtasks: {},
@@ -458,14 +489,8 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   async loadModules(projectId: string) {
     set((s) => ({ loading: { ...s.loading, modules: true } }));
     try {
-      // Fetch the module list and the per-module activity map in parallel.
-      // The activity call swallows its own errors → {} (api.ts), so a failure
-      // there leaves the list in its original API order (no regression).
-      const [modules, activity] = await Promise.all([
-        api.getModules(projectId),
-        api.getModuleActivity(projectId),
-      ]);
-      set({ modules: sortModulesByRecency(modules, activity) });
+      // One shared, already recency-sorted module cache per project.
+      await loadModulesData(projectId);
     } finally {
       set((s) => ({ loading: { ...s.loading, modules: false } }));
     }
@@ -1085,16 +1110,78 @@ export const useTasksStore = create<TasksStoreState>((set, get) => ({
   },
 }));
 
+// Studio's panes want a slimmer row than the backend record. Project the shared
+// cache lazily and memoize on the cached array's identity, so repeated reads
+// (and zustand selector comparisons) keep returning the same objects.
+export function normalizeProjectSummary(project: Project): ProjectSummary {
+  return { id: project.id, name: project.name, identifier: project.slug };
+}
+
+// sortModulesByRecency merges the activity timestamp onto the cached records,
+// so the cache entry carries a field the generated Module type does not declare.
+type CachedModule = Module & { last_activity?: string };
+
+function normalizeModuleSummary(module: CachedModule): ModuleSummary {
+  return {
+    id: module.id,
+    name: module.name,
+    project_id: module.project_id,
+    ...(module.last_activity ? { last_activity: module.last_activity } : {}),
+  };
+}
+
+function memoizeProjection<S, R>(project: (source: S[]) => R[]) {
+  let last: { source: S[]; result: R[] } | null = null;
+  return (source: S[]): R[] => {
+    if (last?.source !== source) last = { source, result: project(source) };
+    return last.result;
+  };
+}
+
+const projectSummaries = memoizeProjection<Project, ProjectSummary>((rows) =>
+  rows.map(normalizeProjectSummary),
+);
+const moduleSummariesByProject = new Map<
+  string,
+  (source: CachedModule[]) => ModuleSummary[]
+>();
+
+function moduleSummaries(projectId: string | null): ModuleSummary[] {
+  if (!projectId) return EMPTY_MODULE_SUMMARIES;
+  let projector = moduleSummariesByProject.get(projectId);
+  if (!projector) {
+    projector = memoizeProjection<CachedModule, ModuleSummary>((rows) =>
+      rows.map(normalizeModuleSummary),
+    );
+    moduleSummariesByProject.set(projectId, projector);
+  }
+  return projector(getModulesSnapshot(projectId));
+}
+
+const EMPTY_MODULE_SUMMARIES: ModuleSummary[] = [];
+
 // `states` is derived, never stored: one catalog, plus the local-only Scratch
 // section this store owns.
 function attachDerivedStates(state: TasksStoreState): void {
-  Object.defineProperty(state, "states", {
-    configurable: true,
-    enumerable: false,
-    get: () => [
-      SCRATCH_STATE,
-      ...(getStatesSnapshot(state.selectedProjectId) as TaskState[]),
-    ],
+  Object.defineProperties(state, {
+    states: {
+      configurable: true,
+      enumerable: false,
+      get: () => [
+        SCRATCH_STATE,
+        ...(getStatesSnapshot(state.selectedProjectId) as TaskState[]),
+      ],
+    },
+    projects: {
+      configurable: true,
+      enumerable: false,
+      get: () => projectSummaries(getProjectsSnapshot()),
+    },
+    modules: {
+      configurable: true,
+      enumerable: false,
+      get: () => moduleSummaries(state.selectedProjectId),
+    },
   });
 }
 
@@ -1108,7 +1195,22 @@ const rawSetState = useTasksStore.setState;
 useTasksStore.setState = ((partial, replace) => {
   const current = useTasksStore.getState();
   const next = typeof partial === "function" ? partial(current) : partial;
-  const { states, ...withoutStates } = next as Partial<TasksStoreState>;
+  const { states, projects, modules, ...withoutStates } =
+    next as Partial<TasksStoreState>;
+  if (projects !== undefined) {
+    seedProjects(
+      projects.map((summary) => ({
+        id: summary.id,
+        name: summary.name,
+        slug: summary.identifier,
+        description: "",
+      })),
+    );
+  }
+  if (modules !== undefined) {
+    const projectId = withoutStates.selectedProjectId ?? current.selectedProjectId;
+    if (projectId) seedModules(projectId, modules as unknown as Module[]);
+  }
   if (states !== undefined) {
     const projectId = withoutStates.selectedProjectId ?? current.selectedProjectId;
     if (projectId) {
@@ -1121,6 +1223,18 @@ useTasksStore.setState = ((partial, replace) => {
   rawSetState(withoutStates as typeof next, replace);
   attachDerivedStates(useTasksStore.getState());
 }) as typeof useTasksStore.setState;
+
+/** Reactive read of Studio's project rows. */
+export function useStudioProjects(): ProjectSummary[] {
+  return projectSummaries(useCachedProjects());
+}
+
+/** Reactive read of the selected project's module rows. */
+export function useStudioModules(): ModuleSummary[] {
+  const projectId = useTasksStore((s) => s.selectedProjectId);
+  const cached = useCachedModules(projectId);
+  return useMemo(() => cached.map(normalizeModuleSummary), [cached]);
+}
 
 /**
  * Reactive read of the task-pane state list. Subscribes to the shared catalog,

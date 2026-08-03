@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useModalStore } from "../../../../app/modal/modalStore";
-import { useTasksStore } from "../../stores/tasksStore";
+import { useStudioModules, useTasksStore } from "../../stores/tasksStore";
 import { useUIStore } from "../../stores/uiStore";
 import { PaneShell } from "../../components/PaneShell";
 
 export function ModulesPane() {
-  const modules = useTasksStore((s) => s.modules);
+  const modules = useStudioModules();
   const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
   const selectModule = useTasksStore((s) => s.selectModule);
   const loading = useTasksStore((s) => s.loading.modules);

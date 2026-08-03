@@ -9,6 +9,8 @@ import tempfile
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from studio_server.atomic_files import atomic_write_json
+
 from .catalog import CatalogValidationError, catalog_root, tree_digest, verify_catalog
 
 
@@ -90,26 +92,15 @@ def _write_manifest(root: Path, *, provider: str, lock: dict) -> None:
             package["name"]: package["digest"] for package in lock["packages"]
         },
     }
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{MANIFEST_NAME}.",
-        suffix=".tmp",
-        dir=root,
+    atomic_write_json(
+        root / MANIFEST_NAME,
+        payload,
+        separators=(",", ":"),
+        sort_keys=True,
+        trailing_newline=True,
+        mode=0o600,
+        fsync=True,
     )
-    temporary = Path(temporary_name)
-    try:
-        os.fchmod(descriptor, 0o600)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as manifest_file:
-            descriptor = -1
-            json.dump(payload, manifest_file, separators=(",", ":"), sort_keys=True)
-            manifest_file.write("\n")
-            manifest_file.flush()
-            os.fsync(manifest_file.fileno())
-        os.replace(temporary, root / MANIFEST_NAME)
-    except BaseException:
-        if descriptor >= 0:
-            os.close(descriptor)
-        temporary.unlink(missing_ok=True)
-        raise
 
 
 def _canonical_name(skill_dir: Path) -> str | None:

@@ -3,26 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 
+from studio_server.atomic_files import atomic_write_json
 from worktracker.launch_seeds import default_agent_prompt
 from worktracker.workflow_seeds import DEFAULT_WORKFLOW_TEMPLATES
-
-
-def _atomic_write(path: Path, value: dict) -> None:
-    fd, temporary = tempfile.mkstemp(
-        prefix=f"{path.name}.", suffix=".tmp", dir=path.parent
-    )
-    temporary_path = Path(temporary)
-    try:
-        with os.fdopen(fd, "w") as handle:
-            json.dump(value, handle, indent=4)
-        os.replace(temporary_path, path)
-    except Exception:
-        temporary_path.unlink(missing_ok=True)
-        raise
 
 
 def migrate_profile_prompts(
@@ -97,5 +82,5 @@ def migrate_profile_prompts(
         changed_file = True
 
     if changed_file:
-        _atomic_write(config_file, payload)
+        atomic_write_json(config_file, payload, indent=4)
     return migrated_bindings

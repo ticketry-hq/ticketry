@@ -6,7 +6,6 @@ temp settings file and that variable is pointed at it for one launch, so the
 user's ``~/.gemini/settings.json`` is never touched.
 """
 
-import json
 import os
 import shlex
 import tempfile
@@ -15,6 +14,7 @@ from pathlib import Path
 from apps.terminals.agents.injectors import DEFAULT_LIFECYCLE_URL, HOOKS_DIR, hook_argv
 from apps.terminals.agents.injectors import DEFAULT_MCP_URL
 from apps.terminals.authorization import issue_run_authorization
+from studio_server.atomic_files import atomic_write_json
 
 
 # Absolute path to the bundled Gemini lifecycle hook script.
@@ -124,17 +124,15 @@ def inject_gemini_lifecycle_settings(
     # this call since Gemini reads it on startup, so it is not auto-deleted.
 
     if settings_path is None:
-        fd, raw_settings_path = tempfile.mkstemp(
+        # mkstemp only mints the unique private name here; the write itself
+        # goes through the same atomic path as the explicit-path branch, so
+        # the two branches agree about permissions.
+        descriptor, raw_settings_path = tempfile.mkstemp(
             prefix=f"Muxed-gemini-{agent_run_id}-", suffix=".json"
         )
+        os.close(descriptor)
         settings_path = Path(raw_settings_path)
-        with os.fdopen(fd, "w") as handle:
-            json.dump(settings, handle, separators=(",", ":"))
-    else:
-        settings_path.write_text(
-            json.dumps(settings, separators=(",", ":")), encoding="utf-8"
-        )
-        settings_path.chmod(0o600)
+    atomic_write_json(settings_path, settings, separators=(",", ":"), mode=0o600)
 
     # Relocate the system settings layer for this process only, then trust the
     # workspace so the wired hooks execute without an interactive prompt.

@@ -18,6 +18,8 @@ import threading
 import traceback
 from pathlib import Path
 
+from studio_server.atomic_files import atomic_write_bytes
+
 
 CREDENTIAL_ENV = "MUXED_SIDECAR_CREDENTIAL"
 DEFAULT_DESKTOP_ORIGIN = "tauri://localhost"
@@ -56,25 +58,12 @@ def load_or_create_secret_key(data_dir: Path) -> str:
 
     secret_path = data_dir / "django_secret_key"
     if not secret_path.exists():
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=".django_secret_key.",
-            suffix=".tmp",
-            dir=data_dir,
+        atomic_write_bytes(
+            secret_path,
+            secrets.token_urlsafe(48).encode(),
+            mode=0o600,
+            fsync=True,
         )
-        temporary_path = Path(temporary_name)
-        try:
-            os.fchmod(descriptor, 0o600)
-            with os.fdopen(descriptor, "w") as secret_file:
-                descriptor = -1
-                secret_file.write(secrets.token_urlsafe(48))
-                secret_file.flush()
-                os.fsync(secret_file.fileno())
-            os.replace(temporary_path, secret_path)
-        except BaseException:
-            if descriptor >= 0:
-                os.close(descriptor)
-            temporary_path.unlink(missing_ok=True)
-            raise
 
     os.chmod(secret_path, 0o600)
     secret = secret_path.read_text()

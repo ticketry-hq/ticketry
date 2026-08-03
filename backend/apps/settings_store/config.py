@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
-from pathlib import Path
 from typing import Optional
+
+from studio_server.atomic_files import atomic_write_json
 
 from apps.settings_store.local_state_migration import (
     CONFIG_DIR as CONFIG_DIR,
@@ -120,21 +120,7 @@ class Config:
             "recent_profile_index": self.recent_profile_index,
             "profiles": [profile_to_dict(profile) for profile in self.profiles],
         }
-        payload = json.dumps(data, indent=4)
-        fd, tmp_path = tempfile.mkstemp(
-            prefix=CONFIG_FILE.name + ".", suffix=".tmp", dir=str(CONFIG_DIR)
-        )
-        tmp = Path(tmp_path)
-        try:
-            with os.fdopen(fd, "w") as handle:
-                handle.write(payload)
-            os.replace(tmp, CONFIG_FILE)
-        except Exception:
-            try:
-                tmp.unlink()
-            except FileNotFoundError:
-                pass
-            raise
+        atomic_write_json(CONFIG_FILE, data, indent=4)
 
     @property
     def current_profile(self) -> Optional[Profile]:

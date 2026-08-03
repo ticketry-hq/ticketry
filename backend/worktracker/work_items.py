@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404
 from worktracker.models import Issue, IssueType, State
 from worktracker.ranking import key_between
 from worktracker.services.errors import NotFoundError, ValidationError
-from worktracker.state_groups import RESOLVED_GROUPS
+from worktracker.state import RESOLVED_GROUPS
 
 
 # A KEY-N segment is a single hyphen between a non-hyphen prefix and digits;

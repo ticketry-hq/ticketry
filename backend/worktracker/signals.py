@@ -35,9 +35,11 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import Signal, receiver
 
 from worktracker.models import Issue, IssueType, LaunchBinding, State
-from worktracker.state_identity import normalize_state_id
-from worktracker.state_groups import state_group
-from worktracker.state_projection import workflow_state_projection
+from worktracker.state import (
+    normalize_state_id,
+    state_group,
+    workflow_state_projection,
+)
 
 logger = logging.getLogger(__name__)
 

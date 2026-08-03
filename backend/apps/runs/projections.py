@@ -9,7 +9,7 @@ from studio_server.contracts import (
     WorkItemStateFrame,
 )
 from worktracker.models import Issue, Project, State
-from worktracker.state_projection import workflow_state_projection
+from worktracker.state import workflow_state_projection
 
 
 def automation_attempt_record(attempt: AutomationAttempt) -> AutomationAttemptRecord:

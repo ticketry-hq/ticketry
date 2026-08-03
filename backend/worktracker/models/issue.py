@@ -3,7 +3,7 @@ from .project import Project
 from .issue_type import IssueType
 from .state import State
 from .constants import TYPE_CHOICES
-from worktracker.state_identity import normalize_state_id
+from worktracker.state import normalize_state_id
 
 
 class Issue(models.Model):

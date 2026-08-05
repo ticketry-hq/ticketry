@@ -50,10 +50,11 @@ function permissiveCapability(provider: ConfigurableProvider): ProviderCapabilit
 }
 
 interface Props {
-  onContinue: () => void;
+  continueLabel: string;
+  onContinue: () => void | Promise<void>;
 }
 
-export function OnboardingProviders({ onContinue }: Props) {
+export function OnboardingProviders({ continueLabel, onContinue }: Props) {
   const [activated, setActivated] = useState<ConfigurableProvider[]>([]);
   const [launchDefault, setLaunchDefault] =
     useState<LaunchDefaultPickerValue>(EMPTY_DEFAULT);
@@ -168,7 +169,7 @@ export function OnboardingProviders({ onContinue }: Props) {
           ),
         ),
       );
-      onContinue();
+      await onContinue();
     } catch (cause) {
       setError(apiErrorMessage(cause));
       setSaving(false);
@@ -252,7 +253,7 @@ export function OnboardingProviders({ onContinue }: Props) {
           disabled={!canContinue}
           className="rounded-md bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Continue"}
+          {saving ? "Saving…" : continueLabel}
         </button>
       </div>
     </>

@@ -71,6 +71,12 @@ hydrated as one local planning view. Agent-run status is joined to this hierarch
 for presentation; it is not stored as part of the hierarchy.
 _Avoid_: Agent-status tree, lazily fetched branch tree
 
+**Module folder**:
+The profile-to-module link carrying the local filesystem path where that
+module's code lives for that profile. The same module may link to a different
+path in another profile or have no link in a fresh profile.
+_Avoid_: Repo path, module directory, worktree, project folder
+
 **Module tab strip**:
 The single module switcher row spanning the Stories and Workspace panes, listing
 every module of the active project in the recency order captured when the project
@@ -288,20 +294,33 @@ _Avoid_: Onboarding reset, re-arming onboarding, replaying the tour
 
 **Work item**:
 The aggregate the backend owns and serves as `WorkItemOut` — the thing a Story,
-Implementation, or Module all are. Studio holds exactly one client-side copy of
-each, keyed by id; every surface that needs one reads it by id rather than
-carrying its own. Older Studio code names the same aggregate Task or Issue in
-type and store names; those spellings survive only where they already exist and
-name the surface, not the record.
+Implementation, or Module all are. Older Studio code names the same aggregate
+Task or Issue in type and store names; those spellings survive only where they
+already exist and name the surface, not the record.
 _Avoid_: Task record, issue record, task summary
 
 **Work-item store**:
 The single owner of every work-item record Studio holds. Panes, trees, and
-pickers keep the ids they need and resolve records through it, so a record can
-never exist in two places and disagree with itself. It is the only place a
-work-item record is written, and the status-feed revision guards live alongside
-it because a guard held apart from its data protects nothing.
+pickers keep the ids they need and resolve records through it, and the
+status-feed revision guards live alongside it because a guard held apart from
+its data protects nothing.
 _Avoid_: Detail store, issue cache, work-item cache
+
+**Record copy**:
+Any second holding of a work item's field values outside the work-item store —
+a list that carries whole records, a re-shaped summary type, a component's own
+snapshot. Named so it can be prohibited: two copies of one record are two
+answers to the same question, and the one being read is decided by accident.
+The prohibition is enforced by tests, not by convention, because it was asserted
+in prose twice and was false both times.
+_Avoid_: Cache entry, projection, denormalised view
+
+**Membership**:
+Which work items belong to a collection and in what order — a module's tree, a
+state section's rows, a parent's children. The server decides it and Studio
+stores it as ids, never as records, so membership can go stale without any
+record disagreeing with itself.
+_Avoid_: Task list, tree data, section contents
 
 **Selection paint**:
 Rendering the newly selected work item's panel from the record Studio already

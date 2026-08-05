@@ -10,7 +10,7 @@ import type {
   TerminalCreateRequest,
 } from "../../agents/terminal/create/types";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { getConfigSnapshot } from "../stores/configStore";
+import { getConfigSnapshot, getModuleFolder } from "../stores/configStore";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { useTasksStore } from "../stores/tasksStore";
 
@@ -37,7 +37,7 @@ function studioPlanFlow(): TerminalCreateFlow {
       const { recentProfileIndex, profiles } = getConfigSnapshot();
       const profile =
         recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-      return Boolean(profile?.module_folders?.[moduleId]);
+      return Boolean(getModuleFolder(profile, moduleId));
     },
     openFolderGate(req) {
       // Resume the same launch after the folder saves: chain through the prompt
@@ -86,7 +86,7 @@ export function startPlanFlow(): void {
 
 /**
  * Kick off the instant-change flow:
- * 1) If `module_folders[selectedModuleId]` is empty, push ModuleFolder first
+ * 1) If the selected module has no link, push ModuleFolder first
  *    (chained `next` resumes into PromptInput → AgentPicker (mode: instant)).
  * 2) Otherwise push PromptInput with `next: agent-picker, mode: instant`.
  */
@@ -107,7 +107,7 @@ export function startInstantChangeFlow(): void {
 
   const profile =
     recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = profile?.module_folders?.[selectedModuleId];
+  const folder = getModuleFolder(profile, selectedModuleId);
 
   if (!folder) {
     modal.pushModal({
@@ -163,7 +163,7 @@ export function startOpenFlow(): void {
   if (!context) return;
   const profile =
     recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = profile?.module_folders?.[context.moduleId];
+  const folder = getModuleFolder(profile, context.moduleId);
   if (!folder) {
     modal.pushModal({
       type: "module-folder",
@@ -190,7 +190,7 @@ export function startOpenWithPromptFlow(): void {
   if (!context) return;
   const profile =
     recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = profile?.module_folders?.[context.moduleId];
+  const folder = getModuleFolder(profile, context.moduleId);
   if (!folder) {
     modal.pushModal({
       type: "module-folder",

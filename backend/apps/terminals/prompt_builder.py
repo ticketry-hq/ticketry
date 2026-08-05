@@ -22,7 +22,11 @@ from apps.documents import dao as documents_dao
 from apps.documents import design_docs
 from apps import worktracker_queries
 from apps.settings_store import config as cfgmod
-from apps.settings_store.config import NoConfigurationSelected, resolve_profile_index
+from apps.settings_store.config import (
+    NoConfigurationSelected,
+    module_link_path,
+    resolve_profile_index,
+)
 from apps.terminals.agents.prompts import (
     build_context_prompt,
     build_doc_chat_prompt,
@@ -166,6 +170,7 @@ async def _build_prompt(
             doc_rel_path=resolved_rel,
             module_id=module_id,
             user_input=initial_prompt,
+            profile=profile,
         )
         return prompt, design_abs, cwd, None
 
@@ -177,7 +182,7 @@ async def _build_prompt(
         module = next((m for m in modules if m.id == module_id), None)
         if module is None:
             return None, None, None, "module_not_found"
-        folder = profile.module_folders.get(module_id) or None
+        folder = module_link_path(profile, module_id)
         design_rel = design_docs.planning_design_dir(module, agent_run_id)
         design_abs = _prepare_design_dir(module_folder, design_rel)
         prompt = build_instant_change_prompt(
@@ -205,7 +210,7 @@ async def _build_prompt(
             )
         except Exception as e:
             return None, None, None, f"task_fetch_failed: {e!s}"
-        folder = profile.module_folders.get(module_id) or None
+        folder = module_link_path(profile, module_id)
         design_rel = design_docs.planning_design_dir(module, agent_run_id)
         design_abs = _prepare_design_dir(module_folder, design_rel)
         prompt = build_planning_context_prompt(

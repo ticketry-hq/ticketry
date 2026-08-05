@@ -55,7 +55,7 @@ describe("ModuleFolder modal", () => {
           workspace_slug: "ws",
           agent_prompt: null,
           agent_prompts: {},
-          module_folders: {},
+          module_links: [],
           recent_project_id: null,
         },
       ],
@@ -72,12 +72,12 @@ describe("ModuleFolder modal", () => {
           workspace_slug: "ws",
           agent_prompt: null,
           agent_prompts: {},
-          module_folders: {
-            "mod-1": "/repos/old",
-            "mod-2": "",
-            "mod-3": "/repos/shared",
-            "mod-4": "/repos/old",
-          },
+          module_links: [
+            { module_id: "mod-1", path: "/repos/old" },
+            { module_id: "mod-2", path: "" },
+            { module_id: "mod-3", path: "/repos/shared" },
+            { module_id: "mod-4", path: "/repos/old" },
+          ],
           recent_project_id: null,
         },
       ],
@@ -149,9 +149,9 @@ describe("ModuleFolder modal", () => {
       await Promise.resolve();
     });
 
-    expect(putSpy.mock.calls[0][1].module_folders).toEqual({
-      "mod-new": "/repos/picked",
-    });
+    expect(putSpy.mock.calls[0][1].module_links).toEqual([
+      { module_id: "mod-new", path: "/repos/picked" },
+    ]);
     expect(useModalStore.getState().modalStack).toEqual([
       { type: "agent-picker", payload: undefined },
     ]);
@@ -162,7 +162,7 @@ describe("ModuleFolder modal", () => {
       profiles: [
         {
           ...state.profiles[0],
-          module_folders: { "mod-1": "/repos/recent" },
+          module_links: [{ module_id: "mod-1", path: "/repos/recent" }],
         },
       ],
     }));
@@ -194,9 +194,9 @@ describe("ModuleFolder modal", () => {
       "/repos/manual-draft",
     );
     expect(putSpy).not.toHaveBeenCalled();
-    expect(getConfigSnapshot().profiles[0].module_folders).toEqual({
-      "mod-1": "/repos/recent",
-    });
+    expect(getConfigSnapshot().profiles[0].module_links).toEqual([
+      { module_id: "mod-1", path: "/repos/recent" },
+    ]);
   });
 
   it("keeps the native folder action out of browser Studio", () => {
@@ -215,7 +215,7 @@ describe("ModuleFolder modal", () => {
       profiles: [
         {
           ...state.profiles[0],
-          module_folders: { "mod-1": "/repos/recent" },
+          module_links: [{ module_id: "mod-1", path: "/repos/recent" }],
         },
       ],
     }));
@@ -244,7 +244,7 @@ describe("ModuleFolder modal", () => {
       profiles: [
         {
           ...state.profiles[0],
-          module_folders: { "mod-1": "/repos/one" },
+          module_links: [{ module_id: "mod-1", path: "/repos/one" }],
         },
       ],
     }));
@@ -267,10 +267,10 @@ describe("ModuleFolder modal", () => {
       await Promise.resolve();
     });
 
-    expect(putSpy.mock.calls[0][1].module_folders).toEqual({
-      "mod-1": "/repos/one",
-      "mod-2": "/repos/one",
-    });
+    expect(putSpy.mock.calls[0][1].module_links).toEqual([
+      { module_id: "mod-1", path: "/repos/one" },
+      { module_id: "mod-2", path: "/repos/one" },
+    ]);
   });
 
   it("selects then saves a recent folder with ArrowDown and Enter", async () => {
@@ -278,10 +278,10 @@ describe("ModuleFolder modal", () => {
       profiles: [
         {
           ...state.profiles[0],
-          module_folders: {
-            "mod-1": "/repos/older",
-            "mod-2": "/repos/newer",
-          },
+          module_links: [
+            { module_id: "mod-1", path: "/repos/older" },
+            { module_id: "mod-2", path: "/repos/newer" },
+          ],
         },
       ],
     }));
@@ -306,11 +306,11 @@ describe("ModuleFolder modal", () => {
       await Promise.resolve();
     });
 
-    expect(putSpy.mock.calls[0][1].module_folders).toEqual({
-      "mod-1": "/repos/older",
-      "mod-2": "/repos/newer",
-      "mod-3": "/repos/newer",
-    });
+    expect(putSpy.mock.calls[0][1].module_links).toEqual([
+      { module_id: "mod-1", path: "/repos/older" },
+      { module_id: "mod-2", path: "/repos/newer" },
+      { module_id: "mod-3", path: "/repos/newer" },
+    ]);
   });
 
   it("shows recent folders from only the active profile", () => {
@@ -320,12 +320,12 @@ describe("ModuleFolder modal", () => {
         {
           ...firstProfile,
           name: "inactive",
-          module_folders: { "mod-1": "/repos/inactive" },
+          module_links: [{ module_id: "mod-1", path: "/repos/inactive" }],
         },
         {
           ...firstProfile,
           name: "active",
-          module_folders: { "mod-2": "/repos/active" },
+          module_links: [{ module_id: "mod-2", path: "/repos/active" }],
         },
       ],
       recentProfileIndex: 1,
@@ -342,7 +342,7 @@ describe("ModuleFolder modal", () => {
       profiles: [
         {
           ...state.profiles[0],
-          module_folders: { "mod-1": "/repos/one" },
+          module_links: [{ module_id: "mod-1", path: "/repos/one" }],
         },
       ],
     }));
@@ -353,9 +353,9 @@ describe("ModuleFolder modal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(putSpy).not.toHaveBeenCalled();
-    expect(getConfigSnapshot().profiles[0].module_folders).toEqual({
-      "mod-1": "/repos/one",
-    });
+    expect(getConfigSnapshot().profiles[0].module_links).toEqual([
+      { module_id: "mod-1", path: "/repos/one" },
+    ]);
   });
 
   it("discards a native folder selection on Cancel", async () => {
@@ -375,11 +375,11 @@ describe("ModuleFolder modal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(putSpy).not.toHaveBeenCalled();
-    expect(getConfigSnapshot().profiles[0].module_folders).toEqual({});
+    expect(getConfigSnapshot().profiles[0].module_links).toEqual([]);
     expect(useModalStore.getState().modalStack).toEqual([]);
   });
 
-  it("Enter on unchanged value calls api.putProfile with module_folders updated", async () => {
+  it("Enter on unchanged value calls api.putProfile with module_links updated", async () => {
     const putSpy = vi.spyOn(studioApi, "putProfile").mockResolvedValue({
       recent_profile_index: 0,
       features: getConfigSnapshot().features,
@@ -389,7 +389,7 @@ describe("ModuleFolder modal", () => {
           workspace_slug: "ws",
           agent_prompt: null,
           agent_prompts: {},
-          module_folders: { "mod-1": "/usr/local" },
+          module_links: [{ module_id: "mod-1", path: "/usr/local" }],
           recent_project_id: null,
         },
       ],
@@ -404,7 +404,9 @@ describe("ModuleFolder modal", () => {
     });
     expect(putSpy).toHaveBeenCalledTimes(1);
     const [, body] = putSpy.mock.calls[0];
-    expect(body.module_folders).toEqual({ "mod-1": "/usr/local" });
+    expect(body.module_links).toEqual([
+      { module_id: "mod-1", path: "/usr/local" },
+    ]);
   });
 
   it("Studio host reads and saves the restarted Studio profile store", async () => {
@@ -416,7 +418,7 @@ describe("ModuleFolder modal", () => {
           workspace_slug: "ws",
           agent_prompt: null,
           agent_prompts: {},
-          module_folders: { "mod-1": "/studio/repo" },
+          module_links: [{ module_id: "mod-1", path: "/studio/repo" }],
           recent_project_id: null,
         },
       ],
@@ -444,8 +446,8 @@ describe("ModuleFolder modal", () => {
     });
 
     expect(putSpy).toHaveBeenCalledTimes(1);
-    expect(putSpy.mock.calls[0][1].module_folders).toEqual({
-      "mod-1": "/studio/new",
-    });
+    expect(putSpy.mock.calls[0][1].module_links).toEqual([
+      { module_id: "mod-1", path: "/studio/new" },
+    ]);
   });
 });

@@ -72,6 +72,8 @@ for package in (
     "burner_redis",
     "django",
     "channels",
+    "rest_framework",
+    "drf_spectacular",
     "psycopg",
     "psycopg_binary",
 ):
@@ -82,6 +84,8 @@ for package in (
 
 datas += copy_metadata("Django")
 datas += copy_metadata("channels")
+datas += copy_metadata("djangorestframework")
+datas += copy_metadata("drf-spectacular")
 datas += copy_metadata("django-ninja")
 datas += copy_metadata("uvicorn")
 datas += copy_metadata("fastmcp")

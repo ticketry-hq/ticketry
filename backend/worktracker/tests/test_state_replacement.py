@@ -1,5 +1,7 @@
-"""Impact-aware shared workflow-state replacement (CODIN-1126)."""
+"""CODING-158: guarded bare state deletion and retained workflow pruning."""
 
+import json
+import inspect
 import uuid
 
 import pytest
@@ -8,10 +10,10 @@ from worktracker.models import (
     Issue,
     IssueType,
     IssueTypeTransition,
+    LaunchBinding,
     State,
 )
-from worktracker.services import workflow_config as svc
-from worktracker.services.errors import ServiceError
+from worktracker.services import scoped_workflows, workflow_config
 from worktracker.tests.conftest import BASE
 
 
@@ -21,7 +23,7 @@ def _state(project, name, group="started", **kwargs):
     )
 
 
-def _issue(project, state, issue_type, sequence_id):
+def _issue(project, state, issue_type, sequence_id=1):
     return Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -33,78 +35,52 @@ def _issue(project, state, issue_type, sequence_id):
     )
 
 
-@pytest.mark.django_db
-def test_state_impact_reports_items_workflows_protection_and_replacements(project):
-    source = _state(project, "Doing", is_protected=True)
-    replacement = _state(project, "Review")
-    other_group = _state(project, "Done", group="completed")
-    issue_type = IssueType.objects.create(
-        id=uuid.uuid4(),
-        project=project,
-        name="Feature",
-        level="task",
-        start_state=source,
-        workflow_revision=7,
+def test_preview_token_and_reassignment_service_surface_is_removed():
+    assert not hasattr(workflow_config, "get_state_impact")
+    assert not hasattr(scoped_workflows, "preview_impact")
+    assert tuple(inspect.signature(workflow_config.delete_state).parameters) == (
+        "state_id",
     )
-    other_type = IssueType.objects.create(
-        id=uuid.uuid4(),
-        project=project,
-        name="Defect",
-        level="task",
-    )
-    _issue(project, source, issue_type, 1)
-    _issue(project, source, other_type, 2)
-    IssueTypeTransition.objects.create(
-        issue_type=issue_type,
-        from_state=source,
-        to_state=other_group,
-    )
-
-    impact = svc.get_state_impact(source.id)
-
-    assert impact["state_id"] == source.id
-    assert impact["total_work_items"] == 2
-    assert impact["work_item_counts"] == [
-        {
-            "issue_type_id": other_type.id,
-            "issue_type_name": "Defect",
-            "count": 1,
-        },
-        {
-            "issue_type_id": issue_type.id,
-            "issue_type_name": "Feature",
-            "count": 1,
-        },
-    ]
-    assert impact["workflow_references"] == [
-        {
-            "issue_type_id": issue_type.id,
-            "issue_type_name": "Feature",
-            "revision": 7,
-            "roles": ["start", "edge_source"],
-        }
-    ]
-    assert impact["protection_rules"] == [
-        {
-            "code": "protected_state",
-            "message": "Protected workflow states cannot be deleted.",
-        },
-        {
-            "code": "replacement_required",
-            "message": "Occupied or workflow-referenced states require an explicit replacement.",
-        },
-    ]
-    assert [item.id for item in impact["valid_replacements"]] == [
-        replacement.id,
-        other_group.id,
-    ]
-    assert len(impact["impact_token"]) == 64
 
 
 @pytest.mark.django_db
-def test_bare_delete_of_workflow_referenced_state_is_rejected_without_mutation(project):
+def test_occupied_state_delete_returns_named_conflict_without_mutation(
+    client, project, auth
+):
     source = _state(project, "Doing")
-    replacement = _state(project, "Review")
+    _state(project, "Review")
+    issue_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Feature", level="task"
+    )
+    issue = _issue(project, source, issue_type)
+
+    response = client.delete(f"{BASE}/states/{source.id}", headers=auth)
+
+    assert response.status_code == 409
+    assert "occupied" in response.json()["detail"].lower()
+    issue.refresh_from_db()
+    assert issue.state_id == source.id
+    assert State.objects.filter(pk=source.id).exists()
+
+
+@pytest.mark.django_db
+def test_empty_unreferenced_state_delete_succeeds(client, project, auth):
+    source = _state(project, "Doing")
+    sibling = _state(project, "Review")
+
+    response = client.delete(f"{BASE}/states/{source.id}", headers=auth)
+
+    assert response.status_code == 204
+    assert not State.objects.filter(pk=source.id).exists()
+    assert State.objects.filter(pk=sibling.id).exists()
+
+
+@pytest.mark.django_db
+def test_workflow_referenced_state_delete_returns_conflict_without_pruning(
+    client, project, auth
+):
+    source = _state(project, "Doing")
+    target = _state(project, "Review")
     issue_type = IssueType.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -114,158 +90,71 @@ def test_bare_delete_of_workflow_referenced_state_is_rejected_without_mutation(p
         workflow_revision=3,
     )
     transition = IssueTypeTransition.objects.create(
-        issue_type=issue_type,
-        from_state=source,
-        to_state=replacement,
+        issue_type=issue_type, from_state=source, to_state=target
     )
 
-    with pytest.raises(ServiceError) as exc:
-        svc.delete_state(source.id)
+    response = client.delete(f"{BASE}/states/{source.id}", headers=auth)
 
-    assert exc.value.status_code == 409
-    assert State.objects.filter(pk=source.id).exists()
+    assert response.status_code == 409
+    assert "workflow configuration" in response.json()["detail"].lower()
     issue_type.refresh_from_db()
+    assert issue_type.start_state_id == source.id
     assert issue_type.workflow_revision == 3
     assert IssueTypeTransition.objects.filter(pk=transition.pk).exists()
 
 
 @pytest.mark.django_db
-def test_confirmed_replacement_moves_items_and_repairs_workflow_graphs(project):
-    source = _state(project, "Doing")
-    replacement = _state(project, "Review")
+@pytest.mark.parametrize(
+    ("method", "path"),
+    (
+        ("get", "/states/{state_id}/impact"),
+        ("post", "/issue-types/{type_id}/workflow-settings/impact"),
+    ),
+)
+def test_deleted_impact_routes_do_not_resolve(client, method, path):
+    concrete = path.format(state_id=uuid.uuid4(), type_id=uuid.uuid4())
+    if method == "get":
+        response = client.get(f"{BASE}{concrete}")
+    else:
+        response = client.post(
+            f"{BASE}{concrete}",
+            data=json.dumps({"operation": "remove_state", "workflow_revision": 0}),
+            content_type="application/json",
+        )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_transition_edit_still_prunes_unreachable_rows(project):
+    start = _state(project, "Todo", group="unstarted")
+    middle = _state(project, "Doing")
     done = _state(project, "Done", group="completed")
     issue_type = IssueType.objects.create(
         id=uuid.uuid4(),
         project=project,
         name="Feature",
         level="task",
-        start_state=source,
-        workflow_revision=4,
-    )
-    issue = _issue(project, source, issue_type, 1)
-    IssueTypeTransition.objects.create(
-        issue_type=issue_type,
-        from_state=source,
-        to_state=replacement,
+        start_state=start,
     )
     IssueTypeTransition.objects.create(
-        issue_type=issue_type,
-        from_state=replacement,
-        to_state=done,
+        issue_type=issue_type, from_state=start, to_state=middle
     )
-    impact = svc.get_state_impact(source.id)
-
-    svc.delete_state(
-        source.id,
-        reassign_to=replacement.id,
-        impact_token=impact["impact_token"],
+    IssueTypeTransition.objects.create(
+        issue_type=issue_type, from_state=middle, to_state=done
+    )
+    binding = LaunchBinding.objects.create(
+        issue_type=issue_type, state=middle, prompt="Implement"
     )
 
-    issue.refresh_from_db()
+    scoped_workflows.remove_transition(
+        issue_type.id, start.id, middle.id, workflow_revision=0
+    )
+
+    assert not IssueTypeTransition.objects.filter(issue_type=issue_type).exists()
+    assert not LaunchBinding.objects.filter(pk=binding.pk).exists()
     issue_type.refresh_from_db()
-    assert issue.state_id == replacement.id
-    assert issue.state_revision > 0
-    assert not State.objects.filter(pk=source.id).exists()
-    assert issue_type.workflow_revision == 5
-    assert issue_type.start_state_id == replacement.id
-    assert set(
-        IssueTypeTransition.objects.filter(issue_type=issue_type).values_list(
-            "from_state_id", "to_state_id"
-        )
-    ) == {(replacement.id, done.id)}
-
-
-@pytest.mark.django_db
-def test_changed_impact_confirmation_conflicts_without_applying(project):
-    source = _state(project, "Doing")
-    replacement = _state(project, "Review")
-    feature = IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Feature", level="task"
-    )
-    defect = IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Defect", level="task"
-    )
-    issue = _issue(project, source, feature, 1)
-    impact = svc.get_state_impact(source.id)
-
-    issue.issue_type = defect
-    issue.save(update_fields=["issue_type", "updated_at"])
-
-    with pytest.raises(ServiceError) as exc:
-        svc.delete_state(
-            source.id,
-            reassign_to=replacement.id,
-            impact_token=impact["impact_token"],
-        )
-
-    assert exc.value.status_code == 409
-    assert "impact changed" in exc.value.message.lower()
-    issue.refresh_from_db()
-    assert issue.state_id == source.id
-    assert State.objects.filter(pk=source.id).exists()
-
-
-@pytest.mark.django_db
-def test_state_impact_is_exposed_as_a_typed_http_contract(client, project, auth):
-    source = _state(project, "Doing")
-    replacement = _state(project, "Review")
-    issue_type = IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Feature", level="task"
-    )
-    _issue(project, source, issue_type, 1)
-
-    response = client.get(f"{BASE}/states/{source.id}/impact", headers=auth)
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["state_id"] == str(source.id)
-    assert body["total_work_items"] == 1
-    assert body["work_item_counts"] == [
-        {
-            "issue_type_id": str(issue_type.id),
-            "issue_type_name": "Feature",
-            "count": 1,
-        }
-    ]
-    assert body["workflow_references"] == []
-    assert body["protection_rules"][0]["code"] == "replacement_required"
-    assert [item["id"] for item in body["valid_replacements"]] == [
-        str(replacement.id)
-    ]
-
-
-@pytest.mark.django_db
-def test_replacement_allows_standing_workflow_warnings(project):
-    source = _state(project, "Doing")
-    replacement = _state(project, "Review")
-    _state(project, "Done", group="completed")
-    issue_type = IssueType.objects.create(
-        id=uuid.uuid4(),
-        project=project,
-        name="Feature",
-        level="task",
-        start_state=source,
-        workflow_revision=2,
-    )
-    issue = _issue(project, source, issue_type, 1)
-    IssueTypeTransition.objects.create(
-        issue_type=issue_type,
-        from_state=source,
-        to_state=replacement,
-    )
-    impact = svc.get_state_impact(source.id)
-
-    svc.delete_state(
-        source.id,
-        reassign_to=replacement.id,
-        impact_token=impact["impact_token"],
-    )
-
-    issue.refresh_from_db()
-    issue_type.refresh_from_db()
-    assert issue.state_id == replacement.id
-    assert not State.objects.filter(pk=source.id).exists()
-    assert issue_type.workflow_revision == 3
+    assert issue_type.workflow_revision == 1
 
 
 @pytest.mark.django_db
@@ -281,19 +170,15 @@ def test_display_reorder_changes_neither_item_states_nor_workflow_edges(project)
         start_state=first,
         workflow_revision=6,
     )
-    issue = _issue(project, first, issue_type, 1)
+    issue = _issue(project, first, issue_type)
     IssueTypeTransition.objects.create(
-        issue_type=issue_type,
-        from_state=first,
-        to_state=second,
+        issue_type=issue_type, from_state=first, to_state=second
     )
     IssueTypeTransition.objects.create(
-        issue_type=issue_type,
-        from_state=second,
-        to_state=done,
+        issue_type=issue_type, from_state=second, to_state=done
     )
 
-    svc.reorder_states(project.id, [done.id, second.id, first.id])
+    workflow_config.reorder_states(project.id, [done.id, second.id, first.id])
 
     issue.refresh_from_db()
     issue_type.refresh_from_db()

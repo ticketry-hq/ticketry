@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicket";
 import type { TaskState, TaskSummary } from "../features/studio/lib/types";
+import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 
@@ -77,6 +78,23 @@ function activateByKeyboard(control: HTMLElement): void {
 
 describe("State configuration workspace selection", () => {
   beforeEach(() => {
+    seedConfig({
+      profiles: [
+        {
+          name: "Local",
+          workspace_slug: "meml",
+          agent_prompt: null,
+          agent_prompts: {},
+          module_links: [
+            { module_id: "module-1", path: "/repos/module-1" },
+            { module_id: "module-2", path: "/repos/module-2" },
+          ],
+          recent_project_id: "project-1",
+          recent_module_ids: {},
+        },
+      ],
+      recentProfileIndex: 0,
+    });
     useUIStore.setState({
       collapsedStateNames: new Set(),
       expandedTaskIds: new Set(),

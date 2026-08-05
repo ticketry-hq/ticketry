@@ -10,7 +10,7 @@ import {
 } from "../../agents/terminal/ModuleFolderSelection";
 
 /**
- * Collects a module name and optional local folder, then creates the module.
+ * Collects a module name and local folder, then creates the module.
  *
  * Folder persistence happens only after the new module ID exists. If that
  * persistence fails, retrying reuses the created ID instead of creating a
@@ -33,8 +33,12 @@ export function AddModule() {
     recentProfileIndex,
   });
 
-  // Block submit on blank names or while a create is pending.
-  const canSubmit = name.trim().length > 0 && !busy && !!selectedProjectId;
+  // Both planning and local setup are required before this coherent flow starts.
+  const canSubmit =
+    name.trim().length > 0 &&
+    folderSelection.value.trim().length > 0 &&
+    !busy &&
+    !!selectedProjectId;
 
   async function submit(): Promise<void> {
     if (!canSubmit || !selectedProjectId || submittingRef.current) return;
@@ -45,25 +49,22 @@ export function AddModule() {
     try {
       let moduleId = createdModuleIdRef.current;
       if (!moduleId) {
-        await createModule(selectedProjectId, name.trim());
-        moduleId = useTasksStore.getState().selectedModuleId;
-        if (!moduleId) {
-          throw new Error("Created module was not selected.");
-        }
+        moduleId = await createModule(selectedProjectId, name.trim());
         createdModuleIdRef.current = moduleId;
         setCreatedModuleId(moduleId);
       }
 
       const folder = folderSelection.value.trim();
-      if (folder) {
-        try {
-          await setModuleFolder(moduleId, folder);
-        } catch {
-          setError(
-            "Module created, but its folder could not be saved. Retry to save the folder.",
-          );
-          return;
-        }
+      try {
+        await setModuleFolder(moduleId, folder);
+      } catch {
+        setError(
+          "Module created, but its folder could not be saved. Retry to save the folder.",
+        );
+        return;
+      }
+      if (useTasksStore.getState().selectedModuleId !== moduleId) {
+        await useTasksStore.getState().selectModule(moduleId);
       }
       popModal();
     } catch {
@@ -83,7 +84,7 @@ export function AddModule() {
           actionId: [MODAL_ACTIONS.previous, MODAL_ACTIONS.next],
           label: "Move",
         },
-        { actionId: MODAL_ACTIONS.confirm, label: "Create" },
+        { actionId: MODAL_ACTIONS.confirm, label: "Create module" },
         { actionId: MODAL_ACTIONS.close, label: "Cancel" },
       ]}
       onAction={(actionId) => {
@@ -110,7 +111,11 @@ export function AddModule() {
         className="w-full bg-pane-bg px-2 py-1 font-mono text-sm outline-none ring-1 ring-pane-border focus:ring-focus-accent"
       />
       <div className="mt-3">
-        <ModuleFolderSelection selection={folderSelection} />
+        <ModuleFolderSelection
+          selection={folderSelection}
+          ariaLabel="Module folder"
+          placeholder="Local folder"
+        />
       </div>
       {error && <div className="mt-2 text-sm text-red-400">{error}</div>}
       <div className="mt-3 flex justify-end gap-2">
@@ -127,7 +132,7 @@ export function AddModule() {
           onClick={() => void submit()}
           className="rounded border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent disabled:opacity-50"
         >
-          {createdModuleId ? "Save Folder" : "Create"}
+          {createdModuleId ? "Save folder" : "Create module"}
         </button>
       </div>
     </ModalShell>

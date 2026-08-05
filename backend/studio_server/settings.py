@@ -33,6 +33,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.admin",
     "channels",
+    "rest_framework",
+    "drf_spectacular",
     "apps.runs",
     "apps.terminals",
     "apps.documents",
@@ -101,4 +103,20 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
+}
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "worktracker.rest.authentication.ApiKeyAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "worktracker.rest.exceptions.service_exception_handler",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "WorkTracker DRF API",
+    "VERSION": "0.1.0",
 }

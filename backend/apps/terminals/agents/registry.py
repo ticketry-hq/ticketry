@@ -175,6 +175,13 @@ class AgentAdapter:
         than opting out of the gate.
         """
 
+        if activated_providers is not None:
+            if self.slug not in activated_providers:
+                raise LaunchConfigurationError("provider_not_activated")
+            # The task launch resolver already validated this catalog-backed
+            # model/reasoning pair off the async event loop.
+            return self._command(prompt, model, reasoning)
+
         try:
             _, model, reasoning = validate_provider_options(
                 agent=self.slug,

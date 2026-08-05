@@ -127,7 +127,7 @@ function localProfile() {
     workspace_slug: "meml",
     agent_prompt: null,
     agent_prompts: {},
-    module_folders: {},
+    module_links: [],
     recent_project_id: "project-1",
     recent_module_ids: { "project-1": "module-middle" },
   };
@@ -175,8 +175,9 @@ function mockModuleCreation({
     }
     if (url === "/api/config/profiles/0" && init?.method === "PUT") {
       const body = JSON.parse(String(init.body));
-      const isFolderWrite =
-        body.module_folders?.["module-new"] !== undefined;
+      const isFolderWrite = body.module_links?.some(
+        (link: { module_id: string }) => link.module_id === "module-new",
+      );
       if (isFolderWrite) folderPutCount += 1;
       if (isFolderWrite && folderPutCount <= folderPutFailures) {
         return Promise.resolve(
@@ -458,10 +459,10 @@ describe("Studio module tab strip", () => {
       target: { value: "New module" },
     });
     fireEvent.change(
-      within(addDialog).getByPlaceholderText("Local folder (optional)"),
+      within(addDialog).getByRole("textbox", { name: "Module folder" }),
       { target: { value: "/repos/new-module" } },
     );
-    fireEvent.click(within(addDialog).getByRole("button", { name: "Create" }));
+    fireEvent.click(within(addDialog).getByRole("button", { name: "Create module" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("tab", { name: "New module" })).toHaveAttribute("aria-selected", "true");
@@ -472,9 +473,9 @@ describe("Studio module tab strip", () => {
         expect.objectContaining({ id: "module-new", project_id: "project-1" }),
       ]),
     );
-    expect(getStudioConfigSnapshot().profiles[0]?.module_folders).toEqual({
-      "module-new": "/repos/new-module",
-    });
+    expect(getStudioConfigSnapshot().profiles[0]?.module_links).toEqual([
+      { module_id: "module-new", path: "/repos/new-module" },
+    ]);
     expect(
       fetchMock.mock.calls.filter(
         ([input, init]) =>
@@ -482,12 +483,26 @@ describe("Studio module tab strip", () => {
           (init as RequestInit | undefined)?.method === "POST",
       ),
     ).toHaveLength(1);
+    const createCallIndex = fetchMock.mock.calls.findIndex(
+      ([input, init]) =>
+        String(input) === "/api/work-tracker/projects/project-1/modules" &&
+        (init as RequestInit | undefined)?.method === "POST",
+    );
+    const linkCallIndex = fetchMock.mock.calls.findIndex(
+      ([input, init]) =>
+        String(input) === "/api/config/profiles/0" &&
+        (init as RequestInit | undefined)?.method === "PUT" &&
+        JSON.parse(String((init as RequestInit).body)).module_links?.some(
+          (link: { module_id: string }) => link.module_id === "module-new",
+        ),
+    );
+    expect(createCallIndex).toBeGreaterThanOrEqual(0);
+    expect(linkCallIndex).toBeGreaterThan(createCallIndex);
   });
 
-  it("creates with a blank folder without adding a mapping or follow-up modal", async () => {
+  it("requires trimmed module name and folder before enabling Create module", async () => {
     const profile = localProfile();
     seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
-    mockModuleCreation();
     render(
       <>
         <ModuleTabStrip />
@@ -497,23 +512,24 @@ describe("Studio module tab strip", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add module" }));
     const dialog = await screen.findByRole("dialog", { name: "Add Module" });
-    fireEvent.change(within(dialog).getByPlaceholderText("Module name"), {
-      target: { value: "New module" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+    const name = within(dialog).getByPlaceholderText("Module name");
+    const folder = within(dialog).getByRole("textbox", { name: "Module folder" });
+    const submit = within(dialog).getByRole("button", { name: "Create module" });
+    expect(submit).toBeDisabled();
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(getStudioConfigSnapshot().profiles[0]?.module_folders).toEqual({});
-    expect(useModalStore.getState().modalStack).toEqual([]);
-    expect(
-      fetchMock.mock.calls.some(
-        ([input, init]) =>
-          String(input) === "/api/config/profiles/0" &&
-          JSON.parse(String((init as RequestInit).body)).module_folders?.[
-            "module-new"
-          ] !== undefined,
-      ),
-    ).toBe(false);
+    fireEvent.change(name, { target: { value: "   " } });
+    fireEvent.change(folder, { target: { value: "/repos/new-module" } });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(name, { target: { value: "New module" } });
+    fireEvent.change(folder, { target: { value: "   " } });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(folder, {
+      target: { value: " /repos/new-module " },
+    });
+    expect(submit).toBeEnabled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("retries only folder persistence after the module has been created", async () => {
@@ -533,15 +549,15 @@ describe("Studio module tab strip", () => {
       target: { value: "New module" },
     });
     fireEvent.change(
-      within(dialog).getByPlaceholderText("Local folder (optional)"),
+      within(dialog).getByRole("textbox", { name: "Module folder" }),
       { target: { value: "/repos/retry" } },
     );
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create module" }));
 
     expect(
       await within(dialog).findByText(/folder could not be saved/i),
     ).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save Folder" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save folder" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(
@@ -556,9 +572,14 @@ describe("Studio module tab strip", () => {
         ([input, init]) =>
           String(input) === "/api/config/profiles/0" &&
           (init as RequestInit | undefined)?.method === "PUT" &&
-          JSON.parse(String((init as RequestInit).body)).module_folders?.[
-            "module-new"
-          ] !== undefined,
+          (() => {
+            const body = JSON.parse(String((init as RequestInit).body));
+            return (
+              body.module_links?.some(
+                (link: { module_id: string }) => link.module_id === "module-new",
+              ) && body.recent_module_ids?.["project-1"] !== "module-new"
+            );
+          })(),
       ),
     ).toHaveLength(2);
   });
@@ -623,7 +644,10 @@ describe("Studio module tab strip", () => {
   });
 
   it("switches modules with the existing selection behavior", async () => {
-    const profile = localProfile();
+    const profile = {
+      ...localProfile(),
+      module_links: [{ module_id: "module-old", path: "/repos/old" }],
+    };
     seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
     localStorage.setItem(
       "studio.studio.selectedTaskByModule",
@@ -826,7 +850,12 @@ describe("Studio module tab strip", () => {
   });
 
   it("shows the recent module as active after project-load restoration", async () => {
-    const profile = localProfile();
+    const profile = {
+      ...localProfile(),
+      module_links: [
+        { module_id: "module-middle", path: "/repos/middle" },
+      ],
+    };
     seedStudioConfig({ profiles: [profile], recentProfileIndex: 0 });
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

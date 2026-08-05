@@ -52,21 +52,3 @@ PROVIDER_CAPABILITIES = {
         ),
     )
 }
-
-
-def capabilities_payload() -> list[dict]:
-    from apps.settings_store.provider_catalog import load_provider_catalog
-
-    activated_providers = load_provider_catalog().activated_providers
-    return [
-        {
-            "agent": capability.slug,
-            "accepts_model": capability.accepts_model,
-            "accepts_any_model": capability.accepts_any_model,
-            "model_prefixes": list(capability.model_prefixes),
-            "model_aliases": list(capability.model_aliases),
-            "reasoning_levels": list(capability.reasoning_levels),
-        }
-        for capability in PROVIDER_CAPABILITIES.values()
-        if capability.slug in activated_providers
-    ]

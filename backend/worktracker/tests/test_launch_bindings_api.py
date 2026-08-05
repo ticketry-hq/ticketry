@@ -3,7 +3,6 @@ import uuid
 
 import pytest
 
-from apps.settings_store.models import AppSetting
 from worktracker.models import IssueType, LaunchBinding, State
 from worktracker.tests.conftest import BASE
 
@@ -71,34 +70,7 @@ def test_immediate_launch_binding_put_is_removed(client, project, binding_ids, a
 
 
 @pytest.mark.django_db
-def test_provider_capabilities_are_exposed_to_settings(client, auth):
+def test_provider_capabilities_route_is_removed(client, auth):
     response = client.get(f"{BASE}/launch-bindings/provider-capabilities", headers=auth)
 
-    assert response.status_code == 200
-    capabilities = {row["agent"]: row for row in response.json()}
-    assert capabilities["claude"]["reasoning_levels"] == [
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-        "max",
-    ]
-    assert capabilities["gemini"]["reasoning_levels"] == []
-    assert capabilities["gemini"]["model_prefixes"] == ["gemini-"]
-    assert capabilities["gemini"]["accepts_any_model"] is False
-    assert "agy" not in capabilities
-
-
-@pytest.mark.django_db
-def test_provider_capabilities_omit_deactivated_providers(client, auth):
-    AppSetting.objects.create(
-        scope="host",
-        key="provider_catalog",
-        value='{"activated_providers":["claude","gemini"],"global_default":null}',
-        updated_at="2026-07-25T00:00:00+00:00",
-    )
-
-    response = client.get(f"{BASE}/launch-bindings/provider-capabilities", headers=auth)
-
-    assert response.status_code == 200
-    assert [row["agent"] for row in response.json()] == ["claude", "gemini"]
+    assert response.status_code == 404

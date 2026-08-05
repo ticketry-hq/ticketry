@@ -49,7 +49,7 @@ The independently inheritable prompt, agent/provider, model, and reasoning defau
 _Avoid_: edge launch configuration, parent-depth configuration, required launch form
 
 **Activated provider**:
-A built-in coding-agent provider (claude, codex, gemini) the host has enabled in Settings. Activation is host-wide and lives outside the code-owned adapter set; the four adapters still exist in code, but only activated ones appear in launch selectors. A launch bound to a non-activated provider is blocked, never silently redirected to another provider.
+A coding-agent provider whose persisted Provider row is activated. Activation is host-wide and mutable through the provider catalog API; executable adapters remain code-owned, and startup fails when adapter slugs and Provider rows differ in either direction. Only activated rows appear in launch selectors. A launch bound to a non-activated provider is blocked, never silently redirected to another provider.
 _Avoid_: installed provider, available adapter, provider catalog entry
 
 **Global launch default**:

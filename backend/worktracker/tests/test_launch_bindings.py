@@ -212,14 +212,9 @@ def test_provider_model_incompatibility_is_clear(project, launch_policy):
 
 @pytest.mark.django_db
 def test_provider_validation_rejects_a_deactivated_provider():
-    from apps.settings_store.models import AppSetting
+    from worktracker.models import Provider
 
-    AppSetting.objects.create(
-        scope="host",
-        key="provider_catalog",
-        value='{"activated_providers":["claude"],"global_default":null}',
-        updated_at="2026-07-25T00:00:00+00:00",
-    )
+    Provider.objects.filter(slug="codex").update(activated=False)
 
     with pytest.raises(LaunchBindingError) as exc:
         validate_provider_options(agent="codex", model="gpt-5.4", reasoning="high")
@@ -239,10 +234,7 @@ def test_unattended_launch_accepts_a_blank_binding_backed_by_the_global_default(
     AppSetting.objects.create(
         scope="host",
         key="provider_catalog",
-        value=(
-            '{"activated_providers":["claude","codex","gemini"],'
-            '"global_default":{"provider":"codex","model":"gpt-5.4"}}'
-        ),
+        value='{"global_default":{"provider":"codex","model":"gpt-5.4"}}',
         updated_at="2026-07-27T00:00:00+00:00",
     )
     binding = LaunchBinding.objects.create(

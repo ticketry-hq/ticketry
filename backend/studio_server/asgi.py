@@ -66,6 +66,20 @@ async def _reconcile_worktrees() -> None:
 register_startup(_reconcile_worktrees)
 
 
+async def _validate_provider_catalog() -> None:
+    """Refuse readiness when persisted providers and executable adapters drift."""
+
+    from apps.terminals.agents.registry import all_slugs
+    from worktracker.services.provider_catalog import (
+        assert_provider_catalog_matches_adapters,
+    )
+
+    await asyncio.to_thread(assert_provider_catalog_matches_adapters, all_slugs())
+
+
+register_startup(_validate_provider_catalog)
+
+
 async def _reap_dead_terminal_sessions() -> None:
     """Soft-delete terminal rows whose tmux session died while we were down.
 

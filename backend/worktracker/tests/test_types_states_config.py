@@ -53,9 +53,7 @@ def _seed(project):
 
 
 def _types(client, project, auth):
-    return client.get(
-        f"{BASE}/projects/{project.id}/issue-types", headers=auth
-    ).json()
+    return client.get(f"{BASE}/projects/{project.id}/issue-types", headers=auth).json()
 
 
 def _states(client, project, auth):
@@ -66,7 +64,7 @@ def _make_task(client, project, auth, *, issue_type_id, **body):
     body.setdefault("name", "T")
     body["issue_type_id"] = str(issue_type_id)
     r = post_json(client, f"{BASE}/projects/{project.id}/work-items", body, auth)
-    assert r.status_code == 200, r.content
+    assert r.status_code == 201, r.content
     return r.json()
 
 
@@ -112,7 +110,7 @@ def test_create_type_appends_to_level(client, project, auth):
         {"name": "Bug", "level": "task", "color": "#ef4444"},
         auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     body = r.json()
     # Task-level seeds are Story(1), PathFind(2), Implementation(3), so the new
     # task type lands at 4.
@@ -132,7 +130,7 @@ def test_create_type_duplicate_name_409(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_create_type_bad_level_422(client, project, auth):
+def test_create_type_bad_level_400(client, project, auth):
     _seed(project)
     r = post_json(
         client,
@@ -140,7 +138,7 @@ def test_create_type_bad_level_422(client, project, auth):
         {"name": "Saga", "level": "portfolio"},
         auth,
     )
-    assert r.status_code == 422
+    assert r.status_code == 400
 
 
 # --- derive on create -------------------------------------------------------
@@ -152,7 +150,7 @@ def test_create_with_type_sets_binary(client, project, auth):
     story = IssueType.objects.get(project=project, name="Story", level="task")
 
     task = _make_task(client, project, auth, issue_type_id=str(story.id))
-    assert task["issue_type"]["name"] == "Story"
+    assert task["issue_type"] == str(story.id)
     assert Issue.objects.get(pk=task["id"]).type == "task"
 
 
@@ -165,7 +163,7 @@ def test_create_without_type_is_rejected(client, project, auth):
         {"name": "Untyped"},
         auth,
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
     assert not Issue.objects.filter(project=project, name="Untyped").exists()
 
 
@@ -262,7 +260,7 @@ def test_create_state_appends(client, project, auth):
         {"name": "In Review", "group": "started", "color": "#f59e0b"},
         auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     names = [s["name"] for s in _states(client, project, auth)]
     assert "In Review" in names
 
@@ -278,7 +276,7 @@ def test_create_state_without_color_returns_persisted_palette_color(
 
     r = post_json(client, f"{BASE}/projects/{project.id}/states", body, auth)
 
-    assert r.status_code == 200
+    assert r.status_code == 201
     assert r.json()["color"] in CARBON_DARK_PALETTE
     assert State.objects.get(pk=r.json()["id"]).color == r.json()["color"]
 
@@ -292,7 +290,7 @@ def test_create_state_preserves_explicit_color(client, project, auth):
         auth,
     )
 
-    assert r.status_code == 200
+    assert r.status_code == 201
     assert r.json()["color"] == "#aBc123"
 
 
@@ -323,7 +321,7 @@ def test_create_state_without_color_returns_conflict_when_palette_exhausted(
 
 
 @pytest.mark.django_db
-def test_create_state_bad_group_422(client, project, auth):
+def test_create_state_bad_group_400(client, project, auth):
     _seed(project)
     r = post_json(
         client,
@@ -331,7 +329,7 @@ def test_create_state_bad_group_422(client, project, auth):
         {"name": "Weird", "group": "sixth"},
         auth,
     )
-    assert r.status_code == 422
+    assert r.status_code == 400
 
 
 @pytest.mark.django_db
@@ -352,11 +350,11 @@ def test_patch_state_rename_recolor_regroup(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_patch_state_bad_group_422(client, project, auth):
+def test_patch_state_bad_group_400(client, project, auth):
     _seed(project)
     todo = State.objects.get(project=project, name="Spec")
     r = patch_json(client, f"{BASE}/states/{todo.id}", {"group": "nope"}, auth)
-    assert r.status_code == 422
+    assert r.status_code == 400
 
 
 @pytest.mark.django_db
@@ -368,7 +366,7 @@ def test_delete_last_state_in_group_409(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_delete_state_in_use_409_then_reassign(client, project, auth):
+def test_delete_occupied_state_409_then_empty_state_deletes(client, project, auth):
     _seed(project)
     # A custom, deletable state (canonical states are all protected) plus a
     # sibling reassign target — both in the started group so neither is the
@@ -399,17 +397,14 @@ def test_delete_state_in_use_409_then_reassign(client, project, auth):
 
     blocked = client.delete(f"{BASE}/states/{doomed['id']}", headers=auth)
     assert blocked.status_code == 409
+    assert "occupied" in blocked.json()["detail"].lower()
+    assert Issue.objects.get(pk=task["id"]).state_id == uuid.UUID(doomed["id"])
 
-    impact = client.get(
-        f"{BASE}/states/{doomed['id']}/impact", headers=auth
-    ).json()
-    ok = client.delete(
-        f"{BASE}/states/{doomed['id']}?reassign_to={extra['id']}"
-        f"&impact_token={impact['impact_token']}",
-        headers=auth,
-    )
+    Issue.objects.filter(pk=task["id"]).delete()
+    ok = client.delete(f"{BASE}/states/{doomed['id']}", headers=auth)
     assert ok.status_code == 204
-    assert str(Issue.objects.get(pk=task["id"]).state_id) == extra["id"]
+    assert not State.objects.filter(pk=doomed["id"]).exists()
+    assert State.objects.filter(pk=extra["id"]).exists()
 
 
 @pytest.mark.django_db
@@ -444,12 +439,11 @@ def test_reorder_states_incomplete_set_422(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_workitem_out_carries_required_nested_issue_type(client, project, auth):
+def test_workitem_out_carries_bare_issue_type_id(client, project, auth):
     _seed(project)
     story = IssueType.objects.get(project=project, name="Story")
     task = _make_task(client, project, auth, issue_type_id=story.id)
-    # Present and nested, never null or a bare id.
-    assert task["issue_type"]["level"] == "task"
+    assert task["issue_type"] == str(story.id)
 
 
 @pytest.mark.django_db

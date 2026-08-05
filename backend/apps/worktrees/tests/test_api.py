@@ -1,7 +1,7 @@
 """HTTP-surface tests for the opt-in worktree block (Worktrees W3, #589).
 
 Drives the real ``git`` binary through the W1 engine; the only thing stubbed
-is the local-profile resolution, so ``module_folders`` points at a repo built
+is the local-profile resolution, so ``module_links`` points at a repo built
 under ``tmp_path``. Each AC maps to at least one test here.
 """
 
@@ -32,7 +32,7 @@ def profile(monkeypatch, repo):
     """Stub the local profile so module 'mod-1' maps to the test repo."""
 
     fake = types.SimpleNamespace(
-        module_folders={MODULE_ID: str(repo)},
+        module_links=[{"module_id": MODULE_ID, "path": str(repo)}],
         workspace_slug="meml",
     )
     monkeypatch.setattr("apps.worktrees.api._current_profile", lambda: fake)
@@ -72,7 +72,8 @@ def test_get_status_no_repo(monkeypatch, tmp_path):
     bare = tmp_path / "not-a-repo"
     bare.mkdir()
     fake = types.SimpleNamespace(
-        module_folders={MODULE_ID: str(bare)}, workspace_slug="meml"
+        module_links=[{"module_id": MODULE_ID, "path": str(bare)}],
+        workspace_slug="meml",
     )
     monkeypatch.setattr("apps.worktrees.api._current_profile", lambda: fake)
 
@@ -149,7 +150,7 @@ def test_create_idempotent(profile, repo):
 def test_create_no_folder(monkeypatch):
     """No configured local folder → kind=no_repo, never a 500."""
 
-    fake = types.SimpleNamespace(module_folders={}, workspace_slug="meml")
+    fake = types.SimpleNamespace(module_links=[], workspace_slug="meml")
     monkeypatch.setattr("apps.worktrees.api._current_profile", lambda: fake)
 
     resp = client.post("/worktrees/t1/create", json={"module_id": MODULE_ID})

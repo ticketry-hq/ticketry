@@ -141,7 +141,6 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
         key="provider_catalog",
         value=json.dumps(
             {
-                "activated_providers": ["codex"],
                 "global_default": {"provider": "codex", "model": "gpt-5.4"},
             }
         ),
@@ -149,9 +148,7 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
     )
     story_type = IssueType.objects.get(project=project, name="Story")
     module_type = IssueType.objects.get(project=project, level="module")
-    states = {
-        state.name: state for state in State.objects.filter(project=project)
-    }
+    states = {state.name: state for state in State.objects.filter(project=project)}
     module = Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -185,9 +182,10 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
     story.state = states["Implement"]
     story.save(update_fields=["state", "updated_at"])
 
-    assert [
-        launch["launch_configuration"].required_skills for launch in launches
-    ] == [("to-spec",), ("to-tickets",)]
+    assert [launch["launch_configuration"].required_skills for launch in launches] == [
+        ("to-spec",),
+        ("to-tickets",),
+    ]
     assert AutomationAttempt.objects.filter(issue=story).count() == 2
 
 
@@ -430,9 +428,7 @@ def test_delayed_event_uses_frozen_historical_auto_start(monkeypatch):
         events.append(kwargs)
 
     monkeypatch.setattr("apps.execution.driver.spawn_run", spawn)
-    issue_state_changed.disconnect(
-        dispatch_uid="execution_launch_workflow_automation"
-    )
+    issue_state_changed.disconnect(dispatch_uid="execution_launch_workflow_automation")
     issue_state_changed.connect(capture, dispatch_uid="test-capture-delayed")
     try:
         issue.state = after

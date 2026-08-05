@@ -12,6 +12,9 @@ from worktracker.models import (
     IssueType,
     IssueTypeTransition,
     LaunchBinding,
+    AgentModel,
+    Provider,
+    ReasoningLevel,
     State,
     Workspace,
 )
@@ -352,14 +355,20 @@ def test_project_creation_only_adds_missing_seed_rows(monkeypatch):
             agent_allowed=False,
         )
         state_name = REVIEWED_DEFAULTS["states"][0]["name"]
+        provider = Provider.objects.get(slug="claude")
+        model = AgentModel.objects.create(
+            provider=provider,
+            name="project-owned-model",
+        )
+        reasoning = ReasoningLevel.objects.get(name="high")
+        model.permitted_reasoning_levels.add(reasoning)
         binding = LaunchBinding.objects.create(
             issue_type=story,
             state=states[state_name],
             prompt="Project-owned prompt",
             required_skills=["project-owned-skill"],
-            agent="project-owned-agent",
-            model="project-owned-model",
-            reasoning="high",
+            model=model,
+            reasoning=reasoning,
             auto_start=True,
             subtree_run_enabled=False,
         )

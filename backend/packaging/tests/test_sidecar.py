@@ -354,6 +354,11 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
     ) as port:
         headers = {"x-api-key": (tmp_path / "worktracker_token").read_text().strip()}
         base_url = f"http://127.0.0.1:{port}/api/work-tracker"
+        workspace_response = httpx.get(
+            f"{base_url}/workspace", headers=headers, timeout=30
+        )
+        assert workspace_response.status_code == 200
+        assert workspace_response.json()["slug"] == "meml"
         project_response = httpx.post(
             f"{base_url}/projects",
             headers=headers,
@@ -371,10 +376,14 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
         assert issue_types_response.status_code == 200
         issue_types = issue_types_response.json()
         module_type_id = next(
-            issue_type["id"] for issue_type in issue_types if issue_type["level"] == "module"
+            issue_type["id"]
+            for issue_type in issue_types
+            if issue_type["level"] == "module"
         )
         task_type_id = next(
-            issue_type["id"] for issue_type in issue_types if issue_type["name"] == "Story"
+            issue_type["id"]
+            for issue_type in issue_types
+            if issue_type["name"] == "Story"
         )
 
         module_response = httpx.post(
@@ -518,9 +527,7 @@ def test_frozen_backend_refuses_to_start_without_native_hook_runner(tmp_path):
 
     assert result.returncode == 1
     assert (
-        result.stdout.splitlines().count(
-            "MUXED_FAILURE crash sidecar could not start"
-        )
+        result.stdout.splitlines().count("MUXED_FAILURE crash sidecar could not start")
         == 1
     )
     assert "packaged hook runner is missing" in result.stderr
@@ -639,6 +646,12 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
             raise AssertionError("sidecar did not emit a readiness line")
 
         url = f"http://127.0.0.1:{port}/api/work-tracker/projects"
+        workspace_url = f"http://127.0.0.1:{port}/api/work-tracker/workspace"
+        workspace_response = httpx.get(
+            workspace_url, headers={"x-api-key": credential}, timeout=30
+        )
+        assert workspace_response.status_code == 200
+        assert workspace_response.json()["slug"] == "meml"
         assert (
             httpx.get(url, headers={"x-api-key": credential}, timeout=5).status_code
             == 200
@@ -651,14 +664,14 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
         assert config_response.status_code == 200
         assert config_response.json() == {
             "recent_profile_index": 0,
-            "features": {"projects": False},
+            "features": {"sidebar": False, "projects": False},
             "profiles": [
                 {
                     "name": "Local",
                     "workspace_slug": "meml",
                     "agent_prompt": None,
                     "agent_prompts": {},
-                    "module_folders": {},
+                    "module_links": [],
                     "recent_project_id": None,
                     "recent_module_ids": {},
                 }
@@ -693,9 +706,7 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
             timeout=5,
         )
         assert preflight.status_code == 204
-        assert (
-            preflight.headers["access-control-allow-origin"] == "tauri://localhost"
-        )
+        assert preflight.headers["access-control-allow-origin"] == "tauri://localhost"
         assert "x-api-key" in preflight.headers["access-control-allow-headers"]
         assert (
             httpx.get(f"http://127.0.0.1:{port}/wt-admin/", timeout=5).status_code

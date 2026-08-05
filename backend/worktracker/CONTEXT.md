@@ -127,9 +127,9 @@ _Avoid_: enabled state, per-type state list, hidden state
 The cleanup that accompanies any edit which disconnects states from an issue
 type's start state (removing a state, deleting an edge, changing the start
 state): the disconnected states' transitions and launch bindings for that
-type are deleted, after a human confirms a preview of exactly what goes. The
-project state catalog is never touched — pruning removes per-type
-configuration, not states.
+type are deleted. The client derives the impact from the canonical rows before
+a human confirms the edit. The project state catalog is never touched —
+pruning removes per-type configuration, not states.
 _Avoid_: cascade delete, orphan cleanup, state deletion
 
 **Transition origin**:
@@ -194,3 +194,27 @@ while any item in the subtree has live agent work. Cancellation also archives,
 but as a side effect of entering a cancelled state; archiving is the direct
 act, and it says nothing about whether the work was finished or abandoned.
 _Avoid_: delete, cancel, done, soft delete, hidden state, archived state
+
+**Route registry**:
+The single declaration of which reads and which writes exist for each model,
+against which the live route table is checked. It answers "how many ways can
+this model be read or written?" — a question the surface could not previously
+answer — and it forbids the undeclared route rather than merely discouraging it.
+It is asserted against the route table, not against any web framework, so it
+outlives both.
+_Avoid_: URL conf, API docs, OpenAPI document, endpoint list
+
+**Canonical collection read**:
+The one read that returns a model's rows for a given scope. Narrower views are
+derived from it by the caller rather than requested as separate reads, so no two
+reads can return overlapping row sets and no client can end up holding the same
+row twice under two different keys.
+_Avoid_: filtered list endpoint, list variant, include-flag query
+
+**Domain operation**:
+A write that is not model CRUD — work-item, state, or issue-type reorder;
+remove-state-from-workflow (because no row records graph membership); or
+onboarding acknowledgement. Each is deliberately exceptional and lives in a
+named place apart from the CRUD surface, so exceptions stay countable instead
+of hiding among equally-bespoke handlers. Transition rows themselves are CRUD.
+_Avoid_: custom action, RPC endpoint, ad-hoc view

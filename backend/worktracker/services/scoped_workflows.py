@@ -8,11 +8,6 @@ from django.db import transaction
 
 from worktracker.models import IssueType, IssueTypeTransition, LaunchBinding, State
 from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
-from worktracker.services.launch_bindings import (
-    validate_provider_options,
-    validate_required_skills,
-    validate_unattended_launch_binding,
-)
 
 
 def _issue_type(type_id) -> IssueType:
@@ -46,13 +41,6 @@ def _state(issue_type: IssueType, state_id, *, field: str = "state") -> State:
 def _advance_revision(issue_type: IssueType) -> None:
     issue_type.workflow_revision += 1
     issue_type.save(update_fields=["workflow_revision", "updated_at"])
-
-
-def _check_revision(issue_type: IssueType, workflow_revision: int) -> None:
-    if issue_type.workflow_revision != workflow_revision:
-        raise ConflictError(
-            "Workflow revision is stale; read the current workflow and retry."
-        )
 
 
 def _reachable(seed_ids: set, edges) -> set:
@@ -91,15 +79,15 @@ def _launch_binding_payload(binding):
         "state_id": binding.state_id,
         "prompt": binding.prompt,
         "required_skills": binding.required_skills,
-        "agent": binding.agent,
-        "model": binding.model,
-        "reasoning": binding.reasoning,
+        "agent": binding.provider_slug,
+        "model": binding.model_name,
+        "reasoning": binding.reasoning_name,
         "auto_start": binding.auto_start,
         "subtree_run_enabled": binding.subtree_run_enabled,
     }
 
 
-def _build_impact(
+def _prune_impact(
     issue_type: IssueType,
     *,
     operation: str,
@@ -137,8 +125,7 @@ def _build_impact(
         matching = [
             edge
             for edge in transitions
-            if edge.from_state_id == from_state_id
-            and edge.to_state_id == to_state_id
+            if edge.from_state_id == from_state_id and edge.to_state_id == to_state_id
         ]
         if not matching:
             raise NotFoundError("Workflow transition not found.")
@@ -148,9 +135,7 @@ def _build_impact(
     else:
         raise ValidationError("Unsupported workflow impact operation.")
 
-    remaining = [
-        edge for edge in transitions if edge.id not in removed_edge_ids
-    ]
+    remaining = [edge for edge in transitions if edge.id not in removed_edge_ids]
     reachable = _reachable_state_ids(next_start_state_id, remaining)
     deleted_transitions = [
         edge
@@ -163,26 +148,8 @@ def _build_impact(
         binding for binding in bindings if binding.state_id not in reachable
     ]
     return {
-        "workflow_revision": issue_type.workflow_revision,
         "deleted_transition_rows": deleted_transitions,
         "deleted_binding_rows": deleted_bindings,
-        "deleted_transitions": [
-            _transition_payload(edge) for edge in deleted_transitions
-        ],
-        "deleted_launch_bindings": [
-            _launch_binding_payload(binding) for binding in deleted_bindings
-        ],
-        "disabled_auto_start_state_ids": [
-            binding.state_id for binding in deleted_bindings if binding.auto_start
-        ],
-    }
-
-
-def _public_impact(impact):
-    return {
-        key: value
-        for key, value in impact.items()
-        if key not in {"deleted_transition_rows", "deleted_binding_rows"}
     }
 
 
@@ -193,28 +160,6 @@ def _delete_impact_rows(impact) -> None:
         IssueTypeTransition.objects.filter(id__in=transition_ids).delete()
     if binding_ids:
         LaunchBinding.objects.filter(id__in=binding_ids).delete()
-
-
-def preview_impact(
-    type_id,
-    *,
-    operation: str,
-    workflow_revision: int,
-    state_id=None,
-    from_state_id=None,
-    to_state_id=None,
-):
-    issue_type = _issue_type(type_id)
-    _check_revision(issue_type, workflow_revision)
-    return _public_impact(
-        _build_impact(
-            issue_type,
-            operation=operation,
-            state_id=state_id,
-            from_state_id=from_state_id,
-            to_state_id=to_state_id,
-        )
-    )
 
 
 def _standing_warnings(issue_type: IssueType, states, transitions):
@@ -235,9 +180,7 @@ def _standing_warnings(issue_type: IssueType, states, transitions):
     )
 
     member_states = [state for state in states if state.id in members]
-    completed = {
-        state.id for state in member_states if state.group == "completed"
-    }
+    completed = {state.id for state in member_states if state.group == "completed"}
     can_reach_completed = _reachable(
         completed,
         (
@@ -269,12 +212,11 @@ def _launch_policy_warnings(bindings, states):
     failed launch at a time.
     """
 
-    from apps.settings_store.provider_catalog import (
-        PROVIDER_ORDER,
-        load_provider_catalog,
-    )
+    from apps.settings_store.provider_catalog import load_provider_catalog
+    from worktracker.services.provider_catalog import activated_provider_slugs
 
     catalog = load_provider_catalog()
+    activated_providers = activated_provider_slugs()
     state_names = {state.id: state.name for state in states}
     warnings = []
     for binding in bindings:
@@ -282,15 +224,15 @@ def _launch_policy_warnings(bindings, states):
             continue
         state_name = state_names.get(binding.state_id, "This state")
         if (
-            binding.agent in PROVIDER_ORDER
-            and binding.agent not in catalog.activated_providers
+            binding.provider_slug is not None
+            and binding.provider_slug not in activated_providers
         ):
             warnings.append(
                 {
                     "code": "provider_not_activated",
                     "state_id": binding.state_id,
                     "message": (
-                        f"{state_name} launches with {binding.agent}, which is "
+                        f"{state_name} launches with {binding.provider_slug}, which is "
                         "deactivated in Settings → Model configuration; those "
                         "launches are blocked."
                     ),
@@ -298,7 +240,7 @@ def _launch_policy_warnings(bindings, states):
             )
         elif (
             binding.auto_start
-            and binding.agent is None
+            and binding.provider_slug is None
             and catalog.global_default is None
         ):
             warnings.append(
@@ -336,9 +278,7 @@ def get_workflow(type_id):
         "start_state_id": issue_type.start_state_id,
         "workflow_revision": issue_type.workflow_revision,
         "transitions": [_transition_payload(edge) for edge in transitions],
-        "launch_bindings": [
-            _launch_binding_payload(binding) for binding in bindings
-        ],
+        "launch_bindings": [_launch_binding_payload(binding) for binding in bindings],
         "warnings": [
             *_standing_warnings(issue_type, states, transitions),
             *_launch_policy_warnings(bindings, states),
@@ -364,22 +304,20 @@ def add_transition(
         issue_type=issue_type, from_state=from_state, to_state=to_state
     ).exists():
         raise ConflictError("That workflow transition already exists.")
-    IssueTypeTransition.objects.create(
+    edge = IssueTypeTransition.objects.create(
         issue_type=issue_type,
         from_state=from_state,
         to_state=to_state,
         agent_allowed=agent_allowed,
     )
     _advance_revision(issue_type)
-    return get_workflow(type_id)
+    return edge
 
 
 @transaction.atomic
-def remove_transition(
-    type_id, from_state_id, to_state_id, *, workflow_revision: int
-):
+def remove_transition(type_id, from_state_id, to_state_id, *, workflow_revision: int):
     issue_type = _locked_issue_type(type_id, workflow_revision)
-    impact = _build_impact(
+    impact = _prune_impact(
         issue_type,
         operation="remove_transition",
         from_state_id=from_state_id,
@@ -387,20 +325,18 @@ def remove_transition(
     )
     _delete_impact_rows(impact)
     _advance_revision(issue_type)
-    return get_workflow(type_id)
 
 
 @transaction.atomic
 def remove_state(type_id, state_id, *, workflow_revision: int):
     issue_type = _locked_issue_type(type_id, workflow_revision)
-    impact = _build_impact(
+    impact = _prune_impact(
         issue_type,
         operation="remove_state",
         state_id=state_id,
     )
     _delete_impact_rows(impact)
     _advance_revision(issue_type)
-    return get_workflow(type_id)
 
 
 @transaction.atomic
@@ -426,14 +362,14 @@ def set_transition_permission(
     edge.agent_allowed = agent_allowed
     edge.save(update_fields=["agent_allowed"])
     _advance_revision(issue_type)
-    return get_workflow(type_id)
+    return edge
 
 
 @transaction.atomic
 def set_start_state(type_id, *, state_id, workflow_revision: int):
     issue_type = _locked_issue_type(type_id, workflow_revision)
     state = _state(issue_type, state_id, field="state")
-    impact = _build_impact(
+    impact = _prune_impact(
         issue_type,
         operation="set_start_state",
         state_id=state.id,
@@ -441,135 +377,5 @@ def set_start_state(type_id, *, state_id, workflow_revision: int):
     issue_type.start_state = state
     _delete_impact_rows(impact)
     issue_type.workflow_revision += 1
-    issue_type.save(
-        update_fields=["start_state", "workflow_revision", "updated_at"]
-    )
-    return get_workflow(type_id)
-
-
-@transaction.atomic
-def upsert_launch_binding(
-    type_id,
-    state_id,
-    *,
-    prompt,
-    agent,
-    model,
-    reasoning,
-    workflow_revision: int,
-    required_skills=None,
-):
-    issue_type = _locked_issue_type(type_id, workflow_revision)
-    state = _state(issue_type, state_id, field="state")
-    agent, model, reasoning = validate_provider_options(
-        agent=agent, model=model, reasoning=reasoning
-    )
-    current = LaunchBinding.objects.filter(
-        issue_type=issue_type, state=state
-    ).first()
-    if required_skills is None:
-        required_skills = current.required_skills if current is not None else []
-    required_skills = validate_required_skills(
-        required_skills=required_skills,
-        prompt=prompt,
-    )
-    if current is not None and current.auto_start:
-        proposed = LaunchBinding(
-            issue_type=issue_type,
-            state=state,
-            prompt=prompt or "",
-            required_skills=required_skills,
-            agent=agent,
-            model=model,
-            reasoning=reasoning,
-            auto_start=True,
-        )
-        validate_unattended_launch_binding(proposed)
-    LaunchBinding.objects.update_or_create(
-        issue_type=issue_type,
-        state=state,
-        defaults={
-            "prompt": prompt or "",
-            "required_skills": required_skills,
-            "agent": agent,
-            "model": model,
-            "reasoning": reasoning,
-        },
-    )
-    _advance_revision(issue_type)
-    return get_workflow(type_id)
-
-
-@transaction.atomic
-def clear_launch_binding(type_id, state_id, *, workflow_revision: int):
-    issue_type = _locked_issue_type(type_id, workflow_revision)
-    state = _state(issue_type, state_id, field="state")
-    binding = LaunchBinding.objects.filter(
-        issue_type=issue_type, state=state
-    ).first()
-    if binding is not None and binding.subtree_run_enabled:
-        binding.prompt = ""
-        binding.required_skills = []
-        binding.agent = None
-        binding.model = None
-        binding.reasoning = None
-        binding.auto_start = False
-        binding.save(
-            update_fields=[
-                "prompt",
-                "required_skills",
-                "agent",
-                "model",
-                "reasoning",
-                "auto_start",
-                "updated_at",
-            ]
-        )
-    elif binding is not None:
-        binding.delete()
-    _advance_revision(issue_type)
-    return get_workflow(type_id)
-
-
-@transaction.atomic
-def set_auto_start(
-    type_id, state_id, *, auto_start: bool, workflow_revision: int
-):
-    issue_type = _locked_issue_type(type_id, workflow_revision)
-    state = _state(issue_type, state_id, field="state")
-    binding = LaunchBinding.objects.filter(
-        issue_type=issue_type, state=state
-    ).first()
-    # A row that exists only to carry ``subtree_run_enabled`` is not a launch
-    # configuration, so it must not satisfy this guard.
-    if binding is None or not binding.has_launch_policy:
-        raise ValidationError(
-            "Configure a launch binding before changing auto-start."
-        )
-    if auto_start:
-        validate_unattended_launch_binding(binding)
-    binding.auto_start = auto_start
-    binding.save(update_fields=["auto_start", "updated_at"])
-    _advance_revision(issue_type)
-    return get_workflow(type_id)
-
-
-@transaction.atomic
-def set_subtree_run(
-    type_id, state_id, *, enabled: bool, workflow_revision: int
-):
-    issue_type = _locked_issue_type(type_id, workflow_revision)
-    state = _state(issue_type, state_id, field="state")
-    binding, _ = LaunchBinding.objects.get_or_create(
-        issue_type=issue_type,
-        state=state,
-    )
-    binding.subtree_run_enabled = enabled
-    if not enabled and not binding.has_launch_policy and not binding.auto_start:
-        # The row only ever existed to carry this flag. Leaving it behind would
-        # leave an empty launch policy on a state that has none.
-        binding.delete()
-    else:
-        binding.save(update_fields=["subtree_run_enabled", "updated_at"])
-    _advance_revision(issue_type)
-    return get_workflow(type_id)
+    issue_type.save(update_fields=["start_state", "workflow_revision", "updated_at"])
+    return issue_type

@@ -25,9 +25,7 @@ def seeded_agent_run_issues(request):
     ):
         ensure_issue(project_id=project_id, module_id=module_id, task_id=None)
         for task_id in task_ids:
-            ensure_issue(
-                project_id=project_id, module_id=module_id, task_id=task_id
-            )
+            ensure_issue(project_id=project_id, module_id=module_id, task_id=task_id)
 
 
 @pytest.fixture
@@ -59,9 +57,7 @@ def default_task_launch_configuration(monkeypatch):
             reasoning=None,
         )
 
-    monkeypatch.setattr(
-        session_module, "resolve_task_launch_configuration", resolve
-    )
+    monkeypatch.setattr(session_module, "resolve_task_launch_configuration", resolve)
 
 
 def write_profiles(config_file, profiles, recent=None):
@@ -78,7 +74,7 @@ def sample_profile():
         "workspace_slug": "ws",
         "agent_prompt": None,
         "agent_prompts": {},
-        "module_folders": {},
+        "module_links": [],
         "recent_project_id": None,
         "recent_module_ids": {},
     }

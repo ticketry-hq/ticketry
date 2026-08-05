@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 from studio_server.atomic_files import atomic_write_json
 
@@ -26,10 +26,17 @@ PROFILE_FIELDS = {
     "workspace_slug",
     "agent_prompt",
     "agent_prompts",
-    "module_folders",
+    "module_links",
     "recent_project_id",
     "recent_module_ids",
 }
+
+
+class ModuleLink(TypedDict):
+    """A profile-scoped association between a module and its local path."""
+
+    module_id: str
+    path: str
 
 
 def load_features() -> dict[str, bool]:
@@ -51,7 +58,7 @@ def load_features() -> dict[str, bool]:
             data["projects"]
             if isinstance(data.get("projects"), bool)
             else DEFAULT_FEATURES["projects"]
-        )
+        ),
     }
     if not resolved["sidebar"]:
         resolved["projects"] = False
@@ -73,7 +80,7 @@ class Profile:
         workspace_slug: str,
         agent_prompt: Optional[str] = None,
         agent_prompts: Optional[dict] = None,
-        module_folders: Optional[dict] = None,
+        module_links: Optional[list[ModuleLink]] = None,
         recent_project_id: Optional[str] = None,
         recent_module_ids: Optional[dict] = None,
     ):
@@ -81,9 +88,29 @@ class Profile:
         self.workspace_slug = workspace_slug
         self.agent_prompt = agent_prompt
         self.agent_prompts = agent_prompts or {}
-        self.module_folders = module_folders or {}
+        self.module_links: list[ModuleLink] = [
+            dict(link) for link in (module_links or [])
+        ]
         self.recent_project_id = recent_project_id
         self.recent_module_ids = recent_module_ids or {}
+
+
+def module_link_path(
+    profile: Optional[Profile], module_id: Optional[str]
+) -> Optional[str]:
+    """Return a module's path from links scoped to ``profile``.
+
+    Duplicate module IDs use the last link. Missing module IDs and empty paths
+    are both represented as ``None`` so each public consumer can preserve its
+    own explicit fallback.
+    """
+
+    if profile is None or not module_id:
+        return None
+    for link in reversed(profile.module_links):
+        if link["module_id"] == module_id:
+            return link["path"] or None
+    return None
 
 
 class Config:
@@ -99,13 +126,7 @@ class Config:
         try:
             data = json.loads(CONFIG_FILE.read_text())
             self.profiles = [
-                Profile(
-                    **{
-                        key: value
-                        for key, value in profile.items()
-                        if key in PROFILE_FIELDS
-                    }
-                )
+                Profile(**profile_from_storage_dict(profile))
                 for profile in data.get("profiles", [])
             ]
             self.recent_profile_index = data.get("recent_profile_index")
@@ -116,7 +137,7 @@ class Config:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         data = {
             "recent_profile_index": self.recent_profile_index,
-            "profiles": [profile_to_dict(profile) for profile in self.profiles],
+            "profiles": [profile_to_storage_dict(profile) for profile in self.profiles],
         }
         atomic_write_json(CONFIG_FILE, data, indent=4)
 
@@ -127,13 +148,43 @@ class Config:
         return self.profiles[self.current_profile_index]
 
 
+def profile_from_storage_dict(profile: dict) -> dict:
+    """Translate a stored profile into the canonical runtime contract."""
+
+    current = {key: value for key, value in profile.items() if key in PROFILE_FIELDS}
+    if "module_links" not in current:
+        legacy_folders = profile.get("module_folders")
+        if isinstance(legacy_folders, dict):
+            current["module_links"] = [
+                {"module_id": module_id, "path": path}
+                for module_id, path in legacy_folders.items()
+            ]
+    return current
+
+
 def profile_to_dict(profile: Profile) -> dict:
+    """Return the canonical configuration API representation for a profile."""
+
     return {
         "name": profile.name,
         "workspace_slug": profile.workspace_slug,
         "agent_prompt": profile.agent_prompt,
         "agent_prompts": profile.agent_prompts,
-        "module_folders": profile.module_folders,
+        "module_links": profile.module_links,
+        "recent_project_id": profile.recent_project_id,
+        "recent_module_ids": profile.recent_module_ids,
+    }
+
+
+def profile_to_storage_dict(profile: Profile) -> dict:
+    """Return the canonical local-settings representation for a profile."""
+
+    return {
+        "name": profile.name,
+        "workspace_slug": profile.workspace_slug,
+        "agent_prompt": profile.agent_prompt,
+        "agent_prompts": profile.agent_prompts,
+        "module_links": profile.module_links,
         "recent_project_id": profile.recent_project_id,
         "recent_module_ids": profile.recent_module_ids,
     }

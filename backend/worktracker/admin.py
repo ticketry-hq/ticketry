@@ -39,9 +39,14 @@ class IssueTypeAdmin(admin.ModelAdmin):
 
 @admin.register(LaunchBinding)
 class LaunchBindingAdmin(admin.ModelAdmin):
-    list_display = ("issue_type", "state", "agent", "model", "reasoning")
-    list_filter = ("issue_type__project", "issue_type", "state", "agent")
-    search_fields = ("prompt", "model")
+    list_display = ("issue_type", "state", "model", "reasoning")
+    list_filter = (
+        "issue_type__project",
+        "issue_type",
+        "state",
+        "model__provider",
+    )
+    search_fields = ("prompt", "model__name")
 
 
 @admin.register(Issue)

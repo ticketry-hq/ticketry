@@ -106,7 +106,7 @@ describe("Studio workflow settings", () => {
         workspace_slug: "local",
         agent_prompt: null,
         agent_prompts: {},
-        module_folders: {},
+        module_links: [],
       }],
     });
     workflowApi.getIssueTypes.mockResolvedValue([

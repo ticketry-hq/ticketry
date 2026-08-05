@@ -17,7 +17,12 @@ import {
   useStudioStore,
 } from "../../projects";
 import { TEMP_TASK_ID } from "../../agents/types";
-import { getConfigSnapshot, updateProfile } from "./configStore";
+import {
+  getConfigSnapshot,
+  getModuleFolder,
+  updateProfile,
+} from "./configStore";
+import { useModalStore } from "../../../app/modal/modalStore";
 import { toast } from "../../../app/stores/toastStore";
 import { apiErrorMessage } from "../../../shared/api/client";
 import {
@@ -161,7 +166,7 @@ interface TasksStoreState {
   createProject: (body: ProjectCreate) => Promise<ProjectSummary>;
   selectProject: (id: string) => Promise<void>;
   loadModules: (projectId: string) => Promise<void>;
-  createModule: (projectId: string, name: string) => Promise<void>;
+  createModule: (projectId: string, name: string) => Promise<string>;
   createStory: (
     projectId: string,
     moduleId: string,
@@ -545,7 +550,7 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
             workspace_slug: profile.workspace_slug,
             agent_prompt: profile.agent_prompt,
             agent_prompts: profile.agent_prompts,
-            module_folders: profile.module_folders,
+            module_links: profile.module_links,
             recent_project_id: id,
             recent_module_ids: profile.recent_module_ids ?? {},
           })
@@ -583,7 +588,7 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
   },
 
   async createModule(projectId: string, name: string) {
-    // Create in the owned work tracker, refresh, then auto-select the module.
+    // Create in the owned work tracker and refresh both module owners.
     const issueTypes = await loadIssueTypes(projectId, api.getIssueTypes);
     const moduleType = issueTypes.find(
       (issueType) => issueType.level === "module" && issueType.name === "Module",
@@ -601,13 +606,13 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
         ? workItemsStore.reloadModules()
         : Promise.resolve();
 
-    // Both list refreshes and selection (which loads the module's tasks) are
-    // independent once the module exists.
+    // Refresh both module owners once creation succeeds. Selection belongs to
+    // the creation surface after it has stored the new module's folder link.
     await Promise.all([
       get().loadModules(projectId),
-      get().selectModule(created.id),
       refreshWorkItemsModules,
     ]);
+    return created.id;
   },
 
   async createStory(projectId: string, moduleId: string, name: string) {
@@ -640,6 +645,17 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
   },
 
   async selectModule(id: string) {
+    const { recentProfileIndex, profiles } = getConfigSnapshot();
+    const profile =
+      recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
+    if (!getModuleFolder(profile, id)) {
+      useModalStore.getState().pushModal({
+        type: "module-folder",
+        payload: { moduleId: id, resumeModuleSelection: true },
+      });
+      return;
+    }
+
     const projectId = get().selectedProjectId;
     set({
       selectedModuleId: id,
@@ -663,7 +679,7 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
             workspace_slug: profile.workspace_slug,
             agent_prompt: profile.agent_prompt,
             agent_prompts: profile.agent_prompts,
-            module_folders: profile.module_folders,
+            module_links: profile.module_links,
             recent_project_id: profile.recent_project_id ?? null,
             recent_module_ids: nextRecentModuleIds,
           })

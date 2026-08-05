@@ -12,7 +12,7 @@ threadpool under ASGI, so the synchronous git engine + ORM are called
 directly without an ``asyncio.to_thread`` dance.
 
 The working path + record metadata come from the local profile's
-``module_folders`` (the same source W2 uses at launch); the browser supplies
+``module_links`` (the same source W2 uses at launch); the browser supplies
 ``module_id`` (to find the folder) and, for create, the task's
 ``ticket_seq`` + ``task_name`` it already holds — so this app stays free of
 any worktracker/repository coupling.
@@ -27,7 +27,11 @@ from typing import Optional
 from ninja import Router, Schema
 
 from apps.settings_store import config as cfgmod
-from apps.settings_store.config import NoConfigurationSelected, resolve_profile_index
+from apps.settings_store.config import (
+    NoConfigurationSelected,
+    module_link_path,
+    resolve_profile_index,
+)
 from apps.worktrees import dao, service
 
 
@@ -98,7 +102,7 @@ def _module_folder(profile, module_id: Optional[str]) -> Optional[str]:
 
     if profile is None or not module_id:
         return None
-    folder = profile.module_folders.get(module_id) or None
+    folder = module_link_path(profile, module_id)
     if folder and os.path.isdir(folder):
         return folder
     return None

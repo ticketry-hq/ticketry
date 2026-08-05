@@ -2,6 +2,8 @@ import { type FormEvent, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
 import type { ProviderCatalog } from "../../shared/api/types";
 import * as api from "../../features/studio/lib/api";
+import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
+import { getConfigSnapshot } from "../../features/studio/stores/configStore";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";
 import {
   setProviderCapabilities,
@@ -19,6 +21,7 @@ const EMPTY_CATALOG: ProviderCatalog = {
 };
 
 export default function OnboardingWelcome() {
+  const projectsEnabled = getConfigSnapshot().features.projects;
   const [pane, setPane] = useState<WelcomePane>("providers");
   const createProject = useTasksStore((state) => state.createProject);
   const startTour = useOnboardingTourStore((state) => state.start);
@@ -28,6 +31,21 @@ export default function OnboardingWelcome() {
   const [skipping, setSkipping] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [skipError, setSkipError] = useState<string | null>(null);
+
+  const continueFromProviders = async () => {
+    if (projectsEnabled) {
+      setPane("project");
+      return;
+    }
+
+    let projectId = useTasksStore.getState().selectedProjectId;
+    if (!projectId) {
+      const project = await resolveDefaultProject();
+      await useTasksStore.getState().selectProject(project.id);
+      projectId = project.id;
+    }
+    startTour(projectId);
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -72,8 +90,11 @@ export default function OnboardingWelcome() {
           Welcome to WorkTracker
         </div>
 
-        {pane === "providers" ? (
-          <OnboardingProviders onContinue={() => setPane("project")} />
+        {!projectsEnabled || pane === "providers" ? (
+          <OnboardingProviders
+            continueLabel={projectsEnabled ? "Continue" : "Get started"}
+            onContinue={continueFromProviders}
+          />
         ) : (
           <>
             <h1 className="mt-3 text-2xl font-semibold text-text-primary">

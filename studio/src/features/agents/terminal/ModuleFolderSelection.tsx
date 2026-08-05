@@ -2,7 +2,7 @@ import { useState } from "react";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 
 interface FolderProfile {
-  module_folders?: Record<string, string>;
+  module_links?: Array<{ module_id: string; path: string }>;
 }
 
 export function useModuleFolderSelection({
@@ -20,7 +20,8 @@ export function useModuleFolderSelection({
     recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
   const recentFolders = Array.from(
     new Set(
-      Object.values(profile?.module_folders ?? {})
+      (profile?.module_links ?? [])
+        .map((link) => link.path)
         .reverse()
         .filter((path) => path.trim().length > 0),
     ),
@@ -74,17 +75,22 @@ type ModuleFolderSelectionState = ReturnType<typeof useModuleFolderSelection>;
 export function ModuleFolderSelection({
   selection,
   autoFocus = false,
+  ariaLabel,
+  placeholder = "Local folder (optional)",
 }: {
   selection: ModuleFolderSelectionState;
   autoFocus?: boolean;
+  ariaLabel?: string;
+  placeholder?: string;
 }) {
   return (
     <>
       <input
         autoFocus={autoFocus}
+        aria-label={ariaLabel}
         value={selection.value}
         onChange={(event) => selection.setValue(event.target.value)}
-        placeholder="Local folder (optional)"
+        placeholder={placeholder}
         spellCheck={false}
         className="w-full bg-pane-bg px-2 py-1 font-mono text-sm outline-none ring-1 ring-pane-border focus:ring-focus-accent"
       />

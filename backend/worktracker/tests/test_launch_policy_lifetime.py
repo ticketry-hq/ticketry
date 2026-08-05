@@ -65,12 +65,17 @@ def _launch_warnings(issue_type) -> list[dict]:
     ]
 
 
-def _store_catalog(**kwargs) -> None:
+def _store_catalog(*, activated_providers=None, global_default=None) -> None:
+    if activated_providers is not None:
+        from worktracker.models import Provider
+
+        Provider.objects.update(activated=False)
+        Provider.objects.filter(slug__in=activated_providers).update(activated=True)
     AppSetting.objects.update_or_create(
         scope=PROVIDER_CATALOG_SCOPE,
         key=PROVIDER_CATALOG_KEY,
         defaults={
-            "value": ProviderCatalog(**kwargs).model_dump_json(),
+            "value": ProviderCatalog(global_default=global_default).model_dump_json(),
             "updated_at": "2026-07-27T00:00:00+00:00",
         },
     )

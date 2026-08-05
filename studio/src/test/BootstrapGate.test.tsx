@@ -224,7 +224,7 @@ describe("BootstrapGate", () => {
 
     expect(await screen.findByText("Studio ready")).toBeInTheDocument();
     expect(mocks.createProject).toHaveBeenCalledWith({
-      name: "coding",
+      name: "Coding",
       slug: "CDN",
     });
     expect(mocks.selectProject).toHaveBeenCalledWith("created-cdn-project");

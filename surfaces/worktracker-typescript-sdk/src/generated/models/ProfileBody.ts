@@ -15,6 +15,14 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { ModuleLinkBody } from './ModuleLinkBody.js';
+import {
+    ModuleLinkBodyFromJSON,
+    ModuleLinkBodyFromJSONTyped,
+    ModuleLinkBodyToJSON,
+    ModuleLinkBodyToJSONTyped,
+} from './ModuleLinkBody.js';
+
 /**
  * 
  * @export
@@ -35,10 +43,10 @@ export interface ProfileBody {
     agent_prompts?: { [key: string]: any; };
     /**
      * 
-     * @type {{ [key: string]: any; }}
+     * @type {Array<ModuleLinkBody>}
      * @memberof ProfileBody
      */
-    module_folders?: { [key: string]: any; };
+    module_links?: Array<ModuleLinkBody>;
     /**
      * 
      * @type {string}
@@ -86,7 +94,7 @@ export function ProfileBodyFromJSONTyped(json: any, ignoreDiscriminator: boolean
         
         'agent_prompt': json['agent_prompt'] == null ? undefined : json['agent_prompt'],
         'agent_prompts': json['agent_prompts'] == null ? undefined : json['agent_prompts'],
-        'module_folders': json['module_folders'] == null ? undefined : json['module_folders'],
+        'module_links': json['module_links'] == null ? undefined : ((json['module_links'] as Array<any>).map(ModuleLinkBodyFromJSON)),
         'name': json['name'],
         'recent_module_ids': json['recent_module_ids'] == null ? undefined : json['recent_module_ids'],
         'recent_project_id': json['recent_project_id'] == null ? undefined : json['recent_project_id'],
@@ -107,7 +115,7 @@ export function ProfileBodyToJSONTyped(value?: ProfileBody | null, ignoreDiscrim
         
         'agent_prompt': value['agent_prompt'],
         'agent_prompts': value['agent_prompts'],
-        'module_folders': value['module_folders'],
+        'module_links': value['module_links'] == null ? undefined : ((value['module_links'] as Array<any>).map(ModuleLinkBodyToJSON)),
         'name': value['name'],
         'recent_module_ids': value['recent_module_ids'],
         'recent_project_id': value['recent_project_id'],

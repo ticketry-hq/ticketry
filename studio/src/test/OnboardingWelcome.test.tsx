@@ -31,6 +31,8 @@ vi.mock("../shared/api/client", async () => {
   return {
     ...actual,
     acknowledgeOnboarding: vi.fn(),
+    listModules: vi.fn(),
+    listProjects: vi.fn(),
   };
 });
 
@@ -69,6 +71,8 @@ const emptyCatalog: ProviderCatalog = {
 const acknowledgeOnboarding = workspaceApi.acknowledgeOnboarding as ReturnType<
   typeof vi.fn
 >;
+const listModules = workspaceApi.listModules as ReturnType<typeof vi.fn>;
+const listProjects = workspaceApi.listProjects as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -88,6 +92,8 @@ beforeEach(() => {
     slug: "meml",
     onboarding_required: false,
   });
+  listModules.mockResolvedValue([]);
+  listProjects.mockResolvedValue([]);
   queryClient.setQueryData(queryKeys.workspace, true);
   useOnboardingTourStore.getState().reset();
   seedConfig({
@@ -97,6 +103,117 @@ beforeEach(() => {
 });
 
 describe("Onboarding welcome", () => {
+  it("uses provider setup as the entire welcome flow when Projects is disabled", async () => {
+    seedConfig({ features: { sidebar: true, projects: false } });
+    useTasksStore.setState({
+      projects: [
+        { id: "bootstrap-project", name: "Coding", identifier: "CDN" },
+      ],
+      selectedProjectId: "bootstrap-project",
+    });
+
+    render(<OnboardingWelcome />);
+    await screen.findByRole("heading", { name: "Your agents" });
+
+    expect(screen.getByRole("button", { name: "Get started" }))
+      .toBeDisabled();
+    expect(screen.queryByRole("heading", { name: "Your first project" }))
+      .not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "I use codex" }));
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+
+    await waitFor(() => {
+      expect(useOnboardingTourStore.getState()).toMatchObject({
+        step: "module-create",
+        projectId: "bootstrap-project",
+      });
+    });
+    expect(catalogApi.createProject).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: "Your first project" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("resolves and selects the canonical default before starting without Projects", async () => {
+    seedConfig({ features: { sidebar: true, projects: false } });
+    useTasksStore.setState({
+      projects: [
+        { id: "legacy-project", name: "Legacy", identifier: "CODING" },
+        { id: "canonical-project", name: "Coding", identifier: "CDN" },
+      ],
+      selectedProjectId: null,
+    });
+
+    render(<OnboardingWelcome />);
+    await screen.findByRole("heading", { name: "Your agents" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "I use codex" }));
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+
+    await waitFor(() => {
+      expect(useTasksStore.getState().selectedProjectId)
+        .toBe("canonical-project");
+      expect(useOnboardingTourStore.getState()).toMatchObject({
+        step: "module-create",
+        projectId: "canonical-project",
+      });
+    });
+    expect(catalogApi.createProject).not.toHaveBeenCalled();
+  });
+
+  it("creates canonical Coding only as fallback before starting without Projects", async () => {
+    seedConfig({ features: { sidebar: true, projects: false } });
+    catalogApi.createProject.mockResolvedValueOnce({
+      id: "created-canonical-project",
+      name: "Coding",
+      identifier: "CDN",
+    });
+
+    render(<OnboardingWelcome />);
+    await screen.findByRole("heading", { name: "Your agents" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "I use codex" }));
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+
+    await waitFor(() => {
+      expect(catalogApi.createProject).toHaveBeenCalledWith({
+        name: "Coding",
+        slug: "CDN",
+      });
+      expect(useOnboardingTourStore.getState()).toMatchObject({
+        step: "module-create",
+        projectId: "created-canonical-project",
+      });
+    });
+  });
+
+  it("keeps default-project failures inline and retries without a null tour", async () => {
+    seedConfig({ features: { sidebar: true, projects: false } });
+    catalogApi.createProject.mockRejectedValueOnce(new Error("create failed"));
+
+    render(<OnboardingWelcome />);
+    await screen.findByRole("heading", { name: "Your agents" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "I use codex" }));
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The resolved default project is unavailable.",
+    );
+    expect(useOnboardingTourStore.getState()).toMatchObject({
+      step: "inactive",
+      projectId: null,
+    });
+    expect(screen.getByRole("button", { name: "Get started" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
+
+    await waitFor(() => {
+      expect(catalogApi.createProject).toHaveBeenCalledTimes(2);
+      expect(useOnboardingTourStore.getState()).toMatchObject({
+        step: "module-create",
+        projectId: "created-project",
+      });
+    });
+  });
+
   it("does not treat the backend's legacy first-run defaults as declarations", async () => {
     catalogApi.getProviderCatalog.mockResolvedValue({
       value: {
@@ -220,6 +337,22 @@ describe("Onboarding welcome", () => {
       expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1);
     });
     expect(getOnboardingRequiredSnapshot()).toBe(false);
+  });
+
+  it("keeps the same skip acknowledgement when Projects is disabled", async () => {
+    seedConfig({ features: { sidebar: true, projects: false } });
+    render(<OnboardingWelcome />);
+    await screen.findByRole("heading", { name: "Your agents" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+
+    await waitFor(() => {
+      expect(catalogApi.putProviderCatalog).toHaveBeenCalledWith(emptyCatalog);
+      expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1);
+    });
+    expect(getOnboardingRequiredSnapshot()).toBe(false);
+    expect(catalogApi.createProject).not.toHaveBeenCalled();
+    expect(useOnboardingTourStore.getState().step).toBe("inactive");
   });
 
   it("skip remains available after provider setup", async () => {

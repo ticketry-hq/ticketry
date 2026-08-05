@@ -209,8 +209,13 @@ def migrate_and_provision() -> None:
         call_command("provision", stdout=provision_output)
 
         from apps.settings_store import service as settings_service
+        from django.conf import settings
 
         provisioned = json.loads(provision_output.getvalue())
+        # Provision may generate the first-run token after Django settings have
+        # loaded. Make that credential authoritative for the running process as
+        # well as the persisted token file.
+        settings.WORKTRACKER_API_TOKEN = provisioned["token"]
         settings_service.ensure_local_profile(
             name="Local",
             workspace_slug=provisioned["workspace_slug"],

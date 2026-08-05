@@ -144,10 +144,27 @@ export async function setModuleFolder(
   if (recentProfileIndex === null) return;
   const profile = profiles[recentProfileIndex];
   if (!profile) return;
+  const linkIndex = profile.module_links.findIndex(
+    (link) => link.module_id === moduleId,
+  );
+  const moduleLink = { module_id: moduleId, path };
+  const moduleLinks =
+    linkIndex === -1
+      ? [...profile.module_links, moduleLink]
+      : profile.module_links.map((link, index) =>
+          index === linkIndex ? moduleLink : link,
+        );
   await updateProfile(recentProfileIndex, {
     ...profile,
-    module_folders: { ...profile.module_folders, [moduleId]: path },
+    module_links: moduleLinks,
   });
+}
+
+export function getModuleFolder(
+  profile: Pick<Profile, "module_links"> | null | undefined,
+  moduleId: string,
+): string | undefined {
+  return profile?.module_links.find((link) => link.module_id === moduleId)?.path;
 }
 
 export function isSidebarEnabled(

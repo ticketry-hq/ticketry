@@ -13,15 +13,16 @@ from uuid import UUID
 
 import pytest
 
-from worktracker_sdk.generated import ModuleWorkItemIn, WorkItemIn, WorkItemPatch
+from worktracker_sdk.generated import WorkItemIn, WorkItemPatch
 from worktracker_sdk.generated.exceptions import ApiException, NotFoundException
 
 from fake_sdk import (
     FakeGeneratedSdk,
     make_api_error,
     make_detail,
+    make_flat_module,
+    make_flat_work_item,
     make_issue_type,
-    make_module,
     make_state,
     make_work_item,
     raises,
@@ -245,20 +246,18 @@ def test_list_issue_types_reads_typed_rows_off_the_sdk():
 
 def test_list_modules_deserializes_unified_issue_shape():
     client = FakeGeneratedSdk()
+    client.issue_types.returns["list_issue_types"] = [
+        make_issue_type(id=EPIC_TYPE, name="Epic", level="module", color="#111")
+    ]
     client.modules.returns["list_modules"] = [
-        make_module(
+        make_flat_module(
             id=MODULE,
             name="Payments",
             project_id=PROJECT,
             sequence_id=7,
             key="MEML-7",
             is_archived=False,
-            issue_type=make_issue_type(
-                id=EPIC_TYPE,
-                name="Epic",
-                level="module",
-                color="#111",
-            ),
+            issue_type=UUID(EPIC_TYPE),
         )
     ]
     service = WorktrackerService(base_url="http://example.test", sdk=client)
@@ -281,15 +280,18 @@ def test_list_modules_deserializes_unified_issue_shape():
 
 def test_task_shape_surfaces_issue_type_and_parent():
     client = FakeGeneratedSdk()
-    client.work_items.returns["list_project_work_items"] = [
-        make_work_item(
+    client.issue_types.returns["list_issue_types"] = [
+        make_issue_type(id=STORY_TYPE, name="Story", level="task")
+    ]
+    client.work_items.returns["list_work_items"] = [
+        make_flat_work_item(
             id=TASK,
             name="Wire the gate",
             project_id=PROJECT,
             sequence_id=12,
             key="MEML-12",
             parent_id=MODULE,
-            issue_type=make_issue_type(id=STORY_TYPE, name="Story", level="task"),
+            issue_type=UUID(STORY_TYPE),
             is_archived=False,
         )
     ]
@@ -388,7 +390,7 @@ def test_create_task_resolves_implementation_type_and_ready_state_into_sdk_paylo
         make_issue_type(id=implementation_type, name="Implementation", level="task"),
     ]
     client.states.returns["list_states"] = [make_state(id=ready_state, name="Ready")]
-    client.work_items.returns["create_project_work_item"] = make_work_item()
+    client.work_items.returns["create_work_item"] = make_work_item()
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
     service.create_task(
@@ -400,9 +402,7 @@ def test_create_task_resolves_implementation_type_and_ready_state_into_sdk_paylo
 
     assert client.issue_types.calls == [("list_issue_types", (UUID(PROJECT),), {})]
     name, args, kwargs = client.work_items.calls[0]
-    assert (
-        name == "create_project_work_item" and args[0] == UUID(PROJECT) and kwargs == {}
-    )
+    assert name == "create_work_item" and args[0] == UUID(PROJECT) and kwargs == {}
     assert isinstance(args[1], WorkItemIn)
     assert args[1].model_dump(mode="json", exclude_none=True) == {
         "name": "Build it",
@@ -422,7 +422,7 @@ def test_create_sub_task_resolves_canonical_birth_state_into_sdk_payload():
     client.states.returns["list_states"] = [
         make_state(id=refinement_state, name="Refinement"),
     ]
-    client.work_items.returns["create_project_work_item"] = make_work_item()
+    client.work_items.returns["create_work_item"] = make_work_item()
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
     service.create_sub_task(
@@ -434,9 +434,7 @@ def test_create_sub_task_resolves_canonical_birth_state_into_sdk_payload():
     )
 
     name, args, kwargs = client.work_items.calls[0]
-    assert (
-        name == "create_project_work_item" and args[0] == UUID(PROJECT) and kwargs == {}
-    )
+    assert name == "create_work_item" and args[0] == UUID(PROJECT) and kwargs == {}
     assert isinstance(args[1], WorkItemIn)
     assert args[1].model_dump(mode="json", exclude_none=True) == {
         "name": "Discover API constraints",
@@ -452,15 +450,15 @@ def test_module_task_and_sub_task_include_resolved_issue_type_id():
     client.issue_types.returns["list_issue_types"] = [
         make_issue_type(id=STORY_TYPE, name="Story", level="task"),
     ]
-    client.work_items.returns["create_module_work_item"] = make_work_item()
-    client.work_items.returns["create_project_work_item"] = make_work_item()
+    client.work_items.returns["create_work_item"] = make_work_item()
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
     service.create_task(PROJECT, "Module child", module_id=MODULE, issue_type="Story")
     service.create_sub_task(PROJECT, TASK, "Nested", issue_type="Story")
 
     _name, module_args, _kwargs = client.work_items.calls[0]
-    assert isinstance(module_args[1], ModuleWorkItemIn)
+    assert isinstance(module_args[1], WorkItemIn)
+    assert module_args[1].parent_id == UUID(MODULE)
     assert module_args[1].issue_type_id == UUID(STORY_TYPE)
     _name, subtask_args, _kwargs = client.work_items.calls[1]
     assert subtask_args[1].parent_id == UUID(TASK)
@@ -469,7 +467,7 @@ def test_module_task_and_sub_task_include_resolved_issue_type_id():
 
 def test_create_without_issue_type_is_rejected_before_sdk_use():
     client = FakeGeneratedSdk()
-    client.work_items.returns["create_project_work_item"] = make_work_item()
+    client.work_items.returns["create_work_item"] = make_work_item()
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
     with pytest.raises(TypeError):
@@ -501,7 +499,7 @@ def test_create_accepts_explicit_type_uuid():
     ]
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
-    client.work_items.returns["create_project_work_item"] = make_work_item()
+    client.work_items.returns["create_work_item"] = make_work_item()
     service.create_task(PROJECT, "Raw id", issue_type=STORY_TYPE)
 
     _name, args, _kwargs = client.work_items.calls[0]

@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from types import SimpleNamespace
 from uuid import UUID
 
 from worktracker_sdk.generated import (
@@ -9,8 +10,6 @@ from worktracker_sdk.generated import (
     IssueTypeOut,
     ModuleOut,
     ProjectOut,
-    ScopeContextOut,
-    ScopeRef,
     StateOut,
     WorkItemDetailOut,
     WorkItemOut,
@@ -90,6 +89,41 @@ def make_work_item(**over) -> WorkItemOut:
     return WorkItemOut(**data)
 
 
+def make_flat_work_item(**over):
+    """Build the post-CODING-156 bare-id work-item SDK shape."""
+
+    data = dict(
+        id=UUID("44444444-4444-4444-4444-444444444444"),
+        name="T",
+        project_id=UUID("22222222-2222-2222-2222-222222222222"),
+        key="MEML-1",
+        issue_type=UUID("66666666-6666-6666-6666-666666666666"),
+        state=None,
+        description="",
+        sequence_id=1,
+        parent_id=None,
+        is_archived=False,
+        blocked_by_ids=[],
+        blocks_ids=[],
+    )
+    data.update(over)
+    return SimpleNamespace(**data)
+
+
+def make_flat_module(**over):
+    data = dict(
+        id=UUID("33333333-3333-3333-3333-333333333333"),
+        name="M",
+        project_id=UUID("22222222-2222-2222-2222-222222222222"),
+        sequence_id=1,
+        is_archived=False,
+        key="MEML-1",
+        issue_type=UUID("66666666-6666-6666-6666-666666666666"),
+    )
+    data.update(over)
+    return SimpleNamespace(**data)
+
+
 def make_module(**over) -> ModuleOut:
     data = dict(
         id=UUID("33333333-3333-3333-3333-333333333333"),
@@ -156,18 +190,6 @@ def make_detail(task=None, attachments=None) -> WorkItemDetailOut:
     )
 
 
-def make_scope_ref(**over) -> ScopeRef:
-    data = dict(
-        id=UUID("22222222-2222-2222-2222-222222222222"),
-        key="CODIN-2",
-        name="blocker",
-        state_group="started",
-        resolved=False,
-    )
-    data.update(over)
-    return ScopeRef(**data)
-
-
 def make_launched_agent(**over) -> LaunchedAgentOut:
     data = dict(
         target_id="44444444-4444-4444-4444-444444444444",
@@ -176,23 +198,6 @@ def make_launched_agent(**over) -> LaunchedAgentOut:
     )
     data.update(over)
     return LaunchedAgentOut(**data)
-
-
-def make_scope_context(**over) -> ScopeContextOut:
-    ref = make_scope_ref()
-    data = dict(
-        task=make_scope_ref(
-            id=UUID("11111111-1111-1111-1111-111111111111"),
-            key="CODIN-1",
-            name="T",
-            state_group=None,
-        ),
-        depends_on=[ref],
-        depended_by=[],
-        advisory="1 of 1 blocker(s) unresolved.",
-    )
-    data.update(over)
-    return ScopeContextOut(**data)
 
 
 __all__ = [
@@ -206,10 +211,11 @@ __all__ = [
     "make_attachment",
     "make_detail",
     "make_issue_type",
+    "make_flat_module",
+    "make_flat_work_item",
     "make_launched_agent",
     "make_module",
     "make_project",
-    "make_scope_context",
     "make_state",
     "make_work_item",
     "raises",

@@ -85,7 +85,7 @@ def test_successful_save_writes_new_content(isolated_config):
             "workspace_slug": "new-ws",
             "agent_prompt": None,
             "agent_prompts": {},
-            "module_folders": {},
+            "module_links": [],
             "recent_project_id": None,
             "recent_module_ids": {},
         }

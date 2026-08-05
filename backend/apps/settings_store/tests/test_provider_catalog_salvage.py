@@ -1,10 +1,3 @@
-"""Activation is a gate, so an unreadable catalog must never fail open.
-
-``ProviderCatalog()`` defaults to *every* provider activated, so returning it
-from a parse failure silently widens activation to maximum. These pin the
-salvage: narrow on bad data, and never widen without saying so.
-"""
-
 import json
 
 import pytest
@@ -18,45 +11,7 @@ from apps.settings_store.provider_catalog import (
 )
 
 
-def test_an_unknown_field_keeps_the_stored_activation_set():
-    """``extra="forbid"`` means a newer build's field breaks an older read."""
-
-    catalog = parse_provider_catalog(
-        json.dumps({"activated_providers": ["claude"], "unexpected_field": 1})
-    )
-
-    assert catalog.activated_providers == frozenset({"claude"})
-
-
-def test_an_unknown_provider_slug_is_dropped_not_widened():
-    catalog = parse_provider_catalog(
-        json.dumps({"activated_providers": ["claude", "future-provider"]})
-    )
-
-    assert catalog.activated_providers == frozenset({"claude"})
-
-
-def test_a_default_the_activation_set_rejects_drops_only_the_default():
-    """The cross-field validator rejects the whole document; salvage does not.
-
-    Discarding the activation set alongside the offending default is what
-    re-activated every provider — the nastier half of the failure.
-    """
-
-    catalog = parse_provider_catalog(
-        json.dumps(
-            {
-                "activated_providers": ["claude"],
-                "global_default": {"provider": "gemini"},
-            }
-        )
-    )
-
-    assert catalog.activated_providers == frozenset({"claude"})
-    assert catalog.global_default is None
-
-
-def test_a_valid_default_survives_an_unknown_field():
+def test_legacy_activation_and_unknown_fields_do_not_reenter_the_settings_shape():
     catalog = parse_provider_catalog(
         json.dumps(
             {
@@ -67,31 +22,52 @@ def test_a_valid_default_survives_an_unknown_field():
         )
     )
 
-    assert catalog.activated_providers == frozenset({"claude"})
-    assert catalog.global_default is not None
-    assert catalog.global_default.model == "opus"
+    assert catalog.model_dump(mode="json") == {
+        "global_default": {
+            "provider": "claude",
+            "model": "opus",
+            "reasoning": None,
+        }
+    }
 
 
-def test_unrecoverable_data_falls_back_to_first_run_defaults_loudly(caplog):
+def test_invalid_default_is_dropped_without_reintroducing_activation():
+    catalog = parse_provider_catalog(
+        json.dumps({"global_default": {"provider": "future-provider"}})
+    )
+
+    assert catalog.model_dump(mode="json") == {"global_default": None}
+
+
+def test_unrecoverable_data_falls_back_to_no_default_loudly(caplog):
     with caplog.at_level("ERROR"):
         catalog = parse_provider_catalog("not json at all")
 
-    assert catalog.activated_providers == frozenset({"claude", "codex", "gemini"})
+    assert catalog.model_dump(mode="json") == {"global_default": None}
     assert "provider catalog" in caplog.text
 
 
 @pytest.mark.django_db
-def test_the_launch_path_and_the_settings_view_salvage_identically(client):
-    """Two copies of a security-relevant fallback would drift (L1)."""
-
+def test_settings_view_and_launch_accessor_salvage_the_same_default(client):
     AppSetting.objects.create(
         scope=PROVIDER_CATALOG_SCOPE,
         key=PROVIDER_CATALOG_KEY,
-        value=json.dumps({"activated_providers": ["claude"], "unexpected_field": 1}),
+        value=json.dumps(
+            {
+                "activated_providers": ["claude"],
+                "global_default": {"provider": "claude", "model": "opus"},
+                "unexpected_field": 1,
+            }
+        ),
         updated_at="2026-07-27T00:00:00+00:00",
     )
 
-    assert load_provider_catalog().activated_providers == frozenset({"claude"})
-    assert client.get("/api/settings/provider-catalog").json() == {
-        "value": {"activated_providers": ["claude"], "global_default": None}
+    expected = {
+        "global_default": {
+            "provider": "claude",
+            "model": "opus",
+            "reasoning": None,
+        }
     }
+    assert load_provider_catalog().model_dump(mode="json") == expected
+    assert client.get("/api/settings/provider-catalog").json() == {"value": expected}

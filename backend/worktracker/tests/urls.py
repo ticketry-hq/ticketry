@@ -5,7 +5,7 @@ Mirrors the path the host application mounts the router at
 same URLs without depending on the server package.
 """
 
-from django.urls import path
+from django.urls import include, path
 from ninja import NinjaAPI
 
 from worktracker.api import router as worktracker_router
@@ -15,5 +15,6 @@ api = NinjaAPI(urls_namespace="worktracker-test")
 api.add_router("/work-tracker", worktracker_router)
 
 urlpatterns = [
+    path("api/work-tracker/", include("worktracker.rest.urls")),
     path("api/", api.urls),
 ]

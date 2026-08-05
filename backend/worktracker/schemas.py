@@ -170,35 +170,6 @@ class WorkItemDetailOut(Schema):
     attachments: List[AttachmentOut] = []
 
 
-class ScopeRef(Schema):
-    """A compact, agent-readable reference to one issue in a scope-context (#667).
-
-    ``state_group`` is the issue's frozen group (``None`` when it has no state);
-    ``resolved`` is ``True`` iff that group is completed/cancelled.
-    """
-
-    id: uuid.UUID
-    key: str
-    name: str
-    state_group: Optional[str] = None
-    resolved: bool = False
-
-
-class ScopeContextOut(Schema):
-    """The read-only dependency slice a subagent consumes for a task (#667, B).
-
-    Derived entirely from the existing ``blocked_by``/``blocks`` edges (#624).
-    ``depends_on`` are the direct blockers (must land first), ``depended_by`` the
-    direct dependents (wait on this task), and ``advisory`` a short
-    natural-language summary.
-    """
-
-    task: ScopeRef
-    depends_on: List[ScopeRef] = []
-    depended_by: List[ScopeRef] = []
-    advisory: str
-
-
 # --- Input shapes -----------------------------------------------------------
 
 
@@ -447,15 +418,6 @@ class LaunchBindingOut(Schema):
     agent: Optional[str] = None
     model: Optional[str] = None
     reasoning: Optional[str] = None
-
-
-class ProviderCapabilitiesOut(Schema):
-    agent: str
-    accepts_model: bool
-    accepts_any_model: bool
-    model_prefixes: List[str] = []
-    model_aliases: List[str] = []
-    reasoning_levels: List[str] = []
 
 
 class WorkItemReorderIn(Schema):

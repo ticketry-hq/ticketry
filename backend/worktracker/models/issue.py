@@ -13,8 +13,7 @@ class Issue(models.Model):
 
     - ``type`` splits modules from tasks; routes filter on it.
     - ``parent`` is the one tree link — epic membership AND subtask parent.
-    - ``state`` is a single FK, serialized as one nested object (never a bare
-      id, never a sibling ``state_detail``).
+    - ``state`` is a single FK, serialized as its bare primary key.
     - ``sequence_id`` is allocated from the project's shared counter, so the
       ``key`` (``{project.slug}-{sequence_id}``) is unique within the project.
     """

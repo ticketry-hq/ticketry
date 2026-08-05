@@ -365,9 +365,25 @@ def test_rescan_resolves_canonical_dir_with_zero_prior_rows(
     canonical.mkdir(parents=True)
     (canonical / "plan.html").write_text("<html>plan</html>")
 
-    profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
-    write_profiles(tmp_config, [profile], recent=0)
+    inactive_folder = tmp_path / "inactive-repo"
+    inactive_canonical = (
+        inactive_folder
+        / "spec"
+        / f"platform--{MODULE_ID[:8]}"
+        / "T42--stub-task"
+    )
+    inactive_canonical.mkdir(parents=True)
+    (inactive_canonical / "wrong.html").write_text("<html>wrong profile</html>")
+
+    inactive_profile = dict(sample_profile)
+    inactive_profile["module_links"] = [
+        {"module_id": MODULE_ID, "path": str(inactive_folder)}
+    ]
+    active_profile = dict(sample_profile)
+    active_profile["module_links"] = [
+        {"module_id": MODULE_ID, "path": str(module_folder)}
+    ]
+    write_profiles(tmp_config, [inactive_profile, active_profile], recent=0)
 
     from apps import worktracker_queries
     from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
@@ -392,7 +408,12 @@ def test_rescan_resolves_canonical_dir_with_zero_prior_rows(
 
     resp = client.get(
         "/api/documents",
-        {"task_id": TASK_ID, "project_id": PROJECT_ID, "module_id": MODULE_ID},
+        {
+            "task_id": TASK_ID,
+            "project_id": PROJECT_ID,
+            "module_id": MODULE_ID,
+            "profile": 1,
+        },
     )
     assert resp.status_code == 200
     docs = resp.json()["documents"]
@@ -402,6 +423,23 @@ def test_rescan_resolves_canonical_dir_with_zero_prior_rows(
 
     served = client.get(f"/api/docs/{docs[0]['id']}/plan.html")
     assert served.status_code == 200
+
+
+def test_listing_without_a_module_link_keeps_registered_documents(
+    client, tmp_config, sample_profile, tmp_path
+):
+    root = _seed_design_dir(tmp_path)
+    _register_doc(doc_id="d1", root_dir=str(root), rel_path="design.html")
+    profile = {**sample_profile, "module_links": []}
+    write_profiles(tmp_config, [profile], recent=0)
+
+    resp = client.get(
+        "/api/documents",
+        {"task_id": TASK_ID, "project_id": PROJECT_ID, "module_id": MODULE_ID},
+    )
+
+    assert resp.status_code == 200
+    assert [doc["rel_path"] for doc in resp.json()["documents"]] == ["design.html"]
 
 
 def test_scratch_mode_lists_module_bucket(client, tmp_path):

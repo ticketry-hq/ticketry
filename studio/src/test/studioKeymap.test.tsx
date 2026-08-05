@@ -114,7 +114,7 @@ describe("Studio task keymap", () => {
           workspace_slug: "local",
           agent_prompt: null,
           agent_prompts: {},
-          module_folders: { "module-1": "/workspace" },
+          module_links: [{ module_id: "module-1", path: "/workspace" }],
         },
       ],
     });

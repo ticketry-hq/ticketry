@@ -54,9 +54,7 @@ def test_list_is_ordered_by_rank(client, project, auth):
     # Move C to the very top (above A).
     _reorder(client, auth, c["id"], before=None, after=a["id"])
 
-    listed = client.get(
-        f"{BASE}/projects/{project.id}/work-items", headers=auth
-    ).json()
+    listed = client.get(f"{BASE}/work-items?project={project.id}", headers=auth).json()
     assert [i["id"] for i in listed] == [c["id"], a["id"], b["id"]]
 
 
@@ -76,7 +74,7 @@ def test_reorder_writes_only_the_moved_row(client, project, auth):
     after = {
         i["id"]: i["rank"]
         for i in client.get(
-            f"{BASE}/projects/{project.id}/work-items", headers=auth
+            f"{BASE}/work-items?project={project.id}", headers=auth
         ).json()
     }
     assert after[b["id"]] == b["rank"]

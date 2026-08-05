@@ -2,20 +2,18 @@
 
 The HTTP routes stay in the ``api`` package and the mutation policy in
 ``services``; this module owns the deeper work item query helpers so callers do
-not need to know the issue tree, key resolution, rank allocation, blocker graph,
-or scope-context mechanics.
+not need to know the issue tree, key resolution, rank allocation, or blocker
+graph mechanics.
 """
 
 import re
-import uuid
 
-from django.db.models import Count, Max, Prefetch, Q
+from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404
 
 from worktracker.models import Issue, IssueType, State
 from worktracker.ranking import key_between
 from worktracker.services.errors import NotFoundError, ValidationError
-from worktracker.state import RESOLVED_GROUPS
 
 
 # A KEY-N segment is a single hyphen between a non-hyphen prefix and digits;
@@ -165,55 +163,3 @@ def blocker_would_cycle(issue_id, new_blocker_ids):
         frontier.extend(str(b) for b in blockers)
 
     return False
-
-
-def scope_ref(issue):
-    """Project one issue into the compact ScopeRef shape (#667)."""
-
-    group = issue.state.group if issue.state else None
-    return {
-        "id": issue.id,
-        "key": issue.key,
-        "name": issue.name,
-        "state_group": group,
-        "resolved": group in RESOLVED_GROUPS,
-    }
-
-
-def build_scope_context(issue_id):
-    """Build the read-only dependency slice a subagent consumes for a task."""
-
-    neighbor_qs = Issue.objects.select_related("state", "project")
-    base = (
-        Issue.objects.filter(type="task")
-        .select_related("project", "state")
-        .prefetch_related(
-            Prefetch("blocked_by", queryset=neighbor_qs),
-            Prefetch("blocks", queryset=neighbor_qs),
-        )
-    )
-
-    issue = resolve_in(base, issue_id)
-
-    depends_on = [scope_ref(b) for b in issue.blocked_by.all()]
-    depended_by = [scope_ref(b) for b in issue.blocks.all()]
-
-    unresolved = [ref for ref in depends_on if not ref["resolved"]]
-    if unresolved:
-        keys = ", ".join(ref["key"] for ref in unresolved)
-        advisory = (
-            f"{len(unresolved)} of {len(depends_on)} blocker(s) unresolved "
-            f"({keys}) - stay within this task; do not implement upstream work."
-        )
-    else:
-        advisory = (
-            "No unresolved blockers - deliver only this task and nothing beyond "
-            "its scope."
-        )
-
-    return {
-        "task": scope_ref(issue),
-        "depends_on": depends_on,
-        "depended_by": depended_by,
-        "advisory": advisory,
-    }

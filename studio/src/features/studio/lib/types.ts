@@ -3,12 +3,17 @@
 import type { LifecycleState } from "../../agents/terminal";
 import type { IssueTypeOut } from "@worktracker/typescript-sdk/models";
 
+export interface ModuleLink {
+  module_id: string;
+  path: string;
+}
+
 export interface Profile {
   name: string;
   workspace_slug: string;
   agent_prompt: string | null;
   agent_prompts: Record<string, string>;
-  module_folders: Record<string, string>;
+  module_links: ModuleLink[];
   recent_project_id?: string | null;
   recent_module_ids?: Record<string, string>;
 }

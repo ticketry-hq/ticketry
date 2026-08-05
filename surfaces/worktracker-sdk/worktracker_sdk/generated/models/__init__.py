@@ -24,6 +24,7 @@ from worktracker_sdk.generated.models.issue_type_patch import IssueTypePatch
 from worktracker_sdk.generated.models.launch_binding_out import LaunchBindingOut
 from worktracker_sdk.generated.models.message_error import MessageError
 from worktracker_sdk.generated.models.module_in import ModuleIn
+from worktracker_sdk.generated.models.module_link_body import ModuleLinkBody
 from worktracker_sdk.generated.models.module_out import ModuleOut
 from worktracker_sdk.generated.models.module_work_item_in import ModuleWorkItemIn
 from worktracker_sdk.generated.models.profile_body import ProfileBody
@@ -33,8 +34,6 @@ from worktracker_sdk.generated.models.project_patch import ProjectPatch
 from worktracker_sdk.generated.models.provider_capabilities_out import ProviderCapabilitiesOut
 from worktracker_sdk.generated.models.reorder_in import ReorderIn
 from worktracker_sdk.generated.models.review_finding_in import ReviewFindingIn
-from worktracker_sdk.generated.models.scope_context_out import ScopeContextOut
-from worktracker_sdk.generated.models.scope_ref import ScopeRef
 from worktracker_sdk.generated.models.scoped_launch_binding_in import ScopedLaunchBindingIn
 from worktracker_sdk.generated.models.scoped_workflow_impact_in import ScopedWorkflowImpactIn
 from worktracker_sdk.generated.models.scoped_workflow_impact_out import ScopedWorkflowImpactOut

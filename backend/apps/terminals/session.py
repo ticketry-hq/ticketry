@@ -15,7 +15,7 @@ from django.db import close_old_connections
 
 from apps.documents import watch as documents_watch
 from apps.settings_store import config as cfgmod
-from apps.settings_store.config import NoConfigurationSelected
+from apps.settings_store.config import NoConfigurationSelected, module_link_path
 from apps.runs.models import AgentRun
 from apps.runs.bus import publish_backend_session_sync
 from apps.terminals.agents.registry import (
@@ -154,14 +154,14 @@ def _enforce_provider_activation(agent: str) -> frozenset[str]:
     the ORM from the async launch path.
     """
 
-    from apps.settings_store.provider_catalog import load_provider_catalog
     from worktracker.services.launch_bindings import (
         LaunchBindingError,
         validate_provider_options,
     )
+    from worktracker.services.provider_catalog import activated_provider_slugs
 
     try:
-        activated_providers = load_provider_catalog().activated_providers
+        activated_providers = activated_provider_slugs()
         validate_provider_options(
             agent=agent,
             model=None,
@@ -199,9 +199,7 @@ class TerminalSessionService:
         if profile_index is None:
             raise NoConfigurationSelected("No profile selected.")
         profile = cfgmod.Config().profiles[profile_index]
-        module_folder: Optional[str] = (
-            profile.module_folders.get(intent.module_id) or None
-        )
+        module_folder: Optional[str] = module_link_path(profile, intent.module_id)
         if module_folder and not os.path.isdir(module_folder):
             module_folder = None
         cwd = module_folder or os.path.expanduser("~")
@@ -235,7 +233,9 @@ class TerminalSessionService:
             doc_id=intent.doc_id,
             persist_task_id=intent.task_id,
             workflow_prompt=(
-                launch_configuration.prompt if launch_configuration is not None else None
+                launch_configuration.prompt
+                if launch_configuration is not None
+                else None
             ),
             agent=effective_agent or "",
         )
@@ -449,9 +449,7 @@ class TerminalSessionService:
                             project_id, agent_run_id, "exited", at=ended_at
                         )
             active_run_ids = set(
-                AgentTerminalSession.objects.filter(
-                    terminated_at__isnull=True
-                )
+                AgentTerminalSession.objects.filter(terminated_at__isnull=True)
                 .exclude(agent_run_id__in=ended_run_ids)
                 .values_list("agent_run_id", flat=True)
             )

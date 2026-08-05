@@ -47,6 +47,7 @@ __all__ = [
     "LaunchBindingOut",
     "MessageError",
     "ModuleIn",
+    "ModuleLinkBody",
     "ModuleOut",
     "ModuleWorkItemIn",
     "ProfileBody",
@@ -56,8 +57,6 @@ __all__ = [
     "ProviderCapabilitiesOut",
     "ReorderIn",
     "ReviewFindingIn",
-    "ScopeContextOut",
-    "ScopeRef",
     "ScopedLaunchBindingIn",
     "ScopedWorkflowImpactIn",
     "ScopedWorkflowImpactOut",
@@ -121,6 +120,7 @@ from worktracker_sdk.generated.models.issue_type_patch import IssueTypePatch as 
 from worktracker_sdk.generated.models.launch_binding_out import LaunchBindingOut as LaunchBindingOut
 from worktracker_sdk.generated.models.message_error import MessageError as MessageError
 from worktracker_sdk.generated.models.module_in import ModuleIn as ModuleIn
+from worktracker_sdk.generated.models.module_link_body import ModuleLinkBody as ModuleLinkBody
 from worktracker_sdk.generated.models.module_out import ModuleOut as ModuleOut
 from worktracker_sdk.generated.models.module_work_item_in import ModuleWorkItemIn as ModuleWorkItemIn
 from worktracker_sdk.generated.models.profile_body import ProfileBody as ProfileBody
@@ -130,8 +130,6 @@ from worktracker_sdk.generated.models.project_patch import ProjectPatch as Proje
 from worktracker_sdk.generated.models.provider_capabilities_out import ProviderCapabilitiesOut as ProviderCapabilitiesOut
 from worktracker_sdk.generated.models.reorder_in import ReorderIn as ReorderIn
 from worktracker_sdk.generated.models.review_finding_in import ReviewFindingIn as ReviewFindingIn
-from worktracker_sdk.generated.models.scope_context_out import ScopeContextOut as ScopeContextOut
-from worktracker_sdk.generated.models.scope_ref import ScopeRef as ScopeRef
 from worktracker_sdk.generated.models.scoped_launch_binding_in import ScopedLaunchBindingIn as ScopedLaunchBindingIn
 from worktracker_sdk.generated.models.scoped_workflow_impact_in import ScopedWorkflowImpactIn as ScopedWorkflowImpactIn
 from worktracker_sdk.generated.models.scoped_workflow_impact_out import ScopedWorkflowImpactOut as ScopedWorkflowImpactOut

@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
-import { seedConfig } from "../features/studio/stores/configStore";
+import {
+  getConfigSnapshot,
+  seedConfig,
+} from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useUIStore } from "../features/studio/stores/uiStore";
 import { useIssueStore } from "../app/shell/ticket-workspace/selected-ticket";
@@ -223,6 +226,22 @@ describe("Studio module task-tree hydration", () => {
   });
 
   it("reveals a remembered nested task while preserving other expanded branches", async () => {
+    seedConfig({
+      profiles: [
+        {
+          name: "Local",
+          workspace_slug: "meml",
+          agent_prompt: null,
+          agent_prompts: {},
+          module_links: [
+            { module_id: "module-1", path: "/repos/module-1" },
+          ],
+          recent_project_id: "project-1",
+          recent_module_ids: { "project-1": "module-1" },
+        },
+      ],
+      recentProfileIndex: 0,
+    });
     localStorage.setItem(
       "studio.selectedTaskByModule:v1",
       JSON.stringify({ "module-1": "3" }),
@@ -231,8 +250,17 @@ describe("Studio module task-tree hydration", () => {
       "studio.expandedSubtasks:v1",
       JSON.stringify({ "module-1": ["4"] }),
     );
-    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url === "/api/config/profiles/0" && init?.method === "PUT") {
+        return Promise.resolve(
+          jsonResponse({
+            recent_profile_index: 0,
+            profiles: [JSON.parse(String(init.body))],
+            features: getConfigSnapshot().features,
+          }),
+        );
+      }
       if (url.endsWith("/modules/module-1/work-items")) {
         return Promise.resolve(
           jsonResponse([

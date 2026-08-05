@@ -6,7 +6,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.staticfiles.views import serve as serve_static
 from django.http import FileResponse
-from django.urls import path, re_path
+from django.urls import include, path, re_path
 from django.views.static import serve
 
 from studio_server.api import api
@@ -15,7 +15,10 @@ from studio_server.api import api
 # API + admin first so they always win over the SPA catch-all below.
 # Dev media serving resolves local attachment URLs (C6).
 
-urlpatterns = [path("api/", api.urls)]
+urlpatterns = [
+    path("api/work-tracker/", include("worktracker.rest.urls")),
+    path("api/", api.urls),
+]
 if settings.ADMIN_ENABLED:
     urlpatterns.append(path("wt-admin/", admin.site.urls))
 urlpatterns.append(path("static/<path:path>", serve_static, {"insecure": True}))

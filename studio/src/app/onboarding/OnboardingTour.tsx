@@ -1,6 +1,14 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
+import {
+  setModuleFolder,
+  useConfig,
+} from "../../features/studio/stores/configStore";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";
+import {
+  ModuleFolderSelection,
+  useModuleFolderSelection,
+} from "../../features/agents/terminal/ModuleFolderSelection";
 import CoachMark from "./CoachMark";
 import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
@@ -20,10 +28,17 @@ export default function OnboardingTour({ onSelectStory }: Props) {
   const moduleCreated = useOnboardingTourStore((state) => state.moduleCreated);
   const reset = useOnboardingTourStore((state) => state.reset);
   const createModule = useTasksStore((state) => state.createModule);
+  const { profiles, recentProfileIndex } = useConfig();
   const [moduleName, setModuleName] = useState("General");
+  const [createdModuleId, setCreatedModuleId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const moduleInput = useRef<HTMLInputElement>(null);
+  const createdModuleIdRef = useRef<string | null>(null);
+  const folderSelection = useModuleFolderSelection({
+    profiles,
+    recentProfileIndex,
+  });
 
   useEffect(() => {
     if (step === "handoff" && storyId) onSelectStory(storyId);
@@ -46,16 +61,34 @@ export default function OnboardingTour({ onSelectStory }: Props) {
 
   const createGuidedModule = async (event: FormEvent) => {
     event.preventDefault();
-    if (busy || !moduleName.trim() || !projectId) return;
+    if (
+      busy ||
+      !moduleName.trim() ||
+      !folderSelection.value.trim() ||
+      !projectId
+    ) return;
     setBusy(true);
     setError(null);
     try {
-      await createModule(projectId, moduleName.trim());
-      const selectedModuleId = useTasksStore.getState().selectedModuleId;
-      if (!selectedModuleId) {
-        throw new Error("The new module could not be selected.");
+      let moduleId = createdModuleIdRef.current;
+      if (!moduleId) {
+        moduleId = await createModule(projectId, moduleName.trim());
+        createdModuleIdRef.current = moduleId;
+        setCreatedModuleId(moduleId);
       }
-      moduleCreated(selectedModuleId);
+      try {
+        await setModuleFolder(moduleId, folderSelection.value.trim());
+      } catch {
+        setError(
+          "Module created, but its folder could not be saved. Retry to save the folder.",
+        );
+        setBusy(false);
+        return;
+      }
+      if (useTasksStore.getState().selectedModuleId !== moduleId) {
+        await useTasksStore.getState().selectModule(moduleId);
+      }
+      moduleCreated(moduleId);
       setBusy(false);
     } catch (cause) {
       setError(apiErrorMessage(cause));
@@ -105,7 +138,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
       <CoachMark
         anchor="module-add"
         title="Create your first module"
-        description="Modules group related stories. The name is editable."
+        description="Modules group related stories. Name it and choose its local folder."
         focusDialog={false}
       >
         <form onSubmit={(event) => void createGuidedModule(event)}>
@@ -114,20 +147,38 @@ export default function OnboardingTour({ onSelectStory }: Props) {
             <input
               ref={moduleInput}
               autoFocus
+              disabled={createdModuleId !== null}
               value={moduleName}
               onChange={(event) => setModuleName(event.target.value)}
               data-testid="onboarding-module-name"
               className="mt-2 block w-full rounded-md border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
             />
           </label>
+          <div className="mt-3">
+            <ModuleFolderSelection
+              selection={folderSelection}
+              ariaLabel="Module folder"
+              placeholder="Local folder"
+            />
+          </div>
           {errorNode}
           <button
             type="submit"
             data-testid="onboarding-create-module"
-            disabled={busy || !moduleName.trim()}
+            disabled={
+              busy ||
+              !moduleName.trim() ||
+              !folderSelection.value.trim()
+            }
             className={`${buttonClass} mt-4`}
           >
-            {busy ? "Creating…" : "Create module"}
+            {busy
+              ? createdModuleId
+                ? "Saving…"
+                : "Creating…"
+              : createdModuleId
+                ? "Save folder"
+                : "Create module"}
           </button>
         </form>
         {footer}

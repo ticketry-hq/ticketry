@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Set
 from typing import TYPE_CHECKING
 
-from worktracker.launch_capabilities import PROVIDER_CAPABILITIES
-from worktracker.models import LaunchBinding
+from worktracker.models import AgentModel, LaunchBinding, Provider, ReasoningLevel
 from worktracker.required_skills import (
     RequiredSkillsValidationError,
     normalize_required_skills,
@@ -49,41 +48,52 @@ def validate_provider_options(
                 field="agent",
             )
         return None, None, None
-    capability = PROVIDER_CAPABILITIES.get(agent)
-    if capability is None:
+    provider = Provider.objects.filter(slug=agent).first()
+    if provider is None:
         raise LaunchBindingError(
             "unknown_agent",
             f"Agent/provider '{agent}' is not supported.",
             field="agent",
         )
-    from apps.settings_store.provider_catalog import (
-        PROVIDER_ORDER,
-        load_provider_catalog,
-    )
-
     if activated_providers is None:
-        activated_providers = load_provider_catalog().activated_providers
-    if agent in PROVIDER_ORDER and agent not in activated_providers:
+        from worktracker.services.provider_catalog import activated_provider_slugs
+
+        activated_providers = activated_provider_slugs()
+    if agent not in activated_providers:
         raise LaunchBindingError(
             "provider_not_activated",
             f"Agent/provider '{agent}' is not activated.",
             field="agent",
         )
-    if model is not None and not capability.accepts(model):
-        accepted = (*capability.model_aliases, *capability.model_prefixes)
-        supported = ", ".join(accepted) or "the provider catalog"
+    catalog_model = None
+    if model is not None:
+        catalog_model = AgentModel.objects.filter(
+            provider=provider, name=model
+        ).first()
+    if model is not None and catalog_model is None:
         raise LaunchBindingError(
             "unsupported_model",
-            f"Model '{model}' is not compatible with agent/provider '{agent}' "
-            f"(supported names or prefixes: {supported}).",
+            f"Model '{model}' is not in the catalog for agent/provider '{agent}'.",
             field="model",
         )
-    if reasoning is not None and reasoning not in capability.reasoning_levels:
-        supported = ", ".join(capability.reasoning_levels) or "none"
+    if reasoning is not None and catalog_model is None:
+        raise LaunchBindingError(
+            "model_required",
+            "Choose a catalog model before configuring reasoning.",
+            field="model",
+        )
+    catalog_reasoning = None
+    if reasoning is not None:
+        catalog_reasoning = ReasoningLevel.objects.filter(name=reasoning).first()
+    if reasoning is not None and (
+        catalog_reasoning is None
+        or not catalog_model.permitted_reasoning_levels.filter(
+            pk=catalog_reasoning.pk
+        ).exists()
+    ):
         raise LaunchBindingError(
             "unsupported_reasoning",
-            f"Reasoning '{reasoning}' is not supported by agent/provider "
-            f"'{agent}' (supported: {supported}).",
+            f"Reasoning '{reasoning}' is not permitted for model '{model}'.",
             field="reasoning",
         )
     return agent, model, reasoning
@@ -148,32 +158,15 @@ def apply_global_launch_default(
 def list_launch_bindings(project_id) -> list[LaunchBinding]:
     return list(
         LaunchBinding.objects.filter(issue_type__project_id=project_id)
-        .select_related("issue_type", "state")
+        .select_related("issue_type", "state", "model__provider", "reasoning")
         .order_by("issue_type__sort_order", "state__sort_order", "id")
     )
-
-
-def subtree_run_capabilities(project_id) -> dict:
-    """Return enabled state ids grouped by issue type for one project."""
-
-    capabilities = {}
-    pairs = (
-        LaunchBinding.objects.filter(
-            issue_type__project_id=project_id,
-            subtree_run_enabled=True,
-        )
-        .order_by("issue_type__sort_order", "state__sort_order", "id")
-        .values_list("issue_type_id", "state_id")
-    )
-    for issue_type_id, state_id in pairs:
-        capabilities.setdefault(str(issue_type_id), []).append(state_id)
-    return capabilities
 
 
 def get_launch_binding(issue_type_id, state_id) -> LaunchBinding | None:
     return (
         LaunchBinding.objects.filter(issue_type_id=issue_type_id, state_id=state_id)
-        .select_related("issue_type", "state")
+        .select_related("issue_type", "state", "model__provider", "reasoning")
         .first()
     )
 
@@ -234,9 +227,9 @@ def _validated_launch_binding(
             field="prompt",
         )
     agent, _model, _reasoning = validate_provider_options(
-        agent=binding.agent,
-        model=binding.model,
-        reasoning=binding.reasoning,
+        agent=binding.provider_slug,
+        model=binding.model_name,
+        reasoning=binding.reasoning_name,
         activated_providers=activated_providers,
     )
     return binding, agent
@@ -255,7 +248,9 @@ def validate_unattended_launch_binding(binding: LaunchBinding | None) -> LaunchB
             "This launch binding has no resolved agent/provider.",
             field="agent",
         )
-    if not PROVIDER_CAPABILITIES[agent].supports_unattended:
+    from worktracker.services.provider_catalog import provider_supports_unattended
+
+    if not provider_supports_unattended(agent):
         raise LaunchBindingError(
             "unattended_launch_unsupported",
             f"Agent/provider '{agent}' cannot launch unattended.",

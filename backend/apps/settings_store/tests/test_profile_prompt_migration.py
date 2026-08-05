@@ -50,7 +50,7 @@ def test_legacy_profile_prompts_move_to_existing_known_project_bindings(tmp_path
                         "workspace_slug": "meml",
                         "agent_prompt": "Profile default",
                         "agent_prompts": {"implement": "Profile implement"},
-                        "module_folders": {},
+                        "module_links": [],
                     }
                 ],
             }

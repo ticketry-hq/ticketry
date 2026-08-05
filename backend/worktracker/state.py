@@ -13,8 +13,8 @@ Keep it that way — nothing here may import ``worktracker.api`` or ``ninja``.
 """
 
 # A state group counts as "resolved" — the work is done or will never be done —
-# in exactly the two terminal groups. Mirrors the FE issueStore.RESOLVED_GROUPS
-# so the scope-context advisory and the dependency view speak the same language.
+# in exactly the two terminal groups. Mirrors the frontend dependency view and
+# the MCP scope-context projection.
 
 RESOLVED_GROUPS = frozenset({"completed", "cancelled"})
 

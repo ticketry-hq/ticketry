@@ -330,6 +330,24 @@
         "title": "ModuleIn",
         "type": "object"
       },
+      "ModuleLinkBody": {
+        "properties": {
+          "module_id": {
+            "title": "Module Id",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "module_id",
+          "path"
+        ],
+        "title": "ModuleLinkBody",
+        "type": "object"
+      },
       "ModuleOut": {
         "description": "A module issue — mirrors core.ModuleSummary plus additive key fields.",
         "properties": {
@@ -423,15 +441,15 @@
           },
           "agent_prompts": {
             "additionalProperties": true,
-            "default": {},
             "title": "Agent Prompts",
             "type": "object"
           },
-          "module_folders": {
-            "additionalProperties": true,
-            "default": {},
-            "title": "Module Folders",
-            "type": "object"
+          "module_links": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleLinkBody"
+            },
+            "title": "Module Links",
+            "type": "array"
           },
           "name": {
             "title": "Name",
@@ -439,7 +457,6 @@
           },
           "recent_module_ids": {
             "additionalProperties": true,
-            "default": {},
             "title": "Recent Module Ids",
             "type": "object"
           },
@@ -655,81 +672,6 @@
           "description"
         ],
         "title": "ReviewFindingIn",
-        "type": "object"
-      },
-      "ScopeContextOut": {
-        "description": "The read-only dependency slice a subagent consumes for a task (#667, B).\n\nDerived entirely from the existing ``blocked_by``/``blocks`` edges (#624).\n``depends_on`` are the direct blockers (must land first), ``depended_by`` the\ndirect dependents (wait on this task), and ``advisory`` a short\nnatural-language summary.",
-        "properties": {
-          "advisory": {
-            "title": "Advisory",
-            "type": "string"
-          },
-          "depended_by": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ScopeRef"
-            },
-            "title": "Depended By",
-            "type": "array"
-          },
-          "depends_on": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ScopeRef"
-            },
-            "title": "Depends On",
-            "type": "array"
-          },
-          "task": {
-            "$ref": "#/components/schemas/ScopeRef"
-          }
-        },
-        "required": [
-          "task",
-          "advisory"
-        ],
-        "title": "ScopeContextOut",
-        "type": "object"
-      },
-      "ScopeRef": {
-        "description": "A compact, agent-readable reference to one issue in a scope-context (#667).\n\n``state_group`` is the issue's frozen group (``None`` when it has no state);\n``resolved`` is ``True`` iff that group is completed/cancelled.",
-        "properties": {
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "key": {
-            "title": "Key",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "resolved": {
-            "default": false,
-            "title": "Resolved",
-            "type": "boolean"
-          },
-          "state_group": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "State Group"
-          }
-        },
-        "required": [
-          "id",
-          "key",
-          "name"
-        ],
-        "title": "ScopeRef",
         "type": "object"
       },
       "ScopedLaunchBindingIn": {
@@ -5096,64 +5038,6 @@
           }
         ],
         "summary": "Reorder Work Item",
-        "tags": [
-          "WorkItems"
-        ]
-      }
-    },
-    "/work-items/{issue_id}/scope-context": {
-      "get": {
-        "description": "Read-only dependency slice a subagent consumes for a task (#667, B).\n\nResolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its\n**direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first),\n``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory``\nsummarizes the unresolved-blocker situation. Derived entirely from existing\nedges; it performs no writes.\n\n``prefetch_related`` (with ``select_related`` folded into each neighbor\nqueryset) bounds this to a handful of queries regardless of edge count.\nTransitive upstream is a noted later toggle; v1 is the direct edge sets.",
-        "operationId": "getWorkItemScopeContext",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "title": "Issue Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScopeContextOut"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageError"
-                }
-              }
-            },
-            "description": "Invalid or missing API key"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageError"
-                }
-              }
-            },
-            "description": "Resource not found"
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "summary": "Work Item Scope Context",
         "tags": [
           "WorkItems"
         ]

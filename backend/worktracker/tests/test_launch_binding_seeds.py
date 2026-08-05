@@ -34,7 +34,6 @@ def test_new_project_seeds_known_bindings_as_explicit_rows_and_nothing_wildcard(
     )
 
     assert seeded.prompt == DEFAULT_AGENT_PROMPTS["Implement"]
-    assert seeded.agent is None
     assert seeded.model is None
     assert seeded.reasoning is None
     assert seeded.subtree_run_enabled is True

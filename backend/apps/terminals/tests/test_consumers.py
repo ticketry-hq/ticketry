@@ -221,7 +221,9 @@ async def test_init_roundtrip_and_clean_exit(configured, monkeypatch):
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ready"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_init_frame()))
@@ -350,7 +352,9 @@ async def test_instant_and_planning_mutually_exclusive(configured):
     communicator = await _communicator()
     await communicator.send_to(
         text_data=json.dumps(
-            _init_frame(task_id=None, is_planning=True, is_instant=True, instant_prompt="x")
+            _init_frame(
+                task_id=None, is_planning=True, is_instant=True, instant_prompt="x"
+            )
         )
     )
     msg = json.loads(await communicator.receive_from(timeout=2))
@@ -369,7 +373,9 @@ async def test_max_sessions_guard(configured, monkeypatch):
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_init_frame()))
@@ -406,7 +412,9 @@ async def test_dimensions_ordering(configured, monkeypatch):
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "x"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     captured: dict = {}
     real_spawn = consumers.ptyprocess.PtyProcessUnicode.spawn
@@ -468,7 +476,9 @@ async def test_resize_calls_setwinsize(configured, monkeypatch):
     ready = json.loads(await communicator.receive_from(timeout=2))
     assert ready["type"] == "ready"
 
-    await communicator.send_to(text_data=json.dumps({"type": "resize", "cols": 120, "rows": 40}))
+    await communicator.send_to(
+        text_data=json.dumps({"type": "resize", "cols": 120, "rows": 40})
+    )
     await _wait_until(lambda: (40, 120) in captured)
 
     assert (40, 120) in captured
@@ -488,7 +498,9 @@ async def test_client_disconnect_terminates_pty(configured, monkeypatch):
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     terminate_calls: list[bool] = []
     original_terminate = consumers.PtySession.terminate
@@ -540,7 +552,9 @@ async def test_instant_mode_builds_prompt_and_launches(configured, monkeypatch):
         captured["user_input"] = user_input
         return "INSTANT_PROMPT_OK"
 
-    monkeypatch.setattr("apps.terminals.prompt_builder.build_instant_change_prompt", fake_build)
+    monkeypatch.setattr(
+        "apps.terminals.prompt_builder.build_instant_change_prompt", fake_build
+    )
 
     captured_argv: dict = {}
 
@@ -555,12 +569,16 @@ async def test_instant_mode_builds_prompt_and_launches(configured, monkeypatch):
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     communicator = await _communicator()
     await communicator.send_to(
         text_data=json.dumps(
-            _init_frame(task_id=None, is_instant=True, instant_prompt="rename foo to bar")
+            _init_frame(
+                task_id=None, is_instant=True, instant_prompt="rename foo to bar"
+            )
         )
     )
     ready = json.loads(await communicator.receive_from(timeout=2))
@@ -592,7 +610,9 @@ async def test_task_spawn_creates_persisted_tmux_session(configured, monkeypatch
 
     _patch_tmux_create(monkeypatch, fake_create_session)
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_init_frame()))
@@ -624,7 +644,9 @@ async def test_scroll_frame_drives_tmux_copy_mode(configured, monkeypatch):
     )
     # Long-lived attach so the pump is alive when the scroll frame arrives.
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "5"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     scrolls: list[tuple[str, str, int]] = []
     monkeypatch.setattr(
@@ -691,7 +713,10 @@ async def test_instant_spawn_persists_under_scratch_sentinel(configured, monkeyp
         return [ModuleSummary(id=MODULE_ID, name="Mod One", project_id=project_id)]
 
     monkeypatch.setattr(worktracker_queries, "get_modules", fake_get_modules)
-    monkeypatch.setattr("apps.terminals.prompt_builder.build_instant_change_prompt", lambda **kw: "INSTANT_OK")
+    monkeypatch.setattr(
+        "apps.terminals.prompt_builder.build_instant_change_prompt",
+        lambda **kw: "INSTANT_OK",
+    )
     _patch_agent_argv(monkeypatch)(lambda agent, prompt: ["claude", "--prompt", prompt])
 
     created: dict = {}
@@ -702,11 +727,15 @@ async def test_instant_spawn_persists_under_scratch_sentinel(configured, monkeyp
 
     _patch_tmux_create(monkeypatch, fake_create_session)
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     communicator = await _communicator()
     await communicator.send_to(
-        text_data=json.dumps(_init_frame(task_id=None, is_instant=True, instant_prompt="do it"))
+        text_data=json.dumps(
+            _init_frame(task_id=None, is_instant=True, instant_prompt="do it")
+        )
     )
     ready = json.loads(await communicator.receive_from(timeout=2))
     assert ready["type"] == "ready"
@@ -723,7 +752,9 @@ async def test_instant_spawn_persists_under_scratch_sentinel(configured, monkeyp
     await communicator.disconnect()
 
 
-async def test_initial_persisted_spawn_reserves_and_releases_agent_run(configured, monkeypatch):
+async def test_initial_persisted_spawn_reserves_and_releases_agent_run(
+    configured, monkeypatch
+):
     import apps.terminals.consumers as consumers
 
     _patch_repo(monkeypatch)
@@ -734,7 +765,9 @@ async def test_initial_persisted_spawn_reserves_and_releases_agent_run(configure
         lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
     )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     communicator = await _communicator()
     await communicator.send_to(text_data=json.dumps(_init_frame()))
@@ -748,7 +781,9 @@ async def test_initial_persisted_spawn_reserves_and_releases_agent_run(configure
     assert run_id not in consumers.TMUX_VIEWERS
 
 
-async def test_initial_persisted_spawn_resize_failure_releases_reservation(configured, monkeypatch):
+async def test_initial_persisted_spawn_resize_failure_releases_reservation(
+    configured, monkeypatch
+):
     import apps.terminals.consumers as consumers
 
     _patch_repo(monkeypatch)
@@ -782,7 +817,9 @@ async def test_initial_persisted_spawn_resize_failure_releases_reservation(confi
 async def test_attach_uses_attach_argv_and_spawns(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     captured: dict = {}
 
     def fake_attach_argv(rid):
@@ -790,10 +827,14 @@ async def test_attach_uses_attach_argv_and_spawns(configured, monkeypatch):
         return ["printf", "ok"]
 
     monkeypatch.setattr(tmux_client, "attach_argv", fake_attach_argv)
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     communicator = await _communicator()
-    await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-xyz")))
+    await communicator.send_to(
+        text_data=json.dumps(_attach_init(agent_run_id="run-xyz"))
+    )
     ready = json.loads(await communicator.receive_from(timeout=2))
     assert ready["type"] == "ready"
     assert isinstance(ready["session_id"], str) and ready["session_id"]
@@ -813,7 +854,9 @@ async def test_attach_session_not_found(configured, monkeypatch):
     monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: None)
 
     communicator = await _communicator()
-    await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="missing")))
+    await communicator.send_to(
+        text_data=json.dumps(_attach_init(agent_run_id="missing"))
+    )
     msg = json.loads(await communicator.receive_from(timeout=2))
     assert msg == {"type": "error", "message": "session_not_found"}
 
@@ -825,9 +868,13 @@ async def test_attach_respects_max_sessions(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
     monkeypatch.setattr(consumers, "MAX_SESSIONS", 1)
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="r1")))
@@ -846,7 +893,9 @@ async def test_attach_respects_max_sessions(configured, monkeypatch):
 async def test_attach_resize_calls_setwinsize(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "5"])
 
     refreshed: list[tuple[int, int]] = []
@@ -870,7 +919,9 @@ async def test_attach_resize_calls_setwinsize(configured, monkeypatch):
     ready = json.loads(await communicator.receive_from(timeout=2))
     assert ready["type"] == "ready"
 
-    await communicator.send_to(text_data=json.dumps({"type": "resize", "cols": 120, "rows": 40}))
+    await communicator.send_to(
+        text_data=json.dumps({"type": "resize", "cols": 120, "rows": 40})
+    )
     await _wait_until(lambda: (40, 120) in captured)
 
     assert (40, 120) in captured
@@ -883,9 +934,13 @@ async def test_attach_resize_calls_setwinsize(configured, monkeypatch):
 async def test_attach_close_does_not_terminate_tmux_session(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     terminate_calls: list[str] = []
 
@@ -896,7 +951,9 @@ async def test_attach_close_does_not_terminate_tmux_session(configured, monkeypa
     monkeypatch.setattr(tmux_sessions, "terminate_session", fake_terminate_session)
 
     communicator = await _communicator()
-    await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="r-keep")))
+    await communicator.send_to(
+        text_data=json.dumps(_attach_init(agent_run_id="r-keep"))
+    )
     ready = json.loads(await communicator.receive_from(timeout=2))
     assert ready["type"] == "ready"
 
@@ -907,19 +964,26 @@ async def test_attach_close_does_not_terminate_tmux_session(configured, monkeypa
     assert terminate_calls == []
 
 
-async def test_attach_calls_refresh_client_size_with_init_geometry(configured, monkeypatch):
+async def test_attach_calls_refresh_client_size_with_init_geometry(
+    configured, monkeypatch
+):
 
     captured: list[tuple[str, int, int]] = []
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
     monkeypatch.setattr(
-        tmux_client, "refresh_client_size",
+        tmux_client,
+        "refresh_client_size",
         lambda rid, cols, rows: captured.append((rid, cols, rows)),
     )
 
     communicator = await _communicator()
-    await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-size", cols=132, rows=43)))
+    await communicator.send_to(
+        text_data=json.dumps(_attach_init(agent_run_id="run-size", cols=132, rows=43))
+    )
     ready = json.loads(await communicator.receive_from(timeout=2))
     assert ready["type"] == "ready"
     await _drain_until_close(communicator)
@@ -931,7 +995,9 @@ async def test_attach_calls_refresh_client_size_with_init_geometry(configured, m
 async def test_attach_resize_failure_releases_reservation(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
 
     def fail_refresh(rid, cols, rows):
@@ -940,7 +1006,9 @@ async def test_attach_resize_failure_releases_reservation(configured, monkeypatc
     monkeypatch.setattr(tmux_client, "refresh_client_size", fail_refresh)
 
     communicator = await _communicator()
-    await communicator.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-bad-size")))
+    await communicator.send_to(
+        text_data=json.dumps(_attach_init(agent_run_id="run-bad-size"))
+    )
     msg = json.loads(await communicator.receive_from(timeout=2))
     assert msg == {"type": "error", "message": "attach_resize_failed: bad geometry"}
 
@@ -950,12 +1018,18 @@ async def test_attach_resize_failure_releases_reservation(configured, monkeypatc
     await communicator.disconnect()
 
 
-async def test_second_attach_same_agent_run_replaces_existing_viewer(configured, monkeypatch):
+async def test_second_attach_same_agent_run_replaces_existing_viewer(
+    configured, monkeypatch
+):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="same-run")))
@@ -978,7 +1052,9 @@ async def test_second_attach_same_agent_run_replaces_existing_viewer(configured,
 async def test_failed_replacement_keeps_existing_viewer(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
     resize_calls = 0
 
@@ -1012,9 +1088,13 @@ async def test_failed_replacement_keeps_existing_viewer(configured, monkeypatch)
 async def test_concurrent_attach_different_agent_run_succeeds(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-a")))
@@ -1032,9 +1112,13 @@ async def test_concurrent_attach_different_agent_run_succeeds(configured, monkey
 async def test_attach_reservation_released_after_close(configured, monkeypatch):
     import apps.terminals.consumers as consumers
 
-    monkeypatch.setattr(tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid))
+    monkeypatch.setattr(
+        tmux_sessions, "get_session", lambda rid: _fake_tmux_session(rid)
+    )
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["sleep", "30"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     first = await _communicator()
     await first.send_to(text_data=json.dumps(_attach_init(agent_run_id="run-reopen")))
@@ -1112,10 +1196,12 @@ def _patch_worktracker_for_design(monkeypatch):
 
     monkeypatch.setattr(worktracker_queries, "get_modules", fake_get_modules)
     monkeypatch.setattr(worktracker_queries, "get_task_details", fake_get_task_details)
-    monkeypatch.setattr(worktracker_queries, "get_tasks_and_states", fake_get_tasks_and_states)
+    monkeypatch.setattr(
+        worktracker_queries, "get_tasks_and_states", fake_get_tasks_and_states
+    )
 
 
-async def _build(module_folder, **overrides):
+async def _build(module_folder, *, profile_index=0, **overrides):
     """Call consumers._build_prompt with task-mode defaults."""
     import apps.terminals.consumers as consumers
 
@@ -1132,14 +1218,16 @@ async def _build(module_folder, **overrides):
         agent="claude",
     )
     kwargs.update(overrides)
-    return await consumers._build_prompt(0, **kwargs)
+    return await consumers._build_prompt(profile_index, **kwargs)
 
 
-async def test_task_prompt_injects_created_design_dir(tmp_config, sample_profile, tmp_path, monkeypatch):
+async def test_task_prompt_injects_created_design_dir(
+    tmp_config, sample_profile, tmp_path, monkeypatch
+):
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1168,7 +1256,7 @@ async def test_concurrent_task_prompt_builds_share_one_design_dir(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1192,7 +1280,7 @@ async def test_task_prompt_ignores_legacy_profile_prompt_map(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     profile["agent_prompts"] = {"Todo": "SAVED PROMPT OVERRIDE"}
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
@@ -1209,11 +1297,13 @@ async def test_planning_prompt_uses_run_scoped_dir_and_move_contract(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
-    prompt, design_dir, cwd, err = await _build(str(module_folder), is_planning=True, task_id=None)
+    prompt, design_dir, cwd, err = await _build(
+        str(module_folder), is_planning=True, task_id=None
+    )
 
     assert err is None
     rel = f"spec/platform--{MODULE_ID[:8]}/planning/a3f9c2d1"
@@ -1223,11 +1313,42 @@ async def test_planning_prompt_uses_run_scoped_dir_and_move_contract(
     assert design_dir == str((module_folder / rel).resolve())
 
 
-async def test_instant_prompt_gets_design_dir(tmp_config, sample_profile, tmp_path, monkeypatch):
+async def test_planning_prompt_resolves_links_from_the_selected_profile(
+    tmp_config, sample_profile, tmp_path, monkeypatch
+):
+    inactive_folder = tmp_path / "inactive"
+    active_folder = tmp_path / "active"
+    inactive_folder.mkdir()
+    active_folder.mkdir()
+    inactive_profile = {
+        **sample_profile,
+        "name": "Inactive",
+        "module_links": [{"module_id": MODULE_ID, "path": str(inactive_folder)}],
+    }
+    active_profile = {
+        **sample_profile,
+        "name": "Active",
+        "module_links": [{"module_id": MODULE_ID, "path": str(active_folder)}],
+    }
+    write_profiles(tmp_config, [inactive_profile, active_profile], recent=1)
+    _patch_worktracker_for_design(monkeypatch)
+
+    prompt, _design_dir, _cwd, err = await _build(
+        str(active_folder), profile_index=1, is_planning=True, task_id=None
+    )
+
+    assert err is None
+    assert f"Local Codebase: {active_folder}" in prompt
+    assert str(inactive_folder) not in prompt
+
+
+async def test_instant_prompt_gets_design_dir(
+    tmp_config, sample_profile, tmp_path, monkeypatch
+):
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1236,7 +1357,9 @@ async def test_instant_prompt_gets_design_dir(tmp_config, sample_profile, tmp_pa
     )
 
     assert err is None
-    assert f"Design directory: spec/platform--{MODULE_ID[:8]}/planning/a3f9c2d1" in prompt
+    assert (
+        f"Design directory: spec/platform--{MODULE_ID[:8]}/planning/a3f9c2d1" in prompt
+    )
     assert design_dir is not None
 
 
@@ -1246,7 +1369,7 @@ async def test_mcp_enabled_instant_prompt_requires_opt_in_before_self_terminatio
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1261,7 +1384,9 @@ async def test_mcp_enabled_instant_prompt_requires_opt_in_before_self_terminatio
     assert err is None
     rendered = " ".join(prompt.split())
     assert rendered.count("May I terminate this run") == 1
-    assert rendered.index("May I terminate this run") < rendered.index("Make the change")
+    assert rendered.index("May I terminate this run") < rendered.index(
+        "Make the change"
+    )
     assert "Only an explicit affirmative response" in rendered
     assert "Refusal, an ambiguous response, or no response" in rendered
     assert "Remember that decision for this run" in rendered
@@ -1280,7 +1405,7 @@ async def test_gemini_instant_prompt_includes_self_termination_guidance(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1305,7 +1430,7 @@ async def test_self_termination_guidance_is_instant_only(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1325,7 +1450,9 @@ async def test_self_termination_guidance_is_instant_only(
         assert "May I terminate this run" not in prompt
 
 
-async def test_no_module_folder_degrades_without_contract_block(tmp_config, sample_profile, monkeypatch):
+async def test_no_module_folder_degrades_without_contract_block(
+    tmp_config, sample_profile, monkeypatch
+):
     write_profiles(tmp_config, [sample_profile], recent=0)
     _patch_worktracker_for_design(monkeypatch)
 
@@ -1392,7 +1519,7 @@ async def test_doc_chat_prompt_runs_in_doc_design_dir(
     design_dir.mkdir(parents=True)
     (design_dir / "LLD.html").write_text("<html></html>")
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
 
     from apps.documents import dao as ddao
@@ -1433,7 +1560,7 @@ async def test_doc_chat_doc_id_disambiguates_among_multiple_roots(
     canonical.mkdir(parents=True)
     worktree.mkdir(parents=True)
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
 
     from apps.documents import dao as ddao
@@ -1482,7 +1609,7 @@ async def test_doc_chat_prompt_degrades_without_registry_row(
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     profile = dict(sample_profile)
-    profile["module_folders"] = {MODULE_ID: str(module_folder)}
+    profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
 
     prompt, design_abs, cwd, err = await _build(
@@ -1513,7 +1640,9 @@ async def test_doc_chat_spawn_persists_scope_and_doc_path(configured, monkeypatc
 
     _patch_tmux_create(monkeypatch, fake_create_session)
     monkeypatch.setattr(tmux_client, "attach_argv", lambda rid: ["printf", "ok"])
-    monkeypatch.setattr(tmux_client, "refresh_client_size", lambda rid, cols, rows: None)
+    monkeypatch.setattr(
+        tmux_client, "refresh_client_size", lambda rid, cols, rows: None
+    )
 
     communicator = await _communicator()
     await communicator.send_to(

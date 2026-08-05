@@ -15,7 +15,17 @@ from apps.terminals.launch_configuration import (
 from apps.terminals.session import LaunchIntent
 from apps.terminals.tmux import sessions as tmux_sessions
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
-from worktracker.models import Issue, IssueType, LaunchBinding, Project, State, Workspace
+from worktracker.models import (
+    AgentModel,
+    Issue,
+    IssueType,
+    LaunchBinding,
+    Project,
+    Provider,
+    ReasoningLevel,
+    State,
+    Workspace,
+)
 
 from .conftest import write_profiles
 from .test_consumers import _fake_tmux_session
@@ -26,6 +36,14 @@ pytestmark = pytest.mark.django_db(transaction=True)
 
 @pytest.fixture
 def launch_policy():
+    provider, _ = Provider.objects.get_or_create(
+        slug="claude",
+        defaults={"activated": True, "supports_unattended": True},
+    )
+    reasoning, _ = ReasoningLevel.objects.get_or_create(name="high")
+    model, _ = AgentModel.objects.get_or_create(provider=provider, name="sonnet")
+    model.permitted_reasoning_levels.add(reasoning)
+    AgentModel.objects.get_or_create(provider=provider, name="opus")
     workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
     project = Project.objects.create(
         id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
@@ -61,9 +79,8 @@ def launch_policy():
         issue_type=issue_type,
         state=state,
         prompt="Configured workflow prompt",
-        agent="claude",
-        model="sonnet",
-        reasoning="high",
+        model=model,
+        reasoning=reasoning,
         required_skills=["to-spec"],
     )
     return issue, binding
@@ -71,21 +88,28 @@ def launch_policy():
 
 @pytest.fixture
 def provider_catalog():
-    """Write the host catalog the way Settings does, then read it back live."""
+    """Write activation rows and the settings-owned default, then read them live."""
 
     from apps.settings_store.models import AppSetting
-
     def _write(*, activated=("claude", "codex", "gemini"), global_default=None):
+        Provider.objects.update(activated=False)
+        Provider.objects.filter(slug__in=activated).update(activated=True)
+        if global_default and global_default.get("model"):
+            provider = Provider.objects.get(slug=global_default["provider"])
+            model, _ = AgentModel.objects.get_or_create(
+                provider=provider,
+                name=global_default["model"],
+            )
+            if global_default.get("reasoning"):
+                reasoning, _ = ReasoningLevel.objects.get_or_create(
+                    name=global_default["reasoning"]
+                )
+                model.permitted_reasoning_levels.add(reasoning)
         AppSetting.objects.update_or_create(
             scope="host",
             key="provider_catalog",
             defaults={
-                "value": json.dumps(
-                    {
-                        "activated_providers": list(activated),
-                        "global_default": global_default,
-                    }
-                ),
+                "value": json.dumps({"global_default": global_default}),
                 "updated_at": "2026-07-27T00:00:00+00:00",
             },
         )
@@ -97,10 +121,9 @@ def test_blank_configuration_launches_the_global_default(
     launch_policy, provider_catalog
 ):
     issue, binding = launch_policy
-    binding.agent = None
     binding.model = None
     binding.reasoning = None
-    binding.save(update_fields=["agent", "model", "reasoning"])
+    binding.save(update_fields=["model", "reasoning"])
     provider_catalog(
         global_default={"provider": "codex", "model": "gpt-5.4", "reasoning": "high"}
     )
@@ -116,10 +139,9 @@ def test_changing_the_default_takes_effect_on_the_next_launch(
     launch_policy, provider_catalog
 ):
     issue, binding = launch_policy
-    binding.agent = None
     binding.model = None
     binding.reasoning = None
-    binding.save(update_fields=["agent", "model", "reasoning"])
+    binding.save(update_fields=["model", "reasoning"])
     provider_catalog(global_default={"provider": "codex", "model": "gpt-5.4"})
     assert real_resolve_task_launch_configuration(str(issue.id)).agent == "codex"
 
@@ -134,9 +156,7 @@ def test_resolution_loads_provider_catalog_once(
     launch_policy, provider_catalog, monkeypatch
 ):
     issue, _binding = launch_policy
-    provider_catalog(
-        global_default={"provider": "codex", "model": "gpt-5.4"}
-    )
+    provider_catalog(global_default={"provider": "codex", "model": "gpt-5.4"})
     from apps.settings_store import provider_catalog as provider_catalog_module
 
     load_calls = 0
@@ -156,9 +176,7 @@ def test_resolution_loads_provider_catalog_once(
     assert load_calls == 1
 
 
-def test_explicit_binding_overrides_the_global_default(
-    launch_policy, provider_catalog
-):
+def test_explicit_binding_overrides_the_global_default(launch_policy, provider_catalog):
     issue, _binding = launch_policy
     provider_catalog(
         global_default={"provider": "codex", "model": "gpt-5.4", "reasoning": "high"}
@@ -189,10 +207,9 @@ def test_automated_launch_into_a_blank_state_uses_the_global_default(
     launch_policy, provider_catalog
 ):
     issue, binding = launch_policy
-    binding.agent = None
     binding.model = None
     binding.reasoning = None
-    binding.save(update_fields=["agent", "model", "reasoning"])
+    binding.save(update_fields=["model", "reasoning"])
     provider_catalog(
         global_default={"provider": "codex", "model": "gpt-5.4", "reasoning": "high"}
     )
@@ -208,10 +225,9 @@ def test_automated_launch_into_a_blank_state_uses_the_global_default(
 
 def test_blank_configuration_without_a_default_still_refuses_to_launch(launch_policy):
     issue, binding = launch_policy
-    binding.agent = None
     binding.model = None
     binding.reasoning = None
-    binding.save(update_fields=["agent", "model", "reasoning"])
+    binding.save(update_fields=["model", "reasoning"])
 
     with pytest.raises(ValueError, match="^agent_not_configured$"):
         real_resolve_task_launch_configuration(str(issue.id))
@@ -222,7 +238,7 @@ def test_resolver_returns_an_immutable_launch_snapshot(launch_policy):
 
     resolved = real_resolve_task_launch_configuration(str(issue.id))
     binding.prompt = "Edited after launch resolution"
-    binding.model = "opus"
+    binding.model = AgentModel.objects.get(provider__slug="claude", name="opus")
     binding.save(update_fields=["prompt", "model"])
 
     assert resolved.prompt == "Configured workflow prompt"
@@ -267,7 +283,9 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
                 "workspace_slug": "meml",
                 "agent_prompt": "LEGACY PROFILE PROMPT",
                 "agent_prompts": {},
-                "module_folders": {str(module.id): str(module_folder)},
+                "module_links": [
+                    {"module_id": str(module.id), "path": str(module_folder)}
+                ],
                 "recent_project_id": None,
                 "recent_module_ids": {},
             }
@@ -306,7 +324,11 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         real_resolve_task_launch_configuration, str(issue.id)
     )
     binding.prompt = "Edited after launch resolution"
-    binding.model = "opus"
+    binding.model = await asyncio.to_thread(
+        AgentModel.objects.get,
+        provider__slug="claude",
+        name="opus",
+    )
     await asyncio.to_thread(binding.save, update_fields=["prompt", "model"])
 
     def unexpected_reresolution(*args, **kwargs):

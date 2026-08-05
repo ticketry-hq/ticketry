@@ -15,6 +15,12 @@ from worktracker.models.issue import Issue
 from worktracker.models.attachment import Attachment
 from worktracker.models.workflow import IssueTypeTransition
 from worktracker.models.launch_binding import LaunchBinding
+from worktracker.models.provider_catalog import (
+    AgentModel,
+    AgentModelReasoningLevel,
+    Provider,
+    ReasoningLevel,
+)
 
 __all__ = [
     "CARBON_DARK_PALETTE",
@@ -32,4 +38,8 @@ __all__ = [
     "Attachment",
     "IssueTypeTransition",
     "LaunchBinding",
+    "Provider",
+    "AgentModel",
+    "ReasoningLevel",
+    "AgentModelReasoningLevel",
 ]

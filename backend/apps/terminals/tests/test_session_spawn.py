@@ -84,7 +84,7 @@ def _profile(tmp_config, module_folder) -> None:
                 "workspace_slug": "ws",
                 "agent_prompt": None,
                 "agent_prompts": {},
-                "module_folders": {MODULE_ID: str(module_folder)},
+                "module_links": [{"module_id": MODULE_ID, "path": str(module_folder)}],
                 "recent_project_id": None,
                 "recent_module_ids": {},
             }
@@ -146,14 +146,18 @@ def _patch_argv(monkeypatch, factory=None) -> None:
     adapter's ``command(prompt)`` by pinning the slug to "claude".
     """
     factory = factory or (lambda agent, prompt: ["claude", "--prompt", prompt])
-    fake = FakeAdapter(slug="claude", command_fn=lambda prompt: factory("claude", prompt))
+    fake = FakeAdapter(
+        slug="claude", command_fn=lambda prompt: factory("claude", prompt)
+    )
     monkeypatch.setitem(registry._REGISTRY, "claude", fake)
 
 
 # ---------- happy path ----------
 
 
-async def test_spawn_happy_path_returns_id_and_persists(tmp_config, tmp_path, monkeypatch):
+async def test_spawn_happy_path_returns_id_and_persists(
+    tmp_config, tmp_path, monkeypatch
+):
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     _profile(tmp_config, module_folder)
@@ -193,7 +197,45 @@ async def test_spawn_happy_path_returns_id_and_persists(tmp_config, tmp_path, mo
     assert created["command"].startswith("env -u NO_COLOR ")
 
 
-async def test_spawn_publishes_a_starting_lifecycle_delta(tmp_config, tmp_path, monkeypatch):
+async def test_spawn_resolves_the_active_profiles_module_link(
+    tmp_config, tmp_path, monkeypatch
+):
+    inactive_folder = tmp_path / "inactive-repo"
+    active_folder = tmp_path / "active-repo"
+    inactive_folder.mkdir()
+    active_folder.mkdir()
+    write_profiles(
+        tmp_config,
+        [
+            {
+                "name": "Inactive",
+                "workspace_slug": "ws",
+                "module_links": [
+                    {"module_id": MODULE_ID, "path": str(inactive_folder)}
+                ],
+            },
+            {
+                "name": "Active",
+                "workspace_slug": "ws",
+                "module_links": [{"module_id": MODULE_ID, "path": str(active_folder)}],
+            },
+        ],
+        recent=1,
+    )
+    _patch_worktracker(monkeypatch)
+    created = _capture_create_session(monkeypatch)
+    _patch_argv(monkeypatch)
+
+    await session_module.session.spawn(_intent())
+
+    assert created["cwd"] == str(active_folder)
+    assert str(inactive_folder) not in created["command"]
+    assert str(active_folder) in created["command"]
+
+
+async def test_spawn_publishes_a_starting_lifecycle_delta(
+    tmp_config, tmp_path, monkeypatch
+):
     """#979: connected /ws/status clients learn about the spawn immediately —
     a `starting` lifecycle frame rides the status bus at persist time."""
 
@@ -263,9 +305,7 @@ async def test_spawn_roots_in_worktree_when_present(tmp_config, tmp_path, monkey
     _patch_argv(monkeypatch)
 
     # #587 use-if-exists: the task's live worktree wins over the module folder.
-    monkeypatch.setattr(
-        prompt_builder, "_worktree_root", lambda **kw: str(worktree)
-    )
+    monkeypatch.setattr(prompt_builder, "_worktree_root", lambda **kw: str(worktree))
 
     run_id = await session_module.session.spawn(_intent())
 
@@ -274,7 +314,9 @@ async def test_spawn_roots_in_worktree_when_present(tmp_config, tmp_path, monkey
     assert run.cwd == str(worktree)
 
 
-async def test_spawn_no_worktree_falls_back_to_module_folder(tmp_config, tmp_path, monkeypatch):
+async def test_spawn_no_worktree_falls_back_to_module_folder(
+    tmp_config, tmp_path, monkeypatch
+):
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     _profile(tmp_config, module_folder)
@@ -292,7 +334,9 @@ async def test_spawn_no_worktree_falls_back_to_module_folder(tmp_config, tmp_pat
 # ---------- failure paths (raise, never fall back) ----------
 
 
-async def test_spawn_tmux_failure_raises_and_no_orphan(tmp_config, tmp_path, monkeypatch):
+async def test_spawn_tmux_failure_raises_and_no_orphan(
+    tmp_config, tmp_path, monkeypatch
+):
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
     _profile(tmp_config, module_folder)
@@ -318,6 +362,23 @@ async def test_spawn_no_profile_raises(tmp_config, monkeypatch):
         await session_module.session.spawn(_intent())
 
     assert await AgentRun.objects.acount() == 0
+
+
+async def test_spawn_without_a_module_link_uses_the_home_fallback(
+    tmp_config, monkeypatch
+):
+    write_profiles(
+        tmp_config,
+        [{"name": "Default", "workspace_slug": "ws", "module_links": []}],
+        recent=0,
+    )
+    _patch_worktracker(monkeypatch)
+    created = _capture_create_session(monkeypatch)
+    _patch_argv(monkeypatch)
+
+    await session_module.session.spawn(_intent())
+
+    assert created["cwd"] == session_module.os.path.expanduser("~")
 
 
 async def test_spawn_unknown_agent_raises(tmp_config, tmp_path, monkeypatch):
@@ -383,29 +444,11 @@ def test_spawn_sync_via_async_to_sync(tmp_config, tmp_path, monkeypatch):
 
 
 def _deactivate(*providers: str) -> None:
-    """Persist a host catalog with ``providers`` switched off."""
+    """Switch provider catalog rows off."""
 
-    from apps.settings_store.models import AppSetting
-    from apps.settings_store.provider_catalog import (
-        PROVIDER_CATALOG_KEY,
-        PROVIDER_CATALOG_SCOPE,
-        PROVIDER_ORDER,
-        ProviderCatalog,
-    )
+    from worktracker.models import Provider
 
-    catalog = ProviderCatalog(
-        activated_providers=frozenset(
-            provider for provider in PROVIDER_ORDER if provider not in providers
-        )
-    )
-    AppSetting.objects.update_or_create(
-        scope=PROVIDER_CATALOG_SCOPE,
-        key=PROVIDER_CATALOG_KEY,
-        defaults={
-            "value": catalog.model_dump_json(),
-            "updated_at": "2026-07-27T00:00:00+00:00",
-        },
-    )
+    Provider.objects.filter(slug__in=providers).update(activated=False)
 
 
 @pytest.mark.parametrize("scope", ("plan", "instant", "docchat"))
@@ -451,9 +494,10 @@ def test_activation_gate_returns_the_set_it_read_for_an_activated_provider():
     )
 
 
-def test_activation_gate_leaves_a_non_configurable_adapter_alone():
-    """``agy`` is not a configurable provider, so activation never gates it."""
+def test_activation_gate_applies_to_every_adapter_row():
+    """Every code-owned adapter has a provider row and follows its activation."""
 
-    _deactivate("claude", "codex", "gemini")
+    _deactivate("agy")
 
-    assert session_module._enforce_provider_activation("agy") == frozenset()
+    with pytest.raises(ValueError, match="provider_not_activated"):
+        session_module._enforce_provider_activation("agy")

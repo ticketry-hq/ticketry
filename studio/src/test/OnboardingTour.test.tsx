@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const workspaceApi = vi.hoisted(() => ({ acknowledgeOnboarding: vi.fn() }));
+const fetchMock = vi.fn();
 
 vi.mock("../shared/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../shared/api/client")>()),
@@ -15,6 +16,7 @@ import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
 import { ProjectsPane } from "../app/shell/sidebar/projects/ProjectsPane";
 import {
+  getConfigSnapshot,
   isSidebarEnabled,
   seedConfig,
   useConfig,
@@ -74,8 +76,36 @@ function renderTour(onSelectStory = vi.fn()) {
   };
 }
 
+function localProfile() {
+  return {
+    name: "Local",
+    workspace_slug: "meml",
+    agent_prompt: null,
+    agent_prompts: {},
+    module_links: [],
+    recent_project_id: "project-created",
+    recent_module_ids: {},
+  };
+}
+
+function configResponse(profile = localProfile()): Response {
+  return new Response(
+    JSON.stringify({ recent_profile_index: 0, profiles: [profile] }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal("fetch", fetchMock);
+  fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/api/config/profiles/0" && init?.method === "PUT") {
+      return Promise.resolve(
+        configResponse(JSON.parse(String(init.body))),
+      );
+    }
+    throw new Error(`Unexpected request: ${String(input)}`);
+  });
   workspaceApi.acknowledgeOnboarding.mockResolvedValue({
     id: "workspace-1",
     name: "Workspace",
@@ -94,6 +124,7 @@ beforeEach(() => {
     },
   }));
   useOnboardingTourStore.getState().reset();
+  seedConfig({ profiles: [localProfile()], recentProfileIndex: 0 });
   startTourFromLayout(true, DEFAULT_PANEL_LAYOUT);
 });
 
@@ -103,8 +134,18 @@ describe("post-project onboarding tour", () => {
       sidebar: false,
       projects: false,
     });
+    const operations: string[] = [];
     const createModule = vi.fn(async () => {
+      operations.push("create module");
       useTasksStore.setState({ selectedModuleId: "module-returned" });
+      return "module-returned";
+    });
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/config/profiles/0" && init?.method === "PUT") {
+        operations.push("store folder link");
+        return Promise.resolve(configResponse(JSON.parse(String(init.body))));
+      }
+      throw new Error(`Unexpected request: ${String(input)}`);
     });
     useTasksStore.setState({ createModule } as never);
     const { onSelectStory } = renderTour();
@@ -127,6 +168,9 @@ describe("post-project onboarding tour", () => {
       { key: "Escape" },
     );
     expect(moduleAnchor).toHaveFocus();
+    fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), {
+      target: { value: " /repos/general " },
+    });
     fireEvent.click(screen.getByTestId("onboarding-create-module"));
 
     const storyDialog = await screen.findByRole("dialog", {
@@ -137,7 +181,13 @@ describe("post-project onboarding tour", () => {
     expect(screen.getByRole("textbox", { name: "Capture an idea" }))
       .toHaveFocus();
     expect(createModule).toHaveBeenCalledWith("project-created", "General");
+    expect(operations).toEqual(["create module", "store folder link"]);
+    expect(getConfigSnapshot().profiles[0]?.module_links).toEqual([
+      { module_id: "module-returned", path: "/repos/general" },
+    ]);
     expect(useTasksStore.getState().selectedModuleId).toBe("module-returned");
+    expect(screen.queryByRole("dialog", { name: "Module Folder" }))
+      .not.toBeInTheDocument();
     expect(screen.queryByTestId("onboarding-story-name")).not.toBeInTheDocument();
     expect(screen.queryByTestId("onboarding-create-story")).not.toBeInTheDocument();
 
@@ -223,6 +273,76 @@ describe("post-project onboarding tour", () => {
     },
   );
 
+  it("requires trimmed module name and folder before enabling Create module", () => {
+    renderTour();
+    fireEvent.click(screen.getByTestId("onboarding-continue"));
+
+    const name = screen.getByTestId("onboarding-module-name");
+    const folder = screen.getByRole("textbox", { name: "Module folder" });
+    const submit = screen.getByTestId("onboarding-create-module");
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(name, { target: { value: "   " } });
+    fireEvent.change(folder, { target: { value: "/repos/general" } });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(name, { target: { value: "General" } });
+    fireEvent.change(folder, { target: { value: "   " } });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(folder, { target: { value: " /repos/general " } });
+    expect(submit).toBeEnabled();
+  });
+
+  it("retries a failed folder link against the retained module without advancing or creating again", async () => {
+    let folderWrites = 0;
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) !== "/api/config/profiles/0" || init?.method !== "PUT") {
+        throw new Error(`Unexpected request: ${String(input)}`);
+      }
+      folderWrites += 1;
+      if (folderWrites === 1) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ message: "save failed" }), {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(configResponse(JSON.parse(String(init.body))));
+    });
+    const createModule = vi.fn(async () => {
+      useTasksStore.setState({ selectedModuleId: "module-returned" });
+      return "module-returned";
+    });
+    useTasksStore.setState({ createModule } as never);
+    renderTour();
+    fireEvent.click(screen.getByTestId("onboarding-continue"));
+    fireEvent.change(screen.getByTestId("onboarding-module-name"), {
+      target: { value: "My module" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), {
+      target: { value: "/repos/my-module" },
+    });
+
+    fireEvent.click(screen.getByTestId("onboarding-create-module"));
+
+    expect(await screen.findByTestId("onboarding-step-error")).toHaveTextContent(
+      /folder could not be saved/i,
+    );
+    expect(useOnboardingTourStore.getState().step).toBe("module-create");
+    expect(createModule).toHaveBeenCalledTimes(1);
+    expect(folderWrites).toBe(1);
+
+    fireEvent.click(screen.getByTestId("onboarding-create-module"));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Create your first story" }),
+    ).toBeInTheDocument();
+    expect(createModule).toHaveBeenCalledTimes(1);
+    expect(folderWrites).toBe(2);
+  });
+
   it("retains the module value, step, and focus when creation fails so it can retry", async () => {
     const createModule = vi.fn(async () => {
       throw new Error("module unavailable");
@@ -232,6 +352,9 @@ describe("post-project onboarding tour", () => {
     fireEvent.click(screen.getByTestId("onboarding-continue"));
     const input = screen.getByTestId("onboarding-module-name");
     fireEvent.change(input, { target: { value: "My module" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Module folder" }), {
+      target: { value: "/repos/my-module" },
+    });
     fireEvent.click(screen.getByTestId("onboarding-create-module"));
 
     expect(await screen.findByTestId("onboarding-step-error")).toHaveTextContent(

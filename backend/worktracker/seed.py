@@ -84,14 +84,18 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
     supports_auto_start = any(
         field.name == "auto_start" for field in LaunchBinding._meta.get_fields()
     )
+    supports_agent = any(
+        field.name == "agent" for field in LaunchBinding._meta.get_fields()
+    )
     for issue_type in issue_types:
         for state in states:
             defaults = {
                 "prompt": default_agent_prompt(issue_type.name, state.name),
-                "agent": None,
                 "model": None,
                 "reasoning": None,
             }
+            if supports_agent:
+                defaults["agent"] = None
             if supports_subtree_run:
                 defaults["subtree_run_enabled"] = issue_type.name == "Story"
             if supports_required_skills:

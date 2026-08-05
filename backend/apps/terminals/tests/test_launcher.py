@@ -61,6 +61,28 @@ def test_build_doc_chat_prompt_forbids_creating_new_docs():
     assert "Do not create" in prompt
 
 
+def test_build_doc_chat_prompt_uses_the_supplied_profiles_module_link():
+    profile = SimpleNamespace(
+        module_links=[{"module_id": "module-1", "path": "/active/repo"}]
+    )
+
+    prompt = build_doc_chat_prompt(
+        doc_rel_path="LLD.html", module_id="module-1", profile=profile
+    )
+
+    assert "Local Module Folder: /active/repo" in prompt
+
+
+def test_build_doc_chat_prompt_keeps_missing_link_explicit():
+    prompt = build_doc_chat_prompt(
+        doc_rel_path="LLD.html",
+        module_id="module-1",
+        profile=SimpleNamespace(module_links=[]),
+    )
+
+    assert "Local Module Folder: \n" in prompt
+
+
 def test_build_context_prompt_keeps_factual_context_and_tools_neutral():
     prompt = build_context_prompt(_task("Refinement", "Story"))
 
@@ -102,7 +124,7 @@ def test_profile_default_prompt_is_not_launch_authority(monkeypatch):
                 agent_prompts={},
                 agent_prompt="CUSTOM DEFAULT: follow our operations handbook.",
                 workspace_slug="",
-                module_folders={},
+                module_links=[],
             )
         ],
     )
@@ -119,7 +141,7 @@ def test_resolved_binding_prompt_overrides_legacy_profile_prompt():
         agent_prompts={"Implement": "LEGACY PROFILE PROMPT"},
         agent_prompt="LEGACY DEFAULT",
         workspace_slug="meml",
-        module_folders={"module-1": "/repo"},
+        module_links=[{"module_id": "module-1", "path": "/repo"}],
     )
 
     prompt = build_context_prompt(
@@ -154,7 +176,9 @@ def test_selected_workflow_prompt_is_opaque_over_neutral_framing(monkeypatch):
                 },
                 agent_prompt=None,
                 workspace_slug="workspace",
-                module_folders={"module-1": "/code/module"},
+                module_links=[
+                    {"module_id": "module-1", "path": "/code/module"}
+                ],
             )
         ],
     )
@@ -228,7 +252,7 @@ def test_project_binding_wins_for_idea_state(monkeypatch):
                 agent_prompts={"Idea": "CUSTOM IDEA PROMPT"},
                 agent_prompt=None,
                 workspace_slug="",
-                module_folders={},
+                module_links=[],
             )
         ],
     )
@@ -254,7 +278,7 @@ def test_custom_idea_prompt_is_not_supplemented_with_hard_constraints(monkeypatc
                 agent_prompts={"Idea": "CUSTOM IDEA PROMPT: transition when ready"},
                 agent_prompt=None,
                 workspace_slug="",
-                module_folders={},
+                module_links=[],
             )
         ],
     )
@@ -281,7 +305,7 @@ def test_custom_non_idea_prompt_gets_no_idea_boundary(monkeypatch):
                 agent_prompts={"Review": "CUSTOM REVIEW PROMPT"},
                 agent_prompt=None,
                 workspace_slug="",
-                module_folders={},
+                module_links=[],
             )
         ],
     )

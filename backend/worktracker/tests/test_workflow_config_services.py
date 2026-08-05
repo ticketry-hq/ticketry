@@ -13,7 +13,6 @@ from contextlib import contextmanager
 import pytest
 
 from worktracker.models import Issue, IssueType, Project, State
-from worktracker.signals import issue_state_changed
 from worktracker.services import workflow_config as svc
 from worktracker.services.errors import NotFoundError, ServiceError, ValidationError
 
@@ -304,7 +303,7 @@ def test_delete_last_state_in_group_conflicts(project):
 
 
 @pytest.mark.django_db
-def test_delete_state_in_use_requires_reassign(project):
+def test_delete_occupied_state_names_the_conflict(project):
     s = svc.create_state(project.id, name="Backlog", group="backlog")
     svc.create_state(project.id, name="Icebox", group="backlog")
     issue_type = IssueType.objects.create(
@@ -312,76 +311,42 @@ def test_delete_state_in_use_requires_reassign(project):
     )
     _issue(project, state=s, issue_type=issue_type)
 
-    with conflict():
+    with conflict() as exc:
         svc.delete_state(s.id)
+    assert "occupied" in exc.value.message.lower()
 
 
 @pytest.mark.django_db
-def test_delete_state_reassigns_then_deletes(project):
+def test_delete_empty_unreferenced_state(project):
     src = svc.create_state(project.id, name="Backlog", group="backlog")
-    dst = svc.create_state(project.id, name="Icebox", group="backlog")
-    issue_type = IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Feature", level="task"
-    )
-    issue = _issue(project, state=src, issue_type=issue_type)
+    svc.create_state(project.id, name="Icebox", group="backlog")
 
-    impact = svc.get_state_impact(src.id)
-    svc.delete_state(
-        src.id, reassign_to=dst.id, impact_token=impact["impact_token"]
-    )
+    svc.delete_state(src.id)
 
-    issue.refresh_from_db()
-    assert issue.state_id == dst.id
     assert not State.objects.filter(pk=src.id).exists()
 
 
 @pytest.mark.django_db
-def test_delete_state_reassign_preserves_state_change_invariants(
-    project, django_capture_on_commit_callbacks
-):
-    """Configuration repair preserves revisions and cancellation archiving."""
+def test_delete_state_rejects_workflow_references_without_mutation(project):
     src = svc.create_state(project.id, name="Backlog", group="backlog")
     svc.create_state(project.id, name="Icebox", group="backlog")
-    dst = svc.create_state(project.id, name="Cancelled", group="cancelled")
     story_type = IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Story", level="task"
-    )
-    issue = _issue(project, state=src, issue_type=story_type)
-    previous_revision = issue.state_revision
-    events = []
-
-    def record_event(sender, **kwargs):
-        events.append(kwargs)
-
-    issue_state_changed.connect(
-        record_event,
-        dispatch_uid="state-deletion-reassignment",
+        id=uuid.uuid4(),
+        project=project,
+        name="Story",
+        level="task",
+        start_state=src,
+        workflow_revision=4,
     )
 
-    impact = svc.get_state_impact(src.id)
-    try:
-        with django_capture_on_commit_callbacks(execute=True):
-            svc.delete_state(
-                src.id,
-                reassign_to=dst.id,
-                impact_token=impact["impact_token"],
-            )
-    finally:
-        issue_state_changed.disconnect(
-            record_event,
-            dispatch_uid="state-deletion-reassignment",
-        )
+    with conflict() as exc:
+        svc.delete_state(src.id)
 
-    issue.refresh_from_db()
-    assert issue.state_id == dst.id
-    # Entering a cancelled-group state must ride the archive cascade.
-    assert issue.is_archived is True
-    assert issue.state_revision > previous_revision
-    assert len(events) == 1
-    assert events[0]["issue_id"] == str(issue.id)
-    assert events[0]["from_state_id"] == str(src.id)
-    assert events[0]["to_state_id"] == str(dst.id)
-    assert events[0]["revision"] == issue.state_revision
+    assert "workflow configuration" in exc.value.message.lower()
+    assert State.objects.filter(pk=src.id).exists()
+    story_type.refresh_from_db()
+    assert story_type.start_state_id == src.id
+    assert story_type.workflow_revision == 4
 
 
 @pytest.mark.django_db

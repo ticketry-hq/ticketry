@@ -40,7 +40,7 @@ def sample_profile():
         "workspace_slug": "ws",
         "agent_prompt": None,
         "agent_prompts": {},
-        "module_folders": {},
+        "module_links": [],
         "recent_project_id": None,
         "recent_module_ids": {},
     }

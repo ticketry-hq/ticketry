@@ -20,6 +20,7 @@ import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
+from worktracker_sdk.generated.models.module_link_body import ModuleLinkBody
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -30,13 +31,13 @@ class ProfileBody(BaseModel):
     """ # noqa: E501
     agent_prompt: Optional[StrictStr] = None
     agent_prompts: Optional[Dict[str, Any]] = None
-    module_folders: Optional[Dict[str, Any]] = None
+    module_links: Optional[List[ModuleLinkBody]] = None
     name: StrictStr
     recent_module_ids: Optional[Dict[str, Any]] = None
     recent_project_id: Optional[StrictStr] = None
     workspace_slug: StrictStr
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["agent_prompt", "agent_prompts", "module_folders", "name", "recent_module_ids", "recent_project_id", "workspace_slug"]
+    __properties: ClassVar[List[str]] = ["agent_prompt", "agent_prompts", "module_links", "name", "recent_module_ids", "recent_project_id", "workspace_slug"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -79,6 +80,13 @@ class ProfileBody(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of each item in module_links (list)
+        _items = []
+        if self.module_links:
+            for _item_module_links in self.module_links:
+                if _item_module_links:
+                    _items.append(_item_module_links.to_dict())
+            _dict['module_links'] = _items
         # puts key-value pairs in additional_properties in the top level
         if self.additional_properties is not None:
             for _key, _value in self.additional_properties.items():
@@ -108,7 +116,7 @@ class ProfileBody(BaseModel):
         _obj = cls.model_validate({
             "agent_prompt": obj.get("agent_prompt"),
             "agent_prompts": obj.get("agent_prompts"),
-            "module_folders": obj.get("module_folders"),
+            "module_links": [ModuleLinkBody.from_dict(_item) for _item in obj["module_links"]] if obj.get("module_links") is not None else None,
             "name": obj.get("name"),
             "recent_module_ids": obj.get("recent_module_ids"),
             "recent_project_id": obj.get("recent_project_id"),

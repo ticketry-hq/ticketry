@@ -31,11 +31,6 @@ import {
     ReviewFindingInToJSON,
 } from '../models/ReviewFindingIn.js';
 import {
-    type ScopeContextOut,
-    ScopeContextOutFromJSON,
-    ScopeContextOutToJSON,
-} from '../models/ScopeContextOut.js';
-import {
     type ValidationError,
     ValidationErrorFromJSON,
     ValidationErrorToJSON,
@@ -86,10 +81,6 @@ export interface DeleteWorkItemRequest {
 }
 
 export interface GetWorkItemRequest {
-    issueId: string;
-}
-
-export interface GetWorkItemScopeContextRequest {
     issueId: string;
 }
 
@@ -249,30 +240,6 @@ export interface WorkItemsApiInterface {
      * Retrieve Work Item
      */
     getWorkItem(requestParameters: GetWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemDetailOut>;
-
-    /**
-     * Creates request options for getWorkItemScopeContext without sending the request
-     * @param {string} issueId 
-     * @throws {RequiredError}
-     * @memberof WorkItemsApiInterface
-     */
-    getWorkItemScopeContextRequestOpts(requestParameters: GetWorkItemScopeContextRequest): Promise<runtime.RequestOpts>;
-
-    /**
-     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges; it performs no writes.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
-     * @summary Work Item Scope Context
-     * @param {string} issueId 
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof WorkItemsApiInterface
-     */
-    getWorkItemScopeContextRaw(requestParameters: GetWorkItemScopeContextRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ScopeContextOut>>;
-
-    /**
-     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges; it performs no writes.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
-     * Work Item Scope Context
-     */
-    getWorkItemScopeContext(requestParameters: GetWorkItemScopeContextRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ScopeContextOut>;
 
     /**
      * Creates request options for listModuleWorkItems without sending the request
@@ -674,57 +641,6 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
      */
     async getWorkItem(requestParameters: GetWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItemDetailOut> {
         const response = await this.getWorkItemRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * Creates request options for getWorkItemScopeContext without sending the request
-     */
-    async getWorkItemScopeContextRequestOpts(requestParameters: GetWorkItemScopeContextRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['issueId'] == null) {
-            throw new runtime.RequiredError(
-                'issueId',
-                'Required parameter "issueId" was null or undefined when calling getWorkItemScopeContext().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
-        }
-
-
-        let urlPath = `/work-items/{issue_id}/scope-context`;
-        urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
-
-        return {
-            path: urlPath,
-            method: 'GET',
-            headers: headerParameters,
-            query: queryParameters,
-        };
-    }
-
-    /**
-     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges; it performs no writes.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
-     * Work Item Scope Context
-     */
-    async getWorkItemScopeContextRaw(requestParameters: GetWorkItemScopeContextRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ScopeContextOut>> {
-        const requestOptions = await this.getWorkItemScopeContextRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => ScopeContextOutFromJSON(jsonValue));
-    }
-
-    /**
-     * Read-only dependency slice a subagent consumes for a task (#667, B).  Resolve the task by UUID or ``KEY-N`` (404 otherwise), then walk its **direct** edges: ``blocked_by`` becomes ``depends_on`` (must land first), ``blocks`` becomes ``depended_by`` (waits on this), and a short ``advisory`` summarizes the unresolved-blocker situation. Derived entirely from existing edges; it performs no writes.  ``prefetch_related`` (with ``select_related`` folded into each neighbor queryset) bounds this to a handful of queries regardless of edge count. Transitive upstream is a noted later toggle; v1 is the direct edge sets.
-     * Work Item Scope Context
-     */
-    async getWorkItemScopeContext(requestParameters: GetWorkItemScopeContextRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ScopeContextOut> {
-        const response = await this.getWorkItemScopeContextRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

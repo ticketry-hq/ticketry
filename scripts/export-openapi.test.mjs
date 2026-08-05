@@ -53,8 +53,11 @@ test("OpenAPI export runs from the current ticketry backend", (context) => {
       resolve(stack, "backend"),
       "-m",
       "django",
-      "export_openapi",
+      "spectacular",
+      "--file",
       resolve(stack, "openapi.json"),
+      "--format",
+      "openapi-json",
       "DJANGO_SETTINGS_MODULE=worktracker.openapi_settings",
     ]);
   } finally {
@@ -103,8 +106,11 @@ test("OpenAPI export can target a temporary contract-check artifact", (context) 
     assert.deepEqual(readFileSync(log, "utf8").trim().split("\n"), [
       "-m",
       "django",
-      "export_openapi",
+      "spectacular",
+      "--file",
       destination,
+      "--format",
+      "openapi-json",
     ]);
   } finally {
     rmSync(fixture, { recursive: true, force: true });

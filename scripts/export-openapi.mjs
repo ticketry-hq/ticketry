@@ -15,7 +15,15 @@ const localPython =
 const python = process.env.WORKTRACKER_PYTHON || (existsSync(localPython) ? localPython : "python3");
 const result = spawnSync(
   python,
-  ["-m", "django", "export_openapi", destination],
+  [
+    "-m",
+    "django",
+    "spectacular",
+    "--file",
+    destination,
+    "--format",
+    "openapi-json",
+  ],
   {
     cwd: backend,
     env: {

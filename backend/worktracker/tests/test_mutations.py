@@ -509,19 +509,3 @@ def test_child_count_excludes_archived_children(client, project, auth):
     )
     after = client.get(f"{BASE}/work-items/{story['id']}", headers=auth).json()
     assert after["task"]["sub_issues_count"] == 0
-
-
-# --- auth inheritance (C7) ---------------------------------------------------
-#
-# The new routes inherit auth structurally: they are mounted on the same
-# ``router = Router(auth=ApiKeyAuth())`` as the existing 13 routes. The package
-# self-test host does not enforce router-level auth at runtime (a known ninja
-# wiring limitation — the same reason ``test_auth.py``'s Client cases fail on
-# the clean tree), so we assert the structural binding instead of a 401.
-
-
-def test_router_carries_api_key_auth():
-    from worktracker.api import router
-    from worktracker.auth import ApiKeyAuth
-
-    assert isinstance(router.auth, ApiKeyAuth)

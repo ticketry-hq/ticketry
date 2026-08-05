@@ -5,7 +5,6 @@ from apps.execution.api import router as execution_router
 from apps.runs.api import router as runs_router
 from apps.settings_store.api import router as settings_router
 from apps.terminals.api import router as terminals_router
-from worktracker.api import router as worktracker_router
 from apps.worktrees.api import router as worktrees_router
 from apps.settings_store.config import NoConfigurationSelected
 
@@ -17,7 +16,6 @@ api.add_router("", terminals_router)
 api.add_router("", documents_router)
 api.add_router("", worktrees_router)
 api.add_router("", execution_router)
-api.add_router("/work-tracker", worktracker_router)
 
 
 @api.exception_handler(NoConfigurationSelected)

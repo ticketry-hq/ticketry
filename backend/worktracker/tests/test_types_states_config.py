@@ -1,7 +1,7 @@
 """S6 — configurable issue types (G1) + workflow-state CRUD (G2).
 
-Exercises all 9 new routes plus their guards and invariants through the
-package's ninja self-test host, and confirms the seed / backfill behavior.
+Exercises the issue-type and workflow-state routes through the package's DRF
+test host, and confirms the seed / backfill behavior.
 """
 
 import uuid
@@ -15,7 +15,7 @@ from worktracker.models import (
     State,
 )
 from worktracker.seed import ensure_issue_types, ensure_state_order
-from worktracker.schemas import IssueTypeIn, IssueTypeOut, IssueTypePatch
+from worktracker.rest.serializers import IssueTypeSerializer
 from worktracker.tests.conftest import BASE, patch_json, post_json
 
 
@@ -94,8 +94,7 @@ def test_seed_is_idempotent(project):
 
 
 def test_issue_type_contract_has_no_icon_field():
-    for schema in (IssueTypeIn, IssueTypeOut, IssueTypePatch):
-        assert "icon" not in schema.model_fields
+    assert "icon" not in IssueTypeSerializer().fields
 
 
 # --- create type ------------------------------------------------------------
@@ -444,11 +443,3 @@ def test_workitem_out_carries_bare_issue_type_id(client, project, auth):
     story = IssueType.objects.get(project=project, name="Story")
     task = _make_task(client, project, auth, issue_type_id=story.id)
     assert task["issue_type"] == str(story.id)
-
-
-@pytest.mark.django_db
-def test_router_carries_api_key_auth():
-    from worktracker.api import router
-    from worktracker.auth import ApiKeyAuth
-
-    assert isinstance(router.auth, ApiKeyAuth)

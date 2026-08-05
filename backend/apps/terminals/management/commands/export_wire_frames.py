@@ -1,6 +1,6 @@
 """Export the terminal WebSocket wire-frame JSON Schema (#692 · T687-3).
 
-Sibling of the worktracker ``export_openapi`` command, but for the ``/ws/terminal``
+Sibling of the worktracker drf-spectacular export, but for the ``/ws/terminal``
 frames instead of the REST surface. Dumps the schema declared in
 :mod:`terminals.frames` to the committed artifact that the Studio contract test
 and the drift gate both read.

@@ -16,11 +16,9 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import StrictBool
-from typing import List, Optional
+from typing import List
 from uuid import UUID
-from worktracker_sdk.generated.models.module_in import ModuleIn
-from worktracker_sdk.generated.models.module_out import ModuleOut
+from worktracker_sdk.generated.models.module import Module
 
 from worktracker_sdk.generated.api_client import ApiClient, RequestSerialized
 from worktracker_sdk.generated.api_response import ApiResponse
@@ -44,7 +42,7 @@ class ModulesApi:
     def create_module(
         self,
         project_id: UUID,
-        module_in: ModuleIn,
+        module: Module,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -57,15 +55,15 @@ class ModulesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ModuleOut:
-        """Create Module
+    ) -> Module:
+        """create_module
 
-        Create a module issue (no parent) with a freshly allocated sequence.
+        Project-scoped module collection with explicit stable ordering.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param module_in: (required)
-        :type module_in: ModuleIn
+        :param module: (required)
+        :type module: Module
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -90,7 +88,7 @@ class ModulesApi:
 
         _param = self._create_module_serialize(
             project_id=project_id,
-            module_in=module_in,
+            module=module,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -98,10 +96,7 @@ class ModulesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "ModuleOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "Module",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -118,7 +113,7 @@ class ModulesApi:
     def create_module_with_http_info(
         self,
         project_id: UUID,
-        module_in: ModuleIn,
+        module: Module,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -131,15 +126,15 @@ class ModulesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[ModuleOut]:
-        """Create Module
+    ) -> ApiResponse[Module]:
+        """create_module
 
-        Create a module issue (no parent) with a freshly allocated sequence.
+        Project-scoped module collection with explicit stable ordering.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param module_in: (required)
-        :type module_in: ModuleIn
+        :param module: (required)
+        :type module: Module
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -164,7 +159,7 @@ class ModulesApi:
 
         _param = self._create_module_serialize(
             project_id=project_id,
-            module_in=module_in,
+            module=module,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -172,10 +167,7 @@ class ModulesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "ModuleOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "Module",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -192,7 +184,7 @@ class ModulesApi:
     def create_module_without_preload_content(
         self,
         project_id: UUID,
-        module_in: ModuleIn,
+        module: Module,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -206,14 +198,14 @@ class ModulesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Create Module
+        """create_module
 
-        Create a module issue (no parent) with a freshly allocated sequence.
+        Project-scoped module collection with explicit stable ordering.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param module_in: (required)
-        :type module_in: ModuleIn
+        :param module: (required)
+        :type module: Module
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -238,7 +230,7 @@ class ModulesApi:
 
         _param = self._create_module_serialize(
             project_id=project_id,
-            module_in=module_in,
+            module=module,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -246,10 +238,7 @@ class ModulesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "ModuleOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "Module",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -261,7 +250,7 @@ class ModulesApi:
     def _create_module_serialize(
         self,
         project_id,
-        module_in,
+        module,
         _request_auth,
         _content_type,
         _headers,
@@ -289,8 +278,8 @@ class ModulesApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if module_in is not None:
-            _body_params = module_in
+        if module is not None:
+            _body_params = module
 
 
         # set the HTTP header `Accept`
@@ -308,7 +297,9 @@ class ModulesApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )
@@ -342,7 +333,6 @@ class ModulesApi:
     def list_modules(
         self,
         project_id: UUID,
-        include_archived: Optional[StrictBool] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -355,15 +345,13 @@ class ModulesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> List[ModuleOut]:
-        """List Modules
+    ) -> List[Module]:
+        """list_modules
 
-        List the project's module issues (archived hidden unless requested).
+        Project-scoped module collection with explicit stable ordering.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param include_archived:
-        :type include_archived: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -388,7 +376,6 @@ class ModulesApi:
 
         _param = self._list_modules_serialize(
             project_id=project_id,
-            include_archived=include_archived,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -396,9 +383,7 @@ class ModulesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[ModuleOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[Module]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -415,7 +400,6 @@ class ModulesApi:
     def list_modules_with_http_info(
         self,
         project_id: UUID,
-        include_archived: Optional[StrictBool] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -428,15 +412,13 @@ class ModulesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[List[ModuleOut]]:
-        """List Modules
+    ) -> ApiResponse[List[Module]]:
+        """list_modules
 
-        List the project's module issues (archived hidden unless requested).
+        Project-scoped module collection with explicit stable ordering.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param include_archived:
-        :type include_archived: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -461,7 +443,6 @@ class ModulesApi:
 
         _param = self._list_modules_serialize(
             project_id=project_id,
-            include_archived=include_archived,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -469,9 +450,7 @@ class ModulesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[ModuleOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[Module]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -488,7 +467,6 @@ class ModulesApi:
     def list_modules_without_preload_content(
         self,
         project_id: UUID,
-        include_archived: Optional[StrictBool] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -502,14 +480,12 @@ class ModulesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """List Modules
+        """list_modules
 
-        List the project's module issues (archived hidden unless requested).
+        Project-scoped module collection with explicit stable ordering.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param include_archived:
-        :type include_archived: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -534,7 +510,6 @@ class ModulesApi:
 
         _param = self._list_modules_serialize(
             project_id=project_id,
-            include_archived=include_archived,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -542,9 +517,7 @@ class ModulesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[ModuleOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[Module]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -556,7 +529,6 @@ class ModulesApi:
     def _list_modules_serialize(
         self,
         project_id,
-        include_archived,
         _request_auth,
         _content_type,
         _headers,
@@ -581,10 +553,6 @@ class ModulesApi:
         if project_id is not None:
             _path_params['project_id'] = project_id
         # process the query parameters
-        if include_archived is not None:
-
-            _query_params.append(('include_archived', include_archived))
-
         # process the header parameters
         # process the form parameters
         # process the body parameter

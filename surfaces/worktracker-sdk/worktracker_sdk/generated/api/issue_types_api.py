@@ -16,12 +16,12 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
+from pydantic import StrictStr
 from typing import List, Optional
 from uuid import UUID
-from worktracker_sdk.generated.models.issue_type_in import IssueTypeIn
-from worktracker_sdk.generated.models.issue_type_out import IssueTypeOut
-from worktracker_sdk.generated.models.issue_type_patch import IssueTypePatch
-from worktracker_sdk.generated.models.reorder_in import ReorderIn
+from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder
+from worktracker_sdk.generated.models.issue_type import IssueType
+from worktracker_sdk.generated.models.patched_issue_type import PatchedIssueType
 
 from worktracker_sdk.generated.api_client import ApiClient, RequestSerialized
 from worktracker_sdk.generated.api_response import ApiResponse
@@ -45,7 +45,7 @@ class IssueTypesApi:
     def create_issue_type(
         self,
         project_id: UUID,
-        issue_type_in: IssueTypeIn,
+        issue_type: IssueType,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -58,15 +58,15 @@ class IssueTypesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> IssueTypeOut:
-        """Create Issue Type
+    ) -> IssueType:
+        """create_issue_type
 
-        Create an issue type at the tail of its level's order.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param issue_type_in: (required)
-        :type issue_type_in: IssueTypeIn
+        :param issue_type: (required)
+        :type issue_type: IssueType
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -91,7 +91,7 @@ class IssueTypesApi:
 
         _param = self._create_issue_type_serialize(
             project_id=project_id,
-            issue_type_in=issue_type_in,
+            issue_type=issue_type,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -99,11 +99,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
+            '201': "IssueType",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -120,7 +116,7 @@ class IssueTypesApi:
     def create_issue_type_with_http_info(
         self,
         project_id: UUID,
-        issue_type_in: IssueTypeIn,
+        issue_type: IssueType,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -133,15 +129,15 @@ class IssueTypesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[IssueTypeOut]:
-        """Create Issue Type
+    ) -> ApiResponse[IssueType]:
+        """create_issue_type
 
-        Create an issue type at the tail of its level's order.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param issue_type_in: (required)
-        :type issue_type_in: IssueTypeIn
+        :param issue_type: (required)
+        :type issue_type: IssueType
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -166,7 +162,7 @@ class IssueTypesApi:
 
         _param = self._create_issue_type_serialize(
             project_id=project_id,
-            issue_type_in=issue_type_in,
+            issue_type=issue_type,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -174,11 +170,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
+            '201': "IssueType",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -195,7 +187,7 @@ class IssueTypesApi:
     def create_issue_type_without_preload_content(
         self,
         project_id: UUID,
-        issue_type_in: IssueTypeIn,
+        issue_type: IssueType,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -209,14 +201,14 @@ class IssueTypesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Create Issue Type
+        """create_issue_type
 
-        Create an issue type at the tail of its level's order.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param issue_type_in: (required)
-        :type issue_type_in: IssueTypeIn
+        :param issue_type: (required)
+        :type issue_type: IssueType
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -241,7 +233,7 @@ class IssueTypesApi:
 
         _param = self._create_issue_type_serialize(
             project_id=project_id,
-            issue_type_in=issue_type_in,
+            issue_type=issue_type,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -249,11 +241,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
+            '201': "IssueType",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -265,7 +253,7 @@ class IssueTypesApi:
     def _create_issue_type_serialize(
         self,
         project_id,
-        issue_type_in,
+        issue_type,
         _request_auth,
         _content_type,
         _headers,
@@ -293,8 +281,8 @@ class IssueTypesApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if issue_type_in is not None:
-            _body_params = issue_type_in
+        if issue_type is not None:
+            _body_params = issue_type
 
 
         # set the HTTP header `Accept`
@@ -312,7 +300,9 @@ class IssueTypesApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )
@@ -346,7 +336,7 @@ class IssueTypesApi:
     def delete_issue_type(
         self,
         type_id: UUID,
-        reassign_to: Optional[UUID] = None,
+        reassign_to: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -360,14 +350,14 @@ class IssueTypesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> None:
-        """Delete Issue Type
+        """delete_issue_type
 
-        Delete a type; 409 if it is in use without ``reassign_to``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param type_id: (required)
         :type type_id: UUID
         :param reassign_to:
-        :type reassign_to: UUID
+        :type reassign_to: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -401,10 +391,6 @@ class IssueTypesApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -421,7 +407,7 @@ class IssueTypesApi:
     def delete_issue_type_with_http_info(
         self,
         type_id: UUID,
-        reassign_to: Optional[UUID] = None,
+        reassign_to: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -435,14 +421,14 @@ class IssueTypesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[None]:
-        """Delete Issue Type
+        """delete_issue_type
 
-        Delete a type; 409 if it is in use without ``reassign_to``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param type_id: (required)
         :type type_id: UUID
         :param reassign_to:
-        :type reassign_to: UUID
+        :type reassign_to: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -476,10 +462,6 @@ class IssueTypesApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -496,7 +478,7 @@ class IssueTypesApi:
     def delete_issue_type_without_preload_content(
         self,
         type_id: UUID,
-        reassign_to: Optional[UUID] = None,
+        reassign_to: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -510,14 +492,14 @@ class IssueTypesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Delete Issue Type
+        """delete_issue_type
 
-        Delete a type; 409 if it is in use without ``reassign_to``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param type_id: (required)
         :type type_id: UUID
         :param reassign_to:
-        :type reassign_to: UUID
+        :type reassign_to: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -551,10 +533,6 @@ class IssueTypesApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -600,6 +578,260 @@ class IssueTypesApi:
         # process the body parameter
 
 
+
+
+        # authentication setting
+        _auth_settings: List[str] = [
+            'ApiKeyAuth'
+        ]
+
+        return self.api_client.param_serialize(
+            method='DELETE',
+            resource_path='/issue-types/{type_id}',
+            path_params=_path_params,
+            query_params=_query_params,
+            header_params=_header_params,
+            body=_body_params,
+            post_params=_form_params,
+            files=_files,
+            auth_settings=_auth_settings,
+            collection_formats=_collection_formats,
+            _host=_host,
+            _request_auth=_request_auth
+        )
+
+
+
+
+    @validate_call
+    def get_issue_type(
+        self,
+        type_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> IssueType:
+        """get_issue_type
+
+        Shared project-scoped collection and unscoped detail behavior.
+
+        :param type_id: (required)
+        :type type_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_issue_type_serialize(
+            type_id=type_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "IssueType",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+
+
+    @validate_call
+    def get_issue_type_with_http_info(
+        self,
+        type_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> ApiResponse[IssueType]:
+        """get_issue_type
+
+        Shared project-scoped collection and unscoped detail behavior.
+
+        :param type_id: (required)
+        :type type_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_issue_type_serialize(
+            type_id=type_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "IssueType",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        response_data.read()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+
+    @validate_call
+    def get_issue_type_without_preload_content(
+        self,
+        type_id: UUID,
+        _request_timeout: Union[
+            None,
+            Annotated[StrictFloat, Field(gt=0)],
+            Tuple[
+                Annotated[StrictFloat, Field(gt=0)],
+                Annotated[StrictFloat, Field(gt=0)]
+            ]
+        ] = None,
+        _request_auth: Optional[Dict[StrictStr, Any]] = None,
+        _content_type: Optional[StrictStr] = None,
+        _headers: Optional[Dict[StrictStr, Any]] = None,
+        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
+    ) -> RESTResponseType:
+        """get_issue_type
+
+        Shared project-scoped collection and unscoped detail behavior.
+
+        :param type_id: (required)
+        :type type_id: UUID
+        :param _request_timeout: timeout setting for this request. If one
+                                 number provided, it will be total request
+                                 timeout. It can also be a pair (tuple) of
+                                 (connection, read) timeouts.
+        :type _request_timeout: int, tuple(int, int), optional
+        :param _request_auth: set to override the auth_settings for an a single
+                              request; this effectively ignores the
+                              authentication in the spec for a single request.
+        :type _request_auth: dict, optional
+        :param _content_type: force content-type for the request.
+        :type _content_type: str, Optional
+        :param _headers: set to override the headers for a single
+                         request; this effectively ignores the headers
+                         in the spec for a single request.
+        :type _headers: dict, optional
+        :param _host_index: set to override the host_index for a single
+                            request; this effectively ignores the host_index
+                            in the spec for a single request.
+        :type _host_index: int, optional
+        :return: Returns the result object.
+        """ # noqa: E501
+
+        _param = self._get_issue_type_serialize(
+            type_id=type_id,
+            _request_auth=_request_auth,
+            _content_type=_content_type,
+            _headers=_headers,
+            _host_index=_host_index
+        )
+
+        _response_types_map: Dict[str, Optional[str]] = {
+            '200': "IssueType",
+        }
+        response_data = self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
+
+    def _get_issue_type_serialize(
+        self,
+        type_id,
+        _request_auth,
+        _content_type,
+        _headers,
+        _host_index,
+    ) -> RequestSerialized:
+
+        _host = None
+
+        _collection_formats: Dict[str, str] = {
+        }
+
+        _path_params: Dict[str, str] = {}
+        _query_params: List[Tuple[str, str]] = []
+        _header_params: Dict[str, Optional[str]] = _headers or {}
+        _form_params: List[Tuple[str, str]] = []
+        _files: Dict[
+            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
+        ] = {}
+        _body_params: Optional[bytes] = None
+
+        # process the path parameters
+        if type_id is not None:
+            _path_params['type_id'] = type_id
+        # process the query parameters
+        # process the header parameters
+        # process the form parameters
+        # process the body parameter
+
+
         # set the HTTP header `Accept`
         if 'Accept' not in _header_params:
             _header_params['Accept'] = self.api_client.select_header_accept(
@@ -615,7 +847,7 @@ class IssueTypesApi:
         ]
 
         return self.api_client.param_serialize(
-            method='DELETE',
+            method='GET',
             resource_path='/issue-types/{type_id}',
             path_params=_path_params,
             query_params=_query_params,
@@ -648,10 +880,10 @@ class IssueTypesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> List[IssueTypeOut]:
-        """List Issue Types
+    ) -> List[IssueType]:
+        """list_issue_types
 
-        List a project's issue types, ordered by ``(sort_order, created_at)``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -686,9 +918,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[IssueTypeOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[IssueType]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -717,10 +947,10 @@ class IssueTypesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[List[IssueTypeOut]]:
-        """List Issue Types
+    ) -> ApiResponse[List[IssueType]]:
+        """list_issue_types
 
-        List a project's issue types, ordered by ``(sort_order, created_at)``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -755,9 +985,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[IssueTypeOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[IssueType]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -787,9 +1015,9 @@ class IssueTypesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """List Issue Types
+        """list_issue_types
 
-        List a project's issue types, ordered by ``(sort_order, created_at)``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -824,9 +1052,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[IssueTypeOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[IssueType]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -903,7 +1129,7 @@ class IssueTypesApi:
     def reorder_issue_types(
         self,
         project_id: UUID,
-        reorder_in: ReorderIn,
+        configuration_reorder: ConfigurationReorder,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -916,15 +1142,15 @@ class IssueTypesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> List[IssueTypeOut]:
-        """Reorder Issue Types
+    ) -> List[IssueType]:
+        """reorder_issue_types
 
-        Rewrite every type's ``sort_order`` from the given full id order.
+        Atomically replace a project's complete issue-type order.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param reorder_in: (required)
-        :type reorder_in: ReorderIn
+        :param configuration_reorder: (required)
+        :type configuration_reorder: ConfigurationReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -949,7 +1175,7 @@ class IssueTypesApi:
 
         _param = self._reorder_issue_types_serialize(
             project_id=project_id,
-            reorder_in=reorder_in,
+            configuration_reorder=configuration_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -957,10 +1183,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[IssueTypeOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "List[IssueType]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -977,7 +1200,7 @@ class IssueTypesApi:
     def reorder_issue_types_with_http_info(
         self,
         project_id: UUID,
-        reorder_in: ReorderIn,
+        configuration_reorder: ConfigurationReorder,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -990,15 +1213,15 @@ class IssueTypesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[List[IssueTypeOut]]:
-        """Reorder Issue Types
+    ) -> ApiResponse[List[IssueType]]:
+        """reorder_issue_types
 
-        Rewrite every type's ``sort_order`` from the given full id order.
+        Atomically replace a project's complete issue-type order.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param reorder_in: (required)
-        :type reorder_in: ReorderIn
+        :param configuration_reorder: (required)
+        :type configuration_reorder: ConfigurationReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1023,7 +1246,7 @@ class IssueTypesApi:
 
         _param = self._reorder_issue_types_serialize(
             project_id=project_id,
-            reorder_in=reorder_in,
+            configuration_reorder=configuration_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1031,10 +1254,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[IssueTypeOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "List[IssueType]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1051,7 +1271,7 @@ class IssueTypesApi:
     def reorder_issue_types_without_preload_content(
         self,
         project_id: UUID,
-        reorder_in: ReorderIn,
+        configuration_reorder: ConfigurationReorder,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1065,14 +1285,14 @@ class IssueTypesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Reorder Issue Types
+        """reorder_issue_types
 
-        Rewrite every type's ``sort_order`` from the given full id order.
+        Atomically replace a project's complete issue-type order.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param reorder_in: (required)
-        :type reorder_in: ReorderIn
+        :param configuration_reorder: (required)
+        :type configuration_reorder: ConfigurationReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1097,7 +1317,7 @@ class IssueTypesApi:
 
         _param = self._reorder_issue_types_serialize(
             project_id=project_id,
-            reorder_in=reorder_in,
+            configuration_reorder=configuration_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1105,10 +1325,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[IssueTypeOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "List[IssueType]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1120,7 +1337,7 @@ class IssueTypesApi:
     def _reorder_issue_types_serialize(
         self,
         project_id,
-        reorder_in,
+        configuration_reorder,
         _request_auth,
         _content_type,
         _headers,
@@ -1148,8 +1365,8 @@ class IssueTypesApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if reorder_in is not None:
-            _body_params = reorder_in
+        if configuration_reorder is not None:
+            _body_params = configuration_reorder
 
 
         # set the HTTP header `Accept`
@@ -1167,7 +1384,9 @@ class IssueTypesApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )
@@ -1201,7 +1420,7 @@ class IssueTypesApi:
     def update_issue_type(
         self,
         type_id: UUID,
-        issue_type_patch: IssueTypePatch,
+        patched_issue_type: Optional[PatchedIssueType] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1214,15 +1433,15 @@ class IssueTypesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> IssueTypeOut:
-        """Patch Issue Type
+    ) -> IssueType:
+        """update_issue_type
 
-        Rename, recolor, or reorder an issue type.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param type_id: (required)
         :type type_id: UUID
-        :param issue_type_patch: (required)
-        :type issue_type_patch: IssueTypePatch
+        :param patched_issue_type:
+        :type patched_issue_type: PatchedIssueType
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1247,7 +1466,7 @@ class IssueTypesApi:
 
         _param = self._update_issue_type_serialize(
             type_id=type_id,
-            issue_type_patch=issue_type_patch,
+            patched_issue_type=patched_issue_type,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1255,11 +1474,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
+            '200': "IssueType",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1276,7 +1491,7 @@ class IssueTypesApi:
     def update_issue_type_with_http_info(
         self,
         type_id: UUID,
-        issue_type_patch: IssueTypePatch,
+        patched_issue_type: Optional[PatchedIssueType] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1289,15 +1504,15 @@ class IssueTypesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[IssueTypeOut]:
-        """Patch Issue Type
+    ) -> ApiResponse[IssueType]:
+        """update_issue_type
 
-        Rename, recolor, or reorder an issue type.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param type_id: (required)
         :type type_id: UUID
-        :param issue_type_patch: (required)
-        :type issue_type_patch: IssueTypePatch
+        :param patched_issue_type:
+        :type patched_issue_type: PatchedIssueType
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1322,7 +1537,7 @@ class IssueTypesApi:
 
         _param = self._update_issue_type_serialize(
             type_id=type_id,
-            issue_type_patch=issue_type_patch,
+            patched_issue_type=patched_issue_type,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1330,11 +1545,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
+            '200': "IssueType",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1351,7 +1562,7 @@ class IssueTypesApi:
     def update_issue_type_without_preload_content(
         self,
         type_id: UUID,
-        issue_type_patch: IssueTypePatch,
+        patched_issue_type: Optional[PatchedIssueType] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1365,14 +1576,14 @@ class IssueTypesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Patch Issue Type
+        """update_issue_type
 
-        Rename, recolor, or reorder an issue type.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param type_id: (required)
         :type type_id: UUID
-        :param issue_type_patch: (required)
-        :type issue_type_patch: IssueTypePatch
+        :param patched_issue_type:
+        :type patched_issue_type: PatchedIssueType
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1397,7 +1608,7 @@ class IssueTypesApi:
 
         _param = self._update_issue_type_serialize(
             type_id=type_id,
-            issue_type_patch=issue_type_patch,
+            patched_issue_type=patched_issue_type,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1405,11 +1616,7 @@ class IssueTypesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
+            '200': "IssueType",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1421,7 +1628,7 @@ class IssueTypesApi:
     def _update_issue_type_serialize(
         self,
         type_id,
-        issue_type_patch,
+        patched_issue_type,
         _request_auth,
         _content_type,
         _headers,
@@ -1449,8 +1656,8 @@ class IssueTypesApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if issue_type_patch is not None:
-            _body_params = issue_type_patch
+        if patched_issue_type is not None:
+            _body_params = patched_issue_type
 
 
         # set the HTTP header `Accept`
@@ -1468,7 +1675,9 @@ class IssueTypesApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )

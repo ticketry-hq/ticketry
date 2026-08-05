@@ -44,17 +44,17 @@ describe("createWorkTrackerClient", () => {
       );
     const client = createWorkTrackerClient({ baseUrl: "/api/work-tracker", fetch });
 
-    await client.workItems.listProjectWorkItems({
-      projectId: "p 1",
+    await client.workItems.listWorkItems({
+      project: "p 1",
       state: "s/1",
     });
     await client.workItems.updateWorkItem({
       issueId: "w1",
-      workItemPatch: { name: "Renamed" },
+      patchedWorkItemPatch: { name: "Renamed" },
     });
 
     expect(fetch.mock.calls[0][0]).toBe(
-      "/api/work-tracker/projects/p%201/work-items?state=s%2F1",
+      "/api/work-tracker/work-items?project=p%201&state=s%2F1",
     );
     expect(JSON.parse(String(fetch.mock.calls[1][1].body))).toEqual({
       name: "Renamed",
@@ -73,23 +73,23 @@ describe("createWorkTrackerClient", () => {
     const fetch = vi.fn().mockResolvedValue(response(workflow));
     const client = createWorkTrackerClient({ baseUrl: "/api/work-tracker", fetch });
 
-    await client.workflows.addIssueTypeWorkflowTransition({
+    await client.workflows.createIssueTypeTransition({
       typeId: "type/1",
-      addWorkflowTransitionIn: {
-        from_state_id: "todo",
-        to_state_id: "done",
+      issueTypeTransition: {
+        from_state: "todo",
+        to_state: "done",
         agent_allowed: true,
         workflow_revision: 3,
       },
     });
 
     expect(fetch.mock.calls[0][0]).toBe(
-      "/api/work-tracker/issue-types/type%2F1/workflow-settings/transitions",
+      "/api/work-tracker/issue-types/type%2F1/transitions",
     );
     expect(fetch.mock.calls[0][1]).toMatchObject({ method: "POST" });
     expect(JSON.parse(String(fetch.mock.calls[0][1].body))).toEqual({
-      from_state_id: "todo",
-      to_state_id: "done",
+      from_state: "todo",
+      to_state: "done",
       agent_allowed: true,
       workflow_revision: 3,
     });
@@ -123,7 +123,7 @@ describe("createWorkTrackerClient", () => {
     const fetch = vi.fn().mockResolvedValue(response(workspace));
     const client = createWorkTrackerClient({ baseUrl: "/api/work-tracker", fetch });
 
-    await expect(client.workspace.getWorkspace()).resolves.toEqual(workspace);
+    await expect(client.workspace.retrieveWorkspace()).resolves.toEqual(workspace);
     expect(fetch.mock.calls[0][0]).toBe("/api/work-tracker/workspace");
   });
 

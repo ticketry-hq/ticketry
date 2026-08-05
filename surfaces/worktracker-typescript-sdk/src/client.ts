@@ -10,8 +10,11 @@ import {
 import { AttachmentsApi } from "./generated/apis/AttachmentsApi.js";
 import { IssueTypesApi } from "./generated/apis/IssueTypesApi.js";
 import { LaunchBindingsApi } from "./generated/apis/LaunchBindingsApi.js";
+import { ModelsApi } from "./generated/apis/ModelsApi.js";
 import { ModulesApi } from "./generated/apis/ModulesApi.js";
 import { ProjectsApi } from "./generated/apis/ProjectsApi.js";
+import { ProvidersApi } from "./generated/apis/ProvidersApi.js";
+import { ReasoningLevelsApi } from "./generated/apis/ReasoningLevelsApi.js";
 import { StatesApi } from "./generated/apis/StatesApi.js";
 import { WorkflowsApi } from "./generated/apis/WorkflowsApi.js";
 import { WorkspaceApi } from "./generated/apis/WorkspaceApi.js";
@@ -29,8 +32,11 @@ export interface WorkTrackerClient {
   attachments: AttachmentsApi;
   issueTypes: IssueTypesApi;
   launchBindings: LaunchBindingsApi;
+  models: ModelsApi;
   modules: ModulesApi;
   projects: ProjectsApi;
+  providers: ProvidersApi;
+  reasoningLevels: ReasoningLevelsApi;
   states: StatesApi;
   workflows: WorkflowsApi;
   workspace: WorkspaceApi;
@@ -80,8 +86,11 @@ export function createWorkTrackerClient(
     attachments: new AttachmentsApi(configuration),
     issueTypes: new IssueTypesApi(configuration),
     launchBindings: new LaunchBindingsApi(configuration),
+    models: new ModelsApi(configuration),
     modules: new ModulesApi(configuration),
     projects: new ProjectsApi(configuration),
+    providers: new ProvidersApi(configuration),
+    reasoningLevels: new ReasoningLevelsApi(configuration),
     states: new StatesApi(configuration),
     workflows: new WorkflowsApi(configuration),
     workspace: new WorkspaceApi(configuration),

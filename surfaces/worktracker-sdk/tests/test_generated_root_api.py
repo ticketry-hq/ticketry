@@ -56,7 +56,7 @@ def test_get_dependency_graph_uses_generated_transport_at_api_root() -> None:
     assert isinstance(graph, DependencyGraphOut)
     assert graph.nodes[0].state == "Review"
     assert [(method, url) for method, url, _ in calls] == [
-        ("GET", f"https://worktracker.test/api/work-items/{ROOT}/dependency-graph")
+        ("GET", f"https://worktracker.test/api/work-items/{ROOT}/graph-run")
     ]
 
 
@@ -91,7 +91,7 @@ def test_execute_graph_uses_generated_transport_at_api_root() -> None:
     assert result.root_id == ROOT
     assert result.launched == [MODULE]
     assert [(method, url) for method, url, _ in calls] == [
-        ("POST", f"https://worktracker.test/api/work-items/{ROOT}/execute-graph")
+        ("POST", f"https://worktracker.test/api/work-items/{ROOT}/graph-run")
     ]
     assert calls[0][2]["headers"]["x-api-key"] == "secret"
     assert json.loads(calls[0][2]["body"]) == {"agent": "codex"}
@@ -123,7 +123,7 @@ def test_reset_graph_uses_delete_at_api_root() -> None:
     assert isinstance(result, ResetGraphOut)
     assert result.cleared == [MODULE]
     assert [(method, url) for method, url, _ in calls] == [
-        ("DELETE", f"https://worktracker.test/api/work-items/{ROOT}/execute-graph")
+        ("DELETE", f"https://worktracker.test/api/work-items/{ROOT}/graph-run")
     ]
 
 

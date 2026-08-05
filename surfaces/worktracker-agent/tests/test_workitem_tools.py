@@ -13,7 +13,7 @@ from uuid import UUID
 
 import pytest
 
-from worktracker_sdk.generated import WorkItemIn, WorkItemPatch
+from worktracker_sdk.generated import PatchedWorkItemPatch, WorkItemCreate
 from worktracker_sdk.generated.exceptions import ApiException, NotFoundException
 
 from fake_sdk import (
@@ -66,7 +66,7 @@ def test_update_task_replaces_title_by_uuid_with_metadata_only_payload():
     assert len(client.work_items.calls) == 1
     method, args, kwargs = client.work_items.calls[0]
     assert method == "update_work_item" and args[0] == TASK and kwargs == {}
-    assert isinstance(args[1], WorkItemPatch)
+    assert isinstance(args[1], PatchedWorkItemPatch)
     assert args[1].model_dump(mode="json", exclude_unset=True) == {
         "name": "Sharper title",
     }
@@ -95,7 +95,7 @@ def test_update_task_replaces_description_by_key_without_append_behavior():
     assert client.work_items.calls[0] == ("get_work_item", ("CODIN-1068",), {})
     method, args, kwargs = client.work_items.calls[1]
     assert method == "update_work_item" and args[0] == TASK and kwargs == {}
-    assert isinstance(args[1], WorkItemPatch)
+    assert isinstance(args[1], PatchedWorkItemPatch)
     assert args[1].model_dump(mode="json", exclude_unset=True) == {
         "description": "<p>Replacement</p>",
     }
@@ -107,8 +107,8 @@ def test_update_task_replaces_description_by_key_without_append_behavior():
 
 def test_append_task_description_reads_then_patches_with_generated_models():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item"] = make_detail(
-        make_work_item(id=TASK, description="<p>Existing</p>")
+    client.work_items.returns["get_work_item"] = make_work_item(
+        id=TASK, description="<p>Existing</p>"
     )
     client.work_items.returns["update_work_item"] = make_work_item(id=TASK)
     service = WorktrackerService(base_url="http://example.test", sdk=client)
@@ -121,7 +121,7 @@ def test_append_task_description_reads_then_patches_with_generated_models():
         "update_work_item",
     ]
     patch = client.work_items.calls[1][1][1]
-    assert isinstance(patch, WorkItemPatch)
+    assert isinstance(patch, PatchedWorkItemPatch)
     assert patch.description == "<p>Existing</p>\n\n<p>Added</p>"
 
 
@@ -145,7 +145,7 @@ def test_update_task_replaces_title_and_description_in_one_typed_update():
     assert len(client.work_items.calls) == 1
     method, args, _kwargs = client.work_items.calls[0]
     assert method == "update_work_item"
-    assert isinstance(args[1], WorkItemPatch)
+    assert isinstance(args[1], PatchedWorkItemPatch)
     assert args[1].model_dump(mode="json", exclude_unset=True) == {
         "name": "Sharper title",
         "description": "<p>Replacement</p>",
@@ -315,9 +315,9 @@ def test_reparent_tasks_maps_sdk_accounting():
 
     def get_work_item(id_or_key):
         if id_or_key == MODULE:
-            return make_detail(make_work_item(id=MODULE, project_id=PROJECT))
+            return make_work_item(id=MODULE, project_id=PROJECT)
         if id_or_key == TASK:
-            return make_detail(make_work_item(id=TASK, project_id=PROJECT))
+            return make_work_item(id=TASK, project_id=PROJECT)
         raise NotFoundException(status=404)
 
     client.work_items.returns["get_work_item"] = get_work_item
@@ -328,7 +328,7 @@ def test_reparent_tasks_maps_sdk_accounting():
 
     update = next(c for c in client.work_items.calls if c[0] == "update_work_item")
     assert update[1][0] == TASK
-    assert isinstance(update[1][1], WorkItemPatch)
+    assert isinstance(update[1][1], PatchedWorkItemPatch)
     assert update[1][1].parent_id == UUID(MODULE)
     assert result == {
         "parent_task_id": MODULE,
@@ -403,7 +403,7 @@ def test_create_task_resolves_implementation_type_and_ready_state_into_sdk_paylo
     assert client.issue_types.calls == [("list_issue_types", (UUID(PROJECT),), {})]
     name, args, kwargs = client.work_items.calls[0]
     assert name == "create_work_item" and args[0] == UUID(PROJECT) and kwargs == {}
-    assert isinstance(args[1], WorkItemIn)
+    assert isinstance(args[1], WorkItemCreate)
     assert args[1].model_dump(mode="json", exclude_none=True) == {
         "name": "Build it",
         "description": "",
@@ -435,7 +435,7 @@ def test_create_sub_task_resolves_canonical_birth_state_into_sdk_payload():
 
     name, args, kwargs = client.work_items.calls[0]
     assert name == "create_work_item" and args[0] == UUID(PROJECT) and kwargs == {}
-    assert isinstance(args[1], WorkItemIn)
+    assert isinstance(args[1], WorkItemCreate)
     assert args[1].model_dump(mode="json", exclude_none=True) == {
         "name": "Discover API constraints",
         "description": "",
@@ -457,7 +457,7 @@ def test_module_task_and_sub_task_include_resolved_issue_type_id():
     service.create_sub_task(PROJECT, TASK, "Nested", issue_type="Story")
 
     _name, module_args, _kwargs = client.work_items.calls[0]
-    assert isinstance(module_args[1], WorkItemIn)
+    assert isinstance(module_args[1], WorkItemCreate)
     assert module_args[1].parent_id == UUID(MODULE)
     assert module_args[1].issue_type_id == UUID(STORY_TYPE)
     _name, subtask_args, _kwargs = client.work_items.calls[1]

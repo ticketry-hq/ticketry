@@ -8,15 +8,18 @@ import sys
 from worktracker_sdk.generated import (
     AttachmentsApi,
     IssueTypesApi,
-    MessageError,
+    LaunchBindingsApi,
+    ModelsApi,
     ModulesApi,
     ProjectsApi,
+    ProvidersApi,
+    ReasoningLevelsApi,
     StatesApi,
     WorkItemsApi,
     WorkflowsApi,
 )
 from worktracker_sdk.generated.exceptions import ApiException
-from worktracker_sdk.root_api import ExecutionApi, LaunchApi
+from worktracker_sdk.root_api import ExecutionApi, LaunchApi, RevisionedDeleteApi
 
 from worktracker_agent.api.service import WorktrackerService
 
@@ -82,8 +85,13 @@ def test_default_service_builds_generated_per_tag_clients():
     assert isinstance(service.sdk.work_items, WorkItemsApi)
     assert isinstance(service.sdk.workflows, WorkflowsApi)
     assert isinstance(service.sdk.attachments, AttachmentsApi)
+    assert isinstance(service.sdk.launch_bindings, LaunchBindingsApi)
+    assert isinstance(service.sdk.models, ModelsApi)
+    assert isinstance(service.sdk.providers, ProvidersApi)
+    assert isinstance(service.sdk.reasoning_levels, ReasoningLevelsApi)
     assert isinstance(service.sdk.execution, ExecutionApi)
     assert isinstance(service.sdk.launch, LaunchApi)
+    assert isinstance(service.sdk.revisioned_delete, RevisionedDeleteApi)
     assert service.sdk.api_client.configuration.host == (
         "https://worktracker.test/api/work-tracker"
     )
@@ -100,7 +108,7 @@ def test_structured_error_body_wins_over_narrow_generated_error_model():
     error = ApiException(
         status=422,
         body=json.dumps(body),
-        data=MessageError(detail=body["detail"]),
+        data={"detail": body["detail"]},
     )
 
     assert WorktrackerService._sdk_error_body(error) == body

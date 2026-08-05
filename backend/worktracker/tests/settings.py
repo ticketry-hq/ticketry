@@ -26,8 +26,7 @@ DATABASES = {
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 
-# Host the worktracker ninja router so the relocated router/SDK suite can
-# reach it through Django's test client and live_server.
+# Host the WorkTracker DRF URLconf so package tests exercise the production mount.
 ROOT_URLCONF = "worktracker.tests.urls"
 
 # Attachment URLs resolve under MEDIA_URL (C6); MEDIA_ROOT is set per-test.

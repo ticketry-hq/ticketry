@@ -115,12 +115,20 @@ decision and never accepts another run as a target.
 _Avoid_: Objective completion, arbitrary run termination, self-kill
 
 **Model configuration** (Settings section):
-The Studio Settings surface listing the built-in providers, each with an activation toggle, above a single global launch default picker. It manages only which providers are activated and the one default triple; it never stores credentials, per-provider model lists, or reasoning-level lists.
-_Avoid_: provider catalog editor, model catalog, credentials panel
+The Studio Settings surface for the persisted Provider, model, and
+reasoning-level catalog. It toggles activation on Provider rows, adds model rows
+under a provider, maintains each model's permitted reasoning-level links, and
+edits the validated global launch default. Credentials and executable adapters
+remain outside this catalog.
+_Avoid_: hardcoded provider list, free-text model setting, credentials panel
 
 **Launch default picker**:
-The reusable Studio component that selects a (provider, model, reasoning) triple together — provider constrained to activated providers, model as a known-model dropdown that also accepts free text, reasoning from the provider's code-owned levels. It is shared by the workflow launch configuration form and the Model configuration section.
-_Avoid_: provider dropdown, model field, reasoning select
+The reusable Studio component that selects a (provider, model, reasoning)
+triple from catalog rows: an activated Provider, one of its model rows, and one
+of that model's linked reasoning levels. It offers an add-model action instead
+of accepting free text and is shared by workflow launch configuration and the
+Model configuration section.
+_Avoid_: free-text model, code-owned reasoning list, unrelated dropdown trio
 
 **Keymap context**:
 One of Studio's fixed keyboard-resolution layers — the open modal,

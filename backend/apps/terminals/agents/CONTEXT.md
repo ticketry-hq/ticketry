@@ -45,8 +45,12 @@ One application-owned pre-prompt and post-prompt that surround every agent launc
 _Avoid_: user-configurable prompt, project prompt, profile prompt, fallback workflow prompt
 
 **Workflow launch configuration**:
-The independently inheritable prompt, agent/provider, model, and reasoning defaults selected by a work item's type and current workflow state. Provider-specific values are validated together; unset values inherit only from explicitly configured profile/provider choices.
-_Avoid_: edge launch configuration, parent-depth configuration, required launch form
+The independently inheritable prompt and launch catalog references selected by
+a work item's type and current workflow state. A binding stores foreign keys to
+a model row and a reasoning-level row; the model implies its Provider, and the
+reasoning level must be linked to that model. Unset references inherit from the
+validated global launch default.
+_Avoid_: free-text provider, free-text model, edge launch configuration, parent-depth configuration
 
 **Activated provider**:
 A coding-agent provider whose persisted Provider row is activated. Activation is host-wide and mutable through the provider catalog API; executable adapters remain code-owned, and startup fails when adapter slugs and Provider rows differ in either direction. Only activated rows appear in launch selectors. A launch bound to a non-activated provider is blocked, never silently redirected to another provider.

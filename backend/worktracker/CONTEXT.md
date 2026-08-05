@@ -206,10 +206,12 @@ _Avoid_: URL conf, API docs, OpenAPI document, endpoint list
 
 **Canonical collection read**:
 The one read that returns a model's rows for a given scope. Narrower views are
-derived from it by the caller rather than requested as separate reads, so no two
-reads can return overlapping row sets and no client can end up holding the same
-row twice under two different keys.
-_Avoid_: filtered list endpoint, list variant, include-flag query
+requested by declared filter parameters on that same route — for work items,
+project, module, state, archived visibility, and PathFind visibility — rather
+than by adding another overlapping collection endpoint. Every filtered response
+merges rows into the same normalized client store by id; filters describe
+membership, never a second record location.
+_Avoid_: list variant, nested work-item list, request-keyed record cache
 
 **Domain operation**:
 A write that is not model CRUD — work-item, state, or issue-type reorder;
@@ -217,4 +219,5 @@ remove-state-from-workflow (because no row records graph membership); or
 onboarding acknowledgement. Each is deliberately exceptional and lives in a
 named place apart from the CRUD surface, so exceptions stay countable instead
 of hiding among equally-bespoke handlers. Transition rows themselves are CRUD.
-_Avoid_: custom action, RPC endpoint, ad-hoc view
+There are exactly five, and the route registry records why each cannot be CRUD.
+_Avoid_: custom action, unreasoned RPC endpoint, ad-hoc view

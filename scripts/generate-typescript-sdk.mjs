@@ -95,7 +95,11 @@ const stamp = (directory) => {
     if (entry.isDirectory()) stamp(path);
     else if (entry.name.endsWith(".ts")) {
       const content = readFileSync(path, "utf8");
-      writeFileSync(path, content.startsWith(notice) ? content : notice + content);
+      const stamped = content.startsWith(notice) ? content : notice + content;
+      writeFileSync(
+        path,
+        stamped.replace(/[ \t]+$/gm, "").replace(/\n*$/, "\n"),
+      );
     }
   }
 };

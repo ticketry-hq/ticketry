@@ -19,13 +19,10 @@ from typing_extensions import Annotated
 from pydantic import StrictBool, StrictStr
 from typing import List, Optional
 from uuid import UUID
-from worktracker_sdk.generated.models.module_work_item_in import ModuleWorkItemIn
-from worktracker_sdk.generated.models.review_finding_in import ReviewFindingIn
-from worktracker_sdk.generated.models.work_item_detail_out import WorkItemDetailOut
-from worktracker_sdk.generated.models.work_item_in import WorkItemIn
-from worktracker_sdk.generated.models.work_item_out import WorkItemOut
-from worktracker_sdk.generated.models.work_item_patch import WorkItemPatch
-from worktracker_sdk.generated.models.work_item_reorder_in import WorkItemReorderIn
+from worktracker_sdk.generated.models.patched_work_item_patch import PatchedWorkItemPatch
+from worktracker_sdk.generated.models.work_item import WorkItem
+from worktracker_sdk.generated.models.work_item_create import WorkItemCreate
+from worktracker_sdk.generated.models.work_item_reorder import WorkItemReorder
 
 from worktracker_sdk.generated.api_client import ApiClient, RequestSerialized
 from worktracker_sdk.generated.api_response import ApiResponse
@@ -46,10 +43,10 @@ class WorkItemsApi:
 
 
     @validate_call
-    def create_module_work_item(
+    def create_work_item(
         self,
-        module_id: UUID,
-        module_work_item_in: ModuleWorkItemIn,
+        project_id: UUID,
+        work_item_create: WorkItemCreate,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -62,15 +59,15 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> WorkItemOut:
-        """Create Module Work Item
+    ) -> WorkItem:
+        """create_work_item
 
-        Create a task parented to the module (resolving its project).
+        Create an ordinary task or an absorbed review finding.
 
-        :param module_id: (required)
-        :type module_id: UUID
-        :param module_work_item_in: (required)
-        :type module_work_item_in: ModuleWorkItemIn
+        :param project_id: (required)
+        :type project_id: UUID
+        :param work_item_create: (required)
+        :type work_item_create: WorkItemCreate
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -93,9 +90,9 @@ class WorkItemsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._create_module_work_item_serialize(
-            module_id=module_id,
-            module_work_item_in=module_work_item_in,
+        _param = self._create_work_item_serialize(
+            project_id=project_id,
+            work_item_create=work_item_create,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -103,10 +100,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -120,10 +114,10 @@ class WorkItemsApi:
 
 
     @validate_call
-    def create_module_work_item_with_http_info(
+    def create_work_item_with_http_info(
         self,
-        module_id: UUID,
-        module_work_item_in: ModuleWorkItemIn,
+        project_id: UUID,
+        work_item_create: WorkItemCreate,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -136,15 +130,15 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[WorkItemOut]:
-        """Create Module Work Item
+    ) -> ApiResponse[WorkItem]:
+        """create_work_item
 
-        Create a task parented to the module (resolving its project).
+        Create an ordinary task or an absorbed review finding.
 
-        :param module_id: (required)
-        :type module_id: UUID
-        :param module_work_item_in: (required)
-        :type module_work_item_in: ModuleWorkItemIn
+        :param project_id: (required)
+        :type project_id: UUID
+        :param work_item_create: (required)
+        :type work_item_create: WorkItemCreate
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -167,9 +161,9 @@ class WorkItemsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._create_module_work_item_serialize(
-            module_id=module_id,
-            module_work_item_in=module_work_item_in,
+        _param = self._create_work_item_serialize(
+            project_id=project_id,
+            work_item_create=work_item_create,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -177,10 +171,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -194,10 +185,10 @@ class WorkItemsApi:
 
 
     @validate_call
-    def create_module_work_item_without_preload_content(
+    def create_work_item_without_preload_content(
         self,
-        module_id: UUID,
-        module_work_item_in: ModuleWorkItemIn,
+        project_id: UUID,
+        work_item_create: WorkItemCreate,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -211,14 +202,14 @@ class WorkItemsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Create Module Work Item
+        """create_work_item
 
-        Create a task parented to the module (resolving its project).
+        Create an ordinary task or an absorbed review finding.
 
-        :param module_id: (required)
-        :type module_id: UUID
-        :param module_work_item_in: (required)
-        :type module_work_item_in: ModuleWorkItemIn
+        :param project_id: (required)
+        :type project_id: UUID
+        :param work_item_create: (required)
+        :type work_item_create: WorkItemCreate
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -241,9 +232,9 @@ class WorkItemsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._create_module_work_item_serialize(
-            module_id=module_id,
-            module_work_item_in=module_work_item_in,
+        _param = self._create_work_item_serialize(
+            project_id=project_id,
+            work_item_create=work_item_create,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -251,10 +242,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -263,308 +251,10 @@ class WorkItemsApi:
         return response_data.response
 
 
-    def _create_module_work_item_serialize(
-        self,
-        module_id,
-        module_work_item_in,
-        _request_auth,
-        _content_type,
-        _headers,
-        _host_index,
-    ) -> RequestSerialized:
-
-        _host = None
-
-        _collection_formats: Dict[str, str] = {
-        }
-
-        _path_params: Dict[str, str] = {}
-        _query_params: List[Tuple[str, str]] = []
-        _header_params: Dict[str, Optional[str]] = _headers or {}
-        _form_params: List[Tuple[str, str]] = []
-        _files: Dict[
-            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
-        ] = {}
-        _body_params: Optional[bytes] = None
-
-        # process the path parameters
-        if module_id is not None:
-            _path_params['module_id'] = module_id
-        # process the query parameters
-        # process the header parameters
-        # process the form parameters
-        # process the body parameter
-        if module_work_item_in is not None:
-            _body_params = module_work_item_in
-
-
-        # set the HTTP header `Accept`
-        if 'Accept' not in _header_params:
-            _header_params['Accept'] = self.api_client.select_header_accept(
-                [
-                    'application/json'
-                ]
-            )
-
-        # set the HTTP header `Content-Type`
-        if _content_type:
-            _header_params['Content-Type'] = _content_type
-        else:
-            _default_content_type = (
-                self.api_client.select_header_content_type(
-                    [
-                        'application/json'
-                    ]
-                )
-            )
-            if _default_content_type is not None:
-                _header_params['Content-Type'] = _default_content_type
-
-        # authentication setting
-        _auth_settings: List[str] = [
-            'ApiKeyAuth'
-        ]
-
-        return self.api_client.param_serialize(
-            method='POST',
-            resource_path='/modules/{module_id}/work-items',
-            path_params=_path_params,
-            query_params=_query_params,
-            header_params=_header_params,
-            body=_body_params,
-            post_params=_form_params,
-            files=_files,
-            auth_settings=_auth_settings,
-            collection_formats=_collection_formats,
-            _host=_host,
-            _request_auth=_request_auth
-        )
-
-
-
-
-    @validate_call
-    def create_project_work_item(
-        self,
-        project_id: UUID,
-        work_item_in: WorkItemIn,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> WorkItemOut:
-        """Create Work Item
-
-        Create a task issue; ``parent_id`` makes it a top-level task or subtask.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param work_item_in: (required)
-        :type work_item_in: WorkItemIn
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._create_project_work_item_serialize(
-            project_id=project_id,
-            work_item_in=work_item_in,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        ).data
-
-
-    @validate_call
-    def create_project_work_item_with_http_info(
-        self,
-        project_id: UUID,
-        work_item_in: WorkItemIn,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[WorkItemOut]:
-        """Create Work Item
-
-        Create a task issue; ``parent_id`` makes it a top-level task or subtask.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param work_item_in: (required)
-        :type work_item_in: WorkItemIn
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._create_project_work_item_serialize(
-            project_id=project_id,
-            work_item_in=work_item_in,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        )
-
-
-    @validate_call
-    def create_project_work_item_without_preload_content(
-        self,
-        project_id: UUID,
-        work_item_in: WorkItemIn,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> RESTResponseType:
-        """Create Work Item
-
-        Create a task issue; ``parent_id`` makes it a top-level task or subtask.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param work_item_in: (required)
-        :type work_item_in: WorkItemIn
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._create_project_work_item_serialize(
-            project_id=project_id,
-            work_item_in=work_item_in,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        return response_data.response
-
-
-    def _create_project_work_item_serialize(
+    def _create_work_item_serialize(
         self,
         project_id,
-        work_item_in,
+        work_item_create,
         _request_auth,
         _content_type,
         _headers,
@@ -592,8 +282,8 @@ class WorkItemsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if work_item_in is not None:
-            _body_params = work_item_in
+        if work_item_create is not None:
+            _body_params = work_item_create
 
 
         # set the HTTP header `Accept`
@@ -611,7 +301,9 @@ class WorkItemsApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )
@@ -642,307 +334,9 @@ class WorkItemsApi:
 
 
     @validate_call
-    def create_review_finding(
-        self,
-        project_id: UUID,
-        review_finding_in: ReviewFindingIn,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> WorkItemOut:
-        """Create Review Finding
-
-        Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow's start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, or in a foreign project is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param review_finding_in: (required)
-        :type review_finding_in: ReviewFindingIn
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._create_review_finding_serialize(
-            project_id=project_id,
-            review_finding_in=review_finding_in,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        ).data
-
-
-    @validate_call
-    def create_review_finding_with_http_info(
-        self,
-        project_id: UUID,
-        review_finding_in: ReviewFindingIn,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[WorkItemOut]:
-        """Create Review Finding
-
-        Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow's start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, or in a foreign project is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param review_finding_in: (required)
-        :type review_finding_in: ReviewFindingIn
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._create_review_finding_serialize(
-            project_id=project_id,
-            review_finding_in=review_finding_in,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        )
-
-
-    @validate_call
-    def create_review_finding_without_preload_content(
-        self,
-        project_id: UUID,
-        review_finding_in: ReviewFindingIn,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> RESTResponseType:
-        """Create Review Finding
-
-        Create an Implementation finding under a Story in Review (#905).  The dedicated validated finding surface: the child is born in the Implementation workflow's start stage and typed ``Implementation`` server-side. A parent that is not a Story, not in ``Review``, or in a foreign project is rejected *before any write* with the workflow gate's structured 422 body (``detail``/``code``/``from``/``to``) — identical to the status gate. This surface never launches an agent, moves the parent, or draws a dependency edge.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param review_finding_in: (required)
-        :type review_finding_in: ReviewFindingIn
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._create_review_finding_serialize(
-            project_id=project_id,
-            review_finding_in=review_finding_in,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        return response_data.response
-
-
-    def _create_review_finding_serialize(
-        self,
-        project_id,
-        review_finding_in,
-        _request_auth,
-        _content_type,
-        _headers,
-        _host_index,
-    ) -> RequestSerialized:
-
-        _host = None
-
-        _collection_formats: Dict[str, str] = {
-        }
-
-        _path_params: Dict[str, str] = {}
-        _query_params: List[Tuple[str, str]] = []
-        _header_params: Dict[str, Optional[str]] = _headers or {}
-        _form_params: List[Tuple[str, str]] = []
-        _files: Dict[
-            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
-        ] = {}
-        _body_params: Optional[bytes] = None
-
-        # process the path parameters
-        if project_id is not None:
-            _path_params['project_id'] = project_id
-        # process the query parameters
-        # process the header parameters
-        # process the form parameters
-        # process the body parameter
-        if review_finding_in is not None:
-            _body_params = review_finding_in
-
-
-        # set the HTTP header `Accept`
-        if 'Accept' not in _header_params:
-            _header_params['Accept'] = self.api_client.select_header_accept(
-                [
-                    'application/json'
-                ]
-            )
-
-        # set the HTTP header `Content-Type`
-        if _content_type:
-            _header_params['Content-Type'] = _content_type
-        else:
-            _default_content_type = (
-                self.api_client.select_header_content_type(
-                    [
-                        'application/json'
-                    ]
-                )
-            )
-            if _default_content_type is not None:
-                _header_params['Content-Type'] = _default_content_type
-
-        # authentication setting
-        _auth_settings: List[str] = [
-            'ApiKeyAuth'
-        ]
-
-        return self.api_client.param_serialize(
-            method='POST',
-            resource_path='/projects/{project_id}/review-findings',
-            path_params=_path_params,
-            query_params=_query_params,
-            header_params=_header_params,
-            body=_body_params,
-            post_params=_form_params,
-            files=_files,
-            auth_settings=_auth_settings,
-            collection_formats=_collection_formats,
-            _host=_host,
-            _request_auth=_request_auth
-        )
-
-
-
-
-    @validate_call
     def delete_work_item(
         self,
-        issue_id: UUID,
+        issue_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -956,12 +350,12 @@ class WorkItemsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> None:
-        """Delete Work Item
+        """delete_work_item
 
-        Delete an empty issue by UUID; 409 if it still has children.  Blocking non-empty deletes (rather than orphaning) means no accidental subtree loss — the caller re-parents or deletes the children first.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
-        :type issue_id: UUID
+        :type issue_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -994,10 +388,6 @@ class WorkItemsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1013,7 +403,7 @@ class WorkItemsApi:
     @validate_call
     def delete_work_item_with_http_info(
         self,
-        issue_id: UUID,
+        issue_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1027,12 +417,12 @@ class WorkItemsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[None]:
-        """Delete Work Item
+        """delete_work_item
 
-        Delete an empty issue by UUID; 409 if it still has children.  Blocking non-empty deletes (rather than orphaning) means no accidental subtree loss — the caller re-parents or deletes the children first.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
-        :type issue_id: UUID
+        :type issue_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1065,10 +455,6 @@ class WorkItemsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1084,7 +470,7 @@ class WorkItemsApi:
     @validate_call
     def delete_work_item_without_preload_content(
         self,
-        issue_id: UUID,
+        issue_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1098,12 +484,12 @@ class WorkItemsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Delete Work Item
+        """delete_work_item
 
-        Delete an empty issue by UUID; 409 if it still has children.  Blocking non-empty deletes (rather than orphaning) means no accidental subtree loss — the caller re-parents or deletes the children first.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
-        :type issue_id: UUID
+        :type issue_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1136,10 +522,6 @@ class WorkItemsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1180,13 +562,6 @@ class WorkItemsApi:
         # process the body parameter
 
 
-        # set the HTTP header `Accept`
-        if 'Accept' not in _header_params:
-            _header_params['Accept'] = self.api_client.select_header_accept(
-                [
-                    'application/json'
-                ]
-            )
 
 
         # authentication setting
@@ -1228,10 +603,10 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> WorkItemDetailOut:
-        """Retrieve Work Item
+    ) -> WorkItem:
+        """get_work_item
 
-        Retrieve one task by UUID or ``KEY-N``, with state + attachments.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1266,9 +641,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemDetailOut",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1297,10 +670,10 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[WorkItemDetailOut]:
-        """Retrieve Work Item
+    ) -> ApiResponse[WorkItem]:
+        """get_work_item
 
-        Retrieve one task by UUID or ``KEY-N``, with state + attachments.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1335,9 +708,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemDetailOut",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1367,9 +738,9 @@ class WorkItemsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Retrieve Work Item
+        """get_work_item
 
-        Retrieve one task by UUID or ``KEY-N``, with state + attachments.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1404,9 +775,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemDetailOut",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1480,11 +849,13 @@ class WorkItemsApi:
 
 
     @validate_call
-    def list_module_work_items(
+    def list_work_items(
         self,
-        module_id: UUID,
         include_archived: Optional[StrictBool] = None,
         include_pathfind: Optional[StrictBool] = None,
+        module: Optional[UUID] = None,
+        project: Optional[UUID] = None,
+        state: Optional[UUID] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1497,17 +868,21 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> List[WorkItemOut]:
-        """List Module Work Items
+    ) -> List[WorkItem]:
+        """list_work_items
 
-        Return the module's task-descendant subtree.  Membership rides the ``parent`` link, so this is not a flat filter: it walks every task descendant of the module (direct children + subtasks). Each issue carries ``parent_id`` so the repo splits direct children from subtasks (#516 roll-ups). Archived tasks are hidden unless ``include_archived=true``. PathFind tasks are hidden unless ``include_pathfind=true``.
+        The only task collection read, narrowed by declared query parameters.
 
-        :param module_id: (required)
-        :type module_id: UUID
         :param include_archived:
         :type include_archived: bool
         :param include_pathfind:
         :type include_pathfind: bool
+        :param module:
+        :type module: UUID
+        :param project:
+        :type project: UUID
+        :param state:
+        :type state: UUID
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1530,10 +905,12 @@ class WorkItemsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._list_module_work_items_serialize(
-            module_id=module_id,
+        _param = self._list_work_items_serialize(
             include_archived=include_archived,
             include_pathfind=include_pathfind,
+            module=module,
+            project=project,
+            state=state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1541,9 +918,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[WorkItemOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[WorkItem]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1557,11 +932,13 @@ class WorkItemsApi:
 
 
     @validate_call
-    def list_module_work_items_with_http_info(
+    def list_work_items_with_http_info(
         self,
-        module_id: UUID,
         include_archived: Optional[StrictBool] = None,
         include_pathfind: Optional[StrictBool] = None,
+        module: Optional[UUID] = None,
+        project: Optional[UUID] = None,
+        state: Optional[UUID] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1574,17 +951,21 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[List[WorkItemOut]]:
-        """List Module Work Items
+    ) -> ApiResponse[List[WorkItem]]:
+        """list_work_items
 
-        Return the module's task-descendant subtree.  Membership rides the ``parent`` link, so this is not a flat filter: it walks every task descendant of the module (direct children + subtasks). Each issue carries ``parent_id`` so the repo splits direct children from subtasks (#516 roll-ups). Archived tasks are hidden unless ``include_archived=true``. PathFind tasks are hidden unless ``include_pathfind=true``.
+        The only task collection read, narrowed by declared query parameters.
 
-        :param module_id: (required)
-        :type module_id: UUID
         :param include_archived:
         :type include_archived: bool
         :param include_pathfind:
         :type include_pathfind: bool
+        :param module:
+        :type module: UUID
+        :param project:
+        :type project: UUID
+        :param state:
+        :type state: UUID
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1607,10 +988,12 @@ class WorkItemsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._list_module_work_items_serialize(
-            module_id=module_id,
+        _param = self._list_work_items_serialize(
             include_archived=include_archived,
             include_pathfind=include_pathfind,
+            module=module,
+            project=project,
+            state=state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1618,9 +1001,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[WorkItemOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[WorkItem]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1634,11 +1015,13 @@ class WorkItemsApi:
 
 
     @validate_call
-    def list_module_work_items_without_preload_content(
+    def list_work_items_without_preload_content(
         self,
-        module_id: UUID,
         include_archived: Optional[StrictBool] = None,
         include_pathfind: Optional[StrictBool] = None,
+        module: Optional[UUID] = None,
+        project: Optional[UUID] = None,
+        state: Optional[UUID] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1652,16 +1035,20 @@ class WorkItemsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """List Module Work Items
+        """list_work_items
 
-        Return the module's task-descendant subtree.  Membership rides the ``parent`` link, so this is not a flat filter: it walks every task descendant of the module (direct children + subtasks). Each issue carries ``parent_id`` so the repo splits direct children from subtasks (#516 roll-ups). Archived tasks are hidden unless ``include_archived=true``. PathFind tasks are hidden unless ``include_pathfind=true``.
+        The only task collection read, narrowed by declared query parameters.
 
-        :param module_id: (required)
-        :type module_id: UUID
         :param include_archived:
         :type include_archived: bool
         :param include_pathfind:
         :type include_pathfind: bool
+        :param module:
+        :type module: UUID
+        :param project:
+        :type project: UUID
+        :param state:
+        :type state: UUID
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1684,10 +1071,12 @@ class WorkItemsApi:
         :return: Returns the result object.
         """ # noqa: E501
 
-        _param = self._list_module_work_items_serialize(
-            module_id=module_id,
+        _param = self._list_work_items_serialize(
             include_archived=include_archived,
             include_pathfind=include_pathfind,
+            module=module,
+            project=project,
+            state=state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1695,9 +1084,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[WorkItemOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[WorkItem]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1706,11 +1093,13 @@ class WorkItemsApi:
         return response_data.response
 
 
-    def _list_module_work_items_serialize(
+    def _list_work_items_serialize(
         self,
-        module_id,
         include_archived,
         include_pathfind,
+        module,
+        project,
+        state,
         _request_auth,
         _content_type,
         _headers,
@@ -1732,8 +1121,6 @@ class WorkItemsApi:
         _body_params: Optional[bytes] = None
 
         # process the path parameters
-        if module_id is not None:
-            _path_params['module_id'] = module_id
         # process the query parameters
         if include_archived is not None:
 
@@ -1743,341 +1130,18 @@ class WorkItemsApi:
 
             _query_params.append(('include_pathfind', include_pathfind))
 
-        # process the header parameters
-        # process the form parameters
-        # process the body parameter
+        if module is not None:
 
+            _query_params.append(('module', module))
 
-        # set the HTTP header `Accept`
-        if 'Accept' not in _header_params:
-            _header_params['Accept'] = self.api_client.select_header_accept(
-                [
-                    'application/json'
-                ]
-            )
+        if project is not None:
 
-
-        # authentication setting
-        _auth_settings: List[str] = [
-            'ApiKeyAuth'
-        ]
-
-        return self.api_client.param_serialize(
-            method='GET',
-            resource_path='/modules/{module_id}/work-items',
-            path_params=_path_params,
-            query_params=_query_params,
-            header_params=_header_params,
-            body=_body_params,
-            post_params=_form_params,
-            files=_files,
-            auth_settings=_auth_settings,
-            collection_formats=_collection_formats,
-            _host=_host,
-            _request_auth=_request_auth
-        )
-
-
-
-
-    @validate_call
-    def list_project_work_items(
-        self,
-        project_id: UUID,
-        parent: Optional[UUID] = None,
-        state: Optional[UUID] = None,
-        include_archived: Optional[StrictBool] = None,
-        include_pathfind: Optional[StrictBool] = None,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> List[WorkItemOut]:
-        """List Work Items
-
-        List the project's tasks, optionally filtered by parent / state.  No ``parent`` returns every task in the project. ``parent`` filters to the direct children of any issue (a module or a task) — membership is the same ``parent`` link regardless of the parent's type. Archived tasks are hidden unless ``include_archived=true``. PathFind tasks are hidden unless ``include_pathfind=true``.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param parent:
-        :type parent: UUID
-        :param state:
-        :type state: UUID
-        :param include_archived:
-        :type include_archived: bool
-        :param include_pathfind:
-        :type include_pathfind: bool
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._list_project_work_items_serialize(
-            project_id=project_id,
-            parent=parent,
-            state=state,
-            include_archived=include_archived,
-            include_pathfind=include_pathfind,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[WorkItemOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        ).data
-
-
-    @validate_call
-    def list_project_work_items_with_http_info(
-        self,
-        project_id: UUID,
-        parent: Optional[UUID] = None,
-        state: Optional[UUID] = None,
-        include_archived: Optional[StrictBool] = None,
-        include_pathfind: Optional[StrictBool] = None,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[List[WorkItemOut]]:
-        """List Work Items
-
-        List the project's tasks, optionally filtered by parent / state.  No ``parent`` returns every task in the project. ``parent`` filters to the direct children of any issue (a module or a task) — membership is the same ``parent`` link regardless of the parent's type. Archived tasks are hidden unless ``include_archived=true``. PathFind tasks are hidden unless ``include_pathfind=true``.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param parent:
-        :type parent: UUID
-        :param state:
-        :type state: UUID
-        :param include_archived:
-        :type include_archived: bool
-        :param include_pathfind:
-        :type include_pathfind: bool
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._list_project_work_items_serialize(
-            project_id=project_id,
-            parent=parent,
-            state=state,
-            include_archived=include_archived,
-            include_pathfind=include_pathfind,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[WorkItemOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        )
-
-
-    @validate_call
-    def list_project_work_items_without_preload_content(
-        self,
-        project_id: UUID,
-        parent: Optional[UUID] = None,
-        state: Optional[UUID] = None,
-        include_archived: Optional[StrictBool] = None,
-        include_pathfind: Optional[StrictBool] = None,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> RESTResponseType:
-        """List Work Items
-
-        List the project's tasks, optionally filtered by parent / state.  No ``parent`` returns every task in the project. ``parent`` filters to the direct children of any issue (a module or a task) — membership is the same ``parent`` link regardless of the parent's type. Archived tasks are hidden unless ``include_archived=true``. PathFind tasks are hidden unless ``include_pathfind=true``.
-
-        :param project_id: (required)
-        :type project_id: UUID
-        :param parent:
-        :type parent: UUID
-        :param state:
-        :type state: UUID
-        :param include_archived:
-        :type include_archived: bool
-        :param include_pathfind:
-        :type include_pathfind: bool
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._list_project_work_items_serialize(
-            project_id=project_id,
-            parent=parent,
-            state=state,
-            include_archived=include_archived,
-            include_pathfind=include_pathfind,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[WorkItemOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        return response_data.response
-
-
-    def _list_project_work_items_serialize(
-        self,
-        project_id,
-        parent,
-        state,
-        include_archived,
-        include_pathfind,
-        _request_auth,
-        _content_type,
-        _headers,
-        _host_index,
-    ) -> RequestSerialized:
-
-        _host = None
-
-        _collection_formats: Dict[str, str] = {
-        }
-
-        _path_params: Dict[str, str] = {}
-        _query_params: List[Tuple[str, str]] = []
-        _header_params: Dict[str, Optional[str]] = _headers or {}
-        _form_params: List[Tuple[str, str]] = []
-        _files: Dict[
-            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
-        ] = {}
-        _body_params: Optional[bytes] = None
-
-        # process the path parameters
-        if project_id is not None:
-            _path_params['project_id'] = project_id
-        # process the query parameters
-        if parent is not None:
-
-            _query_params.append(('parent', parent))
+            _query_params.append(('project', project))
 
         if state is not None:
 
             _query_params.append(('state', state))
 
-        if include_archived is not None:
-
-            _query_params.append(('include_archived', include_archived))
-
-        if include_pathfind is not None:
-
-            _query_params.append(('include_pathfind', include_pathfind))
-
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -2099,7 +1163,7 @@ class WorkItemsApi:
 
         return self.api_client.param_serialize(
             method='GET',
-            resource_path='/projects/{project_id}/work-items',
+            resource_path='/work-items',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,
@@ -2119,7 +1183,7 @@ class WorkItemsApi:
     def reorder_work_item(
         self,
         issue_id: UUID,
-        work_item_reorder_in: WorkItemReorderIn,
+        work_item_reorder: Optional[WorkItemReorder] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2132,15 +1196,15 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> WorkItemOut:
-        """Reorder Work Item
+    ) -> WorkItem:
+        """reorder_work_item
 
-        Set the moved issue's rank strictly between its destination neighbors (#626).  ``before_id`` / ``after_id`` are the issue's new column neighbors (the rows it lands below / above); either is null for the top, the bottom, or an empty column. Only the moved row is written — the neighbors are untouched, so two users reordering the same column never corrupt each other's keys. A cross-column move PATCHes ``state_id`` first, then calls this with the destination neighbors. Reorder is the sole rank write path, so the fractional-key algebra (and its strict ordering) can't be bypassed.
+        Allocate the moved row's server-owned fractional rank.
 
         :param issue_id: (required)
         :type issue_id: UUID
-        :param work_item_reorder_in: (required)
-        :type work_item_reorder_in: WorkItemReorderIn
+        :param work_item_reorder:
+        :type work_item_reorder: WorkItemReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2165,7 +1229,7 @@ class WorkItemsApi:
 
         _param = self._reorder_work_item_serialize(
             issue_id=issue_id,
-            work_item_reorder_in=work_item_reorder_in,
+            work_item_reorder=work_item_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2173,10 +1237,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2193,7 +1254,7 @@ class WorkItemsApi:
     def reorder_work_item_with_http_info(
         self,
         issue_id: UUID,
-        work_item_reorder_in: WorkItemReorderIn,
+        work_item_reorder: Optional[WorkItemReorder] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2206,15 +1267,15 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[WorkItemOut]:
-        """Reorder Work Item
+    ) -> ApiResponse[WorkItem]:
+        """reorder_work_item
 
-        Set the moved issue's rank strictly between its destination neighbors (#626).  ``before_id`` / ``after_id`` are the issue's new column neighbors (the rows it lands below / above); either is null for the top, the bottom, or an empty column. Only the moved row is written — the neighbors are untouched, so two users reordering the same column never corrupt each other's keys. A cross-column move PATCHes ``state_id`` first, then calls this with the destination neighbors. Reorder is the sole rank write path, so the fractional-key algebra (and its strict ordering) can't be bypassed.
+        Allocate the moved row's server-owned fractional rank.
 
         :param issue_id: (required)
         :type issue_id: UUID
-        :param work_item_reorder_in: (required)
-        :type work_item_reorder_in: WorkItemReorderIn
+        :param work_item_reorder:
+        :type work_item_reorder: WorkItemReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2239,7 +1300,7 @@ class WorkItemsApi:
 
         _param = self._reorder_work_item_serialize(
             issue_id=issue_id,
-            work_item_reorder_in=work_item_reorder_in,
+            work_item_reorder=work_item_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2247,10 +1308,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2267,7 +1325,7 @@ class WorkItemsApi:
     def reorder_work_item_without_preload_content(
         self,
         issue_id: UUID,
-        work_item_reorder_in: WorkItemReorderIn,
+        work_item_reorder: Optional[WorkItemReorder] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2281,14 +1339,14 @@ class WorkItemsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Reorder Work Item
+        """reorder_work_item
 
-        Set the moved issue's rank strictly between its destination neighbors (#626).  ``before_id`` / ``after_id`` are the issue's new column neighbors (the rows it lands below / above); either is null for the top, the bottom, or an empty column. Only the moved row is written — the neighbors are untouched, so two users reordering the same column never corrupt each other's keys. A cross-column move PATCHes ``state_id`` first, then calls this with the destination neighbors. Reorder is the sole rank write path, so the fractional-key algebra (and its strict ordering) can't be bypassed.
+        Allocate the moved row's server-owned fractional rank.
 
         :param issue_id: (required)
         :type issue_id: UUID
-        :param work_item_reorder_in: (required)
-        :type work_item_reorder_in: WorkItemReorderIn
+        :param work_item_reorder:
+        :type work_item_reorder: WorkItemReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2313,7 +1371,7 @@ class WorkItemsApi:
 
         _param = self._reorder_work_item_serialize(
             issue_id=issue_id,
-            work_item_reorder_in=work_item_reorder_in,
+            work_item_reorder=work_item_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2321,10 +1379,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2336,7 +1391,7 @@ class WorkItemsApi:
     def _reorder_work_item_serialize(
         self,
         issue_id,
-        work_item_reorder_in,
+        work_item_reorder,
         _request_auth,
         _content_type,
         _headers,
@@ -2364,8 +1419,8 @@ class WorkItemsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if work_item_reorder_in is not None:
-            _body_params = work_item_reorder_in
+        if work_item_reorder is not None:
+            _body_params = work_item_reorder
 
 
         # set the HTTP header `Accept`
@@ -2383,7 +1438,9 @@ class WorkItemsApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )
@@ -2417,7 +1474,7 @@ class WorkItemsApi:
     def update_work_item(
         self,
         issue_id: StrictStr,
-        work_item_patch: WorkItemPatch,
+        patched_work_item_patch: Optional[PatchedWorkItemPatch] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2430,15 +1487,15 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> WorkItemOut:
-        """Patch Work Item
+    ) -> WorkItem:
+        """update_work_item
 
-        Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
         :type issue_id: str
-        :param work_item_patch: (required)
-        :type work_item_patch: WorkItemPatch
+        :param patched_work_item_patch:
+        :type patched_work_item_patch: PatchedWorkItemPatch
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2463,7 +1520,7 @@ class WorkItemsApi:
 
         _param = self._update_work_item_serialize(
             issue_id=issue_id,
-            work_item_patch=work_item_patch,
+            patched_work_item_patch=patched_work_item_patch,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2471,10 +1528,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2491,7 +1545,7 @@ class WorkItemsApi:
     def update_work_item_with_http_info(
         self,
         issue_id: StrictStr,
-        work_item_patch: WorkItemPatch,
+        patched_work_item_patch: Optional[PatchedWorkItemPatch] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2504,15 +1558,15 @@ class WorkItemsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[WorkItemOut]:
-        """Patch Work Item
+    ) -> ApiResponse[WorkItem]:
+        """update_work_item
 
-        Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
         :type issue_id: str
-        :param work_item_patch: (required)
-        :type work_item_patch: WorkItemPatch
+        :param patched_work_item_patch:
+        :type patched_work_item_patch: PatchedWorkItemPatch
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2537,7 +1591,7 @@ class WorkItemsApi:
 
         _param = self._update_work_item_serialize(
             issue_id=issue_id,
-            work_item_patch=work_item_patch,
+            patched_work_item_patch=patched_work_item_patch,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2545,10 +1599,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2565,7 +1616,7 @@ class WorkItemsApi:
     def update_work_item_without_preload_content(
         self,
         issue_id: StrictStr,
-        work_item_patch: WorkItemPatch,
+        patched_work_item_patch: Optional[PatchedWorkItemPatch] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2579,14 +1630,14 @@ class WorkItemsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Patch Work Item
+        """update_work_item
 
-        Apply only the present patch fields; ``parent_id`` reparents the issue.  A ``state_id`` move routes through the workflow gate (#860) and must be its own PATCH — a rejected move returns a structured 422 (``detail``/``code``/ ``from``/``to``). ``origin`` defaults to ``human``; agent-origin writes are checked against edge permissions.
+        Retrieve, update, or delete one bare work item.
 
         :param issue_id: (required)
         :type issue_id: str
-        :param work_item_patch: (required)
-        :type work_item_patch: WorkItemPatch
+        :param patched_work_item_patch:
+        :type patched_work_item_patch: PatchedWorkItemPatch
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2611,7 +1662,7 @@ class WorkItemsApi:
 
         _param = self._update_work_item_serialize(
             issue_id=issue_id,
-            work_item_patch=work_item_patch,
+            patched_work_item_patch=patched_work_item_patch,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2619,10 +1670,7 @@ class WorkItemsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "WorkItemOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "WorkItem",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -2634,7 +1682,7 @@ class WorkItemsApi:
     def _update_work_item_serialize(
         self,
         issue_id,
-        work_item_patch,
+        patched_work_item_patch,
         _request_auth,
         _content_type,
         _headers,
@@ -2662,8 +1710,8 @@ class WorkItemsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if work_item_patch is not None:
-            _body_params = work_item_patch
+        if patched_work_item_patch is not None:
+            _body_params = patched_work_item_patch
 
 
         # set the HTTP header `Accept`
@@ -2681,7 +1729,9 @@ class WorkItemsApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )

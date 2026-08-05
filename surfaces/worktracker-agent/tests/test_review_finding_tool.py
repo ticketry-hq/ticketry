@@ -11,7 +11,7 @@ evidence *before* any SDK write, and it surfaces the backend gate's rejection
 import inspect
 
 import pytest
-from worktracker_sdk.generated import WorkItemIn
+from worktracker_sdk.generated import WorkItemCreate
 from worktracker_sdk.generated.exceptions import ApiException
 
 from fake_sdk import FakeGeneratedSdk, make_api_error, make_work_item, raises
@@ -60,7 +60,7 @@ def test_create_review_finding_builds_block_and_returns_ids():
     name, args, _kwargs = client.work_items.calls[0]
     assert name == "create_work_item"
     payload = args[1]
-    assert isinstance(payload, WorkItemIn)
+    assert isinstance(payload, WorkItemCreate)
     assert str(payload.parent_id) == PARENT
     assert payload.issue_type_id is None
     assert payload.description == "Path: src/loader.py\nLines: 10-12\nNote: guard it"

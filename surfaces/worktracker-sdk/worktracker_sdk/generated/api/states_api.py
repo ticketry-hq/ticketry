@@ -16,14 +16,11 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import StrictStr
 from typing import List, Optional
 from uuid import UUID
-from worktracker_sdk.generated.models.reorder_in import ReorderIn
-from worktracker_sdk.generated.models.state_impact_out import StateImpactOut
-from worktracker_sdk.generated.models.state_in import StateIn
-from worktracker_sdk.generated.models.state_out import StateOut
-from worktracker_sdk.generated.models.state_patch import StatePatch
+from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder
+from worktracker_sdk.generated.models.patched_state import PatchedState
+from worktracker_sdk.generated.models.state import State
 
 from worktracker_sdk.generated.api_client import ApiClient, RequestSerialized
 from worktracker_sdk.generated.api_response import ApiResponse
@@ -47,7 +44,7 @@ class StatesApi:
     def create_state(
         self,
         project_id: UUID,
-        state_in: StateIn,
+        state: State,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -60,15 +57,15 @@ class StatesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> StateOut:
-        """Create State
+    ) -> State:
+        """create_state
 
-        Create a state in one of the five groups at the tail of the order.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param state_in: (required)
-        :type state_in: StateIn
+        :param state: (required)
+        :type state: State
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -93,7 +90,7 @@ class StatesApi:
 
         _param = self._create_state_serialize(
             project_id=project_id,
-            state_in=state_in,
+            state=state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -101,10 +98,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "State",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -121,7 +115,7 @@ class StatesApi:
     def create_state_with_http_info(
         self,
         project_id: UUID,
-        state_in: StateIn,
+        state: State,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -134,15 +128,15 @@ class StatesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[StateOut]:
-        """Create State
+    ) -> ApiResponse[State]:
+        """create_state
 
-        Create a state in one of the five groups at the tail of the order.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param state_in: (required)
-        :type state_in: StateIn
+        :param state: (required)
+        :type state: State
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -167,7 +161,7 @@ class StatesApi:
 
         _param = self._create_state_serialize(
             project_id=project_id,
-            state_in=state_in,
+            state=state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -175,10 +169,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "State",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -195,7 +186,7 @@ class StatesApi:
     def create_state_without_preload_content(
         self,
         project_id: UUID,
-        state_in: StateIn,
+        state: State,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -209,14 +200,14 @@ class StatesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Create State
+        """create_state
 
-        Create a state in one of the five groups at the tail of the order.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param state_in: (required)
-        :type state_in: StateIn
+        :param state: (required)
+        :type state: State
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -241,7 +232,7 @@ class StatesApi:
 
         _param = self._create_state_serialize(
             project_id=project_id,
-            state_in=state_in,
+            state=state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -249,10 +240,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '201': "State",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -264,7 +252,7 @@ class StatesApi:
     def _create_state_serialize(
         self,
         project_id,
-        state_in,
+        state,
         _request_auth,
         _content_type,
         _headers,
@@ -292,8 +280,8 @@ class StatesApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if state_in is not None:
-            _body_params = state_in
+        if state is not None:
+            _body_params = state
 
 
         # set the HTTP header `Accept`
@@ -311,7 +299,9 @@ class StatesApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )
@@ -345,8 +335,6 @@ class StatesApi:
     def delete_state(
         self,
         state_id: UUID,
-        reassign_to: Optional[UUID] = None,
-        impact_token: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -360,16 +348,12 @@ class StatesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> None:
-        """Delete State
+        """delete_state
 
-        Delete a state, atomically replacing all confirmed references when needed.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param state_id: (required)
         :type state_id: UUID
-        :param reassign_to:
-        :type reassign_to: UUID
-        :param impact_token:
-        :type impact_token: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -394,8 +378,6 @@ class StatesApi:
 
         _param = self._delete_state_serialize(
             state_id=state_id,
-            reassign_to=reassign_to,
-            impact_token=impact_token,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -404,10 +386,6 @@ class StatesApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -424,8 +402,6 @@ class StatesApi:
     def delete_state_with_http_info(
         self,
         state_id: UUID,
-        reassign_to: Optional[UUID] = None,
-        impact_token: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -439,16 +415,12 @@ class StatesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[None]:
-        """Delete State
+        """delete_state
 
-        Delete a state, atomically replacing all confirmed references when needed.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param state_id: (required)
         :type state_id: UUID
-        :param reassign_to:
-        :type reassign_to: UUID
-        :param impact_token:
-        :type impact_token: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -473,8 +445,6 @@ class StatesApi:
 
         _param = self._delete_state_serialize(
             state_id=state_id,
-            reassign_to=reassign_to,
-            impact_token=impact_token,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -483,10 +453,6 @@ class StatesApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -503,8 +469,6 @@ class StatesApi:
     def delete_state_without_preload_content(
         self,
         state_id: UUID,
-        reassign_to: Optional[UUID] = None,
-        impact_token: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -518,16 +482,12 @@ class StatesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Delete State
+        """delete_state
 
-        Delete a state, atomically replacing all confirmed references when needed.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param state_id: (required)
         :type state_id: UUID
-        :param reassign_to:
-        :type reassign_to: UUID
-        :param impact_token:
-        :type impact_token: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -552,8 +512,6 @@ class StatesApi:
 
         _param = self._delete_state_serialize(
             state_id=state_id,
-            reassign_to=reassign_to,
-            impact_token=impact_token,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -562,10 +520,6 @@ class StatesApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '204': None,
-            '401': "MessageError",
-            '404': "MessageError",
-            '409': "MessageError",
-            '422': "ValidationError",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -577,8 +531,6 @@ class StatesApi:
     def _delete_state_serialize(
         self,
         state_id,
-        reassign_to,
-        impact_token,
         _request_auth,
         _content_type,
         _headers,
@@ -603,26 +555,11 @@ class StatesApi:
         if state_id is not None:
             _path_params['state_id'] = state_id
         # process the query parameters
-        if reassign_to is not None:
-
-            _query_params.append(('reassign_to', reassign_to))
-
-        if impact_token is not None:
-
-            _query_params.append(('impact_token', impact_token))
-
         # process the header parameters
         # process the form parameters
         # process the body parameter
 
 
-        # set the HTTP header `Accept`
-        if 'Accept' not in _header_params:
-            _header_params['Accept'] = self.api_client.select_header_accept(
-                [
-                    'application/json'
-                ]
-            )
 
 
         # authentication setting
@@ -633,273 +570,6 @@ class StatesApi:
         return self.api_client.param_serialize(
             method='DELETE',
             resource_path='/states/{state_id}',
-            path_params=_path_params,
-            query_params=_query_params,
-            header_params=_header_params,
-            body=_body_params,
-            post_params=_form_params,
-            files=_files,
-            auth_settings=_auth_settings,
-            collection_formats=_collection_formats,
-            _host=_host,
-            _request_auth=_request_auth
-        )
-
-
-
-
-    @validate_call
-    def get_state_impact(
-        self,
-        state_id: UUID,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> StateImpactOut:
-        """Get State Impact
-
-        Preview work-item, workflow, and protection consequences of deletion.
-
-        :param state_id: (required)
-        :type state_id: UUID
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._get_state_impact_serialize(
-            state_id=state_id,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateImpactOut",
-            '401': "MessageError",
-            '404': "MessageError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        ).data
-
-
-    @validate_call
-    def get_state_impact_with_http_info(
-        self,
-        state_id: UUID,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[StateImpactOut]:
-        """Get State Impact
-
-        Preview work-item, workflow, and protection consequences of deletion.
-
-        :param state_id: (required)
-        :type state_id: UUID
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._get_state_impact_serialize(
-            state_id=state_id,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateImpactOut",
-            '401': "MessageError",
-            '404': "MessageError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        response_data.read()
-        return self.api_client.response_deserialize(
-            response_data=response_data,
-            response_types_map=_response_types_map,
-        )
-
-
-    @validate_call
-    def get_state_impact_without_preload_content(
-        self,
-        state_id: UUID,
-        _request_timeout: Union[
-            None,
-            Annotated[StrictFloat, Field(gt=0)],
-            Tuple[
-                Annotated[StrictFloat, Field(gt=0)],
-                Annotated[StrictFloat, Field(gt=0)]
-            ]
-        ] = None,
-        _request_auth: Optional[Dict[StrictStr, Any]] = None,
-        _content_type: Optional[StrictStr] = None,
-        _headers: Optional[Dict[StrictStr, Any]] = None,
-        _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> RESTResponseType:
-        """Get State Impact
-
-        Preview work-item, workflow, and protection consequences of deletion.
-
-        :param state_id: (required)
-        :type state_id: UUID
-        :param _request_timeout: timeout setting for this request. If one
-                                 number provided, it will be total request
-                                 timeout. It can also be a pair (tuple) of
-                                 (connection, read) timeouts.
-        :type _request_timeout: int, tuple(int, int), optional
-        :param _request_auth: set to override the auth_settings for an a single
-                              request; this effectively ignores the
-                              authentication in the spec for a single request.
-        :type _request_auth: dict, optional
-        :param _content_type: force content-type for the request.
-        :type _content_type: str, Optional
-        :param _headers: set to override the headers for a single
-                         request; this effectively ignores the headers
-                         in the spec for a single request.
-        :type _headers: dict, optional
-        :param _host_index: set to override the host_index for a single
-                            request; this effectively ignores the host_index
-                            in the spec for a single request.
-        :type _host_index: int, optional
-        :return: Returns the result object.
-        """ # noqa: E501
-
-        _param = self._get_state_impact_serialize(
-            state_id=state_id,
-            _request_auth=_request_auth,
-            _content_type=_content_type,
-            _headers=_headers,
-            _host_index=_host_index
-        )
-
-        _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateImpactOut",
-            '401': "MessageError",
-            '404': "MessageError",
-        }
-        response_data = self.api_client.call_api(
-            *_param,
-            _request_timeout=_request_timeout
-        )
-        return response_data.response
-
-
-    def _get_state_impact_serialize(
-        self,
-        state_id,
-        _request_auth,
-        _content_type,
-        _headers,
-        _host_index,
-    ) -> RequestSerialized:
-
-        _host = None
-
-        _collection_formats: Dict[str, str] = {
-        }
-
-        _path_params: Dict[str, str] = {}
-        _query_params: List[Tuple[str, str]] = []
-        _header_params: Dict[str, Optional[str]] = _headers or {}
-        _form_params: List[Tuple[str, str]] = []
-        _files: Dict[
-            str, Union[str, bytes, List[str], List[bytes], List[Tuple[str, bytes]]]
-        ] = {}
-        _body_params: Optional[bytes] = None
-
-        # process the path parameters
-        if state_id is not None:
-            _path_params['state_id'] = state_id
-        # process the query parameters
-        # process the header parameters
-        # process the form parameters
-        # process the body parameter
-
-
-        # set the HTTP header `Accept`
-        if 'Accept' not in _header_params:
-            _header_params['Accept'] = self.api_client.select_header_accept(
-                [
-                    'application/json'
-                ]
-            )
-
-
-        # authentication setting
-        _auth_settings: List[str] = [
-            'ApiKeyAuth'
-        ]
-
-        return self.api_client.param_serialize(
-            method='GET',
-            resource_path='/states/{state_id}/impact',
             path_params=_path_params,
             query_params=_query_params,
             header_params=_header_params,
@@ -931,10 +601,10 @@ class StatesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> List[StateOut]:
-        """List States
+    ) -> List[State]:
+        """list_states
 
-        List the project's workflow states, ordered by ``(sort_order, created_at)``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -969,9 +639,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[StateOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[State]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1000,10 +668,10 @@ class StatesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[List[StateOut]]:
-        """List States
+    ) -> ApiResponse[List[State]]:
+        """list_states
 
-        List the project's workflow states, ordered by ``(sort_order, created_at)``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -1038,9 +706,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[StateOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[State]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1070,9 +736,9 @@ class StatesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """List States
+        """list_states
 
-        List the project's workflow states, ordered by ``(sort_order, created_at)``.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -1107,9 +773,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[StateOut]",
-            '401': "MessageError",
-            '404': "MessageError",
+            '200': "List[State]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1186,7 +850,7 @@ class StatesApi:
     def reorder_states(
         self,
         project_id: UUID,
-        reorder_in: ReorderIn,
+        configuration_reorder: ConfigurationReorder,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1199,15 +863,15 @@ class StatesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> List[StateOut]:
-        """Reorder States
+    ) -> List[State]:
+        """reorder_states
 
-        Rewrite every state's ``sort_order`` from the given full id order.
+        Atomically replace a project's complete workflow-state order.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param reorder_in: (required)
-        :type reorder_in: ReorderIn
+        :param configuration_reorder: (required)
+        :type configuration_reorder: ConfigurationReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1232,7 +896,7 @@ class StatesApi:
 
         _param = self._reorder_states_serialize(
             project_id=project_id,
-            reorder_in=reorder_in,
+            configuration_reorder=configuration_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1240,10 +904,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[StateOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "List[State]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1260,7 +921,7 @@ class StatesApi:
     def reorder_states_with_http_info(
         self,
         project_id: UUID,
-        reorder_in: ReorderIn,
+        configuration_reorder: ConfigurationReorder,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1273,15 +934,15 @@ class StatesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[List[StateOut]]:
-        """Reorder States
+    ) -> ApiResponse[List[State]]:
+        """reorder_states
 
-        Rewrite every state's ``sort_order`` from the given full id order.
+        Atomically replace a project's complete workflow-state order.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param reorder_in: (required)
-        :type reorder_in: ReorderIn
+        :param configuration_reorder: (required)
+        :type configuration_reorder: ConfigurationReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1306,7 +967,7 @@ class StatesApi:
 
         _param = self._reorder_states_serialize(
             project_id=project_id,
-            reorder_in=reorder_in,
+            configuration_reorder=configuration_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1314,10 +975,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[StateOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "List[State]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1334,7 +992,7 @@ class StatesApi:
     def reorder_states_without_preload_content(
         self,
         project_id: UUID,
-        reorder_in: ReorderIn,
+        configuration_reorder: ConfigurationReorder,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1348,14 +1006,14 @@ class StatesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Reorder States
+        """reorder_states
 
-        Rewrite every state's ``sort_order`` from the given full id order.
+        Atomically replace a project's complete workflow-state order.
 
         :param project_id: (required)
         :type project_id: UUID
-        :param reorder_in: (required)
-        :type reorder_in: ReorderIn
+        :param configuration_reorder: (required)
+        :type configuration_reorder: ConfigurationReorder
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1380,7 +1038,7 @@ class StatesApi:
 
         _param = self._reorder_states_serialize(
             project_id=project_id,
-            reorder_in=reorder_in,
+            configuration_reorder=configuration_reorder,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1388,10 +1046,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[StateOut]",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "List[State]",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1403,7 +1058,7 @@ class StatesApi:
     def _reorder_states_serialize(
         self,
         project_id,
-        reorder_in,
+        configuration_reorder,
         _request_auth,
         _content_type,
         _headers,
@@ -1431,8 +1086,8 @@ class StatesApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if reorder_in is not None:
-            _body_params = reorder_in
+        if configuration_reorder is not None:
+            _body_params = configuration_reorder
 
 
         # set the HTTP header `Accept`
@@ -1450,7 +1105,9 @@ class StatesApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )
@@ -1484,7 +1141,7 @@ class StatesApi:
     def update_state(
         self,
         state_id: UUID,
-        state_patch: StatePatch,
+        patched_state: Optional[PatchedState] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1497,15 +1154,15 @@ class StatesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> StateOut:
-        """Patch State
+    ) -> State:
+        """update_state
 
-        Rename / recolor / reorder a state, or move it among the five groups.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param state_id: (required)
         :type state_id: UUID
-        :param state_patch: (required)
-        :type state_patch: StatePatch
+        :param patched_state:
+        :type patched_state: PatchedState
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1530,7 +1187,7 @@ class StatesApi:
 
         _param = self._update_state_serialize(
             state_id=state_id,
-            state_patch=state_patch,
+            patched_state=patched_state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1538,10 +1195,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "State",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1558,7 +1212,7 @@ class StatesApi:
     def update_state_with_http_info(
         self,
         state_id: UUID,
-        state_patch: StatePatch,
+        patched_state: Optional[PatchedState] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1571,15 +1225,15 @@ class StatesApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[StateOut]:
-        """Patch State
+    ) -> ApiResponse[State]:
+        """update_state
 
-        Rename / recolor / reorder a state, or move it among the five groups.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param state_id: (required)
         :type state_id: UUID
-        :param state_patch: (required)
-        :type state_patch: StatePatch
+        :param patched_state:
+        :type patched_state: PatchedState
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1604,7 +1258,7 @@ class StatesApi:
 
         _param = self._update_state_serialize(
             state_id=state_id,
-            state_patch=state_patch,
+            patched_state=patched_state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1612,10 +1266,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "State",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1632,7 +1283,7 @@ class StatesApi:
     def update_state_without_preload_content(
         self,
         state_id: UUID,
-        state_patch: StatePatch,
+        patched_state: Optional[PatchedState] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1646,14 +1297,14 @@ class StatesApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Patch State
+        """update_state
 
-        Rename / recolor / reorder a state, or move it among the five groups.
+        Shared project-scoped collection and unscoped detail behavior.
 
         :param state_id: (required)
         :type state_id: UUID
-        :param state_patch: (required)
-        :type state_patch: StatePatch
+        :param patched_state:
+        :type patched_state: PatchedState
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1678,7 +1329,7 @@ class StatesApi:
 
         _param = self._update_state_serialize(
             state_id=state_id,
-            state_patch=state_patch,
+            patched_state=patched_state,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1686,10 +1337,7 @@ class StatesApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "StateOut",
-            '401': "MessageError",
-            '404': "MessageError",
-            '422': "ValidationError",
+            '200': "State",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -1701,7 +1349,7 @@ class StatesApi:
     def _update_state_serialize(
         self,
         state_id,
-        state_patch,
+        patched_state,
         _request_auth,
         _content_type,
         _headers,
@@ -1729,8 +1377,8 @@ class StatesApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if state_patch is not None:
-            _body_params = state_patch
+        if patched_state is not None:
+            _body_params = patched_state
 
 
         # set the HTTP header `Accept`
@@ -1748,7 +1396,9 @@ class StatesApi:
             _default_content_type = (
                 self.api_client.select_header_content_type(
                     [
-                        'application/json'
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
                     ]
                 )
             )

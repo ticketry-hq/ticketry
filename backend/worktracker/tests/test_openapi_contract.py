@@ -1,8 +1,21 @@
+"""Contract checks for the sole drf-spectacular WorkTracker document."""
+
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 
-from django.core.management import call_command
+from worktracker.registry import declared_model_route_keys
 
-from worktracker.openapi import API_ROOT, build_openapi_schema
+
+ROOT = Path(__file__).resolve().parents[3]
+BACKEND = ROOT / "backend"
+CONTRACT = ROOT / "openapi.json"
+
+
+def _schema():
+    return json.loads(CONTRACT.read_text(encoding="utf-8"))
 
 
 def _operations(schema):
@@ -12,110 +25,93 @@ def _operations(schema):
                 yield path, method, operation
 
 
-def test_export_is_byte_deterministic(tmp_path):
+def _export(destination):
+    environment = os.environ.copy()
+    environment["DJANGO_SETTINGS_MODULE"] = "worktracker.openapi_settings"
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "django",
+            "spectacular",
+            "--file",
+            str(destination),
+            "--format",
+            "openapi-json",
+        ],
+        cwd=BACKEND,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_drf_spectacular_export_is_byte_deterministic(tmp_path):
     first = tmp_path / "first.json"
     second = tmp_path / "second.json"
 
-    call_command("export_openapi", first)
-    call_command("export_openapi", second)
+    first_run = _export(first)
+    second_run = _export(second)
 
-    assert first.read_bytes() == second.read_bytes()
-    assert first.read_bytes().endswith(b"\n")
-    assert json.loads(first.read_text()) == build_openapi_schema()
+    assert first_run.returncode == 0, first_run.stderr
+    assert second_run.returncode == 0, second_run.stderr
+    assert first.read_bytes() == second.read_bytes() == CONTRACT.read_bytes()
 
 
-def test_operations_have_unique_explicit_ids_tags_security_and_errors():
-    schema = build_openapi_schema()
-    operations = list(_operations(schema))
+def test_contract_is_the_declared_worktracker_surface_only():
+    schema = _schema()
+    live = {(method.upper(), f"/api/work-tracker{path}") for path, method, _ in _operations(schema)}
+    declared = {
+        key
+        for key in declared_model_route_keys()
+        if key[1].startswith("/api/work-tracker/")
+    }
+
+    assert live == declared
+    assert "/schema" not in schema["paths"]
+    assert schema["servers"] == [{"url": "/api/work-tracker"}]
+
+
+def test_operations_have_unique_ids_and_uniform_api_key_security():
+    operations = list(_operations(_schema()))
     operation_ids = [operation["operationId"] for _, _, operation in operations]
 
     assert len(operation_ids) == len(set(operation_ids))
-    assert all(not operation_id.startswith("worktracker_api_") for operation_id in operation_ids)
-    assert all(operation["tags"] != ["worktracker"] for _, _, operation in operations)
-    assert all(operation["security"] == [{"ApiKeyAuth": []}] for _, _, operation in operations)
-    assert all("401" in operation["responses"] for _, _, operation in operations)
-    assert schema["servers"] == [{"url": API_ROOT}]
-    assert schema["components"]["securitySchemes"]["ApiKeyAuth"] == {
+    assert all(
+        operation["security"] == [{"ApiKeyAuth": []}]
+        for _, _, operation in operations
+    )
+    assert _schema()["components"]["securitySchemes"]["ApiKeyAuth"] == {
         "type": "apiKey",
         "in": "header",
         "name": "x-api-key",
     }
 
 
-def test_contract_models_multipart_and_empty_responses():
-    schema = build_openapi_schema()
+def test_contract_records_flat_relations_and_binary_attachment_upload():
+    schema = _schema()
+    work_item = schema["components"]["schemas"]["WorkItem"]["properties"]
     upload = schema["paths"]["/work-items/{issue_id}/attachments"]["post"]
-    delete = schema["paths"]["/work-items/{issue_id}"]["delete"]
-    patch = schema["components"]["schemas"]["WorkItemPatch"]["properties"]
-
     multipart = upload["requestBody"]["content"]["multipart/form-data"]["schema"]
-    assert "file" in multipart["properties"]
-    assert "file" in multipart["required"]
-    assert multipart["properties"]["file"]["format"] == "binary"
-    assert delete["responses"]["204"] == {"description": "No Content"}
 
-    for field in ("parent_id", "state_id"):
-        assert field not in schema["components"]["schemas"]["WorkItemPatch"].get(
-            "required", []
-        )
-        assert {"type": "null"} in patch[field]["anyOf"]
-    assert patch["origin"] == {
-        "default": "human",
-        "enum": ["human", "agent"],
-        "title": "Origin",
+    assert work_item["state"] == {
         "type": "string",
+        "format": "uuid",
+        "nullable": True,
+        "readOnly": True,
+    }
+    assert work_item["issue_type"]["format"] == "uuid"
+    assert multipart["required"] == ["file"]
+    assert multipart["properties"]["file"] == {
+        "type": "string",
+        "format": "binary",
     }
 
 
-def test_configuration_feature_models_are_published():
-    schemas = build_openapi_schema()["components"]["schemas"]
+def test_deleted_composite_and_overlapping_routes_are_absent():
+    paths = _schema()["paths"]
 
-    assert schemas["ConfigBody"]["properties"]["features"] == {
-        "$ref": "#/components/schemas/FeaturesBody"
-    }
-    assert schemas["FeaturesBody"] == {
-        "properties": {
-            "sidebar": {"title": "Sidebar", "type": "boolean"},
-            "projects": {"title": "Projects", "type": "boolean"},
-        },
-        "required": ["sidebar", "projects"],
-        "title": "FeaturesBody",
-        "type": "object",
-    }
-
-
-def test_retired_operations_are_absent():
-    schema = build_openapi_schema()
-    operations = {
-        (path, method, operation["operationId"])
-        for path, method, operation in _operations(schema)
-    }
-
-    retired_ids = {
-        "updateModule",
-        "deleteModule",
-        "listAttachments",
-        "updateAttachment",
-        "deleteAttachment",
-        "archiveWorkItem",
-        "unarchiveWorkItem",
-    }
-    assert retired_ids.isdisjoint(operation_id for _, _, operation_id in operations)
-    assert "/attachments/{attachment_id}" not in schema["paths"]
-    assert set(schema["paths"]["/work-items/{issue_id}/attachments"]) == {"post"}
-
-
-def test_sprint_contract_is_absent():
-    schema = build_openapi_schema()
-
-    assert all("sprint" not in path.lower() for path in schema["paths"])
-    assert all("sprint" not in name.lower() for name in schema["components"]["schemas"])
-    assert "sprint_id" not in schema["components"]["schemas"]["WorkItemOut"]["properties"]
-    assert "sprint_id" not in schema["components"]["schemas"]["WorkItemPatch"]["properties"]
-
-
-def test_work_item_priority_contract_is_absent():
-    schema = build_openapi_schema()
-
-    for name in ("ModuleWorkItemIn", "WorkItemIn", "WorkItemPatch", "WorkItemOut"):
-        assert "priority" not in schema["components"]["schemas"][name]["properties"]
+    assert "/modules/{module_id}/work-items" not in paths
+    assert "/work-items/{issue_id}/scope-context" not in paths
+    assert "/issue-types/{type_id}/workflow-settings" not in paths
+    assert "/projects/{project_id}/review-findings" not in paths

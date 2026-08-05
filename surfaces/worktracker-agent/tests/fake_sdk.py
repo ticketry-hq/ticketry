@@ -5,15 +5,6 @@ from datetime import datetime
 from types import SimpleNamespace
 from uuid import UUID
 
-from worktracker_sdk.generated import (
-    AttachmentOut,
-    IssueTypeOut,
-    ModuleOut,
-    ProjectOut,
-    StateOut,
-    WorkItemDetailOut,
-    WorkItemOut,
-)
 from worktracker_sdk.generated.exceptions import ApiException
 from worktracker_sdk.root_api import (
     DependencyGraphNodeOut,
@@ -59,9 +50,14 @@ class FakeGeneratedSdk:
         self.states = FakeApi()
         self.work_items = FakeApi()
         self.workflows = FakeApi()
+        self.launch_bindings = FakeApi()
+        self.models = FakeApi()
+        self.providers = FakeApi()
+        self.reasoning_levels = FakeApi()
         self.attachments = FakeApi()
         self.execution = FakeApi()
         self.launch = FakeApi()
+        self.revisioned_delete = FakeApi()
 
 
 def raises(exc):
@@ -75,18 +71,30 @@ def make_api_error(status, body, error_type=ApiException):
     return error_type(status=status, body=json.dumps(body), data=body)
 
 
-def make_work_item(**over) -> WorkItemOut:
+def make_work_item(**over):
     data = dict(
         id=UUID("44444444-4444-4444-4444-444444444444"),
         name="T",
         project_id=UUID("22222222-2222-2222-2222-222222222222"),
         key="MEML-1",
         issue_type=make_issue_type(),
+        state=None,
+        description="",
+        sequence_id=1,
+        parent_id=None,
+        is_archived=False,
+        blocked_by_ids=[],
+        blocks_ids=[],
         created_at=_TS,
         updated_at=_TS,
     )
     data.update(over)
-    return WorkItemOut(**data)
+    for field in ("id", "project_id", "parent_id"):
+        if data.get(field) is not None and not isinstance(data[field], UUID):
+            data[field] = UUID(data[field])
+    data["blocked_by_ids"] = [UUID(str(item)) for item in data["blocked_by_ids"]]
+    data["blocks_ids"] = [UUID(str(item)) for item in data["blocks_ids"]]
+    return SimpleNamespace(**data)
 
 
 def make_flat_work_item(**over):
@@ -124,7 +132,7 @@ def make_flat_module(**over):
     return SimpleNamespace(**data)
 
 
-def make_module(**over) -> ModuleOut:
+def make_module(**over):
     data = dict(
         id=UUID("33333333-3333-3333-3333-333333333333"),
         name="M",
@@ -135,10 +143,10 @@ def make_module(**over) -> ModuleOut:
         issue_type=make_issue_type(level="module", name="Epic"),
     )
     data.update(over)
-    return ModuleOut(**data)
+    return SimpleNamespace(**data)
 
 
-def make_project(**over) -> ProjectOut:
+def make_project(**over):
     data = dict(
         id=UUID("22222222-2222-2222-2222-222222222222"),
         name="Memory Lane",
@@ -146,20 +154,20 @@ def make_project(**over) -> ProjectOut:
         description="",
     )
     data.update(over)
-    return ProjectOut(**data)
+    return SimpleNamespace(**data)
 
 
-def make_state(**over) -> StateOut:
+def make_state(**over):
     data = dict(
         id=UUID("77777777-7777-7777-7777-777777777777"),
         name="Todo",
         group="unstarted",
     )
     data.update(over)
-    return StateOut(**data)
+    return SimpleNamespace(**data)
 
 
-def make_issue_type(**over) -> IssueTypeOut:
+def make_issue_type(**over):
     data = dict(
         id=UUID("66666666-6666-6666-6666-666666666666"),
         name="Story",
@@ -168,10 +176,10 @@ def make_issue_type(**over) -> IssueTypeOut:
         sort_order=0,
     )
     data.update(over)
-    return IssueTypeOut(**data)
+    return SimpleNamespace(**data)
 
 
-def make_attachment(**over) -> AttachmentOut:
+def make_attachment(**over):
     data = dict(
         id=UUID("88888888-8888-8888-8888-888888888888"),
         filename="note.txt",
@@ -180,11 +188,11 @@ def make_attachment(**over) -> AttachmentOut:
         url="http://example.test/note.txt",
     )
     data.update(over)
-    return AttachmentOut(**data)
+    return SimpleNamespace(**data)
 
 
-def make_detail(task=None, attachments=None) -> WorkItemDetailOut:
-    return WorkItemDetailOut(
+def make_detail(task=None, attachments=None):
+    return SimpleNamespace(
         task=task or make_work_item(),
         attachments=list(attachments or []),
     )

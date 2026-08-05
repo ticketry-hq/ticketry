@@ -99,7 +99,7 @@ class ExecutionApi(_RootApi):
     def get_dependency_graph(self, root_id: str | UUID) -> DependencyGraphOut:
         data = self._request(
             "GET",
-            "/work-items/{root_id}/dependency-graph",
+            "/work-items/{root_id}/graph-run",
             path_params={"root_id": root_id},
             body=None,
             success_status=200,
@@ -111,7 +111,7 @@ class ExecutionApi(_RootApi):
     ) -> ExecuteGraphOut:
         data = self._request(
             "POST",
-            "/work-items/{root_id}/execute-graph",
+            "/work-items/{root_id}/graph-run",
             path_params={"root_id": root_id},
             body={} if agent is None else {"agent": agent},
             success_status=201,
@@ -121,7 +121,7 @@ class ExecutionApi(_RootApi):
     def reset_graph(self, root_id: str | UUID) -> ResetGraphOut:
         data = self._request(
             "DELETE",
-            "/work-items/{root_id}/execute-graph",
+            "/work-items/{root_id}/graph-run",
             path_params={"root_id": root_id},
             body=None,
             success_status=200,
@@ -143,3 +143,63 @@ class LaunchApi(_RootApi):
             success_status=201,
         )
         return LaunchedAgentOut.model_validate(data)
+
+
+class RevisionedDeleteApi(_RootApi):
+    """DELETE bodies retained by DRF but not emitted by OpenAPI Generator."""
+
+    @property
+    def _host(self) -> str:
+        return self.api_client.configuration.host.rstrip("/")
+
+    def _delete_with_revision(
+        self,
+        path: str,
+        *,
+        path_params: dict[str, str | UUID],
+        workflow_revision: int,
+    ) -> None:
+        request = self.api_client.param_serialize(
+            method="DELETE",
+            resource_path=path,
+            path_params=path_params,
+            header_params={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            body={"workflow_revision": workflow_revision},
+            auth_settings=["ApiKeyAuth"],
+            collection_formats={},
+            _host=self._host,
+        )
+        response = self.api_client.call_api(*request)
+        response.read()
+
+    def delete_transition(
+        self,
+        type_id: str | UUID,
+        from_state_id: str | UUID,
+        to_state_id: str | UUID,
+        workflow_revision: int,
+    ) -> None:
+        self._delete_with_revision(
+            "/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}",
+            path_params={
+                "type_id": type_id,
+                "from_state_id": from_state_id,
+                "to_state_id": to_state_id,
+            },
+            workflow_revision=workflow_revision,
+        )
+
+    def delete_launch_binding(
+        self,
+        type_id: str | UUID,
+        state_id: str | UUID,
+        workflow_revision: int,
+    ) -> None:
+        self._delete_with_revision(
+            "/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}",
+            path_params={"type_id": type_id, "state_id": state_id},
+            workflow_revision=workflow_revision,
+        )

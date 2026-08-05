@@ -1,5 +1,5 @@
 import type { FetchAPI } from "./generated/index.js";
-import type { StateOut } from "./generated/models/StateOut.js";
+import type { State } from "./generated/models/State.js";
 import { WorkTrackerApiError } from "./errors.js";
 import { createAuthenticatedFetch } from "./client.js";
 
@@ -83,7 +83,7 @@ export interface BackendSessionFrame {
   at: string;
 }
 
-export type WorkItemState = Omit<StateOut, "id" | "group" | "color"> & {
+export type WorkItemState = Omit<State, "id" | "group" | "color"> & {
   id: string;
   group: string;
   color: string | null;

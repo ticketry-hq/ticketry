@@ -8,7 +8,7 @@ off the SDK exception body, a 5xx propagating, and the read surface.
 """
 
 import pytest
-from worktracker_sdk.generated import WorkItemPatch
+from worktracker_sdk.generated import PatchedWorkItemPatch
 from worktracker_sdk.generated.exceptions import ApiException
 
 from fake_sdk import (
@@ -48,7 +48,7 @@ def test_set_task_blockers_maps_sdk_edges():
 
     name, args, _kwargs = client.work_items.calls[0]
     assert name == "update_work_item"
-    assert args[0] == TASK and isinstance(args[1], WorkItemPatch)
+    assert args[0] == TASK and isinstance(args[1], PatchedWorkItemPatch)
     assert [str(i) for i in args[1].blocked_by_ids] == [DEPENDENT]
     assert result == {
         "task_id": TASK,
@@ -59,7 +59,7 @@ def test_set_task_blockers_maps_sdk_edges():
 
 def test_add_task_blocker_maps_sdk_edges():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item"] = make_detail(make_work_item(id=TASK))
+    client.work_items.returns["get_work_item"] = make_work_item(id=TASK)
     client.work_items.returns["update_work_item"] = make_work_item(
         id=TASK, blocked_by_ids=[BLOCKER], blocks_ids=[DEPENDENT]
     )
@@ -79,9 +79,7 @@ def test_add_task_blocker_maps_sdk_edges():
 
 def test_add_task_dependent_writes_edge_on_the_dependent():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item"] = make_detail(
-        make_work_item(id=DEPENDENT)
-    )
+    client.work_items.returns["get_work_item"] = make_work_item(id=DEPENDENT)
     client.work_items.returns["update_work_item"] = make_work_item(
         id=DEPENDENT, blocked_by_ids=[TASK], blocks_ids=[]
     )
@@ -141,7 +139,7 @@ def test_self_block_returns_clean_error():
 
 def test_cycle_returns_clean_error():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item"] = make_detail(make_work_item(id=TASK))
+    client.work_items.returns["get_work_item"] = make_work_item(id=TASK)
     client.work_items.returns["update_work_item"] = raises(
         _dep_error(422, "That blocker would create a cycle.")
     )

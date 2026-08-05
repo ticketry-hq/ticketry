@@ -38,7 +38,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from worktracker.launch_capabilities import PROVIDER_CAPABILITIES
 from worktracker.services.launch_bindings import (
     LaunchBindingError,
     validate_provider_options,
@@ -372,13 +371,6 @@ _REGISTRY: dict[str, AgentAdapter] = {
         _inject_with_settings_file=inject_gemini_launch,
     ),
 }
-
-if set(_REGISTRY) != set(PROVIDER_CAPABILITIES):
-    raise RuntimeError(
-        "Agent registry and launch-binding provider capabilities must declare "
-        "the same agent slugs."
-    )
-
 
 def get_adapter(slug: str) -> AgentAdapter:
     """Return the adapter for ``slug`` or raise :class:`UnknownAgent`."""

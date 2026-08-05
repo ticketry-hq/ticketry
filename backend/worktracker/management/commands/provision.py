@@ -78,7 +78,7 @@ class Command(BaseCommand):
                     "api_url": getattr(
                         settings,
                         "WORKTRACKER_API_URL",
-                        "http://127.0.0.1:8787/api/work-tracker",
+                        "http://127.0.0.1:8787/api",
                     ),
                     "workspace_slug": workspace.slug,
                     "project_id": None,

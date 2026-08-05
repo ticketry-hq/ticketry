@@ -31,7 +31,7 @@ def create_project(client, auth, *, slug):
 def test_create_project_accepts_three_uppercase_letters(client, auth, workspace):
     response = create_project(client, auth, slug="ABC")
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json()["slug"] == "ABC"
     assert Project.objects.get(id=response.json()["id"]).slug == "ABC"
 
@@ -40,7 +40,7 @@ def test_create_project_accepts_three_uppercase_letters(client, auth, workspace)
 def test_create_project_normalizes_lowercase_key(client, auth, workspace):
     response = create_project(client, auth, slug="cdn")
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json()["slug"] == "CDN"
     assert Project.objects.get(id=response.json()["id"]).slug == "CDN"
 
@@ -55,8 +55,8 @@ def test_create_project_rejects_keys_outside_the_rule(
 ):
     response = create_project(client, auth, slug=slug)
 
-    assert response.status_code == 422
-    assert response.json()["detail"][0]["msg"] == PROJECT_KEY_RULE
+    assert response.status_code == 400
+    assert response.json()["slug"] == [PROJECT_KEY_RULE]
     assert not Project.objects.filter(workspace=workspace).exists()
 
 

@@ -192,7 +192,7 @@ describe("createAgentStatusClient", () => {
     await expect(client.launchAgent({ issueId: "task/1" }))
       .resolves.toEqual(launched);
     expect(fetch.mock.calls[0][0]).toBe(
-      "/api/work-items/task%2F1/launch-agent",
+      "/api/work-tracker/work-items/task%2F1/launch-agent",
     );
     expect(fetch.mock.calls[0][1]).toMatchObject({
       method: "POST",

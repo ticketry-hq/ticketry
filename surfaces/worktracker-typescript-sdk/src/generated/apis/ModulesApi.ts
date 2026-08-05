@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -20,14 +20,20 @@ import {
     ModuleFromJSON,
     ModuleToJSON,
 } from '../models/Module.js';
+import {
+    type ModuleCreate,
+    ModuleCreateFromJSON,
+    ModuleCreateToJSON,
+} from '../models/ModuleCreate.js';
 
 export interface CreateModuleRequest {
     projectId: string;
-    module: Omit<Module, 'id'|'project_id'|'sequence_id'|'key'|'is_archived'|'issue_type'>;
+    moduleCreate: ModuleCreate;
 }
 
 export interface ListModulesRequest {
     projectId: string;
+    includeArchived?: boolean;
 }
 
 /**
@@ -40,7 +46,7 @@ export interface ModulesApiInterface {
     /**
      * Creates request options for createModule without sending the request
      * @param {string} projectId
-     * @param {Module} module
+     * @param {ModuleCreate} moduleCreate
      * @throws {RequiredError}
      * @memberof ModulesApiInterface
      */
@@ -49,7 +55,7 @@ export interface ModulesApiInterface {
     /**
      * Project-scoped module collection with explicit stable ordering.
      * @param {string} projectId
-     * @param {Module} module
+     * @param {ModuleCreate} moduleCreate
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ModulesApiInterface
@@ -64,6 +70,7 @@ export interface ModulesApiInterface {
     /**
      * Creates request options for listModules without sending the request
      * @param {string} projectId
+     * @param {boolean} [includeArchived]
      * @throws {RequiredError}
      * @memberof ModulesApiInterface
      */
@@ -72,6 +79,7 @@ export interface ModulesApiInterface {
     /**
      * Project-scoped module collection with explicit stable ordering.
      * @param {string} projectId
+     * @param {boolean} [includeArchived]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ModulesApiInterface
@@ -101,10 +109,10 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
             );
         }
 
-        if (requestParameters['module'] == null) {
+        if (requestParameters['moduleCreate'] == null) {
             throw new runtime.RequiredError(
-                'module',
-                'Required parameter "module" was null or undefined when calling createModule().'
+                'moduleCreate',
+                'Required parameter "moduleCreate" was null or undefined when calling createModule().'
             );
         }
 
@@ -119,7 +127,7 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
         }
 
 
-        let urlPath = `/projects/{project_id}/modules`;
+        let urlPath = `/work-tracker/projects/{project_id}/modules`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -127,7 +135,7 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: ModuleToJSON(requestParameters['module']),
+            body: ModuleCreateToJSON(requestParameters['moduleCreate']),
         };
     }
 
@@ -162,6 +170,10 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
 
         const queryParameters: any = {};
 
+        if (requestParameters['includeArchived'] != null) {
+            queryParameters['include_archived'] = requestParameters['includeArchived'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
         if (this.configuration && this.configuration.apiKey) {
@@ -169,7 +181,7 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
         }
 
 
-        let urlPath = `/projects/{project_id}/modules`;
+        let urlPath = `/work-tracker/projects/{project_id}/modules`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {

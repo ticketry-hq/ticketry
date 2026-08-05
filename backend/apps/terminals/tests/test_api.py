@@ -183,7 +183,7 @@ def test_create_terminal_run_reuses_spawn_validation(client):
     )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": {"error": "unknown_agent"}}
+    assert response.json() == {"detail": "unknown_agent", "code": "unknown_agent"}
 
 
 def test_create_terminal_run_surfaces_shared_launcher_failure(client, monkeypatch):
@@ -201,7 +201,8 @@ def test_create_terminal_run_surfaces_shared_launcher_failure(client, monkeypatc
 
     assert response.status_code == 500
     assert response.json() == {
-        "detail": {"error": "launch_unavailable", "message": "tmux failed"}
+        "detail": "tmux failed",
+        "code": "launch_unavailable",
     }
 
 
@@ -397,37 +398,37 @@ def test_resume_terminal_returns_new_and_old_ids(client, monkeypatch):
         (
             session_module.ResumeUnavailable("unknown_run"),
             404,
-            {"detail": {"error": "unknown_run"}},
+            {"detail": "unknown_run", "code": "unknown_run"},
         ),
         (
             session_module.ResumeUnavailable("run_still_active"),
             409,
-            {"detail": {"error": "run_still_active"}},
+            {"detail": "run_still_active", "code": "run_still_active"},
         ),
         (
             session_module.ResumeUnavailable("no_provider_session_id"),
             409,
-            {"detail": {"error": "no_provider_session_id"}},
+            {"detail": "no_provider_session_id", "code": "no_provider_session_id"},
         ),
         (
             session_module.ResumeUnavailable("cwd_missing"),
             409,
-            {"detail": {"error": "cwd_missing"}},
+            {"detail": "cwd_missing", "code": "cwd_missing"},
         ),
         (
             registry.ResumeUnsupported("claude"),
             409,
-            {"detail": {"error": "resume_unsupported"}},
+            {"detail": "resume_unsupported", "code": "resume_unsupported"},
         ),
         (
             launch.LaunchUnavailable("tmux failed"),
             500,
-            {"detail": {"error": "launch_unavailable", "message": "tmux failed"}},
+            {"detail": "tmux failed", "code": "launch_unavailable"},
         ),
         (
             registry.UnknownAgent("bogus"),
             409,
-            {"detail": {"error": "unknown_agent"}},
+            {"detail": "unknown_agent", "code": "unknown_agent"},
         ),
     ],
 )
@@ -818,7 +819,7 @@ def test_delete_terminal_terminates_and_soft_deletes(client, monkeypatch):
         session_module.tmux_sessions, "terminate_session", fake_terminate
     )
 
-    response = client.delete("/api/terminals/?agent_run_id=run-delete")
+    response = client.delete("/api/terminals?agent_run_id=run-delete")
 
     assert response.status_code == 200
     assert response.json() == {"agent_run_id": "run-delete", "terminated": True}
@@ -925,9 +926,8 @@ def test_self_terminate_rejects_unbound_callers(
 
     assert response.status_code == 401
     assert response.json() == {
-        "ok": False,
-        "error": "caller_run_unbound",
-        "reason": error,
+        "detail": error,
+        "code": "caller_run_unbound",
     }
     assert AgentRun.objects.get(id="run-safe").status == "running"
 
@@ -947,7 +947,10 @@ def test_self_terminate_rejects_a_valid_identity_for_an_unknown_run(
     )
 
     assert response.status_code == 404
-    assert response.json() == {"ok": False, "error": "caller_run_unknown"}
+    assert response.json() == {
+        "detail": "caller_run_unknown",
+        "code": "caller_run_unknown",
+    }
 
 
 def test_predecessor_identity_cannot_terminate_its_resumed_run(client, monkeypatch):

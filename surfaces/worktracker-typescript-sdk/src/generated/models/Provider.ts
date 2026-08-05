@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -32,7 +32,7 @@ export interface Provider {
      * @type {string}
      * @memberof Provider
      */
-    slug: string;
+    readonly slug: string;
     /**
      *
      * @type {boolean}
@@ -44,7 +44,7 @@ export interface Provider {
      * @type {boolean}
      * @memberof Provider
      */
-    supports_unattended?: boolean;
+    readonly supports_unattended: boolean;
 }
 
 /**
@@ -53,6 +53,7 @@ export interface Provider {
 export function instanceOfProvider(value: object): value is Provider {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('slug' in value) || value['slug'] === undefined) return false;
+    if (!('supports_unattended' in value) || value['supports_unattended'] === undefined) return false;
     return true;
 }
 
@@ -69,7 +70,7 @@ export function ProviderFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'id': json['id'],
         'slug': json['slug'],
         'activated': json['activated'] == null ? undefined : json['activated'],
-        'supports_unattended': json['supports_unattended'] == null ? undefined : json['supports_unattended'],
+        'supports_unattended': json['supports_unattended'],
     };
 }
 
@@ -77,15 +78,13 @@ export function ProviderToJSON(json: any): Provider {
     return ProviderToJSONTyped(json, false);
 }
 
-export function ProviderToJSONTyped(value?: Omit<Provider, 'id'> | null, ignoreDiscriminator: boolean = false): any {
+export function ProviderToJSONTyped(value?: Omit<Provider, 'id'|'slug'|'supports_unattended'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'slug': value['slug'],
         'activated': value['activated'],
-        'supports_unattended': value['supports_unattended'],
     };
 }

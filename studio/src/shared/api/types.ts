@@ -10,8 +10,6 @@ import type {
   ProjectOut as GeneratedProject,
   ProjectPatch as GeneratedProjectPatch,
   ProviderCapabilitiesOut as GeneratedProviderCapabilities,
-  ScopeContextOut as GeneratedScopeContext,
-  ScopeRef as GeneratedScopeRef,
   StateIn as GeneratedStateCreate,
   StateOut as GeneratedState,
   StatePatch as GeneratedStatePatch,
@@ -117,27 +115,6 @@ export type WorkItemDetail = Omit<
 
 export type WorkItemCreate = GeneratedWorkItemCreate;
 export type ModuleWorkItemCreate = GeneratedModuleWorkItemCreate;
-
-// Agent scope-context payload (#667 B). Read-only; consumed by agents, not the
-// graph view (which derives from already-loaded items). Tightens the generated
-// shape so required fields are non-optional.
-export type ScopeRef = Omit<
-  GeneratedScopeRef,
-  "state_group" | "resolved"
-> & {
-  state_group: string | null;
-  resolved: boolean;
-};
-
-export type ScopeContext = Omit<
-  GeneratedScopeContext,
-  "task" | "depends_on" | "depended_by" | "advisory"
-> & {
-  task: ScopeRef;
-  depends_on: ScopeRef[];
-  depended_by: ScopeRef[];
-  advisory: string;
-};
 
 export type WorkItemPatch = Omit<
   GeneratedWorkItemPatch,

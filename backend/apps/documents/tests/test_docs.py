@@ -234,7 +234,11 @@ def test_save_rejects_stale_digest_and_returns_current_digest(
 
     current = hashlib.sha256(b"# Current").hexdigest()
     assert resp.status_code == 409
-    assert resp.json() == {"detail": {"error": "conflict", "digest": current}}
+    assert resp.json() == {
+        "detail": "conflict",
+        "code": "conflict",
+        "digest": current,
+    }
     assert resp.headers["etag"] == f'"{current}"'
     assert spec.read_bytes() == b"# Current"
 

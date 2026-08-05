@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -256,7 +256,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
         }
 
 
-        let urlPath = `/projects/{project_id}/work-items`;
+        let urlPath = `/work-tracker/projects/{project_id}/work-items`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -306,7 +306,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
         }
 
 
-        let urlPath = `/work-items/{issue_id}`;
+        let urlPath = `/work-tracker/work-items/{issue_id}`;
         urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
 
         return {
@@ -354,7 +354,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
         }
 
 
-        let urlPath = `/work-items/{issue_id}`;
+        let urlPath = `/work-tracker/work-items/{issue_id}`;
         urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
 
         return {
@@ -416,7 +416,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
         }
 
 
-        let urlPath = `/work-items`;
+        let urlPath = `/work-tracker/work-items`;
 
         return {
             path: urlPath,
@@ -466,7 +466,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
         }
 
 
-        let urlPath = `/work-items/{issue_id}/reorder`;
+        let urlPath = `/work-tracker/work-items/{issue_id}/reorder`;
         urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
 
         return {
@@ -518,7 +518,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
         }
 
 
-        let urlPath = `/work-items/{issue_id}`;
+        let urlPath = `/work-tracker/work-items/{issue_id}`;
         urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
 
         return {

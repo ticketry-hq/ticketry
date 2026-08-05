@@ -3,8 +3,9 @@ from django.db import migrations
 
 def copy_canonical_description(apps, schema_editor):
     Issue = apps.get_model("worktracker", "Issue")
+    issues = Issue.objects.using(schema_editor.connection.alias)
     changed = []
-    for issue in Issue.objects.only(
+    for issue in issues.only(
         "id", "description", "description_html", "description_stripped"
     ).iterator():
         canonical = (
@@ -18,13 +19,14 @@ def copy_canonical_description(apps, schema_editor):
             changed.append(issue)
 
     if changed:
-        Issue.objects.bulk_update(changed, ["description"], batch_size=500)
+        issues.bulk_update(changed, ["description"], batch_size=500)
 
 
 def restore_legacy_descriptions(apps, schema_editor):
     Issue = apps.get_model("worktracker", "Issue")
+    issues = Issue.objects.using(schema_editor.connection.alias)
     changed = []
-    for issue in Issue.objects.only(
+    for issue in issues.only(
         "id", "description", "description_html", "description_stripped"
     ).iterator():
         issue.description_html = issue.description
@@ -32,7 +34,7 @@ def restore_legacy_descriptions(apps, schema_editor):
         changed.append(issue)
 
     if changed:
-        Issue.objects.bulk_update(
+        issues.bulk_update(
             changed,
             ["description_html", "description_stripped"],
             batch_size=500,

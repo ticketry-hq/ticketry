@@ -8,10 +8,14 @@ def materialize_per_type_transitions(apps, schema_editor):
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
     State = apps.get_model("worktracker", "State")
     WorkflowConfiguration = apps.get_model("worktracker", "WorkflowConfiguration")
+    alias = schema_editor.connection.alias
 
-    state_ids = {str(value) for value in State.objects.values_list("id", flat=True)}
-    for issue_type in IssueType.objects.all().order_by("id"):
-        configuration = WorkflowConfiguration.objects.filter(
+    state_ids = {
+        str(value)
+        for value in State.objects.using(alias).values_list("id", flat=True)
+    }
+    for issue_type in IssueType.objects.using(alias).all().order_by("id"):
+        configuration = WorkflowConfiguration.objects.using(alias).filter(
             issue_type_id=issue_type.id
         ).first()
         if configuration is None:
@@ -23,6 +27,7 @@ def materialize_per_type_transitions(apps, schema_editor):
             issue_type.start_state_id = start_state_id
         issue_type.workflow_revision = configuration.revision
         issue_type.save(
+            using=alias,
             update_fields=["start_state", "workflow_revision", "updated_at"]
         )
 
@@ -50,8 +55,8 @@ def materialize_per_type_transitions(apps, schema_editor):
             )
             if edge.get("auto_launch") is True:
                 auto_start_state_ids.add(to_state_id)
-        IssueTypeTransition.objects.bulk_create(transitions)
-        LaunchBinding.objects.filter(
+        IssueTypeTransition.objects.using(alias).bulk_create(transitions)
+        LaunchBinding.objects.using(alias).filter(
             issue_type_id=issue_type.id,
             state_id__in=auto_start_state_ids,
         ).update(auto_start=True)

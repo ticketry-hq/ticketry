@@ -5,4 +5,5 @@ from django.urls import include, path
 
 urlpatterns = [
     path("api/work-tracker/", include("worktracker.rest.urls")),
+    path("api/", include("apps.rest_urls")),
 ]

@@ -3,6 +3,9 @@
 /* tslint:disable */
 /* eslint-disable */
 export * from './AttachmentsApi.js';
+export * from './ConfigurationApi.js';
+export * from './DocumentsApi.js';
+export * from './ExecutionApi.js';
 export * from './IssueTypesApi.js';
 export * from './LaunchBindingsApi.js';
 export * from './ModelsApi.js';
@@ -10,7 +13,12 @@ export * from './ModulesApi.js';
 export * from './ProjectsApi.js';
 export * from './ProvidersApi.js';
 export * from './ReasoningLevelsApi.js';
+export * from './RunsApi.js';
+export * from './SettingsApi.js';
 export * from './StatesApi.js';
+export * from './SystemApi.js';
+export * from './TerminalsApi.js';
 export * from './WorkItemsApi.js';
 export * from './WorkflowsApi.js';
 export * from './WorkspaceApi.js';
+export * from './WorktreesApi.js';

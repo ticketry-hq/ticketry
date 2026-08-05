@@ -32,6 +32,7 @@ from apps.terminals.agents.registry import (
     all_slugs,
     get_adapter,
 )
+from worktracker.models import AgentModel, Provider, ReasoningLevel
 from worktracker.tests.factories import fixture_issue_id
 
 from .test_consumers import _fake_tmux_session
@@ -61,6 +62,28 @@ _APPROVED_PATH_ENV = {
     "codex": "MUXED_APPROVED_CODEX_PATH",
     "gemini": "MUXED_APPROVED_GEMINI_PATH",
 }
+
+
+@pytest.fixture(autouse=True)
+def provider_catalog():
+    selections = (
+        ("claude", "sonnet", "high"),
+        ("agy", "vendor/model", None),
+        ("codex", "gpt-5.4", "xhigh"),
+        ("gemini", "gemini-3.1-pro-preview", None),
+    )
+    for provider_slug, model_name, reasoning_name in selections:
+        provider = Provider.objects.get(slug=provider_slug)
+        if not provider.activated:
+            provider.activated = True
+            provider.save(update_fields=("activated",))
+        model, _ = AgentModel.objects.get_or_create(
+            provider=provider,
+            name=model_name,
+        )
+        if reasoning_name is not None:
+            reasoning, _ = ReasoningLevel.objects.get_or_create(name=reasoning_name)
+            model.permitted_reasoning_levels.add(reasoning)
 
 
 @pytest.mark.parametrize("slug", ALL_SLUGS)
@@ -133,7 +156,7 @@ def test_command_maps_validated_provider_options(slug, model, reasoning, expecte
 
 
 def test_command_rejects_unsupported_provider_options():
-    with pytest.raises(ValueError, match="unsupported_reasoning"):
+    with pytest.raises(ValueError, match="model_required"):
         get_adapter("gemini").command("hello", reasoning="high")
 
 

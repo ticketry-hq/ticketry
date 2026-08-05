@@ -54,11 +54,14 @@ def ensure_issue_types(project, IssueType, Issue=None):
                 "id": uuid.uuid4(),
                 "level": level,
                 "sort_order": order,
+                "is_pathfind": name == "PathFind",
             },
         )
 
 
-def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
+def ensure_launch_bindings(
+    project, IssueType, State, LaunchBinding, *, using=None
+):
     """Write the reviewed launch defaults as explicit project policy rows.
 
     Only canonical task types and canonical states are selected. Custom types
@@ -69,10 +72,12 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
         name for name, level in DEFAULT_ISSUE_TYPES if level == "task"
     ]
     state_names = [name for name, _group, _color in DEFAULT_STATES]
-    issue_types = IssueType.objects.filter(
+    issue_types = IssueType.objects.using(using).filter(
         project=project, name__in=task_type_names, level="task"
     )
-    states = State.objects.filter(project=project, name__in=state_names)
+    states = State.objects.using(using).filter(
+        project=project, name__in=state_names
+    )
     supports_subtree_run = any(
         field.name == "subtree_run_enabled"
         for field in LaunchBinding._meta.get_fields()
@@ -106,7 +111,7 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
                 defaults["auto_start"] = DEFAULT_AUTO_START_BY_STATE.get(
                     state.name, False
                 )
-            LaunchBinding.objects.get_or_create(
+            LaunchBinding.objects.using(using).get_or_create(
                 issue_type=issue_type,
                 state=state,
                 defaults=defaults,

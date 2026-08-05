@@ -10,6 +10,16 @@ published on CODING-142 and its sub-tasks. Read this first when making any
 further decision about Studio state or the WorkTracker API surface — it holds
 the context those specs assume.
 
+> **Partly superseded, 2026-08-06.** Sections 3.1, 3.2 and 3.3 — the Redux
+> Toolkit rebuild and its enforcement design — were reversed while grilling
+> CODING-145. Studio keeps React Query, with one entry per work item keyed by its
+> id and a batching request layer; the client stores are kept rather than ported.
+> The reason is structural and is stated in section 3 of
+> [`2026-08-06-one-holding-per-thing.md`](2026-08-06-one-holding-per-thing.md).
+> Read that record together with this one. Everything else here — the DRF
+> adoption, the read contract, the route registry, the testing split and the Rust
+> question — still stands.
+
 ---
 
 ## 1. What was reported, and what was actually wrong

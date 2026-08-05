@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -220,7 +220,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
         }
 
 
-        let urlPath = `/issue-types/{type_id}/transitions`;
+        let urlPath = `/work-tracker/issue-types/{type_id}/transitions`;
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
 
         return {
@@ -284,7 +284,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
         }
 
 
-        let urlPath = `/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}`;
+        let urlPath = `/work-tracker/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}`;
         urlPath = urlPath.replace('{from_state_id}', encodeURIComponent(String(requestParameters['fromStateId'])));
         urlPath = urlPath.replace('{to_state_id}', encodeURIComponent(String(requestParameters['toStateId'])));
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
@@ -334,7 +334,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
         }
 
 
-        let urlPath = `/issue-types/{type_id}/transitions`;
+        let urlPath = `/work-tracker/issue-types/{type_id}/transitions`;
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
 
         return {
@@ -390,7 +390,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
         }
 
 
-        let urlPath = `/issue-types/{type_id}/workflow-settings/states/{state_id}`;
+        let urlPath = `/work-tracker/issue-types/{type_id}/workflow-settings/states/{state_id}`;
         urlPath = urlPath.replace('{state_id}', encodeURIComponent(String(requestParameters['stateId'])));
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
 
@@ -455,7 +455,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
         }
 
 
-        let urlPath = `/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}`;
+        let urlPath = `/work-tracker/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}`;
         urlPath = urlPath.replace('{from_state_id}', encodeURIComponent(String(requestParameters['fromStateId'])));
         urlPath = urlPath.replace('{to_state_id}', encodeURIComponent(String(requestParameters['toStateId'])));
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));

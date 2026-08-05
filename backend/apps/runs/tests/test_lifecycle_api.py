@@ -9,10 +9,9 @@ Ported from ``web/backend/tests/test_lifecycle_events.py``:
 from datetime import datetime, timezone
 
 import pytest
-from ninja.testing import TestAsyncClient
+from django.test import AsyncClient
 
 from apps.runs import dao
-from apps.runs.api import router
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
@@ -20,7 +19,17 @@ from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
-client = TestAsyncClient(router)
+class HostAsyncClient(AsyncClient):
+    async def get(self, path, *args, **kwargs):
+        return await super().get(f"/api{path}", *args, **kwargs)
+
+    async def post(self, path, *args, json=None, **kwargs):
+        if json is not None:
+            kwargs.update(data=json, content_type="application/json")
+        return await super().post(f"/api{path}", *args, **kwargs)
+
+
+client = HostAsyncClient()
 PROJECT_ID = fixture_uuid("proj-1")
 MODULE_1_ID = fixture_issue_id(
     project_id="proj-1", module_id="mod-1", task_id=None

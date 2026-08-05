@@ -83,6 +83,18 @@ export async function selectTemporaryMcpPort({ isAvailable = canListen } = {}) {
   return await isAvailable(defaultMcpPort) ? defaultMcpPort : null;
 }
 
+export async function selectWebMcpPort({
+  environment = process.env,
+  isAvailable = canListen,
+} = {}) {
+  return selectWebPort({
+    name: "MCP port",
+    requestedPort: environment.MUXED_WEB_MCP_PORT,
+    firstPort: defaultMcpPort,
+    isAvailable,
+  });
+}
+
 export function buildWebFrontendCommand(frontendPort) {
   return [
     "npm run dev --workspace @worktracker/studio --",
@@ -390,10 +402,8 @@ export async function main() {
       });
       const mcpPort = launch.temporarySqlite
         ? await selectTemporaryMcpPort()
-        : await selectWebPort({
-          name: "MCP port",
-          requestedPort: launch.environment.MUXED_WEB_MCP_PORT ?? String(defaultMcpPort),
-          firstPort: defaultMcpPort,
+        : await selectWebMcpPort({
+          environment: launch.environment,
         });
       const backendOrigin = `http://127.0.0.1:${backendPort}`;
       const frontendOrigin = `http://127.0.0.1:${frontendPort}`;

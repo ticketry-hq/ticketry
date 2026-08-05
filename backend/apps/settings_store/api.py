@@ -4,8 +4,6 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.http import JsonResponse
-from ninja import Router
-from ninja.errors import HttpError
 from pydantic import BaseModel
 
 from apps.settings_store import dao, service
@@ -18,8 +16,6 @@ from apps.settings_store.provider_catalog import (
 )
 from apps.settings_store.schemas import ConfigBody, ProfileBody
 
-
-router = Router(tags=["system"])
 
 KEYBINDINGS_SCOPE = "host"
 KEYBINDINGS_KEY = "keybindings"
@@ -45,7 +41,6 @@ def _index_out_of_range_response() -> JsonResponse:
     )
 
 
-@router.get("/settings/keybindings")
 async def get_keybindings(request):
     value = await dao.get_setting(KEYBINDINGS_SCOPE, KEYBINDINGS_KEY)
     if value is None:
@@ -56,7 +51,6 @@ async def get_keybindings(request):
         return {"value": None}
 
 
-@router.put("/settings/keybindings")
 async def put_keybindings(request, body: SettingValueBody):
     await dao.upsert_setting(
         scope=KEYBINDINGS_SCOPE,
@@ -67,21 +61,17 @@ async def put_keybindings(request, body: SettingValueBody):
     return {"value": body.value}
 
 
-@router.get("/settings/provider-catalog", response=ProviderCatalogBody)
 async def get_provider_catalog(request):
     value = await dao.get_setting(PROVIDER_CATALOG_SCOPE, PROVIDER_CATALOG_KEY)
     catalog = ProviderCatalog() if value is None else parse_provider_catalog(value)
     return {"value": catalog.model_dump(mode="json")}
 
 
-@router.put("/settings/provider-catalog", response=ProviderCatalogBody)
 async def put_provider_catalog(request, body: ProviderCatalogBody):
     try:
-        await sync_to_async(validate_global_launch_default)(
-            body.value.global_default
-        )
+        await sync_to_async(validate_global_launch_default)(body.value.global_default)
     except ValueError as exc:
-        raise HttpError(422, str(exc)) from exc
+        return JsonResponse({"detail": str(exc)}, status=422)
     await dao.upsert_setting(
         scope=PROVIDER_CATALOG_SCOPE,
         key=PROVIDER_CATALOG_KEY,
@@ -91,17 +81,14 @@ async def put_provider_catalog(request, body: ProviderCatalogBody):
     return {"value": body.value.model_dump(mode="json")}
 
 
-@router.get("/config", response=ConfigBody)
 async def get_config(request):
     return service.list_config()
 
 
-@router.post("/config/profiles")
 async def add_profile(request, body: ProfileBody):
     return service.add_profile(body.model_dump())
 
 
-@router.put("/config/profiles/{index}")
 async def replace_profile(request, index: int, body: ProfileBody):
     try:
         return service.replace_profile(index, body.model_dump())
@@ -109,7 +96,6 @@ async def replace_profile(request, index: int, body: ProfileBody):
         return _index_out_of_range_response()
 
 
-@router.delete("/config/profiles/{index}")
 async def delete_profile(request, index: int):
     try:
         return service.delete_profile(index)
@@ -117,7 +103,6 @@ async def delete_profile(request, index: int):
         return _index_out_of_range_response()
 
 
-@router.patch("/config")
 async def patch_config(request, body: RecentIndexBody):
     try:
         return service.set_recent_index(body.recent_profile_index)

@@ -307,28 +307,75 @@ Task or Issue in type and store names; those spellings survive only where they
 already exist and name the surface, not the record.
 _Avoid_: Task record, issue record, task summary
 
-**Work-item store**:
-The single owner of every work-item record Studio holds. Panes, trees, and
-pickers keep the ids they need and resolve records through it, and the
-status-feed revision guards live alongside it because a guard held apart from
-its data protects nothing.
-_Avoid_: Detail store, issue cache, work-item cache
+**Work-item entry**:
+The one holding of a work item's field values, keyed by that work item's id.
+Panes, trees, and pickers keep the ids they need and resolve the record through
+its entry, so every surface reading one work item reads the same object. A
+change to that work item reaches every surface at once, because there is one
+place for it to reach.
+_Avoid_: Work-item store, detail store, issue cache, record cache
 
 **Record copy**:
-Any second holding of a work item's field values outside the work-item store —
-a list that carries whole records, a re-shaped summary type, a component's own
-snapshot. Named so it can be prohibited: two copies of one record are two
-answers to the same question, and the one being read is decided by accident.
-The prohibition is enforced by tests, not by convention, because it was asserted
-in prose twice and was false both times.
+Any second holding of a work item's field values outside its work-item entry —
+a collection that carries whole records, a re-shaped summary type, a row that
+carries a name, a component's own snapshot. Named so it can be prohibited: two
+copies of one record are two answers to the same question, and the one being
+read is decided by accident. The prohibition is enforced by tests, not by
+convention, because it was asserted in prose twice and was false both times.
 _Avoid_: Cache entry, projection, denormalised view
 
 **Membership**:
 Which work items belong to a collection and in what order — a module's tree, a
-state section's rows, a parent's children. The server decides it and Studio
-stores it as ids, never as records, so membership can go stale without any
-record disagreeing with itself.
+state section's rows, a parent's children. The server decides it and sends it as
+ids, and Studio holds it as ids, never as records, so membership can go stale
+without any record disagreeing with itself.
 _Avoid_: Task list, tree data, section contents
+
+**Row**:
+What a planning pane renders one line from: an id and the structural facts of
+its position — depth, parent, whether it can expand, whether it is expanded — and
+never a field of the record it points at. A row for the module scratch
+workspace carries no work-item id at all, because the scratch workspace is not
+a work item. Rows are computed on read and kept nowhere, so the rendered view
+exists only as what is on screen.
+_Avoid_: Task summary, list item, tree node, presentation record
+
+**Client store**:
+The one holding of everything the server never said — which pane has focus, what
+is expanded, what is selected, what is typed but not sent, which tab a workspace
+is on. Every value in it is an id, a boolean, a number, a stack of things the
+person did, or their own text. Because there is one, a test can read all of it
+and assert that nothing a server said has found its way in.
+_Avoid_: UI store, view store, app state, local state
+
+**Intent and validity**:
+The rule the client store follows for anything that points at something: the
+store keeps what the person last chose, and a derivation decides whether that
+choice still exists. A workspace left on a terminal tab whose run has since been
+dismissed shows its Details, and nothing has to correct the stored value.
+_Avoid_: Stale pointer, fallback state, reconciliation
+
+**Terminal tab**:
+One agent run, shown in a task workspace. A work item has many runs and so many
+tabs; a run has one tmux session for its whole life, named from the run's own
+id, so reattaching returns to the same session rather than making another. What
+the tab shows is that session; what the tab *is* is the run.
+_Avoid_: Terminal session tab, tmux tab, agent tab
+
+**Run liveness**:
+Whether an agent run is starting, working, waiting, or finished, and when that
+last changed. It arrives only as values pushed on the status feed, never by a
+read, so the store that receives it is the run's one holding for it and not a
+copy of anything. A run that never opened a terminal has liveness all the same.
+_Avoid_: Terminal status, session state, tmux liveness, terminated_at
+
+**Work-item batch read**:
+The single request that carries many work-item ids and returns their records.
+Every pane asks for one work item at a time; the requests it makes inside a
+short window leave together as one. It exists so that one holding per work item
+costs one request rather than one request per work item, and so that no reply is
+ever written into a holding other than its own.
+_Avoid_: List read, bulk fetch, prefetch, cache seeding
 
 **Selection paint**:
 Rendering the newly selected work item's panel from the record Studio already

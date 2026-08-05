@@ -27,12 +27,13 @@ PREVIOUS_DEFAULT_PROMPTS = {
 
 def sync_reviewed_prompts(apps, schema_editor):
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
+    bindings = LaunchBinding.objects.using(schema_editor.connection.alias)
     for issue_type_name, prompts in DEFAULT_AGENT_PROMPTS_BY_ISSUE_TYPE.items():
         for state_name, reviewed_prompt in prompts.items():
             previous_prompt = PREVIOUS_DEFAULT_PROMPTS.get(state_name)
             if previous_prompt is None:
                 continue
-            LaunchBinding.objects.filter(
+            bindings.filter(
                 issue_type__name=issue_type_name,
                 issue_type__level="task",
                 state__name=state_name,

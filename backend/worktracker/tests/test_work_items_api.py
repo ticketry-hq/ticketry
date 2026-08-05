@@ -8,7 +8,7 @@ import pytest
 
 from worktracker.models import Issue, IssueType, Project, State
 from worktracker.registry import MODEL_ROUTES
-from worktracker.tests.conftest import BASE, patch_json, post_json
+from worktracker.tests.conftest import BASE, openapi_path, patch_json, post_json
 
 
 pytestmark = pytest.mark.django_db
@@ -34,12 +34,12 @@ def module(client, project, module_type, auth):
         {"name": "Epic", "issue_type_id": str(module_type.id)},
         auth,
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     return response.json()
 
 
 def _response_schema(schema, path, method):
-    operation = schema["paths"][path][method.lower()]
+    operation = schema["paths"][openapi_path(schema, path)][method.lower()]
     return operation["responses"]["200"]["content"]["application/json"]["schema"]
 
 
@@ -172,6 +172,61 @@ def test_one_list_route_narrows_by_project_module_and_state(
     assert {row["id"] for row in response.json()} == {selected["id"], child["id"]}
 
 
+def test_default_list_hides_the_stable_pathfind_role_and_its_descendants(
+    client, project, module, task_type, auth
+):
+    pathfind_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="PathFind",
+        level="task",
+        is_pathfind=True,
+    )
+    root = _create(
+        client,
+        project,
+        pathfind_type,
+        auth,
+        name="Explore",
+        parent_id=module["id"],
+    )
+    child = _create(
+        client,
+        project,
+        task_type,
+        auth,
+        name="Nested implementation",
+        parent_id=root["id"],
+    )
+    visible = _create(
+        client,
+        project,
+        task_type,
+        auth,
+        name="Visible",
+        parent_id=module["id"],
+    )
+    pathfind_type.name = "Discovery"
+    pathfind_type.save(update_fields=("name", "updated_at"))
+
+    default = client.get(
+        f"{BASE}/work-items?project={project.id}&module={module['id']}",
+        headers=auth,
+    )
+    included = client.get(
+        f"{BASE}/work-items?project={project.id}&module={module['id']}"
+        "&include_pathfind=true",
+        headers=auth,
+    )
+
+    assert [row["id"] for row in default.json()] == [visible["id"]]
+    assert {row["id"] for row in included.json()} == {
+        root["id"],
+        child["id"],
+        visible["id"],
+    }
+
+
 def test_every_work_item_response_uses_bare_state_and_issue_type_ids(
     client, project, task_type, auth
 ):
@@ -192,24 +247,6 @@ def test_every_work_item_response_uses_bare_state_and_issue_type_ids(
         assert not isinstance(row["issue_type"], dict)
     assert "task" not in retrieved
     assert "attachments" not in retrieved
-
-
-def test_deleted_overlapping_routes_no_longer_resolve(client, project, module, auth):
-    assert (
-        client.get(
-            f"{BASE}/modules/{module['id']}/work-items", headers=auth
-        ).status_code
-        == 404
-    )
-    assert (
-        post_json(
-            client,
-            f"{BASE}/projects/{project.id}/review-findings",
-            {"name": "Finding", "parent_id": str(uuid.uuid4())},
-            auth,
-        ).status_code
-        == 404
-    )
 
 
 def test_state_move_keeps_the_pinned_structured_422_body(

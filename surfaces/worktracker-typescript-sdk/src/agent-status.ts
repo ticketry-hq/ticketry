@@ -1,7 +1,6 @@
 import type { FetchAPI } from "./generated/index.js";
 import type { State } from "./generated/models/State.js";
-import { WorkTrackerApiError } from "./errors.js";
-import { createAuthenticatedFetch } from "./client.js";
+import { createWorkTrackerClient } from "./client.js";
 
 export type RawLifecycleState =
   | "starting"
@@ -173,41 +172,25 @@ export interface AgentStatusClient {
 export function createAgentStatusClient(
   options: AgentStatusClientOptions,
 ): AgentStatusClient {
-  const basePath = options.baseUrl.replace(/\/+$/, "");
-  const fetchApi = createAuthenticatedFetch(options);
+  const client = createWorkTrackerClient(options);
 
   return {
     async getAgentStatus({ projectId, taskId, signal }) {
-      const query = new URLSearchParams({ project_id: projectId });
-      if (taskId !== undefined) query.set("task_id", taskId);
-      const headers = new Headers({ Accept: "application/json" });
-      const response = await fetchApi(
-        `${basePath}/runs/agent-status?${query.toString()}`,
-        { headers, signal },
-      );
-      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
-      return (await response.json()) as AgentStatusSnapshot;
+      return (await client.runs.runsAgentStatusRetrieve(
+        { projectId, taskId },
+        signal ? { signal } : undefined,
+      )) as AgentStatusSnapshot;
     },
     async launchAgent({ issueId }) {
-      const headers = new Headers({
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      });
-      const response = await fetchApi(
-        `${basePath}/work-items/${encodeURIComponent(issueId)}/launch-agent`,
-        { method: "POST", headers, body: JSON.stringify({}) },
-      );
-      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
-      return (await response.json()) as LaunchedAgent;
+      return (await client.execution.workItemsLaunchAgentCreate({
+        issueId,
+        agentOverride: {},
+      })) as LaunchedAgent;
     },
     async retryAutomationAttempt({ attemptId }) {
-      const headers = new Headers({ Accept: "application/json" });
-      const response = await fetchApi(
-        `${basePath}/automation-attempts/${encodeURIComponent(attemptId)}/retry`,
-        { method: "POST", headers },
-      );
-      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
-      return (await response.json()) as AutomationAttemptRecord;
+      return (await client.runs.automationAttemptsRetryCreate({
+        attemptId,
+      })) as AutomationAttemptRecord;
     },
   };
 }

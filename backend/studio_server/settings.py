@@ -117,6 +117,9 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "WorkTracker DRF API",
+    "TITLE": "Ticketry HTTP API",
     "VERSION": "0.1.0",
+    "SCHEMA_PATH_PREFIX": r"^/api",
+    "SCHEMA_PATH_PREFIX_TRIM": True,
+    "SERVERS": [{"url": "/api"}],
 }

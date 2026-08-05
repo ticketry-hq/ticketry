@@ -2,10 +2,9 @@
 
 These are the read peers of the mutation services (``services/modules.py``,
 ``services/work_items.py``). They return plain, fully-materialized Python data
-(``dict`` / ``list`` / ``tuple`` of primitives) shaped like the subset of the
-``*Out`` Ninja schemas the in-process adapter actually reads — so the adapter's
-``_to_task_summary`` / ``_to_state`` mappers consume them verbatim, with no
-field gymnastics and no DTO drift.
+(``dict`` / ``list`` / ``tuple`` of primitives) shaped like the subset the
+in-process adapter actually reads, so its ``_to_task_summary`` / ``_to_state``
+mappers consume them verbatim with no field gymnastics or DTO drift.
 
 The package stays framework-neutral: no Ninja ``Schema`` import, no ``core``
 import. All ORM access (lazy relations, the ``child_count`` annotation) happens
@@ -29,7 +28,7 @@ def _state_dict(state):
     """Project a State (or ``None``) into the nested state dict the adapter reads.
 
     Returns ``None`` for an unset state so the adapter's ``"Unknown"`` fallback
-    fires, matching the route's ``StateOut`` (a nested object or null).
+    fires, matching the adapter contract (a nested object or null).
     """
 
     if state is None:
@@ -45,11 +44,9 @@ def _state_dict(state):
 def _work_item_dict(issue):
     """Project a task ``Issue`` onto the work-item dict subset the adapter reads.
 
-    Mirrors the fields ``WorkItemOut`` exposes that the adapter consumes:
-    nested ``state`` (or ``None``), description,
+    Supplies the fields the adapter consumes: nested ``state`` (or ``None``), description,
     ``parent_id`` and ``sub_issues_count`` (from the ``task_qs``
-    ``child_count`` annotation, falling back to a direct count exactly as
-    ``WorkItemOut.resolve_sub_issues_count`` does).
+    ``child_count`` annotation, falling back to a direct count).
     """
 
     annotated = getattr(issue, "child_count", None)

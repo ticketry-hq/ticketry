@@ -1,6 +1,7 @@
 import pytest
 
 from apps.settings_store.models import AppSetting
+from worktracker.models import AgentModel, Provider, ReasoningLevel
 
 
 pytestmark = pytest.mark.django_db
@@ -14,6 +15,9 @@ def test_missing_provider_catalog_has_only_the_global_default(client):
 
 
 def test_global_default_round_trips_as_one_host_scoped_setting(client):
+    provider = Provider.objects.get(slug="codex")
+    model = AgentModel.objects.create(provider=provider, name="gpt-5")
+    model.permitted_reasoning_levels.add(ReasoningLevel.objects.get(name="high"))
     catalog = {
         "global_default": {
             "provider": "codex",

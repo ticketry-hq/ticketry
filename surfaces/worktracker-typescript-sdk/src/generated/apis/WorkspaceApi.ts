@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -88,7 +88,7 @@ export class WorkspaceApi extends runtime.BaseAPI implements WorkspaceApiInterfa
         }
 
 
-        let urlPath = `/workspace/onboarding/acknowledge`;
+        let urlPath = `/work-tracker/workspace/onboarding/acknowledge`;
 
         return {
             path: urlPath,
@@ -129,7 +129,7 @@ export class WorkspaceApi extends runtime.BaseAPI implements WorkspaceApiInterfa
         }
 
 
-        let urlPath = `/workspace`;
+        let urlPath = `/work-tracker/workspace`;
 
         return {
             path: urlPath,

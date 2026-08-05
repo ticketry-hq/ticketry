@@ -265,7 +265,9 @@ def test_adapter_uses_persistent_exact_locked_installation(
     resolved = _resolved(monkeypatch, tmp_path, provider)
     adapter = get_adapter(provider)
     augmentation = adapter.augment_launch(
-        adapter.command("prompt", activated_providers={"claude", "codex", "gemini"}),
+        adapter.command(
+            "prompt", activated_providers={"claude", "agy", "codex", "gemini"}
+        ),
         f"run-{provider}",
         lifecycle_url="http://127.0.0.1:8123/api/lifecycle/events",
         mcp_url="http://127.0.0.1:8124/mcp",

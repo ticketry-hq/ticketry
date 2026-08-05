@@ -173,7 +173,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         } == expected["edges"]
 
     story_prompts = REVIEWED_DEFAULTS["prompts"]["Story"]
-    assert "requirements" in story_prompts["Grill"]
+    assert "$grill-with-docs" in story_prompts["Grill"]
     assert "`Spec`" in story_prompts["Grill"]
     assert "`Tickets`" not in story_prompts["Grill"]
     assert "specification" in story_prompts["Spec"]

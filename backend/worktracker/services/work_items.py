@@ -30,7 +30,7 @@ def resolve_module_id(parent: Issue | None) -> uuid.UUID | None:
     return parent.module_id
 
 
-def _get_issue(issue_id, *, message="Work item not found."):
+def get_issue(issue_id, *, message="Work item not found."):
     """Fetch an issue or raise the framework-neutral not-found error.
 
     Services own a single not-found mechanism: ``NotFoundError`` carries the
@@ -76,7 +76,7 @@ def create_project_work_item(
     if description is not None:
         issue.description = description
     if parent_id:
-        parent = _get_issue(parent_id, message="Parent work item not found.")
+        parent = get_issue(parent_id, message="Parent work item not found.")
         issue.parent = parent
         issue.module_id = resolve_module_id(parent)
     # Birth is gated like the move is (#870): a typed item is born in its
@@ -188,7 +188,7 @@ def create_module_work_item(
 ):
     """Create a task under a module and return the saved issue."""
 
-    module = _get_issue(module_id, message="Module not found.")
+    module = get_issue(module_id, message="Module not found.")
     sequence_id = allocate_sequence_id(module.project_id)
 
     issue = Issue(
@@ -227,7 +227,7 @@ def update_work_item(issue_id: uuid.UUID, **data):
     transition caller and defaults to ``human`` for REST compatibility.
     """
 
-    issue = _get_issue(issue_id)
+    issue = get_issue(issue_id)
 
     if "state_id" in data:
         origin = data.pop("origin", "human")
@@ -249,7 +249,7 @@ def update_work_item(issue_id: uuid.UUID, **data):
     if parent_changed:
         parent_id = data["parent_id"]
         parent = (
-            _get_issue(parent_id, message="Parent work item not found.")
+            get_issue(parent_id, message="Parent work item not found.")
             if parent_id
             else None
         )
@@ -293,7 +293,7 @@ def update_work_item(issue_id: uuid.UUID, **data):
 def reorder_work_item(issue_id: uuid.UUID, before_id=None, after_id=None):
     """Move an issue between same-project neighbors and persist the new rank."""
 
-    issue = _get_issue(issue_id)
+    issue = get_issue(issue_id)
     before = _reorder_neighbor(issue, before_id)
     after = _reorder_neighbor(issue, after_id)
 
@@ -312,7 +312,7 @@ def reorder_work_item(issue_id: uuid.UUID, before_id=None, after_id=None):
 def delete_work_item(issue_id: uuid.UUID):
     """Delete an empty issue and reject issues with children."""
 
-    issue = _get_issue(issue_id)
+    issue = get_issue(issue_id)
     if issue.children.exists():
         raise ConflictError("Issue has children; empty or re-parent them first.")
     issue.delete()
@@ -321,7 +321,7 @@ def delete_work_item(issue_id: uuid.UUID):
 def _reorder_neighbor(issue, neighbor_id):
     if neighbor_id is None:
         return None
-    neighbor = _get_issue(neighbor_id, message="Neighbor not found.")
+    neighbor = get_issue(neighbor_id, message="Neighbor not found.")
     if neighbor.project_id != issue.project_id:
         raise ValidationError("Neighbor belongs to another project.")
     return neighbor

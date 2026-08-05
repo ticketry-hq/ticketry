@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -163,7 +163,7 @@ export class ModelsApi extends runtime.BaseAPI implements ModelsApiInterface {
         }
 
 
-        let urlPath = `/models`;
+        let urlPath = `/work-tracker/models`;
 
         return {
             path: urlPath,
@@ -212,7 +212,7 @@ export class ModelsApi extends runtime.BaseAPI implements ModelsApiInterface {
         }
 
 
-        let urlPath = `/models/{id}`;
+        let urlPath = `/work-tracker/models/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {
@@ -253,7 +253,7 @@ export class ModelsApi extends runtime.BaseAPI implements ModelsApiInterface {
         }
 
 
-        let urlPath = `/models`;
+        let urlPath = `/work-tracker/models`;
 
         return {
             path: urlPath,
@@ -303,7 +303,7 @@ export class ModelsApi extends runtime.BaseAPI implements ModelsApiInterface {
         }
 
 
-        let urlPath = `/models/{id}`;
+        let urlPath = `/work-tracker/models/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {

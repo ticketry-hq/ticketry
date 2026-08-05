@@ -24,20 +24,24 @@ def module(client, project, auth):
         {"name": "Epic", "issue_type_id": str(module_type.id)},
         auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     return r.json()
 
 
 @pytest.mark.django_db
-def test_create_module_work_item_wrong_level_type_maps_422(client, project, module, auth):
+def test_create_child_work_item_wrong_level_type_maps_422(client, project, module, auth):
     """A module-level type on a task create must map to 422, not 500."""
     wrong = IssueType.objects.create(
         id=uuid.uuid4(), project=project, name="EpicType", level="module"
     )
     r = post_json(
         client,
-        f"{BASE}/modules/{module['id']}/work-items",
-        {"name": "Sub", "issue_type_id": str(wrong.id)},
+        f"{BASE}/projects/{project.id}/work-items",
+        {
+            "name": "Sub",
+            "parent_id": module["id"],
+            "issue_type_id": str(wrong.id),
+        },
         auth,
     )
     assert r.status_code == 422

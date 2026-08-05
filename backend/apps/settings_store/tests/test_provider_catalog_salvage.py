@@ -36,7 +36,13 @@ def test_invalid_default_is_dropped_without_reintroducing_activation():
         json.dumps({"global_default": {"provider": "future-provider"}})
     )
 
-    assert catalog.model_dump(mode="json") == {"global_default": None}
+    assert catalog.model_dump(mode="json") == {
+        "global_default": {
+            "provider": "future-provider",
+            "model": None,
+            "reasoning": None,
+        }
+    }
 
 
 def test_unrecoverable_data_falls_back_to_no_default_loudly(caplog):

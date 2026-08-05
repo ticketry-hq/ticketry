@@ -47,7 +47,7 @@ from worktracker_agent.api.schemas import (
 
 # Owned backend used when no base url is supplied.
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8787/api/work-tracker"
+DEFAULT_BASE_URL = "http://127.0.0.1:8787/api"
 RESOLVED_STATE_GROUPS = frozenset({"completed", "cancelled"})
 
 

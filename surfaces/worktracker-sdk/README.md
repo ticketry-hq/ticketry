@@ -14,7 +14,7 @@ from worktracker_sdk.generated import ProjectIn, ProjectOut
 from worktracker_sdk.generated.exceptions import ApiException
 
 configuration = Configuration(
-    host="http://localhost:8787/api/work-tracker",
+    host="http://localhost:8787/api",
     api_key={"ApiKeyAuth": "secret"},
 )
 with ApiClient(configuration) as client:
@@ -28,14 +28,14 @@ contract, and use `npm run contract:check` to verify generated-source drift.
 ## Root-mounted companion APIs
 
 Execution and launch operations live at `/api`, above the generated
-`/api/work-tracker` contract. `ExecutionApi` and `LaunchApi` reuse the generated
+complete `/api` contract. `ExecutionApi` and `LaunchApi` reuse the generated
 client's authentication, HTTP transport, and exception mapping:
 
 ```python
 from worktracker_sdk import ApiClient, Configuration, ExecutionApi, LaunchApi
 
 configuration = Configuration(
-    host="http://localhost:8787/api/work-tracker",
+    host="http://localhost:8787/api",
     api_key={"ApiKeyAuth": "secret"},
 )
 with ApiClient(configuration) as client:

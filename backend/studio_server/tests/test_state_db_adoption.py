@@ -113,12 +113,53 @@ def _build_legacy_database(db_connection, db_path):
             schema_editor.create_model(model)
 
     with sqlite3.connect(db_path) as conn:
-        # create_model() emits the *current* model DDL; a legacy database
-        # predates post-initial migrations, so strip their columns to leave
-        # the byte-matched 0001 schema (later migrations re-add them during
-        # adoption).
-        conn.execute('ALTER TABLE agent_runs DROP COLUMN "resumed_from"')
-        conn.execute('ALTER TABLE agent_runs DROP COLUMN "scope"')
+        # create_model() emits the current AgentRun foreign key. Rebuild that
+        # table to the exact pre-0008 shape so the adoption migration can add
+        # and backfill the Issue relation itself.
+        conn.executescript(
+            """
+            DROP TABLE agent_runs;
+            CREATE TABLE agent_runs (
+                id VARCHAR NOT NULL PRIMARY KEY,
+                workspace_slug VARCHAR,
+                project_id VARCHAR NOT NULL,
+                module_id VARCHAR NOT NULL,
+                task_id VARCHAR,
+                ticket_seq INTEGER,
+                agent VARCHAR NOT NULL,
+                status VARCHAR NOT NULL,
+                started_at VARCHAR NOT NULL,
+                ended_at VARCHAR,
+                exit_code INTEGER,
+                error VARCHAR,
+                cwd VARCHAR,
+                provider_session_id VARCHAR,
+                lifecycle_state VARCHAR,
+                lifecycle_updated_at VARCHAR,
+                design_dir VARCHAR
+            );
+            CREATE INDEX idx_agent_runs_task_started_at
+            ON agent_runs (task_id, started_at DESC);
+
+            DROP TABLE agent_terminal_sessions;
+            CREATE TABLE agent_terminal_sessions (
+                agent_run_id VARCHAR NOT NULL PRIMARY KEY,
+                tmux_session_name VARCHAR NOT NULL,
+                task_id VARCHAR NOT NULL,
+                module_id VARCHAR NOT NULL,
+                project_id VARCHAR NOT NULL,
+                agent VARCHAR NOT NULL,
+                created_at VARCHAR NOT NULL,
+                terminated_at VARCHAR,
+                scope VARCHAR DEFAULT 'task' NOT NULL,
+                doc_rel_path VARCHAR,
+                FOREIGN KEY(agent_run_id)
+                    REFERENCES agent_runs (id) ON DELETE CASCADE
+            );
+            CREATE INDEX idx_agent_terminal_sessions_task_created
+            ON agent_terminal_sessions (task_id, terminated_at, created_at DESC);
+            """
+        )
         conn.execute("CREATE TABLE alembic_version (version_num varchar(32) NOT NULL)")
         conn.execute(
             "INSERT INTO alembic_version (version_num) VALUES (?)",
@@ -127,12 +168,15 @@ def _build_legacy_database(db_connection, db_path):
         conn.execute(
             """
             INSERT INTO agent_runs (
-                id, issue_id, ticket_seq,
+                id, workspace_slug, project_id, module_id, task_id, ticket_seq,
                 agent, status, started_at, design_dir
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "run-1",
+                "meml",
+                "project-1",
+                "module-1",
                 "11111111-1111-1111-1111-111111111111",
                 527,
                 "codex",
@@ -140,27 +184,6 @@ def _build_legacy_database(db_connection, db_path):
                 "2026-06-12T12:00:00+00:00",
                 "/tmp/designs",
             ),
-        )
-        # The seed above intentionally uses the current raw-SQL contract. Turn
-        # the table back into the pre-0008 shape before fake-initial adoption
-        # so the real migration still exercises its legacy-column backfill.
-        conn.execute('ALTER TABLE agent_runs RENAME COLUMN "issue_id" TO "task_id"')
-        conn.execute('ALTER TABLE agent_runs ADD COLUMN "workspace_slug" varchar')
-        conn.execute('ALTER TABLE agent_runs ADD COLUMN "project_id" varchar')
-        conn.execute('ALTER TABLE agent_runs ADD COLUMN "module_id" varchar')
-        conn.execute(
-            """
-            UPDATE agent_runs
-            SET workspace_slug = 'meml',
-                project_id = 'project-1',
-                module_id = 'module-1'
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX idx_agent_runs_task_started_at
-            ON agent_runs (task_id, started_at DESC)
-            """
         )
         conn.execute(
             """

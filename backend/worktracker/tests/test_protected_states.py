@@ -1,7 +1,7 @@
 """#629 — Blocked default state + protected (non-deletable) states.
 
-Exercises the DELETE guard, the read-only nature of the flag, and the
-StateOut serialization through the package's ninja self-test host.
+Exercises the DELETE guard, the read-only nature of the flag, and state
+serialization through the package's DRF test host.
 """
 
 import uuid

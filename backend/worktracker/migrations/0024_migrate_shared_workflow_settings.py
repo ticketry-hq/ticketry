@@ -58,21 +58,29 @@ def migrate_shared_workflow_settings(apps, schema_editor):
         "worktracker", "ProjectWorkflowSettings"
     )
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
+    alias = schema_editor.connection.alias
+    projects = Project.objects.using(alias)
+    issue_type_rows = IssueType.objects.using(alias)
+    state_rows = State.objects.using(alias)
+    configuration_rows = WorkflowConfiguration.objects.using(alias)
+    graphs = ProjectWorkflowGraph.objects.using(alias)
+    settings = ProjectWorkflowSettings.objects.using(alias)
+    bindings = LaunchBinding.objects.using(alias)
 
-    for project in Project.objects.all().order_by("id"):
+    for project in projects.all().order_by("id"):
         issue_types = list(
-            IssueType.objects.filter(project_id=project.id).order_by(
+            issue_type_rows.filter(project_id=project.id).order_by(
                 "sort_order", "created_at", "id"
             )
         )
         states = list(
-            State.objects.filter(project_id=project.id).order_by(
+            state_rows.filter(project_id=project.id).order_by(
                 "sort_order", "created_at", "id"
             )
         )
         configurations = {
             configuration.issue_type_id: configuration
-            for configuration in WorkflowConfiguration.objects.filter(
+            for configuration in configuration_rows.filter(
                 issue_type__project_id=project.id
             )
         }
@@ -103,13 +111,13 @@ def migrate_shared_workflow_settings(apps, schema_editor):
             else []
         )
         shared_signature = _edge_signature(shared_edges)
-        ProjectWorkflowGraph.objects.update_or_create(
+        graphs.update_or_create(
             project_id=project.id,
             defaults={"edges": shared_edges},
         )
 
         bindings_by_type = {}
-        for binding in LaunchBinding.objects.filter(
+        for binding in bindings.filter(
             issue_type__project_id=project.id
         ).order_by("issue_type__sort_order", "state__sort_order", "id"):
             bindings_by_type.setdefault(binding.issue_type_id, []).append(
@@ -126,7 +134,7 @@ def migrate_shared_workflow_settings(apps, schema_editor):
                     "edges": [],
                 }
                 transition_override = [] if shared_signature else None
-                WorkflowConfiguration.objects.create(
+                configuration_rows.create(
                     issue_type_id=issue_type.id,
                     active={},
                     draft={},
@@ -143,6 +151,7 @@ def migrate_shared_workflow_settings(apps, schema_editor):
                 configuration.draft = active
                 configuration.transition_override = transition_override
                 configuration.save(
+                    using=alias,
                     update_fields=[
                         "active",
                         "draft",
@@ -166,7 +175,7 @@ def migrate_shared_workflow_settings(apps, schema_editor):
                 }
             )
 
-        ProjectWorkflowSettings.objects.update_or_create(
+        settings.update_or_create(
             project_id=project.id,
             defaults={
                 "draft": {

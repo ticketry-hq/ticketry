@@ -22,16 +22,10 @@ import hashlib
 from typing import Optional
 
 from django.http import HttpResponse, JsonResponse
-from ninja import Router, Schema
+from pydantic import BaseModel
 
 from apps.documents import service
-from worktracker.auth import ApiKeyAuth
-
-
-router = Router(tags=["workspace"])
-
-
-class SaveDocumentIn(Schema):
+class SaveDocumentIn(BaseModel):
     content: str
     digest: str
 
@@ -46,7 +40,6 @@ def _error_response(error: str, *, status: int) -> JsonResponse:
     )
 
 
-@router.get("/documents")
 async def list_documents(
     request,
     task_id: Optional[str] = None,
@@ -76,7 +69,6 @@ async def list_documents(
     return {"documents": documents}
 
 
-@router.get("/docs/{doc_id}/{path:asset_path}")
 async def serve_document_asset(request, doc_id: str, asset_path: str):
     """Serve a registered document or one of its relative assets.
 
@@ -99,7 +91,6 @@ async def serve_document_asset(request, doc_id: str, asset_path: str):
     return response
 
 
-@router.put("/docs/{doc_id}", auth=ApiKeyAuth())
 async def save_document(request, doc_id: str, payload: SaveDocumentIn):
     """Digest-guarded save of a registered primary Markdown document."""
 
@@ -124,6 +115,5 @@ async def save_document(request, doc_id: str, payload: SaveDocumentIn):
     return response
 
 
-@router.get("/fs/complete")
 async def fs_complete(request, path: str = ""):
     return {"entries": service.complete_directories(path)}

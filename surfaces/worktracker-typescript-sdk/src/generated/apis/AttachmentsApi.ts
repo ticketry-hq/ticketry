@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -113,7 +113,7 @@ export class AttachmentsApi extends runtime.BaseAPI implements AttachmentsApiInt
         }
 
 
-        let urlPath = `/work-items/{issue_id}/attachments`;
+        let urlPath = `/work-tracker/work-items/{issue_id}/attachments`;
         urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
 
         return {
@@ -193,7 +193,7 @@ export class AttachmentsApi extends runtime.BaseAPI implements AttachmentsApiInt
         }
 
 
-        let urlPath = `/work-items/{issue_id}/attachments`;
+        let urlPath = `/work-tracker/work-items/{issue_id}/attachments`;
         urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
 
         return {

@@ -51,8 +51,9 @@ For dependencies, treat 'Review' state as unblocked.""",
 
 def refresh_default_prompts(apps, schema_editor):
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
+    bindings = LaunchBinding.objects.using(schema_editor.connection.alias)
     for state_name, old_prompt in OLD_AGENT_PROMPTS.items():
-        LaunchBinding.objects.filter(
+        bindings.filter(
             state__name=state_name,
             prompt=old_prompt,
         ).update(prompt=NEW_AGENT_PROMPTS[state_name])
@@ -60,8 +61,9 @@ def refresh_default_prompts(apps, schema_editor):
 
 def restore_default_prompts(apps, schema_editor):
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
+    bindings = LaunchBinding.objects.using(schema_editor.connection.alias)
     for state_name, old_prompt in OLD_AGENT_PROMPTS.items():
-        LaunchBinding.objects.filter(
+        bindings.filter(
             state__name=state_name,
             prompt=NEW_AGENT_PROMPTS[state_name],
         ).update(prompt=old_prompt)

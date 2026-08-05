@@ -3,7 +3,7 @@ from worktracker.models import Issue, Project
 
 
 class GraphRun(models.Model):
-    """Durable header for an execute-graph run (CODIN-777).
+    """Durable header for a graph run (CODIN-777).
 
     One row per root task. Records only the run *context* (optional provider
     override, project,
@@ -46,9 +46,9 @@ class GraphRun(models.Model):
 class LaunchedTask(models.Model):
     """One durable fact: this task was launched by a subtree run.
 
-    Its presence prevents relaunch until the subtree ledger is reset — see
-    ``apps.execution.driver.reset_subtree``, which deletes these rows so the
-    children become launchable again.
+    Its presence prevents relaunch until the graph-run resource is reset — see
+    ``apps.execution.driver.reset_subtree``, which deletes these rows and their
+    run header so the root can be armed again.
     """
 
     task = models.OneToOneField(

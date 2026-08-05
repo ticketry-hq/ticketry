@@ -1,9 +1,4 @@
-"""Root-mounted operations sharing the generated SDK transport.
-
-The generated CRUD contract is rooted at ``/api/work-tracker`` while these
-host operations are rooted at ``/api``. OpenAPI Generator assumes one base URL
-for the whole client, so this small extension reuses its ``ApiClient`` instead
-of generating incorrect ``/api/work-tracker/work-items/...`` URLs.
+"""Compatibility operations sharing the complete generated SDK transport.
 
 The response models intentionally live here rather than reusing the legacy
 hand-written resource models: this is the contract-phase surface that remains
@@ -54,9 +49,7 @@ class _RootApi:
 
     @property
     def _host(self) -> str:
-        host = self.api_client.configuration.host.rstrip("/")
-        suffix = "/work-tracker"
-        return host[: -len(suffix)] if host.endswith(suffix) else host
+        return self.api_client.configuration.host.rstrip("/")
 
     def _request(
         self,
@@ -99,7 +92,7 @@ class ExecutionApi(_RootApi):
     def get_dependency_graph(self, root_id: str | UUID) -> DependencyGraphOut:
         data = self._request(
             "GET",
-            "/work-items/{root_id}/graph-run",
+            "/work-tracker/work-items/{root_id}/graph-run",
             path_params={"root_id": root_id},
             body=None,
             success_status=200,
@@ -111,7 +104,7 @@ class ExecutionApi(_RootApi):
     ) -> ExecuteGraphOut:
         data = self._request(
             "POST",
-            "/work-items/{root_id}/graph-run",
+            "/work-tracker/work-items/{root_id}/graph-run",
             path_params={"root_id": root_id},
             body={} if agent is None else {"agent": agent},
             success_status=201,
@@ -121,7 +114,7 @@ class ExecutionApi(_RootApi):
     def reset_graph(self, root_id: str | UUID) -> ResetGraphOut:
         data = self._request(
             "DELETE",
-            "/work-items/{root_id}/graph-run",
+            "/work-tracker/work-items/{root_id}/graph-run",
             path_params={"root_id": root_id},
             body=None,
             success_status=200,
@@ -137,7 +130,7 @@ class LaunchApi(_RootApi):
     ) -> LaunchedAgentOut:
         data = self._request(
             "POST",
-            "/work-items/{target_id}/launch-agent",
+            "/work-tracker/work-items/{target_id}/launch-agent",
             path_params={"target_id": target_id},
             body={} if agent is None else {"agent": agent},
             success_status=201,
@@ -183,7 +176,7 @@ class RevisionedDeleteApi(_RootApi):
         workflow_revision: int,
     ) -> None:
         self._delete_with_revision(
-            "/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}",
+            "/work-tracker/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}",
             path_params={
                 "type_id": type_id,
                 "from_state_id": from_state_id,
@@ -199,7 +192,7 @@ class RevisionedDeleteApi(_RootApi):
         workflow_revision: int,
     ) -> None:
         self._delete_with_revision(
-            "/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}",
+            "/work-tracker/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}",
             path_params={"type_id": type_id, "state_id": state_id},
             workflow_revision=workflow_revision,
         )

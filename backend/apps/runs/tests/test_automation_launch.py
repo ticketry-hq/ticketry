@@ -7,19 +7,20 @@ import uuid
 
 import pytest
 from django.db import transaction
-from django.test import override_settings
-from ninja.testing import TestClient
+from django.test import Client, override_settings
 
 from apps.execution import signals as execution_signals
-from apps.runs.api import router as runs_router
 from apps.runs.models import AutomationAttempt
 from apps.settings_store.models import AppSetting
 from worktracker.models import (
+    AgentModel,
     Issue,
     IssueType,
     IssueTypeTransition,
     LaunchBinding,
     Project,
+    Provider,
+    ReasoningLevel,
     State,
     Workspace,
 )
@@ -28,7 +29,23 @@ from worktracker.signals import issue_state_changed
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
-runs_client = TestClient(runs_router)
+runs_client = Client()
+
+
+def _catalog_selection(provider_slug, model_name, reasoning_name=None):
+    provider = Provider.objects.get(slug=provider_slug)
+    if not provider.activated:
+        provider.activated = True
+        provider.save(update_fields=("activated",))
+    model, _ = AgentModel.objects.get_or_create(
+        provider=provider,
+        name=model_name,
+    )
+    reasoning = None
+    if reasoning_name is not None:
+        reasoning, _ = ReasoningLevel.objects.get_or_create(name=reasoning_name)
+        model.permitted_reasoning_levels.add(reasoning)
+    return model, reasoning
 
 
 def _automation_policy(*, auto_start=True):
@@ -59,14 +76,14 @@ def _automation_policy(*, auto_start=True):
         from_state=before,
         to_state=after,
     )
+    model, reasoning = _catalog_selection("codex", "gpt-5-codex", "high")
     LaunchBinding.objects.create(
         issue_type=issue_type,
         state=after,
         auto_start=auto_start,
         prompt="Review the committed implementation",
-        agent="codex",
-        model="gpt-5-codex",
-        reasoning="high",
+        model=model,
+        reasoning=reasoning,
     )
     module = Issue.objects.create(
         id=uuid.uuid4(),
@@ -136,6 +153,7 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
         slug="MAT",
         workspace_slug=workspace.slug,
     )
+    _catalog_selection("codex", "gpt-5.4")
     AppSetting.objects.create(
         scope="host",
         key="provider_catalog",
@@ -351,13 +369,13 @@ def test_startup_failure_marks_attempt_failed_without_reverting_state(monkeypatc
 
 def test_destination_binding_selects_the_automated_launch_configuration(monkeypatch):
     issue, after = _automation_policy()
+    model, reasoning = _catalog_selection("claude", "sonnet", "medium")
     LaunchBinding.objects.create(
         issue_type=issue.issue_type,
         state=issue.state,
         prompt="Continue implementation",
-        agent="claude",
-        model="sonnet",
-        reasoning="medium",
+        model=model,
+        reasoning=reasoning,
     )
     launches = []
 
@@ -386,14 +404,14 @@ def test_each_transition_uses_its_own_destination_binding(monkeypatch):
         from_state=middle,
         to_state=final,
     )
+    model, reasoning = _catalog_selection("claude", "sonnet", "medium")
     LaunchBinding.objects.create(
         issue_type=issue.issue_type,
         state=final,
         auto_start=True,
         prompt="Close the completed work",
-        agent="claude",
-        model="sonnet",
-        reasoning="medium",
+        model=model,
+        reasoning=reasoning,
     )
     launches = []
 
@@ -474,8 +492,8 @@ def test_failed_attempt_retry_is_user_initiated_and_idempotent(monkeypatch):
         return "agent-run-retry"
 
     monkeypatch.setattr("apps.execution.driver.spawn_run", spawn)
-    first = runs_client.post(f"/automation-attempts/{failed.id}/retry")
-    second = runs_client.post(f"/automation-attempts/{failed.id}/retry")
+    first = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
+    second = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
     replay_errors = []
     monkeypatch.setattr(
         "apps.execution.signals.logger.exception",

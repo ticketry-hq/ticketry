@@ -7,7 +7,13 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "rest_framework",
     "drf_spectacular",
+    "apps.runs",
+    "apps.terminals",
+    "apps.documents",
+    "apps.settings_store",
     "worktracker",
+    "apps.worktrees",
+    "apps.execution",
 ]
 
 DATABASES = {
@@ -34,10 +40,10 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "WorkTracker API",
-    "DESCRIPTION": "Canonical HTTP contract for WorkTracker clients.",
+    "TITLE": "Ticketry HTTP API",
+    "DESCRIPTION": "Canonical generated contract for every Ticketry HTTP route.",
     "VERSION": "0.1.0",
-    "SCHEMA_PATH_PREFIX": r"^/api/work-tracker",
+    "SCHEMA_PATH_PREFIX": r"^/api",
     "SCHEMA_PATH_PREFIX_TRIM": True,
-    "SERVERS": [{"url": "/api/work-tracker"}],
+    "SERVERS": [{"url": "/api"}],
 }

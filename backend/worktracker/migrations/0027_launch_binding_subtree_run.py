@@ -1,7 +1,7 @@
 from django.db import migrations, models
 
 
-def enable_story_subtree_run(apps, _schema_editor):
+def enable_story_subtree_run(apps, schema_editor):
     """Turn subtree-run on for Story states a launch can actually happen in.
 
     The flag rides on ``LaunchBinding``, so writing a row for every (Story,
@@ -16,24 +16,27 @@ def enable_story_subtree_run(apps, _schema_editor):
     IssueTypeTransition = apps.get_model("worktracker", "IssueTypeTransition")
     State = apps.get_model("worktracker", "State")
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
+    alias = schema_editor.connection.alias
 
-    stories = IssueType.objects.filter(name="Story", level="task")
+    stories = IssueType.objects.using(alias).filter(name="Story", level="task")
     for story in stories.iterator():
         state_ids = set()
         if story.start_state_id is not None:
             state_ids.add(story.start_state_id)
-        for endpoints in IssueTypeTransition.objects.filter(
+        for endpoints in IssueTypeTransition.objects.using(alias).filter(
             issue_type_id=story.id
         ).values_list("from_state_id", "to_state_id"):
             state_ids.update(endpoints)
         if not state_ids:
             state_ids = set(
-                State.objects.filter(project_id=story.project_id).values_list(
+                State.objects.using(alias).filter(
+                    project_id=story.project_id
+                ).values_list(
                     "id", flat=True
                 )
             )
         for state_id in state_ids:
-            LaunchBinding.objects.update_or_create(
+            LaunchBinding.objects.using(alias).update_or_create(
                 issue_type_id=story.id,
                 state_id=state_id,
                 defaults={"subtree_run_enabled": True},

@@ -6,10 +6,10 @@ There is deliberately **no integrate route** — integration is not a browser
 action; it fires automatically when a task is marked Done (see
 :mod:`worktrees.signals`).
 
-Each endpoint is a synchronous ninja operation (mirroring the synchronous
-``worktracker`` routes mounted on the same API): Django runs it in a
-threadpool under ASGI, so the synchronous git engine + ORM are called
-directly without an ``asyncio.to_thread`` dance.
+Each operation is transport-independent synchronous application code called by
+the host's DRF adapters. Django runs the adapter in a threadpool under ASGI, so
+the synchronous git engine and ORM are called directly without an
+``asyncio.to_thread`` dance.
 
 The working path + record metadata come from the local profile's
 ``module_links`` (the same source W2 uses at launch); the browser supplies
@@ -24,7 +24,7 @@ import logging
 import os
 from typing import Optional
 
-from ninja import Router, Schema
+from pydantic import BaseModel
 
 from apps.settings_store import config as cfgmod
 from apps.settings_store.config import (
@@ -37,15 +37,12 @@ from apps.worktrees import dao, service
 
 logger = logging.getLogger(__name__)
 
-router = Router(tags=["worktrees"])
-
-
 # ---------------------------------------------------------------------------
 # Schemas (mirrored by lib/types.ts WorktreeStatus / DiscardResult)
 # ---------------------------------------------------------------------------
 
 
-class WorktreeStatusOut(Schema):
+class WorktreeStatusOut(BaseModel):
     """Discriminated on ``kind``: worktree | no_repo | none."""
 
     kind: str
@@ -65,7 +62,7 @@ class WorktreeStatusOut(Schema):
     reason: Optional[str] = None
 
 
-class CreateWorktreeIn(Schema):
+class CreateWorktreeIn(BaseModel):
     parent_id: Optional[str] = None
     module_id: Optional[str] = None
     project_id: Optional[str] = None
@@ -73,7 +70,7 @@ class CreateWorktreeIn(Schema):
     task_name: Optional[str] = None
 
 
-class DiscardOut(Schema):
+class DiscardOut(BaseModel):
     removed: bool
     reason: str = ""
 
@@ -171,7 +168,6 @@ def _status_payload(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/worktrees", response=WorktreeStatusOut)
 def get_worktree(
     request,
     task_id: str,
@@ -193,7 +189,6 @@ def get_worktree(
     )
 
 
-@router.post("/worktrees/{task_id}/create", response=WorktreeStatusOut)
 def create_worktree(request, task_id: str, payload: CreateWorktreeIn):
     """Opt in: cut a worktree off HEAD for the top-level task. Idempotent."""
 
@@ -239,7 +234,6 @@ def create_worktree(request, task_id: str, payload: CreateWorktreeIn):
     )
 
 
-@router.post("/worktrees/{task_id}/discard", response=DiscardOut)
 def discard_worktree(
     request,
     task_id: str,

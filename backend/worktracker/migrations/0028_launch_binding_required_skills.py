@@ -36,11 +36,12 @@ REFINEMENT_PROMPT = OLD_REFINEMENT_PROMPT.replace(
 
 def seed_required_skills(apps, schema_editor):
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
-    LaunchBinding.objects.filter(
+    bindings = LaunchBinding.objects.using(schema_editor.connection.alias)
+    bindings.filter(
         state__name="Idea",
         prompt=IDEA_PROMPT,
     ).update(required_skills=["to-spec", "to-tickets"])
-    LaunchBinding.objects.filter(
+    bindings.filter(
         state__name="Refinement",
         prompt=OLD_REFINEMENT_PROMPT,
     ).update(
@@ -51,12 +52,13 @@ def seed_required_skills(apps, schema_editor):
 
 def unseed_required_skills(apps, schema_editor):
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
-    LaunchBinding.objects.filter(
+    bindings = LaunchBinding.objects.using(schema_editor.connection.alias)
+    bindings.filter(
         state__name="Idea",
         prompt=IDEA_PROMPT,
         required_skills=["to-spec", "to-tickets"],
     ).update(required_skills=[])
-    LaunchBinding.objects.filter(
+    bindings.filter(
         state__name="Refinement",
         prompt=REFINEMENT_PROMPT,
         required_skills=["grill-with-docs", "to-spec", "to-tickets"],

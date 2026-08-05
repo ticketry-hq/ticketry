@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -149,7 +149,7 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
         }
 
 
-        let urlPath = `/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}`;
+        let urlPath = `/work-tracker/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}`;
         urlPath = urlPath.replace('{state_id}', encodeURIComponent(String(requestParameters['stateId'])));
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
 
@@ -198,7 +198,7 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
         }
 
 
-        let urlPath = `/projects/{project_id}/launch-bindings`;
+        let urlPath = `/work-tracker/projects/{project_id}/launch-bindings`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -263,7 +263,7 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
         }
 
 
-        let urlPath = `/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}`;
+        let urlPath = `/work-tracker/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}`;
         urlPath = urlPath.replace('{state_id}', encodeURIComponent(String(requestParameters['stateId'])));
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
 

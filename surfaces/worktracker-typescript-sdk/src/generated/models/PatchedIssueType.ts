@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -79,6 +79,12 @@ export interface PatchedIssueType {
     workflow_revision?: number;
     /**
      *
+     * @type {boolean}
+     * @memberof PatchedIssueType
+     */
+    readonly is_pathfind?: boolean;
+    /**
+     *
      * @type {string}
      * @memberof PatchedIssueType
      */
@@ -118,6 +124,7 @@ export function PatchedIssueTypeFromJSONTyped(json: any, ignoreDiscriminator: bo
         'sort_order': json['sort_order'] == null ? undefined : json['sort_order'],
         'start_state': json['start_state'] == null ? undefined : json['start_state'],
         'workflow_revision': json['workflow_revision'] == null ? undefined : json['workflow_revision'],
+        'is_pathfind': json['is_pathfind'] == null ? undefined : json['is_pathfind'],
         'created_at': json['created_at'] == null ? undefined : json['created_at'],
         'updated_at': json['updated_at'] == null ? undefined : json['updated_at'],
     };
@@ -127,7 +134,7 @@ export function PatchedIssueTypeToJSON(json: any): PatchedIssueType {
     return PatchedIssueTypeToJSONTyped(json, false);
 }
 
-export function PatchedIssueTypeToJSONTyped(value?: Omit<PatchedIssueType, 'id'|'project'|'sort_order'|'created_at'|'updated_at'> | null, ignoreDiscriminator: boolean = false): any {
+export function PatchedIssueTypeToJSONTyped(value?: Omit<PatchedIssueType, 'id'|'project'|'sort_order'|'is_pathfind'|'created_at'|'updated_at'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }

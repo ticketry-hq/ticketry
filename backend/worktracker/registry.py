@@ -1,7 +1,6 @@
-"""Declared route inventory for the expand-contract HTTP migration."""
+"""Canonical declaration of the live WorkTracker HTTP surface."""
 
 from dataclasses import dataclass
-from importlib.resources import files
 
 
 @dataclass(frozen=True, order=True)
@@ -20,20 +19,30 @@ MODEL_ROUTES = {
         "reads": (
             RouteDeclaration(
                 "GET",
-                "/api/work-items/{issue_id}/graph-run",
+                "/api/work-tracker/work-items/{issue_id}/graph-run",
                 "Retrieve the factual dependency subtree for a graph-run root.",
             ),
         ),
         "writes": (
             RouteDeclaration(
                 "POST",
-                "/api/work-items/{issue_id}/graph-run",
+                "/api/work-tracker/work-items/{issue_id}/graph-run",
                 "Create and arm one graph-run header for a work-item root.",
             ),
             RouteDeclaration(
                 "DELETE",
-                "/api/work-items/{issue_id}/graph-run",
+                "/api/work-tracker/work-items/{issue_id}/graph-run",
                 "Reset one graph run by deleting its header and launch ledger.",
+            ),
+        ),
+    },
+    "LaunchAgent": {
+        "reads": (),
+        "writes": (
+            RouteDeclaration(
+                "POST",
+                "/api/work-tracker/work-items/{issue_id}/launch-agent",
+                "Launch one task-scoped coding agent for a work item.",
             ),
         ),
     },
@@ -227,15 +236,9 @@ MODEL_ROUTES = {
         ),
         "writes": (
             RouteDeclaration(
-                "POST", "/api/work-tracker/providers", "Create a provider row."
-            ),
-            RouteDeclaration(
-                "PATCH", "/api/work-tracker/providers/{id}", "Update a provider row."
-            ),
-            RouteDeclaration(
-                "DELETE",
+                "PATCH",
                 "/api/work-tracker/providers/{id}",
-                "Delete an unused provider row.",
+                "Activate or deactivate one code-owned provider row.",
             ),
         ),
     },
@@ -332,6 +335,59 @@ DOMAIN_OPERATIONS = (
     ),
 )
 
+
+HOST_ROUTES = (
+    RouteDeclaration("GET", "/api/healthz", "Report sidecar health."),
+    RouteDeclaration("GET", "/api/settings/keybindings", "Read host keybindings."),
+    RouteDeclaration("PUT", "/api/settings/keybindings", "Replace host keybindings."),
+    RouteDeclaration("GET", "/api/settings/provider-catalog", "Read the host provider default."),
+    RouteDeclaration("PUT", "/api/settings/provider-catalog", "Replace the host provider default."),
+    RouteDeclaration("GET", "/api/config", "Read local profiles and feature configuration."),
+    RouteDeclaration("PATCH", "/api/config", "Select the recent local profile."),
+    RouteDeclaration("POST", "/api/config/profiles", "Create a local profile."),
+    RouteDeclaration("PUT", "/api/config/profiles/{index}", "Replace a local profile."),
+    RouteDeclaration("DELETE", "/api/config/profiles/{index}", "Delete a local profile."),
+    RouteDeclaration("POST", "/api/automation-attempts/{attempt_id}/retry", "Create an idempotent retry attempt."),
+    RouteDeclaration("POST", "/api/lifecycle/events", "Ingest and publish one lifecycle event."),
+    RouteDeclaration("GET", "/api/runs/module-activity", "Read recent module activity."),
+    RouteDeclaration("GET", "/api/runs/agent-status", "Read the authoritative agent status snapshot."),
+    RouteDeclaration("POST", "/api/terminals/viewers/lease", "Acquire a terminal viewer lease."),
+    RouteDeclaration("POST", "/api/terminals/viewers/lease/renew", "Renew a terminal viewer lease."),
+    RouteDeclaration("POST", "/api/terminals/viewers/lease/release", "Release a terminal viewer lease."),
+    RouteDeclaration("POST", "/api/terminals", "Create a durable terminal run through the control-plane service."),
+    RouteDeclaration("GET", "/api/terminals", "List active terminal runs for a task."),
+    RouteDeclaration("DELETE", "/api/terminals", "Terminate one terminal run."),
+    RouteDeclaration("POST", "/api/terminals/resume", "Resume a provider conversation."),
+    RouteDeclaration("GET", "/api/terminals/resumable", "List resumable provider conversations."),
+    RouteDeclaration("GET", "/api/terminals/scratch", "List scratch terminal runs."),
+    RouteDeclaration("POST", "/api/terminals/self-terminate", "Terminate the Studio-authorized current run."),
+    RouteDeclaration("GET", "/api/documents", "List and rescan registered design documents."),
+    RouteDeclaration("GET", "/api/docs/{doc_id}/{asset_path}", "Read a registered document asset."),
+    RouteDeclaration("PUT", "/api/docs/{doc_id}", "Save a digest-guarded Markdown document."),
+    RouteDeclaration("GET", "/api/fs/complete", "Complete local directory names."),
+    RouteDeclaration("GET", "/api/worktrees", "Read live worktree status."),
+    RouteDeclaration("POST", "/api/worktrees/{task_id}/create", "Create an opt-in worktree."),
+    RouteDeclaration("POST", "/api/worktrees/{task_id}/discard", "Discard an opt-in worktree."),
+)
+
+# Public operations are exceptional and must carry a reviewed reason. Every
+# other declared operation is protected by the default API-key policy.
+PUBLIC_ROUTE_REASONS = {
+    ("GET", "/api/healthz"): "The sidecar supervisor needs a credential-free liveness probe.",
+    (
+        "POST",
+        "/api/lifecycle/events",
+    ): "Provider hook subprocesses report best-effort loopback lifecycle events without the desktop API key.",
+    (
+        "POST",
+        "/api/terminals/self-terminate",
+    ): "The handler authenticates the calling run with its narrower run-scoped Authorization token.",
+    (
+        "GET",
+        "/api/docs/{doc_id}/{asset_path}",
+    ): "Webview document subresources cannot attach the desktop API-key header.",
+}
+
 # Framework-owned patterns are intentionally outside the application registry.
 FRAMEWORK_ROUTE_EXCLUSIONS = (
     "/api/openapi.json",
@@ -339,6 +395,7 @@ FRAMEWORK_ROUTE_EXCLUSIONS = (
     "/api",
     "/api/work-tracker/schema",
     "/media/",
+    "/^media/",
     "/static/",
     "/wt-admin/",
 )
@@ -353,17 +410,19 @@ def declared_model_route_keys():
     } | {route.key for route in DOMAIN_OPERATIONS}
 
 
-def ninja_route_allowlist():
-    """Load the one-route-per-line legacy allowance used during expansion."""
+def declared_route_keys():
+    """Return the complete two-way HTTP contract declaration."""
 
-    lines = (
-        files("worktracker")
-        .joinpath("ninja_route_allowlist.txt")
-        .read_text(encoding="utf-8")
-        .splitlines()
-    )
-    return {
-        tuple(line.split(maxsplit=1))
-        for line in lines
-        if line and not line.startswith("#")
-    }
+    return declared_model_route_keys() | {route.key for route in HOST_ROUTES}
+
+
+def declared_public_route_keys():
+    """Return the exact reviewed set of credential-free operations."""
+
+    return set(PUBLIC_ROUTE_REASONS)
+
+
+def declared_api_key_route_keys():
+    """Return every operation governed by the default API-key policy."""
+
+    return declared_route_keys() - declared_public_route_keys()

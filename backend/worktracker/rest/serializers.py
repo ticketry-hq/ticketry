@@ -1,5 +1,6 @@
 """Model-derived serializers for the incremental DRF migration."""
 
+import re
 import uuid
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -42,6 +43,16 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = ("id", "name", "slug", "description", "workspace_slug")
         read_only_fields = ("id",)
 
+    def validate_slug(self, value):
+        if self.instance is not None:
+            return value
+        normalized = value.upper()
+        if re.fullmatch(r"[A-Z]{3}", normalized) is None:
+            raise serializers.ValidationError(
+                "Project key must be exactly three letters, using only A-Z."
+            )
+        return normalized
+
     def validate(self, attrs):
         if self.instance is not None and "slug" in self.initial_data:
             raise serializers.ValidationError({"slug": "This field is immutable."})
@@ -57,7 +68,6 @@ class ModuleSerializer(serializers.ModelSerializer):
 
     project_id = serializers.UUIDField(read_only=True)
     issue_type = serializers.PrimaryKeyRelatedField(read_only=True)
-    issue_type_id = serializers.UUIDField(write_only=True)
     key = serializers.CharField(read_only=True)
 
     class Meta:
@@ -70,7 +80,6 @@ class ModuleSerializer(serializers.ModelSerializer):
             "key",
             "is_archived",
             "issue_type",
-            "issue_type_id",
         )
         read_only_fields = (
             "id",
@@ -80,6 +89,13 @@ class ModuleSerializer(serializers.ModelSerializer):
             "is_archived",
             "issue_type",
         )
+
+
+class ModuleCreateSerializer(serializers.Serializer):
+    """Input for the project-scoped module create."""
+
+    name = serializers.CharField(max_length=512)
+    issue_type_id = serializers.UUIDField()
 
 
 class WorkItemSerializer(serializers.ModelSerializer):
@@ -269,6 +285,7 @@ class IssueTypeSerializer(serializers.ModelSerializer):
             "sort_order",
             "start_state",
             "workflow_revision",
+            "is_pathfind",
             "created_at",
             "updated_at",
         )
@@ -276,6 +293,7 @@ class IssueTypeSerializer(serializers.ModelSerializer):
             "id",
             "project",
             "sort_order",
+            "is_pathfind",
             "created_at",
             "updated_at",
         )
@@ -337,11 +355,17 @@ class WorkflowRevisionSerializer(serializers.Serializer):
     workflow_revision = serializers.IntegerField(min_value=0)
 
 
+class IssueTypeDeleteSerializer(serializers.Serializer):
+    """Optional explicit reassignment accompanying issue-type deletion."""
+
+    reassign_to = serializers.UUIDField(required=False, allow_null=True)
+
+
 class ProviderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Provider
         fields = ("id", "slug", "activated", "supports_unattended")
-        read_only_fields = ("id",)
+        read_only_fields = ("id", "slug", "supports_unattended")
 
 
 class ReasoningLevelSerializer(serializers.ModelSerializer):

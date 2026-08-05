@@ -1,12 +1,1362 @@
 {
     "openapi": "3.0.3",
     "info": {
-        "title": "WorkTracker API",
+        "title": "Ticketry HTTP API",
         "version": "0.1.0",
-        "description": "Canonical HTTP contract for WorkTracker clients."
+        "description": "Canonical generated contract for every Ticketry HTTP route."
     },
     "paths": {
-        "/issue-types/{type_id}": {
+        "/automation-attempts/{attempt_id}/retry": {
+            "post": {
+                "operationId": "automation_attempts_retry_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "attempt_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "runs"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AutomationAttempt"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/config": {
+            "get": {
+                "operationId": "config_retrieve",
+                "tags": [
+                    "configuration"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Config"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "config_partial_update",
+                "tags": [
+                    "configuration"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedRecentIndex"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedRecentIndex"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedRecentIndex"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Config"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/config/profiles": {
+            "post": {
+                "operationId": "config_profiles_create",
+                "tags": [
+                    "configuration"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Profile"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Profile"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Profile"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Config"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/config/profiles/{index}": {
+            "put": {
+                "operationId": "config_profiles_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "index",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Profile"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Profile"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Profile"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Config"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "config_profiles_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "index",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Config"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/docs/{doc_id}": {
+            "put": {
+                "operationId": "docs_update",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "doc_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "documents"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SaveDocument"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SaveDocument"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SaveDocument"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Digest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/docs/{doc_id}/{asset_path}": {
+            "get": {
+                "operationId": "docs_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "asset_path",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "doc_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "documents"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/documents": {
+            "get": {
+                "operationId": "documents_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "profile",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "scope",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "documents"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DocumentList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/fs/complete": {
+            "get": {
+                "operationId": "fs_complete_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "documents"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FsEntries"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/healthz": {
+            "get": {
+                "operationId": "healthz_retrieve",
+                "tags": [
+                    "system"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Health"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/lifecycle/events": {
+            "post": {
+                "operationId": "lifecycle_events_create",
+                "tags": [
+                    "runs"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LifecycleEvent"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LifecycleEvent"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LifecycleEvent"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LifecycleAccepted"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/runs/agent-status": {
+            "get": {
+                "operationId": "runs_agent_status_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "runs"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentStatusResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/runs/module-activity": {
+            "get": {
+                "operationId": "runs_module_activity_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "window_days",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "runs"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/settings/keybindings": {
+            "get": {
+                "operationId": "settings_keybindings_retrieve",
+                "tags": [
+                    "settings"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SettingValue"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "settings_keybindings_update",
+                "tags": [
+                    "settings"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SettingValue"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SettingValue"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SettingValue"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SettingValue"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/settings/provider-catalog": {
+            "get": {
+                "operationId": "settings_provider_catalog_retrieve",
+                "tags": [
+                    "settings"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProviderCatalogEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "settings_provider_catalog_update",
+                "tags": [
+                    "settings"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderCatalogEnvelope"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderCatalogEnvelope"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProviderCatalogEnvelope"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProviderCatalogEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals": {
+            "get": {
+                "operationId": "terminals_list",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "terminals"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/TerminalRun"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "terminals_create",
+                "tags": [
+                    "terminals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateTerminal"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateTerminal"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateTerminal"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentRunId"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "terminals_destroy",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "terminals"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TerminateResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/resumable": {
+            "get": {
+                "operationId": "terminals_resumable_list",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "terminals"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ResumableTerminal"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/resume": {
+            "post": {
+                "operationId": "terminals_resume_create",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "terminals"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ResumeResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/scratch": {
+            "get": {
+                "operationId": "terminals_scratch_list",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "terminals"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/TerminalRun"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/self-terminate": {
+            "post": {
+                "operationId": "terminals_self_terminate_create",
+                "tags": [
+                    "terminals"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SelfTerminateResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/viewers/lease": {
+            "post": {
+                "operationId": "terminals_viewers_lease_create",
+                "tags": [
+                    "terminals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLease"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLease"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLease"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ViewerLeaseResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/viewers/lease/release": {
+            "post": {
+                "operationId": "terminals_viewers_lease_release_create",
+                "tags": [
+                    "terminals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReleaseResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/viewers/lease/renew": {
+            "post": {
+                "operationId": "terminals_viewers_lease_renew_create",
+                "tags": [
+                    "terminals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ViewerLeaseResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/issue-types/{type_id}": {
             "get": {
                 "operationId": "getIssueType",
                 "description": "Shared project-scoped collection and unscoped detail behavior.",
@@ -101,13 +1451,6 @@
                 "description": "Shared project-scoped collection and unscoped detail behavior.",
                 "parameters": [
                     {
-                        "in": "query",
-                        "name": "reassign_to",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
                         "in": "path",
                         "name": "type_id",
                         "schema": {
@@ -120,6 +1463,25 @@
                 "tags": [
                     "Issue Types"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IssueTypeDelete"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IssueTypeDelete"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IssueTypeDelete"
+                            }
+                        }
+                    }
+                },
                 "security": [
                     {
                         "ApiKeyAuth": []
@@ -132,7 +1494,7 @@
                 }
             }
         },
-        "/issue-types/{type_id}/transitions": {
+        "/work-tracker/issue-types/{type_id}/transitions": {
             "get": {
                 "operationId": "listIssueTypeTransitions",
                 "description": "Canonical transition collection read and revision-guarded create.",
@@ -227,7 +1589,7 @@
                 }
             }
         },
-        "/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}": {
+        "/work-tracker/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}": {
             "patch": {
                 "operationId": "updateIssueTypeTransition",
                 "description": "Permission update/delete at a transition's composite domain key.",
@@ -347,7 +1709,7 @@
                 }
             }
         },
-        "/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}": {
+        "/work-tracker/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}": {
             "put": {
                 "operationId": "upsertLaunchBinding",
                 "description": "Revision-guarded upsert/delete at the row's composite domain key.",
@@ -450,7 +1812,7 @@
                 }
             }
         },
-        "/issue-types/{type_id}/workflow-settings/states/{state_id}": {
+        "/work-tracker/issue-types/{type_id}/workflow-settings/states/{state_id}": {
             "delete": {
                 "operationId": "removeStateFromIssueTypeWorkflow",
                 "description": "Prune membership represented only by a type's graph reachability.",
@@ -489,7 +1851,7 @@
                 }
             }
         },
-        "/models": {
+        "/work-tracker/models": {
             "get": {
                 "operationId": "listAgentModels",
                 "description": "The catalog's list/create/patch/delete contract (no overlapping retrieve).",
@@ -562,7 +1924,7 @@
                 }
             }
         },
-        "/models/{id}": {
+        "/work-tracker/models/{id}": {
             "patch": {
                 "operationId": "updateAgentModel",
                 "description": "The catalog's list/create/patch/delete contract (no overlapping retrieve).",
@@ -646,7 +2008,7 @@
                 }
             }
         },
-        "/projects": {
+        "/work-tracker/projects": {
             "get": {
                 "operationId": "listProjects",
                 "description": "Project CRUD with the existing immutable-key service semantics.",
@@ -719,7 +2081,7 @@
                 }
             }
         },
-        "/projects/{project_id}": {
+        "/work-tracker/projects/{project_id}": {
             "patch": {
                 "operationId": "updateProject",
                 "description": "Project CRUD with the existing immutable-key service semantics.",
@@ -803,7 +2165,7 @@
                 }
             }
         },
-        "/projects/{project_id}/issue-types": {
+        "/work-tracker/projects/{project_id}/issue-types": {
             "get": {
                 "operationId": "listIssueTypes",
                 "description": "Shared project-scoped collection and unscoped detail behavior.",
@@ -898,7 +2260,7 @@
                 }
             }
         },
-        "/projects/{project_id}/issue-types/reorder": {
+        "/work-tracker/projects/{project_id}/issue-types/reorder": {
             "post": {
                 "operationId": "reorderIssueTypes",
                 "description": "Atomically replace a project's complete issue-type order.",
@@ -958,7 +2320,7 @@
                 }
             }
         },
-        "/projects/{project_id}/launch-bindings": {
+        "/work-tracker/projects/{project_id}/launch-bindings": {
             "get": {
                 "operationId": "listLaunchBindings",
                 "description": "Canonical project-scoped collection read.",
@@ -998,11 +2360,19 @@
                 }
             }
         },
-        "/projects/{project_id}/modules": {
+        "/work-tracker/projects/{project_id}/modules": {
             "get": {
                 "operationId": "listModules",
                 "description": "Project-scoped module collection with explicit stable ordering.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "include_archived",
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    },
                     {
                         "in": "path",
                         "name": "project_id",
@@ -1058,17 +2428,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/Module"
+                                "$ref": "#/components/schemas/ModuleCreate"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/Module"
+                                "$ref": "#/components/schemas/ModuleCreate"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/Module"
+                                "$ref": "#/components/schemas/ModuleCreate"
                             }
                         }
                     },
@@ -1093,7 +2463,7 @@
                 }
             }
         },
-        "/projects/{project_id}/states": {
+        "/work-tracker/projects/{project_id}/states": {
             "get": {
                 "operationId": "listStates",
                 "description": "Shared project-scoped collection and unscoped detail behavior.",
@@ -1188,7 +2558,7 @@
                 }
             }
         },
-        "/projects/{project_id}/states/reorder": {
+        "/work-tracker/projects/{project_id}/states/reorder": {
             "post": {
                 "operationId": "reorderStates",
                 "description": "Atomically replace a project's complete workflow-state order.",
@@ -1248,7 +2618,7 @@
                 }
             }
         },
-        "/projects/{project_id}/work-items": {
+        "/work-tracker/projects/{project_id}/work-items": {
             "post": {
                 "operationId": "createWorkItem",
                 "description": "Create an ordinary task or an absorbed review finding.",
@@ -1305,7 +2675,7 @@
                 }
             }
         },
-        "/providers": {
+        "/work-tracker/providers": {
             "get": {
                 "operationId": "listProviders",
                 "description": "The catalog's list/create/patch/delete contract (no overlapping retrieve).",
@@ -1332,53 +2702,9 @@
                         "description": ""
                     }
                 }
-            },
-            "post": {
-                "operationId": "createProvider",
-                "description": "The catalog's list/create/patch/delete contract (no overlapping retrieve).",
-                "tags": [
-                    "Providers"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Provider"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Provider"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Provider"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Provider"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
             }
         },
-        "/providers/{id}": {
+        "/work-tracker/providers/{id}": {
             "patch": {
                 "operationId": "updateProvider",
                 "description": "The catalog's list/create/patch/delete contract (no overlapping retrieve).",
@@ -1432,37 +2758,9 @@
                         "description": ""
                     }
                 }
-            },
-            "delete": {
-                "operationId": "deleteProvider",
-                "description": "The catalog's list/create/patch/delete contract (no overlapping retrieve).",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "Providers"
-                ],
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No response body"
-                    }
-                }
             }
         },
-        "/reasoning-levels": {
+        "/work-tracker/reasoning-levels": {
             "get": {
                 "operationId": "listReasoningLevels",
                 "description": "The catalog's list/create/patch/delete contract (no overlapping retrieve).",
@@ -1535,7 +2833,7 @@
                 }
             }
         },
-        "/reasoning-levels/{id}": {
+        "/work-tracker/reasoning-levels/{id}": {
             "patch": {
                 "operationId": "updateReasoningLevel",
                 "description": "The catalog's list/create/patch/delete contract (no overlapping retrieve).",
@@ -1619,7 +2917,7 @@
                 }
             }
         },
-        "/states/{state_id}": {
+        "/work-tracker/states/{state_id}": {
             "patch": {
                 "operationId": "updateState",
                 "description": "Shared project-scoped collection and unscoped detail behavior.",
@@ -1703,7 +3001,7 @@
                 }
             }
         },
-        "/work-items": {
+        "/work-tracker/work-items": {
             "get": {
                 "operationId": "listWorkItems",
                 "description": "The only task collection read, narrowed by declared query parameters.",
@@ -1774,7 +3072,7 @@
                 }
             }
         },
-        "/work-items/{issue_id}": {
+        "/work-tracker/work-items/{issue_id}": {
             "get": {
                 "operationId": "getWorkItem",
                 "description": "Retrieve, update, or delete one bare work item.",
@@ -1890,7 +3188,7 @@
                 }
             }
         },
-        "/work-items/{issue_id}/attachments": {
+        "/work-tracker/work-items/{issue_id}/attachments": {
             "get": {
                 "operationId": "listWorkItemAttachments",
                 "description": "Read or append attachment rows without re-reading their work item.",
@@ -1984,7 +3282,271 @@
                 }
             }
         },
-        "/work-items/{issue_id}/reorder": {
+        "/work-tracker/work-items/{issue_id}/graph-run": {
+            "get": {
+                "operationId": "workItemsGraphRunRetrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "execution"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Graph"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "workItemsGraphRunCreate",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "execution"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AgentOverride"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AgentOverride"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AgentOverride"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GraphRunResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "workItemsGraphRunDestroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "execution"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GraphResetResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/work-items/{issue_id}/launch-agent": {
+            "post": {
+                "operationId": "workItemsLaunchAgentCreate",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "execution"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AgentOverride"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AgentOverride"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AgentOverride"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LaunchedAgentResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/work-items/{issue_id}/reorder": {
             "post": {
                 "operationId": "reorderWorkItem",
                 "description": "Allocate the moved row's server-owned fractional rank.",
@@ -2040,7 +3602,7 @@
                 }
             }
         },
-        "/workspace": {
+        "/work-tracker/workspace": {
             "get": {
                 "operationId": "retrieveWorkspace",
                 "description": "Retrieve the installation workspace before project selection.",
@@ -2066,7 +3628,7 @@
                 }
             }
         },
-        "/workspace/onboarding/acknowledge": {
+        "/work-tracker/workspace/onboarding/acknowledge": {
             "post": {
                 "operationId": "acknowledgeWorkspaceOnboarding",
                 "description": "Perform the installation's monotonic onboarding acknowledgement.",
@@ -2091,10 +3653,172 @@
                     }
                 }
             }
+        },
+        "/worktrees": {
+            "get": {
+                "operationId": "worktrees_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "parent_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worktrees"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreeStatus"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/worktrees/{task_id}/create": {
+            "post": {
+                "operationId": "worktrees_create_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worktrees"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateWorktree"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateWorktree"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateWorktree"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorktreeStatus"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/worktrees/{task_id}/discard": {
+            "post": {
+                "operationId": "worktrees_discard_create",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "parent_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worktrees"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Discard"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
         }
     },
     "components": {
         "schemas": {
+            "AgentEnum": {
+                "enum": [
+                    "claude",
+                    "agy",
+                    "codex",
+                    "gemini"
+                ],
+                "type": "string",
+                "description": "* `claude` - claude\n* `agy` - agy\n* `codex` - codex\n* `gemini` - gemini"
+            },
             "AgentModel": {
                 "type": "object",
                 "properties": {
@@ -2123,6 +3847,102 @@
                     "id",
                     "name",
                     "provider"
+                ]
+            },
+            "AgentOverride": {
+                "type": "object",
+                "properties": {
+                    "agent": {
+                        "type": "string"
+                    }
+                }
+            },
+            "AgentRunId": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id"
+                ]
+            },
+            "AgentRunRecord": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "$ref": "#/components/schemas/ScopeEnum"
+                    },
+                    "state": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "module_id",
+                    "scope",
+                    "state",
+                    "task_id",
+                    "updated_at"
+                ]
+            },
+            "AgentStatusResponse": {
+                "type": "object",
+                "properties": {
+                    "scope": {
+                        "$ref": "#/components/schemas/AgentStatusScopeResponse"
+                    },
+                    "runs": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AgentRunRecord"
+                        }
+                    },
+                    "automation_attempts": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AutomationAttempt"
+                        }
+                    },
+                    "at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "at",
+                    "automation_attempts",
+                    "runs",
+                    "scope"
+                ]
+            },
+            "AgentStatusScopeResponse": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "project_id",
+                    "task_id"
                 ]
             },
             "Attachment": {
@@ -2172,6 +3992,71 @@
                     "url"
                 ]
             },
+            "AutomationAttempt": {
+                "type": "object",
+                "properties": {
+                    "attempt_id": {
+                        "type": "string"
+                    },
+                    "root_attempt_id": {
+                        "type": "string"
+                    },
+                    "retry_of_attempt_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "work_item_id": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/StatusEnum"
+                    },
+                    "error": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "agent_run_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "attempt_id",
+                    "error",
+                    "retry_of_attempt_id",
+                    "root_attempt_id",
+                    "status",
+                    "updated_at",
+                    "work_item_id"
+                ]
+            },
+            "Config": {
+                "type": "object",
+                "properties": {
+                    "recent_profile_index": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "profiles": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Profile"
+                        }
+                    },
+                    "features": {
+                        "$ref": "#/components/schemas/Features"
+                    }
+                },
+                "required": [
+                    "features",
+                    "profiles",
+                    "recent_profile_index"
+                ]
+            },
             "ConfigurationReorder": {
                 "type": "object",
                 "description": "A complete replacement order for one project's configuration rows.",
@@ -2188,6 +4073,294 @@
                     "ordered_ids"
                 ]
             },
+            "CreateTerminal": {
+                "type": "object",
+                "properties": {
+                    "agent": {
+                        "type": "string"
+                    },
+                    "project_id": {
+                        "type": "string"
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "initial_prompt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "is_planning": {
+                        "type": "boolean"
+                    },
+                    "is_instant": {
+                        "type": "boolean"
+                    },
+                    "instant_prompt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "is_doc_chat": {
+                        "type": "boolean"
+                    },
+                    "doc_rel_path": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "doc_id": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "agent",
+                    "module_id",
+                    "project_id"
+                ]
+            },
+            "CreateWorktree": {
+                "type": "object",
+                "properties": {
+                    "parent_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "project_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "ticket_seq": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "task_name": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
+            },
+            "Digest": {
+                "type": "object",
+                "properties": {
+                    "digest": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "digest"
+                ]
+            },
+            "Discard": {
+                "type": "object",
+                "properties": {
+                    "removed": {
+                        "type": "boolean"
+                    },
+                    "reason": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "reason",
+                    "removed"
+                ]
+            },
+            "Document": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "rel_path": {
+                        "type": "string"
+                    },
+                    "root_dir": {
+                        "type": "string"
+                    },
+                    "title": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "kind": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string"
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "rel_path"
+                ]
+            },
+            "DocumentList": {
+                "type": "object",
+                "properties": {
+                    "documents": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Document"
+                        }
+                    }
+                },
+                "required": [
+                    "documents"
+                ]
+            },
+            "ErrorEnvelope": {
+                "type": "object",
+                "properties": {
+                    "detail": {},
+                    "code": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "Features": {
+                "type": "object",
+                "properties": {
+                    "sidebar": {
+                        "type": "boolean"
+                    },
+                    "projects": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "projects",
+                    "sidebar"
+                ]
+            },
+            "FsEntries": {
+                "type": "object",
+                "properties": {
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "entries"
+                ]
+            },
+            "GlobalLaunchDefault": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string"
+                    },
+                    "model": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "provider"
+                ]
+            },
+            "Graph": {
+                "type": "object",
+                "properties": {
+                    "root_id": {
+                        "type": "string"
+                    },
+                    "nodes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/GraphNode"
+                        }
+                    }
+                },
+                "required": [
+                    "nodes",
+                    "root_id"
+                ]
+            },
+            "GraphNode": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "state": {
+                        "type": "string"
+                    },
+                    "parent_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "blocked_by": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "blocked_by",
+                    "id",
+                    "parent_id",
+                    "state"
+                ]
+            },
+            "GraphResetResult": {
+                "type": "object",
+                "properties": {
+                    "root_id": {
+                        "type": "string"
+                    },
+                    "cleared": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "cleared",
+                    "root_id"
+                ]
+            },
+            "GraphRunResult": {
+                "type": "object",
+                "properties": {
+                    "root_id": {
+                        "type": "string"
+                    },
+                    "launched": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "launched",
+                    "root_id"
+                ]
+            },
             "GroupEnum": {
                 "enum": [
                     "backlog",
@@ -2198,6 +4371,17 @@
                 ],
                 "type": "string",
                 "description": "* `backlog` - Backlog\n* `unstarted` - Unstarted\n* `started` - Started\n* `completed` - Completed\n* `cancelled` - Cancelled"
+            },
+            "Health": {
+                "type": "object",
+                "properties": {
+                    "ok": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "ok"
+                ]
             },
             "IssueType": {
                 "type": "object",
@@ -2237,6 +4421,10 @@
                         "type": "integer",
                         "minimum": 0
                     },
+                    "is_pathfind": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -2251,12 +4439,24 @@
                 "required": [
                     "created_at",
                     "id",
+                    "is_pathfind",
                     "level",
                     "name",
                     "project",
                     "sort_order",
                     "updated_at"
                 ]
+            },
+            "IssueTypeDelete": {
+                "type": "object",
+                "description": "Optional explicit reassignment accompanying issue-type deletion.",
+                "properties": {
+                    "reassign_to": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    }
+                }
             },
             "IssueTypeTransition": {
                 "type": "object",
@@ -2295,6 +4495,21 @@
                     "to_state",
                     "workflow_revision"
                 ]
+            },
+            "KindEnum": {
+                "enum": [
+                    "session_start",
+                    "turn_start",
+                    "tool_use",
+                    "awaiting_input",
+                    "permission_required",
+                    "turn_complete",
+                    "idle",
+                    "error",
+                    "session_end"
+                ],
+                "type": "string",
+                "description": "* `session_start` - session_start\n* `turn_start` - turn_start\n* `tool_use` - tool_use\n* `awaiting_input` - awaiting_input\n* `permission_required` - permission_required\n* `turn_complete` - turn_complete\n* `idle` - idle\n* `error` - error\n* `session_end` - session_end"
             },
             "LaunchBinding": {
                 "type": "object",
@@ -2359,6 +4574,25 @@
                     "workflow_revision"
                 ]
             },
+            "LaunchedAgentResponse": {
+                "type": "object",
+                "properties": {
+                    "target_id": {
+                        "type": "string"
+                    },
+                    "agent": {
+                        "type": "string"
+                    },
+                    "agent_run_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent",
+                    "agent_run_id",
+                    "target_id"
+                ]
+            },
             "LevelEnum": {
                 "enum": [
                     "module",
@@ -2366,6 +4600,55 @@
                 ],
                 "type": "string",
                 "description": "* `module` - Module\n* `task` - Task"
+            },
+            "LifecycleAccepted": {
+                "type": "object",
+                "properties": {
+                    "accepted": {
+                        "$ref": "#/components/schemas/LifecycleEvent"
+                    },
+                    "received_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "accepted",
+                    "received_at"
+                ]
+            },
+            "LifecycleEvent": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "agent": {
+                        "$ref": "#/components/schemas/AgentEnum"
+                    },
+                    "kind": {
+                        "$ref": "#/components/schemas/KindEnum"
+                    },
+                    "ts": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "source": {
+                        "$ref": "#/components/schemas/SourceEnum"
+                    },
+                    "provider_session_id": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "agent",
+                    "agent_run_id",
+                    "kind",
+                    "ts"
+                ]
             },
             "Module": {
                 "type": "object",
@@ -2401,23 +4684,57 @@
                         "type": "string",
                         "format": "uuid",
                         "readOnly": true
-                    },
-                    "issue_type_id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "writeOnly": true
                     }
                 },
                 "required": [
                     "id",
                     "is_archived",
                     "issue_type",
-                    "issue_type_id",
                     "key",
                     "name",
                     "project_id",
                     "sequence_id"
                 ]
+            },
+            "ModuleCreate": {
+                "type": "object",
+                "description": "Input for the project-scoped module create.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 512
+                    },
+                    "issue_type_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "issue_type_id",
+                    "name"
+                ]
+            },
+            "ModuleLink": {
+                "type": "object",
+                "properties": {
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "path": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "module_id",
+                    "path"
+                ]
+            },
+            "Open": {
+                "type": "object",
+                "description": "Named JSON object used where the established payload is intentionally open.",
+                "properties": {
+                    "value": {}
+                }
             },
             "OriginEnum": {
                 "enum": [
@@ -2489,6 +4806,10 @@
                     "workflow_revision": {
                         "type": "integer",
                         "minimum": 0
+                    },
+                    "is_pathfind": {
+                        "type": "boolean",
+                        "readOnly": true
                     },
                     "created_at": {
                         "type": "string",
@@ -2570,13 +4891,14 @@
                     },
                     "slug": {
                         "type": "string",
-                        "maxLength": 64
+                        "readOnly": true
                     },
                     "activated": {
                         "type": "boolean"
                     },
                     "supports_unattended": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 }
             },
@@ -2591,6 +4913,14 @@
                     "name": {
                         "type": "string",
                         "maxLength": 32
+                    }
+                }
+            },
+            "PatchedRecentIndex": {
+                "type": "object",
+                "properties": {
+                    "recent_profile_index": {
+                        "type": "integer"
                     }
                 }
             },
@@ -2674,6 +5004,43 @@
                     }
                 }
             },
+            "Profile": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "workspace_slug": {
+                        "type": "string"
+                    },
+                    "agent_prompt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "agent_prompts": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "module_links": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ModuleLink"
+                        }
+                    },
+                    "recent_project_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "recent_module_ids": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": [
+                    "name",
+                    "workspace_slug"
+                ]
+            },
             "Project": {
                 "type": "object",
                 "description": "The single project shape; workspace selection is create-only input.",
@@ -2716,18 +5083,44 @@
                     },
                     "slug": {
                         "type": "string",
-                        "maxLength": 64
+                        "readOnly": true
                     },
                     "activated": {
                         "type": "boolean"
                     },
                     "supports_unattended": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "id",
-                    "slug"
+                    "slug",
+                    "supports_unattended"
+                ]
+            },
+            "ProviderCatalog": {
+                "type": "object",
+                "properties": {
+                    "global_default": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/GlobalLaunchDefault"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                }
+            },
+            "ProviderCatalogEnvelope": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "$ref": "#/components/schemas/ProviderCatalog"
+                    }
+                },
+                "required": [
+                    "value"
                 ]
             },
             "ReasoningLevel": {
@@ -2747,6 +5140,155 @@
                     "id",
                     "name"
                 ]
+            },
+            "ReleaseResult": {
+                "type": "object",
+                "properties": {
+                    "released": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "released"
+                ]
+            },
+            "ReplacedViewer": {
+                "type": "object",
+                "properties": {
+                    "viewer_id": {
+                        "type": "string"
+                    },
+                    "transport": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "transport",
+                    "viewer_id"
+                ]
+            },
+            "ResumableTerminal": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "agent": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "started_at": {
+                        "type": "string"
+                    },
+                    "ended_at": {
+                        "type": "string"
+                    },
+                    "provider_session_id": {
+                        "type": "string"
+                    },
+                    "resumed_from": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scope": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent",
+                    "agent_run_id",
+                    "ended_at",
+                    "provider_session_id",
+                    "resumed_from",
+                    "scope",
+                    "started_at",
+                    "status"
+                ]
+            },
+            "ResumeResult": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "resumed_from": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "resumed_from"
+                ]
+            },
+            "SaveDocument": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string"
+                    },
+                    "digest": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "content",
+                    "digest"
+                ]
+            },
+            "ScopeEnum": {
+                "enum": [
+                    "task",
+                    "plan",
+                    "instant",
+                    "docchat"
+                ],
+                "type": "string",
+                "description": "* `task` - task\n* `plan` - plan\n* `instant` - instant\n* `docchat` - docchat"
+            },
+            "SelfTerminateResult": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "terminated": {
+                        "type": "boolean"
+                    },
+                    "ok": {
+                        "type": "boolean"
+                    },
+                    "already_terminated": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "already_terminated",
+                    "ok",
+                    "terminated"
+                ]
+            },
+            "SettingValue": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "value"
+                ]
+            },
+            "SourceEnum": {
+                "enum": [
+                    "hook",
+                    "inactivity",
+                    "transport"
+                ],
+                "type": "string",
+                "description": "* `hook` - hook\n* `inactivity` - inactivity\n* `transport` - transport"
             },
             "State": {
                 "type": "object",
@@ -2801,6 +5343,145 @@
                     "project",
                     "sort_order",
                     "updated_at"
+                ]
+            },
+            "StatusEnum": {
+                "enum": [
+                    "pending",
+                    "succeeded",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `pending` - pending\n* `succeeded` - succeeded\n* `failed` - failed"
+            },
+            "TerminalRun": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "tmux_session_name": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "project_id": {
+                        "type": "string"
+                    },
+                    "agent": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string"
+                    },
+                    "doc_rel_path": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "terminated_at": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "agent_run_id"
+                ]
+            },
+            "TerminateResult": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "terminated": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "terminated"
+                ]
+            },
+            "TransportEnum": {
+                "enum": [
+                    "browser",
+                    "desktop"
+                ],
+                "type": "string",
+                "description": "* `browser` - browser\n* `desktop` - desktop"
+            },
+            "ViewerLease": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "viewer_id": {
+                        "type": "string"
+                    },
+                    "transport": {
+                        "$ref": "#/components/schemas/TransportEnum"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "transport",
+                    "viewer_id"
+                ]
+            },
+            "ViewerLeaseRelease": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "viewer_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "viewer_id"
+                ]
+            },
+            "ViewerLeaseResult": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "viewer_id": {
+                        "type": "string"
+                    },
+                    "transport": {
+                        "type": "string"
+                    },
+                    "expires_at": {
+                        "type": "string"
+                    },
+                    "replaced": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ReplacedViewer"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "expires_at",
+                    "replaced",
+                    "transport",
+                    "viewer_id"
                 ]
             },
             "WorkItem": {
@@ -2988,6 +5669,72 @@
                     "onboarding_required",
                     "slug"
                 ]
+            },
+            "WorktreeStatus": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string"
+                    },
+                    "top_level_task_id": {
+                        "type": "string"
+                    },
+                    "is_shared": {
+                        "type": "boolean"
+                    },
+                    "branch": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "base_branch": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "path": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "state": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "clean": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "dirty": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "ahead": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "behind": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "conflict": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "ephemeral": {
+                        "type": "boolean"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "is_shared",
+                    "kind",
+                    "task_id",
+                    "top_level_task_id"
+                ]
             }
         },
         "securitySchemes": {
@@ -3000,7 +5747,7 @@
     },
     "servers": [
         {
-            "url": "/api/work-tracker"
+            "url": "/api"
         }
     ]
 }

@@ -5,7 +5,7 @@ import uuid
 import pytest
 from django.db import transaction
 
-from worktracker.models import Issue, State
+from worktracker.models import Issue, IssueType, State
 from worktracker.tests.conftest import BASE
 
 
@@ -21,12 +21,18 @@ def states(project):
 
 
 def _issue(project, sequence_id):
+    issue_type, _ = IssueType.objects.get_or_create(
+        project=project,
+        name="Task",
+        defaults={"id": uuid.uuid4(), "level": "task"},
+    )
     return Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
         type="task",
         name=f"Item {sequence_id}",
         sequence_id=sequence_id,
+        issue_type=issue_type,
     )
 
 
@@ -79,8 +85,8 @@ def test_full_and_targeted_work_item_reads_expose_state_revision(
     issue.state = states[0]
     issue.save(update_fields=["state", "updated_at"])
 
-    full = client.get(f"{BASE}/projects/{project.id}/work-items", headers=auth).json()
+    full = client.get(f"{BASE}/work-items?project={project.id}", headers=auth).json()
     targeted = client.get(f"{BASE}/work-items/{issue.id}", headers=auth).json()
 
     assert full[0]["state_revision"] == 1
-    assert targeted["task"]["state_revision"] == 1
+    assert targeted["state_revision"] == 1

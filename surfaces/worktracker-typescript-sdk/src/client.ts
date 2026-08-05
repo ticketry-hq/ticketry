@@ -8,6 +8,9 @@ import {
   type Middleware,
 } from "./generated/runtime.js";
 import { AttachmentsApi } from "./generated/apis/AttachmentsApi.js";
+import { ConfigurationApi } from "./generated/apis/ConfigurationApi.js";
+import { DocumentsApi } from "./generated/apis/DocumentsApi.js";
+import { ExecutionApi } from "./generated/apis/ExecutionApi.js";
 import { IssueTypesApi } from "./generated/apis/IssueTypesApi.js";
 import { LaunchBindingsApi } from "./generated/apis/LaunchBindingsApi.js";
 import { ModelsApi } from "./generated/apis/ModelsApi.js";
@@ -15,10 +18,15 @@ import { ModulesApi } from "./generated/apis/ModulesApi.js";
 import { ProjectsApi } from "./generated/apis/ProjectsApi.js";
 import { ProvidersApi } from "./generated/apis/ProvidersApi.js";
 import { ReasoningLevelsApi } from "./generated/apis/ReasoningLevelsApi.js";
+import { RunsApi } from "./generated/apis/RunsApi.js";
+import { SettingsApi } from "./generated/apis/SettingsApi.js";
 import { StatesApi } from "./generated/apis/StatesApi.js";
 import { WorkflowsApi } from "./generated/apis/WorkflowsApi.js";
 import { WorkspaceApi } from "./generated/apis/WorkspaceApi.js";
 import { WorkItemsApi } from "./generated/apis/WorkItemsApi.js";
+import { SystemApi } from "./generated/apis/SystemApi.js";
+import { TerminalsApi } from "./generated/apis/TerminalsApi.js";
+import { WorktreesApi } from "./generated/apis/WorktreesApi.js";
 import { WorkTrackerApiError } from "./errors.js";
 
 export interface WorkTrackerClientOptions {
@@ -30,6 +38,9 @@ export interface WorkTrackerClientOptions {
 
 export interface WorkTrackerClient {
   attachments: AttachmentsApi;
+  configuration: ConfigurationApi;
+  documents: DocumentsApi;
+  execution: ExecutionApi;
   issueTypes: IssueTypesApi;
   launchBindings: LaunchBindingsApi;
   models: ModelsApi;
@@ -37,10 +48,15 @@ export interface WorkTrackerClient {
   projects: ProjectsApi;
   providers: ProvidersApi;
   reasoningLevels: ReasoningLevelsApi;
+  runs: RunsApi;
+  settings: SettingsApi;
   states: StatesApi;
   workflows: WorkflowsApi;
   workspace: WorkspaceApi;
   workItems: WorkItemsApi;
+  system: SystemApi;
+  terminals: TerminalsApi;
+  worktrees: WorktreesApi;
 }
 
 export function createAuthenticatedFetch(
@@ -61,7 +77,10 @@ export function createAuthenticatedFetch(
 export function createWorkTrackerClient(
   options: WorkTrackerClientOptions,
 ): WorkTrackerClient {
-  const basePath = options.baseUrl.replace(/\/+$/, "");
+  const configuredBasePath = options.baseUrl.replace(/\/+$/, "");
+  const basePath = configuredBasePath.endsWith("/work-tracker")
+    ? configuredBasePath.slice(0, -"/work-tracker".length)
+    : configuredBasePath;
   const apiKey = options.apiKey?.trim() || undefined;
   const fetchApi = createAuthenticatedFetch(options);
   const middleware: Middleware = {
@@ -84,6 +103,9 @@ export function createWorkTrackerClient(
 
   return {
     attachments: new AttachmentsApi(configuration),
+    configuration: new ConfigurationApi(configuration),
+    documents: new DocumentsApi(configuration),
+    execution: new ExecutionApi(configuration),
     issueTypes: new IssueTypesApi(configuration),
     launchBindings: new LaunchBindingsApi(configuration),
     models: new ModelsApi(configuration),
@@ -91,10 +113,15 @@ export function createWorkTrackerClient(
     projects: new ProjectsApi(configuration),
     providers: new ProvidersApi(configuration),
     reasoningLevels: new ReasoningLevelsApi(configuration),
+    runs: new RunsApi(configuration),
+    settings: new SettingsApi(configuration),
     states: new StatesApi(configuration),
     workflows: new WorkflowsApi(configuration),
     workspace: new WorkspaceApi(configuration),
     workItems: new WorkItemsApi(configuration),
+    system: new SystemApi(configuration),
+    terminals: new TerminalsApi(configuration),
+    worktrees: new WorktreesApi(configuration),
   };
 }
 

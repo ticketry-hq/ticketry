@@ -1,4 +1,4 @@
-"""Lifecycle ingress endpoint (ticket #498/#512), ported to ninja."""
+"""Transport-independent lifecycle application operations."""
 
 import logging
 from datetime import datetime, timezone
@@ -14,8 +14,6 @@ from studio_server.contracts import (
     RunRecord,
     reduce_lifecycle,
 )
-from ninja import Router, Status
-from worktracker.auth import ApiKeyAuth
 
 from apps.runs import dao
 from apps.runs.bus import publish_status
@@ -25,21 +23,13 @@ from apps.runs.projections import automation_attempt_record
 
 logger = logging.getLogger(__name__)
 
-router = Router(tags=["lifecycle"])
-
-
-@router.post(
-    "/automation-attempts/{attempt_id}/retry",
-    response={200: AutomationAttemptRecord},
-    auth=ApiKeyAuth(),
-)
 def retry_automation_attempt(request, attempt_id: str):
     """Create at most one explicit retry child for one failed attempt."""
 
     with transaction.atomic():
         source = (
             AutomationAttempt.objects.select_for_update()
-            .select_related("issue", "root_attempt")
+            .select_related("issue")
             .filter(pk=attempt_id)
             .first()
         )
@@ -67,7 +57,6 @@ def retry_automation_attempt(request, attempt_id: str):
     return automation_attempt_record(retry)
 
 
-@router.post("/lifecycle/events", response={202: dict})
 async def ingest_lifecycle_event(request, event: LifecycleEvent):
     """Ingest one agent lifecycle/attention event and relay it (#498/#512).
 
@@ -123,10 +112,9 @@ async def ingest_lifecycle_event(request, event: LifecycleEvent):
             )
             await publish_status(project_id, frame.model_dump())
 
-    return Status(202, {"accepted": event.model_dump(), "received_at": received_at})
+    return 202, {"accepted": event.model_dump(), "received_at": received_at}
 
 
-@router.get("/runs/module-activity", response={200: dict})
 async def get_module_activity(
     request,
     project_id: str,
@@ -146,7 +134,6 @@ async def get_module_activity(
     return await dao.last_activity_by_module(project_id, window_days=window_days)
 
 
-@router.get("/runs/agent-status", response={200: AgentStatusSnapshot})
 async def agent_status(request, project_id: str, task_id: str | None = None):
     """Return the authoritative run-status snapshot for a project or task."""
 

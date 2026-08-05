@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -26,6 +26,11 @@ import {
     IssueTypeToJSON,
 } from '../models/IssueType.js';
 import {
+    type IssueTypeDelete,
+    IssueTypeDeleteFromJSON,
+    IssueTypeDeleteToJSON,
+} from '../models/IssueTypeDelete.js';
+import {
     type PatchedIssueType,
     PatchedIssueTypeFromJSON,
     PatchedIssueTypeToJSON,
@@ -33,12 +38,12 @@ import {
 
 export interface CreateIssueTypeRequest {
     projectId: string;
-    issueType: Omit<IssueType, 'id'|'project'|'sort_order'|'created_at'|'updated_at'>;
+    issueType: Omit<IssueType, 'id'|'project'|'sort_order'|'is_pathfind'|'created_at'|'updated_at'>;
 }
 
 export interface DeleteIssueTypeRequest {
     typeId: string;
-    reassignTo?: string;
+    issueTypeDelete?: IssueTypeDelete;
 }
 
 export interface GetIssueTypeRequest {
@@ -56,7 +61,7 @@ export interface ReorderIssueTypesRequest {
 
 export interface UpdateIssueTypeRequest {
     typeId: string;
-    patchedIssueType?: Omit<PatchedIssueType, 'id'|'project'|'sort_order'|'created_at'|'updated_at'>;
+    patchedIssueType?: Omit<PatchedIssueType, 'id'|'project'|'sort_order'|'is_pathfind'|'created_at'|'updated_at'>;
 }
 
 /**
@@ -93,7 +98,7 @@ export interface IssueTypesApiInterface {
     /**
      * Creates request options for deleteIssueType without sending the request
      * @param {string} typeId
-     * @param {string} [reassignTo]
+     * @param {IssueTypeDelete} [issueTypeDelete]
      * @throws {RequiredError}
      * @memberof IssueTypesApiInterface
      */
@@ -102,7 +107,7 @@ export interface IssueTypesApiInterface {
     /**
      * Shared project-scoped collection and unscoped detail behavior.
      * @param {string} typeId
-     * @param {string} [reassignTo]
+     * @param {IssueTypeDelete} [issueTypeDelete]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof IssueTypesApiInterface
@@ -242,7 +247,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
         }
 
 
-        let urlPath = `/projects/{project_id}/issue-types`;
+        let urlPath = `/work-tracker/projects/{project_id}/issue-types`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -285,18 +290,16 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
 
         const queryParameters: any = {};
 
-        if (requestParameters['reassignTo'] != null) {
-            queryParameters['reassign_to'] = requestParameters['reassignTo'];
-        }
-
         const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
 
         if (this.configuration && this.configuration.apiKey) {
             headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
         }
 
 
-        let urlPath = `/issue-types/{type_id}`;
+        let urlPath = `/work-tracker/issue-types/{type_id}`;
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
 
         return {
@@ -304,6 +307,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
             method: 'DELETE',
             headers: headerParameters,
             query: queryParameters,
+            body: IssueTypeDeleteToJSON(requestParameters['issueTypeDelete']),
         };
     }
 
@@ -344,7 +348,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
         }
 
 
-        let urlPath = `/issue-types/{type_id}`;
+        let urlPath = `/work-tracker/issue-types/{type_id}`;
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
 
         return {
@@ -393,7 +397,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
         }
 
 
-        let urlPath = `/projects/{project_id}/issue-types`;
+        let urlPath = `/work-tracker/projects/{project_id}/issue-types`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -451,7 +455,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
         }
 
 
-        let urlPath = `/projects/{project_id}/issue-types/reorder`;
+        let urlPath = `/work-tracker/projects/{project_id}/issue-types/reorder`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -503,7 +507,7 @@ export class IssueTypesApi extends runtime.BaseAPI implements IssueTypesApiInter
         }
 
 
-        let urlPath = `/issue-types/{type_id}`;
+        let urlPath = `/work-tracker/issue-types/{type_id}`;
         urlPath = urlPath.replace('{type_id}', encodeURIComponent(String(requestParameters['typeId'])));
 
         return {

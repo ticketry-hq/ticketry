@@ -1,8 +1,8 @@
 """The ``issue_state_changed`` seam (#706) — emit-on-commit + v1 logging.
 
-Drives the real ninja API paths (``patch_work_item`` / ``create_work_item``)
-through the package's own minimal Django host, with a spy receiver connected to
-the signal. Because dispatch is deferred to ``transaction.on_commit``, the
+Drives the real DRF work-item endpoints through the package's own minimal
+Django host, with a spy receiver connected to the signal. Because dispatch is
+deferred to ``transaction.on_commit``, the
 measured actions run inside ``django_capture_on_commit_callbacks(execute=True)``
 so the callbacks actually fire under the test's wrapping transaction.
 
@@ -18,7 +18,7 @@ import pytest
 from django.db import transaction
 
 from worktracker import signals
-from worktracker.models import Issue, State
+from worktracker.models import Issue, IssueType, IssueTypeTransition, State
 from worktracker.signals import issue_state_changed
 from worktracker.tests.conftest import BASE, patch_json, post_json
 
@@ -56,12 +56,27 @@ def _make_issue(project, state, *, type="task", sequence_id=1):
     spy stays empty — leaving the subsequent measured action in isolation.
     """
 
+    issue_type, _ = IssueType.objects.get_or_create(
+        project=project,
+        name="Module" if type == "module" else "Task",
+        defaults={"id": uuid.uuid4(), "level": type},
+    )
+    if issue_type.start_state_id is None:
+        issue_type.start_state = state
+        issue_type.save(update_fields=("start_state", "updated_at"))
+    for target in State.objects.filter(project=project).exclude(pk=state.id):
+        IssueTypeTransition.objects.get_or_create(
+            issue_type=issue_type,
+            from_state=state,
+            to_state=target,
+        )
     return Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
         type=type,
         name="Item",
         sequence_id=sequence_id,
+        issue_type=issue_type,
         state=state,
     )
 
@@ -119,7 +134,13 @@ def test_within_group_move_emits(
 
 @pytest.mark.django_db
 def test_create_into_state_emits_with_null_from(
-    client, project, states, auth, spy, django_capture_on_commit_callbacks
+    client,
+    project,
+    task_type,
+    states,
+    auth,
+    spy,
+    django_capture_on_commit_callbacks,
 ):
     """AC2: creating an issue directly into a state fires one event, from=null."""
 
@@ -127,10 +148,14 @@ def test_create_into_state_emits_with_null_from(
         r = post_json(
             client,
             f"{BASE}/projects/{project.id}/work-items",
-            {"name": "New", "state_id": str(states["unstarted"].id)},
+            {
+                "name": "New",
+                "issue_type_id": str(task_type.id),
+                "state_id": str(states["unstarted"].id),
+            },
             auth,
         )
-    assert r.status_code == 200
+    assert r.status_code == 201
 
     assert len(spy) == 1
     assert spy[0]["from_state_id"] is None

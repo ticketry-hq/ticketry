@@ -4,6 +4,7 @@ Exercises the issue-type and workflow-state routes through the package's DRF
 test host, and confirms the seed / backfill behavior.
 """
 
+import json
 import uuid
 
 import pytest
@@ -206,7 +207,10 @@ def test_delete_type_in_use_409_then_reassign(client, project, auth):
 
     story_type = IssueType.objects.get(project=project, name="Story")
     ok = client.delete(
-        f"{BASE}/issue-types/{bug['id']}?reassign_to={story_type.id}", headers=auth
+        f"{BASE}/issue-types/{bug['id']}",
+        data=json.dumps({"reassign_to": str(story_type.id)}),
+        content_type="application/json",
+        headers=auth,
     )
     assert ok.status_code == 204
     assert Issue.objects.get(pk=task["id"]).issue_type_id == story_type.id

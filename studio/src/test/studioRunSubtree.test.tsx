@@ -149,7 +149,7 @@ describe("Studio Run subtree action", () => {
     expect(action).toBeDisabled();
     expect(action).toHaveAttribute("aria-busy", "true");
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/work-items/story/execute-graph");
+    expect(url).toBe("/api/work-items/story/graph-run");
     expect(init).toMatchObject({ method: "POST", body: "{}" });
     expect(JSON.parse(String(init.body))).toEqual({});
 
@@ -194,7 +194,7 @@ describe("Studio Run subtree action", () => {
     });
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url === "/api/work-items/story/execute-graph" && init?.method === "POST") {
+      if (url === "/api/work-items/story/graph-run" && init?.method === "POST") {
         return Promise.resolve(response({ error: "subtree_run_not_enabled" }, 422));
       }
       if (url.endsWith("/projects/project-1/subtree-run-capabilities")) {

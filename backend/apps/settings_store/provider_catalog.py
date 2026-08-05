@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -12,7 +11,6 @@ from pydantic import (
     field_validator,
 )
 
-Provider = Literal["claude", "agy", "codex", "gemini"]
 PROVIDER_CATALOG_SCOPE = "host"
 PROVIDER_CATALOG_KEY = "provider_catalog"
 
@@ -81,7 +79,7 @@ class GlobalLaunchDefault(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    provider: Provider
+    provider: str
     model: str | None = None
     reasoning: str | None = None
 

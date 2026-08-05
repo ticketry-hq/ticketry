@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -32,7 +32,7 @@ export interface PatchedProvider {
      * @type {string}
      * @memberof PatchedProvider
      */
-    slug?: string;
+    readonly slug?: string;
     /**
      *
      * @type {boolean}
@@ -44,7 +44,7 @@ export interface PatchedProvider {
      * @type {boolean}
      * @memberof PatchedProvider
      */
-    supports_unattended?: boolean;
+    readonly supports_unattended?: boolean;
 }
 
 /**
@@ -75,15 +75,13 @@ export function PatchedProviderToJSON(json: any): PatchedProvider {
     return PatchedProviderToJSONTyped(json, false);
 }
 
-export function PatchedProviderToJSONTyped(value?: Omit<PatchedProvider, 'id'> | null, ignoreDiscriminator: boolean = false): any {
+export function PatchedProviderToJSONTyped(value?: Omit<PatchedProvider, 'id'|'slug'|'supports_unattended'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'slug': value['slug'],
         'activated': value['activated'],
-        'supports_unattended': value['supports_unattended'],
     };
 }

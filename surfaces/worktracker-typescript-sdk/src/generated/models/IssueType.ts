@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -79,6 +79,12 @@ export interface IssueType {
     workflow_revision?: number;
     /**
      *
+     * @type {boolean}
+     * @memberof IssueType
+     */
+    readonly is_pathfind: boolean;
+    /**
+     *
      * @type {string}
      * @memberof IssueType
      */
@@ -102,6 +108,7 @@ export function instanceOfIssueType(value: object): value is IssueType {
     if (!('name' in value) || value['name'] === undefined) return false;
     if (!('level' in value) || value['level'] === undefined) return false;
     if (!('sort_order' in value) || value['sort_order'] === undefined) return false;
+    if (!('is_pathfind' in value) || value['is_pathfind'] === undefined) return false;
     if (!('created_at' in value) || value['created_at'] === undefined) return false;
     if (!('updated_at' in value) || value['updated_at'] === undefined) return false;
     return true;
@@ -125,6 +132,7 @@ export function IssueTypeFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'sort_order': json['sort_order'],
         'start_state': json['start_state'] == null ? undefined : json['start_state'],
         'workflow_revision': json['workflow_revision'] == null ? undefined : json['workflow_revision'],
+        'is_pathfind': json['is_pathfind'],
         'created_at': json['created_at'],
         'updated_at': json['updated_at'],
     };
@@ -134,7 +142,7 @@ export function IssueTypeToJSON(json: any): IssueType {
     return IssueTypeToJSONTyped(json, false);
 }
 
-export function IssueTypeToJSONTyped(value?: Omit<IssueType, 'id'|'project'|'sort_order'|'created_at'|'updated_at'> | null, ignoreDiscriminator: boolean = false): any {
+export function IssueTypeToJSONTyped(value?: Omit<IssueType, 'id'|'project'|'sort_order'|'is_pathfind'|'created_at'|'updated_at'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }

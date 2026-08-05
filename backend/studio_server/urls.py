@@ -9,15 +9,12 @@ from django.http import FileResponse
 from django.urls import include, path, re_path
 from django.views.static import serve
 
-from studio_server.api import api
-
-
 # API + admin first so they always win over the SPA catch-all below.
 # Dev media serving resolves local attachment URLs (C6).
 
 urlpatterns = [
     path("api/work-tracker/", include("worktracker.rest.urls")),
-    path("api/", api.urls),
+    path("api/", include("apps.rest_urls")),
 ]
 if settings.ADMIN_ENABLED:
     urlpatterns.append(path("wt-admin/", admin.site.urls))

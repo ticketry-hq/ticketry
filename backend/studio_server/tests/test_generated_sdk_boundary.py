@@ -116,7 +116,7 @@ def test_server_has_no_hand_rolled_sdk_imports():
 
 
 def test_generated_sdk_is_importable_in_the_server_test_environment():
-    configuration = Configuration(host="https://worktracker.test/api/work-tracker")
+    configuration = Configuration(host="https://worktracker.test/api")
     client = ApiClient(configuration)
 
     assert isinstance(ProjectsApi(client), ProjectsApi)

@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -213,7 +213,7 @@ export class StatesApi extends runtime.BaseAPI implements StatesApiInterface {
         }
 
 
-        let urlPath = `/projects/{project_id}/states`;
+        let urlPath = `/work-tracker/projects/{project_id}/states`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -263,7 +263,7 @@ export class StatesApi extends runtime.BaseAPI implements StatesApiInterface {
         }
 
 
-        let urlPath = `/states/{state_id}`;
+        let urlPath = `/work-tracker/states/{state_id}`;
         urlPath = urlPath.replace('{state_id}', encodeURIComponent(String(requestParameters['stateId'])));
 
         return {
@@ -311,7 +311,7 @@ export class StatesApi extends runtime.BaseAPI implements StatesApiInterface {
         }
 
 
-        let urlPath = `/projects/{project_id}/states`;
+        let urlPath = `/work-tracker/projects/{project_id}/states`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -369,7 +369,7 @@ export class StatesApi extends runtime.BaseAPI implements StatesApiInterface {
         }
 
 
-        let urlPath = `/projects/{project_id}/states/reorder`;
+        let urlPath = `/work-tracker/projects/{project_id}/states/reorder`;
         urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
 
         return {
@@ -421,7 +421,7 @@ export class StatesApi extends runtime.BaseAPI implements StatesApiInterface {
         }
 
 
-        let urlPath = `/states/{state_id}`;
+        let urlPath = `/work-tracker/states/{state_id}`;
         urlPath = urlPath.replace('{state_id}', encodeURIComponent(String(requestParameters['stateId'])));
 
         return {

@@ -4,7 +4,7 @@ import type {
   ProviderCapabilitiesOut,
   StateImpactOut,
 } from "@worktracker/typescript-sdk/models";
-import { WorkItemPatchOriginEnum } from "@worktracker/typescript-sdk/models";
+import { OriginEnum } from "@worktracker/typescript-sdk/models";
 import { ApiError } from "../../../shared/api/client";
 export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
 import type {
@@ -155,7 +155,7 @@ export const reorderTask = (
     normalizeTask(
       (await worktrackerClient().workItems.reorderWorkItem({
         issueId: taskId,
-        workItemReorderIn: {
+        workItemReorder: {
           before_id: beforeId,
           after_id: afterId,
         },
@@ -181,32 +181,21 @@ function normalizeModuleTaskTree(moduleId: string, tasks: WorkItem[]) {
   return { tasks: roots, subtasks };
 }
 
-// ---------- Config ----------
-// gated: CODIN-668 — host /api/config surface is not in the OpenAPI the SDK is
-// generated from; stays on raw fetch until host-surface SDK coverage is taken up.
+// ---------- Config (generated host operations) ----------
 export const getConfig = () =>
-  request<ConfigPayload>("/api/config");
+  call(() => worktrackerClient().configuration.configRetrieve()) as Promise<ConfigPayload>;
 
 export const postProfile = (body: Partial<Profile>) =>
-  request<ConfigPayload>("/api/config/profiles", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  call(() => worktrackerClient().configuration.configProfilesCreate({ profile: body as never })) as Promise<ConfigPayload>;
 
 export const putProfile = (index: number, body: Partial<Profile>) =>
-  request<ConfigPayload>(`/api/config/profiles/${index}`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
+  call(() => worktrackerClient().configuration.configProfilesUpdate({ index, profile: body as never })) as Promise<ConfigPayload>;
 
 export const deleteProfile = (index: number) =>
-  request<ConfigPayload>(`/api/config/profiles/${index}`, { method: "DELETE" });
+  call(() => worktrackerClient().configuration.configProfilesDestroy({ index })) as Promise<ConfigPayload>;
 
 export const patchConfig = (body: { recent_profile_index: number }) =>
-  request<ConfigPayload>("/api/config", {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+  call(() => worktrackerClient().configuration.configPartialUpdate({ patchedRecentIndex: body })) as Promise<ConfigPayload>;
 
 // ---------- Work tracker (SDK-covered, contract-checked) ----------
 // Project and module LISTS come from the shared caches in features/projects;
@@ -215,7 +204,7 @@ export const createProject = (body: ProjectCreate) =>
   call(async () =>
     normalizeProject(
       (await worktrackerClient().projects.createProject({
-        projectIn: body,
+        project: body,
       })) as Project,
     ),
   );
@@ -223,13 +212,12 @@ export const createProject = (body: ProjectCreate) =>
 // Most-recent agent interaction per module (#598). Hits the server's runs
 // endpoint (not the work tracker). Failure resolves to {} so the module list
 // still renders, just in its original order — no regression on error.
-// gated: CODIN-668 — /api/runs is a host family, not in the SDK's OpenAPI.
 export const getModuleActivity = (
   projectId: string,
 ): Promise<Record<string, string>> =>
-  request<Record<string, string>>(
-    `/api/runs/module-activity?project_id=${encodeURIComponent(projectId)}`,
-  ).catch(() => ({}));
+  call(() => worktrackerClient().runs.runsModuleActivityRetrieve({ projectId }))
+    .then((value) => value as Record<string, string>)
+    .catch(() => ({}));
 
 export const createModule = (
   projectId: string,
@@ -240,7 +228,7 @@ export const createModule = (
     normalizeModule(
       (await worktrackerClient().modules.createModule({
         projectId,
-        moduleIn: { name, issue_type_id: issueTypeId },
+        moduleCreate: { name, issue_type_id: issueTypeId },
       })) as Module,
     ),
   );
@@ -248,7 +236,7 @@ export const createModule = (
 export const getTasks = async (projectId: string, moduleId: string) => {
   const [tasks, states] = await Promise.all([
     call(async () =>
-      (await worktrackerClient().workItems.listModuleWorkItems({ moduleId })) as WorkItem[],
+      (await worktrackerClient().workItems.listWorkItems({ module: moduleId })) as WorkItem[],
     ),
     getStates(projectId),
   ]);
@@ -260,8 +248,8 @@ export const getTasks = async (projectId: string, moduleId: string) => {
 
 export const getProjectWorkItems = (projectId: string): Promise<WorkItem[]> =>
   call(async () =>
-    (await worktrackerClient().workItems.listProjectWorkItems({
-      projectId,
+    (await worktrackerClient().workItems.listWorkItems({
+      project: projectId,
       includeArchived: true,
       includePathfind: true,
     })) as WorkItem[]);
@@ -288,7 +276,7 @@ export const createState = (
   body: { name: string; group: string },
 ): Promise<TaskState> =>
   call(async () =>
-    (await worktrackerClient().states.createState({ projectId, stateIn: body })) as State,
+    (await worktrackerClient().states.createState({ projectId, state: body })) as State,
   );
 
 export const updateState = (
@@ -296,7 +284,7 @@ export const updateState = (
   patch: StatePatch,
 ): Promise<TaskState> =>
   call(async () =>
-    (await worktrackerClient().states.updateState({ stateId, statePatch: patch })) as State,
+    (await worktrackerClient().states.updateState({ stateId, patchedState: patch })) as State,
   );
 
 export const getStateImpact = (stateId: string): Promise<StateImpactOut> =>
@@ -317,7 +305,7 @@ export const reorderWorkflowStates = (
   call(async () =>
     (await worktrackerClient().states.reorderStates({
       projectId,
-      reorderIn: { ordered_ids: orderedIds },
+      configurationReorder: { ordered_ids: orderedIds },
     })) as State[],
   );
 
@@ -479,9 +467,9 @@ export const postTaskStatus = (
     normalizeTask(
       (await worktrackerClient().workItems.updateWorkItem({
         issueId: taskId,
-        workItemPatch: {
+        patchedWorkItemPatch: {
           state_id: stateId,
-          origin: WorkItemPatchOriginEnum.human,
+          origin: OriginEnum.human,
         },
       })) as WorkItem,
     ),
@@ -499,7 +487,7 @@ export const updateTaskParent = (
     normalizeTask(
       (await worktrackerClient().workItems.updateWorkItem({
         issueId: taskId,
-        workItemPatch: { parent_id: parentId },
+        patchedWorkItemPatch: { parent_id: parentId },
       })) as WorkItem,
     ),
   );
@@ -512,9 +500,9 @@ export const createTask = (
 ) =>
   call(async () =>
     normalizeTask(
-      (await worktrackerClient().workItems.createProjectWorkItem({
+      (await worktrackerClient().workItems.createWorkItem({
         projectId,
-        workItemIn: {
+        workItemCreate: {
           name,
           parent_id: parentId ?? null,
           issue_type_id: issueTypeId,
@@ -523,49 +511,34 @@ export const createTask = (
     ),
   );
 
-// The execution service is a Studio-host endpoint rather than part of the
-// WorkTracker OpenAPI surface. An empty body deliberately leaves provider
-// selection to the current workflow launch bindings.
+// An empty override deliberately leaves provider selection to the current
+// workflow launch binding.
 export const executeTaskSubtree = (taskId: string) =>
-  request<unknown>(
-    `/api/work-items/${encodeURIComponent(taskId)}/execute-graph`,
-    { method: "POST", body: JSON.stringify({}) },
-  );
+  call(() => worktrackerClient().execution.workItemsGraphRunCreate({
+    issueId: taskId,
+    agentOverride: {},
+  }));
 
 // Worktrees (ticket #589) live in features/agents/worktrees.
 
-// ---------- Settings ----------
-// gated: CODIN-668 — host /api/settings surface is not in the SDK's OpenAPI.
+// ---------- Settings (generated host operations) ----------
 export const getKeybindingOverrides = () =>
-  request<{ value: unknown }>("/api/settings/keybindings");
+  call(() => worktrackerClient().settings.settingsKeybindingsRetrieve());
 
 export const putKeybindingOverrides = (value: unknown) =>
-  request<{ value: unknown }>("/api/settings/keybindings", {
-    method: "PUT",
-    body: JSON.stringify({ value }),
-  });
+  call(() => worktrackerClient().settings.settingsKeybindingsUpdate({ settingValue: { value } }));
 
 // Typed host provider catalog: the schema is validated server-side, so the
 // client sends the whole value and lets a rejection surface as an ApiError.
 export const getProviderCatalog = () =>
-  request<{ value: ProviderCatalog }>("/api/settings/provider-catalog");
+  call(() => worktrackerClient().settings.settingsProviderCatalogRetrieve()) as Promise<{ value: ProviderCatalog }>;
 
 export const putProviderCatalog = (value: ProviderCatalog) =>
-  request<{ value: ProviderCatalog; blocked_launch_bindings: number }>(
-    "/api/settings/provider-catalog",
-    { method: "PUT", body: JSON.stringify({ value }) },
-  );
+  call(() => worktrackerClient().settings.settingsProviderCatalogUpdate({
+    providerCatalogEnvelope: { value } as never,
+  })) as Promise<{ value: ProviderCatalog; blocked_launch_bindings: number }>;
 
-/** How many launch bindings a candidate activation set would block, unsaved. */
-export const previewProviderCatalogImpact = (value: ProviderCatalog) =>
-  request<{ blocked_launch_bindings: number }>(
-    "/api/settings/provider-catalog/impact",
-    { method: "POST", body: JSON.stringify({ value }) },
-  );
-
-// ---------- Documents (ticket #521) ----------
-// gated: CODIN-668 — host /api/docs · /api/documents · /api/fs surfaces are not
-// in the SDK's OpenAPI.
+// ---------- Documents (ticket #521; generated host operations) ----------
 // Builds the URL for a registered design document. Path-style so the doc's
 // directory levels are mirrored in the URL and its relative assets resolve
 // under the same prefix; used as an iframe `src` in a sandboxed opaque origin.
@@ -573,7 +546,7 @@ export const saveDocument = (
   docId: string,
   body: { content: string; digest: string },
 ) =>
-  request<{ digest: string }>(`/api/docs/${encodeURIComponent(docId)}`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
+  call(() => worktrackerClient().documents.docsUpdate({
+    docId,
+    saveDocument: body,
+  })) as Promise<{ digest: string }>;

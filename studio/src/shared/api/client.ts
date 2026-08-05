@@ -1,6 +1,6 @@
 import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
 import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
-import { WorkItemPatchOriginEnum } from "@worktracker/typescript-sdk/models";
+import { OriginEnum } from "@worktracker/typescript-sdk/models";
 import type {
   IssueType,
   IssueTypeCreate,
@@ -10,7 +10,6 @@ import type {
   Project,
   ProjectCreate,
   ProjectPatch,
-  ScopeContext,
   State,
   StateCreate,
   StatePatch,
@@ -183,7 +182,7 @@ export const createModuleWorkItem = (
 
 export const patchWorkItem = (id: string, patch: WorkItemPatch) => {
   const studioPatch = "state_id" in patch
-    ? { ...patch, origin: WorkItemPatchOriginEnum.human }
+    ? { ...patch, origin: OriginEnum.human }
     : patch;
   return call<WorkItem>(async () =>
     (await sdk().workItems.updateWorkItem({
@@ -192,15 +191,6 @@ export const patchWorkItem = (id: string, patch: WorkItemPatch) => {
     })) as WorkItem
   );
 };
-
-// Agent scope-context (#667 B): read-only dependency slice for one task. Used
-// by agents, not the dependency graph view (which derives from loaded items).
-export const fetchScopeContext = (id: string) =>
-  call<ScopeContext>(async () =>
-    (await sdk().workItems.getWorkItemScopeContext({
-      issueId: id,
-    })) as ScopeContext
-  );
 
 export const deleteWorkItem = (id: string) =>
   call<void>(() => sdk().workItems.deleteWorkItem({ issueId: id }));

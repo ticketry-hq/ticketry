@@ -5,10 +5,11 @@ import uuid
 from django.db.models import QuerySet
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from worktracker.models import Attachment
+from worktracker.models import Attachment, Issue
 from worktracker.rest.serializers import (
     AttachmentSerializer,
     WorkItemCreateSerializer,
@@ -16,10 +17,10 @@ from worktracker.rest.serializers import (
     WorkItemSerializer,
 )
 from worktracker.services.work_items import (
-    _get_issue,
     create_project_work_item,
     create_review_finding,
     delete_work_item,
+    get_issue,
     update_work_item,
 )
 from worktracker.work_items import resolve_issue, task_qs
@@ -32,9 +33,7 @@ def _uuid_query(request, name):
     try:
         return uuid.UUID(value)
     except ValueError:
-        from rest_framework.exceptions import ValidationError
-
-        raise ValidationError({name: "Must be a valid UUID."})
+        raise DRFValidationError({name: "Must be a valid UUID."})
 
 
 def _bool_query(request, name, default=False):
@@ -46,13 +45,32 @@ def _bool_query(request, name, default=False):
         return True
     if normalized in {"false", "0"}:
         return False
-    from rest_framework.exceptions import ValidationError
-
-    raise ValidationError({name: "Must be true or false."})
+    raise DRFValidationError({name: "Must be true or false."})
 
 
 def _ordered_tasks() -> QuerySet:
     return task_qs().order_by("rank", "sequence_id", "id")
+
+
+def _pathfind_subtree_ids(*, project_id=None, module_id=None):
+    """Return canonical PathFind roots and every task descendant."""
+
+    roots = Issue.objects.filter(type="task", issue_type__is_pathfind=True)
+    if project_id is not None:
+        roots = roots.filter(project_id=project_id)
+    if module_id is not None:
+        roots = roots.filter(module_id=module_id)
+    seen = set(roots.values_list("id", flat=True))
+    frontier = set(seen)
+    while frontier:
+        children = set(
+            Issue.objects.filter(type="task", parent_id__in=frontier).values_list(
+                "id", flat=True
+            )
+        ) - seen
+        seen.update(children)
+        frontier = children
+    return seen
 
 
 class WorkItemListView(APIView):
@@ -84,7 +102,12 @@ class WorkItemListView(APIView):
         if not _bool_query(request, "include_archived"):
             queryset = queryset.exclude(is_archived=True)
         if not _bool_query(request, "include_pathfind"):
-            queryset = queryset.exclude(issue_type__name="PathFind")
+            queryset = queryset.exclude(
+                id__in=_pathfind_subtree_ids(
+                    project_id=project_id,
+                    module_id=module_id,
+                )
+            )
         return Response(WorkItemSerializer(queryset, many=True).data)
 
 
@@ -161,7 +184,7 @@ class AttachmentCollectionView(APIView):
         responses=AttachmentSerializer(many=True),
     )
     def get(self, request, issue_id):
-        _get_issue(issue_id)
+        get_issue(issue_id)
         attachments = Attachment.objects.filter(issue_id=issue_id).order_by(
             "created_at", "id"
         )
@@ -183,12 +206,10 @@ class AttachmentCollectionView(APIView):
         responses={201: AttachmentSerializer},
     )
     def post(self, request, issue_id):
-        issue = _get_issue(issue_id)
+        issue = get_issue(issue_id)
         uploaded = request.FILES.get("file")
         if uploaded is None:
-            from rest_framework.exceptions import ValidationError
-
-            raise ValidationError({"file": "This field is required."})
+            raise DRFValidationError({"file": "This field is required."})
         attachment = Attachment.objects.create(
             id=uuid.uuid4(),
             issue=issue,

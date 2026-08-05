@@ -13,6 +13,7 @@ import {
   cleanupTemporaryWebLaunch,
   parseWebDevOptions,
   selectTemporaryMcpPort,
+  selectWebMcpPort,
   selectWebPort,
 } from "./web-dev.mjs";
 import { removeTemporarySqliteProfile } from "../studio/scripts/desktop-dev.mjs";
@@ -173,6 +174,20 @@ test("temporary web MCP tries 8123 once and skips when it is occupied", async ()
 
   assert.equal(selected, null);
   assert.deepEqual(checked, [8123]);
+});
+
+test("persistent web development selects the next free MCP port", async () => {
+  const checked = [];
+  const selected = await selectWebMcpPort({
+    environment: {},
+    isAvailable: async (port) => {
+      checked.push(port);
+      return port !== 8123;
+    },
+  });
+
+  assert.equal(selected, 8124);
+  assert.deepEqual(checked, [8123, 8124]);
 });
 
 test("a skipped temporary MCP removes inherited MCP configuration", () => {

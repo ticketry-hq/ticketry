@@ -170,8 +170,13 @@ def test_round_trip_profile_crud(client, tmp_config, sample_profile):
         content_type="application/json",
     )
     assert response.status_code == 400
-    assert response.json() == {"detail": {"error": "index_out_of_range"}}
-    assert response.content == b'{"detail":{"error":"index_out_of_range"}}'
+    assert response.json() == {
+        "detail": "index_out_of_range",
+        "code": "index_out_of_range",
+    }
+    assert response.content == (
+        b'{"detail":"index_out_of_range","code":"index_out_of_range"}'
+    )
 
     response = client.delete("/api/config/profiles/0")
     assert response.status_code == 200
@@ -362,8 +367,14 @@ def test_replace_and_delete_out_of_range_error_shape(client, sample_profile):
         content_type="application/json",
     )
     assert response.status_code == 400
-    assert response.json() == {"detail": {"error": "index_out_of_range"}}
+    assert response.json() == {
+        "detail": "index_out_of_range",
+        "code": "index_out_of_range",
+    }
 
     response = client.delete("/api/config/profiles/0")
     assert response.status_code == 400
-    assert response.json() == {"detail": {"error": "index_out_of_range"}}
+    assert response.json() == {
+        "detail": "index_out_of_range",
+        "code": "index_out_of_range",
+    }

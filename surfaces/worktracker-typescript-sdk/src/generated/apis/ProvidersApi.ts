@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -26,17 +26,9 @@ import {
     ProviderToJSON,
 } from '../models/Provider.js';
 
-export interface CreateProviderRequest {
-    provider: Omit<Provider, 'id'>;
-}
-
-export interface DeleteProviderRequest {
-    id: string;
-}
-
 export interface UpdateProviderRequest {
     id: string;
-    patchedProvider?: Omit<PatchedProvider, 'id'>;
+    patchedProvider?: Omit<PatchedProvider, 'id'|'slug'|'supports_unattended'>;
 }
 
 /**
@@ -46,50 +38,6 @@ export interface UpdateProviderRequest {
  * @interface ProvidersApiInterface
  */
 export interface ProvidersApiInterface {
-    /**
-     * Creates request options for createProvider without sending the request
-     * @param {Provider} provider
-     * @throws {RequiredError}
-     * @memberof ProvidersApiInterface
-     */
-    createProviderRequestOpts(requestParameters: CreateProviderRequest): Promise<runtime.RequestOpts>;
-
-    /**
-     * The catalog\'s list/create/patch/delete contract (no overlapping retrieve).
-     * @param {Provider} provider
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof ProvidersApiInterface
-     */
-    createProviderRaw(requestParameters: CreateProviderRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Provider>>;
-
-    /**
-     * The catalog\'s list/create/patch/delete contract (no overlapping retrieve).
-     */
-    createProvider(requestParameters: CreateProviderRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Provider>;
-
-    /**
-     * Creates request options for deleteProvider without sending the request
-     * @param {string} id
-     * @throws {RequiredError}
-     * @memberof ProvidersApiInterface
-     */
-    deleteProviderRequestOpts(requestParameters: DeleteProviderRequest): Promise<runtime.RequestOpts>;
-
-    /**
-     * The catalog\'s list/create/patch/delete contract (no overlapping retrieve).
-     * @param {string} id
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof ProvidersApiInterface
-     */
-    deleteProviderRaw(requestParameters: DeleteProviderRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>>;
-
-    /**
-     * The catalog\'s list/create/patch/delete contract (no overlapping retrieve).
-     */
-    deleteProvider(requestParameters: DeleteProviderRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void>;
-
     /**
      * Creates request options for listProviders without sending the request
      * @throws {RequiredError}
@@ -142,105 +90,6 @@ export interface ProvidersApiInterface {
 export class ProvidersApi extends runtime.BaseAPI implements ProvidersApiInterface {
 
     /**
-     * Creates request options for createProvider without sending the request
-     */
-    async createProviderRequestOpts(requestParameters: CreateProviderRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['provider'] == null) {
-            throw new runtime.RequiredError(
-                'provider',
-                'Required parameter "provider" was null or undefined when calling createProvider().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        headerParameters['Content-Type'] = 'application/json';
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
-        }
-
-
-        let urlPath = `/providers`;
-
-        return {
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-            body: ProviderToJSON(requestParameters['provider']),
-        };
-    }
-
-    /**
-     * The catalog\'s list/create/patch/delete contract (no overlapping retrieve).
-     */
-    async createProviderRaw(requestParameters: CreateProviderRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Provider>> {
-        const requestOptions = await this.createProviderRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => ProviderFromJSON(jsonValue));
-    }
-
-    /**
-     * The catalog\'s list/create/patch/delete contract (no overlapping retrieve).
-     */
-    async createProvider(requestParameters: CreateProviderRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Provider> {
-        const response = await this.createProviderRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * Creates request options for deleteProvider without sending the request
-     */
-    async deleteProviderRequestOpts(requestParameters: DeleteProviderRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['id'] == null) {
-            throw new runtime.RequiredError(
-                'id',
-                'Required parameter "id" was null or undefined when calling deleteProvider().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
-        }
-
-
-        let urlPath = `/providers/{id}`;
-        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
-
-        return {
-            path: urlPath,
-            method: 'DELETE',
-            headers: headerParameters,
-            query: queryParameters,
-        };
-    }
-
-    /**
-     * The catalog\'s list/create/patch/delete contract (no overlapping retrieve).
-     */
-    async deleteProviderRaw(requestParameters: DeleteProviderRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
-        const requestOptions = await this.deleteProviderRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.VoidApiResponse(response);
-    }
-
-    /**
-     * The catalog\'s list/create/patch/delete contract (no overlapping retrieve).
-     */
-    async deleteProvider(requestParameters: DeleteProviderRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
-        await this.deleteProviderRaw(requestParameters, initOverrides);
-    }
-
-    /**
      * Creates request options for listProviders without sending the request
      */
     async listProvidersRequestOpts(): Promise<runtime.RequestOpts> {
@@ -253,7 +102,7 @@ export class ProvidersApi extends runtime.BaseAPI implements ProvidersApiInterfa
         }
 
 
-        let urlPath = `/providers`;
+        let urlPath = `/work-tracker/providers`;
 
         return {
             path: urlPath,
@@ -303,7 +152,7 @@ export class ProvidersApi extends runtime.BaseAPI implements ProvidersApiInterfa
         }
 
 
-        let urlPath = `/providers/{id}`;
+        let urlPath = `/work-tracker/providers/{id}`;
         urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
 
         return {

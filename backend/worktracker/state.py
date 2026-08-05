@@ -8,8 +8,8 @@ row for the wire.
 
 ``State`` is imported lazily inside ``state_group`` so that app-init code
 (``signals.py``, ``AppConfig.ready``, and ``models.issue`` itself) can import
-this vocabulary without a cycle and without dragging in the whole API surface.
-Keep it that way — nothing here may import ``worktracker.api`` or ``ninja``.
+this vocabulary without a cycle and without dragging in the DRF transport
+surface. Keep it that way — nothing here may import ``worktracker.rest``.
 """
 
 # A state group counts as "resolved" — the work is done or will never be done —
@@ -25,7 +25,7 @@ def normalize_state_id(value):
     return str(value) if value is not None else None
 
 
-def state_group(state_id):
+def state_group(state_id, *, using=None):
     """Return the group of a state by id, or ``None`` for no/unknown state.
 
     Read fresh from the table rather than via ``issue.state`` so the new-group
@@ -36,7 +36,7 @@ def state_group(state_id):
 
     if not state_id:
         return None
-    state = State.objects.filter(pk=state_id).only("group").first()
+    state = State.objects.using(using).filter(pk=state_id).only("group").first()
     return state.group if state else None
 
 

@@ -9,8 +9,11 @@ def seed_known_bindings(apps, schema_editor):
     IssueType = apps.get_model("worktracker", "IssueType")
     State = apps.get_model("worktracker", "State")
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
-    for project in Project.objects.all():
-        ensure_launch_bindings(project, IssueType, State, LaunchBinding)
+    alias = schema_editor.connection.alias
+    for project in Project.objects.using(alias).all():
+        ensure_launch_bindings(
+            project, IssueType, State, LaunchBinding, using=alias
+        )
 
 
 class Migration(migrations.Migration):

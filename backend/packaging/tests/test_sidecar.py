@@ -921,17 +921,21 @@ def test_packaged_posture_is_forced_and_secret_survives_restarts(tmp_path):
         assert first_secret != inherited_development_secret
         assert first_secret != "muxed-localhost-only"
         assert stat.S_IMODE(secret_file.stat().st_mode) == 0o600
+        api_headers = {
+            "Host": "localhost",
+            "x-api-key": (tmp_path / "worktracker_token").read_text().strip(),
+        }
 
         loopback_response = httpx.get(
             f"http://127.0.0.1:{port}/api/config",
-            headers={"Host": "localhost"},
+            headers=api_headers,
             timeout=5,
         )
         assert loopback_response.status_code == 200
 
         rejected_host = httpx.get(
             f"http://127.0.0.1:{port}/api/config",
-            headers={"Host": "untrusted.invalid"},
+            headers={**api_headers, "Host": "untrusted.invalid"},
             timeout=5,
         )
         assert rejected_host.status_code == 400

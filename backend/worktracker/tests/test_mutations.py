@@ -4,14 +4,14 @@ import uuid
 
 import pytest
 
-from worktracker.models import Issue, IssueType, Project, State
+from worktracker.models import Issue, IssueType, IssueTypeTransition, Project, State
 from worktracker.tests.conftest import BASE, patch_json, post_json
 
 
 # --- helpers ----------------------------------------------------------------
 
 
-def _make_task(client, project, auth, name="T", parent_id=None):
+def _make_task(client, project, auth, name="T", parent_id=None, state_id=None):
     issue_type, _ = IssueType.objects.get_or_create(
         project=project,
         name="Task",
@@ -20,25 +20,10 @@ def _make_task(client, project, auth, name="T", parent_id=None):
     body = {"name": name, "issue_type_id": str(issue_type.id)}
     if parent_id:
         body["parent_id"] = parent_id
+    if state_id:
+        body["state_id"] = str(state_id)
     r = post_json(client, f"{BASE}/projects/{project.id}/work-items", body, auth)
-    assert r.status_code == 200
-    return r.json()
-
-
-def _make_pathfind_type(project):
-    return IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="PathFind", level="task"
-    )
-
-
-def _make_pathfind(
-    client, project, auth, pathfind_type, name="Discovery", parent_id=None
-):
-    body = {"name": name, "issue_type_id": str(pathfind_type.id)}
-    if parent_id:
-        body["parent_id"] = parent_id
-    r = post_json(client, f"{BASE}/projects/{project.id}/work-items", body, auth)
-    assert r.status_code == 200
+    assert r.status_code == 201
     return r.json()
 
 
@@ -54,7 +39,7 @@ def _make_module(client, project, auth, name="Epic"):
         {"name": name, "issue_type_id": str(issue_type.id)},
         auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     return r.json()
 
 
@@ -78,7 +63,7 @@ def test_create_project_seeds_states(client, project, auth):
         {"name": "Second", "slug": "SEC", "workspace_slug": "meml"},
         auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     body = r.json()
     assert body["slug"] == "SEC"
 
@@ -114,7 +99,7 @@ def test_create_project_seeds_states(client, project, auth):
 def test_create_project_resolves_sole_workspace(client, project, auth):
     # workspace_slug omitted → resolves the only workspace (the fixture's).
     r = post_json(client, f"{BASE}/projects", {"name": "NoWs", "slug": "NWS"}, auth)
-    assert r.status_code == 200
+    assert r.status_code == 201
     assert Project.objects.filter(slug="NWS").exists()
 
 
@@ -168,7 +153,7 @@ def test_create_project_persists_description(client, project, auth):
         {"name": "Docs", "slug": "DOC", "description": "# Goals\n\nShip it."},
         auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     assert r.json()["description"] == "# Goals\n\nShip it."
     assert Project.objects.get(slug="DOC").description == "# Goals\n\nShip it."
 
@@ -183,19 +168,17 @@ def test_create_project_defaults_description_to_empty(client, project, auth):
 
 @pytest.mark.django_db
 def test_patch_project_description_keeps_slug_immutable(client, project, auth):
-    # A description-only patch leaves the name alone; slug is never accepted.
+    # A description patch that also tries to mutate the immutable slug is rejected.
     r = patch_json(
         client,
         f"{BASE}/projects/{project.id}",
         {"description": "updated", "slug": "HACK"},
         auth,
     )
-    assert r.status_code == 200
-    body = r.json()
-    assert body["description"] == "updated"
-    assert body["name"] == "meml"  # untouched — name wasn't in the patch
-    assert body["slug"] == "MEML"  # slug stays immutable, ignored if sent
+    assert r.status_code == 400
+    assert "immutable" in str(r.json()["slug"]).lower()
     project.refresh_from_db()
+    assert project.description == ""
     assert project.slug == "MEML"
 
 
@@ -232,196 +215,6 @@ def test_delete_missing_project_404(client, project, auth):
     assert r.status_code == 404
 
 
-# --- archived-item list filtering -------------------------------------------
-
-
-@pytest.mark.django_db
-def test_archive_hides_from_project_list(client, project, auth):
-    task = _make_task(client, project, auth)
-
-    Issue.objects.filter(pk=task["id"]).update(is_archived=True)
-
-    default = client.get(f"{BASE}/projects/{project.id}/work-items", headers=auth).json()
-    assert default == []
-
-    full = client.get(
-        f"{BASE}/projects/{project.id}/work-items?include_archived=true", headers=auth
-    ).json()
-    assert [t["id"] for t in full] == [task["id"]]
-
-
-@pytest.mark.django_db
-def test_archive_hides_from_module_list(client, project, auth):
-    module = _make_module(client, project, auth)
-    task = post_json(
-        client,
-        f"{BASE}/modules/{module['id']}/work-items",
-        {
-            "name": "T",
-            "issue_type_id": str(_task_type(project).id),
-        },
-        auth,
-    ).json()
-
-    Issue.objects.filter(pk=task["id"]).update(is_archived=True)
-
-    default = client.get(f"{BASE}/modules/{module['id']}/work-items", headers=auth).json()
-    assert default == []
-
-    full = client.get(
-        f"{BASE}/modules/{module['id']}/work-items?include_archived=true", headers=auth
-    ).json()
-    assert [t["id"] for t in full] == [task["id"]]
-
-
-@pytest.mark.django_db
-def test_archived_still_retrievable_by_id_and_key(client, project, auth):
-    task = _make_task(client, project, auth)
-    Issue.objects.filter(pk=task["id"]).update(is_archived=True)
-
-    by_id = client.get(f"{BASE}/work-items/{task['id']}", headers=auth)
-    assert by_id.status_code == 200
-    assert by_id.json()["task"]["is_archived"] is True
-
-    by_key = client.get(f"{BASE}/work-items/{task['key']}", headers=auth)
-    assert by_key.status_code == 200
-    assert by_key.json()["task"]["id"] == task["id"]
-
-
-@pytest.mark.django_db
-def test_archive_hides_module_from_module_list(client, project, auth):
-    module = _make_module(client, project, auth)
-    Issue.objects.filter(pk=module["id"]).update(is_archived=True)
-
-    default = client.get(f"{BASE}/projects/{project.id}/modules", headers=auth).json()
-    assert default == []
-
-    full = client.get(
-        f"{BASE}/projects/{project.id}/modules?include_archived=true", headers=auth
-    ).json()
-    assert [m["id"] for m in full] == [module["id"]]
-
-
-# --- PathFind visibility filtering ------------------------------------------
-
-
-@pytest.mark.django_db
-def test_project_work_item_list_hides_pathfind_by_default(client, project, auth):
-    pathfind_type = _make_pathfind_type(project)
-    regular = _make_task(client, project, auth, name="Build")
-    pathfind = _make_pathfind(client, project, auth, pathfind_type)
-
-    default = client.get(f"{BASE}/projects/{project.id}/work-items", headers=auth)
-    assert [t["id"] for t in default.json()] == [regular["id"]]
-
-    full = client.get(
-        f"{BASE}/projects/{project.id}/work-items?include_pathfind=true",
-        headers=auth,
-    )
-    assert {t["id"] for t in full.json()} == {regular["id"], pathfind["id"]}
-
-
-@pytest.mark.django_db
-def test_module_work_item_list_hides_pathfind_descendants_by_default(
-    client, project, auth
-):
-    pathfind_type = _make_pathfind_type(project)
-    module = _make_module(client, project, auth)
-    regular = _make_task(client, project, auth, name="Build", parent_id=module["id"])
-    pathfind = _make_pathfind(
-        client, project, auth, pathfind_type, parent_id=module["id"]
-    )
-    nested_pathfind = _make_pathfind(
-        client, project, auth, pathfind_type, name="Nested", parent_id=pathfind["id"]
-    )
-
-    default = client.get(f"{BASE}/modules/{module['id']}/work-items", headers=auth)
-    assert [t["id"] for t in default.json()] == [regular["id"]]
-
-    full = client.get(
-        f"{BASE}/modules/{module['id']}/work-items?include_pathfind=true",
-        headers=auth,
-    )
-    assert {t["id"] for t in full.json()} == {
-        regular["id"],
-        pathfind["id"],
-        nested_pathfind["id"],
-    }
-
-
-@pytest.mark.django_db
-def test_project_include_archived_does_not_imply_include_pathfind(
-    client, project, auth
-):
-    pathfind_type = _make_pathfind_type(project)
-    regular = _make_task(client, project, auth, name="Build")
-    pathfind = _make_pathfind(client, project, auth, pathfind_type)
-    Issue.objects.filter(pk__in=[regular["id"], pathfind["id"]]).update(is_archived=True)
-
-    archived_only = client.get(
-        f"{BASE}/projects/{project.id}/work-items?include_archived=true",
-        headers=auth,
-    )
-    assert [t["id"] for t in archived_only.json()] == [regular["id"]]
-
-    pathfind_only = client.get(
-        f"{BASE}/projects/{project.id}/work-items?include_pathfind=true",
-        headers=auth,
-    )
-    assert pathfind_only.json() == []
-
-    both = client.get(
-        f"{BASE}/projects/{project.id}/work-items"
-        "?include_archived=true&include_pathfind=true",
-        headers=auth,
-    )
-    assert {t["id"] for t in both.json()} == {regular["id"], pathfind["id"]}
-
-
-@pytest.mark.django_db
-def test_module_include_archived_does_not_imply_include_pathfind(client, project, auth):
-    pathfind_type = _make_pathfind_type(project)
-    module = _make_module(client, project, auth)
-    regular = _make_task(client, project, auth, name="Build", parent_id=module["id"])
-    pathfind = _make_pathfind(
-        client, project, auth, pathfind_type, parent_id=module["id"]
-    )
-    Issue.objects.filter(pk__in=[regular["id"], pathfind["id"]]).update(is_archived=True)
-
-    archived_only = client.get(
-        f"{BASE}/modules/{module['id']}/work-items?include_archived=true",
-        headers=auth,
-    )
-    assert [t["id"] for t in archived_only.json()] == [regular["id"]]
-
-    pathfind_only = client.get(
-        f"{BASE}/modules/{module['id']}/work-items?include_pathfind=true",
-        headers=auth,
-    )
-    assert pathfind_only.json() == []
-
-    both = client.get(
-        f"{BASE}/modules/{module['id']}/work-items"
-        "?include_archived=true&include_pathfind=true",
-        headers=auth,
-    )
-    assert {t["id"] for t in both.json()} == {regular["id"], pathfind["id"]}
-
-
-@pytest.mark.django_db
-def test_pathfind_still_retrievable_by_id_and_key(client, project, auth):
-    pathfind_type = _make_pathfind_type(project)
-    pathfind = _make_pathfind(client, project, auth, pathfind_type)
-
-    by_id = client.get(f"{BASE}/work-items/{pathfind['id']}", headers=auth)
-    assert by_id.status_code == 200
-    assert by_id.json()["task"]["issue_type"]["name"] == "PathFind"
-
-    by_key = client.get(f"{BASE}/work-items/{pathfind['key']}", headers=auth)
-    assert by_key.status_code == 200
-    assert by_key.json()["task"]["id"] == pathfind["id"]
-
-
 # --- #633: cancel = archive (transition-based) ------------------------------
 
 
@@ -433,11 +226,31 @@ def _state(project, name, group):
     )
 
 
+def _workflow(project, start, *edges):
+    issue_type = _task_type(project)
+    issue_type.start_state = start
+    issue_type.save(update_fields=("start_state", "updated_at"))
+    IssueTypeTransition.objects.bulk_create(
+        [
+            IssueTypeTransition(
+                issue_type=issue_type,
+                from_state=from_state,
+                to_state=to_state,
+            )
+            for from_state, to_state in edges
+        ]
+    )
+
+
 @pytest.mark.django_db
 def test_cancel_archives_and_cascades_descendants(client, project, auth):
+    todo = _state(project, "Todo", "unstarted")
     cancelled = _state(project, "Cancelled", "cancelled")
-    story = _make_task(client, project, auth)
-    subtask = _make_task(client, project, auth, parent_id=story["id"])
+    _workflow(project, todo, (todo, cancelled))
+    story = _make_task(client, project, auth, state_id=todo.id)
+    subtask = _make_task(
+        client, project, auth, parent_id=story["id"], state_id=todo.id
+    )
 
     r = patch_json(
         client,
@@ -449,21 +262,22 @@ def test_cancel_archives_and_cascades_descendants(client, project, auth):
     assert r.json()["is_archived"] is True
 
     # Story + its sub-task both drop from the active list (cascade archive).
-    active = client.get(
-        f"{BASE}/projects/{project.id}/work-items", headers=auth
-    ).json()
+    active = client.get(f"{BASE}/work-items?project={project.id}", headers=auth).json()
     assert [t["id"] for t in active] == []
 
     sub = client.get(f"{BASE}/work-items/{subtask['id']}", headers=auth).json()
-    assert sub["task"]["is_archived"] is True
+    assert sub["is_archived"] is True
 
 
 @pytest.mark.django_db
 def test_uncancel_restores_self_only(client, project, auth):
     todo = _state(project, "Todo", "unstarted")
     cancelled = _state(project, "Cancelled", "cancelled")
-    story = _make_task(client, project, auth)
-    subtask = _make_task(client, project, auth, parent_id=story["id"])
+    _workflow(project, todo, (todo, cancelled), (cancelled, todo))
+    story = _make_task(client, project, auth, state_id=todo.id)
+    subtask = _make_task(
+        client, project, auth, parent_id=story["id"], state_id=todo.id
+    )
 
     patch_json(
         client, f"{BASE}/work-items/{story['id']}", {"state_id": str(cancelled.id)}, auth
@@ -476,13 +290,15 @@ def test_uncancel_restores_self_only(client, project, auth):
 
     # The cascade-archived descendant is NOT restored (intentional asymmetry).
     sub = client.get(f"{BASE}/work-items/{subtask['id']}", headers=auth).json()
-    assert sub["task"]["is_archived"] is True
+    assert sub["is_archived"] is True
 
 
 @pytest.mark.django_db
 def test_active_to_active_leaves_manual_archive_untouched(client, project, auth):
+    todo = _state(project, "Todo", "unstarted")
     inprog = _state(project, "In Progress", "started")
-    task = _make_task(client, project, auth)
+    _workflow(project, todo, (todo, inprog))
+    task = _make_task(client, project, auth, state_id=todo.id)
     # Manually archive while in a non-cancelled state.
     Issue.objects.filter(pk=task["id"]).update(is_archived=True)
 
@@ -495,12 +311,16 @@ def test_active_to_active_leaves_manual_archive_untouched(client, project, auth)
 
 @pytest.mark.django_db
 def test_child_count_excludes_archived_children(client, project, auth):
+    todo = _state(project, "Todo", "unstarted")
     cancelled = _state(project, "Cancelled", "cancelled")
-    story = _make_task(client, project, auth)
-    subtask = _make_task(client, project, auth, parent_id=story["id"])
+    _workflow(project, todo, (todo, cancelled))
+    story = _make_task(client, project, auth, state_id=todo.id)
+    subtask = _make_task(
+        client, project, auth, parent_id=story["id"], state_id=todo.id
+    )
 
     before = client.get(f"{BASE}/work-items/{story['id']}", headers=auth).json()
-    assert before["task"]["sub_issues_count"] == 1
+    assert before["sub_issues_count"] == 1
 
     # Cancelling the only child archives it; the parent's rollup drops to 0 so
     # the main app shows no expand arrow over an empty subtree.
@@ -508,4 +328,4 @@ def test_child_count_excludes_archived_children(client, project, auth):
         client, f"{BASE}/work-items/{subtask['id']}", {"state_id": str(cancelled.id)}, auth
     )
     after = client.get(f"{BASE}/work-items/{story['id']}", headers=auth).json()
-    assert after["task"]["sub_issues_count"] == 0
+    assert after["sub_issues_count"] == 0

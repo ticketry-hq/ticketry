@@ -1,4 +1,4 @@
-"""Smoke coverage for root-mounted operations beside the generated SDK."""
+"""Smoke coverage for resource operations in the generated SDK contract."""
 
 import json
 
@@ -48,7 +48,7 @@ def test_get_dependency_graph_uses_generated_transport_at_api_root() -> None:
             "OK",
         )
 
-    client = ApiClient(Configuration(host="https://worktracker.test/api/work-tracker"))
+    client = ApiClient(Configuration(host="https://worktracker.test/api"))
     client.rest_client.pool_manager.request = request
 
     graph = ExecutionApi(client).get_dependency_graph(ROOT)
@@ -56,7 +56,7 @@ def test_get_dependency_graph_uses_generated_transport_at_api_root() -> None:
     assert isinstance(graph, DependencyGraphOut)
     assert graph.nodes[0].state == "Review"
     assert [(method, url) for method, url, _ in calls] == [
-        ("GET", f"https://worktracker.test/api/work-items/{ROOT}/graph-run")
+        ("GET", f"https://worktracker.test/api/work-tracker/work-items/{ROOT}/graph-run")
     ]
 
 
@@ -79,7 +79,7 @@ def test_execute_graph_uses_generated_transport_at_api_root() -> None:
         )
 
     configuration = Configuration(
-        host="https://worktracker.test/api/work-tracker",
+        host="https://worktracker.test/api",
         api_key={"ApiKeyAuth": "secret"},
     )
     client = ApiClient(configuration)
@@ -91,7 +91,7 @@ def test_execute_graph_uses_generated_transport_at_api_root() -> None:
     assert result.root_id == ROOT
     assert result.launched == [MODULE]
     assert [(method, url) for method, url, _ in calls] == [
-        ("POST", f"https://worktracker.test/api/work-items/{ROOT}/graph-run")
+        ("POST", f"https://worktracker.test/api/work-tracker/work-items/{ROOT}/graph-run")
     ]
     assert calls[0][2]["headers"]["x-api-key"] == "secret"
     assert json.loads(calls[0][2]["body"]) == {"agent": "codex"}
@@ -115,7 +115,7 @@ def test_reset_graph_uses_delete_at_api_root() -> None:
             "OK",
         )
 
-    client = ApiClient(Configuration(host="https://worktracker.test/api/work-tracker"))
+    client = ApiClient(Configuration(host="https://worktracker.test/api"))
     client.rest_client.pool_manager.request = request
 
     result = ExecutionApi(client).reset_graph(ROOT)
@@ -123,7 +123,7 @@ def test_reset_graph_uses_delete_at_api_root() -> None:
     assert isinstance(result, ResetGraphOut)
     assert result.cleared == [MODULE]
     assert [(method, url) for method, url, _ in calls] == [
-        ("DELETE", f"https://worktracker.test/api/work-items/{ROOT}/graph-run")
+        ("DELETE", f"https://worktracker.test/api/work-tracker/work-items/{ROOT}/graph-run")
     ]
 
 
@@ -151,7 +151,7 @@ def test_default_coding_agent_returns_launched_agent() -> None:
             "Created",
         )
 
-    client = ApiClient(Configuration(host="https://worktracker.test/api/work-tracker"))
+    client = ApiClient(Configuration(host="https://worktracker.test/api"))
     client.rest_client.pool_manager.request = request
 
     result = LaunchApi(client).default_coding_agent(ROOT, agent="claude")
@@ -159,7 +159,7 @@ def test_default_coding_agent_returns_launched_agent() -> None:
     assert isinstance(result, LaunchedAgentOut)
     assert result.agent == "claude"
     assert [(method, url) for method, url, _ in calls] == [
-        ("POST", f"https://worktracker.test/api/work-items/{ROOT}/launch-agent")
+        ("POST", f"https://worktracker.test/api/work-tracker/work-items/{ROOT}/launch-agent")
     ]
     assert json.loads(calls[0][2]["body"]) == {"agent": "claude"}
 
@@ -169,7 +169,7 @@ def test_root_operation_4xx_preserves_error_message_body() -> None:
     from worktracker_sdk.generated.exceptions import UnprocessableEntityException
 
     payload = {"error": "graph_empty", "message": "No implementation leaves"}
-    client = ApiClient(Configuration(host="https://worktracker.test/api/work-tracker"))
+    client = ApiClient(Configuration(host="https://worktracker.test/api"))
     client.rest_client.pool_manager.request = lambda *args, **kwargs: _StubHttpResponse(
         422,
         json.dumps(payload).encode(),

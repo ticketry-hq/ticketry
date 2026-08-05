@@ -11,10 +11,9 @@ import shutil
 import types
 
 import pytest
-from ninja.testing import TestClient
+from django.test import Client
 
 from apps.worktrees import service
-from apps.worktrees.api import router
 
 
 pytestmark = [
@@ -22,7 +21,17 @@ pytestmark = [
     pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH"),
 ]
 
-client = TestClient(router)
+class HostClient(Client):
+    def get(self, path, *args, **kwargs):
+        return super().get(f"/api{path}", *args, **kwargs)
+
+    def post(self, path, *args, json=None, **kwargs):
+        if json is not None:
+            kwargs.update(data=json, content_type="application/json")
+        return super().post(f"/api{path}", *args, **kwargs)
+
+
+client = HostClient()
 
 MODULE_ID = "mod-1"
 

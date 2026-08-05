@@ -14,3 +14,11 @@ from worktracker_sdk.generated.api.states_api import StatesApi
 from worktracker_sdk.generated.api.work_items_api import WorkItemsApi
 from worktracker_sdk.generated.api.workflows_api import WorkflowsApi
 from worktracker_sdk.generated.api.workspace_api import WorkspaceApi
+from worktracker_sdk.generated.api.configuration_api import ConfigurationApi
+from worktracker_sdk.generated.api.documents_api import DocumentsApi
+from worktracker_sdk.generated.api.execution_api import ExecutionApi
+from worktracker_sdk.generated.api.runs_api import RunsApi
+from worktracker_sdk.generated.api.settings_api import SettingsApi
+from worktracker_sdk.generated.api.system_api import SystemApi
+from worktracker_sdk.generated.api.terminals_api import TerminalsApi
+from worktracker_sdk.generated.api.worktrees_api import WorktreesApi

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any, Optional
 
+from asgiref.sync import async_to_sync
 from django.http import JsonResponse
 from django.db import close_old_connections
-from ninja import Router
 from pydantic import BaseModel
 
 import apps.terminals.agents.registry as registry
@@ -31,7 +30,6 @@ from apps.settings_store.config import NoConfigurationSelected
 from apps.runs.models import AgentRun
 
 
-router = Router(tags=["terminals"])
 logger = logging.getLogger(__name__)
 
 
@@ -78,15 +76,13 @@ def _viewer_lease_payload(lease: viewer_leases.ViewerLease) -> dict[str, Any]:
     }
 
 
-@router.post("/terminals/viewers/lease")
-async def acquire_viewer_lease(request, body: ViewerLeaseBody):
+def acquire_viewer_lease(request, body: ViewerLeaseBody):
     """Acquire the durable newest-viewer-wins lease for a terminal run."""
 
     if body.transport not in {"browser", "desktop"}:
         return JsonResponse({"detail": {"error": "invalid_transport"}}, status=400)
     try:
-        lease = await asyncio.to_thread(
-            viewer_leases.acquire,
+        lease = viewer_leases.acquire(
             agent_run_id=body.agent_run_id,
             viewer_id=body.viewer_id,
             transport=body.transport,
@@ -96,12 +92,10 @@ async def acquire_viewer_lease(request, body: ViewerLeaseBody):
     return _viewer_lease_payload(lease)
 
 
-@router.post("/terminals/viewers/lease/renew")
-async def renew_viewer_lease(request, body: ViewerLeaseReleaseBody):
+def renew_viewer_lease(request, body: ViewerLeaseReleaseBody):
     """Renew a lease or tell a displaced viewer why it must detach."""
 
-    lease = await asyncio.to_thread(
-        viewer_leases.renew,
+    lease = viewer_leases.renew(
         agent_run_id=body.agent_run_id,
         viewer_id=body.viewer_id,
     )
@@ -110,12 +104,10 @@ async def renew_viewer_lease(request, body: ViewerLeaseReleaseBody):
     return _viewer_lease_payload(lease)
 
 
-@router.post("/terminals/viewers/lease/release")
-async def release_viewer_lease(request, body: ViewerLeaseReleaseBody):
+def release_viewer_lease(request, body: ViewerLeaseReleaseBody):
     """Release only this viewer's lease; never terminate the tmux run."""
 
-    released = await asyncio.to_thread(
-        viewer_leases.release,
+    released = viewer_leases.release(
         agent_run_id=body.agent_run_id,
         viewer_id=body.viewer_id,
     )
@@ -157,8 +149,7 @@ def _terminal_session_payload(session) -> dict[str, Any]:
     }
 
 
-@router.post("/terminals")
-async def create_terminal(request, body: CreateTerminalRunBody):
+def create_terminal(request, body: CreateTerminalRunBody):
     """Create a durable run and tmux session before a terminal attaches."""
 
     init, error = _create_request_as_spawn_init(body)
@@ -166,7 +157,7 @@ async def create_terminal(request, body: CreateTerminalRunBody):
         return JsonResponse({"detail": {"error": error}}, status=400)
 
     try:
-        agent_run_id = await create_terminal_run(init)
+        agent_run_id = async_to_sync(create_terminal_run)(init)
     except NoConfigurationSelected:
         return JsonResponse({"detail": {"error": "no_profile_selected"}}, status=400)
     except LaunchUnavailable as exc:
@@ -214,8 +205,7 @@ def _select_resumable_runs(
     return list(selected.values())[:10]
 
 
-@router.get("/terminals")
-async def list_terminals(request, task_id: str) -> list[dict[str, Any]]:
+def list_terminals(request, task_id: str) -> list[dict[str, Any]]:
     """List active persisted terminal sessions for a work item."""
 
     # Reap dead/orphaned tmux sessions first so the UI is never offered a
@@ -223,20 +213,19 @@ async def list_terminals(request, task_id: str) -> list[dict[str, Any]]:
     # returning the unreconciled list rather than failing the request.
 
     try:
-        await asyncio.to_thread(terminal_session.reconcile)
+        terminal_session.reconcile()
     except Exception as exc:
         logger.warning("terminal reconcile before list failed: %s", exc)
 
-    sessions = await asyncio.to_thread(terminal_session.sessions_for, task_id)
+    sessions = terminal_session.sessions_for(task_id)
     return [_terminal_session_payload(s) for s in sessions]
 
 
-@router.post("/terminals/resume")
-async def resume_terminal(request, agent_run_id: str):
+def resume_terminal(request, agent_run_id: str):
     """Resume a terminated provider conversation in a fresh tmux run."""
 
     try:
-        new_agent_run_id = await terminal_session.resume(agent_run_id)
+        new_agent_run_id = async_to_sync(terminal_session.resume)(agent_run_id)
     except ResumeUnavailable as exc:
         status = 404 if exc.reason == "unknown_run" else 409
         return JsonResponse({"detail": {"error": exc.reason}}, status=status)
@@ -256,8 +245,7 @@ async def resume_terminal(request, agent_run_id: str):
     }
 
 
-@router.get("/terminals/resumable")
-async def list_resumable_terminals(
+def list_resumable_terminals(
     request,
     task_id: str | None = None,
     project_id: str | None = None,
@@ -316,7 +304,7 @@ async def list_resumable_terminals(
         finally:
             close_old_connections()
 
-    runs = await asyncio.to_thread(_load_resumable_runs)
+    runs = _load_resumable_runs()
     return [
         {
             "agent_run_id": run.id,
@@ -332,8 +320,7 @@ async def list_resumable_terminals(
     ]
 
 
-@router.get("/terminals/scratch")
-async def list_scratch_terminals(
+def list_scratch_terminals(
     request,
     project_id: str,
     module_id: str | None = None,
@@ -343,14 +330,11 @@ async def list_scratch_terminals(
     # Reap dead/orphaned tmux sessions first, mirroring the task-bound list.
 
     try:
-        await asyncio.to_thread(terminal_session.reconcile)
+        terminal_session.reconcile()
     except Exception as exc:
         logger.warning("terminal reconcile before scratch list failed: %s", exc)
 
-    scratch_sessions = await asyncio.to_thread(
-        terminal_session.sessions_for,
-        dao.SCRATCH_TASK_ID,
-    )
+    scratch_sessions = terminal_session.sessions_for(dao.SCRATCH_TASK_ID)
     sessions = [
         session
         for session in scratch_sessions
@@ -360,17 +344,12 @@ async def list_scratch_terminals(
     return [_terminal_session_payload(s) for s in sessions]
 
 
-@router.delete("/terminals/")
-async def terminate_terminal(request, agent_run_id: str):
+def terminate_terminal(request, agent_run_id: str):
     """Terminate a tmux session and soft-delete its metadata row."""
 
     try:
-        known = await asyncio.to_thread(
-            lambda: AgentTerminalSession.objects.filter(
-                agent_run_id=agent_run_id
-            ).exists()
-        )
-        await asyncio.to_thread(terminal_session.terminate, agent_run_id)
+        known = AgentTerminalSession.objects.filter(agent_run_id=agent_run_id).exists()
+        terminal_session.terminate(agent_run_id)
     except TerminalSessionError as exc:
         return JsonResponse(
             {"detail": {"error": "terminate_failed", "message": str(exc)}},
@@ -385,8 +364,7 @@ async def terminate_terminal(request, agent_run_id: str):
     return {"agent_run_id": agent_run_id, "terminated": True}
 
 
-@router.post("/terminals/self-terminate")
-async def self_terminate_terminal(request):
+def self_terminate_terminal(request):
     """Terminate only the run named by Studio-issued request authorization."""
 
     try:
@@ -408,7 +386,7 @@ async def self_terminate_terminal(request):
         )
         return known, active
 
-    known, active = await asyncio.to_thread(_run_state)
+    known, active = _run_state()
     if not known:
         return JsonResponse(
             {"ok": False, "error": "caller_run_unknown"},
@@ -423,7 +401,7 @@ async def self_terminate_terminal(request):
         }
 
     try:
-        await asyncio.to_thread(terminal_session.terminate, agent_run_id)
+        terminal_session.terminate(agent_run_id)
     except TerminalSessionError as exc:
         return JsonResponse(
             {"ok": False, "error": "terminate_failed", "message": str(exc)},

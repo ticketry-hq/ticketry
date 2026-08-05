@@ -23,8 +23,10 @@ from worktracker.models import (
 from worktracker.rest.serializers import (
     AgentModelSerializer,
     IssueTypeSerializer,
+    IssueTypeDeleteSerializer,
     IssueTypeTransitionSerializer,
     LaunchBindingSerializer,
+    ModuleCreateSerializer,
     ModuleSerializer,
     ProjectSerializer,
     ProviderSerializer,
@@ -33,6 +35,7 @@ from worktracker.rest.serializers import (
     WorkflowRevisionSerializer,
     WorkspaceSerializer,
 )
+from worktracker.rest.schema import DeleteRequestBodyAutoSchema
 from worktracker.services import scoped_workflows, workflow_config
 from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
 from worktracker.services.modules import create_module
@@ -82,7 +85,15 @@ class ProjectViewSet(
 
 
 @extend_schema_view(
-    list=extend_schema(operation_id="listModules", tags=["Modules"]),
+    list=extend_schema(
+        operation_id="listModules",
+        tags=["Modules"],
+        parameters=[
+            OpenApiParameter(
+                "include_archived", bool, required=False, default=False
+            )
+        ],
+    ),
     create=extend_schema(operation_id="createModule", tags=["Modules"]),
 )
 class ModuleViewSet(
@@ -93,6 +104,24 @@ class ModuleViewSet(
     """Project-scoped module collection with explicit stable ordering."""
 
     serializer_class = ModuleSerializer
+
+    def get_serializer_class(self):
+        return ModuleCreateSerializer if self.action == "create" else ModuleSerializer
+
+    @extend_schema(
+        operation_id="createModule",
+        tags=["Modules"],
+        request=ModuleCreateSerializer,
+        responses={201: ModuleSerializer},
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(
+            ModuleSerializer(serializer.instance).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     def get_queryset(self):
         queryset = (
@@ -226,9 +255,15 @@ class StateViewSet(ProjectConfigurationViewSet):
     create=extend_schema(operation_id="createIssueType", tags=["Issue Types"]),
     retrieve=extend_schema(operation_id="getIssueType", tags=["Issue Types"]),
     partial_update=extend_schema(operation_id="updateIssueType", tags=["Issue Types"]),
-    destroy=extend_schema(operation_id="deleteIssueType", tags=["Issue Types"]),
+    destroy=extend_schema(
+        operation_id="deleteIssueType",
+        tags=["Issue Types"],
+        request=IssueTypeDeleteSerializer,
+        responses={204: None},
+    ),
 )
 class IssueTypeViewSet(ProjectConfigurationViewSet):
+    schema = DeleteRequestBodyAutoSchema()
     queryset = IssueType.objects.order_by("sort_order", "created_at")
     serializer_class = IssueTypeSerializer
     lookup_url_kwarg = "type_id"
@@ -257,20 +292,12 @@ class IssueTypeViewSet(ProjectConfigurationViewSet):
             self.kwargs["type_id"], changes
         )
 
-    @extend_schema(
-        parameters=[
-            OpenApiParameter(
-                "reassign_to",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                required=False,
-            )
-        ]
-    )
     def destroy(self, request, *args, **kwargs):
+        serializer = IssueTypeDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         instance = self.get_object()
         workflow_config.delete_issue_type(
-            instance.id, request.query_params.get("reassign_to")
+            instance.id, serializer.validated_data.get("reassign_to")
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -412,11 +439,11 @@ class LaunchBindingDetailView(APIView):
     )
     @transaction.atomic
     def put(self, request, type_id, state_id):
-        try:
-            workflow_revision = int(request.data.get("workflow_revision"))
-        except (TypeError, ValueError):
-            workflow_revision = -1
-        issue_type, state = self._locked_context(type_id, state_id, workflow_revision)
+        guard = WorkflowRevisionSerializer(data=request.data)
+        guard.is_valid(raise_exception=True)
+        issue_type, state = self._locked_context(
+            type_id, state_id, guard.validated_data["workflow_revision"]
+        )
         current = LaunchBinding.objects.filter(
             issue_type=issue_type, state=state
         ).first()
@@ -442,11 +469,11 @@ class LaunchBindingDetailView(APIView):
     )
     @transaction.atomic
     def delete(self, request, type_id, state_id):
-        try:
-            workflow_revision = int(request.data.get("workflow_revision"))
-        except (TypeError, ValueError):
-            workflow_revision = -1
-        issue_type, state = self._locked_context(type_id, state_id, workflow_revision)
+        guard = WorkflowRevisionSerializer(data=request.data)
+        guard.is_valid(raise_exception=True)
+        issue_type, state = self._locked_context(
+            type_id, state_id, guard.validated_data["workflow_revision"]
+        )
         LaunchBinding.objects.filter(issue_type=issue_type, state=state).delete()
         issue_type.workflow_revision += 1
         issue_type.save(update_fields=("workflow_revision", "updated_at"))

@@ -40,10 +40,8 @@ app_name = "worktracker-rest"
 class WorkTrackerSchemaView(SpectacularAPIView):
     pass
 
-provider_collection = ProviderViewSet.as_view({"get": "list", "post": "create"})
-provider_detail = ProviderViewSet.as_view(
-    {"patch": "partial_update", "delete": "destroy"}
-)
+provider_collection = ProviderViewSet.as_view({"get": "list"})
+provider_detail = ProviderViewSet.as_view({"patch": "partial_update"})
 model_collection = AgentModelViewSet.as_view({"get": "list", "post": "create"})
 model_detail = AgentModelViewSet.as_view(
     {"patch": "partial_update", "delete": "destroy"}

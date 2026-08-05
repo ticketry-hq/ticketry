@@ -8,7 +8,6 @@ dependencies = [
     "djangorestframework>=3.16",
     "drf-spectacular>=0.28",
     "channels>=4",
-    "django-ninja>=1",
     "uvicorn[standard]>=0.29.0",
     "ptyprocess>=0.7.0",
     "libtmux==0.37.0",
@@ -45,7 +44,6 @@ include = [
 ]
 
 [tool.setuptools.package-data]
-worktracker = ["ninja_route_allowlist.txt"]
 
 [tool.uv.sources]
 worktracker-sdk = { path = "../surfaces/worktracker-sdk", editable = true }

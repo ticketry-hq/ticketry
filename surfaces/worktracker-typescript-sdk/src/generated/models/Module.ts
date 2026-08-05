@@ -3,8 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * WorkTracker API
- * Canonical HTTP contract for WorkTracker clients.
+ * Ticketry HTTP API
+ * Canonical generated contract for every Ticketry HTTP route.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -63,12 +63,6 @@ export interface Module {
      * @memberof Module
      */
     readonly issue_type: string;
-    /**
-     *
-     * @type {string}
-     * @memberof Module
-     */
-    issue_type_id: string;
 }
 
 /**
@@ -82,7 +76,6 @@ export function instanceOfModule(value: object): value is Module {
     if (!('key' in value) || value['key'] === undefined) return false;
     if (!('is_archived' in value) || value['is_archived'] === undefined) return false;
     if (!('issue_type' in value) || value['issue_type'] === undefined) return false;
-    if (!('issue_type_id' in value) || value['issue_type_id'] === undefined) return false;
     return true;
 }
 
@@ -103,7 +96,6 @@ export function ModuleFromJSONTyped(json: any, ignoreDiscriminator: boolean): Mo
         'key': json['key'],
         'is_archived': json['is_archived'],
         'issue_type': json['issue_type'],
-        'issue_type_id': json['issue_type_id'],
     };
 }
 
@@ -119,6 +111,5 @@ export function ModuleToJSONTyped(value?: Omit<Module, 'id'|'project_id'|'sequen
     return {
 
         'name': value['name'],
-        'issue_type_id': value['issue_type_id'],
     };
 }

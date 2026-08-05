@@ -301,9 +301,8 @@ def test_launched_child_never_relaunches_without_a_terminal_state(graph_project)
         str(root.id), agent="codex", spawn=_successful_spawn
     ) == [str(child.id)]
     assert driver.advance(str(root.id), spawn=_successful_spawn) == []
-    assert (
-        driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn) == []
-    )
+    with pytest.raises(ValueError, match="^graph_run_exists$"):
+        driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn)
     assert [call["task_id"] for call in _successful_spawn.calls] == [str(child.id)]
 
 
@@ -320,7 +319,7 @@ def test_reset_subtree_clears_rows_and_launches_nothing(graph_project):
     assert cleared == [str(a.id), str(b.id)]
     assert not LaunchedTask.objects.filter(root=root).exists()
     assert _successful_spawn.calls == calls_before_reset
-    assert GraphRun.objects.filter(root=root).exists()
+    assert not GraphRun.objects.filter(root=root).exists()
 
 
 def test_root_blockers_are_irrelevant(graph_project):

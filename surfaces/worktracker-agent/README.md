@@ -9,14 +9,14 @@ also forwards its request authorization to Studio's terminal authority.
 All calls go to the owned worktracker HTTP API:
 
 ```
-http://127.0.0.1:8787/api/work-tracker
+http://127.0.0.1:8787/api
 ```
 
 ## Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `WORKTRACKER_BASE_URL` | `http://127.0.0.1:8787/api/work-tracker` | Owned worktracker API base URL |
+| `WORKTRACKER_BASE_URL` | `http://127.0.0.1:8787/api` | Canonical Ticketry HTTP API base URL |
 | `WORKTRACKER_API_KEY` | _unset_ | Optional. When unset, the `x-api-key` header is omitted (dev mode) |
 | `STUDIO_RUN_CONTROL_URL` | `http://127.0.0.1:8787/api/terminals/self-terminate` | Studio's authenticated current-run termination endpoint |
 | `MCP_TRANSPORT` | `http` | FastMCP transport |

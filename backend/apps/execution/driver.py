@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from asgiref.sync import async_to_sync
+from django.db import IntegrityError
 
 from worktracker.models import Issue, LaunchBinding
 from worktracker.state import state_group
@@ -164,6 +165,8 @@ def execute_graph(
     )
     if root is None:
         raise ValueError("task_not_found")
+    if GraphRun.objects.filter(pk=root.id).exists():
+        raise ValueError("graph_run_exists")
     if not LaunchBinding.objects.filter(
         issue_type_id=root.issue_type_id,
         state_id=root.state_id,
@@ -180,14 +183,16 @@ def execute_graph(
     ).exists():
         raise ValueError("graph_empty")
 
-    GraphRun.objects.update_or_create(
-        root_id=root.id,
-        defaults={
-            "project_id": root.project_id,
-            "module_id": module_id,
-            "agent": agent,
-        },
-    )
+    try:
+        GraphRun.objects.create(
+            root_id=root.id,
+            project_id=root.project_id,
+            module_id=module_id,
+            agent=agent,
+        )
+    except IntegrityError as exc:
+        # Preserve the resource-level conflict when concurrent creates race.
+        raise ValueError("graph_run_exists") from exc
     return advance(str(root.id), spawn=spawn)
 
 
@@ -245,15 +250,17 @@ def advance(root_id: str, *, spawn: SpawnRun | None = None) -> list[str]:
 
 
 def reset_subtree(root_id: str) -> list[str]:
-    """Delete the launch ledger for a root so its children become launchable again."""
+    """Delete a root's run header and launch ledger so it can be re-armed."""
 
-    if not GraphRun.objects.filter(pk=root_id).exists():
+    header = GraphRun.objects.filter(pk=root_id).first()
+    if header is None:
         raise ValueError("graph_not_found")
     rows = LaunchedTask.objects.filter(root_id=root_id).order_by(
         "task__sequence_id", "task_id"
     )
     cleared = [str(task_id) for task_id in rows.values_list("task_id", flat=True)]
     rows.delete()
+    header.delete()
     return cleared
 
 

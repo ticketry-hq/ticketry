@@ -107,6 +107,10 @@ const relocateAndStamp = (directory) => {
           "from worktracker_sdk import rest",
           "from worktracker_sdk.generated import rest",
         )
+        .replace(
+          "self._base_path = value",
+          "self._base_path = value.rstrip('/')\n        if self._base_path.endswith('/work-tracker'):\n            self._base_path = self._base_path[:-len('/work-tracker')]",
+        )
         .split("\n")
         .map((line) => line.trimEnd())
         .join("\n")

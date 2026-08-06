@@ -1,11 +1,11 @@
 import { useRef, type KeyboardEvent } from "react";
 import { IconSearch, IconX } from "../../../../../shared/ui/icons";
-import { useUIStore } from "../../../../../features/studio/stores/uiStore";
+import { useClientStore } from "../../../../../state/clientStore";
 import { focusFirstStory, focusStoryTree } from "../storiesFocus";
 
 export function StoriesSearchInput() {
-  const query = useUIStore((state) => state.storySearchQuery);
-  const setQuery = useUIStore((state) => state.setStorySearchQuery);
+  const query = useClientStore((state) => state.storySearchQuery);
+  const setQuery = useClientStore((state) => state.setStorySearchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {

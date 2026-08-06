@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TEMP_TASK_ID } from "../features/agents/types";
-import * as api from "../features/studio/lib/api";
+import * as api from "../shared/api/client";
 import type {
   TaskDetails,
   TaskState,
@@ -9,7 +9,7 @@ import type {
 } from "../features/studio/lib/types";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 
 vi.mock("../features/agents/lifecycle", () => ({
@@ -18,8 +18,8 @@ vi.mock("../features/agents/lifecycle", () => ({
   ScratchStateBadge: () => null,
 }));
 
-vi.mock("../features/studio/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
   postTaskStatus: vi.fn(),
   updateState: vi.fn(),
 }));
@@ -91,9 +91,9 @@ describe("Studio workflow-state task ID colors", () => {
       projectId: "project-1",
       states: [TODO, REVIEW],
     });
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(["1"]),
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: { "module-1": ["1"] },
     });
     useTasksStore.setState({
       selectedProjectId: "project-1",
@@ -144,14 +144,8 @@ describe("Studio workflow-state task ID colors", () => {
   });
 
   it("keeps status-less real IDs muted and Scratch without an ID color token", () => {
-    const scratch = {
-      ...task("0", STATELESS, null),
-      id: TEMP_TASK_ID,
-      name: "Local scratch workspace",
-      sequence_id: null,
-    };
     useTasksStore.setState({
-      tasks: [scratch, task("4", STATELESS, "module-1")],
+      tasks: [task("4", STATELESS, "module-1")],
     });
 
     render(<TasksPane />);
@@ -196,9 +190,9 @@ describe("Studio status-update reconciliation", () => {
     const returned = task("2", REVIEW, "1");
     const details: TaskDetails = { task: before };
     vi.mocked(api.postTaskStatus).mockResolvedValue(returned);
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(["1"]),
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: { "module-1": ["1"] },
     });
     useTasksStore.setState({
       selectedProjectId: "project-1",

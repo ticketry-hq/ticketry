@@ -5,7 +5,7 @@ import type {
   ProviderCapabilities,
   ProviderCatalog,
 } from "../../shared/api/types";
-import * as api from "../../features/studio/lib/api";
+import * as api from "../../shared/api/client";
 import {
   LaunchDefaultPicker,
   type LaunchDefaultPickerValue,

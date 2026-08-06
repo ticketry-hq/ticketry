@@ -97,6 +97,14 @@ export type WorkItem = Omit<
   blocks_ids: string[];
 };
 
+export interface ModuleTree {
+  rootIds: string[];
+  /** Absent key = children have not been read; [] = known childless. */
+  children: Record<string, string[]>;
+  /** Canonical server order for deterministic rankless fallbacks. */
+  order: string[];
+}
+
 export type Attachment = Omit<
   GeneratedAttachment,
   "mime_type" | "size"

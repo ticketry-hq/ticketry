@@ -14,10 +14,10 @@ import { useTasksStore } from "../../features/studio/stores/tasksStore";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { loadKeybindingOverrides } from "../navigation/keymapSettings";
 import {
-  useUIStore,
+  useClientStore,
   visiblePaneOrder,
   type FocusedPane,
-} from "../../features/studio/stores/uiStore";
+} from "../../state/clientStore";
 
 export type BootstrapOutcome = "provisioning" | "unavailable" | "ready";
 
@@ -70,7 +70,7 @@ async function restoreWorkspace(profileIndex: number): Promise<void> {
 
   if (!projectsEnabled) {
     await selectResolvedProject();
-    useUIStore.getState().setSidebarVisible(true);
+    useClientStore.getState().setSidebarVisible(true);
     focusVisiblePane("modules");
     return;
   }
@@ -90,7 +90,7 @@ async function restoreWorkspace(profileIndex: number): Promise<void> {
   // an established workspace. Leave that preference intact for the tour to
   // capture before it temporarily reveals its anchors.
   if (!getOnboardingRequiredSnapshot()) {
-    useUIStore.getState().setSidebarVisible(true);
+    useClientStore.getState().setSidebarVisible(true);
   }
   focusVisiblePane("projects");
 }
@@ -101,7 +101,7 @@ async function selectResolvedProject(): Promise<void> {
 }
 
 function focusVisiblePane(preferredPane: FocusedPane): void {
-  const { sidebarVisible, setFocusedPane } = useUIStore.getState();
+  const { sidebarVisible, setFocusedPane } = useClientStore.getState();
   const projectIsSelected = useTasksStore.getState().selectedProjectId !== null;
   const config = getConfigSnapshot();
   const paneComposition: SidebarPaneComposition = sidebarPaneComposition(

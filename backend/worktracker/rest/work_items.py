@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from worktracker.models import Attachment, Issue
 from worktracker.rest.serializers import (
     AttachmentSerializer,
+    WorkItemBatchSerializer,
     WorkItemCreateSerializer,
     WorkItemPatchSerializer,
     WorkItemSerializer,
@@ -63,11 +64,14 @@ def _pathfind_subtree_ids(*, project_id=None, module_id=None):
     seen = set(roots.values_list("id", flat=True))
     frontier = set(seen)
     while frontier:
-        children = set(
-            Issue.objects.filter(type="task", parent_id__in=frontier).values_list(
-                "id", flat=True
+        children = (
+            set(
+                Issue.objects.filter(type="task", parent_id__in=frontier).values_list(
+                    "id", flat=True
+                )
             )
-        ) - seen
+            - seen
+        )
         seen.update(children)
         frontier = children
     return seen
@@ -109,6 +113,24 @@ class WorkItemListView(APIView):
                 )
             )
         return Response(WorkItemSerializer(queryset, many=True).data)
+
+
+class WorkItemBatchView(APIView):
+    """Read up to one hundred task work items by exact id in one request."""
+
+    @extend_schema(
+        operation_id="batchWorkItems",
+        tags=["Work Items"],
+        request=WorkItemBatchSerializer,
+        responses=WorkItemSerializer(many=True),
+    )
+    def post(self, request):
+        serializer = WorkItemBatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = tuple(dict.fromkeys(serializer.validated_data["ids"]))
+        items_by_id = {item.id: item for item in task_qs().filter(id__in=ids)}
+        items = [items_by_id[item_id] for item_id in ids if item_id in items_by_id]
+        return Response(WorkItemSerializer(items, many=True).data)
 
 
 class WorkItemCreateView(APIView):

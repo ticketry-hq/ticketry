@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { isTypingTarget } from "../../../../../shared/utilities/keyboard";
-import { useUIStore } from "../../../../../features/studio/stores/uiStore";
+import { useClientStore } from "../../../../../state/clientStore";
 
 export type TaskWorkspaceTabIdentity =
   | { kind: "details" }
@@ -80,7 +80,7 @@ export function routeTaskWorkspaceTabAction(
     return true;
   }
 
-  if (useUIStore.getState().focusedPane !== "details-or-terminal") return false;
+  if (useClientStore.getState().focusedPane !== "details-or-terminal") return false;
   const owner = [...mountedWorkspaces].find(
     (entry) => !entry.modal && entry.navigable,
   );

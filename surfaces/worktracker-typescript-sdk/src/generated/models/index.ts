@@ -76,6 +76,7 @@ export * from './ViewerLease.js';
 export * from './ViewerLeaseRelease.js';
 export * from './ViewerLeaseResult.js';
 export * from './WorkItem.js';
+export * from './WorkItemBatch.js';
 export * from './WorkItemCreate.js';
 export * from './WorkItemReorder.js';
 export * from './Workspace.js';

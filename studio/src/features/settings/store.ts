@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import * as api from "../../shared/api/client";
 import { ApiError } from "../../shared/api/client";
-import { toast } from "../../app/stores/toastStore";
+import { toast } from "../../state/clientStore";
 import {
   getStatesSnapshot,
   removeState,

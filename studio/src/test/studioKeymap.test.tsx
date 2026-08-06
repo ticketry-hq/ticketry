@@ -17,7 +17,7 @@ import type {
 import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig as seedStudioConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import {
   useTerminalStore,
@@ -45,13 +45,12 @@ const selectedTask: TaskSummary = {
 
 function taskRow(task: TaskSummary): Row {
   return {
-    task,
+    kind: "work-item",
+    id: task.id,
     depth: 0,
     parentId: null,
-    hasChildren: false,
-    isExpanded: false,
-    isLoading: false,
-    descendantIds: [],
+    expandable: false,
+    expanded: false,
   };
 }
 
@@ -92,7 +91,7 @@ describe("Studio task keymap", () => {
   beforeEach(() => {
     studioKeymapRegistry.setOverrides([]);
     useModalStore.setState({ modalStack: [], activeBindings: null });
-    useUIStore.setState({
+    useClientStore.setState({
       focusedPane: "tasks",
       editViewZone: "stories",
       sidebarVisible: true,
@@ -205,7 +204,7 @@ describe("Studio task keymap", () => {
   ] as const)(
     "opens the task-scoped AgentPicker on Cmd+Enter from the %s pane",
     async (focusedPane) => {
-      useUIStore.setState({ focusedPane });
+      useClientStore.setState({ focusedPane });
       renderKeymapWithModal();
 
       fireEvent.keyDown(window, { key: "Enter", metaKey: true });
@@ -229,7 +228,7 @@ describe("Studio task keymap", () => {
   ] as const)(
     "opens prompt input on Cmd+Shift+Enter from the %s pane",
     (focusedPane) => {
-      useUIStore.setState({ focusedPane });
+      useClientStore.setState({ focusedPane });
       renderKeymapWithModal();
 
       fireEvent.keyDown(window, {
@@ -417,7 +416,7 @@ describe("Studio task keymap", () => {
   });
 
   it("leaves Command launch chords with terminal typing mode", () => {
-    useUIStore.setState({
+    useClientStore.setState({
       sidebarVisible: false,
       editViewZone: "active-tab-body",
       editViewBodyEngaged: true,
@@ -583,14 +582,14 @@ describe("Studio task keymap", () => {
   });
 
   it("names the sidebar key and flips its verb with the sidebar", () => {
-    useUIStore.setState({ sidebarVisible: true });
+    useClientStore.setState({ sidebarVisible: true });
     render(<StudioFooter />);
 
     expect(screen.getByText("— Close Menu").parentElement).toHaveTextContent(
       "\\— Close Menu",
     );
 
-    act(() => useUIStore.getState().setSidebarVisible(false));
+    act(() => useClientStore.getState().setSidebarVisible(false));
 
     expect(screen.getByText("— Open Menu").parentElement).toHaveTextContent(
       "\\— Open Menu",
@@ -614,7 +613,7 @@ describe("Studio task keymap", () => {
     seedStudioConfig({
       features: { sidebar: false, projects: false },
     });
-    useUIStore.setState({ sidebarVisible: true });
+    useClientStore.setState({ sidebarVisible: true });
 
     render(
       <>
@@ -639,7 +638,7 @@ describe("Studio task keymap", () => {
 
     expect(defaultKeyWasNotConsumed).toBe(true);
     expect(reboundKeyWasNotConsumed).toBe(true);
-    expect(useUIStore.getState().sidebarVisible).toBe(true);
+    expect(useClientStore.getState().sidebarVisible).toBe(true);
     expect(studioKeymapRegistry.getOverrides()).toEqual([
       reboundSidebarToggle,
     ]);
@@ -655,7 +654,7 @@ describe("Studio task keymap", () => {
   });
 
   it("teaches the current edit-view zone and replaces it with disengage while engaged", () => {
-    useUIStore.setState({
+    useClientStore.setState({
       sidebarVisible: false,
       editViewZone: "stories",
       editViewBodyEngaged: false,
@@ -670,7 +669,7 @@ describe("Studio task keymap", () => {
     expect(screen.getByText("— Dive")).toBeInTheDocument();
     expect(screen.queryByText("— Disengage")).not.toBeInTheDocument();
 
-    act(() => useUIStore.getState().setEditViewZone("tab-strip"));
+    act(() => useClientStore.getState().setEditViewZone("tab-strip"));
 
     expect(screen.getByText("— Next Zone")).toBeInTheDocument();
     expect(screen.getByText("— Tab").parentElement).toHaveTextContent("←→— Tab");
@@ -678,7 +677,7 @@ describe("Studio task keymap", () => {
     expect(screen.getByText("— Open")).toBeInTheDocument();
     expect(screen.queryByText("— Story")).not.toBeInTheDocument();
 
-    act(() => useUIStore.getState().setEditViewZone("active-tab-body"));
+    act(() => useClientStore.getState().setEditViewZone("active-tab-body"));
 
     expect(screen.getByText("— Next Zone")).toBeInTheDocument();
     expect(screen.getByText("— Tabs").parentElement).toHaveTextContent("↑— Tabs");
@@ -687,7 +686,7 @@ describe("Studio task keymap", () => {
     );
     expect(screen.getByText("— Engage")).toBeInTheDocument();
 
-    act(() => useUIStore.getState().setEditViewBodyEngaged(true));
+    act(() => useClientStore.getState().setEditViewBodyEngaged(true));
 
     expect(screen.getByText("— Disengage").parentElement).toHaveTextContent(
       "⌘Esc— Disengage",
@@ -847,7 +846,7 @@ describe("Studio task keymap", () => {
         .getEffectiveBindings()
         .some((binding) => binding.actionId === "open-web"),
     ).toBe(false);
-    expect(useUIStore.getState().activeBindings).not.toContainEqual({
+    expect(useClientStore.getState().bindingsStack.at(-1)).not.toContainEqual({
       key: "w",
       label: "Open Web",
     });
@@ -858,7 +857,7 @@ describe("Studio task keymap", () => {
 
     fireEvent.keyDown(window, { key: "\\" });
 
-    expect(useUIStore.getState().sidebarVisible).toBe(false);
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
 
     act(() => {
       studioKeymapRegistry.setOverrides([
@@ -877,44 +876,44 @@ describe("Studio task keymap", () => {
     });
 
     fireEvent.keyDown(window, { key: "\\" });
-    expect(useUIStore.getState().sidebarVisible).toBe(false);
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
 
     fireEvent.keyDown(window, { key: "x" });
-    expect(useUIStore.getState().sidebarVisible).toBe(true);
+    expect(useClientStore.getState().sidebarVisible).toBe(true);
   });
 
   it("moves focus left and right with h and l", () => {
     const { unmount } = render(<KeymapHarness />);
 
     fireEvent.keyDown(window, { key: "h" });
-    expect(useUIStore.getState().focusedPane).toBe("modules");
+    expect(useClientStore.getState().focusedPane).toBe("modules");
     fireEvent.keyDown(window, { key: "h" });
-    expect(useUIStore.getState().focusedPane).toBe("projects");
+    expect(useClientStore.getState().focusedPane).toBe("projects");
 
     unmount();
-    useUIStore.setState({ focusedPane: "tasks" });
+    useClientStore.setState({ focusedPane: "tasks" });
     render(<KeymapHarness />);
     fireEvent.keyDown(window, { key: "l" });
-    expect(useUIStore.getState().focusedPane).toBe("details-or-terminal");
+    expect(useClientStore.getState().focusedPane).toBe("details-or-terminal");
   });
 
   it("cannot traverse left from Modules into Projects when the flag is off", () => {
     seedStudioConfig({
       features: { sidebar: true, projects: false },
     });
-    useUIStore.setState({ focusedPane: "modules" });
+    useClientStore.setState({ focusedPane: "modules" });
     render(<KeymapHarness />);
 
     fireEvent.keyDown(window, { key: "h" });
 
-    expect(useUIStore.getState().focusedPane).toBe("modules");
+    expect(useClientStore.getState().focusedPane).toBe("modules");
   });
 
   it("keeps sidebar panes out of traversal when installation disables them", () => {
     seedStudioConfig({
       features: { sidebar: false, projects: false },
     });
-    useUIStore.setState({
+    useClientStore.setState({
       sidebarVisible: true,
       focusedPane: "details-or-terminal",
       editViewZone: "active-tab-body",
@@ -923,7 +922,7 @@ describe("Studio task keymap", () => {
 
     fireEvent.keyDown(window, { key: "ArrowLeft" });
 
-    expect(useUIStore.getState()).toMatchObject({
+    expect(useClientStore.getState()).toMatchObject({
       sidebarVisible: true,
       focusedPane: "tasks",
       editViewZone: "stories",
@@ -931,7 +930,7 @@ describe("Studio task keymap", () => {
 
     fireEvent.keyDown(window, { key: "h" });
 
-    expect(useUIStore.getState()).toMatchObject({
+    expect(useClientStore.getState()).toMatchObject({
       sidebarVisible: true,
       focusedPane: "tasks",
     });

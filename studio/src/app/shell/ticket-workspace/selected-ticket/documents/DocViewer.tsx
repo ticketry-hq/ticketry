@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { dialog } from "../../../../stores/dialogStore";
+import { dialog } from "../../../../../state/clientStore";
 import { docUrl } from "../../../../../features/agents/api/agentApi";
 import type { DocTabState } from "../../../../../features/agents/types";
-import { ApiError, saveDocument } from "../../../../../features/studio/lib/api";
+import { ApiError, saveDocument } from "../../../../../shared/api/client";
 import { renderMarkdown } from "./markdown";
 import {
   loadDocumentContent,

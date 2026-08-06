@@ -1,4 +1,4 @@
-import { useToastStore } from "../stores/toastStore";
+import { useClientStore } from "../../state/clientStore";
 import { IconAlertTriangle, IconCheckCircle, IconX } from "../../shared/ui/icons";
 import { useModalStore } from "../modal/modalStore";
 
@@ -7,8 +7,8 @@ import { useModalStore } from "../modal/modalStore";
 // (role=status / aria-live=polite); errors assert (role=alert) so they're read
 // even mid-action.
 export default function ToastHost() {
-  const toasts = useToastStore((s) => s.toasts);
-  const dismiss = useToastStore((s) => s.dismiss);
+  const toasts = useClientStore((s) => s.toasts);
+  const dismiss = useClientStore((s) => s.dismissToast);
   const settingsOpen = useModalStore((state) =>
     state.modalStack.some((modal) => modal.type === "settings"));
 

@@ -3,10 +3,14 @@ import {
   type ConfigSnapshot,
 } from "../../features/studio/stores/configStore";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";
-import { useUIStore } from "../../features/studio/stores/uiStore";
+import { useClientStore } from "../../state/clientStore";
 import type {
-  FlatRow,
-  Row,
+  TreeRow,
+  WorkItemRow,
+} from "../shell/ticket-workspace/tasks/TasksPane";
+import {
+  isPlanningRow,
+  planningRowId,
 } from "../shell/ticket-workspace/tasks/TasksPane";
 import { focusIdeaEntry } from "../shell/ticket-workspace/tasks/storiesFocus";
 
@@ -14,22 +18,22 @@ type Direction = 1 | -1;
 
 export interface NavigationContext {
   event: KeyboardEvent;
-  taskRows: Row[];
+  taskRows: TreeRow[];
   cfg: ConfigSnapshot;
   tasks: ReturnType<typeof useTasksStore.getState>;
-  ui: ReturnType<typeof useUIStore.getState>;
+  ui: ReturnType<typeof useClientStore.getState>;
 }
 
 export function createNavigationContext(
   event: KeyboardEvent,
-  taskRows: Row[],
+  taskRows: TreeRow[],
 ): NavigationContext {
   return {
     event,
     taskRows,
     cfg: getConfigSnapshot(),
     tasks: useTasksStore.getState(),
-    ui: useUIStore.getState(),
+    ui: useClientStore.getState(),
   };
 }
 
@@ -39,20 +43,20 @@ export function consume(event: KeyboardEvent): void {
 }
 
 export function selectedTaskIndex(
-  rows: Row[],
+  rows: TreeRow[],
   selectedTaskId: string | null,
 ): number {
   if (!selectedTaskId) return -1;
   return rows.findIndex(
-    (row) => "task" in row && row.task.id === selectedTaskId,
+    (row) => isPlanningRow(row) && planningRowId(row) === selectedTaskId,
   );
 }
 
-export function selectTaskAt(rows: Row[], index: number): void {
+export function selectTaskAt(rows: TreeRow[], index: number): void {
   const row = rows[index];
-  if (!row || !("task" in row)) return;
+  if (!row || !isPlanningRow(row)) return;
   useTasksStore.setState({
-    selectedTaskId: row.task.id,
+    selectedTaskId: planningRowId(row),
     workspaceSelection: { kind: "task" },
   });
 }
@@ -79,20 +83,20 @@ export function moveTaskSelection(
   return true;
 }
 
-export function currentTaskRow(ctx: NavigationContext): FlatRow | null {
+export function currentTaskRow(ctx: NavigationContext): WorkItemRow | null {
   const selected = selectedTaskIndex(ctx.taskRows, ctx.tasks.selectedTaskId);
   const row = ctx.taskRows[selected];
-  return row && "task" in row ? row : null;
+  return row?.kind === "work-item" ? row : null;
 }
 
 function taskIndexFrom(
-  rows: Row[],
+  rows: TreeRow[],
   start: number,
   direction: Direction,
 ): number {
   let index = start + direction;
   while (index >= 0 && index < rows.length) {
-    if ("task" in rows[index]) return index;
+    if (isPlanningRow(rows[index])) return index;
     index += direction;
   }
   return -1;

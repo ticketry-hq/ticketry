@@ -21,7 +21,7 @@ import {
   getProjectsSnapshot,
   seedProjects,
 } from "../features/projects";
-import { useSelectionStore } from "../features/work-items/stores/selectionStore";
+import { useClientStore } from "../state/clientStore";
 import { queryClient } from "../shared/query/queryClient";
 import type { Module, Project } from "../shared/api/types";
 
@@ -45,7 +45,7 @@ beforeEach(() => {
   createProject.mockReset();
   updateProject.mockReset();
   deleteProject.mockReset();
-  useSelectionStore.getState().clear();
+  useClientStore.getState().selectionClear();
   useStudioStore.setState({
     selectedProjectId: null,
     activeView: "backlog",
@@ -188,14 +188,14 @@ describe("studioStore project CRUD (#665)", () => {
     // p2 then p1 used → MRU [p1, p2]; deleting p1 leaves p2 as the survivor.
     await useStudioStore.getState().selectProject("p2");
     await useStudioStore.getState().selectProject("p1");
-    useSelectionStore.getState().toggle("backlog", "issue-x");
+    useClientStore.getState().selectionToggle("backlog", "issue-x");
     deleteProject.mockResolvedValue(undefined);
 
     const result = await useStudioStore.getState().deleteProject("p1");
 
     expect(result).toEqual({ redirect: true, targetId: "p2" });
     expect(getProjectsSnapshot().map((p) => p.id)).toEqual(["p2"]);
-    expect(useSelectionStore.getState().ids.size).toBe(0);
+    expect(useClientStore.getState().selection.ids.size).toBe(0);
   });
 
   it("deleteProject of a non-selected project removes it without a redirect", async () => {

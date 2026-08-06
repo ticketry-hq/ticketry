@@ -13,7 +13,10 @@ const workflowApi = vi.hoisted(() => ({
   getStates: vi.fn(),
 }));
 
-vi.mock("../features/studio/workflowApi", () => workflowApi);
+vi.mock("../shared/api/client", async (load) => ({
+  ...(await load<typeof import("../shared/api/client")>()),
+  ...workflowApi,
+}));
 
 const DOING: State = {
   id: "doing",
@@ -36,13 +39,6 @@ const DONE: State = {
   color: "#22c55e",
   sort_order: 2,
 };
-const SCRATCH = {
-  id: null,
-  name: "Scratch",
-  group: "backlog",
-  color: null,
-};
-
 function workItem(
   id: string,
   state: State,
@@ -140,7 +136,7 @@ describe("workflow state removal synchronization", () => {
   it("removes an unoccupied deleted state from every active catalog", async () => {
     useTasksStore.setState({
       selectedProjectId: "project-1",
-      states: [SCRATCH, DOING, REVIEW, DONE],
+      states: [DOING, REVIEW, DONE],
     });
     useBacklogStore.setState({
       projectId: "project-1",
@@ -154,7 +150,7 @@ describe("workflow state removal synchronization", () => {
     });
 
     expect(useWorkflowEditorStore.getState().states).toEqual([REVIEW, DONE]);
-    expect(useTasksStore.getState().states).toEqual([SCRATCH, REVIEW, DONE]);
+    expect(useTasksStore.getState().states).toEqual([REVIEW, DONE]);
     expect(useBacklogStore.getState().states).toEqual([REVIEW, DONE]);
   });
 
@@ -174,7 +170,7 @@ describe("workflow state removal synchronization", () => {
       selectedProjectId: "project-1",
       selectedModuleId: "module-1",
       selectedTaskId: stale.id,
-      states: [SCRATCH, DOING, REVIEW, DONE],
+      states: [DOING, REVIEW, DONE],
       tasks: [taskRow(stale)],
       subtasks: { [stale.id]: [taskRow(child)] },
       details: { task: taskRow(stale) },
@@ -208,7 +204,7 @@ describe("workflow state removal synchronization", () => {
     });
 
     expect(useTasksStore.getState()).toMatchObject({
-      states: [SCRATCH, REVIEW, DONE],
+      states: [REVIEW, DONE],
       tasks: [{ id: stale.id, state: REVIEW, state_revision: 4 }],
       subtasks: {
         [stale.id]: [{ id: child.id, state: REVIEW, state_revision: 4 }],
@@ -244,7 +240,7 @@ describe("workflow state removal synchronization", () => {
     useTasksStore.setState({
       selectedProjectId: "project-1",
       selectedModuleId: "module-1",
-      states: [SCRATCH, DOING, REVIEW, DONE],
+      states: [DOING, REVIEW, DONE],
       tasks: [taskRow(feedItem)],
       pendingStateDeltas: {
         [feedItem.id]: { state: taskRow(feedItem).state, revision: 5 },
@@ -302,7 +298,7 @@ describe("workflow state removal synchronization", () => {
     useWorkflowEditorStore.setState({ states: [DOING, DONE] });
     useTasksStore.setState({
       selectedProjectId: "project-1",
-      states: [SCRATCH, DOING, DONE],
+      states: [DOING, DONE],
       tasks: [taskRow(stale)],
     });
 

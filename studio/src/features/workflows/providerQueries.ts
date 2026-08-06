@@ -5,14 +5,13 @@ import type {
 } from "../../shared/api/types";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
-import * as settingsApi from "../studio/lib/api";
-import * as workflowApi from "../studio/workflowApi";
+import * as settingsApi from "../../shared/api/client";
 
 const fetchProviderCatalog = async (): Promise<ProviderCatalog> =>
   (await settingsApi.getProviderCatalog()).value;
 
 const fetchProviderCapabilities = (): Promise<ProviderCapabilities[]> =>
-  workflowApi.getLaunchProviderCapabilities();
+  settingsApi.getLaunchProviderCapabilities();
 
 export function loadProviderCatalog(): Promise<ProviderCatalog> {
   return queryClient.fetchQuery({

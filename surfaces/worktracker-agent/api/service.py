@@ -117,7 +117,14 @@ class WorktrackerService:
         )
         resolved_api_key = api_key or os.getenv("WORKTRACKER_API_KEY")
 
-        self.base_url = resolved_base_url.rstrip("/")
+        # The generated operations already carry the /work-tracker segment, so
+        # the SDK wants the /api root. Accept either form of the configured
+        # base: the documented WORKTRACKER_BASE_URL ends in /work-tracker, and
+        # passing that through unchanged doubles the segment and 404s every
+        # read. The generated Configuration patches its `host` setter to strip
+        # this, but its constructor writes _base_path directly and never calls
+        # that setter, so the strip has to happen here too.
+        self.base_url = resolved_base_url.rstrip("/").removesuffix("/work-tracker")
         self.api_key = resolved_api_key
         self.workspace_slug = workspace_slug
         self.sdk = sdk or GeneratedSdk.connect(self.base_url, resolved_api_key)
@@ -337,7 +344,9 @@ class WorktrackerService:
                 size=a.size or 0,
                 asset_url=a.url or "",
             )
-            for a in self.sdk.attachments.list_work_item_attachments(raw.id)
+            # raw.id is a UUID after the DRF change; the generated signature
+            # takes a str and pydantic rejects the object outright.
+            for a in self.sdk.attachments.list_work_item_attachments(str(raw.id))
         ]
         return WorktrackerTaskDetail(
             **task.model_dump(),

@@ -5,7 +5,7 @@ import { useAgentStatusStore } from "../features/agents/status";
 import { useTerminalStore } from "../features/agents/terminal";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { ApiError } from "../shared/api/client";
-import { useToastStore } from "../app/stores/toastStore";
+import { useClientStore } from "../state/clientStore";
 import type { WorkItem, WorkItemDetail } from "../shared/api/types";
 
 const getAgentStatus = vi.fn<() => Promise<AgentStatusSnapshot>>();
@@ -101,7 +101,6 @@ beforeEach(() => {
     byTask: {},
     automationAttempts: {},
     automationByTask: {},
-    workItemCursors: {},
   });
   useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
   useBacklogStore.setState({
@@ -115,7 +114,7 @@ beforeEach(() => {
     seenStateRevisions: {},
     pendingStateDeltas: {},
   });
-  useToastStore.setState({ toasts: [] });
+  useClientStore.setState({ toasts: [], workItemCursorsByProject: {} });
 });
 
 describe("statusFeed", () => {
@@ -581,7 +580,7 @@ describe("statusFeed", () => {
 
     expect(getWorkItem).toHaveBeenCalledTimes(4);
     expect(useBacklogStore.getState().items[0].state?.id).toBe("done");
-    expect(useToastStore.getState().toasts.at(-1)?.message).toContain(
+    expect(useClientStore.getState().toasts.at(-1)?.message).toContain(
       "could not be fully refreshed",
     );
     vi.useRealTimers();

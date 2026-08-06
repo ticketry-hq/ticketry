@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { type WorkItem, type Module } from "../../../../../shared/api/types";
-import { type BlockerChip } from "../../../../../features/work-items/issueStore";
+import { type BlockerChip } from "../../../../../features/work-items";
 import ParentPicker from "./fields/ParentPicker";
 import BlockerPicker from "./fields/BlockerPicker";
 import { formatDate } from "../../../../../shared/utilities/display";
@@ -14,7 +14,8 @@ interface IssueSidebarProps {
   saving: Record<string, boolean>;
   blockedByChips: BlockerChip[];
   blocksChips: BlockerChip[];
-  patchField: (patch: any) => Promise<void>;
+  items: WorkItem[];
+  setParent: (parentId: string | null) => void;
   addBlocker: (id: string) => void;
   removeBlocker: (id: string) => void;
   goEpic: () => void;
@@ -27,7 +28,8 @@ export default function IssueSidebar({
   saving,
   blockedByChips,
   blocksChips,
-  patchField,
+  items,
+  setParent,
   addBlocker,
   removeBlocker,
   goEpic,
@@ -58,8 +60,9 @@ export default function IssueSidebar({
           <ParentPicker
             value={task.parent_id}
             currentId={task.id}
+            items={items}
             saving={Boolean(saving.parent_id)}
-            onChange={(parent_id) => patchField({ parent_id })}
+            onChange={setParent}
           />
         </Field>
         <Field label="Module">
@@ -93,6 +96,7 @@ export default function IssueSidebar({
             ))}
             <BlockerPicker
               issueId={task.id}
+              items={items}
               currentIds={task.blocked_by_ids}
               onPick={addBlocker}
               saving={Boolean(saving.blocked_by_ids)}

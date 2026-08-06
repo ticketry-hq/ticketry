@@ -1,9 +1,10 @@
-import type { TaskState, TaskSummary } from "./types";
+import type { TaskState } from "./types";
 
-// The five workflow groups in board order. Only a fallback rank for states
-// with no explicit `sort_order` — the canonical order (CODIN-859) comes from
-// each state's `sort_order`, which distinguishes Refinement/Ready and
-// Implement/Review inside their shared groups.
+interface PresentableWorkItem {
+  id: string;
+  state: { name: string } | null;
+}
+
 const STATE_GROUP_ORDER: Record<string, number> = {
   backlog: 0,
   unstarted: 1,
@@ -13,30 +14,43 @@ const STATE_GROUP_ORDER: Record<string, number> = {
 };
 
 export interface GroupedTasks {
-  groups: Record<string, TaskSummary[]>;
+  groups: Record<string, string[]>;
   orderedStates: TaskState[];
 }
 
-/**
- * Port of tui/presenter.py:group_and_order_tasks. Groups tasks by state name
- * and returns an ordered state list matching the TUI's display ordering
- * (backlog → unstarted → started → completed → cancelled, then any leftovers
- * appended in insertion order).
- */
+/** Group membership ids while resolving every displayed field from its entry. */
 export function groupAndOrderTasks(
-  tasks: TaskSummary[],
-  states: TaskState[],
+  items: readonly PresentableWorkItem[],
+  states: readonly TaskState[],
+): GroupedTasks;
+export function groupAndOrderTasks(
+  ids: readonly string[],
+  itemsById: Readonly<Record<string, PresentableWorkItem>>,
+  states: readonly TaskState[],
+): GroupedTasks;
+export function groupAndOrderTasks(
+  idsOrItems: readonly string[] | readonly PresentableWorkItem[],
+  itemsOrStates: Readonly<Record<string, PresentableWorkItem>> | readonly TaskState[],
+  maybeStates?: readonly TaskState[],
 ): GroupedTasks {
-  const groups: Record<string, TaskSummary[]> = {};
-  for (const task of tasks) {
-    const stateName = task.state?.name ?? "Unknown";
-    if (!groups[stateName]) groups[stateName] = [];
-    groups[stateName].push(task);
+  const legacy = maybeStates === undefined;
+  const ids = legacy
+    ? (idsOrItems as readonly PresentableWorkItem[]).map((item) => item.id)
+    : idsOrItems as readonly string[];
+  const itemsById = legacy
+    ? Object.fromEntries(
+        (idsOrItems as readonly PresentableWorkItem[]).map((item) => [item.id, item]),
+      )
+    : itemsOrStates as Readonly<Record<string, PresentableWorkItem>>;
+  const states = (legacy ? itemsOrStates : maybeStates) as readonly TaskState[];
+  const groups: Record<string, string[]> = {};
+  for (const id of ids) {
+    const stateName = itemsById[id]?.state?.name;
+    if (!stateName) continue;
+    (groups[stateName] ??= []).push(id);
   }
 
   const orderedStates = [...states].sort((a, b) => {
-    // sort_order is the primary workflow key; group rank is the fallback for
-    // states that carry no explicit order.
     const sa = a.sort_order;
     const sb = b.sort_order;
     if (typeof sa === "number" && typeof sb === "number" && sa !== sb) {
@@ -46,14 +60,6 @@ export function groupAndOrderTasks(
     const bg = STATE_GROUP_ORDER[(b.group ?? "").toLowerCase()] ?? 99;
     return ag - bg;
   });
-
-  const seenNames = new Set(orderedStates.map((s) => s.name));
-  for (const name of Object.keys(groups)) {
-    if (!seenNames.has(name)) {
-      orderedStates.push({ id: null, name, group: "", color: null });
-      seenNames.add(name);
-    }
-  }
 
   return { groups, orderedStates };
 }

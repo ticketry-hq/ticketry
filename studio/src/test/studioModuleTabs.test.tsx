@@ -10,7 +10,7 @@ import { useStudioStore } from "../features/projects/store";
 import { getModulesSnapshot, seedModules as seedProjectModules } from "../features/projects";
 import { getConfigSnapshot as getStudioConfigSnapshot, seedConfig as seedStudioConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { StudioLayout } from "../app/shell/StudioLayout";
 import { ModalHost, useModalStore } from "../app/modal";
 
@@ -228,12 +228,11 @@ describe("Studio module tab strip", () => {
       automationAttempts: {},
       automationByTask: {},
     });
-    useUIStore.setState({
+    useClientStore.setState({
       focusedPane: "modules",
       sidebarVisible: true,
-      expandedTaskIds: new Set(),
-      expandedModuleId: null,
-      collapsedStateNames: new Set(),
+      expandedIdsByModule: {},
+      collapsedStateIds: new Set(),
       panelLayout: [18, 18, 36, 28],
     });
     useTasksStore.setState({
@@ -698,7 +697,7 @@ describe("Studio module tab strip", () => {
       "Old module",
     ]);
     await waitFor(() => {
-      expect(useUIStore.getState()).toMatchObject({
+      expect(useClientStore.getState()).toMatchObject({
         sidebarVisible: false,
         focusedPane: "tasks",
       });
@@ -755,7 +754,7 @@ describe("Studio module tab strip", () => {
     seedStudioConfig({
       features: { sidebar: true, projects: false },
     });
-    useUIStore.setState({ panelLayout: [20, 20, 35, 25] });
+    useClientStore.setState({ panelLayout: [20, 20, 35, 25] });
 
     render(<StudioLayout />);
 
@@ -780,7 +779,7 @@ describe("Studio module tab strip", () => {
     seedStudioConfig({
       features: { sidebar: false, projects: false },
     });
-    useUIStore.setState({
+    useClientStore.setState({
       sidebarVisible: true,
       panelLayout: persistedLayout,
     });
@@ -794,7 +793,7 @@ describe("Studio module tab strip", () => {
     ).toHaveAttribute("data-default-size", "100");
     expect(screen.getAllByTestId("pane-resize-handle")).toHaveLength(1);
     expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("true");
-    expect(useUIStore.getState().panelLayout).toEqual(persistedLayout);
+    expect(useClientStore.getState().panelLayout).toEqual(persistedLayout);
 
     await act(async () => {
       seedStudioConfig({
@@ -813,7 +812,7 @@ describe("Studio module tab strip", () => {
     expect(
       screen.getByTestId("module-workspace-region").parentElement,
     ).toHaveAttribute("data-default-size", "60");
-    expect(useUIStore.getState().panelLayout).toEqual(persistedLayout);
+    expect(useClientStore.getState().panelLayout).toEqual(persistedLayout);
   });
 
   it("drives resize cursor behavior through every divider's expanded hover target", () => {
@@ -832,7 +831,7 @@ describe("Studio module tab strip", () => {
   });
 
   it("keeps a persisted zero-width Projects pane above its visible minimum", () => {
-    useUIStore.setState({ panelLayout: [0, 18, 44, 38] });
+    useClientStore.setState({ panelLayout: [0, 18, 44, 38] });
 
     render(<StudioLayout />);
 

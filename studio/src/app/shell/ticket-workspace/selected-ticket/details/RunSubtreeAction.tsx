@@ -1,16 +1,24 @@
 import { useRef, useState } from "react";
-import { toast } from "../../../../stores/toastStore";
+import { toast } from "../../../../../state/clientStore";
 import { ApiError, apiErrorMessage } from "../../../../../shared/api/client";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
-import { executeTaskSubtree } from "../../../../../features/studio/lib/api";
+import { executeTaskSubtree } from "../../../../../shared/api/client";
 import {
   refreshSubtreeRunCapabilities,
   useSubtreeRunCapabilitiesQuery,
 } from "../../../../../features/settings";
-import { useIssueStore } from "../../../../../features/work-items/issueStore";
+import { queryClient } from "../../../../../shared/query/queryClient";
+import { queryKeys } from "../../../../../shared/query/keys";
+import type { WorkItem } from "../../../../../shared/api/types";
 
 interface RunSubtreeActionProps {
-  task: {
+  task: WorkItem;
+  moduleId: string | null;
+}
+
+/** Starts an eligible top-level work item's existing dependency-subtree campaign. */
+export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
+  const item = task as unknown as {
     id: string;
     project_id: string;
     parent_id: string | null;
@@ -18,27 +26,22 @@ interface RunSubtreeActionProps {
     state?: { id: string | null; name?: string | null } | null;
     issue_type: { id: string; name: string };
   };
-  moduleId: string | null;
-}
-
-/** Starts an eligible top-level work item's existing dependency-subtree campaign. */
-export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
   const [pending, setPending] = useState(false);
   const inFlightRef = useRef(false);
   // One row per work item mounts this; the query dedups so they share a single
   // request rather than each firing its own.
   const { data: capabilityMap } = useSubtreeRunCapabilitiesQuery(
-    task.project_id,
+    item.project_id,
   );
-  const enabledStates = capabilityMap?.[task.issue_type.id];
+  const enabledStates = capabilityMap?.[item.issue_type.id];
   const eligible =
-    task.id !== TEMP_TASK_ID &&
+    item.id !== TEMP_TASK_ID &&
     moduleId !== null &&
-    task.parent_id === moduleId &&
-    task.sub_issues_count > 0 &&
-    task.state?.id !== null &&
-    task.state?.id !== undefined &&
-    enabledStates?.includes(task.state.id) === true;
+    item.parent_id === moduleId &&
+    item.sub_issues_count > 0 &&
+    item.state?.id !== null &&
+    item.state?.id !== undefined &&
+    enabledStates?.includes(item.state.id) === true;
 
   if (!eligible) return null;
 
@@ -48,7 +51,7 @@ export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
     inFlightRef.current = true;
     setPending(true);
     try {
-      await executeTaskSubtree(task.id);
+      await executeTaskSubtree(item.id);
       toast.success("Subtree run started.");
     } catch (error) {
       if (
@@ -57,11 +60,16 @@ export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
         typeof error.body === "object" &&
         (error.body as Record<string, unknown>).error === "subtree_run_not_enabled"
       ) {
-        const [, refreshedIssue] = await Promise.all([
-          refreshSubtreeRunCapabilities(task.project_id),
-          useIssueStore.getState().reloadIssue(task.id),
+        await Promise.all([
+          refreshSubtreeRunCapabilities(item.project_id),
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.workItems.byId(item.id),
+            exact: true,
+          }),
         ]);
-        const stateName = refreshedIssue?.task.state?.name ?? task.state?.name;
+        const stateName = queryClient.getQueryData<WorkItem>(
+          queryKeys.workItems.byId(item.id),
+        )?.state?.name ?? item.state?.name;
         toast.error(
           stateName
             ? `Run subtree is no longer available while this item is in ${stateName}.`

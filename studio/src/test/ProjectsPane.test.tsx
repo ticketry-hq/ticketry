@@ -12,14 +12,14 @@ import { ApiError } from "../shared/api/client";
 import { ProjectsPane } from "../app/shell/sidebar/projects/ProjectsPane";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 
-vi.mock("../features/studio/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/lib/api")>()),
-  createProject: vi.fn(),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
+  createProjectSummary: vi.fn(),
 }));
 
-import * as api from "../features/studio/lib/api";
+import * as api from "../shared/api/client";
 
-const createProject = vi.mocked(api.createProject);
+const createProject = vi.mocked(api.createProjectSummary);
 
 beforeEach(() => {
   createProject.mockReset();

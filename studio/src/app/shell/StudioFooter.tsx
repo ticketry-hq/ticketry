@@ -4,9 +4,9 @@ import { studioKeymapRegistry } from "../navigation/keymapRegistry";
 import { formatChordSymbols } from "../navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../navigation/three-zone/threeZoneNavigation";
 import {
-  useUIStore,
+  useClientStore,
   type EditViewZone,
-} from "../../features/studio/stores/uiStore";
+} from "../../state/clientStore";
 import { IconSettings } from "../../shared/ui/icons";
 
 // Settings sits behind two sequential lazy boundaries (SettingsModal, then
@@ -30,11 +30,11 @@ export function StudioFooter() {
     (s) => s.openKeyboardShortcuts,
   );
   const openSettings = useModalStore((s) => s.openSettings);
-  const sidebarVisible = useUIStore((s) => s.sidebarVisible);
-  const editViewBodyEngaged = useUIStore(
+  const sidebarVisible = useClientStore((s) => s.sidebarVisible);
+  const editViewBodyEngaged = useClientStore(
     (s) => s.editViewBodyEngaged,
   );
-  const editViewZone = useUIStore((s) => s.editViewZone);
+  const editViewZone = useClientStore((s) => s.editViewZone);
   const footerBindings = [
     // The sidebar chip stays put in both states and flips its verb, so the
     // footer always names the key that reveals — or hides — the menu panes.

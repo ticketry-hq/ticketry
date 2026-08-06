@@ -3,10 +3,10 @@ import { scratchBucketId } from "../../../../features/agents/terminal";
 import { PaneShell } from "../../PaneShell";
 import { useConfig } from "../../../../features/studio/stores/configStore";
 import {
-  useStudioTaskTree,
   useTaskStates,
   useTasksStore,
 } from "../../../../features/studio/stores/tasksStore";
+import { useWorkItem } from "../../../../features/work-items";
 import type { WorkspaceLauncherContext } from "./SelectedTicketContent";
 import { SelectedTicketDetails } from "./details/SelectedTicketDetails";
 import { SelectedTicketContent } from "./SelectedTicketContent";
@@ -26,9 +26,10 @@ export function SelectedTicket() {
   const dismissStateConfiguration = useTasksStore(
     (s) => s.dismissStateConfiguration,
   );
-  const { tasks } = useStudioTaskTree();
   const { profiles, recentProfileIndex } = useConfig();
-  const task = tasks.find((candidate) => candidate.id === selectedTaskId);
+  const { data: task } = useWorkItem(
+    selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,
+  );
   const profile = recentProfileIndex === null ? null : profiles[recentProfileIndex] ?? null;
   const bucket =
     selectedTaskId === TEMP_TASK_ID

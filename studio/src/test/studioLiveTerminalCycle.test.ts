@@ -4,10 +4,20 @@ import {
   selectLiveTerminalStop,
   type LiveTerminalStop,
 } from "../features/studio/lib/liveTerminalCycle";
-import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import type {
+  Row,
+  TreeRow,
+} from "../app/shell/ticket-workspace/tasks/TasksPane";
 
 function taskRow(taskId: string): Row {
-  return { task: { id: taskId } } as Row;
+  return {
+    kind: "work-item",
+    id: taskId,
+    depth: 0,
+    parentId: null,
+    expandable: false,
+    expanded: false,
+  };
 }
 
 describe("live-terminal cycle selector", () => {
@@ -16,7 +26,7 @@ describe("live-terminal cycle selector", () => {
       moduleId: "module-1",
       taskRows: [
         taskRow("task-b"),
-        { kind: Symbol("header"), key: "header", stateName: "Todo", count: 2 } as Row,
+        { kind: Symbol("header"), key: "header", stateName: "Todo", count: 2 } as TreeRow,
         taskRow("task-a"),
       ],
       agentStatus: {

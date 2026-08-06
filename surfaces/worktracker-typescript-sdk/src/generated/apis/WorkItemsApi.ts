@@ -26,6 +26,11 @@ import {
     WorkItemToJSON,
 } from '../models/WorkItem.js';
 import {
+    type WorkItemBatch,
+    WorkItemBatchFromJSON,
+    WorkItemBatchToJSON,
+} from '../models/WorkItemBatch.js';
+import {
     type WorkItemCreate,
     WorkItemCreateFromJSON,
     WorkItemCreateToJSON,
@@ -35,6 +40,10 @@ import {
     WorkItemReorderFromJSON,
     WorkItemReorderToJSON,
 } from '../models/WorkItemReorder.js';
+
+export interface BatchWorkItemsRequest {
+    workItemBatch: WorkItemBatch;
+}
 
 export interface CreateWorkItemRequest {
     projectId: string;
@@ -74,6 +83,28 @@ export interface UpdateWorkItemRequest {
  * @interface WorkItemsApiInterface
  */
 export interface WorkItemsApiInterface {
+    /**
+     * Creates request options for batchWorkItems without sending the request
+     * @param {WorkItemBatch} workItemBatch
+     * @throws {RequiredError}
+     * @memberof WorkItemsApiInterface
+     */
+    batchWorkItemsRequestOpts(requestParameters: BatchWorkItemsRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * Read up to one hundred task work items by exact id in one request.
+     * @param {WorkItemBatch} workItemBatch
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof WorkItemsApiInterface
+     */
+    batchWorkItemsRaw(requestParameters: BatchWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<WorkItem>>>;
+
+    /**
+     * Read up to one hundred task work items by exact id in one request.
+     */
+    batchWorkItems(requestParameters: BatchWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<WorkItem>>;
+
     /**
      * Creates request options for createWorkItem without sending the request
      * @param {string} projectId
@@ -226,6 +257,57 @@ export interface WorkItemsApiInterface {
  *
  */
 export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterface {
+
+    /**
+     * Creates request options for batchWorkItems without sending the request
+     */
+    async batchWorkItemsRequestOpts(requestParameters: BatchWorkItemsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['workItemBatch'] == null) {
+            throw new runtime.RequiredError(
+                'workItemBatch',
+                'Required parameter "workItemBatch" was null or undefined when calling batchWorkItems().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/work-tracker/work-items/batch`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: WorkItemBatchToJSON(requestParameters['workItemBatch']),
+        };
+    }
+
+    /**
+     * Read up to one hundred task work items by exact id in one request.
+     */
+    async batchWorkItemsRaw(requestParameters: BatchWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<WorkItem>>> {
+        const requestOptions = await this.batchWorkItemsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(WorkItemFromJSON));
+    }
+
+    /**
+     * Read up to one hundred task work items by exact id in one request.
+     */
+    async batchWorkItems(requestParameters: BatchWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<WorkItem>> {
+        const response = await this.batchWorkItemsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for createWorkItem without sending the request

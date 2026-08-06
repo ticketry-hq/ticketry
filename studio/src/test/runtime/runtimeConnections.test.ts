@@ -3,7 +3,7 @@ import { listProjects } from "../../shared/api/client";
 import { docUrl as agentDocUrl } from "../../features/agents/api/agentApi";
 import {
   docUrl as studioDocUrl,
-} from "../../features/studio/lib/api";
+} from "../../shared/api/client";
 
 const fetchMock = vi.fn();
 

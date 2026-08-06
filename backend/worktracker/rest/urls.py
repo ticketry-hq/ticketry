@@ -27,6 +27,7 @@ from worktracker.rest.domain_ops import (
 )
 from worktracker.rest.work_items import (
     AttachmentCollectionView,
+    WorkItemBatchView,
     WorkItemCreateView,
     WorkItemDetailView,
     WorkItemListView,
@@ -39,6 +40,7 @@ app_name = "worktracker-rest"
 @extend_schema_view(get=extend_schema(exclude=True))
 class WorkTrackerSchemaView(SpectacularAPIView):
     pass
+
 
 provider_collection = ProviderViewSet.as_view({"get": "list"})
 provider_detail = ProviderViewSet.as_view({"patch": "partial_update"})
@@ -122,6 +124,7 @@ urlpatterns = [
         name="issue-type-reorder",
     ),
     path("work-items", WorkItemListView.as_view(), name="work-item-list"),
+    path("work-items/batch", WorkItemBatchView.as_view(), name="work-item-batch"),
     path(
         "projects/<uuid:project_id>/work-items",
         WorkItemCreateView.as_view(),

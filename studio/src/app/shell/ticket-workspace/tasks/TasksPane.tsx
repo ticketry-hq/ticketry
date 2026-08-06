@@ -1,8 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useTaskStates, useTasksStore } from "../../../../features/studio/stores/tasksStore";
-import { useUIStore } from "../../../../features/studio/stores/uiStore";
+import { useClientStore } from "../../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../../../features/agents/types";
-import type { TaskSummary } from "../../../../features/studio/lib/types";
 import { PaneShell } from "../../PaneShell";
 import { TaskRow } from "./components/TaskRow";
 import { StateHeaderRow } from "./components/StateHeaderRow";
@@ -18,23 +17,25 @@ import {
   resolveTicketReorderNeighbors,
   type VisibleRootBlock,
 } from "./internal/ticketReorder";
-import { orderedTaskSections } from "../../../../features/studio/lib/taskTree";
+import { type WorkItemRow } from "../../../../features/studio/lib/taskTree";
+import { queryClient } from "../../../../shared/query/queryClient";
+import { queryKeys } from "../../../../shared/query/keys";
+import type { WorkItem } from "../../../../shared/api/types";
 
-export interface FlatRow {
-  task: TaskSummary;
-  depth: number;
-  parentId: string | null;
-  hasChildren: boolean;
-  isExpanded: boolean;
-  isLoading: boolean;
-  descendantIds: string[];
+export type { WorkItemRow } from "../../../../features/studio/lib/taskTree";
+
+export interface ScratchRow {
+  kind: "scratch";
+  moduleId: string;
 }
+
+export type Row = WorkItemRow | ScratchRow;
 
 export const PLACEHOLDER = Symbol("loading-placeholder");
 export const HEADER = Symbol("state-header");
 
-export type Row =
-  | FlatRow
+export type TreeRow =
+  | Row
   | { kind: typeof PLACEHOLDER; key: string; depth: number }
   | {
       kind: typeof HEADER;
@@ -44,6 +45,14 @@ export type Row =
       stateColor: string;
       count: number;
     };
+
+export function isPlanningRow(row: TreeRow): row is Row {
+  return row.kind === "work-item" || row.kind === "scratch";
+}
+
+export function planningRowId(row: Row): string {
+  return row.kind === "work-item" ? row.id : TEMP_TASK_ID;
+}
 
 interface TicketDragPayload {
   taskId: string;
@@ -69,15 +78,15 @@ const ticketDragCodec: DragPayloadCodec<TicketDragPayload> = {
 };
 
 type RenderBlock =
-  | { kind: "row"; row: Exclude<Row, FlatRow> }
-  | { kind: "block"; rows: FlatRow[] };
+  | { kind: "row"; row: Exclude<TreeRow, Row> }
+  | { kind: "block"; rows: Row[] };
 
-function groupRootBlocks(rows: Row[]): RenderBlock[] {
+function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
   const grouped: RenderBlock[] = [];
   for (const row of rows) {
-    if ("kind" in row) {
+    if (!isPlanningRow(row)) {
       grouped.push({ kind: "row", row });
-    } else if (row.depth === 0) {
+    } else if (row.kind === "scratch" || row.depth === 0) {
       grouped.push({ kind: "block", rows: [row] });
     } else {
       const previous = grouped[grouped.length - 1];
@@ -97,22 +106,28 @@ export function TasksPane() {
   const pendingReorderTaskIds = useTasksStore(
     (s) => s.pendingReorderTaskIds,
   );
-  const toggleExpanded = useUIStore((s) => s.toggleExpanded);
-  const collapsedStateNames = useUIStore((s) => s.collapsedStateNames);
-  const toggleStateCollapsed = useUIStore((s) => s.toggleStateCollapsed);
+  const toggleExpanded = useClientStore((s) => s.toggleExpanded);
+  const collapsedStateIds = useClientStore((s) => s.collapsedStateIds);
+  const toggleStateCollapsed = useClientStore((s) => s.toggleStateCollapsed);
   const toggleStateConfiguration = useTasksStore(
     (s) => s.toggleStateConfiguration,
   );
 
-  const { rows, tasks, loadingTasks, isSearchActive } = useTaskTree();
+  const {
+    rows,
+    tree,
+    sectionIdsByState,
+    loadingTasks,
+    isSearchActive,
+  } = useTaskTree();
   const renderBlocks = useMemo(() => groupRootBlocks(rows), [rows]);
   const visibleBlocks = useMemo<VisibleRootBlock[]>(
     () =>
       renderBlocks.flatMap((block) =>
         block.kind === "block"
           ? [{
-              rootId: block.rows[0].task.id,
-              rowIds: block.rows.map((row) => row.task.id),
+              rootId: planningRowId(block.rows[0]),
+              rowIds: block.rows.map(planningRowId),
             }]
           : [],
       ),
@@ -124,26 +139,27 @@ export function TasksPane() {
       payload: TicketDragPayload,
       resolved: { targetId: string; intent: "near" | "far" },
     ) => {
-      const source = tasks.find((task) => task.id === payload.taskId);
+      const source = queryClient.getQueryData<WorkItem>(
+        queryKeys.workItems.byId(payload.taskId),
+      );
       if (!source || !selectedProjectId || !selectedModuleId) return;
       const headerStateId = resolved.targetId.startsWith("state:")
         ? resolved.targetId.slice("state:".length)
         : null;
       const target = headerStateId
         ? null
-        : tasks.find((task) => task.id === resolved.targetId);
+        : queryClient.getQueryData<WorkItem>(
+            queryKeys.workItems.byId(resolved.targetId),
+          );
       const destinationState = headerStateId
         ? states.find((state) => state.id === headerStateId)
         : target?.state;
       if (!destinationState?.id) return;
 
       const sectionBlocks = visibleBlocks.filter((block) =>
-        tasks.some(
-          (task) =>
-            task.id === block.rootId &&
-            task.parent_id === selectedModuleId &&
-            task.state.id === destinationState.id,
-        ),
+        queryClient.getQueryData<WorkItem>(
+          queryKeys.workItems.byId(block.rootId),
+        )?.state?.id === destinationState.id,
       );
       // Collapsed headers have no visible blocks. Rebuild their root-only
       // section from the ranked task list so a head drop still uses the real
@@ -151,11 +167,8 @@ export function TasksPane() {
       const destinationBlocks =
         sectionBlocks.length > 0 || !headerStateId
           ? sectionBlocks
-          : (orderedTaskSections(tasks, states).find(
-              (section) => section.state.id === destinationState.id,
-            )?.tasks ?? [])
-              .filter((task) => task.parent_id === selectedModuleId)
-              .map((task) => ({ rootId: task.id, rowIds: [task.id] }));
+          : (sectionIdsByState[destinationState.id] ?? [])
+              .map((id) => ({ rootId: id, rowIds: [id] }));
       const neighbors = resolveTicketReorderNeighbors(
         destinationBlocks,
         payload.taskId,
@@ -163,7 +176,7 @@ export function TasksPane() {
         resolved.intent,
       );
       if (!neighbors) return;
-      if (source.state.id === destinationState.id) {
+      if (source.state?.id === destinationState.id) {
         void moveTaskWithinState(
           payload.taskId,
           neighbors.beforeId,
@@ -184,7 +197,7 @@ export function TasksPane() {
       selectedModuleId,
       selectedProjectId,
       states,
-      tasks,
+      sectionIdsByState,
       visibleBlocks,
     ],
   );
@@ -203,13 +216,15 @@ export function TasksPane() {
   }, []);
   const handleToggleExpand = useCallback(
     (taskId: string) => {
-      if (!isSearchActive) toggleExpanded(taskId);
+      if (!isSearchActive && selectedModuleId) {
+        toggleExpanded(selectedModuleId, taskId);
+      }
     },
-    [isSearchActive, toggleExpanded],
+    [isSearchActive, selectedModuleId, toggleExpanded],
   );
   const handleToggleStateCollapsed = useCallback(
-    (stateName: string) => {
-      if (!isSearchActive) toggleStateCollapsed(stateName);
+    (stateId: string) => {
+      if (!isSearchActive) toggleStateCollapsed(stateId);
     },
     [isSearchActive, toggleStateCollapsed],
   );
@@ -222,7 +237,7 @@ export function TasksPane() {
     [selectedProjectId, toggleStateConfiguration],
   );
 
-  function renderNonTaskRow(r: Exclude<Row, FlatRow>) {
+  function renderNonTaskRow(r: Exclude<TreeRow, Row>) {
     if ("kind" in r && r.kind === HEADER) {
       const targetId = r.stateId ? stateDropTargetId(r.stateId) : null;
       const isTarget =
@@ -236,7 +251,9 @@ export function TasksPane() {
           stateColor={r.stateColor}
           count={r.count}
           isCollapsed={
-            isSearchActive ? false : collapsedStateNames.has(r.stateName)
+            isSearchActive || !r.stateId
+              ? false
+              : collapsedStateIds.has(r.stateId)
           }
           onToggle={handleToggleStateCollapsed}
           onConfigure={handleToggleStateConfiguration}
@@ -266,33 +283,34 @@ export function TasksPane() {
   function renderBlock(block: RenderBlock) {
     if (block.kind === "row") return renderNonTaskRow(block.row);
     const root = block.rows[0];
+    const rootId = planningRowId(root);
     // Expansion is persisted on every real toggle. During a drag, hide only
     // the active root's descendants in this view so every drag termination
     // path restores them when the controller clears its payload.
     const renderedRows =
-      dragDrop.payload?.taskId === root.task.id
+      dragDrop.payload?.taskId === rootId
         ? block.rows.slice(0, 1)
         : block.rows;
     const canDrag =
-      root.task.id !== TEMP_TASK_ID &&
+      root.kind === "work-item" &&
       root.parentId === null &&
-      !pendingReorderTaskIds.has(root.task.id) &&
+      !pendingReorderTaskIds.has(root.id) &&
       !isSearchActive;
     const canTarget =
-      root.task.id !== TEMP_TASK_ID &&
+      root.kind === "work-item" &&
       !isSearchActive;
     const isTarget =
       canTarget &&
-      dragDrop.targetId === root.task.id &&
+      dragDrop.targetId === rootId &&
       dragDrop.intent !== null &&
-      dragDrop.payload?.taskId !== root.task.id;
+      dragDrop.payload?.taskId !== rootId;
     const targetProps = canTarget
-      ? dragDrop.getDropTargetProps(root.task.id)
+      ? dragDrop.getDropTargetProps(rootId)
       : undefined;
 
     return (
       <li
-        key={`block-${root.task.id}`}
+        key={`block-${rootId}`}
         role="none"
         className="relative"
         {...targetProps}
@@ -310,14 +328,14 @@ export function TasksPane() {
         <ul role="group">
           {renderedRows.map((row, index) => (
             <TaskRow
-              key={row.task.id}
+              key={planningRowId(row)}
               row={row}
-              isSelected={row.task.id === selectedTaskId}
+              isSelected={planningRowId(row) === selectedTaskId}
               onClick={handleSelect}
               onToggleExpand={handleToggleExpand}
               dragSourceProps={
                 index === 0 && canDrag
-                  ? dragDrop.getDragSourceProps({ taskId: row.task.id })
+                  ? dragDrop.getDragSourceProps({ taskId: rootId })
                   : undefined
               }
             />
@@ -331,9 +349,9 @@ export function TasksPane() {
     <PaneShell pane="tasks">
       <StoriesSearchInput />
       <IdeaEntry />
-      {loadingTasks && tasks.length === 0 ? (
+      {loadingTasks && tree.order.length === 0 ? (
         <div className="text-text-muted">…</div>
-      ) : tasks.length === 0 ? (
+      ) : !rows.some(isPlanningRow) ? (
         <div className="text-text-muted">No stories</div>
       ) : (
         <ul role="tree" tabIndex={-1}>

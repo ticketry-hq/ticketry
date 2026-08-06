@@ -1,15 +1,13 @@
-import {
-  useBacklogStore,
-  useWorkItems,
-} from "../../../../../../features/work-items";
+import { useCachedStates } from "../../../../../../shared/query/stateCatalog";
 import { compareStateOrder, stateColor, stateLabel } from "../../../../../../shared/utilities/display";
 import type { State } from "../../../../../../shared/api/types";
 import Popover, { PopoverOption } from "./Popover";
 import PickerTrigger from "./PickerTrigger";
 
 interface Props {
+  projectId?: string;
   value: State | null;
-  onChange: (stateId: string) => void;
+  onChange: (state: State & { id: string }) => void;
   saving?: boolean;
   /** Neutral trigger text for the bulk bar ("Set state…") — overrides the label. */
   triggerLabel?: string;
@@ -25,8 +23,8 @@ function Dot({ color }: { color: string }) {
 }
 
 // Status picker grouped by the five workflow groups.
-export default function StatePicker({ value, onChange, saving, triggerLabel }: Props) {
-  const { states } = useWorkItems();
+export default function StatePicker({ projectId, value, onChange, saving, triggerLabel }: Props) {
+  const states = useCachedStates(projectId ?? null);
   // Ordered by canonical workflow position (sort_order primary), so Refinement
   // precedes Ready and Implement precedes Review within their shared groups.
   const ordered = [...states].sort(compareStateOrder);
@@ -53,14 +51,7 @@ export default function StatePicker({ value, onChange, saving, triggerLabel }: P
               key={s.id ?? s.name}
               selected={s.id === value?.id}
               onClick={() => {
-                if (
-                  s.id &&
-                  useBacklogStore.getState().states.some(
-                    (state) => state.id === s.id,
-                  )
-                ) {
-                  onChange(s.id);
-                }
+                if (s.id) onChange(s as State & { id: string });
                 close();
               }}
             >

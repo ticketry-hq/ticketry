@@ -6,7 +6,7 @@ import {
   seedConfig,
 } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { useIssueStore } from "../app/shell/ticket-workspace/selected-ticket";
 
 vi.mock("../features/agents/lifecycle", () => ({
@@ -56,10 +56,9 @@ describe("Studio module task-tree hydration", () => {
     vi.stubGlobal("fetch", fetchMock);
     localStorage.clear();
     seedConfig({ profiles: [], recentProfileIndex: null });
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(),
-      expandedModuleId: "module-1",
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: {},
     });
     useTasksStore.setState({
       selectedProjectId: "project-1",
@@ -214,15 +213,15 @@ describe("Studio module task-tree hydration", () => {
     expect(
       screen.getByRole("button", { name: "Expand Done" }),
     ).toBeInTheDocument();
-    expect(localStorage.getItem("studio.collapsedStates:v1")).toBe(
-      JSON.stringify(["Done"]),
+    expect(localStorage.getItem("studio.collapsedStates:v2")).toBe(
+      JSON.stringify(["done"]),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Expand Done" }));
     expect(
       screen.getByRole("button", { name: "Collapse Done" }),
     ).toBeInTheDocument();
-    expect(localStorage.getItem("studio.collapsedStates:v1")).toBe("[]");
+    expect(localStorage.getItem("studio.collapsedStates:v2")).toBe("[]");
   });
 
   it("reveals a remembered nested task while preserving other expanded branches", async () => {
@@ -286,9 +285,9 @@ describe("Studio module task-tree hydration", () => {
     ).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText(/Implementation child/)).toBeInTheDocument();
     expect(screen.getByText(/Unrelated child/)).toBeInTheDocument();
-    expect(useUIStore.getState().expandedTaskIds).toEqual(
-      new Set(["1", "2", "4"]),
-    );
+    expect(useClientStore.getState().expandedIdsByModule).toEqual({
+      "module-1": ["4"],
+    });
     expect(
       fetchMock.mock.calls.filter(([input]) =>
         String(input).endsWith("/modules/module-1/work-items"),
@@ -528,19 +527,20 @@ describe("Studio module task-tree hydration", () => {
       }),
     );
 
-    useTasksStore.setState({ selectedModuleId: "module-1" });
-    useUIStore.getState().hydrateExpandedForModule("module-1");
-    expect(useUIStore.getState().expandedTaskIds).toEqual(
-      new Set(["module-one-branch"]),
-    );
+    useClientStore.setState({
+      expandedIdsByModule: {
+        "module-1": ["module-one-branch"],
+        "module-2": ["module-two-branch"],
+      },
+    });
+    useClientStore
+      .getState()
+      .toggleExpanded("module-2", "new-module-two-branch");
 
-    useTasksStore.setState({ selectedModuleId: "module-2" });
-    useUIStore.getState().hydrateExpandedForModule("module-2");
-    useUIStore.getState().toggleExpanded("new-module-two-branch");
-
-    expect(useUIStore.getState().expandedTaskIds).toEqual(
-      new Set(["module-two-branch", "new-module-two-branch"]),
-    );
+    expect(useClientStore.getState().expandedIdsByModule).toEqual({
+      "module-1": ["module-one-branch"],
+      "module-2": ["module-two-branch", "new-module-two-branch"],
+    });
     expect(JSON.parse(localStorage.getItem("studio.expandedSubtasks:v1")!))
       .toEqual({
         "module-1": ["module-one-branch"],

@@ -1,18 +1,29 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import {
-  useIssueStore,
   deriveEpic,
   resolveBlockerChips,
-} from "../../../../../features/work-items/issueStore";
-import {
+  useCreateWorkItem,
+  useEditWorkItemDescription,
+  useRenameWorkItem,
+  useSetWorkItemBlockers,
+  useSetWorkItemParent,
+  useSetWorkItemState,
   useBacklogStore,
   usePlanningFilterStore,
-  useWorkItems,
+  useWorkItem,
+  useWorkItemsByIds,
 } from "../../../../../features/work-items";
-import { dialog } from "../../../../stores/dialogStore";
+import { dialog, toast } from "../../../../../state/clientStore";
 import { useStudioStore } from "../../../../../features/projects/store";
 import { useModulesQuery, useProjectsQuery } from "../../../../../features/projects";
 import type { Module, Project } from "../../../../../shared/api/types";
+import { apiErrorMessage, isNoOpTransition } from "../../../../../shared/api/client";
+import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher";
+import { useCachedStates } from "../../../../../shared/query/stateCatalog";
+import {
+  useStudioTaskMembership,
+  useTasksStore,
+} from "../../../../../features/studio/stores/tasksStore";
 
 const EMPTY_MODULES: Module[] = [];
 const EMPTY_PROJECTS: Project[] = [];
@@ -42,38 +53,48 @@ function readSidebarVisible(): boolean {
   return readVersionedItem(SIDEBAR_KEY, LEGACY_SIDEBAR_KEYS) !== "0";
 }
 
-// The two-pane issue body: left = summary / status / description / child
-// issues; right = the relationship-led Details panel. Each editable field
-// PATCHes optimistically via issueStore.
-//
-// Takes the ticket's key-or-id and loads its selected-ticket details itself.
+// The two-pane issue body reads the same per-id holding as the Stories row.
+// A mounted query requests only when that holding is genuinely absent.
 export default function IssueDetail({ issueId }: { issueId: string }) {
-  const open = useIssueStore((s) => s.open);
-  const openIssue = useIssueStore((s) => s.openIssue);
-  const children = useIssueStore((s) => s.children);
-  const cachedTask = useIssueStore((s) => {
-    const id = s.workItemIdByKey[issueId] ?? issueId;
-    return s.workItemsById[id] ?? null;
-  });
-  const cachedChildIds = useIssueStore((s) => {
-    const id = s.workItemIdByKey[issueId] ?? issueId;
-    return s.childWorkItemIds[id] ?? NO_CHILD_IDS;
-  });
-  const workItemsById = useIssueStore((s) => s.workItemsById);
-  const loading = useIssueStore((s) => s.loading);
-  const notFound = useIssueStore((s) => s.notFound);
-  const loadError = useIssueStore((s) => s.loadError);
-  const saving = useIssueStore((s) => s.saving);
-  const patchField = useIssueStore((s) => s.patchField);
-  const patchBlockers = useIssueStore((s) => s.patchBlockers);
-  const addSubtask = useIssueStore((s) => s.addSubtask);
-  const cancelChild = useIssueStore((s) => s.cancelChild);
-
+  const taskQuery = useWorkItem(issueId);
+  const task = taskQuery.data ?? null;
+  const membership = useStudioTaskMembership();
+  const items = useWorkItemsByIds(membership.order);
+  const displayedChildren = useWorkItemsByIds(
+    task ? membership.children[task.id] ?? NO_CHILD_IDS : NO_CHILD_IDS,
+  );
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
-  const modules = useModulesQuery(selectedProjectId).data ?? EMPTY_MODULES;
+  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
+  const projectContextId = selectedProjectId ?? task?.project_id ?? null;
+  const modules = useModulesQuery(projectContextId).data ?? EMPTY_MODULES;
   const projects = useProjectsQuery().data ?? EMPTY_PROJECTS;
-  const { items } = useWorkItems();
+  const states = useCachedStates(task?.project_id ?? null);
   const deleteIssue = useBacklogStore((s) => s.deleteIssue);
+  const epic = deriveEpic(task, modules, items);
+  const moduleMembership =
+    task && (epic?.id ?? selectedModuleId)
+      ? [{ projectId: task.project_id, moduleId: epic?.id ?? selectedModuleId! }]
+      : [];
+  const rename = useRenameWorkItem();
+  const editDescription = useEditWorkItemDescription();
+  const setState = useSetWorkItemState();
+  const setChildState = useSetWorkItemState();
+  const setParent = useSetWorkItemParent(moduleMembership);
+  const setBlockers = useSetWorkItemBlockers();
+  const createChild = useCreateWorkItem(
+    moduleMembership[0] ?? { projectId: task?.project_id ?? "", moduleId: "" },
+  );
+
+  const reportMutationError = (error: Error) => {
+    if (!isNoOpTransition(error)) toast.error(apiErrorMessage(error));
+  };
+  const saving = {
+    name: rename.isPending,
+    description: editDescription.isPending,
+    state_id: setState.isPending,
+    parent_id: setParent.isPending,
+    blocked_by_ids: setBlockers.isPending,
+  };
 
   const [sidebarVisible, setSidebarVisible] = useState(readSidebarVisible);
   const toggleSidebar = () =>
@@ -86,32 +107,10 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
       return !v;
     });
 
-  // Self-load: a host that hasn't primed the store (for example, a details
-  // tab) still renders — openIssue no-ops when this issue is already open.
-  useEffect(() => {
-    void openIssue(issueId);
-  }, [issueId, openIssue]);
-
-  const openMatchesSelection =
-    open !== null && (open.task.id === issueId || open.task.key === issueId);
-  const detail = openMatchesSelection
-    ? open
-    : cachedTask
-      ? { task: cachedTask, attachments: [] }
-      : null;
-  const displayedChildren = openMatchesSelection
-    ? children
-    : cachedChildIds
-        .map((id) => workItemsById[id])
-        .filter((item): item is NonNullable<typeof item> => item !== undefined);
-
-  // A loaded selection paints from the canonical record immediately. Loading
-  // is reserved for a true cache miss, including a deep-link outside the
-  // module currently held by the work-item store.
-  if (!cachedTask && loading) {
+  if (!task && taskQuery.isPending) {
     return <div className="grid h-full place-items-center text-base text-text-muted">Loading issue…</div>;
   }
-  if (notFound) {
+  if (taskQuery.error instanceof WorkItemNotFoundError) {
     return (
       <div className="grid h-full place-items-center text-center text-base text-text-muted" data-testid="issue-not-found">
         <div>
@@ -121,25 +120,20 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
       </div>
     );
   }
-  if (!detail) {
-    // A non-404 load failure (the 404 path renders the not-found block above).
-    // Mutation errors never reach here — those surface as toasts (#638).
-    if (loadError) {
+  if (!task) {
+    if (taskQuery.error) {
       return (
         <div
           className="grid h-full place-items-center px-6 text-center text-base text-lifecycle-danger"
           data-testid="issue-load-error"
         >
-          {loadError}
+          {apiErrorMessage(taskQuery.error)}
         </div>
       );
     }
     return null;
   }
 
-  const task = detail.task;
-  const attachments = detail.attachments;
-  const epic = deriveEpic(task, modules, items);
   const project = projects.find((p) => p.id === task.project_id) ?? null;
   const descriptionValue = task.description?.trim() ? task.description : null;
 
@@ -147,10 +141,29 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   const blockedByChips = resolveBlockerChips(task.blocked_by_ids, items, modules);
   const blocksChips = resolveBlockerChips(task.blocks_ids, items, modules);
 
+  const replaceBlockers = (blockedByIds: string[]) =>
+    setBlockers.mutate(
+      { id: task.id, blockedByIds },
+      { onError: reportMutationError },
+    );
   const removeBlocker = (id: string) =>
-    void patchBlockers(task.blocked_by_ids.filter((x) => x !== id));
+    replaceBlockers(task.blocked_by_ids.filter((candidate) => candidate !== id));
   const addBlocker = (id: string) =>
-    void patchBlockers([...task.blocked_by_ids, id]);
+    replaceBlockers([...task.blocked_by_ids, id]);
+  const cancelChild = (id: string) => {
+    const cancelled = states.find(
+      (state): state is typeof state & { id: string } =>
+        state.group === "cancelled" && state.id !== null,
+    );
+    if (!cancelled) {
+      toast.error("No Cancelled state is configured for this project.");
+      return;
+    }
+    setChildState.mutate(
+      { id, state: cancelled },
+      { onError: reportMutationError },
+    );
+  };
 
   // Breadcrumb epic segment → the backlog scoped to that epic. The selection
   // is the shared planning axis (#833); load the project's selection first so
@@ -219,15 +232,26 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
         <NameEditor
           name={task.name}
           saving={Boolean(saving.name)}
-          onSave={(name) => patchField({ name })}
+          onSave={(name) =>
+            rename.mutate(
+              { id: task.id, name },
+              { onError: reportMutationError },
+            )
+          }
         />
 
         <div className="mt-4 flex items-center gap-3" data-testid="status-row">
           <LaunchAgentAction issueId={task.id} />
           <StatePicker
+            projectId={task.project_id}
             value={task.state}
             saving={Boolean(saving.state_id)}
-            onChange={(state_id) => patchField({ state_id })}
+            onChange={(state) =>
+              setState.mutate(
+                { id: task.id, state },
+                { onError: reportMutationError },
+              )
+            }
           />
           <RunSubtreeAction task={task} moduleId={epic?.id ?? null} />
         </div>
@@ -237,21 +261,38 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           <Suspense fallback={null}>
             <DescriptionEditor
               value={descriptionValue}
-              onSave={(description) => patchField({ description })}
+              onSave={(description) =>
+                editDescription.mutate(
+                  { id: task.id, description },
+                  { onError: reportMutationError },
+                )
+              }
             />
           </Suspense>
         </div>
 
-        <Attachments attachments={attachments} />
+        <Attachments attachments={[]} />
 
         {hasFindingsPanel(task) && (
-          <FindingsPanel children={displayedChildren} onCancel={(id) => void cancelChild(id)} />
+          <FindingsPanel
+            children={displayedChildren}
+            onCancel={cancelChild}
+          />
         )}
 
         <ChildIssues
           children={displayedChildren}
           projectId={task.project_id}
-          onAddSubtask={(name, issueTypeId) => void addSubtask(name, issueTypeId)}
+          onAddSubtask={(name, issueTypeId) =>
+            createChild.mutate(
+              {
+                name,
+                parent_id: task.id,
+                issue_type_id: issueTypeId,
+              },
+              { onError: reportMutationError },
+            )
+          }
         />
       </div>
 
@@ -262,7 +303,13 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           saving={saving}
           blockedByChips={blockedByChips}
           blocksChips={blocksChips}
-          patchField={patchField}
+          items={items}
+          setParent={(parentId) =>
+            setParent.mutate(
+              { id: task.id, parentId },
+              { onError: reportMutationError },
+            )
+          }
           addBlocker={addBlocker}
           removeBlocker={removeBlocker}
           goEpic={goEpic}

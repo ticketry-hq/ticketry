@@ -5,7 +5,7 @@ import { ScratchStateBadge } from "../features/agents/lifecycle";
 import { useAgentStatusStore } from "../features/agents/status";
 import { TEMP_TASK_ID } from "../features/agents/types";
 import type { TaskSummary } from "../features/studio/lib/types";
-import type { FlatRow } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { TaskRow } from "../app/shell/ticket-workspace/tasks/components/TaskRow";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
@@ -44,14 +44,9 @@ const scratchTask: TaskSummary = {
   sub_issues_count: 0,
 };
 
-const scratchRow: FlatRow = {
-  task: scratchTask,
-  depth: 0,
-  parentId: null,
-  hasChildren: false,
-  isExpanded: false,
-  isLoading: false,
-  descendantIds: [],
+const scratchRow: Row = {
+  kind: "scratch",
+  moduleId: "module-1",
 };
 
 function renderScratchRowAndDetails() {

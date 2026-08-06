@@ -6,7 +6,7 @@ import type {
 } from "../../shared/api/types";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
-import * as api from "../studio/workflowApi";
+import * as api from "../../shared/api/client";
 import { loadProviderCapabilities } from "./providerQueries";
 import {
   getProviderCapabilitiesSnapshot,

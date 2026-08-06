@@ -48,7 +48,7 @@ import {
   isSidebarEnabled,
   useConfig,
 } from "../../../../features/studio/stores/configStore";
-import { useUIStore } from "../../../../features/studio/stores/uiStore";
+import { useClientStore } from "../../../../state/clientStore";
 import { formatChordSymbols } from "../../../navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../navigation/three-zone/threeZoneNavigation";
 import { selectScratchRunIds, useAgentStatusStore } from "../../../../features/agents/status";
@@ -327,18 +327,18 @@ export function SelectedTicketContent({
   const [terminalFocusSignal, setTerminalFocusSignal] = useState(0);
   const [highlightedTab, setHighlightedTab] =
     useState<TaskWorkspaceTabIdentity>({ kind: "details" });
-  const sidebarVisible = useUIStore((state) => state.sidebarVisible);
+  const sidebarVisible = useClientStore((state) => state.sidebarVisible);
   const sidebarEnabled = isSidebarEnabled(useConfig());
-  const editViewZone = useUIStore((state) => state.editViewZone);
-  const editViewBodyEngaged = useUIStore(
+  const editViewZone = useClientStore((state) => state.editViewZone);
+  const editViewBodyEngaged = useClientStore(
     (state) => state.editViewBodyEngaged,
   );
-  const navigationModality = useUIStore((state) => state.navigationModality);
-  const setEditViewZone = useUIStore((state) => state.setEditViewZone);
-  const setNavigationModality = useUIStore(
+  const navigationModality = useClientStore((state) => state.navigationModality);
+  const setEditViewZone = useClientStore((state) => state.setEditViewZone);
+  const setNavigationModality = useClientStore(
     (state) => state.setNavigationModality,
   );
-  const setEditViewBodyEngaged = useUIStore(
+  const setEditViewBodyEngaged = useClientStore(
     (state) => state.setEditViewBodyEngaged,
   );
   const isEditView =
@@ -1145,7 +1145,7 @@ export function SelectedTicketContent({
           isEditView
             ? (event) => {
                 if (
-                  !useUIStore.getState().editViewBodyEngaged &&
+                  !useClientStore.getState().editViewBodyEngaged &&
                   event.target instanceof HTMLElement &&
                   event.target.closest(".xterm")
                 ) {

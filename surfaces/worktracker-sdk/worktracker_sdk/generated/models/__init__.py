@@ -88,6 +88,7 @@ from worktracker_sdk.generated.models.viewer_lease import ViewerLease
 from worktracker_sdk.generated.models.viewer_lease_release import ViewerLeaseRelease
 from worktracker_sdk.generated.models.viewer_lease_result import ViewerLeaseResult
 from worktracker_sdk.generated.models.work_item import WorkItem
+from worktracker_sdk.generated.models.work_item_batch import WorkItemBatch
 from worktracker_sdk.generated.models.work_item_create import WorkItemCreate
 from worktracker_sdk.generated.models.work_item_reorder import WorkItemReorder
 from worktracker_sdk.generated.models.workspace import Workspace

@@ -7,21 +7,12 @@ const catalogApi = vi.hoisted(() => ({
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../features/studio/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...catalogApi,
+  getWorkspace: vi.fn(),
+  acknowledgeOnboarding: vi.fn(),
 }));
-
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
-  );
-  return {
-    ...actual,
-    getWorkspace: vi.fn(),
-    acknowledgeOnboarding: vi.fn(),
-  };
-});
 
 import * as api from "../shared/api/client";
 import { OnboardingGate } from "../app/onboarding/OnboardingGate";

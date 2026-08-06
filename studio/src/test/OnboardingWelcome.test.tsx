@@ -3,15 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderCatalog } from "../shared/api/types";
 
 const catalogApi = vi.hoisted(() => ({
-  createProject: vi.fn(),
+  createProjectSummary: vi.fn(),
   getLaunchProviderCapabilities: vi.fn(),
   getProviderCatalog: vi.fn(),
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../features/studio/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...catalogApi,
+  acknowledgeOnboarding: vi.fn(),
+  listModules: vi.fn(),
+  listProjects: vi.fn(),
 }));
 
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
@@ -23,18 +26,6 @@ import * as workspaceApi from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
 import { queryClient } from "../shared/query/queryClient";
 import { queryKeys } from "../shared/query/keys";
-
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
-  );
-  return {
-    ...actual,
-    acknowledgeOnboarding: vi.fn(),
-    listModules: vi.fn(),
-    listProjects: vi.fn(),
-  };
-});
 
 const capabilities = [
   {
@@ -76,7 +67,7 @@ const listProjects = workspaceApi.listProjects as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.resetAllMocks();
-  catalogApi.createProject.mockResolvedValue({
+  catalogApi.createProjectSummary.mockResolvedValue({
     id: "created-project",
     name: "Coding",
     identifier: "CODING",
@@ -129,7 +120,7 @@ describe("Onboarding welcome", () => {
         projectId: "bootstrap-project",
       });
     });
-    expect(catalogApi.createProject).not.toHaveBeenCalled();
+    expect(catalogApi.createProjectSummary).not.toHaveBeenCalled();
     expect(screen.queryByRole("heading", { name: "Your first project" }))
       .not.toBeInTheDocument();
   });
@@ -157,12 +148,12 @@ describe("Onboarding welcome", () => {
         projectId: "canonical-project",
       });
     });
-    expect(catalogApi.createProject).not.toHaveBeenCalled();
+    expect(catalogApi.createProjectSummary).not.toHaveBeenCalled();
   });
 
   it("creates canonical Coding only as fallback before starting without Projects", async () => {
     seedConfig({ features: { sidebar: true, projects: false } });
-    catalogApi.createProject.mockResolvedValueOnce({
+    catalogApi.createProjectSummary.mockResolvedValueOnce({
       id: "created-canonical-project",
       name: "Coding",
       identifier: "CDN",
@@ -174,7 +165,7 @@ describe("Onboarding welcome", () => {
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
 
     await waitFor(() => {
-      expect(catalogApi.createProject).toHaveBeenCalledWith({
+      expect(catalogApi.createProjectSummary).toHaveBeenCalledWith({
         name: "Coding",
         slug: "CDN",
       });
@@ -187,7 +178,7 @@ describe("Onboarding welcome", () => {
 
   it("keeps default-project failures inline and retries without a null tour", async () => {
     seedConfig({ features: { sidebar: true, projects: false } });
-    catalogApi.createProject.mockRejectedValueOnce(new Error("create failed"));
+    catalogApi.createProjectSummary.mockRejectedValueOnce(new Error("create failed"));
 
     render(<OnboardingWelcome />);
     await screen.findByRole("heading", { name: "Your agents" });
@@ -206,7 +197,7 @@ describe("Onboarding welcome", () => {
     fireEvent.click(screen.getByRole("button", { name: "Get started" }));
 
     await waitFor(() => {
-      expect(catalogApi.createProject).toHaveBeenCalledTimes(2);
+      expect(catalogApi.createProjectSummary).toHaveBeenCalledTimes(2);
       expect(useOnboardingTourStore.getState()).toMatchObject({
         step: "module-create",
         projectId: "created-project",
@@ -351,7 +342,7 @@ describe("Onboarding welcome", () => {
       expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1);
     });
     expect(getOnboardingRequiredSnapshot()).toBe(false);
-    expect(catalogApi.createProject).not.toHaveBeenCalled();
+    expect(catalogApi.createProjectSummary).not.toHaveBeenCalled();
     expect(useOnboardingTourStore.getState().step).toBe("inactive");
   });
 
@@ -368,7 +359,7 @@ describe("Onboarding welcome", () => {
       expect(catalogApi.putProviderCatalog).toHaveBeenLastCalledWith(emptyCatalog);
       expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1);
     });
-    expect(catalogApi.createProject).not.toHaveBeenCalled();
+    expect(catalogApi.createProjectSummary).not.toHaveBeenCalled();
   });
 
   it("creates the independently editable first project through the live store and starts its tour", async () => {
@@ -398,7 +389,7 @@ describe("Onboarding welcome", () => {
     fireEvent.click(screen.getByTestId("onboarding-create-project"));
 
     await waitFor(() => {
-      expect(catalogApi.createProject).toHaveBeenCalledWith({
+      expect(catalogApi.createProjectSummary).toHaveBeenCalledWith({
         name: "My project",
         slug: "MYP",
         description: "",
@@ -420,7 +411,7 @@ describe("Onboarding welcome", () => {
   });
 
   it("shows a duplicate-key conflict inline and keeps the project form editable", async () => {
-    catalogApi.createProject.mockRejectedValueOnce(
+    catalogApi.createProjectSummary.mockRejectedValueOnce(
       new ApiError(409, "Conflict", {
         detail: "Project slug 'CDN' already exists.",
       }),

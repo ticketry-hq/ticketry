@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
 import type { ProviderCatalog } from "../../shared/api/types";
-import * as api from "../../features/studio/lib/api";
+import * as api from "../../shared/api/client";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { getConfigSnapshot } from "../../features/studio/stores/configStore";
 import { useTasksStore } from "../../features/studio/stores/tasksStore";

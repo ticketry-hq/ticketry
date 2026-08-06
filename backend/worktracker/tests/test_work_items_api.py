@@ -71,12 +71,18 @@ def test_declared_work_item_reads_validate_against_the_generated_schema(
             f"{BASE}/schema", headers={**auth, "accept": "application/json"}
         ).json()
     )
-    if declaration.path.endswith("/{issue_id}"):
+    if declaration.path.endswith("/batch"):
+        url = declaration.path
+    elif declaration.path.endswith("/{issue_id}"):
         url = declaration.path.format(issue_id=work_item["id"])
     else:
         url = f"{declaration.path}?project={project.id}"
 
-    response = client.get(url, headers=auth)
+    response = (
+        post_json(client, url, {"ids": [work_item["id"]]}, auth)
+        if declaration.method == "POST"
+        else client.get(url, headers=auth)
+    )
 
     assert response.status_code == 200
     jsonschema.validate(
@@ -170,6 +176,48 @@ def test_one_list_route_narrows_by_project_module_and_state(
 
     assert response.status_code == 200
     assert {row["id"] for row in response.json()} == {selected["id"], child["id"]}
+
+
+def test_batch_read_returns_only_existing_requested_ids_in_request_order(
+    client, project, task_type, auth
+):
+    first = _create(client, project, task_type, auth, name="First")
+    second = _create(client, project, task_type, auth, name="Second")
+
+    response = post_json(
+        client,
+        f"{BASE}/work-items/batch",
+        {"ids": [second["id"], str(uuid.uuid4()), first["id"], second["id"]]},
+        auth,
+    )
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == [second["id"], first["id"]]
+
+
+def test_batch_read_accepts_one_hundred_ids(client, project, task_type, auth):
+    existing = _create(client, project, task_type, auth)
+    ids = [existing["id"], *(str(uuid.uuid4()) for _ in range(99))]
+
+    response = post_json(
+        client,
+        f"{BASE}/work-items/batch",
+        {"ids": ids},
+        auth,
+    )
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == [existing["id"]]
+
+
+@pytest.mark.parametrize(
+    "ids",
+    [[], ["not-a-uuid"], [str(uuid.uuid4()) for _ in range(101)]],
+)
+def test_batch_read_rejects_invalid_or_oversized_bodies(client, auth, ids):
+    response = post_json(client, f"{BASE}/work-items/batch", {"ids": ids}, auth)
+
+    assert response.status_code == 400
 
 
 def test_default_list_hides_the_stable_pathfind_role_and_its_descendants(

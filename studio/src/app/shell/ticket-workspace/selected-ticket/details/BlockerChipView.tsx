@@ -1,4 +1,4 @@
-import { type BlockerChip } from "../../../../../features/work-items/issueStore";
+import { type BlockerChip } from "../../../../../features/work-items";
 import { IconAlertTriangle, IconX } from "../../../../../shared/ui/icons";
 import { quietChipRemoveClassName } from "./fields/QuietChipControls";
 import { useTasksStore } from "../../../../../features/studio/stores/tasksStore";

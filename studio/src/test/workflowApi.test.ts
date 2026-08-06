@@ -8,7 +8,7 @@ import {
   setIssueTypeWorkflowStartState,
   setIssueTypeWorkflowTransitionPermission,
   upsertIssueTypeWorkflowLaunchBinding,
-} from "../features/studio/workflowApi";
+} from "../shared/api/client";
 import { seedConfig } from "../features/studio/stores/configStore";
 
 const fetchMock = vi.fn();

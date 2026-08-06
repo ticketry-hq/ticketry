@@ -1,7 +1,6 @@
 import type { State, WorkItem } from "../../shared/api/types";
 import { compareStateOrder } from "../../shared/utilities/display";
 import { useTasksStore } from "../studio/stores/tasksStore";
-import { useUIStore } from "../studio/stores/uiStore";
 import { useIssueStore } from "../work-items/issueStore";
 import { advanceStateCatalogRevision } from "../../shared/stateCatalogRevision";
 import { getStatesSnapshot, setStates } from "../../shared/query/stateCatalog";
@@ -66,15 +65,6 @@ export function synchronizeActiveStateCatalogs(
   workflowStates: State[],
 ): State[] {
   advanceStateCatalogRevision(projectId, authoritative);
-  const taskCatalog = useTasksStore.getState();
-  const previousName =
-    (taskCatalog.selectedProjectId === projectId
-      ? taskCatalog.states.find((state) => state.id === authoritative.id)?.name
-      : undefined) ??
-    getStatesSnapshot(projectId).find((state) => state.id === authoritative.id)
-      ?.name ??
-    workflowStates.find((state) => state.id === authoritative.id)?.name;
-
   useTasksStore.setState((current) => {
     if (current.selectedProjectId !== projectId) return current;
     const taskState = toTaskState(authoritative);
@@ -116,13 +106,6 @@ export function synchronizeActiveStateCatalogs(
       .filter((item) => item.project_id === projectId)
       .map((item) => replaceWorkItemState(item, authoritative)),
   );
-
-  if (previousName) {
-    useUIStore.getState().renameCollapsedState(
-      previousName,
-      authoritative.name,
-    );
-  }
 
   return upsertCanonicalState(workflowStates, authoritative);
 }

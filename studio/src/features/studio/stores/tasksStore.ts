@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { isCancelledError } from "@tanstack/react-query";
+import { isCancelledError, useQueries } from "@tanstack/react-query";
 import { create } from "zustand";
-import * as api from "../lib/api";
-import { normalizeTask } from "../lib/api";
+import * as api from "../../../shared/api/client";
+import { normalizeTask } from "../../../shared/api/client";
 import {
   getModulesSnapshot,
   getProjectsSnapshot,
@@ -23,7 +23,7 @@ import {
   updateProfile,
 } from "./configStore";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { toast } from "../../../app/stores/toastStore";
+import { toast } from "../../../state/clientStore";
 import { apiErrorMessage } from "../../../shared/api/client";
 import {
   loadChildWorkItems,
@@ -31,6 +31,7 @@ import {
 } from "../../work-items";
 import { useIssueStore } from "../../work-items/issueStore";
 import type {
+  ModuleTree,
   Module,
   Project,
   ProjectCreate,
@@ -57,6 +58,9 @@ import {
   useCachedTaskDetails,
   useCachedTaskTree,
 } from "./taskTreeCache";
+import { queryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/keys";
+import { workItemQuery } from "../../work-items/queries";
 import { loadIssueTypes } from "../../settings";
 import {
   type ModuleSummary,
@@ -66,31 +70,6 @@ import {
   type TaskState,
   type TaskSummary,
 } from "../lib/types";
-
-// Synthetic, local-only "scratch" state + task that bucket no-task (plan/instant)
-// agent runs (D6). The state is prepended to the real states list so its group
-// header sorts to the top of the backlog group and the task renders first. It
-// carries no id, so it never appears as a settable target in the status modal.
-const SCRATCH_STATE: TaskState = {
-  id: null,
-  name: "Scratch",
-  group: "backlog",
-  color: null,
-};
-
-function makeScratchTask(): TaskSummary {
-  return {
-    id: TEMP_TASK_ID,
-    name: "Local scratch workspace",
-    project_id: "",
-    sequence_id: null,
-    issue_type: { id: "scratch", name: "Scratch", level: "task" },
-    state: SCRATCH_STATE,
-    description: null,
-    parent_id: null,
-    sub_issues_count: 0,
-  };
-}
 
 // The recency sort is the shared, generic helper (#831) so the Studio modules
 // pane and the Studio workitems surfaces cannot drift. Re-exported here for the
@@ -137,11 +116,7 @@ interface TasksStoreState {
   selectedModuleId: string | null;
   /** Derived from the module tree cache; see ./taskTreeCache. */
   readonly tasks: TaskSummary[];
-  /**
-   * Derived from the one shared workflow-state catalog, with the local-only
-   * Scratch section in front. React surfaces read useTaskStates() instead —
-   * a catalog change notifies query subscribers, not this store's.
-   */
+  /** Derived from the one shared workflow-state catalog. */
   readonly states: TaskState[];
   selectedTaskId: string | null;
   workspaceSelection: WorkspaceSelection;
@@ -387,20 +362,6 @@ function currentRankNeighbors(
   };
 }
 
-// Overlay accepted feed deltas onto a freshly fetched task tree: a row whose
-// fetched revision is older than a retained delta keeps the delta's state, so
-// a slow list response cannot roll a Story back to its pre-move section.
-function overlayPendingDeltas(
-  rows: TaskSummary[],
-  pending: Record<string, PendingStateDelta>,
-): TaskSummary[] {
-  return rows.map((row) => {
-    const delta = pending[row.id];
-    if (!delta || delta.revision <= (row.state_revision ?? 0)) return row;
-    return { ...row, state: delta.state, state_revision: delta.revision };
-  });
-}
-
 function overlayAuthoritativeCatalog(
   projectId: string,
   rows: TaskSummary[],
@@ -430,9 +391,29 @@ function routeDerivedWrites(
 
   if ((tasks !== undefined || subtasks !== undefined) && projectId && moduleId) {
     const existing = getTaskTree(projectId, moduleId);
+    const nextRootIds = tasks?.map((task) => task.id) ?? existing.rootIds;
+    const nextChildren: Record<string, string[]> = subtasks
+      ? Object.fromEntries(
+          Object.entries(subtasks).map(([parentId, children]) => [
+            parentId,
+            children.map((task) => task.id),
+          ]),
+        )
+      : { ...existing.children };
+    const mentionedIds = [
+      ...nextRootIds,
+      ...Object.values(nextChildren).flat(),
+    ];
+    if (tasks !== undefined || subtasks !== undefined) {
+      for (const id of mentionedIds) nextChildren[id] ??= [];
+    }
     setTaskTree(projectId, moduleId, {
-      tasks: tasks ?? existing.tasks,
-      subtasks: subtasks ?? existing.subtasks,
+      rootIds: nextRootIds,
+      children: nextChildren,
+      order: [
+        ...existing.order.filter((id) => mentionedIds.includes(id)),
+        ...mentionedIds.filter((id) => !existing.order.includes(id)),
+      ],
     });
   }
   if (details !== undefined) {
@@ -510,7 +491,7 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
     // Still the Studio client (its normalization and error surface are what the
     // create flow expects); the result is published to the shared cache so both
     // Studio surfaces see the new project without a refetch.
-    const created = await api.createProject(body);
+    const created = await api.createProjectSummary(body);
     seedProjects([
       ...getProjectsSnapshot().filter((project) => project.id !== created.id),
       {
@@ -594,7 +575,7 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
       (issueType) => issueType.level === "module" && issueType.name === "Module",
     );
     if (!moduleType) throw new Error("The Module issue type is unavailable.");
-    const created = await api.createModule(projectId, name, moduleType.id);
+    const created = await api.createModuleSummary(projectId, name, moduleType.id);
 
     // Keep the work-items project context in sync when it already owns this
     // project. Issue details derive a Story's module from that list, including
@@ -701,15 +682,11 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
       }
       // TUI parity (tui/ui/app.py:load_tasks lines 333–351): on success or
       // empty result, collapse the left two panes and focus the Tasks pane.
-      // Dynamic import keeps the tasksStore ↔ uiStore cycle from biting at
+      // Dynamic import keeps the tasksStore ↔ clientStore cycle from biting at
       // module-eval time.
-      const { useUIStore } = await import("./uiStore");
-      useUIStore.getState().setSidebarVisible(false);
-      useUIStore.getState().setFocusedPane("tasks");
-
-      // Restore the per-module expanded sub-task set and reveal a remembered
-      // nested selection by merging every loaded ancestor into that set.
-      await useUIStore.getState().hydrateExpandedForModule(id);
+      const { useClientStore } = await import("../../../state/clientStore");
+      useClientStore.getState().setSidebarVisible(false);
+      useClientStore.getState().setFocusedPane("tasks");
     }
   },
 
@@ -719,58 +696,35 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
     set((s) => ({ loading: { ...s.loading, tasks: true } }));
     try {
       const tree = await loadTaskTreeData(projectId, moduleId, async () => {
-        const { tasks, states, subtasks, workItems } =
+        const { rootIds, children, order, states, workItems } =
           await api.getTasks(projectId, moduleId);
-        const state = get();
-        // The module endpoint already returned every descendant in its full
-        // WorkItem shape. Feed that canonical owner before retaining the
-        // legacy summary projection required by planning surfaces.
-        useIssueStore.getState().hydrateWorkItems(workItems ?? []);
+        for (const item of workItems) {
+          queryClient.setQueryData(queryKeys.workItems.byId(item.id), item);
+        }
+        useIssueStore.getState().hydrateWorkItems(workItems);
         const catalogChanged = stateCatalogChangedSince(
           projectId,
           catalogRevision,
-        );
-        const loadedTasks = overlayPendingDeltas(
-          tasks,
-          state.pendingStateDeltas,
-        );
-        const nextTasks = [
-          makeScratchTask(),
-          ...(catalogChanged
-            ? overlayAuthoritativeCatalog(projectId, loadedTasks)
-            : loadedTasks),
-        ];
-        const nextSubtasks = Object.fromEntries(
-          Object.entries(subtasks).map(([parentId, children]) => [
-            parentId,
-            catalogChanged
-              ? overlayAuthoritativeCatalog(
-                  projectId,
-                  overlayPendingDeltas(children, state.pendingStateDeltas),
-                )
-              : overlayPendingDeltas(children, state.pendingStateDeltas),
-          ]),
         );
         // The module response carries the project's states. Publish them to
         // the one shared catalog unless a workflow edit landed while this fetch
         // was in flight, in which case the catalog is already newer.
         if (!catalogChanged) setStatesSorted(projectId, states as State[]);
-        return { tasks: nextTasks, subtasks: nextSubtasks };
+        return { rootIds, children, order };
       });
       set((state) => {
         if (!isCurrentTasksLoad(state, projectId, moduleId, generation)) {
           return state;
         }
-        const loadedTaskIds = new Set(tree.tasks.map((task) => task.id));
-        for (const children of Object.values(tree.subtasks)) {
-          for (const child of children) loadedTaskIds.add(child.id);
-        }
+        const loadedTaskIds = new Set(tree.order);
         const rememberedTaskId = readTaskSelections()[moduleId];
+        const isSelectableTaskId = (taskId: string) =>
+          taskId === TEMP_TASK_ID || loadedTaskIds.has(taskId);
         return {
           selectedTaskId:
-            state.selectedTaskId && loadedTaskIds.has(state.selectedTaskId)
+            state.selectedTaskId && isSelectableTaskId(state.selectedTaskId)
               ? state.selectedTaskId
-              : rememberedTaskId && loadedTaskIds.has(rememberedTaskId)
+              : rememberedTaskId && isSelectableTaskId(rememberedTaskId)
                 ? rememberedTaskId
                 : null,
         };
@@ -803,9 +757,9 @@ export const useTasksStore = create<TasksStoreState>((rawSet, get, store) => {
       details: null,
       workspaceSelection: { kind: "task" },
     });
-    // The Details panel resolves the canonical record synchronously. Its
-    // single debounced request is a background refresh, owned by issueStore.
-    await useIssueStore.getState().openIssue(id);
+    // Selection is client intent only. The workspace subscribes to the
+    // per-item holding directly; a loaded row therefore paints without a
+    // request, while a genuinely absent deep-link entry loads in its query.
   },
 
   toggleStateConfiguration(projectId, stateId) {
@@ -1271,17 +1225,13 @@ function moduleSummaries(projectId: string | null): ModuleSummary[] {
 
 const EMPTY_MODULE_SUMMARIES: ModuleSummary[] = [];
 
-// `states` is derived, never stored: one catalog, plus the local-only Scratch
-// section this store owns.
+// `states` is derived, never stored: one shared workflow-state catalog.
 function attachDerivedStates(state: TasksStoreState): void {
   Object.defineProperties(state, {
     states: {
       configurable: true,
       enumerable: false,
-      get: () => [
-        SCRATCH_STATE,
-        ...(getStatesSnapshot(state.selectedProjectId) as TaskState[]),
-      ],
+      get: () => getStatesSnapshot(state.selectedProjectId) as TaskState[],
     },
     projects: {
       configurable: true,
@@ -1296,14 +1246,33 @@ function attachDerivedStates(state: TasksStoreState): void {
     tasks: {
       configurable: true,
       enumerable: false,
-      get: () =>
-        getTaskTree(state.selectedProjectId, state.selectedModuleId).tasks,
+      get: () => {
+        const tree = getTaskTree(state.selectedProjectId, state.selectedModuleId);
+        return tree.rootIds.flatMap((id) => {
+          const item = queryClient.getQueryData<WorkItem>(
+            queryKeys.workItems.byId(id),
+          );
+          return item ? [item as unknown as TaskSummary] : [];
+        });
+      },
     },
     subtasks: {
       configurable: true,
       enumerable: false,
-      get: () =>
-        getTaskTree(state.selectedProjectId, state.selectedModuleId).subtasks,
+      get: () => {
+        const tree = getTaskTree(state.selectedProjectId, state.selectedModuleId);
+        return Object.fromEntries(
+          Object.entries(tree.children).map(([parentId, ids]) => [
+            parentId,
+            ids.flatMap((id) => {
+              const item = queryClient.getQueryData<WorkItem>(
+                queryKeys.workItems.byId(id),
+              );
+              return item ? [item as unknown as TaskSummary] : [];
+            }),
+          ]),
+        );
+      },
     },
     details: {
       configurable: true,
@@ -1317,8 +1286,7 @@ attachDerivedStates(useTasksStore.getState());
 useTasksStore.subscribe((state) => attachDerivedStates(state));
 
 // A `states` write has no local home any more; route it to the shared catalog
-// for whichever project the write is about, dropping the local-only Scratch
-// entry (id === null) which this store re-adds on read.
+// for whichever project the write is about.
 const rawSetState = useTasksStore.setState;
 useTasksStore.setState = ((partial, replace) => {
   const current = useTasksStore.getState();
@@ -1332,13 +1300,66 @@ useTasksStore.setState = ((partial, replace) => {
  * subscribe to the cache entries those fetches populate, so a feed delta or a
  * reorder re-renders the panes.
  */
+export function useStudioTaskMembership(): ModuleTree {
+  const projectId = useTasksStore((s) => s.selectedProjectId);
+  const moduleId = useTasksStore((s) => s.selectedModuleId);
+  return useCachedTaskTree(projectId, moduleId);
+}
+
+/**
+ * Transitional record resolver for non-Stories callers. The module entry is
+ * still id-only; these arrays contain the work-item entry objects themselves
+ * and are computed for the caller rather than cached.
+ */
 export function useStudioTaskTree(): {
   tasks: TaskSummary[];
   subtasks: Record<TaskId, TaskSummary[]>;
 } {
+  const tree = useStudioTaskMembership();
+  const itemQueries = useQueries(
+    { queries: tree.order.map((id) => workItemQuery(id)) },
+    queryClient,
+  );
+  const itemsById = new Map(
+    itemQueries.flatMap(({ data: item }) =>
+      item ? [[item.id, item] as const] : [],
+    ),
+  );
+  return {
+    tasks: tree.rootIds.flatMap((id) => {
+      const item = itemsById.get(id);
+      return item ? [item as unknown as TaskSummary] : [];
+    }),
+    subtasks: Object.fromEntries(
+      Object.entries(tree.children).map(([parentId, ids]) => [
+        parentId,
+        ids.flatMap((id) => {
+          const item = itemsById.get(id);
+          return item ? [item as unknown as TaskSummary] : [];
+        }),
+      ]),
+    ),
+  };
+}
+
+/** Resolve collapsed-subtree structure without storing it on a row. */
+export function useStudioTaskDescendantIds(taskId: string): string[] {
   const projectId = useTasksStore((s) => s.selectedProjectId);
   const moduleId = useTasksStore((s) => s.selectedModuleId);
-  return useCachedTaskTree(projectId, moduleId);
+  const tree = useCachedTaskTree(projectId, moduleId);
+  return useMemo(() => {
+    const ids: string[] = [];
+    const visited = new Set([taskId]);
+    const pending = [...(tree.children[taskId] ?? [])];
+    while (pending.length > 0) {
+      const childId = pending.pop();
+      if (!childId || visited.has(childId)) continue;
+      visited.add(childId);
+      ids.push(childId);
+      pending.push(...(tree.children[childId] ?? []));
+    }
+    return ids;
+  }, [taskId, tree]);
 }
 
 export function useStudioTaskDetails(): TaskDetails | null {
@@ -1365,11 +1386,7 @@ export function useStudioModules(): ModuleSummary[] {
  */
 export function useTaskStates(): TaskState[] {
   const projectId = useTasksStore((s) => s.selectedProjectId);
-  const catalog = useCachedStates(projectId);
-  return useMemo(
-    () => [SCRATCH_STATE, ...(catalog as TaskState[])],
-    [catalog],
-  );
+  return useCachedStates(projectId) as TaskState[];
 }
 
 useTasksStore.subscribe((state, previous) => {

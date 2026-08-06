@@ -1,12 +1,26 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskSummary, TaskState } from "../features/studio/lib/types";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
-import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import {
+  isPlanningRow,
+  TasksPane,
+} from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useTaskTree } from "../app/shell/ticket-workspace/tasks/hooks/useTaskTree";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { TEMP_TASK_ID } from "../features/agents/types";
+import { queryClient } from "../shared/query/queryClient";
+import { queryKeys } from "../shared/query/keys";
+import type { WorkItem } from "../shared/api/types";
+import { setTaskTree } from "../features/studio/stores/taskTreeCache";
 
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => null,
@@ -30,13 +44,6 @@ const DONE: TaskState = {
   sort_order: 1,
 };
 
-const SCRATCH: TaskState = {
-  id: null,
-  name: "Scratch",
-  group: "backlog",
-  color: null,
-};
-
 function story(overrides: Partial<TaskSummary> = {}): TaskSummary {
   return {
     id: "story-alpha",
@@ -56,7 +63,17 @@ function story(overrides: Partial<TaskSummary> = {}): TaskSummary {
 function visibleStoryNames(): string[] {
   return within(screen.getByRole("tree"))
     .getAllByRole("treeitem")
+    .filter((row) => row.getAttribute("data-task-id") !== TEMP_TASK_ID)
     .map((row) => row.textContent ?? "");
+}
+
+function seedStories(...items: TaskSummary[]) {
+  for (const item of items) {
+    queryClient.setQueryData(
+      queryKeys.workItems.byId(item.id),
+      item as unknown as WorkItem,
+    );
+  }
 }
 
 function KeyboardStoriesPane() {
@@ -67,25 +84,26 @@ function KeyboardStoriesPane() {
 
 describe("Studio Stories search", () => {
   beforeEach(() => {
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(),
+    queryClient.clear();
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: {},
       storySearchQuery: "",
     });
+    const alpha = story();
+    const beta = story({
+      id: "story-beta",
+      name: "Beta follow-up",
+      sequence_id: 202,
+      key: "CODING-202",
+    });
+    seedStories(alpha, beta);
     useTasksStore.setState({
       selectedProjectId: "project-1",
       selectedModuleId: "module-1",
       selectedTaskId: null,
-      tasks: [
-        story(),
-        story({
-          id: "story-beta",
-          name: "Beta follow-up",
-          sequence_id: 202,
-          key: "CODING-202",
-        }),
-      ],
-      states: [SCRATCH, TODO, DONE],
+      tasks: [alpha, beta],
+      states: [TODO, DONE],
       subtasks: {},
       details: null,
       loading: {
@@ -96,6 +114,63 @@ describe("Studio Stories search", () => {
         subtasks: false,
       },
     });
+  });
+
+  it("derives id-only work-item rows and a distinct module scratch row", () => {
+    const { result } = renderHook(() => useTaskTree());
+    const planningRows = result.current.rows.filter(isPlanningRow);
+
+    expect(planningRows[0]).toEqual({ kind: "scratch", moduleId: "module-1" });
+    expect(planningRows.slice(1)).toEqual([
+      {
+        kind: "work-item",
+        id: "story-beta",
+        depth: 0,
+        parentId: null,
+        expandable: false,
+        expanded: false,
+      },
+      {
+        kind: "work-item",
+        id: "story-alpha",
+        depth: 0,
+        parentId: null,
+        expandable: false,
+        expanded: false,
+      },
+    ]);
+    expect(planningRows.some((row) => "task" in row || "name" in row)).toBe(false);
+  });
+
+  it("resolves the displayed record again when its canonical holding changes", () => {
+    render(<TasksPane />);
+    expect(screen.getByText("Alpha launch")).toBeInTheDocument();
+
+    act(() => {
+      queryClient.setQueryData(queryKeys.workItems.byId("story-alpha"), {
+        ...story(),
+        name: "Alpha renamed",
+      } as unknown as WorkItem);
+    });
+
+    expect(screen.getByText("Alpha renamed")).toBeInTheDocument();
+    expect(screen.queryByText("Alpha launch")).not.toBeInTheDocument();
+  });
+
+  it("offers disclosure for unread children but not a known childless row", () => {
+    setTaskTree("project-1", "module-1", {
+      rootIds: ["story-alpha", "story-beta"],
+      children: { "story-beta": [] },
+      order: ["story-alpha", "story-beta"],
+    });
+    render(<TasksPane />);
+
+    const unknown = screen.getByRole("treeitem", { name: /Alpha launch/ });
+    const childless = screen.getByRole("treeitem", { name: /Beta follow-up/ });
+    expect(
+      within(unknown).getByRole("button", { name: "Expand subtasks" }),
+    ).toBeInTheDocument();
+    expect(within(childless).queryByRole("button")).toBeNull();
   });
 
   it("renders canonical keys and narrows by key, title, or bare ticket number", () => {
@@ -150,6 +225,7 @@ describe("Studio Stories search", () => {
 
   it("keeps the empty-pane message when there are genuinely no task rows", () => {
     useTasksStore.setState({
+      selectedModuleId: null,
       tasks: [],
       states: [TODO, DONE],
     });
@@ -164,12 +240,12 @@ describe("Studio Stories search", () => {
 
   it("hands keyboard focus between search and only the visible Story rows", () => {
     Element.prototype.scrollIntoView = vi.fn();
+    const alpha = story();
+    const hidden = story({ id: "story-hidden", name: "Beta hidden", sequence_id: 202 });
+    const next = story({ id: "story-next", name: "Alpha follow-up", sequence_id: 203 });
+    seedStories(alpha, hidden, next);
     useTasksStore.setState({
-      tasks: [
-        story(),
-        story({ id: "story-hidden", name: "Beta hidden", sequence_id: 202 }),
-        story({ id: "story-next", name: "Alpha follow-up", sequence_id: 203 }),
-      ],
+      tasks: [alpha, hidden, next],
     });
     render(<KeyboardStoriesPane />);
 
@@ -182,8 +258,11 @@ describe("Studio Stories search", () => {
     fireEvent.change(search, { target: { value: "alpha" } });
     fireEvent.keyDown(search, { key: "ArrowDown" });
     expect(
-      screen.getByRole("treeitem", { name: /Alpha follow-up/ }),
+      screen.getByRole("treeitem", { name: /Local scratch workspace/ }),
     ).toHaveFocus();
+    expect(useTasksStore.getState().selectedTaskId).toBe(TEMP_TASK_ID);
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
     expect(useTasksStore.getState().selectedTaskId).toBe("story-next");
 
     fireEvent.keyDown(window, { key: "ArrowDown" });
@@ -212,38 +291,44 @@ describe("Studio Stories search", () => {
       parent_id: root.id,
       sub_issues_count: 2,
     });
+    const implementationSibling = story({
+      id: "implementation-sibling",
+      name: "Unrelated implementation",
+      sequence_id: 303,
+      parent_id: root.id,
+    });
+    const taskMatch = story({
+      id: "task-match",
+      name: "Needle validation",
+      sequence_id: 304,
+      key: "CODING-304",
+      parent_id: matchingParent.id,
+    });
+    const taskSibling = story({
+      id: "task-sibling",
+      name: "Unrelated validation",
+      sequence_id: 305,
+      parent_id: matchingParent.id,
+    });
+    seedStories(root, matchingParent, implementationSibling, taskMatch, taskSibling);
     useTasksStore.setState({
       tasks: [root],
       subtasks: {
         [root.id]: [
           matchingParent,
-          story({
-            id: "implementation-sibling",
-            name: "Unrelated implementation",
-            sequence_id: 303,
-            parent_id: root.id,
-          }),
+          implementationSibling,
         ],
         [matchingParent.id]: [
-          story({
-            id: "task-match",
-            name: "Needle validation",
-            sequence_id: 304,
-            key: "CODING-304",
-            parent_id: matchingParent.id,
-          }),
-          story({
-            id: "task-sibling",
-            name: "Unrelated validation",
-            sequence_id: 305,
-            parent_id: matchingParent.id,
-          }),
+          taskMatch,
+          taskSibling,
         ],
       },
     });
-    useUIStore.setState({
-      collapsedStateNames: new Set([TODO.name]),
-      expandedTaskIds: new Set([root.id, matchingParent.id]),
+    useClientStore.setState({
+      collapsedStateIds: new Set([TODO.id!]),
+      expandedIdsByModule: {
+        "module-1": [root.id, matchingParent.id],
+      },
     });
     render(<TasksPane />);
 
@@ -269,11 +354,11 @@ describe("Studio Stories search", () => {
     expect(
       screen.getByRole("treeitem", { name: /Needle implementation/ }),
     ).toHaveAttribute("aria-expanded", "true");
-    expect(useUIStore.getState().collapsedStateNames).toEqual(
-      new Set([TODO.name]),
+    expect(useClientStore.getState().collapsedStateIds).toEqual(
+      new Set([TODO.id]),
     );
-    expect(useUIStore.getState().expandedTaskIds).toEqual(
-      new Set([root.id, matchingParent.id]),
+    expect(useClientStore.getState().expandedIdsByModule["module-1"]).toEqual(
+      [root.id, matchingParent.id],
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse Todo" }));
@@ -283,23 +368,23 @@ describe("Studio Stories search", () => {
         { name: "Collapse subtasks" },
       ),
     );
-    expect(useUIStore.getState().collapsedStateNames).toEqual(
-      new Set([TODO.name]),
+    expect(useClientStore.getState().collapsedStateIds).toEqual(
+      new Set([TODO.id]),
     );
-    expect(useUIStore.getState().expandedTaskIds).toEqual(
-      new Set([root.id, matchingParent.id]),
+    expect(useClientStore.getState().expandedIdsByModule["module-1"]).toEqual(
+      [root.id, matchingParent.id],
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
     expect(
       screen.getByRole("button", { name: "Expand Todo" }),
     ).toBeInTheDocument();
-    expect(screen.queryAllByRole("treeitem")).toHaveLength(0);
-    expect(useUIStore.getState().collapsedStateNames).toEqual(
-      new Set([TODO.name]),
+    expect(visibleStoryNames()).toHaveLength(0);
+    expect(useClientStore.getState().collapsedStateIds).toEqual(
+      new Set([TODO.id]),
     );
-    expect(useUIStore.getState().expandedTaskIds).toEqual(
-      new Set([root.id, matchingParent.id]),
+    expect(useClientStore.getState().expandedIdsByModule["module-1"]).toEqual(
+      [root.id, matchingParent.id],
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Expand Todo" }));
@@ -320,25 +405,29 @@ describe("Studio Stories search", () => {
       sequence_id: 401,
       sub_issues_count: 1,
     });
+    const todoOther = story({ id: "todo-other", name: "Other Todo", sequence_id: 402 });
+    const doneRoot = story({
+      id: "done-root",
+      name: "Completed rollout",
+      sequence_id: 403,
+      state: DONE,
+    });
+    const todoMatch = story({
+      id: "todo-match",
+      name: "Find this nested task",
+      sequence_id: 404,
+      parent_id: todoRoot.id,
+    });
+    seedStories(todoRoot, todoOther, doneRoot, todoMatch);
     useTasksStore.setState({
       tasks: [
         todoRoot,
-        story({ id: "todo-other", name: "Other Todo", sequence_id: 402 }),
-        story({
-          id: "done-root",
-          name: "Completed rollout",
-          sequence_id: 403,
-          state: DONE,
-        }),
+        todoOther,
+        doneRoot,
       ],
       subtasks: {
         [todoRoot.id]: [
-          story({
-            id: "todo-match",
-            name: "Find this nested task",
-            sequence_id: 404,
-            parent_id: todoRoot.id,
-          }),
+          todoMatch,
         ],
       },
     });
@@ -364,22 +453,20 @@ describe("Studio Stories search", () => {
       sequence_id: 501,
       sub_issues_count: 1,
     });
+    seedStories(loadingParent);
     useTasksStore.setState((state) => ({
-      tasks: [
-        story({
-          id: TEMP_TASK_ID,
-          name: "Local scratch workspace",
-          sequence_id: 500,
-          key: undefined,
-          state: SCRATCH,
-          parent_id: null,
-        }),
-        loadingParent,
-      ],
+      tasks: [loadingParent],
       subtasks: {},
       loading: { ...state.loading, subtasks: true },
     }));
-    useUIStore.setState({ expandedTaskIds: new Set([loadingParent.id]) });
+    setTaskTree("project-1", "module-1", {
+      rootIds: [loadingParent.id],
+      children: {},
+      order: [loadingParent.id],
+    });
+    useClientStore.setState({
+      expandedIdsByModule: { "module-1": [loadingParent.id] },
+    });
     render(<TasksPane />);
 
     fireEvent.change(screen.getByRole("textbox", { name: "Search stories" }), {
@@ -388,7 +475,7 @@ describe("Studio Stories search", () => {
 
     expect(
       screen.getByRole("treeitem", { name: /Local scratch workspace/ }),
-    ).toHaveTextContent("500 · Local scratch workspace");
+    ).toHaveTextContent("Local scratch workspace");
     expect(screen.queryByText(/undefined-|null-/)).not.toBeInTheDocument();
     expect(
       screen.getByRole("treeitem", { name: /Alpha loading branch/ }),

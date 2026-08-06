@@ -5,7 +5,7 @@ import {
   sidebarPaneComposition,
   useConfig,
 } from "../../../features/studio/stores/configStore";
-import { useUIStore } from "../../../features/studio/stores/uiStore";
+import { useClientStore } from "../../../state/clientStore";
 import {
   DEFAULT_PANEL_LAYOUT,
   mergeOuterPanelLayout,
@@ -20,9 +20,9 @@ export function useStudioPanelLayout() {
     config.features.projects,
     isSidebarEnabled(config),
   );
-  const sidebarVisible = useUIStore((state) => state.sidebarVisible);
-  const panelLayout = useUIStore((state) => state.panelLayout);
-  const setPanelLayout = useUIStore((state) => state.setPanelLayout);
+  const sidebarVisible = useClientStore((state) => state.sidebarVisible);
+  const panelLayout = useClientStore((state) => state.panelLayout);
+  const setPanelLayout = useClientStore((state) => state.setPanelLayout);
 
   const outerGroupRef = useRef<ImperativePanelGroupHandle>(null);
   const workAreaGroupRef = useRef<ImperativePanelGroupHandle>(null);

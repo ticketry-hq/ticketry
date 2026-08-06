@@ -3,15 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskState, TaskSummary } from "../features/studio/lib/types";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 
 const api = vi.hoisted(() => ({
   postTaskStatus: vi.fn(),
   reorderTask: vi.fn(),
 }));
 
-vi.mock("../features/studio/lib/api", async (load) => ({
-  ...(await load<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (load) => ({
+  ...(await load<typeof import("../shared/api/client")>()),
   ...api,
 }));
 
@@ -83,6 +83,7 @@ function dataTransfer(): DataTransfer {
 function visibleRows(): string[] {
   return within(screen.getByRole("tree"))
     .getAllByRole("treeitem")
+    .filter((row) => row.getAttribute("data-task-id") !== "__scratch__")
     .map((row) => row.getAttribute("data-task-id")!);
 }
 
@@ -103,9 +104,9 @@ function dispatchDrag(
 describe("TasksPane within-state ticket dragging", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(["middle"]),
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: { "module-1": ["middle"] },
       storySearchQuery: "",
     });
     useTasksStore.setState({
@@ -190,7 +191,7 @@ describe("TasksPane within-state ticket dragging", () => {
   });
 
   it("removes every drag source while stories search is active", () => {
-    useUIStore.setState({ storySearchQuery: "top" });
+    useClientStore.setState({ storySearchQuery: "top" });
     render(<TasksPane />);
 
     const top = screen.getByRole("treeitem", { name: /top/ });
@@ -207,7 +208,7 @@ describe("TasksPane within-state ticket dragging", () => {
 
   it("drops on an empty collapsed header without expanding it", async () => {
     const calls: string[] = [];
-    useUIStore.setState({ collapsedStateNames: new Set(["Review"]) });
+    useClientStore.setState({ collapsedStateIds: new Set([REVIEW.id!]) });
     api.postTaskStatus.mockImplementation(async () => {
       calls.push("transition");
       return task("bottom", "A", "module-1", 0, REVIEW);
@@ -255,9 +256,8 @@ describe("TasksPane within-state ticket dragging", () => {
   });
 
   it("transiently collapses only the dragged root and restores it on every drag end path", async () => {
-    useUIStore.setState({
-      expandedModuleId: "module-1",
-      expandedTaskIds: new Set(["top", "middle"]),
+    useClientStore.setState({
+      expandedIdsByModule: { "module-1": ["top", "middle"] },
     });
     useTasksStore.setState({
       tasks: [
@@ -271,7 +271,7 @@ describe("TasksPane within-state ticket dragging", () => {
       },
     });
     const persistedBefore = JSON.stringify([
-      ...useUIStore.getState().expandedTaskIds,
+      ...useClientStore.getState().expandedIdsByModule["module-1"],
     ]);
     render(<TasksPane />);
 
@@ -338,14 +338,15 @@ describe("TasksPane within-state ticket dragging", () => {
       .toBeInTheDocument();
     await waitFor(() => expect(api.reorderTask).toHaveBeenCalledTimes(2));
 
-    expect(JSON.stringify([...useUIStore.getState().expandedTaskIds]))
+    expect(JSON.stringify([
+      ...useClientStore.getState().expandedIdsByModule["module-1"],
+    ]))
       .toBe(persistedBefore);
   });
 
   it("leaves a previously collapsed dragged root collapsed", () => {
-    useUIStore.setState({
-      expandedModuleId: "module-1",
-      expandedTaskIds: new Set(),
+    useClientStore.setState({
+      expandedIdsByModule: {},
     });
     render(<TasksPane />);
 
@@ -357,6 +358,6 @@ describe("TasksPane within-state ticket dragging", () => {
     dispatchDrag(middle, "dragend", transfer);
     expect(screen.queryByRole("treeitem", { name: /middle-child/ }))
       .not.toBeInTheDocument();
-    expect(useUIStore.getState().expandedTaskIds).toEqual(new Set());
+    expect(useClientStore.getState().expandedIdsByModule).toEqual({});
   });
 });

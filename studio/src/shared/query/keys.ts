@@ -24,15 +24,19 @@ export const queryKeys = {
     byProject: (projectId: string) => ["issue-types", projectId] as const,
   },
 
-  // The module task tree: summaries + states + subtask buckets in one payload
-  // (mirrors api.getTasks).
+  // Module membership only: root ids, parent-to-child ids, and server order.
   tasks: {
     all: ["tasks"] as const,
     byModule: (projectId: string, moduleId: string) =>
       ["tasks", projectId, moduleId] as const,
+    detail: (projectId: string, taskId: string) =>
+      ["tasks", projectId, "details", taskId] as const,
+    emptyTree: ["tasks", "none"] as const,
+    emptyDetail: ["tasks", "no-details"] as const,
   },
 
   workItems: {
+    byId: (id: string) => ["workItem", id] as const,
     index: ["work-items", "index"] as const,
     detail: (id: string) => ["work-items", "detail", id] as const,
     children: (parentId: string) => ["work-items", "children", parentId] as const,

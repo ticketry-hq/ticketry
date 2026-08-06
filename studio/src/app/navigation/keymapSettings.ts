@@ -1,7 +1,7 @@
 import {
   getKeybindingOverrides,
   putKeybindingOverrides,
-} from "../../features/studio/lib/api";
+} from "../../shared/api/client";
 import {
   studioKeymapRegistry,
   type BindingOverride,

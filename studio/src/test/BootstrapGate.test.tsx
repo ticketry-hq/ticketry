@@ -58,8 +58,8 @@ vi.mock("../features/studio/stores/tasksStore", () => ({
   },
 }));
 
-vi.mock("../features/studio/stores/uiStore", () => ({
-  useUIStore: {
+vi.mock("../state/clientStore", () => ({
+  useClientStore: {
     getState: () => ({
       sidebarVisible: true,
       setSidebarVisible: mocks.setSidebarVisible,

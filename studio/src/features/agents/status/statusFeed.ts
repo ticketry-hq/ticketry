@@ -8,34 +8,22 @@ import {
 import {
   agentApiBase,
   apiKey,
-  ApiError,
 } from "../../../shared/api/client";
-import { toast } from "../../../app/stores/toastStore";
-import { KeyedRetryService } from "../../../shared/async/keyedRetry";
+import { useClientStore } from "../../../state/clientStore";
 import { scratchBucketId, useTerminalStore } from "../terminal";
 import { SCRATCH_RUN_TASK_ID } from "../types";
-import {
-  useBacklogStore,
-} from "../../work-items";
 import { useTicketWorkspaceStore } from "../../../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
-import { useIssueStore } from "../../work-items/issueStore";
-import { useTasksStore } from "../../studio/stores/tasksStore";
 import { synchronizeActiveStateCatalogs } from "../../workflows/stateCatalogSync";
 import { useWorkflowEditorStore } from "../../workflows/workflowEditorStore";
 import type { DesignDoc } from "../types";
 import { useAgentStatusStore } from "./store";
 import { statusWebSocketUrl } from "../../../runtime";
-import { loadWorkItemDetail } from "../../work-items/queries";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_CAP_MS = 15_000;
-const DETAIL_RETRY_OPTIONS = {
-  maxRetries: 3,
-  initialDelayMs: 250,
-  backoffMultiplier: 2,
-} as const;
+const WORK_ITEM_INVALIDATION_WINDOW_MS = 50;
 const EXITED_RUN_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
 function pruneExitedRuns(at: string): void {
@@ -79,7 +67,7 @@ function dispatch(frame: AgentStatusFrame): void {
     return;
   }
   if (frame.type === "work_item_state") {
-    routeWorkItemStateFrame(frame);
+    active?.acceptWorkItemFrame(frame);
     return;
   }
   if (frame.type === "workflow_state") {
@@ -97,46 +85,6 @@ function dispatch(frame: AgentStatusFrame): void {
     return;
   }
   routeDocumentFrame(frame as StatusDocumentFrame);
-}
-
-function routeWorkItemStateFrame(frame: WorkItemStateFrame): void {
-  // The socket is project-scoped, but this second guard rejects a queued frame
-  // after project switch and makes direct dispatch safe in tests.
-  if (active && active.projectId !== frame.project_id) return;
-  // Revision ordering belongs to the record owner. Compatibility projections
-  // are updated below only while they still exist; they do not decide whether
-  // this frame is current.
-  const owner = useIssueStore.getState();
-  const cached = owner.getWorkItem(frame.work_item_id);
-  // An id is globally unique, so a cached record for another project is
-  // proof that this frame belongs to a stale socket scope. Do not let that
-  // frame mutate the canonical record (or every id-derived surface).
-  let accepted = !cached || cached.project_id === frame.project_id
-    ? owner.applyWorkItemStateDelta(
-        frame.work_item_id,
-        frame.state,
-        frame.revision,
-        frame.updated_at,
-      )
-    : false;
-  const backlog = useBacklogStore.getState();
-  if (backlog.projectId === frame.project_id) {
-    accepted = backlog.applyStateDelta(
-      frame.work_item_id,
-      frame.state,
-      frame.revision,
-      frame.updated_at,
-    ) || accepted;
-  }
-  const tasks = useTasksStore.getState();
-  if (tasks.selectedProjectId === frame.project_id) {
-    accepted = tasks.applyWorkItemStateDelta(
-      frame.work_item_id,
-      frame.state,
-      frame.revision,
-    ) || accepted;
-  }
-  if (accepted) active?.reconcileWorkItem(frame);
 }
 
 function routeWorkflowStateFrame(frame: WorkflowStateFrame): void {
@@ -207,7 +155,7 @@ let active: {
   projectId: string;
   refreshSnapshotOnSocketOpen: boolean;
   acceptCursor: (projectId: string, revision: number) => void;
-  reconcileWorkItem: (frame: WorkItemStateFrame) => void;
+  acceptWorkItemFrame: (frame: WorkItemStateFrame) => void;
   stop: () => void;
 } | null = null;
 
@@ -232,16 +180,11 @@ export const statusFeed = {
     let retry: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
     let stopped = false;
-    const cachedBacklog = useBacklogStore.getState();
-    const rememberedCursor = useAgentStatusStore.getState().workItemCursors[projectId];
     let workItemCursor =
-      rememberedCursor !== undefined
-        ? rememberedCursor
-        : cachedBacklog.projectId === projectId && !cachedBacklog.loading
-          ? 0
-          : undefined;
+      useClientStore.getState().workItemCursorsByProject[projectId];
     let snapshotRequest: object | null = null;
-    const detailRetries = new KeyedRetryService<string, number, void>();
+    const pendingWorkItemIds = new Set<string>();
+    let invalidationTimer: ReturnType<typeof setTimeout> | null = null;
 
     const snapshot = () => {
       const request = {};
@@ -272,68 +215,38 @@ export const statusFeed = {
     const acceptCursor = (frameProjectId: string, revision: number) => {
       if (frameProjectId !== projectId || !Number.isSafeInteger(revision)) return;
       workItemCursor = Math.max(workItemCursor ?? 0, revision);
-      useAgentStatusStore.getState().acceptWorkItemCursor(projectId, workItemCursor);
+      useClientStore
+        .getState()
+        .advanceWorkItemCursor(projectId, workItemCursor);
     };
 
-    const reconcileWorkItem = (frame: WorkItemStateFrame) => {
-      if (frame.project_id !== projectId || stopped) return;
-      void detailRetries
-        .schedule(
-          frame.work_item_id,
-          frame.revision,
-          async (signal) => {
-            let detail;
-            try {
-              detail = await loadWorkItemDetail(frame.work_item_id, signal);
-            } catch (error) {
-              if (error instanceof ApiError && error.status === 404) {
-              if (!stopped && active?.projectId === projectId) {
-                  useIssueStore
-                    .getState()
-                    .removeReconciledWorkItem(frame.work_item_id, frame.revision);
-                  useBacklogStore
-                    .getState()
-                    .removeReconciledItem(frame.work_item_id, frame.revision);
-                  useTasksStore
-                    .getState()
-                    .removeReconciledTask(frame.work_item_id, frame.revision);
-                }
-                return;
-              }
-              throw error;
-            }
-            if (stopped || signal.aborted || active?.projectId !== projectId) return;
-            let stale = false;
-            stale =
-              useIssueStore.getState().reconcileWorkItem(detail.task, frame.revision) ===
-              "stale";
-            const backlog = useBacklogStore.getState();
-            if (backlog.projectId === projectId) {
-              stale =
-                backlog.reconcileTargetedItem(detail.task, frame.revision) ===
-                "stale" || stale;
-            }
-            const tasks = useTasksStore.getState();
-            if (tasks.selectedProjectId === projectId) {
-              stale =
-                tasks.reconcileTargetedTask(detail.task, frame.revision) ===
-                  "stale" || stale;
-            }
-            if (stale) {
-              throw new Error(
-                `WorkItem ${frame.work_item_id} detail is older than revision ${frame.revision}`,
-              );
-            }
-          },
-          DETAIL_RETRY_OPTIONS,
-        )
-        .catch((error: unknown) => {
-          if (error instanceof DOMException && error.name === "AbortError") return;
-          if (stopped || active?.projectId !== projectId) return;
-          toast.error(
-            `Story ${frame.work_item_id} moved, but its details could not be fully refreshed.`,
-          );
+    const flushWorkItemInvalidations = () => {
+      invalidationTimer = null;
+      const ids = [...pendingWorkItemIds];
+      pendingWorkItemIds.clear();
+      for (const id of ids) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.workItems.byId(id),
+          exact: true,
         });
+      }
+      if (ids.length > 0) {
+        // The unchanged protocol's work_item_state frame is structural: a
+        // state change can move an id between rendered membership sections.
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.tasks.all,
+        });
+      }
+    };
+
+    const acceptWorkItemFrame = (frame: WorkItemStateFrame) => {
+      if (frame.project_id !== projectId || stopped) return;
+      acceptCursor(frame.project_id, frame.revision);
+      pendingWorkItemIds.add(frame.work_item_id);
+      invalidationTimer ??= setTimeout(
+        flushWorkItemInvalidations,
+        WORK_ITEM_INVALIDATION_WINDOW_MS,
+      );
     };
 
     const connect = () => {
@@ -386,7 +299,8 @@ export const statusFeed = {
         queryKey: queryKeys.agentStatus.byProject(projectId),
         exact: true,
       });
-      detailRetries.cancelAll();
+      pendingWorkItemIds.clear();
+      if (invalidationTimer) clearTimeout(invalidationTimer);
       if (retry) clearTimeout(retry);
       const previous = socket;
       socket = null;
@@ -397,7 +311,7 @@ export const statusFeed = {
       projectId,
       refreshSnapshotOnSocketOpen,
       acceptCursor,
-      reconcileWorkItem,
+      acceptWorkItemFrame,
       stop,
     };
   },

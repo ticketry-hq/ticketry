@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../shared/api/client";
 import type { TaskState, TaskSummary } from "../features/studio/lib/types";
-import { useToastStore } from "../app/stores/toastStore";
+import { useClientStore } from "../state/clientStore";
 
 const api = vi.hoisted(() => ({
   getTasks: vi.fn(),
@@ -9,8 +9,8 @@ const api = vi.hoisted(() => ({
   reorderTask: vi.fn(),
 }));
 
-vi.mock("../features/studio/lib/api", async (load) => ({
-  ...(await load<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (load) => ({
+  ...(await load<typeof import("../shared/api/client")>()),
   ...api,
 }));
 
@@ -67,7 +67,7 @@ function deferred<T>() {
 describe("tasksStore moveTaskWithinState", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    useToastStore.setState({ toasts: [] });
+    useClientStore.setState({ toasts: [] });
     useTasksStore.setState({
       selectedProjectId: "project-1",
       selectedModuleId: "module-1",
@@ -140,7 +140,7 @@ describe("tasksStore moveTaskWithinState", () => {
     expect(restored.rank).toBe("M");
     expect(useTasksStore.getState().selectedTaskId).toBe("move");
     expect(api.reorderTask).not.toHaveBeenCalled();
-    expect(useToastStore.getState().toasts.at(-1)?.message).toBe(
+    expect(useClientStore.getState().toasts.at(-1)?.message).toBe(
       "A Story cannot move 'Todo' → 'Review'.",
     );
   });
@@ -208,7 +208,7 @@ describe("tasksStore moveTaskWithinState", () => {
     expect(retained.rank).toBe("server-rank");
     expect(api.postTaskStatus).toHaveBeenCalledTimes(1);
     expect(api.getTasks).toHaveBeenCalledWith("project-1", "module-1");
-    expect(useToastStore.getState().toasts.at(-1)?.message).toContain(
+    expect(useClientStore.getState().toasts.at(-1)?.message).toContain(
       "Ticket moved, but placement failed",
     );
   });
@@ -255,7 +255,7 @@ describe("tasksStore moveTaskWithinState", () => {
       useTasksStore.getState().tasks.find((item) => item.id === "move")!.rank,
     ).toBe("M");
     expect(useTasksStore.getState().subtasks.parent[0].rank).toBe("M");
-    expect(useToastStore.getState().toasts.at(-1)?.message).toContain(
+    expect(useClientStore.getState().toasts.at(-1)?.message).toContain(
       "placement rejected",
     );
   });

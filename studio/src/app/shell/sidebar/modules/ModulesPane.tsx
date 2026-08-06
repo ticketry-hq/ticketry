@@ -1,7 +1,10 @@
 import { useEffect } from "react";
 import { useModalStore } from "../../../modal/modalStore";
 import { useStudioModules, useTasksStore } from "../../../../features/studio/stores/tasksStore";
-import { useUIStore } from "../../../../features/studio/stores/uiStore";
+import {
+  resolveCursorId,
+  useClientStore,
+} from "../../../../state/clientStore";
 import { PaneShell } from "../../PaneShell";
 
 export function ModulesPane() {
@@ -10,7 +13,8 @@ export function ModulesPane() {
   const selectModule = useTasksStore((s) => s.selectModule);
   const loading = useTasksStore((s) => s.loading.modules);
 
-  const cursor = useUIStore((s) => s.modulesCursor);
+  const cursorId = useClientStore((s) => s.modulesCursorId);
+  const setCursor = useClientStore((s) => s.setModulesCursor);
   const pushModal = useModalStore((s) => s.pushModal);
 
   // Centered "+ Add Module" trigger, always rendered after the list.
@@ -28,16 +32,14 @@ export function ModulesPane() {
   useEffect(() => {
     if (selectedModuleId) {
       const i = modules.findIndex((m) => m.id === selectedModuleId);
-      if (i >= 0) useUIStore.setState({ modulesCursor: i });
+      if (i >= 0) setCursor(selectedModuleId);
     }
-  }, [selectedModuleId, modules]);
+  }, [selectedModuleId, modules, setCursor]);
 
-  // Safeguard cursor bounds when list or cursor changes
-  useEffect(() => {
-    if (cursor >= modules.length) {
-      useUIStore.setState({ modulesCursor: 0 });
-    }
-  }, [modules, cursor]);
+  const visibleCursorId = resolveCursorId(
+    cursorId,
+    modules.map((module) => module.id),
+  );
 
   return (
     <PaneShell title="Modules" pane="modules">
@@ -50,14 +52,14 @@ export function ModulesPane() {
         </>
       ) : (
         <ul>
-          {modules.map((m, i) => {
+          {modules.map((m) => {
             const isSelected = m.id === selectedModuleId;
-            const isFocused = i === cursor;
+            const isFocused = m.id === visibleCursorId;
             return (
               <li
                 key={m.id}
                 onClick={() => {
-                  useUIStore.setState({ modulesCursor: i });
+                  setCursor(m.id);
                   void selectModule(m.id);
                 }}
                 className={`cursor-pointer truncate px-1 py-0.5 ${

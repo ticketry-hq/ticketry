@@ -2,12 +2,12 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { useModalStore } from "../app/modal";
 import ToastHost from "../app/shell/ToastHost";
-import { toast, useToastStore } from "../app/stores/toastStore";
+import { toast, useClientStore } from "../state/clientStore";
 
 describe("ToastHost", () => {
   beforeEach(() => {
     useModalStore.setState({ modalStack: [], activeBindings: null });
-    useToastStore.setState({ toasts: [] });
+    useClientStore.setState({ toasts: [] });
   });
 
   it("suppresses toasts while Settings is open and renders them after it closes", () => {

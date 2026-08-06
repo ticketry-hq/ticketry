@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useToastStore } from "../app/stores/toastStore";
+import { useClientStore } from "../state/clientStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useWorkspaceTabsStore } from "../features/agents/terminal/internal/workspaceTabsStore";
 import { closeTerminalTab } from "../app/shell/ticket-workspace/selected-ticket/internal/closeTerminalTab";
@@ -24,7 +24,7 @@ describe("closeTerminalTab", () => {
     });
     useTicketWorkspaceStore.setState({ workspaces: {} });
     useTicketWorkspaceStore.getState().ensureWorkspace("task-1");
-    useToastStore.setState({ toasts: [] });
+    useClientStore.setState({ toasts: [] });
   });
 
   it("keeps the tab open and records no history chip when termination fails", async () => {
@@ -48,7 +48,7 @@ describe("closeTerminalTab", () => {
     expect(
       useTicketWorkspaceStore.getState().workspaces["task-1"].history,
     ).toEqual([]);
-    expect(useToastStore.getState().toasts).toEqual([
+    expect(useClientStore.getState().toasts).toEqual([
       expect.objectContaining({
         kind: "error",
         message: expect.stringContaining("backend refused termination"),

@@ -22,7 +22,7 @@ import type {
   ProviderCapabilities,
   ProviderCatalog,
 } from "../../shared/api/types";
-import * as api from "../studio/lib/api";
+import * as api from "../../shared/api/client";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SettingsSubsection,

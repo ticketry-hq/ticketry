@@ -9,7 +9,7 @@ const { confirmReload } = vi.hoisted(() => ({
   confirmReload: vi.fn(),
 }));
 
-vi.mock("../app/stores/dialogStore", () => ({
+vi.mock("../state/clientStore", () => ({
   dialog: { confirm: confirmReload },
 }));
 

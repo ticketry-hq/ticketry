@@ -1,4 +1,4 @@
-// Per-task worktree host API (ticket #589), extracted from studio/lib/api.ts
+// Per-task worktree host API (ticket #589), extracted from the former Studio request layer
 // into a shared module (CODIN-922) so both the Studio SelectedTicketDetails and the
 // Backlog issue workspace surface the same controls.
 //

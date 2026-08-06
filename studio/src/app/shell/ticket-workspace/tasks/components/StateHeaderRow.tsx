@@ -18,9 +18,9 @@ interface StateHeaderRowProps {
   stateColor: string;
   count: number;
   isCollapsed: boolean;
-  // Name-taking handler so the parent can pass one stable callback to every
+  // Id-taking handler so the parent can pass one stable callback to every
   // header without defeating React.memo.
-  onToggle: (stateName: string) => void;
+  onToggle: (stateId: string) => void;
   onConfigure?: (stateId: string) => void;
   stateId?: string | null;
   dropTargetProps?: DropTargetProps;
@@ -74,7 +74,9 @@ export const StateHeaderRow = React.memo(function StateHeaderRow({
         type="button"
         aria-expanded={!isCollapsed}
         aria-label={isCollapsed ? `Expand ${stateName}` : `Collapse ${stateName}`}
-        onClick={() => onToggle(stateName)}
+        onClick={() => {
+          if (stateId) onToggle(stateId);
+        }}
         className="flex min-w-0 flex-1 cursor-pointer items-center text-left"
       >
         <span className="mr-1 inline-block w-4 shrink-0 text-center text-text-muted">

@@ -5,7 +5,7 @@ import type { TaskSummary } from "../features/studio/lib/types";
 import type { WorkItem } from "../shared/api/types";
 import { RunSubtreeAction } from "../app/shell/ticket-workspace/selected-ticket/details/RunSubtreeAction";
 import { useIssueStore } from "../features/work-items/issueStore";
-import { useToastStore } from "../app/stores/toastStore";
+import { useClientStore } from "../state/clientStore";
 import { useSettingsStore } from "../features/settings/store";
 import { seedCapabilities } from "../features/settings/queries";
 
@@ -78,7 +78,7 @@ describe("Studio Run subtree action", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
-    useToastStore.setState({ toasts: [] });
+    useClientStore.setState({ toasts: [] });
     useSettingsStore.setState({ projectId: "project-1" });
     seedCapabilities("project-1", { story: ["todo"] });
     useIssueStore.setState({
@@ -155,7 +155,7 @@ describe("Studio Run subtree action", () => {
 
     resolveRequest(response({ root_id: story.id, nodes: [] }));
     await waitFor(() =>
-      expect(useToastStore.getState().toasts).toContainEqual(
+      expect(useClientStore.getState().toasts).toContainEqual(
         expect.objectContaining({ kind: "success", message: "Subtree run started." }),
       ),
     );
@@ -169,7 +169,7 @@ describe("Studio Run subtree action", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run subtree" }));
 
     await waitFor(() =>
-      expect(useToastStore.getState().toasts).toContainEqual(
+      expect(useClientStore.getState().toasts).toContainEqual(
         expect.objectContaining({
           kind: "error",
           message: "Subtree execution could not be started: 422: graph_empty",
@@ -222,7 +222,7 @@ describe("Studio Run subtree action", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run subtree" }));
 
     await waitFor(() =>
-      expect(useToastStore.getState().toasts).toContainEqual(
+      expect(useClientStore.getState().toasts).toContainEqual(
         expect.objectContaining({
           kind: "error",
           message: "Run subtree is no longer available while this item is in Review.",

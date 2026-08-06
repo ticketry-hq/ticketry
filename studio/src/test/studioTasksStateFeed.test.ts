@@ -19,20 +19,13 @@ vi.mock("@worktracker/typescript-sdk/agent-status", async (load) => {
   };
 });
 
+const getTasks = vi.hoisted(() => vi.fn());
+
 vi.mock("../shared/api/client", async () => {
   const actual = await vi.importActual<typeof import("../shared/api/client")>(
     "../shared/api/client",
   );
-  return { ...actual, getWorkItem: vi.fn() };
-});
-
-const getTasks = vi.hoisted(() => vi.fn());
-
-vi.mock("../features/studio/lib/api", async () => {
-  const actual = await vi.importActual<
-    typeof import("../features/studio/lib/api")
-  >("../features/studio/lib/api");
-  return { ...actual, getTasks };
+  return { ...actual, getWorkItem: vi.fn(), getTasks };
 });
 
 import * as client from "../shared/api/client";
@@ -138,7 +131,6 @@ beforeEach(() => {
     byTask: {},
     automationAttempts: {},
     automationByTask: {},
-    workItemCursors: {},
   });
   useBacklogStore.setState({
     projectId: null,

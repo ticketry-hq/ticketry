@@ -179,6 +179,17 @@ class WorkItemCreateSerializer(serializers.Serializer):
         return attrs
 
 
+class WorkItemBatchSerializer(serializers.Serializer):
+    """Exact ids for one bounded, body-based work-item read."""
+
+    ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=False,
+        min_length=1,
+        max_length=100,
+    )
+
+
 class WorkItemPatchSerializer(serializers.Serializer):
     """Fields supported by the domain service's guarded partial update."""
 

@@ -1,11 +1,16 @@
 import * as api from "../../shared/api/client";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import type {
   WorkItem,
   WorkItemDetail,
   WorkItemFilters,
 } from "../../shared/api/types";
-import { queryClient } from "../../shared/query/queryClient";
+import {
+  FIVE_MINUTES,
+  queryClient,
+} from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
+import { fetchWorkItem } from "../../shared/api/workItemBatcher";
 
 /**
  * Canonical read boundary for work-item server state.
@@ -14,6 +19,32 @@ import { queryKeys } from "../../shared/query/keys";
  * migrated, but requests, cancellation, de-duplication, staleness and errors
  * belong to TanStack Query here.
  */
+
+export const workItemQuery = (id: string) => ({
+  queryKey: queryKeys.workItems.byId(id),
+  queryFn: () => fetchWorkItem(id),
+  staleTime: FIVE_MINUTES,
+});
+
+/** Subscribe to the one server-state holding for a work item. */
+export function useWorkItem(id: string | null) {
+  return useQuery(
+    {
+      ...workItemQuery(id ?? "no-work-item"),
+      enabled: id !== null,
+    },
+    queryClient,
+  );
+}
+
+/** Resolve id-only membership without creating a record-shaped collection. */
+export function useWorkItemsByIds(ids: readonly string[]): WorkItem[] {
+  const results = useQueries(
+    { queries: ids.map((id) => workItemQuery(id)) },
+    queryClient,
+  );
+  return results.flatMap(({ data }) => (data ? [data] : []));
+}
 
 export async function loadWorkItemDetail(
   keyOrId: string,

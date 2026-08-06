@@ -3,7 +3,7 @@ import {
   useTerminalStore,
 } from "../../../../../features/agents/terminal/appNavigation";
 import { useTicketWorkspaceStore } from "../state/ticketWorkspaceStore";
-import { toast } from "../../../../stores/toastStore";
+import { toast } from "../../../../../state/clientStore";
 import { ApiError } from "../../../../../features/agents/api/agentApi";
 
 /** Returns true when the run was resumed and attached, false on failure. */

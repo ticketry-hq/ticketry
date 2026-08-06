@@ -2,7 +2,7 @@ import { act, fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { PaneShell } from "../app/shell/PaneShell";
 import { seedConfig } from "../features/studio/stores/configStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 
 function renderPanePair() {
   const { container } = render(
@@ -23,7 +23,7 @@ describe("PaneShell", () => {
     seedConfig({
       features: { sidebar: true, projects: true },
     });
-    useUIStore.setState({
+    useClientStore.setState({
       focusedPane: "tasks",
       editViewZone: "stories",
       navigationModality: "keyboard",
@@ -49,7 +49,7 @@ describe("PaneShell", () => {
   it("swaps emphasis when the focused pane store value changes", () => {
     const { stories, workspace } = renderPanePair();
 
-    act(() => useUIStore.setState({ focusedPane: "details-or-terminal" }));
+    act(() => useClientStore.setState({ focusedPane: "details-or-terminal" }));
 
     expect(stories).toHaveClass("opacity-[0.65]");
     expect(workspace).toHaveClass("ring-1");
@@ -61,13 +61,13 @@ describe("PaneShell", () => {
 
     fireEvent.mouseDown(workspace);
 
-    expect(useUIStore.getState().focusedPane).toBe("details-or-terminal");
+    expect(useClientStore.getState().focusedPane).toBe("details-or-terminal");
     expect(stories).toHaveClass("opacity-[0.65]");
     expect(workspace).not.toHaveClass("opacity-[0.65]");
   });
 
   it("removes Stories zone chrome after pointer navigation in edit view", () => {
-    useUIStore.getState().setSidebarVisible(false);
+    useClientStore.getState().setSidebarVisible(false);
     const { stories } = renderPanePair();
 
     fireEvent.mouseDown(stories!);

@@ -8,7 +8,7 @@ import {
 } from "../app/navigation/keymapRegistry";
 import { loadKeybindingOverrides } from "../app/navigation/keymapSettings";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 
 const settingsOverride: BindingOverride = {
   context: "global",
@@ -32,7 +32,7 @@ describe("persisted binding overrides", () => {
     vi.restoreAllMocks();
     studioKeymapRegistry.setOverrides([]);
     useModalStore.setState({ modalStack: [], activeBindings: null });
-    useUIStore.setState({ focusedPane: "tasks" });
+    useClientStore.setState({ focusedPane: "tasks" });
     useTasksStore.setState({
       selectedProjectId: "project-1",
       selectedModuleId: "module-1",

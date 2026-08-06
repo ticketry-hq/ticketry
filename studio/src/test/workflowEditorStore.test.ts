@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useIssueStore } from "../app/shell/ticket-workspace/selected-ticket";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { synchronizeActiveStateCatalogs } from "../features/workflows/stateCatalogSync";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import { useSettingsStore } from "../features/settings/store";
@@ -24,7 +24,10 @@ const workflowApi = vi.hoisted(() => ({
   setIssueTypeWorkflowSubtreeRun: vi.fn(),
 }));
 
-vi.mock("../features/studio/workflowApi", () => workflowApi);
+vi.mock("../shared/api/client", async (load) => ({
+  ...(await load<typeof import("../shared/api/client")>()),
+  ...workflowApi,
+}));
 
 const workflow = {
   issue_type_id: "story",
@@ -100,8 +103,8 @@ describe("workflowEditorStore scoped apply", () => {
       open: null,
       children: [],
     });
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
     });
     useSettingsStore.setState({
       projectId: "project-1",
@@ -248,12 +251,6 @@ describe("workflowEditorStore scoped apply", () => {
   });
 
   it("synchronizes a created state into every active catalog for the project", async () => {
-    const scratch = {
-      id: null,
-      name: "Scratch",
-      group: "backlog",
-      color: null,
-    };
     const todo = {
       id: "todo",
       name: "Todo",
@@ -287,7 +284,7 @@ describe("workflowEditorStore scoped apply", () => {
     await useWorkflowEditorStore.getState().load("project-1");
     useTasksStore.setState({
       selectedProjectId: "project-1",
-      states: [scratch, todo, staleReview, done],
+      states: [todo, staleReview, done],
     });
     useBacklogStore.setState({
       projectId: "project-1",
@@ -301,12 +298,7 @@ describe("workflowEditorStore scoped apply", () => {
       created,
       done,
     ]);
-    expect(useTasksStore.getState().states).toEqual([
-      scratch,
-      todo,
-      created,
-      done,
-    ]);
+    expect(useTasksStore.getState().states).toEqual([todo, created, done]);
     expect(useBacklogStore.getState().states).toEqual([
       todo,
       created,
@@ -341,11 +333,9 @@ describe("workflowEditorStore scoped apply", () => {
 
     await useWorkflowEditorStore.getState().createState("Review", "started");
 
-    // project-2's catalog is untouched; the Scratch section is local to the
-    // Stories pane and always present there.
-    expect(
-      useTasksStore.getState().states.filter((state) => state.id !== null),
-    ).toEqual([otherState]);
+    // Project 2's workflow catalog is untouched. Scratch is a row kind, not a
+    // workflow state in this catalog.
+    expect(useTasksStore.getState().states).toEqual([otherState]);
     expect(useBacklogStore.getState().states).toEqual([otherState]);
   });
 
@@ -396,9 +386,13 @@ describe("workflowEditorStore scoped apply", () => {
       open: { task: openStory, attachments: [] },
       children: [openChild],
     });
-    useUIStore.setState({
-      collapsedStateNames: new Set(["Old review", "Todo"]),
+    useClientStore.setState({
+      collapsedStateIds: new Set([review.id, todo.id]),
     });
+    localStorage.setItem(
+      "studio.collapsedStates:v2",
+      JSON.stringify([review.id, todo.id]),
+    );
 
     await useWorkflowEditorStore.getState().updateState("review", {
       name: "Quality review",
@@ -423,15 +417,15 @@ describe("workflowEditorStore scoped apply", () => {
       open: { task: { id: openStory.id, state: renamed } },
       children: [{ id: openChild.id, state: renamed }],
     });
-    expect(useUIStore.getState().collapsedStateNames).toEqual(
-      new Set(["Quality review", "Todo"]),
+    expect(useClientStore.getState().collapsedStateIds).toEqual(
+      new Set([review.id, todo.id]),
     );
-    expect(localStorage.getItem("studio.collapsedStates:v1")).toBe(
-      '["Quality review","Todo"]',
+    expect(localStorage.getItem("studio.collapsedStates:v2")).toBe(
+      '["review","todo"]',
     );
   });
 
-  it("migrates a collapsed rename from the active Stories catalog when Settings is cold", () => {
+  it("keeps a collapsed state id stable when Settings renames it cold", () => {
     const review: State = {
       id: "review",
       name: "Old review",
@@ -443,8 +437,8 @@ describe("workflowEditorStore scoped apply", () => {
       selectedProjectId: "project-1",
       states: [review],
     });
-    useUIStore.setState({
-      collapsedStateNames: new Set(["Old review"]),
+    useClientStore.setState({
+      collapsedStateIds: new Set([review.id]),
     });
 
     synchronizeActiveStateCatalogs(
@@ -453,8 +447,8 @@ describe("workflowEditorStore scoped apply", () => {
       [],
     );
 
-    expect(useUIStore.getState().collapsedStateNames).toEqual(
-      new Set(["Quality review"]),
+    expect(useClientStore.getState().collapsedStateIds).toEqual(
+      new Set([review.id]),
     );
   });
 

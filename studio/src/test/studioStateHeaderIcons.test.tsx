@@ -6,7 +6,7 @@ import {
   stageIconForName,
 } from "../app/shell/ticket-workspace/tasks/components/StateHeaderRow";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import {
   IconCheckCircle,
   IconGrill,
@@ -57,9 +57,9 @@ const STORY: TaskSummary = {
 
 describe("Studio state header stage icons", () => {
   beforeEach(() => {
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(),
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: {},
       storySearchQuery: "",
     });
     useTasksStore.setState({

@@ -14,7 +14,7 @@ import {
   closeTerminalTab,
   useTicketWorkspaceStore,
 } from "../shell/ticket-workspace/selected-ticket/appNavigation";
-import type { Row } from "../shell/ticket-workspace/tasks/TasksPane";
+import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { focusStoriesSearch } from "../shell/ticket-workspace/tasks/storiesFocus";
 import {
   createNavigationContext,
@@ -49,7 +49,7 @@ export function routeModulePositionNavigation(
 /** Routes shortcuts shared by both Studio layouts. */
 export function routeSharedNavigation(
   event: KeyboardEvent,
-  taskRows: Row[],
+  taskRows: TreeRow[],
   actionId: string | null,
 ): void {
   const ctx = createNavigationContext(event, taskRows);

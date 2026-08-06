@@ -18,8 +18,8 @@ const workflowApi = vi.hoisted(() => ({
   upsertIssueTypeWorkflowLaunchBinding: vi.fn(),
 }));
 
-vi.mock("../features/studio/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...workflowApi,
 }));
 

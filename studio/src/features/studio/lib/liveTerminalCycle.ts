@@ -4,7 +4,11 @@ import {
 } from "../../agents/status";
 import type { SessionMeta } from "../../agents/terminal";
 import type { TaskId } from "./types";
-import type { Row } from "../../../app/shell/ticket-workspace/tasks/TasksPane";
+import type { TreeRow } from "../../../app/shell/ticket-workspace/tasks/TasksPane";
+import {
+  isPlanningRow,
+  planningRowId,
+} from "../../../app/shell/ticket-workspace/tasks/TasksPane";
 
 type CycleSession = Pick<
   SessionMeta,
@@ -21,7 +25,7 @@ export type LiveTerminalCycleDirection = "forward" | "backward";
 
 interface LiveTerminalStopInput {
   moduleId: string | null;
-  taskRows: readonly Row[];
+  taskRows: readonly TreeRow[];
   taskOrder?: readonly TaskId[];
   agentStatus: AgentStatusData;
   sessions: Readonly<Record<string, CycleSession>>;
@@ -41,7 +45,9 @@ export function selectLiveTerminalStops({
   const stops: LiveTerminalStop[] = [];
   const taskIds =
     taskOrder ??
-    taskRows.flatMap((row) => ("task" in row ? [row.task.id] : []));
+    taskRows.flatMap((row) =>
+      isPlanningRow(row) ? [planningRowId(row)] : [],
+    );
   for (const taskId of taskIds) {
     for (const sessionId of tabsByTask[taskId] ?? []) {
       const session = sessions[sessionId];

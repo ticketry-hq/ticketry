@@ -22,7 +22,7 @@ import {
   useConfig,
 } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 
 const CUSTOM_PANEL_LAYOUT = [12, 24, 40, 24];
 
@@ -38,7 +38,7 @@ function startTourFromLayout(
 ) {
   useOnboardingTourStore.getState().reset();
   seedConfig({ features });
-  useUIStore.setState({ sidebarVisible, panelLayout });
+  useClientStore.setState({ sidebarVisible, panelLayout });
   useOnboardingTourStore.getState().start("project-created");
 }
 
@@ -150,7 +150,7 @@ describe("post-project onboarding tour", () => {
     useTasksStore.setState({ createModule } as never);
     const { onSelectStory } = renderTour();
 
-    expect(useUIStore.getState()).toMatchObject({
+    expect(useClientStore.getState()).toMatchObject({
       sidebarVisible: false,
       panelLayout: CUSTOM_PANEL_LAYOUT,
     });
@@ -210,7 +210,7 @@ describe("post-project onboarding tour", () => {
       expect(workspaceApi.acknowledgeOnboarding).toHaveBeenCalledTimes(1),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(useUIStore.getState()).toMatchObject({
+    expect(useClientStore.getState()).toMatchObject({
       sidebarVisible: false,
       panelLayout: CUSTOM_PANEL_LAYOUT,
     });
@@ -400,7 +400,7 @@ describe("post-project onboarding tour", () => {
       );
       expect(useOnboardingTourStore.getState().step).toBe("inactive");
       expect(createModule).not.toHaveBeenCalled();
-      expect(useUIStore.getState()).toMatchObject({
+      expect(useClientStore.getState()).toMatchObject({
         sidebarVisible: false,
         panelLayout: CUSTOM_PANEL_LAYOUT,
       });
@@ -415,7 +415,7 @@ describe("post-project onboarding tour", () => {
     await waitFor(() =>
       expect(workspaceApi.acknowledgeOnboarding).toHaveBeenCalledTimes(1),
     );
-    expect(useUIStore.getState()).toMatchObject({
+    expect(useClientStore.getState()).toMatchObject({
       sidebarVisible: true,
       panelLayout: DEFAULT_PANEL_LAYOUT,
     });

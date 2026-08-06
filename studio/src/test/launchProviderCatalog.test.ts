@@ -4,8 +4,8 @@ const catalogApi = vi.hoisted(() => ({
   getLaunchProviderCapabilities: vi.fn(),
 }));
 
-vi.mock("../features/studio/workflowApi", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/workflowApi")>()),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...catalogApi,
 }));
 

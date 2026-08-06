@@ -3,7 +3,6 @@ import { useStudioStore } from "../../../../../../features/projects/store";
 import { useModulesQuery } from "../../../../../../features/projects";
 
 const EMPTY_MODULES: Module[] = [];
-import { useWorkItems } from "../../../../../../features/work-items";
 import type { Module, WorkItem } from "../../../../../../shared/api/types";
 import Popover, { PopoverOption } from "./Popover";
 import { IconCornerDownRight } from "../../../../../../shared/ui/icons";
@@ -15,6 +14,7 @@ interface Props {
   value: string | null;
   /** The issue being edited — excluded (with its descendants) to avoid cycles. */
   currentId?: string;
+  items?: WorkItem[];
   onChange: (parentId: string | null) => void;
   saving?: boolean;
 }
@@ -53,11 +53,9 @@ function matches(
 }
 
 // Parent picker: an Epic (module) or a task. Reparents the tree.
-export default function ParentPicker({ value, currentId, onChange, saving }: Props) {
+export default function ParentPicker({ value, currentId, items = [], onChange, saving }: Props) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const modules = useModulesQuery(selectedProjectId).data ?? EMPTY_MODULES;
-  const { items } = useWorkItems();
-
   const blocked = currentId
     ? new Set([currentId, ...descendantIds(currentId, items)])
     : new Set<string>();
@@ -113,7 +111,7 @@ function PickerBody({ modules, taskOptions, value, onChange, close }: BodyProps)
   const [query, setQuery] = useState("");
   const matchingModules = useMemo(() => modules.filter((m) => matches(m, query)), [modules, query]);
   const tasks = useMemo(
-    () => taskOptions.filter((t) => matches(t, query)),
+    () => taskOptions.filter((t) => matches(t as unknown as Parameters<typeof matches>[0], query)),
     [taskOptions, query],
   );
 

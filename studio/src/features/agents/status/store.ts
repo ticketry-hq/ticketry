@@ -16,13 +16,9 @@ interface AgentStatusActions {
   upsertAutomationAttempt: (attempt: AutomationAttemptRecord) => void;
   reconcileAutomationAttempts: (attempts: AutomationAttemptRecord[]) => void;
   pruneRuns: (olderThan: string) => void;
-  acceptWorkItemCursor: (projectId: string, revision: number) => void;
 }
 
-export type AgentStatusStore = AgentStatusData & AgentStatusActions & {
-  /** Project replay cursors retained for the lifetime of this browser page. */
-  workItemCursors: Record<string, number>;
-};
+export type AgentStatusStore = AgentStatusData & AgentStatusActions;
 
 function isOlder(candidate: string, current: string): boolean {
   return Date.parse(candidate) < Date.parse(current);
@@ -143,7 +139,6 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
   byTask: {},
   automationAttempts: {},
   automationByTask: {},
-  workItemCursors: {},
 
   switchProject(projectId) {
     set((state) => state.projectId === projectId
@@ -224,15 +219,6 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
         }
       }
       return next;
-    });
-  },
-
-  acceptWorkItemCursor(projectId, revision) {
-    set((state) => {
-      if ((state.workItemCursors[projectId] ?? -1) >= revision) return state;
-      return {
-        workItemCursors: { ...state.workItemCursors, [projectId]: revision },
-      };
     });
   },
 }));

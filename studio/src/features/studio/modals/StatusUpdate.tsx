@@ -3,6 +3,9 @@ import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useTaskStates, useTasksStore } from "../stores/tasksStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
+import { useSetWorkItemState } from "../../work-items";
+import { apiErrorMessage, isNoOpTransition } from "../../../shared/api/client";
+import { toast } from "../../../state/clientStore";
 
 export function StatusUpdate() {
   const allStates = useTaskStates();
@@ -10,6 +13,7 @@ export function StatusUpdate() {
   const states = allStates.filter((st) => st.id !== null);
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
+  const setState = useSetWorkItemState();
   const popModal = useModalStore((s) => s.popModal);
 
   const [selectedStateId, setSelectedStateId] = useState(
@@ -23,7 +27,7 @@ export function StatusUpdate() {
 
   async function commit(stateId: string | null = selectedStateId): Promise<void> {
     const current = useTasksStore.getState();
-    const target = current.states.find((state) => state.id === stateId);
+    const target = states.find((state) => state.id === stateId);
     if (!target || !target.id) return;
     if (
       current.selectedProjectId !== selectedProjectId ||
@@ -35,8 +39,13 @@ export function StatusUpdate() {
     }
     setBusy(true);
     try {
-      await current.updateTaskStatus(selectedProjectId, selectedTaskId, target.id);
+      await setState.mutateAsync({
+        id: selectedTaskId,
+        state: target as typeof target & { id: string },
+      });
       popModal();
+    } catch (error) {
+      if (!isNoOpTransition(error)) toast.error(apiErrorMessage(error));
     } finally {
       setBusy(false);
     }

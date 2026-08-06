@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import * as api from "../lib/api";
+import * as api from "../../../shared/api/client";
 import { type ConfigPayload, type Profile } from "../lib/types";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";

@@ -11,7 +11,7 @@ import type {
   StatePatch,
   WorkItem,
 } from "../../shared/api/types";
-import * as api from "../studio/workflowApi";
+import * as api from "../../shared/api/client";
 import { loadProviderCapabilities } from "./providerQueries";
 import {
   synchronizeActiveStateCatalogOrder,

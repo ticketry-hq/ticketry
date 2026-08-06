@@ -1,7 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ToastHost from "../app/shell/ToastHost";
-import { useToastStore } from "../app/stores/toastStore";
 import { ApiError } from "../shared/api/client";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
@@ -9,15 +8,16 @@ import type { TaskSummary } from "../features/studio/lib/types";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useTaskTree } from "../app/shell/ticket-workspace/tasks/hooks/useTaskTree";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
+import { TEMP_TASK_ID } from "../features/agents/types";
 
 const api = vi.hoisted(() => ({
   createTask: vi.fn(),
   getIssueTypes: vi.fn(),
 }));
 
-vi.mock("../features/studio/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
   createTask: api.createTask,
   getIssueTypes: api.getIssueTypes,
 }));
@@ -80,6 +80,12 @@ function renderStoriesPane(children?: React.ReactNode) {
   );
 }
 
+function workItemRows(): HTMLElement[] {
+  return screen
+    .getAllByRole("treeitem")
+    .filter((row) => row.getAttribute("data-task-id") !== TEMP_TASK_ID);
+}
+
 describe("Studio Stories idea entry", () => {
   beforeEach(() => {
     api.createTask.mockReset();
@@ -87,11 +93,11 @@ describe("Studio Stories idea entry", () => {
       { id: "type-task", name: "Task", level: "task" },
       { id: "type-story", name: "Story", level: "task" },
     ]);
-    useToastStore.setState({ toasts: [] });
+    useClientStore.setState({ toasts: [] });
     useOnboardingTourStore.getState().reset();
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(),
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: {},
     });
     useTasksStore.setState({
       selectedProjectId: "project-1",
@@ -131,8 +137,11 @@ describe("Studio Stories idea entry", () => {
     renderStoriesPane();
 
     const entry = screen.getByRole("textbox", { name: "Capture an idea" });
-    const firstStory = screen.getByRole("treeitem");
+    const firstStory = screen.getByRole("treeitem", {
+      name: /Local scratch workspace/,
+    });
     fireEvent.change(entry, { target: { value: "Keep this idea" } });
+    fireEvent.click(firstStory);
     firstStory.focus();
 
     fireEvent.keyDown(firstStory, { key: "ArrowUp" });
@@ -161,7 +170,7 @@ describe("Studio Stories idea entry", () => {
     });
     renderStoriesPane();
 
-    const [firstStory, nextStory] = screen.getAllByRole("treeitem");
+    const [firstStory, nextStory] = workItemRows();
     fireEvent.click(firstStory);
     firstStory.focus();
     fireEvent.keyDown(firstStory, { key: "ArrowDown" });
@@ -212,7 +221,7 @@ describe("Studio Stories idea entry", () => {
   it("trims and creates one explicit Story, then reveals it without changing selection", async () => {
     const pending = deferred<TaskSummary>();
     api.createTask.mockReturnValue(pending.promise);
-    useUIStore.setState({ collapsedStateNames: new Set(["Idea"]) });
+    useClientStore.setState({ collapsedStateIds: new Set([IDEA.id]) });
     useOnboardingTourStore.setState({
       step: "story-create",
       projectId: "project-1",
@@ -247,8 +256,8 @@ describe("Studio Stories idea entry", () => {
       step: "handoff",
       storyId: "story-new",
     });
-    expect(useUIStore.getState().collapsedStateNames.has("Idea")).toBe(false);
-    const rows = within(screen.getByRole("tree")).getAllByRole("treeitem");
+    expect(useClientStore.getState().collapsedStateIds.has(IDEA.id)).toBe(false);
+    const rows = workItemRows();
     expect(rows[0]).toHaveAttribute("data-task-id", "story-new");
     expect(screen.queryByTestId("toast-success")).not.toBeInTheDocument();
   });

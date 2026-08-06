@@ -235,7 +235,9 @@ conf = worktracker_sdk.generated.Configuration(
     ) -> None:
         """Constructor
         """
-        self._base_path = "/api" if host is None else host
+        self._base_path = "/api" if host is None else host.rstrip('/')
+        if self._base_path.endswith('/work-tracker'):
+            self._base_path = self._base_path[:-len('/work-tracker')]
         """Default Base url
         """
         self.server_index = 0 if server_index is None and host is None else server_index

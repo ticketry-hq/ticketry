@@ -17,10 +17,11 @@ import type {
 import {
   HEADER,
   type Row,
+  type TreeRow,
 } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket";
 
 const todoState: TaskState = {
@@ -57,15 +58,14 @@ function task(
   };
 }
 
-function taskRow(summary: TaskSummary, descendantIds: string[] = []): Row {
+function taskRow(summary: TaskSummary, _descendantIds: string[] = []): Row {
   return {
-    task: summary,
+    kind: "work-item",
+    id: summary.id,
     depth: 0,
     parentId: null,
-    hasChildren: summary.sub_issues_count > 0,
-    isExpanded: false,
-    isLoading: false,
-    descendantIds,
+    expandable: summary.sub_issues_count > 0,
+    expanded: false,
   };
 }
 
@@ -94,7 +94,7 @@ function session(
   };
 }
 
-function Harness({ rows }: { rows: Row[] }) {
+function Harness({ rows }: { rows: TreeRow[] }) {
   useGlobalKeymap(rows);
   return null;
 }
@@ -186,20 +186,19 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
       states: [],
       subtasks: {},
     });
-    useUIStore.setState({
+    useClientStore.setState({
       sidebarVisible: true,
       focusedPane: "details-or-terminal",
       modalStack: [],
-      expandedTaskIds: new Set(),
-      expandedModuleId: "module-1",
-      collapsedStateNames: new Set(),
+      expandedIdsByModule: {},
+      collapsedStateIds: new Set(),
       storySearchQuery: "",
     });
     useTicketWorkspaceStore.setState({ workspaces: {} });
     useTerminalForegroundStore.setState({ claims: {}, hostTargets: {} });
   });
 
-  it("lands on a nested live terminal in natural order and persists every expanded ancestor", async () => {
+  it("lands on a nested live terminal while deriving its expanded ancestors", async () => {
     const root = task("task-1", "module-1", todoState, 1);
     const parent = task("task-2", root.id, todoState, 1);
     const leaf = task("task-3", parent.id);
@@ -225,14 +224,11 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
     });
 
     expect(useTasksStore.getState().selectedTaskId).toBe(leaf.id);
-    expect(useUIStore.getState().expandedTaskIds).toEqual(
-      new Set([parent.id, root.id]),
-    );
+    expect(useClientStore.getState().expandedIdsByModule).toEqual({});
     expect(useWorkspaceTabsStore.getState().activeByTask[leaf.id]).toBe(
       `session-${leaf.id}`,
     );
-    expect(JSON.parse(localStorage.getItem("studio.expandedSubtasks:v1")!))
-      .toEqual({ "module-1": [parent.id, root.id] });
+    expect(localStorage.getItem("studio.expandedSubtasks:v1")).toBeNull();
   });
 
   it("lands inside a collapsed workflow-state section and leaves it expanded", () => {
@@ -243,7 +239,7 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
       tasks: [current, hidden],
       states: [todoState, doneState],
     });
-    useUIStore.setState({ collapsedStateNames: new Set([doneState.name]) });
+    useClientStore.setState({ collapsedStateIds: new Set([doneState.id!]) });
     localStorage.setItem(
       "studio.collapsedStates:v1",
       JSON.stringify([doneState.name]),
@@ -269,8 +265,8 @@ describe("Studio live-terminal cycle through collapsed rows", () => {
     });
 
     expect(useTasksStore.getState().selectedTaskId).toBe(hidden.id);
-    expect(useUIStore.getState().collapsedStateNames).toEqual(new Set());
-    expect(localStorage.getItem("studio.collapsedStates:v1")).toBe("[]");
+    expect(useClientStore.getState().collapsedStateIds).toEqual(new Set());
+    expect(localStorage.getItem("studio.collapsedStates:v2")).toBe("[]");
   });
 
   it("derives a hidden stop between its parent and the following visible root", () => {

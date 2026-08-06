@@ -2,8 +2,8 @@ import { create } from "zustand";
 import * as api from "../../shared/api/client";
 import { ApiError } from "../../shared/api/client";
 import * as recentProjects from "./utilities/recentProjects";
-import { toast } from "../../app/stores/toastStore";
-import { useSelectionStore } from "../work-items/stores/selectionStore";
+import { toast } from "../../state/clientStore";
+import { useClientStore } from "../../state/clientStore";
 import {
   createProjectRecord,
   deleteProjectRecord,
@@ -177,7 +177,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
     // The open project is gone: drop any selection it owned (not auto-cleared)
     // and resolve the MRU survivor for the caller to navigate to.
-    useSelectionStore.getState().clear();
+    useClientStore.getState().selectionClear();
     const targetId = recentProjects.resolveStartProject(getProjectsSnapshot(), id);
     return { redirect: true, targetId };
   },

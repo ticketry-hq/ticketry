@@ -3,9 +3,12 @@ import {
   createTask,
   getConfig,
   getIssueTypes,
+  getTaskDetails,
+  getTasks,
+  getWorkItem,
   normalizeTask,
   postTaskStatus,
-} from "../features/studio/lib/api";
+} from "../shared/api/client";
 import { listProjects } from "../shared/api/client";
 import type { WorkItem } from "../shared/api/types";
 import { seedConfig } from "../features/studio/stores/configStore";
@@ -156,6 +159,81 @@ describe("Studio idea capture API", () => {
     expect(normalized.rank).toBe("rank-7");
     expect(normalized.issue_type).toEqual(customType);
     expect(normalizeTask(baseTask).issue_type).toEqual(baseTask.issue_type);
+  });
+
+  it("adapts the bare work-item response for detail consumers", async () => {
+    const task = {
+      id: "task-1",
+      key: "CODIN-1",
+      name: "Typed task",
+      project_id: "project-1",
+      sequence_id: 1,
+      state: { id: "todo", name: "Todo", group: "backlog", color: null },
+      description: null,
+      parent_id: "module-1",
+      sub_issues_count: 0,
+      blocked_by_ids: [],
+      blocks_ids: [],
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      issue_type: { id: "type-task", name: "Task", level: "task" },
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(task))
+      .mockResolvedValueOnce(jsonResponse(task));
+
+    await expect(getWorkItem("task-1")).resolves.toEqual({
+      task,
+      attachments: [],
+    });
+    await expect(getTaskDetails("project-1", "task-1")).resolves.toEqual({
+      task: expect.objectContaining({
+        id: "task-1",
+        project_id: "project-1",
+      }),
+    });
+  });
+
+  it("hydrates work-item relation ids for the module tree", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse([{
+        id: "task-1",
+        key: "CODIN-1",
+        name: "Visible task",
+        project_id: "project-1",
+        sequence_id: 1,
+        state: "state-todo",
+        state_revision: 0,
+        description: null,
+        parent_id: "module-1",
+        sub_issues_count: 0,
+        is_archived: false,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        rank: "a0",
+        issue_type: "type-task",
+        blocked_by_ids: [],
+        blocks_ids: [],
+      }]))
+      .mockResolvedValueOnce(jsonResponse([{
+        id: "state-todo",
+        name: "Todo",
+        group: "backlog",
+        color: null,
+      }]))
+      .mockResolvedValueOnce(jsonResponse([{
+        id: "type-task",
+        name: "Task",
+        level: "task",
+      }]));
+
+    const result = await getTasks("project-1", "module-1");
+
+    expect(result.rootIds).toEqual(["task-1"]);
+    expect(result.workItems[0]).toMatchObject({
+      state: { id: "state-todo", name: "Todo" },
+      issue_type: { id: "type-task", name: "Task" },
+    });
   });
 
   it("stamps human origin on the Studio status-change request", async () => {

@@ -5,7 +5,7 @@ import { ModalHost } from "../app/modal";
 import { getConfigSnapshot, seedConfig } from "../features/studio/stores/configStore";
 import { useModalStore } from "../app/modal";
 import * as agentApi from "../features/agents/api/agentApi";
-import * as studioApi from "../features/studio/lib/api";
+import * as studioApi from "../shared/api/client";
 import type { StudioRuntime } from "../runtime";
 
 function folderPickerRuntime(

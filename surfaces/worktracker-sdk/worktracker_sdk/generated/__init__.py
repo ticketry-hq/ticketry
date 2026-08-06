@@ -122,6 +122,7 @@ __all__ = [
     "ViewerLeaseRelease",
     "ViewerLeaseResult",
     "WorkItem",
+    "WorkItemBatch",
     "WorkItemCreate",
     "WorkItemReorder",
     "Workspace",
@@ -236,6 +237,7 @@ from worktracker_sdk.generated.models.viewer_lease import ViewerLease as ViewerL
 from worktracker_sdk.generated.models.viewer_lease_release import ViewerLeaseRelease as ViewerLeaseRelease
 from worktracker_sdk.generated.models.viewer_lease_result import ViewerLeaseResult as ViewerLeaseResult
 from worktracker_sdk.generated.models.work_item import WorkItem as WorkItem
+from worktracker_sdk.generated.models.work_item_batch import WorkItemBatch as WorkItemBatch
 from worktracker_sdk.generated.models.work_item_create import WorkItemCreate as WorkItemCreate
 from worktracker_sdk.generated.models.work_item_reorder import WorkItemReorder as WorkItemReorder
 from worktracker_sdk.generated.models.workspace import Workspace as Workspace

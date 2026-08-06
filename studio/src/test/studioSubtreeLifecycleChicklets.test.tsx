@@ -12,7 +12,7 @@ import { dispatchStatusFrame, statusFeed } from "../features/agents/status/statu
 import { useAgentStatusStore } from "../features/agents/status";
 import { TasksPane } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 
 const getAgentStatus = vi.hoisted(() =>
   vi.fn<() => Promise<AgentStatusSnapshot>>(),
@@ -116,10 +116,9 @@ describe("Studio subtree lifecycle chicklets", () => {
       automationAttempts: {},
       automationByTask: {},
     });
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(),
-      expandedModuleId: "module-1",
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: {},
     });
     useTasksStore.setState({
       selectedProjectId: "project-1",
@@ -412,7 +411,11 @@ describe("Studio subtree lifecycle chicklets", () => {
         name: "Expand subtasks",
       }),
     );
-    expect(screen.getAllByRole("treeitem")).toHaveLength(2);
+    expect(
+      screen
+        .getAllByRole("treeitem")
+        .filter((row) => row.getAttribute("data-task-id") !== "__scratch__"),
+    ).toHaveLength(2);
     expect(badgeText(taskRow("Implementation child"))).toBe("▶1");
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 
 describe("UI store local persistence", () => {
   beforeEach(() => {
@@ -13,9 +13,9 @@ describe("UI store local persistence", () => {
   });
 
   it("debounces panel layout writes and persists the latest layout", () => {
-    useUIStore.getState().setPanelLayout([10, 20, 40, 30]);
+    useClientStore.getState().setPanelLayout([10, 20, 40, 30]);
     vi.advanceTimersByTime(200);
-    useUIStore.getState().setPanelLayout([15, 20, 35, 30]);
+    useClientStore.getState().setPanelLayout([15, 20, 35, 30]);
 
     vi.advanceTimersByTime(399);
     expect(localStorage.getItem("studio.panelLayout:v1")).toBeNull();

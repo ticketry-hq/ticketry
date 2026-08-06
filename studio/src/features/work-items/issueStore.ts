@@ -2,7 +2,6 @@ import { create } from "zustand";
 import * as api from "../../shared/api/client";
 import { ApiError, apiErrorMessage, isNoOpTransition } from "../../shared/api/client";
 import type {
-  Module,
   State,
   WorkItem,
   WorkItemDetail,
@@ -10,8 +9,12 @@ import type {
 } from "../../shared/api/types";
 import { useBacklogStore } from "./internal/backlogStore";
 import { useStudioStore } from "../projects/store";
-import { toast } from "../../app/stores/toastStore";
-import { RESOLVED_GROUPS } from "../../shared/utilities/display";
+import { toast } from "../../state/clientStore";
+export {
+  deriveEpic,
+  resolveBlockerChips,
+} from "./selectors";
+export type { BlockerChip } from "./selectors";
 import {
   overlayAuthoritativeState,
   stateCatalogChangedSinceGeneration,
@@ -30,75 +33,6 @@ import {
 
 // Surface the workflow gate's structured `detail` on a rejected move (#872).
 const errMessage = apiErrorMessage;
-
-/**
- * Walk the parent chain up to the owning module (the Epic). Resolves once the
- * ancestor items + modules are loaded (backlogStore / studioStore); returns
- * null while a cold deep-link is still hydrating those.
- */
-export function deriveEpic(
-  task: WorkItem | null,
-  modules: Module[],
-  items: WorkItem[],
-): Module | null {
-  if (!task) return null;
-  const moduleById = new Map(modules.map((m) => [m.id, m]));
-  const itemById = new Map(items.map((i) => [i.id, i]));
-  let pid = task.parent_id;
-  const seen = new Set<string>();
-  while (pid && !seen.has(pid)) {
-    seen.add(pid);
-    const epic = moduleById.get(pid);
-    if (epic) return epic;
-    const parent = itemById.get(pid);
-    if (!parent) return null;
-    pid = parent.parent_id;
-  }
-  return null;
-}
-
-/** A resolved blocker/blocks chip for the Details panel. */
-export interface BlockerChip {
-  id: string;
-  /** KEY-N, or null when the id isn't in the loaded project set yet. */
-  key: string | null;
-  name: string | null;
-  state: State | null;
-  /** Warn (amber): the blocker is still open (state group ∉ completed/cancelled). */
-  unresolved: boolean;
-}
-
-/**
- * Resolve blocker/blocks ids → navigable chips from the loaded project tree
- * (the same derive-from-the-loaded-set trick deriveEpic uses for the Epic
- * link). An id absent from the loaded set renders as a bare-id chip — still
- * navigable by id — and does not warn (its state is unknown).
- */
-export function resolveBlockerChips(
-  ids: string[],
-  items: WorkItem[],
-  modules: Module[],
-): BlockerChip[] {
-  const itemById = new Map(items.map((i) => [i.id, i]));
-  const moduleById = new Map(modules.map((m) => [m.id, m]));
-  return ids.map((id) => {
-    const it = itemById.get(id);
-    if (it) {
-      return {
-        id,
-        key: it.key,
-        name: it.name,
-        state: it.state,
-        unresolved: !RESOLVED_GROUPS.has(it.state?.group ?? ""),
-      };
-    }
-    const mod = moduleById.get(id);
-    if (mod) {
-      return { id, key: mod.key, name: mod.name, state: null, unresolved: false };
-    }
-    return { id, key: null, name: null, state: null, unresolved: false };
-  });
-}
 
 // Resolve the optimistic shape of a single edited field so selected-ticket
 // details update before the server round-trip; WorkItemOut then reconciles it.

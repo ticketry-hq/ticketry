@@ -13,7 +13,7 @@ vi.mock("../shared/api/client", async () => {
 import * as api from "../shared/api/client";
 import { ApiError, apiErrorMessage } from "../shared/api/client";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
-import { useToastStore } from "../app/stores/toastStore";
+import { useClientStore } from "../state/clientStore";
 import type { State, WorkItem } from "../shared/api/types";
 
 const patchWorkItem = api.patchWorkItem as ReturnType<typeof vi.fn>;
@@ -52,12 +52,12 @@ function wi(partial: Partial<WorkItem> & { id: string }): WorkItem {
 
 const store = () => useBacklogStore.getState();
 const errorToasts = () =>
-  useToastStore.getState().toasts.filter((t) => t.kind === "error").map((t) => t.message);
+  useClientStore.getState().toasts.filter((t) => t.kind === "error").map((t) => t.message);
 
 beforeEach(() => {
   patchWorkItem.mockReset();
   useBacklogStore.setState({ items: [], states: [IDEA, DONE], error: null });
-  useToastStore.setState({ toasts: [] });
+  useClientStore.setState({ toasts: [] });
 });
 
 describe("apiErrorMessage (#872)", () => {

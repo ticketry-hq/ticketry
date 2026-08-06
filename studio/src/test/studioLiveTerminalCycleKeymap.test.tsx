@@ -14,7 +14,7 @@ import type { TaskSummary } from "../features/studio/lib/types";
 import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket";
 
 vi.mock("xterm", () => ({
@@ -97,13 +97,12 @@ function task(id: string, sequenceId: number): TaskSummary {
 
 function taskRow(summary: TaskSummary): Row {
   return {
-    task: summary,
+    kind: "work-item",
+    id: summary.id,
     depth: 0,
     parentId: null,
-    hasChildren: false,
-    isExpanded: false,
-    isLoading: false,
-    descendantIds: [],
+    expandable: false,
+    expanded: false,
   };
 }
 
@@ -182,7 +181,7 @@ describe("Studio live-terminal cycle keymap", () => {
       tasks: [firstTask, secondTask],
       states: [firstTask.state],
     });
-    useUIStore.setState({
+    useClientStore.setState({
       sidebarVisible: true,
       editViewZone: "stories",
       focusedPane: "details-or-terminal",
@@ -268,7 +267,7 @@ describe("Studio live-terminal cycle keymap", () => {
   });
 
   it("leaves Command-backslash inactive in the edit view", () => {
-    useUIStore.setState({
+    useClientStore.setState({
       sidebarVisible: false,
       editViewZone: "stories",
       focusedPane: "tasks",

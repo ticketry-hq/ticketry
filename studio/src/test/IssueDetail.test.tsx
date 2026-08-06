@@ -19,16 +19,12 @@ vi.mock("../shared/api/client", async () => {
     createWorkItem: vi.fn(),
     listIssueTypes: vi.fn(async () => []),
     listProjectWorkItems: vi.fn(async () => []),
+    updateState: vi.fn(),
   };
 });
 
 vi.mock("../features/agents/worktrees/internal/api", () => ({
   getWorktree: vi.fn(),
-}));
-
-vi.mock("../features/studio/workflowApi", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/workflowApi")>()),
-  updateState: vi.fn(),
 }));
 
 vi.mock("../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEditor", () => ({
@@ -58,7 +54,6 @@ vi.mock("../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEdi
 
 import * as api from "../shared/api/client";
 import * as worktreeApi from "../features/agents/worktrees/internal/api";
-import * as workflowApi from "../features/studio/workflowApi";
 import IssueDetail from "../app/shell/ticket-workspace/selected-ticket/details/IssueDetail";
 import { useIssueStore } from "../app/shell/ticket-workspace/selected-ticket";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
@@ -67,10 +62,10 @@ import { seedModules, seedProjects } from "../features/projects";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
-import { useToastStore } from "../app/stores/toastStore";
+import { useClientStore } from "../state/clientStore";
 import { useSettingsStore } from "../features/settings/store";
 import { seedCapabilities } from "../features/settings/queries";
-import { dialog } from "../app/stores/dialogStore";
+import { dialog } from "../state/clientStore";
 import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
 import type { Attachment, Module, State, WorkItem, WorkItemDetail } from "../shared/api/types";
 
@@ -158,7 +153,7 @@ beforeEach(() => {
   });
   deleteIssue.mockReset().mockResolvedValue(undefined);
   confirmDelete.mockReset().mockResolvedValue(false);
-  useToastStore.setState({ toasts: [] });
+  useClientStore.setState({ toasts: [] });
   useTasksStore.setState({ selectedProjectId: null, selectedTaskId: null });
   useWorkflowEditorStore.setState({ projectId: null, states: [] });
   useSettingsStore.setState({ projectId: "p1" });
@@ -376,7 +371,7 @@ describe("IssueDetail", () => {
 
     resolveLaunch();
     await waitFor(() => {
-      expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
+      expect(useClientStore.getState().toasts.at(-1)).toMatchObject({
         kind: "success",
         message: "Agent run started.",
       });
@@ -398,7 +393,7 @@ describe("IssueDetail", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
+      expect(useClientStore.getState().toasts.at(-1)).toMatchObject({
         kind: "error",
         message: "Agent run could not be started: launch unavailable",
       });
@@ -528,7 +523,7 @@ describe("IssueDetail", () => {
       projectId: "p1",
       states: [coloredTodo, coloredDone],
     });
-    vi.mocked(workflowApi.updateState).mockResolvedValue(recoloredTodo);
+    vi.mocked(api.updateState).mockResolvedValue(recoloredTodo);
 
     const picker = screen.getByTestId("state-picker");
     fireEvent.click(within(picker).getByRole("button", { name: "Todo" }));

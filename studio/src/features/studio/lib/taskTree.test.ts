@@ -27,11 +27,15 @@ function task(id: string, rank?: string): TaskSummary {
 describe("orderedTaskSections", () => {
   it("sorts workflow-state tickets by rank descending", () => {
     const [section] = orderedTaskSections(
-      [task("low", "F"), task("high", "kV"), task("middle", "V")],
+      ["low", "high", "middle"],
+      Object.fromEntries(
+        [task("low", "F"), task("high", "kV"), task("middle", "V")]
+          .map((item) => [item.id, item]),
+      ),
       [TODO],
     );
 
-    expect(section.tasks.map(({ id }) => id)).toEqual([
+    expect(section.ids).toEqual([
       "high",
       "middle",
       "low",
@@ -40,15 +44,16 @@ describe("orderedTaskSections", () => {
 
   it("places missing ranks last while preserving the previous reversed order", () => {
     const [section] = orderedTaskSections(
-      [
+      ["missing-first", "ranked", "missing-second"],
+      Object.fromEntries([
         task("missing-first"),
         task("ranked", "V"),
         task("missing-second"),
-      ],
+      ].map((item) => [item.id, item])),
       [TODO],
     );
 
-    expect(section.tasks.map(({ id }) => id)).toEqual([
+    expect(section.ids).toEqual([
       "ranked",
       "missing-second",
       "missing-first",

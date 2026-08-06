@@ -3,10 +3,16 @@ import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import {
   useStudioModules,
-  useStudioTaskDetails,
-  useStudioTaskTree,
+  useStudioTaskMembership,
   useTasksStore,
 } from "../stores/tasksStore";
+import {
+  useSetWorkItemParent,
+  useWorkItem,
+  useWorkItemsByIds,
+} from "../../work-items";
+import { apiErrorMessage } from "../../../shared/api/client";
+import { toast } from "../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../agents/types";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 
@@ -24,20 +30,28 @@ export interface ParentUpdatePayload {
 /**
  * Reparent the selected work item. In "epic" mode the candidates are the
  * project's modules; in "parent" mode they are the other tasks/sub-tasks
- * loaded for the current module. Reuses the PATCH /work-items endpoint via
- * tasksStore.updateTaskParent — no new backend route.
+ * loaded for the current module. Candidate labels and the selected record come
+ * from their per-item holdings.
  */
 export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
   const mode = payload?.mode ?? "parent";
-  const { tasks, subtasks } = useStudioTaskTree();
+  const membership = useStudioTaskMembership();
+  const tasks = useWorkItemsByIds(membership.order);
   const modules = useStudioModules();
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
+  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
   const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
-  const details = useStudioTaskDetails();
-  const updateTaskParent = useTasksStore((s) => s.updateTaskParent);
+  const { data: selectedTask } = useWorkItem(
+    selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,
+  );
+  const setParent = useSetWorkItemParent(
+    selectedProjectId && selectedModuleId
+      ? [{ projectId: selectedProjectId, moduleId: selectedModuleId }]
+      : [],
+  );
   const popModal = useModalStore((s) => s.popModal);
 
-  const currentParentId = details?.task.parent_id ?? null;
+  const currentParentId = selectedTask?.parent_id ?? null;
 
   const candidates = useMemo<Candidate[]>(() => {
     if (mode === "epic") {
@@ -45,8 +59,7 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
     }
     const out: Candidate[] = [];
     const seen = new Set<string>();
-    const everyTask = [...tasks, ...Object.values(subtasks).flat()];
-    for (const t of everyTask) {
+    for (const t of tasks) {
       if (t.id === TEMP_TASK_ID) continue;
       if (t.id === selectedTaskId) continue; // can't be its own parent
       if (seen.has(t.id)) continue;
@@ -54,7 +67,7 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
       out.push({ id: t.id, label: t.name });
     }
     return out;
-  }, [mode, tasks, subtasks, modules, selectedTaskId]);
+  }, [mode, tasks, modules, selectedTaskId]);
 
   const [filter, setFilter] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -76,8 +89,10 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
     }
     setBusy(true);
     try {
-      await updateTaskParent(selectedProjectId, selectedTaskId, chosen.id);
+      await setParent.mutateAsync({ id: selectedTaskId, parentId: chosen.id });
       popModal();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
     } finally {
       setBusy(false);
     }

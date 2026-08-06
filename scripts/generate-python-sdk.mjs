@@ -107,9 +107,18 @@ const relocateAndStamp = (directory) => {
           "from worktracker_sdk import rest",
           "from worktracker_sdk.generated import rest",
         )
+        // Operations already carry the /work-tracker segment, so the SDK wants
+        // the /api root. Callers configure either form, so strip a trailing
+        // /work-tracker rather than doubling it. Both assignment paths need
+        // this: the `host` setter, and the constructor, which writes
+        // _base_path directly and never calls that setter.
         .replace(
           "self._base_path = value",
           "self._base_path = value.rstrip('/')\n        if self._base_path.endswith('/work-tracker'):\n            self._base_path = self._base_path[:-len('/work-tracker')]",
+        )
+        .replace(
+          'self._base_path = "/api" if host is None else host',
+          'self._base_path = "/api" if host is None else host.rstrip(\'/\')\n        if self._base_path.endswith(\'/work-tracker\'):\n            self._base_path = self._base_path[:-len(\'/work-tracker\')]',
         )
         .split("\n")
         .map((line) => line.trimEnd())

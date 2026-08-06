@@ -5,11 +5,11 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { toast } from "../../../../stores/toastStore";
+import { toast } from "../../../../../state/clientStore";
 import { useOnboardingTourStore } from "../../../../onboarding/onboardingTourStore";
 import { apiErrorMessage } from "../../../../../shared/api/client";
 import { useTasksStore } from "../../../../../features/studio/stores/tasksStore";
-import { useUIStore } from "../../../../../features/studio/stores/uiStore";
+import { useClientStore } from "../../../../../state/clientStore";
 import { focusFirstStory } from "../storiesFocus";
 
 export function IdeaEntry() {
@@ -60,9 +60,9 @@ export function IdeaEntry() {
         return;
       }
 
-      const ui = useUIStore.getState();
-      if (ui.collapsedStateNames.has(created.state.name)) {
-        ui.toggleStateCollapsed(created.state.name);
+      const ui = useClientStore.getState();
+      if (created.state.id && ui.collapsedStateIds.has(created.state.id)) {
+        ui.toggleStateCollapsed(created.state.id);
       }
       useOnboardingTourStore.getState().storyCreated(created.id);
       setDraft("");

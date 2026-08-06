@@ -4,8 +4,8 @@ import { useTasksStore } from "../features/studio/stores/tasksStore";
 
 const api = vi.hoisted(() => ({ postTaskStatus: vi.fn() }));
 
-vi.mock("../features/studio/lib/api", async (load) => ({
-  ...(await load<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (load) => ({
+  ...(await load<typeof import("../shared/api/client")>()),
   ...api,
 }));
 

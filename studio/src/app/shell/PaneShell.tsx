@@ -3,8 +3,8 @@ import {
   isSidebarEnabled,
   useConfig,
 } from "../../features/studio/stores/configStore";
-import type { FocusedPane } from "../../features/studio/stores/uiStore";
-import { useUIStore } from "../../features/studio/stores/uiStore";
+import type { FocusedPane } from "../../state/clientStore";
+import { useClientStore } from "../../state/clientStore";
 
 interface PaneShellProps {
   title?: string;
@@ -16,18 +16,18 @@ interface PaneShellProps {
  * Pane wrapper: title header, scrollable body, and a focusable root that
  * carries `tabIndex={-1}` so the global keymap's focusLeft/focusRight can
  * move DOM focus into it. The pane root also reports clicks/focus back
- * into `uiStore.setFocusedPane` so a click can shift focus too.
+ * into `clientStore.setFocusedPane` so a click can shift focus too.
  */
 export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
   function PaneShell({ title, pane, children }, externalRef) {
-    const focusedPane = useUIStore((s) => s.focusedPane);
-    const editViewZone = useUIStore((s) => s.editViewZone);
-    const navigationModality = useUIStore((s) => s.navigationModality);
-    const sidebarVisible = useUIStore((s) => s.sidebarVisible);
+    const focusedPane = useClientStore((s) => s.focusedPane);
+    const editViewZone = useClientStore((s) => s.editViewZone);
+    const navigationModality = useClientStore((s) => s.navigationModality);
+    const sidebarVisible = useClientStore((s) => s.sidebarVisible);
     const sidebarEnabled = isSidebarEnabled(useConfig());
-    const setFocusedPane = useUIStore((s) => s.setFocusedPane);
-    const setEditViewZone = useUIStore((s) => s.setEditViewZone);
-    const setNavigationModality = useUIStore((s) => s.setNavigationModality);
+    const setFocusedPane = useClientStore((s) => s.setFocusedPane);
+    const setEditViewZone = useClientStore((s) => s.setEditViewZone);
+    const setNavigationModality = useClientStore((s) => s.setNavigationModality);
     const innerRef = useRef<HTMLDivElement | null>(null);
 
     const isEditView = !sidebarEnabled || !sidebarVisible;

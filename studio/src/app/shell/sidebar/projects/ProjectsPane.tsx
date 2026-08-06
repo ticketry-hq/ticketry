@@ -1,6 +1,9 @@
 import { useModalStore } from "../../../modal/modalStore";
 import { useStudioProjects, useTasksStore } from "../../../../features/studio/stores/tasksStore";
-import { useUIStore } from "../../../../features/studio/stores/uiStore";
+import {
+  resolveCursorId,
+  useClientStore,
+} from "../../../../state/clientStore";
 import { PaneShell } from "../../PaneShell";
 
 export function ProjectsPane() {
@@ -8,8 +11,13 @@ export function ProjectsPane() {
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
   const selectProject = useTasksStore((s) => s.selectProject);
   const loading = useTasksStore((s) => s.loading.projects);
-  const projectIdx = useUIStore((s) => s.projectsCursor);
+  const cursorId = useClientStore((s) => s.projectsCursorId);
+  const setCursor = useClientStore((s) => s.setProjectsCursor);
   const pushModal = useModalStore((s) => s.pushModal);
+  const visibleCursorId = resolveCursorId(
+    cursorId,
+    projects.map((project) => project.id),
+  );
 
   const addButton = (
     <button
@@ -35,14 +43,14 @@ export function ProjectsPane() {
         </>
       ) : (
         <ul>
-          {projects.map((p, i) => {
+          {projects.map((p) => {
             const isSelected = p.id === selectedProjectId;
-            const isFocused = i === projectIdx;
+            const isFocused = p.id === visibleCursorId;
             return (
               <li
                 key={p.id}
                 onClick={() => {
-                  useUIStore.setState({ projectsCursor: i });
+                  setCursor(p.id);
                   void selectProject(p.id);
                 }}
                 className={`cursor-pointer truncate px-1 py-0.5 ${

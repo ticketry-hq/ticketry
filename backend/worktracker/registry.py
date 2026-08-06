@@ -65,9 +65,7 @@ MODEL_ROUTES = {
             ),
         ),
         "writes": (
-            RouteDeclaration(
-                "POST", "/api/work-tracker/projects", "Create a project."
-            ),
+            RouteDeclaration("POST", "/api/work-tracker/projects", "Create a project."),
             RouteDeclaration(
                 "PATCH",
                 "/api/work-tracker/projects/{project_id}",
@@ -190,6 +188,11 @@ MODEL_ROUTES = {
                 "GET",
                 "/api/work-tracker/work-items/{issue_id}",
                 "Retrieve one bare work item by id or key.",
+            ),
+            RouteDeclaration(
+                "POST",
+                "/api/work-tracker/work-items/batch",
+                "Retrieve up to one hundred bare work items by exact id.",
             ),
         ),
         "writes": (
@@ -340,40 +343,91 @@ HOST_ROUTES = (
     RouteDeclaration("GET", "/api/healthz", "Report sidecar health."),
     RouteDeclaration("GET", "/api/settings/keybindings", "Read host keybindings."),
     RouteDeclaration("PUT", "/api/settings/keybindings", "Replace host keybindings."),
-    RouteDeclaration("GET", "/api/settings/provider-catalog", "Read the host provider default."),
-    RouteDeclaration("PUT", "/api/settings/provider-catalog", "Replace the host provider default."),
-    RouteDeclaration("GET", "/api/config", "Read local profiles and feature configuration."),
+    RouteDeclaration(
+        "GET", "/api/settings/provider-catalog", "Read the host provider default."
+    ),
+    RouteDeclaration(
+        "PUT", "/api/settings/provider-catalog", "Replace the host provider default."
+    ),
+    RouteDeclaration(
+        "GET", "/api/config", "Read local profiles and feature configuration."
+    ),
     RouteDeclaration("PATCH", "/api/config", "Select the recent local profile."),
     RouteDeclaration("POST", "/api/config/profiles", "Create a local profile."),
     RouteDeclaration("PUT", "/api/config/profiles/{index}", "Replace a local profile."),
-    RouteDeclaration("DELETE", "/api/config/profiles/{index}", "Delete a local profile."),
-    RouteDeclaration("POST", "/api/automation-attempts/{attempt_id}/retry", "Create an idempotent retry attempt."),
-    RouteDeclaration("POST", "/api/lifecycle/events", "Ingest and publish one lifecycle event."),
-    RouteDeclaration("GET", "/api/runs/module-activity", "Read recent module activity."),
-    RouteDeclaration("GET", "/api/runs/agent-status", "Read the authoritative agent status snapshot."),
-    RouteDeclaration("POST", "/api/terminals/viewers/lease", "Acquire a terminal viewer lease."),
-    RouteDeclaration("POST", "/api/terminals/viewers/lease/renew", "Renew a terminal viewer lease."),
-    RouteDeclaration("POST", "/api/terminals/viewers/lease/release", "Release a terminal viewer lease."),
-    RouteDeclaration("POST", "/api/terminals", "Create a durable terminal run through the control-plane service."),
+    RouteDeclaration(
+        "DELETE", "/api/config/profiles/{index}", "Delete a local profile."
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/automation-attempts/{attempt_id}/retry",
+        "Create an idempotent retry attempt.",
+    ),
+    RouteDeclaration(
+        "POST", "/api/lifecycle/events", "Ingest and publish one lifecycle event."
+    ),
+    RouteDeclaration(
+        "GET", "/api/runs/module-activity", "Read recent module activity."
+    ),
+    RouteDeclaration(
+        "GET", "/api/runs/agent-status", "Read the authoritative agent status snapshot."
+    ),
+    RouteDeclaration(
+        "POST", "/api/terminals/viewers/lease", "Acquire a terminal viewer lease."
+    ),
+    RouteDeclaration(
+        "POST", "/api/terminals/viewers/lease/renew", "Renew a terminal viewer lease."
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/terminals/viewers/lease/release",
+        "Release a terminal viewer lease.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/terminals",
+        "Create a durable terminal run through the control-plane service.",
+    ),
     RouteDeclaration("GET", "/api/terminals", "List active terminal runs for a task."),
     RouteDeclaration("DELETE", "/api/terminals", "Terminate one terminal run."),
-    RouteDeclaration("POST", "/api/terminals/resume", "Resume a provider conversation."),
-    RouteDeclaration("GET", "/api/terminals/resumable", "List resumable provider conversations."),
+    RouteDeclaration(
+        "POST", "/api/terminals/resume", "Resume a provider conversation."
+    ),
+    RouteDeclaration(
+        "GET", "/api/terminals/resumable", "List resumable provider conversations."
+    ),
     RouteDeclaration("GET", "/api/terminals/scratch", "List scratch terminal runs."),
-    RouteDeclaration("POST", "/api/terminals/self-terminate", "Terminate the Studio-authorized current run."),
-    RouteDeclaration("GET", "/api/documents", "List and rescan registered design documents."),
-    RouteDeclaration("GET", "/api/docs/{doc_id}/{asset_path}", "Read a registered document asset."),
-    RouteDeclaration("PUT", "/api/docs/{doc_id}", "Save a digest-guarded Markdown document."),
+    RouteDeclaration(
+        "POST",
+        "/api/terminals/self-terminate",
+        "Terminate the Studio-authorized current run.",
+    ),
+    RouteDeclaration(
+        "GET", "/api/documents", "List and rescan registered design documents."
+    ),
+    RouteDeclaration(
+        "GET", "/api/docs/{doc_id}/{asset_path}", "Read a registered document asset."
+    ),
+    RouteDeclaration(
+        "PUT", "/api/docs/{doc_id}", "Save a digest-guarded Markdown document."
+    ),
     RouteDeclaration("GET", "/api/fs/complete", "Complete local directory names."),
     RouteDeclaration("GET", "/api/worktrees", "Read live worktree status."),
-    RouteDeclaration("POST", "/api/worktrees/{task_id}/create", "Create an opt-in worktree."),
-    RouteDeclaration("POST", "/api/worktrees/{task_id}/discard", "Discard an opt-in worktree."),
+    RouteDeclaration(
+        "POST", "/api/worktrees/{task_id}/create", "Create an opt-in worktree."
+    ),
+    RouteDeclaration(
+        "POST", "/api/worktrees/{task_id}/discard", "Discard an opt-in worktree."
+    ),
 )
 
 # Public operations are exceptional and must carry a reviewed reason. Every
 # other declared operation is protected by the default API-key policy.
 PUBLIC_ROUTE_REASONS = {
-    ("GET", "/api/healthz"): "The sidecar supervisor needs a credential-free liveness probe.",
+    (
+        "GET",
+        "/api/healthz",
+    ): "The sidecar supervisor needs a credential-free liveness probe.",
     (
         "POST",
         "/api/lifecycle/events",

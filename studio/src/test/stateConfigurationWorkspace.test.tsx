@@ -5,7 +5,7 @@ import { SelectedTicket } from "../app/shell/ticket-workspace/selected-ticket/Se
 import type { TaskState, TaskSummary } from "../features/studio/lib/types";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 
 vi.mock("../features/agents/lifecycle", () => ({
   AgentStateBadge: () => null,
@@ -95,9 +95,9 @@ describe("State configuration workspace selection", () => {
       ],
       recentProfileIndex: 0,
     });
-    useUIStore.setState({
-      collapsedStateNames: new Set(),
-      expandedTaskIds: new Set(),
+    useClientStore.setState({
+      collapsedStateIds: new Set(),
+      expandedIdsByModule: {},
       storySearchQuery: "",
     });
     useTasksStore.setState({

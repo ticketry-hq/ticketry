@@ -7,7 +7,7 @@ import {
   outerPanelLayout,
 } from "../app/shell/layout/layoutMath";
 import { sidebarPaneComposition } from "../features/studio/stores/configStore";
-import { visiblePaneOrder } from "../features/studio/stores/uiStore";
+import { visiblePaneOrder } from "../state/clientStore";
 
 describe("sidebar pane composition", () => {
   it("preserves both existing Projects feature shapes", () => {

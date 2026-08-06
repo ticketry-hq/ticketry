@@ -81,7 +81,8 @@ def test_operations_have_unique_ids_and_explicit_security():
         key for key, security in security_by_key.items() if security == [{}]
     } == declared_public_route_keys()
     assert all(
-        security == ([{}] if key in declared_public_route_keys() else [{"ApiKeyAuth": []}])
+        security
+        == ([{}] if key in declared_public_route_keys() else [{"ApiKeyAuth": []}])
         for key, security in security_by_key.items()
     )
     assert _schema()["components"]["securitySchemes"]["ApiKeyAuth"] == {
@@ -111,18 +112,29 @@ def test_contract_records_flat_relations_and_binary_attachment_upload():
     }
 
 
+def test_work_item_batch_read_is_a_bounded_post_body():
+    schema = _schema()
+    operation = schema["paths"]["/work-tracker/work-items/batch"]["post"]
+    request = operation["requestBody"]["content"]["application/json"]["schema"]
+    body_schema = schema["components"]["schemas"][request["$ref"].rsplit("/", 1)[1]]
+
+    assert operation["operationId"] == "batchWorkItems"
+    assert body_schema["required"] == ["ids"]
+    assert body_schema["properties"]["ids"] == {
+        "type": "array",
+        "items": {"type": "string", "format": "uuid"},
+        "maxItems": 100,
+        "minItems": 1,
+    }
+
+
 def test_module_archived_filter_and_issue_type_reassignment_body_are_declared():
     schema = _schema()
-    module_list = schema["paths"]["/work-tracker/projects/{project_id}/modules"][
-        "get"
-    ]
-    issue_type_delete = schema["paths"]["/work-tracker/issue-types/{type_id}"][
-        "delete"
-    ]
+    module_list = schema["paths"]["/work-tracker/projects/{project_id}/modules"]["get"]
+    issue_type_delete = schema["paths"]["/work-tracker/issue-types/{type_id}"]["delete"]
 
     assert any(
-        parameter["name"] == "include_archived"
-        and parameter["in"] == "query"
+        parameter["name"] == "include_archived" and parameter["in"] == "query"
         for parameter in module_list["parameters"]
     )
     assert "requestBody" in issue_type_delete

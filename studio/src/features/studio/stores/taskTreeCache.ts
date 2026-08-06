@@ -1,26 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
-import type { TaskDetails, TaskId, TaskSummary } from "../lib/types";
+import type { ModuleTree } from "../../../shared/api/types";
+import type { TaskDetails } from "../lib/types";
 
-// Storage for the Stories tree. The module tree (root rows + subtask buckets)
-// is one cache entry per (project, module); an open item's details is its own
-// entry per (project, task). tasksStore reads and writes through here rather
-// than holding copies, so a module revisit or a second surface sees the same
-// rows, and invalidation is available per module instead of store-wide.
+// Membership is the only value held by the module-tree entry. Work-item fields
+// live in their own `workItem` entries and are resolved only when a surface
+// reads an id.
+export type TaskTree = ModuleTree;
 
-export interface TaskTree {
-  tasks: TaskSummary[];
-  subtasks: Record<TaskId, TaskSummary[]>;
-}
-
-const EMPTY_TREE: TaskTree = { tasks: [], subtasks: {} };
+export const EMPTY_TREE: TaskTree = {
+  rootIds: [],
+  children: {},
+  order: [],
+};
 
 const treeKey = (projectId: string, moduleId: string) =>
   queryKeys.tasks.byModule(projectId, moduleId);
 
 const detailsKey = (projectId: string, taskId: string) =>
-  [...queryKeys.tasks.all, projectId, "details", taskId] as const;
+  queryKeys.tasks.detail(projectId, taskId);
 
 export function getTaskTree(
   projectId: string | null,
@@ -44,15 +43,8 @@ export async function loadTaskTree(
   queryFn: () => Promise<TaskTree>,
 ): Promise<TaskTree> {
   const queryKey = treeKey(projectId, moduleId);
-  // A module can be left and revisited while its first request is still in
-  // flight. The revisited selection is a new explicit load, so cancel the old
-  // Query attempt instead of attaching the new selection to stale work.
   await queryClient.cancelQueries({ queryKey, exact: true });
-  return queryClient.fetchQuery({
-    queryKey,
-    queryFn,
-    staleTime: 0,
-  });
+  return queryClient.fetchQuery({ queryKey, queryFn, staleTime: 0 });
 }
 
 export function getTaskDetails(
@@ -60,9 +52,7 @@ export function getTaskDetails(
   taskId: string | null,
 ): TaskDetails | null {
   if (!projectId || !taskId) return null;
-  return (
-    queryClient.getQueryData<TaskDetails>(detailsKey(projectId, taskId)) ?? null
-  );
+  return queryClient.getQueryData<TaskDetails>(detailsKey(projectId, taskId)) ?? null;
 }
 
 export function setTaskDetails(
@@ -89,11 +79,6 @@ export function loadTaskDetails(
   });
 }
 
-/**
- * Subscribe to a module's cached tree. The imperative store action currently
- * starts the fetch through loadTaskTree; TanStack owns the request and this
- * hook owns reactive delivery to components.
- */
 export function useCachedTaskTree(
   projectId: string | null,
   moduleId: string | null,
@@ -103,7 +88,7 @@ export function useCachedTaskTree(
       queryKey:
         projectId && moduleId
           ? treeKey(projectId, moduleId)
-          : [...queryKeys.tasks.all, "none"],
+          : queryKeys.tasks.emptyTree,
       queryFn: () => EMPTY_TREE,
       enabled: false,
     },
@@ -121,7 +106,7 @@ export function useCachedTaskDetails(
       queryKey:
         projectId && taskId
           ? detailsKey(projectId, taskId)
-          : [...queryKeys.tasks.all, "no-details"],
+          : queryKeys.tasks.emptyDetail,
       queryFn: () => null,
       enabled: false,
     },

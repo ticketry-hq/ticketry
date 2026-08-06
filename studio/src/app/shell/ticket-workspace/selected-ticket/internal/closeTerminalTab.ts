@@ -1,7 +1,7 @@
 import {
   useTerminalStore,
 } from "../../../../../features/agents/terminal/appNavigation";
-import { toast } from "../../../../stores/toastStore";
+import { toast } from "../../../../../state/clientStore";
 import { apiErrorMessage } from "../../../../../shared/api/client";
 import type { SessionId } from "../../../../../features/agents/types";
 import { useTicketWorkspaceStore } from "../state/ticketWorkspaceStore";

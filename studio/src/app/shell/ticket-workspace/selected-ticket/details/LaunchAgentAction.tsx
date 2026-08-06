@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { createAgentStatusClient } from "@worktracker/typescript-sdk/agent-status";
 import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
-import { toast } from "../../../../stores/toastStore";
+import { toast } from "../../../../../state/clientStore";
 import {
   agentApiBase,
   apiErrorMessage,

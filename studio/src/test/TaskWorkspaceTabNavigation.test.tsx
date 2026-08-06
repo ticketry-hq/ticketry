@@ -121,10 +121,13 @@ import { ModalShell } from "../app/modal/ModalShell";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { MODAL_ACTIONS } from "../app/navigation/keymapRegistry";
 import type { TaskSummary } from "../features/studio/lib/types";
-import type { Row } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import type {
+  Row,
+  WorkItemRow,
+} from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
-import { useUIStore } from "../features/studio/stores/uiStore";
+import { useClientStore } from "../state/clientStore";
 import { setProviderCapabilities } from "../features/workflows/providerQueries";
 import { dispatchStatusFrame } from "../features/agents/status/statusFeed";
 import { useAgentStatusStore } from "../features/agents/status";
@@ -147,14 +150,13 @@ const taskSummaries: TaskSummary[] = [TASK_ID, NEXT_TASK_ID].map(
   }),
 );
 
-const taskRows: Row[] = taskSummaries.map((task) => ({
-  task,
+const taskRows: WorkItemRow[] = taskSummaries.map((task) => ({
+  kind: "work-item",
+  id: task.id,
   depth: 0,
   parentId: null,
-  hasChildren: false,
-  isExpanded: false,
-  isLoading: false,
-  descendantIds: [],
+  expandable: false,
+  expanded: false,
 }));
 
 function TaskKeymapHarness({ rows = taskRows }: { rows?: Row[] }) {
@@ -367,7 +369,7 @@ beforeEach(() => {
   seedConfig({
     features: { sidebar: true, projects: true },
   });
-  useUIStore.setState({
+  useClientStore.setState({
     focusedPane: "tasks",
     editViewZone: "stories",
     editViewBodyEngaged: false,
@@ -382,7 +384,6 @@ beforeEach(() => {
     byTask: {},
     automationAttempts: {},
     automationByTask: {},
-    workItemCursors: {},
   });
   useTasksStore.setState({
     selectedProjectId: "project-1",
@@ -493,7 +494,7 @@ describe("Studio edit-view navigation zones", () => {
     rows: Row[] = taskRows,
     workspaceBucket: string | null = TASK_ID,
   ) {
-    useUIStore.getState().setSidebarVisible(false);
+    useClientStore.getState().setSidebarVisible(false);
     return render(
       <>
         <TaskKeymapHarness rows={rows} />
@@ -547,7 +548,7 @@ describe("Studio edit-view navigation zones", () => {
 
     expect(zones).toHaveLength(3);
     expect(tabStrip).toHaveClass("min-h-10", "items-center", "px-1", "py-1");
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewZone).toBe("stories");
     expect(stories).toHaveFocus();
     expect(stories).toHaveClass("ring-1");
     expect(workspace).not.toHaveClass("ring-1");
@@ -555,14 +556,14 @@ describe("Studio edit-view navigation zones", () => {
     expect(body).toHaveClass("opacity-[0.65]");
 
     expect(shiftTab().defaultPrevented).toBe(true);
-    expect(useUIStore.getState().editViewZone).toBe("tab-strip");
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
     expect(tabStrip).toHaveFocus();
     expect(tabStrip).toHaveClass("ring-1");
     expect(workspace).not.toHaveClass("ring-1");
     expect(stories).toHaveClass("opacity-[0.65]");
 
     expect(shiftTab().defaultPrevented).toBe(true);
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     expect(body).toHaveFocus();
     expect(
       body.querySelector('[data-navigation-highlight="active-tab-body"]'),
@@ -571,7 +572,7 @@ describe("Studio edit-view navigation zones", () => {
     expect(tabStrip).toHaveClass("opacity-[0.65]");
 
     expect(shiftTab().defaultPrevented).toBe(true);
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewZone).toBe("stories");
     expect(stories).toHaveFocus();
   });
 
@@ -589,7 +590,7 @@ describe("Studio edit-view navigation zones", () => {
 
     fireEvent.mouseDown(tabStrip);
 
-    expect(useUIStore.getState().editViewZone).toBe("tab-strip");
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
     expect(stories).not.toHaveClass("opacity-[0.65]");
     expect(stories).not.toHaveClass("ring-1");
     expect(tabStrip).not.toHaveClass("opacity-[0.65]");
@@ -607,7 +608,7 @@ describe("Studio edit-view navigation zones", () => {
 
     fireEvent.mouseDown(stories);
 
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewZone).toBe("stories");
     expect(stories).not.toHaveClass("opacity-[0.65]");
     expect(stories).not.toHaveClass("ring-1");
     expect(tabStrip).not.toHaveClass("opacity-[0.65]");
@@ -626,11 +627,11 @@ describe("Studio edit-view navigation zones", () => {
   });
 
   it("leaves native Shift+Tab untouched in the full sidebar view", () => {
-    useUIStore.getState().setSidebarVisible(true);
+    useClientStore.getState().setSidebarVisible(true);
     render(<TaskKeymapHarness />);
 
     expect(shiftTab().defaultPrevented).toBe(false);
-    expect(useUIStore.getState().focusedPane).toBe("tasks");
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
   });
 
   it("moves and clamps the Stories selection, then focuses idea entry above the first Story", () => {
@@ -659,18 +660,18 @@ describe("Studio edit-view navigation zones", () => {
     "keeps modal key handling ahead of %s-store edit-view %s navigation",
     (store, zone) => {
       const onClose = vi.fn();
-      useUIStore.getState().setSidebarVisible(false);
-      useUIStore.getState().setEditViewZone(zone);
+      useClientStore.getState().setSidebarVisible(false);
+      useClientStore.getState().setEditViewZone(zone);
       if (store === "shared") {
         useModalStore.setState({ modalStack: [{ type: "settings" }] });
       } else {
-        useUIStore.setState({ modalStack: [{ type: "settings" }] });
+        useClientStore.setState({ modalStack: [{ type: "settings" }] });
       }
       const view = render(
         <>
           <TaskKeymapHarness
             rows={[
-              { ...taskRows[0], hasChildren: true },
+              { ...taskRows[0], expandable: true },
               { ...taskRows[1], depth: 1, parentId: TASK_ID },
             ]}
           />
@@ -686,7 +687,7 @@ describe("Studio edit-view navigation zones", () => {
       );
       const initialWorkspace =
         useTicketWorkspaceStore.getState().workspaces[TASK_ID];
-      const initialExpanded = useUIStore.getState().expandedTaskIds;
+      const initialExpanded = useClientStore.getState().expandedIdsByModule;
       const modalControl = screen.getByRole("textbox", {
         name: "Modal control",
       });
@@ -705,8 +706,8 @@ describe("Studio edit-view navigation zones", () => {
       fireEvent.keyDown(modalControl, { key: "Escape" });
 
       expect(useTasksStore.getState().selectedTaskId).toBe(TASK_ID);
-      expect(useUIStore.getState().editViewZone).toBe(zone);
-      expect(useUIStore.getState().expandedTaskIds).toEqual(initialExpanded);
+      expect(useClientStore.getState().editViewZone).toBe(zone);
+      expect(useClientStore.getState().expandedIdsByModule).toEqual(initialExpanded);
       expect(
         useTicketWorkspaceStore.getState().workspaces[TASK_ID],
       ).toEqual(initialWorkspace);
@@ -716,18 +717,20 @@ describe("Studio edit-view navigation zones", () => {
   );
 
   it("expands a collapsed Story parent, then exits right once it is expanded", () => {
-    const collapsedRows: Row[] = [
-      { ...taskRows[0], hasChildren: true },
+    const collapsedRows: WorkItemRow[] = [
+      { ...taskRows[0], expandable: true },
       { ...taskRows[1], depth: 1, parentId: TASK_ID },
     ];
     const view = mountEditView(collapsedRows);
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(useUIStore.getState().expandedTaskIds.has(TASK_ID)).toBe(true);
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(
+      useClientStore.getState().expandedIdsByModule["module-1"],
+    ).toContain(TASK_ID);
+    expect(useClientStore.getState().editViewZone).toBe("stories");
 
-    const expandedRows: Row[] = [
-      { ...collapsedRows[0], isExpanded: true },
+    const expandedRows: WorkItemRow[] = [
+      { ...collapsedRows[0], expanded: true },
       collapsedRows[1],
     ];
     view.rerender(
@@ -744,13 +747,15 @@ describe("Studio edit-view navigation zones", () => {
     );
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(useUIStore.getState().editViewZone).toBe("tab-strip");
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
     expect(useTasksStore.getState().selectedTaskId).toBe(TASK_ID);
 
-    useUIStore.getState().setEditViewZone("stories");
+    useClientStore.getState().setEditViewZone("stories");
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(useUIStore.getState().expandedTaskIds.has(TASK_ID)).toBe(false);
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(
+      useClientStore.getState().expandedIdsByModule["module-1"] ?? [],
+    ).not.toContain(TASK_ID);
+    expect(useClientStore.getState().editViewZone).toBe("stories");
     expect(useTasksStore.getState().selectedTaskId).toBe(TASK_ID);
   });
 
@@ -759,7 +764,7 @@ describe("Studio edit-view navigation zones", () => {
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
 
-    expect(useUIStore.getState().editViewZone).toBe("tab-strip");
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
     expect(useTasksStore.getState().selectedTaskId).toBe(TASK_ID);
   });
 
@@ -769,7 +774,7 @@ describe("Studio edit-view navigation zones", () => {
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
 
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewZone).toBe("stories");
     expect(useTasksStore.getState().selectedTaskId).toBeNull();
   });
 
@@ -778,7 +783,7 @@ describe("Studio edit-view navigation zones", () => {
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
 
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewZone).toBe("stories");
     expect(useTasksStore.getState().selectedTaskId).toBe(TASK_ID);
   });
 
@@ -797,7 +802,7 @@ describe("Studio edit-view navigation zones", () => {
 
     fireEvent.keyDown(window, { key: "Enter" });
 
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     expect(selectedTab()).toHaveAccessibleName("Notes");
     expect(
       document.querySelector('[data-navigation-zone="active-tab-body"]'),
@@ -860,7 +865,7 @@ describe("Studio edit-view navigation zones", () => {
     expect(details).toHaveAttribute("data-highlighted", "true");
 
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewZone).toBe("stories");
 
     shiftTab();
     expect(details).toHaveAttribute("data-highlighted", "true");
@@ -869,7 +874,7 @@ describe("Studio edit-view navigation zones", () => {
     expect(selectedTab()).toHaveAccessibleName("Details");
 
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    expect(useUIStore.getState().editViewZone).toBe("tab-strip");
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
     expect(details).toHaveAttribute("data-highlighted", "true");
 
     for (let index = 0; index < 10; index += 1) {
@@ -879,14 +884,14 @@ describe("Studio edit-view navigation zones", () => {
       "data-highlighted",
       "true",
     );
-    expect(useUIStore.getState().editViewZone).toBe("tab-strip");
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
 
     fireEvent.keyDown(window, { key: "ArrowUp" });
     expect(screen.getByRole("tab", { name: "MEML-3 · codex" })).toHaveAttribute(
       "data-highlighted",
       "true",
     );
-    expect(useUIStore.getState().editViewZone).toBe("tab-strip");
+    expect(useClientStore.getState().editViewZone).toBe("tab-strip");
   });
 
   it.each(["Enter", "ArrowDown"])(
@@ -903,7 +908,7 @@ describe("Studio edit-view navigation zones", () => {
       fireEvent.keyDown(window, { key });
 
       expect(selectedTab()).toHaveAccessibleName("Design");
-      expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
+      expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
       await waitFor(() =>
         expect(
           screen
@@ -926,7 +931,7 @@ describe("Studio edit-view navigation zones", () => {
     fireEvent.keyDown(window, { key: "ArrowDown" });
 
     expect(selectedTab()).toHaveAccessibleName("Details");
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
   });
 
   it.each([
@@ -941,12 +946,12 @@ describe("Studio edit-view navigation zones", () => {
       shiftTab();
       shiftTab();
 
-      expect(useUIStore.getState().editViewBodyEngaged).toBe(false);
+      expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
 
       fireEvent.keyDown(window, { key });
 
-      expect(useUIStore.getState().editViewZone).toBe(expectedZone);
-      expect(useUIStore.getState().editViewBodyEngaged).toBe(false);
+      expect(useClientStore.getState().editViewZone).toBe(expectedZone);
+      expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
     },
   );
 
@@ -983,7 +988,7 @@ describe("Studio edit-view navigation zones", () => {
 
     shiftTab();
     shiftTab();
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     expect(body).toHaveFocus();
     expect(
       body.querySelector('[data-navigation-highlight="active-tab-body"]'),
@@ -992,12 +997,12 @@ describe("Studio edit-view navigation zones", () => {
     expect(terminalHarness.focusOrder).toEqual([]);
 
     expect(shiftTab().defaultPrevented).toBe(true);
-    expect(useUIStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewZone).toBe("stories");
     expect(stories).toHaveFocus();
     expect(terminalHarness.focusOrder).toEqual([]);
 
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     expect(body).toHaveFocus();
     expect(terminalHarness.focusOrder).toEqual([]);
 
@@ -1006,8 +1011,8 @@ describe("Studio edit-view navigation zones", () => {
     await waitFor(() =>
       expect(document.activeElement).toHaveClass("xterm-helper-textarea"),
     );
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(true);
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
 
     const xtermInput = document.activeElement!;
     const ptyKeydown = vi.fn();
@@ -1025,7 +1030,7 @@ describe("Studio edit-view navigation zones", () => {
       expect(keydown(xtermInput, init).defaultPrevented).toBe(false);
     }
     expect(ptyKeydown).toHaveBeenCalledTimes(passthroughKeys.length);
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     expect(selectedTab()).toHaveAccessibleName("MEML-3 · claude");
 
     const escape = keydown(xtermInput, {
@@ -1035,8 +1040,8 @@ describe("Studio edit-view navigation zones", () => {
 
     expect(escape.defaultPrevented).toBe(true);
     expect(ptyKeydown).toHaveBeenCalledTimes(passthroughKeys.length);
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(false);
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
     await waitFor(() =>
       expect(
         view.container.querySelector(
@@ -1049,7 +1054,7 @@ describe("Studio edit-view navigation zones", () => {
     await waitFor(() =>
       expect(document.activeElement).toHaveClass("xterm-helper-textarea"),
     );
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(true);
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
   });
 
   it("engages and disengages a document body in place", async () => {
@@ -1073,11 +1078,11 @@ describe("Studio edit-view navigation zones", () => {
 
     fireEvent.keyDown(window, { key: "Enter" });
     expect(body).toHaveFocus();
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(false);
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
 
     fireEvent.keyDown(window, { key: "Enter" });
     await waitFor(() => expect(frame).toHaveFocus());
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(true);
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
 
     expect(
       keydown(frame, { key: "ArrowLeft", metaKey: false }).defaultPrevented,
@@ -1088,8 +1093,8 @@ describe("Studio edit-view navigation zones", () => {
 
     expect(escape.defaultPrevented).toBe(true);
     expect(documentKeydown).toHaveBeenCalledTimes(1);
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(false);
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
     expect(body).toHaveFocus();
     expect(
       body.querySelector('[data-navigation-highlight="active-tab-body"]'),
@@ -1097,7 +1102,7 @@ describe("Studio edit-view navigation zones", () => {
 
     fireEvent.keyDown(window, { key: "Enter" });
     await waitFor(() => expect(frame).toHaveFocus());
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(true);
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
   });
 
   it.each([
@@ -1126,8 +1131,8 @@ describe("Studio edit-view navigation zones", () => {
       keydown(frame, { key: "Escape", metaKey: true });
       fireEvent.keyDown(window, { key });
 
-      expect(useUIStore.getState().editViewZone).toBe(expectedZone);
-      expect(useUIStore.getState().editViewBodyEngaged).toBe(false);
+      expect(useClientStore.getState().editViewZone).toBe(expectedZone);
+      expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
       expect(
         view.container.querySelector(
           `[data-navigation-zone="${expectedZone}"]`,
@@ -1157,8 +1162,8 @@ describe("Studio edit-view navigation zones", () => {
     expect(ring).toHaveAttribute("data-terminal-mode", "idle");
 
     act(() => {
-      useUIStore.getState().setEditViewZone("active-tab-body");
-      useUIStore.getState().setEditViewBodyEngaged(true);
+      useClientStore.getState().setEditViewZone("active-tab-body");
+      useClientStore.getState().setEditViewBodyEngaged(true);
     });
 
     expect(view.getByTestId("terminal-mode-ring")).toHaveAttribute(
@@ -1166,7 +1171,7 @@ describe("Studio edit-view navigation zones", () => {
       "engaged",
     );
 
-    act(() => useUIStore.getState().setEditViewBodyEngaged(false));
+    act(() => useClientStore.getState().setEditViewBodyEngaged(false));
 
     expect(view.getByTestId("terminal-mode-ring")).toHaveAttribute(
       "data-terminal-mode",
@@ -1212,8 +1217,8 @@ describe("Studio edit-view navigation zones", () => {
 
     const view = mountEditView();
     act(() => {
-      useUIStore.getState().setEditViewZone("active-tab-body");
-      useUIStore.getState().setEditViewBodyEngaged(true);
+      useClientStore.getState().setEditViewZone("active-tab-body");
+      useClientStore.getState().setEditViewBodyEngaged(true);
     });
     await waitFor(() => expect(terminalHarness.focusOrder).toHaveLength(1));
     const firstTerminal = terminalHarness.focusOrder[0];
@@ -1222,7 +1227,7 @@ describe("Studio edit-view navigation zones", () => {
 
     await waitFor(() => expect(terminalHarness.focusOrder).toHaveLength(2));
     expect(terminalHarness.focusOrder[1]).not.toBe(firstTerminal);
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(true);
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(true);
     expect(view.getByTestId("terminal-mode-ring")).toHaveAttribute(
       "data-terminal-mode",
       "engaged",
@@ -1247,8 +1252,8 @@ describe("Studio edit-view navigation zones", () => {
     // Selected: the keyboard cursor is on the terminal body, but keys still
     // drive navigation. The shared accent-blue zone ring marks it.
     act(() => {
-      useUIStore.getState().setNavigationModality("keyboard");
-      useUIStore.getState().setEditViewZone("active-tab-body");
+      useClientStore.getState().setNavigationModality("keyboard");
+      useClientStore.getState().setEditViewZone("active-tab-body");
     });
 
     expect(
@@ -1260,7 +1265,7 @@ describe("Studio edit-view navigation zones", () => {
 
     // Entered: keys now go to xterm. The green engaged ring takes over and the
     // blue selection ring is withdrawn, so the two states never look alike.
-    act(() => useUIStore.getState().setEditViewBodyEngaged(true));
+    act(() => useClientStore.getState().setEditViewBodyEngaged(true));
 
     expect(
       view.getByTestId("terminal-mode-ring"),
@@ -1275,7 +1280,7 @@ describe("Studio edit-view navigation zones", () => {
     expect(tag).toHaveTextContent("⌘Esc");
 
     // Leaving terminal mode restores the selection ring.
-    act(() => useUIStore.getState().setEditViewBodyEngaged(false));
+    act(() => useClientStore.getState().setEditViewBodyEngaged(false));
 
     expect(
       view.getByTestId("terminal-mode-ring"),
@@ -1311,7 +1316,7 @@ describe("Studio edit-view navigation zones", () => {
     fireEvent.mouseDown(xtermInput);
     xtermInput.focus();
 
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
     expect(xtermInput).toHaveFocus();
     expect(terminalHarness.focusOrder).toEqual([0]);
 
@@ -1323,8 +1328,8 @@ describe("Studio edit-view navigation zones", () => {
     expect(
       keydown(xtermInput, { key: "Escape", metaKey: true }).defaultPrevented,
     ).toBe(true);
-    expect(useUIStore.getState().editViewZone).toBe("active-tab-body");
-    expect(useUIStore.getState().editViewBodyEngaged).toBe(false);
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
     expect(
       view.container.querySelector(
         '[data-navigation-highlight="active-tab-body"]',
@@ -1683,7 +1688,7 @@ describe("mounted scratch workspace terminal refresh", () => {
 
 describe("task workspace Command-arrow navigation", () => {
   beforeEach(() => {
-    useUIStore.setState({ focusedPane: "details-or-terminal" });
+    useClientStore.setState({ focusedPane: "details-or-terminal" });
   });
 
   it("does not consume Command-arrow before a task workspace is rendered", () => {
@@ -1887,7 +1892,7 @@ describe("Studio workspace context restoration", () => {
     expect(document.activeElement).toBe(
       view.container.querySelector('[data-pane="tasks"]'),
     );
-    expect(useUIStore.getState().focusedPane).toBe("tasks");
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
     expect(terminalHarness.focusOrder).toEqual([]);
 
     const terminalTab = screen.getByRole("tab", { name: "MEML-3 · codex" });
@@ -1897,10 +1902,10 @@ describe("Studio workspace context restoration", () => {
     await waitFor(() =>
       expect(document.activeElement).toHaveClass("xterm-helper-textarea"),
     );
-    expect(useUIStore.getState().focusedPane).toBe("details-or-terminal");
+    expect(useClientStore.getState().focusedPane).toBe("details-or-terminal");
 
     terminalHarness.focusOrder.length = 0;
-    act(() => useUIStore.setState({ focusedPane: "tasks" }));
+    act(() => useClientStore.setState({ focusedPane: "tasks" }));
     expect(document.activeElement).toBe(
       view.container.querySelector('[data-pane="tasks"]'),
     );
@@ -1917,7 +1922,7 @@ describe("Studio workspace context restoration", () => {
     expect(document.activeElement).toBe(
       view.container.querySelector('[data-pane="tasks"]'),
     );
-    expect(useUIStore.getState().focusedPane).toBe("tasks");
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
     expect(terminalHarness.focusOrder).toEqual([]);
   });
 
@@ -2318,7 +2323,7 @@ describe("focus-based Command-arrow workspace routing", () => {
     expect(unfocused.defaultPrevented).toBe(false);
     expect(selectedTabIn("pane-a")).toHaveAccessibleName("Details");
 
-    act(() => useUIStore.setState({ focusedPane: "details-or-terminal" }));
+    act(() => useClientStore.setState({ focusedPane: "details-or-terminal" }));
     const focused = keydown(window);
     expect(focused.defaultPrevented).toBe(true);
     expect(selectedTabIn("pane-a")).toHaveAccessibleName("Design");
@@ -2369,7 +2374,7 @@ describe("focus-based Command-arrow workspace routing", () => {
         {pane("pane-a", TASK_ID)}
       </>,
     );
-    act(() => useUIStore.setState({ focusedPane: "details-or-terminal" }));
+    act(() => useClientStore.setState({ focusedPane: "details-or-terminal" }));
 
     const event = keydown(window);
     expect(event.defaultPrevented).toBe(true);

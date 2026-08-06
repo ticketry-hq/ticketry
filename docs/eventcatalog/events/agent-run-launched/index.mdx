@@ -1,0 +1,12 @@
+---
+id: agent-run-launched
+name: Agent Run Launched
+version: 1.0.0
+summary: A dependency-graph node has acquired a durable agent run.
+owners:
+  - ticketry
+---
+
+The execution API returns the current graph projection including per-node
+`agent_run_id`, status, and error. Lifecycle deltas then carry subsequent
+attention-state changes.

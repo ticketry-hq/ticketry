@@ -1,0 +1,22 @@
+---
+id: workspace-filesystem
+name: Workspace Filesystem
+version: 1.0.0
+summary: Project checkouts, task worktrees, design documents, media, and configuration files.
+container_type: objectStore
+technology: Local filesystem and Git
+authoritative: true
+access_mode: readWrite
+classification: internal
+owners:
+  - ticketry
+services:
+  - document-service
+  - worktree-service
+  - ticketry-backend
+---
+
+Runtime-generated databases, caches, sidecars, native libraries, and build
+output remain isolated from source control.
+
+<NodeGraph />

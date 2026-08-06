@@ -1,0 +1,41 @@
+---
+id: work-item-type
+name: Work-item Type
+version: 1.0.0
+summary: Project-configurable classification layered over the fixed module/task level.
+owners:
+  - ticketry
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+  - name: projectId
+    type: UUID
+    required: true
+    references: project
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: name
+    type: string
+    required: true
+  - name: level
+    type: string
+    required: true
+    enum:
+      - module
+      - task
+  - name: startStateId
+    type: UUID
+    references: workflow-state
+    referencesIdentifier: id
+    relationType: startsIn
+  - name: workflowRevision
+    type: integer
+    required: true
+---
+
+The type owns a directed transition graph. Its workflow revision lets callers
+detect edits to that graph.
+
+<EntityPropertiesTable />

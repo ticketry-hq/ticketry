@@ -1,0 +1,45 @@
+---
+id: dependency-graph-execution
+name: Dependency Graph Execution
+version: 1.0.0
+summary: Derives a work graph, launches the ready set, and reports durable agent lifecycle.
+owners:
+  - ticketry
+steps:
+  - id: request
+    title: Execute a root work item
+    message:
+      id: execute-work-graph
+      version: 1.0.0
+    next_step: derive
+  - id: derive
+    title: Derive current graph and readiness
+    service:
+      id: execution-engine
+    next_step: launch
+  - id: launch
+    title: Launch each ready node
+    message:
+      id: agent-run-launched
+      version: 1.0.0
+    next_step: terminal
+  - id: terminal
+    title: Create durable terminal session
+    service:
+      id: terminal-service
+    next_step: lifecycle
+  - id: lifecycle
+    title: Normalize provider lifecycle
+    service:
+      id: run-status-service
+    next_step: render
+  - id: render
+    title: Reconcile activity in Studio
+    service:
+      id: frontend-state-projections
+---
+
+The ready set is derived from WorkTracker blocker edges and current workflow
+state. Repeating the command is safe: durable facts prevent duplicate launches.
+
+<NodeGraph />

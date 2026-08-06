@@ -1,0 +1,30 @@
+---
+id: worktracker
+name: WorkTracker
+version: 1.0.0
+summary: |
+  Authoritative system of record for planning data, workflow policy, attachments,
+  launch bindings, and work-item relationships.
+owners:
+  - ticketry
+services:
+  - id: worktracker-api
+  - id: worktracker-mcp
+containers:
+  - id: ticketry-state-database
+flows:
+  - id: work-item-change-synchronization
+    version: 1.0.0
+relationships:
+  - id: agent-execution-system
+    label: supplies dependency and launch policy to
+  - id: studio-webview
+    label: supplies work projections to
+---
+
+The WorkTracker API and MCP service expose the same planning concepts to two
+different consumers: the desktop application and coding agents.
+
+<ContextDiagram />
+
+<NodeGraph />

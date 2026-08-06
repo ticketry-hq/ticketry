@@ -1,0 +1,31 @@
+---
+id: agent-execution-system
+name: Agent Execution System
+version: 1.0.0
+summary: Executes one work item or a derived dependency graph and records durable outcomes.
+owners:
+  - ticketry
+services:
+  - id: execution-engine
+  - id: run-status-service
+containers:
+  - id: ticketry-state-database
+flows:
+  - id: dependency-graph-execution
+    version: 1.0.0
+relationships:
+  - id: worktracker
+    label: reads work graph and launch policy from
+  - id: workspace-runtime-system
+    label: launches durable sessions through
+  - id: studio-webview
+    label: streams lifecycle projections to
+---
+
+Graph edges are derived from current `blocked_by` relationships. The system
+persists run context and per-node execution state, not a second copy of the
+planning graph.
+
+<ContextDiagram />
+
+<NodeGraph />

@@ -1,0 +1,21 @@
+---
+id: work-item-state-changed
+name: Work-item State Changed
+version: 1.0.0
+summary: Versioned status-feed delta for one committed work-item workflow-state move.
+owners:
+  - ticketry
+badges:
+  - content: Actual contract
+    backgroundColor: green
+    textColor: green
+---
+
+The frame contains `project_id`, `work_item_id`, the complete state projection
+or null, a monotonic project `revision`, and `updated_at`.
+
+## Semantic limit
+
+Despite sometimes being discussed as a work-item revision, this event only
+describes state identity changes. It carries no changed-field list, general
+detail payload, or deletion tombstone.

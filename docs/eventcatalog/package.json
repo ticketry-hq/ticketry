@@ -1,0 +1,16 @@
+{
+  "name": "@ticketry/eventcatalog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-contracts.mjs",
+    "dev": "npm run sync && node scripts/run-eventcatalog.mjs dev",
+    "build": "npm run sync && node scripts/run-eventcatalog.mjs build",
+    "preview": "node scripts/run-eventcatalog.mjs preview"
+  },
+  "dependencies": {
+    "@eventcatalog/core": "4.3.3",
+    "vite": "8.1.5"
+  }
+}

@@ -1,0 +1,39 @@
+---
+id: frontend-state-projections
+name: Frontend State Projections
+version: 1.0.0
+summary: Maintains local backlog, task, detail, workflow, and run projections for the UI.
+owners:
+  - ticketry
+receives:
+  - id: work-item-state-changed
+    version: 1.0.0
+  - id: workflow-state-changed
+    version: 1.0.0
+  - id: agent-lifecycle-changed
+    version: 1.0.0
+readsFrom:
+  - id: frontend-state-store
+writesTo:
+  - id: frontend-state-store
+badges:
+  - content: Known drift
+    backgroundColor: amber
+    textColor: amber
+---
+
+## Projection map
+
+| Projection | Typical consumer | Reconciled by current status feed |
+| --- | --- | --- |
+| Backlog and task collections | boards and lists | yes, for workflow-state moves |
+| Issue detail records | ticket detail views | no |
+| Workflow-state catalog | selectors and cards | yes |
+| Agent-run activity | terminal and activity UI | yes |
+
+The same `work_item_id` can exist in multiple frontend projections. Updating one
+projection does not imply that another has been invalidated.
+
+<NodeGraph />
+
+<MessageTable format="all" />

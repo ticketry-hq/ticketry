@@ -1,0 +1,160 @@
+import * as api from "../../shared/api/client";
+import type {
+  WorkItem,
+  WorkItemDetail,
+  WorkItemFilters,
+} from "../../shared/api/types";
+import { queryClient } from "../../shared/query/queryClient";
+import { queryKeys } from "../../shared/query/keys";
+
+/**
+ * Canonical read boundary for work-item server state.
+ *
+ * Zustand stores may still project these records while their consumers are
+ * migrated, but requests, cancellation, de-duplication, staleness and errors
+ * belong to TanStack Query here.
+ */
+
+export async function loadWorkItemDetail(
+  keyOrId: string,
+  signal?: AbortSignal,
+): Promise<WorkItemDetail> {
+  const queryKey = queryKeys.workItems.detail(keyOrId);
+  const cancel = () => {
+    void queryClient.cancelQueries({ queryKey, exact: true });
+  };
+  if (signal?.aborted) cancel();
+  signal?.addEventListener("abort", cancel, { once: true });
+  try {
+    return await queryClient.fetchQuery({
+      queryKey,
+      queryFn: ({ signal: querySignal }) =>
+        api.getWorkItem(keyOrId, querySignal),
+      staleTime: 0,
+    });
+  } finally {
+    signal?.removeEventListener("abort", cancel);
+  }
+}
+
+export async function loadProjectWorkItems(
+  projectId: string,
+  filters: WorkItemFilters = {},
+): Promise<WorkItem[]> {
+  return queryClient.fetchQuery({
+    queryKey: queryKeys.workItems.byProject(projectId, filters),
+    queryFn: () => api.listProjectWorkItems(projectId, filters),
+    staleTime: 0,
+  });
+}
+
+export function getProjectWorkItemsSnapshot(
+  projectId: string,
+  filters: WorkItemFilters = {},
+): WorkItem[] {
+  return (
+    queryClient.getQueryData<WorkItem[]>(
+      queryKeys.workItems.byProject(projectId, filters),
+    ) ?? EMPTY_WORK_ITEMS
+  );
+}
+
+export function setProjectWorkItems(
+  projectId: string,
+  filters: WorkItemFilters,
+  items: WorkItem[],
+): void {
+  queryClient.setQueryData(
+    queryKeys.workItems.byProject(projectId, filters),
+    items,
+  );
+}
+
+export async function loadChildWorkItems(
+  projectId: string,
+  parentId: string,
+): Promise<WorkItem[]> {
+  return queryClient.fetchQuery({
+    queryKey: queryKeys.workItems.children(parentId),
+    queryFn: () => api.listProjectWorkItems(projectId, { parent: parentId }),
+    staleTime: 0,
+  });
+}
+
+export function getWorkItemDetailSnapshot(
+  keyOrId: string,
+): WorkItemDetail | null {
+  return (
+    queryClient.getQueryData<WorkItemDetail>(
+      queryKeys.workItems.detail(keyOrId),
+    ) ?? null
+  );
+}
+
+export function setWorkItemDetail(
+  keyOrId: string,
+  detail: WorkItemDetail,
+): void {
+  queryClient.setQueryData(queryKeys.workItems.detail(keyOrId), detail);
+  if (detail.task.id !== keyOrId) {
+    queryClient.setQueryData(
+      queryKeys.workItems.detail(detail.task.id),
+      detail,
+    );
+  }
+  if (detail.task.key !== keyOrId) {
+    queryClient.setQueryData(
+      queryKeys.workItems.detail(detail.task.key),
+      detail,
+    );
+  }
+}
+
+export function setChildWorkItems(parentId: string, children: WorkItem[]): void {
+  queryClient.setQueryData(queryKeys.workItems.children(parentId), children);
+}
+
+const EMPTY_WORK_ITEMS: WorkItem[] = [];
+
+export function getChildWorkItemsSnapshot(parentId: string): WorkItem[] {
+  return (
+    queryClient.getQueryData<WorkItem[]>(
+      queryKeys.workItems.children(parentId),
+    ) ?? EMPTY_WORK_ITEMS
+  );
+}
+
+export interface WorkItemIndex {
+  workItemsById: Record<string, WorkItem>;
+  workItemIdByKey: Record<string, string>;
+  childWorkItemIds: Record<string, string[]>;
+}
+
+const EMPTY_INDEX: WorkItemIndex = {
+  workItemsById: {},
+  workItemIdByKey: {},
+  childWorkItemIds: {},
+};
+
+export function getWorkItemIndexSnapshot(): WorkItemIndex {
+  return (
+    queryClient.getQueryData<WorkItemIndex>(queryKeys.workItems.index) ??
+    EMPTY_INDEX
+  );
+}
+
+export function setWorkItemIndex(
+  workItemsById: Record<string, WorkItem>,
+): WorkItemIndex {
+  const workItemIdByKey: Record<string, string> = {};
+  const childWorkItemIds: Record<string, string[]> = {};
+  for (const item of Object.values(workItemsById)) {
+    workItemIdByKey[item.key] = item.id;
+    if (item.parent_id) {
+      (childWorkItemIds[item.parent_id] ??= []).push(item.id);
+    }
+  }
+  const index = { workItemsById, workItemIdByKey, childWorkItemIds };
+  queryClient.setQueryData(queryKeys.workItems.index, index);
+  return index;
+}

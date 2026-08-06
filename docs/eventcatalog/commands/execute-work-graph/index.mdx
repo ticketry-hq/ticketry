@@ -1,0 +1,18 @@
+---
+id: execute-work-graph
+name: Execute Work Graph
+version: 1.0.0
+summary: Launch the ready set of a root work item's dependency subtree.
+owners:
+  - ticketry
+operation:
+  method: POST
+  path: /api/work-items/{work_item_id}/execute-graph
+  statusCodes:
+    - "201"
+    - "404"
+    - "422"
+---
+
+The command is idempotent: reinvocation rebuilds the graph from durable facts
+and launches only genuinely new work.

@@ -1,0 +1,49 @@
+---
+id: launch-binding
+name: Launch Binding
+version: 1.0.0
+summary: Explicit agent-launch policy for one work-item-type and current-state pair.
+owners:
+  - ticketry
+identifier: typeStatePair
+properties:
+  - name: typeStatePair
+    type: string
+    required: true
+    description: Unique composite of workItemTypeId and workflowStateId.
+  - name: workItemTypeId
+    type: UUID
+    required: true
+    references: work-item-type
+    referencesIdentifier: id
+    relationType: configures
+  - name: workflowStateId
+    type: UUID
+    required: true
+    references: workflow-state
+    referencesIdentifier: id
+    relationType: activeIn
+  - name: prompt
+    type: string
+  - name: requiredSkills
+    type: array
+    items:
+      type: string
+  - name: agent
+    type: string
+  - name: model
+    type: string
+  - name: reasoning
+    type: string
+  - name: autoStart
+    type: boolean
+    required: true
+  - name: subtreeRunEnabled
+    type: boolean
+    required: true
+---
+
+The existence of a row is not the same as configured launch policy: a row may
+exist only to carry the subtree-run flag.
+
+<EntityPropertiesTable />

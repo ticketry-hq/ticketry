@@ -1,0 +1,36 @@
+---
+id: project
+name: Project
+version: 1.0.0
+summary: Owns work items, workflow states, types, sequence allocation, and the state-feed cursor.
+owners:
+  - ticketry
+aggregateRoot: true
+identifier: id
+properties:
+  - name: id
+    type: UUID
+    required: true
+  - name: workspaceId
+    type: UUID
+    required: true
+    references: workspace
+    referencesIdentifier: id
+    relationType: belongsTo
+  - name: slug
+    type: string
+    required: true
+  - name: name
+    type: string
+    required: true
+  - name: sequenceCounter
+    type: integer
+    required: true
+    description: Shared type-agnostic counter used to allocate work-item keys.
+  - name: stateRevision
+    type: integer
+    required: true
+    description: Monotonic cursor for committed work-item workflow-state transitions.
+---
+
+<EntityPropertiesTable />

@@ -1,0 +1,352 @@
+---
+const mappings = [
+  {
+    concept: 'Planning hierarchy',
+    backend: 'Workspace → Project → Issue (parent tree)',
+    contract: 'WorkspaceOut · ProjectOut · ModuleOut · WorkItemOut',
+    frontend: 'StudioStore projects/modules · BacklogStore items · TasksStore tasks/subtasks',
+    identity: 'workspace.slug · project.id · work_item.id',
+    coherence: 'HTTP snapshots; project switches replace the active projection',
+  },
+  {
+    concept: 'Workflow configuration',
+    backend: 'State · IssueType · IssueTypeTransition · LaunchBinding',
+    contract: 'StateOut · IssueTypeOut · ScopedWorkflowSettings',
+    frontend: 'SettingsStore · WorkflowEditorStore · BacklogStore.states · TasksStore.states',
+    identity: 'project_id · issue_type_id · state_id · workflow_revision',
+    coherence: 'Catalog synchronization writes through to every active state projection',
+  },
+  {
+    concept: 'Work-item detail',
+    backend: 'Issue · Attachment · blocker edges',
+    contract: 'WorkItemDetailOut',
+    frontend: 'IssueStore.open/children plus a separate BacklogStore copy',
+    identity: 'work_item.id or work_item.key',
+    coherence: 'Targeted refetch; non-state edits are not broadcast by the status feed',
+    risk: true,
+  },
+  {
+    concept: 'Workflow state',
+    backend: 'Issue.state + Issue.state_revision · Project.state_revision',
+    contract: 'WorkItemStateFrame · WorkflowStateFrame',
+    frontend: 'BacklogStore · TasksStore · SettingsStore · WorkflowEditorStore',
+    identity: 'project revision cursor + work_item state_revision',
+    coherence: 'Status feed overlays newer state deltas onto in-flight HTTP snapshots',
+  },
+  {
+    concept: 'Dependency execution',
+    backend: 'Issue.blocked_by · GraphRun · EngineRun',
+    contract: 'Graph execution and status payloads',
+    frontend: 'AgentStatusStore plus task/module views',
+    identity: 'root_id · task_id · agent_run_id',
+    coherence: 'Graph edges are derived from blockers; node status is persisted in EngineRun',
+  },
+  {
+    concept: 'Agent activity',
+    backend: 'AgentRun · AutomationAttempt',
+    contract: 'RunRecord · AutomationAttemptRecord · lifecycle frames',
+    frontend: 'AgentStatusStore.runs/automationAttempts and reverse indexes by task',
+    identity: 'agent_run_id · root_attempt_id · work_item_id',
+    coherence: 'Timestamp ordering; terminal lifecycle wins equal-time conflicts',
+  },
+  {
+    concept: 'Terminal sessions',
+    backend: 'AgentTerminalSession · AgentRunViewerLease · tmux',
+    contract: 'PersistedTerminalSession · terminal WebSocket frames',
+    frontend: 'TerminalStore · WorkspaceTabsStore · TerminalForegroundStore',
+    identity: 'agent_run_id ↔ session_id; task_id buckets',
+    coherence: 'Backend/tmux owns durability; the frontend owns tabs, attachment, and foreground',
+  },
+  {
+    concept: 'Documents & ticket workspace',
+    backend: 'DesignDocument + filesystem document',
+    contract: 'DesignDoc and document frames',
+    frontend: 'DrawerWorkspaceStore workspaces/docs/history',
+    identity: 'document.id · root_dir/rel_path · issue key',
+    coherence: 'Document registry is durable; open tabs and overlays are projections',
+  },
+  {
+    concept: 'Worktrees',
+    backend: 'Worktree index + live Git state',
+    contract: 'Worktree API payloads',
+    frontend: 'Worktree feature queries and ticket launch context',
+    identity: 'task_id (one indexed worktree per top-level task)',
+    coherence: 'Database stores attachment metadata; clean/ahead/behind are computed from Git',
+  },
+  {
+    concept: 'Application settings',
+    backend: 'AppSetting(scope, key, value)',
+    contract: 'Config and settings payloads',
+    frontend: 'AgentConfigStore · StudioConfigStore · UIStore local preferences',
+    identity: 'scope + key',
+    coherence: 'Mixed ownership: host configuration is durable; some view preferences use localStorage',
+  },
+];
+
+const backendGroups = [
+  {
+    name: 'Work Management',
+    tone: 'indigo',
+    source: 'backend/worktracker/models/',
+    models: [
+      ['Workspace', 'id · slug · name · onboarding_required · timestamps', 'owns Projects'],
+      ['Project', 'id · workspace · name · slug · description · seq_counter · state_revision · timestamps', 'belongs to Workspace; owns Issues, States, IssueTypes'],
+      ['Issue', 'id · project · type · issue_type · parent · state · state_revision · sequence_id · rank · description · archived · timestamps', 'self tree; M:N blockers'],
+      ['State', 'id · project · name · group · color · sort_order · protected · timestamps', 'project workflow node; referenced by Issues and workflows'],
+      ['IssueType', 'id · project · name · level · color · sort_order · start_state · workflow_revision · timestamps', 'owns transitions and launch bindings'],
+      ['IssueTypeTransition', 'issue_type · from_state · to_state · agent_allowed', 'directed workflow edge'],
+      ['LaunchBinding', 'issue_type · state · prompt · skills · agent · model · reasoning · auto_start · subtree_run_enabled · timestamps', 'unique policy for type × current state'],
+      ['Attachment', 'id · issue · file · filename · mime_type · size · created_at', 'belongs to Issue'],
+    ],
+  },
+  {
+    name: 'Agent Execution',
+    tone: 'violet',
+    source: 'backend/apps/execution/models.py · backend/apps/runs/models.py',
+    models: [
+      ['GraphRun', 'root · project · module · agent · timestamps', 'one durable graph header per root Issue'],
+      ['EngineRun', 'task · project · module · agent · phase · status · agent_run_id · error · timestamps', 'one durable execution row per task Issue'],
+      ['AgentRun', 'id · workspace_slug · project/module/task ids · ticket_seq · agent · status · lifecycle · timing · cwd · provider session · scope', 'launched coding-agent run'],
+      ['AutomationAttempt', 'id · transition_id · issue · from/to states · workflow_revision · status · agent · agent_run_id · retry links · error · timestamps', 'correlates auto-launch with a committed transition'],
+    ],
+  },
+  {
+    name: 'Workspace Runtime',
+    tone: 'cyan',
+    source: 'backend/apps/{terminals,documents,worktrees}/models.py',
+    models: [
+      ['AgentTerminalSession', 'agent_run · tmux_session_name · task/module/project ids · agent · scope · doc_rel_path · created/terminated', '1:1 durable terminal mirror for AgentRun'],
+      ['AgentRunViewerLease', 'agent_run · viewer_id · transport · acquired_at · expires_at', '1:1 current viewer control-plane lease'],
+      ['DesignDocument', 'id · module_id · task_id · scope · root_dir · rel_path · discovered_by_run_id · timestamps', 'unique filesystem document registration'],
+      ['Worktree', 'id · task_id · workspace/project/module ids · ticket_seq · repo/path/branch/base · status · ephemeral · timestamps', 'durable index; Git owns live repository state'],
+    ],
+  },
+  {
+    name: 'Application Configuration',
+    tone: 'amber',
+    source: 'backend/apps/settings_store/models.py',
+    models: [
+      ['AppSetting', 'scope + key · value · updated_at', 'composite-key host setting'],
+    ],
+  },
+];
+
+const frontendGroups = [
+  {
+    name: 'Backend-data projections',
+    tone: 'emerald',
+    stores: [
+      ['StudioStore', 'projects · selectedProjectId · modules · activeView', 'ProjectOut · ModuleOut', 'HTTP snapshot'],
+      ['BacklogStore', 'projectId · items · states · filters · seenStateRevisions · pendingStateDeltas', 'WorkItem[] · State[]', 'HTTP + status-feed overlay'],
+      ['IssueStore', 'open detail · children · saving fields · load/error state', 'WorkItemDetail · WorkItem[]', 'targeted HTTP projection'],
+      ['TasksStore', 'projects · modules · tasks · states · subtasks · details · revision guards', 'summary wire types', 'parallel Studio task projection'],
+      ['SettingsStore', 'issueTypes · states · subtreeRunCapabilities', 'workflow configuration', 'HTTP snapshot + catalog sync'],
+      ['WorkflowEditorStore', 'issueTypes · states · counts · selected type · workflows · staged states · capabilities', 'ScopedWorkflowSettings', 'editable projection with revision guard'],
+      ['AgentStatusStore', 'runs/byTask · automationAttempts/byTask · workItemCursors', 'run and attempt records', 'status-feed projection'],
+    ],
+  },
+  {
+    name: 'Runtime projections',
+    tone: 'sky',
+    stores: [
+      ['TerminalStore', 'sessions · sessionByRun · persistedSessions · resumableSessions', 'terminal session and run payloads', 'WebSocket + HTTP; tmux remains durable'],
+      ['WorkspaceTabsStore', 'tabs by task · active tab · doc chat tabs · focus request', 'SessionId indexes', 'frontend-only view projection'],
+      ['TerminalForegroundStore', 'foreground claims · registered host targets', 'session/run identity', 'frontend-only ownership arbiter'],
+      ['DrawerWorkspaceStore', 'view model by issue · tabs/docs/history/overlays by ticket bucket', 'WorkItem · DesignDoc · Profile', 'composed projection'],
+      ['AgentConfigStore', 'profiles · recent profile index', 'host config payload', 'backend configuration mirror'],
+      ['StudioConfigStore', 'profiles · recent profile index · feature flags', 'host config payload', 'legacy/parallel configuration mirror'],
+    ],
+  },
+  {
+    name: 'Interaction-only state',
+    tone: 'slate',
+    stores: [
+      ['UIStore', 'focus · navigation · sidebar/layout · modal/bindings stacks · expansion/collapse · cursors/search', 'no domain record', 'memory + selected localStorage preferences'],
+      ['ModalStore', 'modal stack · active key hints', 'no domain record', 'in memory'],
+      ['DialogStore', 'active confirm/reassign dialog', 'no domain record', 'in memory'],
+      ['ToastStore', 'ephemeral notifications', 'no domain record', 'in memory'],
+      ['SelectionStore', 'surface · selected ids · anchor', 'WorkItem ids only', 'in memory'],
+      ['PlanningFilterStore', 'project · epic ids · state ids', 'WorkItem/State ids only', 'in memory'],
+      ['OnboardingStore', 'onboarding required', 'Workspace flag', 'backend-backed projection'],
+      ['OnboardingTourStore', 'tour step · selected project/module/story · captured layout', 'ids only', 'in memory'],
+    ],
+  },
+];
+
+const modelCount = backendGroups.reduce((sum, group) => sum + group.models.length, 0);
+const storeCount = frontendGroups.reduce((sum, group) => sum + group.stores.length, 0);
+const anchor = (kind, name) =>
+  `${kind}-${name
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .toLowerCase()}`;
+---
+
+<section id="data-model" class="not-prose scroll-mt-20">
+  <div class="rounded-2xl border border-[rgb(var(--ec-page-border))] overflow-hidden bg-[rgb(var(--ec-card-bg,var(--ec-page-bg)))]">
+    <div class="px-6 py-7 md:px-8 border-b border-[rgb(var(--ec-page-border))] bg-gradient-to-br from-indigo-500/10 via-transparent to-cyan-500/10">
+      <div class="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[rgb(var(--ec-accent))]">
+        <span>Implementation data model</span>
+        <span class="rounded-full border border-[rgb(var(--ec-page-border))] px-2 py-1 normal-case tracking-normal text-[rgb(var(--ec-page-text-muted))]">{modelCount} backend models</span>
+        <span class="rounded-full border border-[rgb(var(--ec-page-border))] px-2 py-1 normal-case tracking-normal text-[rgb(var(--ec-page-text-muted))]">{storeCount} frontend stores</span>
+      </div>
+      <h2 class="mt-3 text-3xl font-bold text-[rgb(var(--ec-page-text))]">
+        One concept, three model layers
+      </h2>
+      <p class="mt-3 max-w-4xl text-[rgb(var(--ec-page-text-muted))] font-light">
+        The domain model names what Ticketry means. Django records are the durable implementation
+        of that meaning. Zustand stores are task-specific projections, so the same backend record
+        may deliberately appear in several frontend shapes.
+      </p>
+
+      <div class="mt-6 grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-stretch">
+        <a href="#ubiquitous-language" class="rounded-xl border border-violet-500/30 bg-violet-500/10 p-4 hover:border-violet-500/60 transition-colors">
+          <div class="text-xs font-semibold uppercase tracking-wide text-violet-500">Meaning</div>
+          <div class="mt-1 font-semibold text-[rgb(var(--ec-page-text))]">Domain ontology</div>
+          <div class="mt-1 text-sm text-[rgb(var(--ec-page-text-muted))]">Work Item, Workflow State, Agent Run, Terminal Session…</div>
+        </a>
+        <div class="hidden md:flex items-center text-[rgb(var(--ec-page-text-muted))]">→</div>
+        <div class="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-indigo-500">Authority</div>
+          <div class="mt-1 font-semibold text-[rgb(var(--ec-page-text))]">Backend persistence</div>
+          <div class="mt-1 text-sm text-[rgb(var(--ec-page-text-muted))]">Django models, SQLite rows, tmux, Git, and files.</div>
+        </div>
+        <div class="hidden md:flex items-center text-[rgb(var(--ec-page-text-muted))]">→</div>
+        <div class="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-cyan-500">Experience</div>
+          <div class="mt-1 font-semibold text-[rgb(var(--ec-page-text))]">Frontend projections</div>
+          <div class="mt-1 text-sm text-[rgb(var(--ec-page-text-muted))]">Wire types normalized into stores for each interaction surface.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 py-7 md:px-8">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 class="text-xl font-semibold text-[rgb(var(--ec-page-text))]">The join map</h3>
+          <p class="mt-1 text-sm text-[rgb(var(--ec-page-text-muted))]">
+            Read each row left-to-right: durable record → contract → frontend copy.
+          </p>
+        </div>
+        <a href="#ubiquitous-language" class="text-sm font-medium text-[rgb(var(--ec-accent))] hover:underline">
+          Read the language behind the model →
+        </a>
+      </div>
+
+      <div class="mt-5 overflow-x-auto rounded-xl border border-[rgb(var(--ec-page-border))]">
+        <table class="w-full min-w-[1080px] border-collapse text-left text-sm">
+          <thead class="bg-[rgb(var(--ec-page-bg))] text-xs uppercase tracking-wide text-[rgb(var(--ec-page-text-muted))]">
+            <tr>
+              <th class="px-4 py-3 font-semibold">Domain concept</th>
+              <th class="px-4 py-3 font-semibold">Backend model</th>
+              <th class="px-4 py-3 font-semibold">API / event seam</th>
+              <th class="px-4 py-3 font-semibold">Frontend model</th>
+              <th class="px-4 py-3 font-semibold">Identity & coherence</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[rgb(var(--ec-page-border))]">
+            {mappings.map((row) => (
+              <tr class:list={['align-top', row.risk && 'bg-amber-500/5']}>
+                <td class="px-4 py-4">
+                  <div class="font-semibold text-[rgb(var(--ec-page-text))]">{row.concept}</div>
+                  {row.risk && <span class="inline-flex mt-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">known drift risk</span>}
+                </td>
+                <td class="px-4 py-4 text-[rgb(var(--ec-page-text))]">{row.backend}</td>
+                <td class="px-4 py-4 text-[rgb(var(--ec-page-text-muted))]">{row.contract}</td>
+                <td class="px-4 py-4 text-[rgb(var(--ec-page-text))]">{row.frontend}</td>
+                <td class="px-4 py-4">
+                  <div class="font-mono text-xs text-[rgb(var(--ec-page-text))]">{row.identity}</div>
+                  <div class="mt-2 text-[rgb(var(--ec-page-text-muted))]">{row.coherence}</div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 border-t border-[rgb(var(--ec-page-border))]">
+      <div class="px-6 py-7 md:px-8 xl:border-r border-[rgb(var(--ec-page-border))]">
+        <div class="flex items-baseline justify-between gap-3">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-500">Backend</div>
+            <h3 class="mt-1 text-2xl font-semibold text-[rgb(var(--ec-page-text))]">Durable model inventory</h3>
+          </div>
+          <span class="text-sm text-[rgb(var(--ec-page-text-muted))]">{modelCount} models</span>
+        </div>
+        <p class="mt-2 text-sm text-[rgb(var(--ec-page-text-muted))]">
+          Includes every hand-written Django model. Django’s implicit many-to-many join tables are shown as relationships, not separate domain records.
+        </p>
+
+        <div class="mt-5 space-y-3">
+          {backendGroups.map((group, groupIndex) => (
+            <details open={groupIndex === 0} class="group rounded-xl border border-[rgb(var(--ec-page-border))] bg-[rgb(var(--ec-page-bg))]">
+              <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <div class="font-semibold text-[rgb(var(--ec-page-text))]">{group.name}</div>
+                  <code class="text-xs text-[rgb(var(--ec-page-text-muted))]">{group.source}</code>
+                </div>
+                <span class="text-xs text-[rgb(var(--ec-page-text-muted))] group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div class="border-t border-[rgb(var(--ec-page-border))] divide-y divide-[rgb(var(--ec-page-border))]">
+                {group.models.map(([name, fields, relation]) => (
+                  <div id={anchor('model', name)} class="px-4 py-3 scroll-mt-24">
+                    <div class="font-mono text-sm font-semibold text-[rgb(var(--ec-page-text))]">{name}</div>
+                    <div class="mt-1 font-mono text-xs leading-5 text-[rgb(var(--ec-page-text-muted))]">{fields}</div>
+                    <div class="mt-1 text-xs text-[rgb(var(--ec-page-text-muted))]">↳ {relation}</div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+
+      <div class="px-6 py-7 md:px-8 border-t xl:border-t-0 border-[rgb(var(--ec-page-border))]">
+        <div class="flex items-baseline justify-between gap-3">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-500">Frontend</div>
+            <h3 class="mt-1 text-2xl font-semibold text-[rgb(var(--ec-page-text))]">Projection inventory</h3>
+          </div>
+          <span class="text-sm text-[rgb(var(--ec-page-text-muted))]">{storeCount} stores</span>
+        </div>
+        <p class="mt-2 text-sm text-[rgb(var(--ec-page-text-muted))]">
+          Includes every Zustand store. “Frontend-only” state is part of the interaction model, but it is not a second system of record.
+        </p>
+
+        <div class="mt-5 space-y-3">
+          {frontendGroups.map((group, groupIndex) => (
+            <details open={groupIndex === 0} class="group rounded-xl border border-[rgb(var(--ec-page-border))] bg-[rgb(var(--ec-page-bg))]">
+              <summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3">
+                <div class="font-semibold text-[rgb(var(--ec-page-text))]">{group.name}</div>
+                <span class="text-xs text-[rgb(var(--ec-page-text-muted))] group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div class="border-t border-[rgb(var(--ec-page-border))] divide-y divide-[rgb(var(--ec-page-border))]">
+                {group.stores.map(([name, state, shape, authority]) => (
+                  <div id={anchor('store', name)} class="px-4 py-3 scroll-mt-24">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <div class="font-mono text-sm font-semibold text-[rgb(var(--ec-page-text))]">{name}</div>
+                      <span class="rounded-full border border-[rgb(var(--ec-page-border))] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[rgb(var(--ec-page-text-muted))]">{authority}</span>
+                    </div>
+                    <div class="mt-1 font-mono text-xs leading-5 text-[rgb(var(--ec-page-text-muted))]">{state}</div>
+                    <div class="mt-1 text-xs text-[rgb(var(--ec-page-text-muted))]">↳ shape: {shape}</div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 py-5 md:px-8 border-t border-[rgb(var(--ec-page-border))] bg-amber-500/5">
+      <div class="font-semibold text-[rgb(var(--ec-page-text))]">What this makes visible</div>
+      <p class="mt-1 text-sm text-[rgb(var(--ec-page-text-muted))]">
+        The backend has one authoritative Work Item, but the frontend currently has at least three substantial projections of it:
+        BacklogStore, IssueStore, and TasksStore. Workflow configuration is also repeated across SettingsStore and
+        WorkflowEditorStore. Those repetitions are where synchronization rules—and drift—matter most.
+      </p>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,29 @@
+---
+id: document
+name: Design Document
+version: 1.0.0
+summary: Registered design artifact associated with a task, plan, instant run, or document chat.
+owners:
+  - ticketry
+identifier: id
+properties:
+  - name: id
+    type: string
+    required: true
+  - name: workItemId
+    type: UUID
+    description: Cross-domain reference to the Work Item this document describes, when task-scoped.
+  - name: relativePath
+    type: string
+    required: true
+  - name: mediaType
+    type: string
+    required: true
+  - name: digest
+    type: string
+    description: Optimistic concurrency guard for document writes.
+---
+
+Documents are filesystem artifacts registered behind a traversal-safe boundary.
+
+<EntityPropertiesTable />

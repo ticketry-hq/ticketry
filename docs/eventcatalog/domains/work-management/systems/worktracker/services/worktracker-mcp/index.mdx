@@ -1,0 +1,22 @@
+---
+id: worktracker-mcp
+name: WorkTracker MCP Service
+version: 1.0.0
+summary: Agent-facing tool surface over the WorkTracker domain.
+owners:
+  - ticketry
+entities:
+  - id: project
+  - id: work-item
+  - id: workflow-state
+readsFrom:
+  - id: ticketry-state-database
+writesTo:
+  - id: ticketry-state-database
+---
+
+The MCP surface lets coding agents inspect and mutate work without coupling them
+to Studio UI structure. It is implemented under `surfaces/worktracker-agent/mcp`
+and combines generated WorkTracker tools with service-level lifecycle tools.
+
+<NodeGraph />

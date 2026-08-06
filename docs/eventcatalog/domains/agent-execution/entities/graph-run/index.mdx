@@ -1,0 +1,32 @@
+---
+id: graph-run
+name: Graph Run
+version: 1.0.0
+summary: Durable execution header for a root work item and its derived dependency graph.
+owners:
+  - ticketry
+aggregateRoot: true
+identifier: rootWorkItemId
+properties:
+  - name: rootWorkItemId
+    type: UUID
+    required: true
+    description: Cross-domain reference to the root Work Item being executed.
+  - name: projectId
+    type: UUID
+    required: true
+    description: Cross-domain reference to the owning Work Management project.
+  - name: moduleId
+    type: UUID
+    description: Cross-domain reference to the scoping module Work Item.
+  - name: agentOverride
+    type: string
+  - name: updatedAt
+    type: datetime
+    required: true
+---
+
+Graph edges are not persisted here; they are derived from the Work Item blocker
+graph when read.
+
+<EntityPropertiesTable />

@@ -1,0 +1,25 @@
+---
+id: frontend-state-store
+name: Frontend State Store
+version: 1.0.0
+summary: In-memory Zustand projections used to render and interact with backend state.
+container_type: cache
+technology: Zustand
+authoritative: false
+access_mode: readWrite
+classification: internal
+owners:
+  - ticketry
+services:
+  - frontend-state-projections
+badges:
+  - content: Non-authoritative
+    backgroundColor: amber
+    textColor: amber
+---
+
+This is a family of view projections rather than one normalized entity store.
+Backlog/task collections, issue details, workflow states, and run activity have
+different refresh paths.
+
+<NodeGraph />

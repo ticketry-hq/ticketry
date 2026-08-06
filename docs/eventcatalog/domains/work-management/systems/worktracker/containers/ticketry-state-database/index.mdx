@@ -1,0 +1,28 @@
+---
+id: ticketry-state-database
+name: Ticketry State Database
+version: 1.0.0
+summary: Local SQLite database containing planning, execution, run, terminal, and worktree records.
+container_type: database
+technology: SQLite
+authoritative: true
+access_mode: readWrite
+classification: internal
+owners:
+  - ticketry
+services:
+  - worktracker-api
+  - execution-engine
+  - run-status-service
+  - terminal-service
+badges:
+  - content: System of record
+    backgroundColor: green
+    textColor: green
+---
+
+One local database supports several bounded contexts. Table ownership still
+belongs to the corresponding service; sharing the physical database does not
+erase those conceptual boundaries.
+
+<NodeGraph />

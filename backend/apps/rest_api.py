@@ -109,9 +109,12 @@ class AutomationAttemptSerializer(serializers.Serializer):
 
 class AgentRunRecordSerializer(serializers.Serializer):
     agent_run_id = serializers.CharField()
+    project_id = serializers.CharField()
     task_id = serializers.CharField(allow_null=True)
     module_id = serializers.CharField()
+    agent = serializers.CharField()
     scope = serializers.ChoiceField(choices=("task", "plan", "instant", "docchat"))
+    started_at = serializers.CharField()
     state = serializers.CharField()
     updated_at = serializers.CharField()
 
@@ -195,14 +198,8 @@ class CreateTerminalSerializer(serializers.Serializer):
 class TerminalRunSerializer(serializers.Serializer):
     agent_run_id = serializers.CharField()
     tmux_session_name = serializers.CharField(required=False)
-    task_id = serializers.CharField(required=False, allow_null=True)
-    module_id = serializers.CharField(required=False)
-    project_id = serializers.CharField(required=False)
-    agent = serializers.CharField(required=False)
-    scope = serializers.CharField(required=False)
     doc_rel_path = serializers.CharField(required=False, allow_null=True)
     created_at = serializers.CharField(required=False)
-    terminated_at = serializers.CharField(required=False, allow_null=True)
 
 
 class ResumableTerminalSerializer(serializers.Serializer):
@@ -210,10 +207,8 @@ class ResumableTerminalSerializer(serializers.Serializer):
     agent = serializers.CharField()
     status = serializers.CharField()
     started_at = serializers.CharField()
-    ended_at = serializers.CharField()
     provider_session_id = serializers.CharField()
     resumed_from = serializers.CharField(allow_null=True)
-    scope = serializers.CharField()
 
 
 class SaveDocumentSerializer(serializers.Serializer):

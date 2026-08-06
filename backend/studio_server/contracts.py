@@ -136,9 +136,12 @@ class RunRecord(BaseModel):
     """Transport-neutral latest lifecycle state for one durable agent run."""
 
     agent_run_id: str
+    project_id: str
     task_id: Optional[str]
     module_id: str
+    agent: str
     scope: Literal["task", "plan", "instant", "docchat"]
+    started_at: str
     state: LifecycleState
     updated_at: str
 

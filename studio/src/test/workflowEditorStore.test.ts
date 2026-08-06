@@ -3,13 +3,14 @@ import { useIssueStore } from "../app/shell/ticket-workspace/selected-ticket";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useClientStore } from "../state/clientStore";
-import { synchronizeActiveStateCatalogs } from "../features/workflows/stateCatalogSync";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import { useSettingsStore } from "../features/settings/store";
 import { getCapabilitiesSnapshot, seedCapabilities } from "../features/settings/queries";
 import { ApiError } from "../shared/api/client";
 import type { State, WorkItem } from "../shared/api/types";
 import type { TaskSummary } from "../features/studio/lib/types";
+import { getStatesSnapshot, upsertState } from "../shared/query/stateCatalog";
+import { advanceStateCatalogRevision } from "../shared/stateCatalogRevision";
 
 const workflowApi = vi.hoisted(() => ({
   addIssueTypeWorkflowTransition: vi.fn(),
@@ -339,7 +340,7 @@ describe("workflowEditorStore scoped apply", () => {
     expect(useBacklogStore.getState().states).toEqual([otherState]);
   });
 
-  it("synchronizes a renamed state across open surfaces without losing identity or collapse", async () => {
+  it("publishes a renamed state once without losing collapse identity", async () => {
     const todo: State = {
       id: "todo",
       name: "Todo",
@@ -402,21 +403,8 @@ describe("workflowEditorStore scoped apply", () => {
       name: "Quality review",
     });
     expect(useWorkflowEditorStore.getState().states[1]).toEqual(renamed);
-    expect(useTasksStore.getState()).toMatchObject({
-      selectedTaskId: story.id,
-      states: [todo, renamed],
-      tasks: [{ id: story.id, state: renamed }],
-      subtasks: { [story.id]: [{ id: child.id, state: renamed }] },
-      details: { task: { id: story.id, state: renamed } },
-    });
-    expect(useBacklogStore.getState()).toMatchObject({
-      states: [todo, renamed],
-      items: [{ id: backlogStory.id, state: renamed }],
-    });
-    expect(useIssueStore.getState()).toMatchObject({
-      open: { task: { id: openStory.id, state: renamed } },
-      children: [{ id: openChild.id, state: renamed }],
-    });
+    expect(getStatesSnapshot("project-1")).toEqual([todo, renamed]);
+    expect(useTasksStore.getState().selectedTaskId).toBe(story.id);
     expect(useClientStore.getState().collapsedStateIds).toEqual(
       new Set([review.id, todo.id]),
     );
@@ -441,11 +429,9 @@ describe("workflowEditorStore scoped apply", () => {
       collapsedStateIds: new Set([review.id]),
     });
 
-    synchronizeActiveStateCatalogs(
-      "project-1",
-      { ...review, name: "Quality review" },
-      [],
-    );
+    const renamed = { ...review, name: "Quality review" };
+    advanceStateCatalogRevision("project-1", renamed);
+    upsertState("project-1", renamed);
 
     expect(useClientStore.getState().collapsedStateIds).toEqual(
       new Set([review.id]),

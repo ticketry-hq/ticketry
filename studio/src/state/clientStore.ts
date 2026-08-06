@@ -6,6 +6,14 @@ import {
   type SidebarPaneComposition,
 } from "../features/studio/stores/configStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
+import type {
+  DesignDoc,
+  DocTabState,
+  RunChip,
+  TabKind,
+  SessionId,
+} from "../features/agents/types";
+import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
 import {
   finishCollapsedStateMigration,
   isPanelLayout,
@@ -85,6 +93,8 @@ export interface Toast {
 }
 
 export interface ClientState {
+  workspaces: Record<string, TicketWorkspaceViewState>;
+  activeByTask: Record<string, SessionId>;
   focusedPane: FocusedPane;
   editViewZone: EditViewZone;
   editViewBodyEngaged: boolean;
@@ -113,6 +123,20 @@ export interface ClientState {
 
   /** Highest status-feed revision observed for each project. */
   workItemCursorsByProject: Record<string, number>;
+
+  resetWorkspaces: () => void;
+  ensureWorkspace: (bucket: string) => void;
+  setActive: (bucket: string, active: TabKind) => void;
+  setActiveDoc: (bucket: string, docId: string) => void;
+  upsertDoc: (bucket: string, doc: DesignDoc, event: "created" | "updated") => void;
+  hydrateDocs: (bucket: string, docs: DesignDoc[]) => void;
+  closeDoc: (bucket: string, docId: string) => void;
+  reopenDoc: (bucket: string, docId: string) => void;
+  recordClosedRun: (bucket: string, chip: RunChip) => void;
+  tabOpened: (bucket: string, sessionId: SessionId, select?: boolean) => void;
+  tabRekeyed: (from: SessionId, to: SessionId) => void;
+  tabSelected: (bucket: string, sessionId: SessionId) => void;
+  tabFocused: (bucket: string, sessionId: SessionId) => void;
 
   focusLeft: () => void;
   focusRight: () => void;
@@ -159,6 +183,34 @@ export interface ClientState {
   pushToast: (kind: ToastKind, message: string) => number;
   dismissToast: (id: number) => void;
   advanceWorkItemCursor: (projectId: string, revision: number) => void;
+}
+
+export interface TicketWorkspaceViewState {
+  active: TabKind;
+  activeDocId: string | null;
+  docs: DocTabState[];
+  history: RunChip[];
+}
+
+export const DEFAULT_WORKSPACE: TicketWorkspaceViewState = {
+  active: "details",
+  activeDocId: null,
+  docs: [],
+  history: [],
+};
+
+function relabelWorkspaceDocs(docs: DocTabState[]): DocTabState[] {
+  const stems = new Map<string, number>();
+  for (const doc of docs) {
+    const stem = doc.relPath.split("/").pop()?.replace(/\.html?$/i, "") ?? doc.relPath;
+    stems.set(stem, (stems.get(stem) ?? 0) + 1);
+  }
+  return docs.map((doc) => {
+    const parts = doc.relPath.split("/");
+    const stem = parts.pop()?.replace(/\.html?$/i, "") ?? doc.relPath;
+    const duplicate = (stems.get(stem) ?? 0) > 1 && parts.length > 0;
+    return { ...doc, label: duplicate ? `${parts[parts.length - 1]}/${stem}` : stem };
+  });
 }
 
 export const DEFAULT_BINDINGS: KeyBinding[] = [
@@ -250,6 +302,8 @@ function nextExpandedMap(
 }
 
 export const useClientStore = create<ClientState>((set, get) => ({
+  workspaces: {},
+  activeByTask: {},
   focusedPane: "tasks",
   editViewZone: "stories",
   editViewBodyEngaged: false,
@@ -267,6 +321,129 @@ export const useClientStore = create<ClientState>((set, get) => ({
   dialogs: [],
   toasts: [],
   workItemCursorsByProject: {},
+
+  resetWorkspaces() {
+    set({ workspaces: {} });
+  },
+
+  ensureWorkspace(bucket) {
+    if (get().workspaces[bucket]) return;
+    set((state) => ({
+      workspaces: { ...state.workspaces, [bucket]: { ...DEFAULT_WORKSPACE } },
+    }));
+  },
+
+  setActive(bucket, active) {
+    set((state) => {
+      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
+      return { workspaces: { ...state.workspaces, [bucket]: { ...current, active } } };
+    });
+  },
+
+  setActiveDoc(bucket, docId) {
+    set((state) => {
+      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
+      return { workspaces: { ...state.workspaces, [bucket]: {
+        ...current, active: "doc", activeDocId: docId,
+      } } };
+    });
+  },
+
+  upsertDoc(bucket, doc, event) {
+    set((state) => {
+      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
+      const existing = current.docs.find((candidate) => candidate.relPath === doc.rel_path);
+      if (existing) {
+        return { workspaces: { ...state.workspaces, [bucket]: {
+          ...current,
+          docs: current.docs.map((candidate) => candidate.relPath === doc.rel_path
+            ? { ...candidate, docId: doc.id, reloadToken: candidate.reloadToken + 1 }
+            : candidate),
+        } } };
+      }
+      const docs = relabelWorkspaceDocs([...current.docs, {
+        docId: doc.id, relPath: doc.rel_path, label: doc.label, open: true, reloadToken: 0,
+      }]);
+      return { workspaces: { ...state.workspaces, [bucket]: event === "created"
+        ? { ...current, docs, active: "doc", activeDocId: doc.id }
+        : { ...current, docs } } };
+    });
+  },
+
+  hydrateDocs(bucket, incoming) {
+    set((state) => {
+      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
+      const byPath = new Map(current.docs.map((doc) => [doc.relPath, doc]));
+      const docs = relabelWorkspaceDocs(incoming.map((doc) => {
+        const known = byPath.get(doc.rel_path);
+        return known ? { ...known, docId: doc.id } : {
+          docId: doc.id, relPath: doc.rel_path, label: doc.label, open: true, reloadToken: 0,
+        };
+      }));
+      // Validity is derived by the view. Never rewrite the person's selected
+      // tab merely because a refreshed registry no longer contains it.
+      return { workspaces: { ...state.workspaces, [bucket]: { ...current, docs } } };
+    });
+  },
+
+  closeDoc(bucket, docId) {
+    set((state) => {
+      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
+      return { workspaces: { ...state.workspaces, [bucket]: {
+        ...current,
+        docs: current.docs.map((doc) => doc.docId === docId ? { ...doc, open: false } : doc),
+      } } };
+    });
+  },
+
+  reopenDoc(bucket, docId) {
+    set((state) => {
+      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
+      return { workspaces: { ...state.workspaces, [bucket]: {
+        ...current,
+        docs: current.docs.map((doc) => doc.docId === docId ? { ...doc, open: true } : doc),
+        active: "doc", activeDocId: docId,
+      } } };
+    });
+  },
+
+  recordClosedRun(bucket, chip) {
+    set((state) => {
+      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
+      if (chip.agentRunId && current.history.some((entry) => entry.agentRunId === chip.agentRunId)) {
+        return state;
+      }
+      return { workspaces: { ...state.workspaces, [bucket]: {
+        ...current, history: [...current.history, chip],
+      } } };
+    });
+  },
+
+  tabOpened(bucket, sessionId, select = true) {
+    set((state) => ({
+      activeByTask: select || state.activeByTask[bucket] === undefined
+        ? { ...state.activeByTask, [bucket]: sessionId }
+        : state.activeByTask,
+    }));
+  },
+
+  tabRekeyed(from, to) {
+    if (from === to) return;
+    set((state) => ({
+      activeByTask: Object.fromEntries(Object.entries(state.activeByTask).map(
+        ([bucket, id]) => [bucket, id === from ? to : id],
+      )),
+    }));
+  },
+
+  tabSelected(bucket, sessionId) {
+    set((state) => ({ activeByTask: { ...state.activeByTask, [bucket]: sessionId } }));
+  },
+
+  tabFocused(bucket, sessionId) {
+    set((state) => ({ activeByTask: { ...state.activeByTask, [bucket]: sessionId } }));
+    focusTerminal(sessionId);
+  },
 
   focusLeft() {
     const { focusedPane, sidebarVisible } = get();

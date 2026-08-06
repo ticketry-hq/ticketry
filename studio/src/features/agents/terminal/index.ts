@@ -8,7 +8,7 @@
 // internals, and foreground registry — remains implementation.
 //
 // The interface, by intent:
-//   launchSession / launchDocChat  create a run (the spawn verb, separate from display)
+//   launchSession                 creates a run (the spawn verb, separate from display)
 //   useTaskSessions / useActiveSession
 //                                  the tab-strip queries: a bucket's ordered
 //                                  terminal tabs (with lifecycle) + focused tab
@@ -43,7 +43,6 @@ export type { ModuleFolderPayload } from "./ModuleFolder";
 
 export {
   launchSession,
-  launchDocChat,
   useTaskSessions,
   useActiveSession,
   type SessionTab,
@@ -55,7 +54,6 @@ export {
 export {
   bucketFor,
   bucketOfMeta,
-  docChatKey,
   isScratchBucket,
   scratchBucketId,
   scratchResumableKey,
@@ -66,7 +64,6 @@ export {
 export { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
 export {
   launchAgent,
-  launchDocumentAgent,
   attachToRun,
   ackTerminal,
   closeTerminal,

@@ -51,7 +51,7 @@ describe("ticketWorkspaceStore", () => {
     useTicketWorkspaceStore.getState().upsertDoc("t1", doc("d1", "design.html"), "created");
     useTicketWorkspaceStore.getState().setOverlayOpen("t1", "d1", true);
     useTicketWorkspaceStore.getState().closeDoc("t1", "d1");
-    expect(ws().active).toBe("details");
+    expect(ws().active).toBe("doc");
     expect(ws().overlayOpenByDoc["d1"]).toBeUndefined();
   });
 
@@ -147,23 +147,22 @@ describe("ticketWorkspaceStore", () => {
     expect(ws().active).toBe("details");
   });
 
-  it("hydrateDocs drops tabs the registry no longer lists", () => {
+  it("hydrateDocs drops missing tabs without overwriting selection intent", () => {
     useTicketWorkspaceStore.getState().upsertDoc("t1", doc("d1", "gone.html"), "created");
     useTicketWorkspaceStore.getState().hydrateDocs("t1", [doc("d2", "kept.html")]);
     expect(ws().docs.map((d) => d.relPath)).toEqual(["kept.html"]);
-    // The active doc vanished: fall back to Details.
-    expect(ws().active).toBe("details");
-    expect(ws().activeDocId).toBeNull();
+    expect(ws().active).toBe("doc");
+    expect(ws().activeDocId).toBe("d1");
   });
 
   // ---------- close / reopen ----------
 
-  it("closeDoc demotes the doc and falls back to Details when it was active", () => {
+  it("closeDoc preserves the selected document intent", () => {
     useTicketWorkspaceStore.getState().upsertDoc("t1", doc("d1", "design.html"), "created");
     useTicketWorkspaceStore.getState().closeDoc("t1", "d1");
     expect(ws().docs[0].open).toBe(false);
-    expect(ws().active).toBe("details");
-    expect(ws().activeDocId).toBeNull();
+    expect(ws().active).toBe("doc");
+    expect(ws().activeDocId).toBe("d1");
   });
 
   it("closeDoc keeps a non-doc active tab unchanged", () => {

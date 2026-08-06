@@ -19,9 +19,12 @@ export type AgentRunScope = "task" | "plan" | "instant" | "docchat";
 
 export interface RunRecord {
   agent_run_id: string;
+  project_id?: string;
   task_id: string | null;
   module_id: string;
+  agent?: string;
   scope: AgentRunScope;
+  started_at?: string;
   state: RawLifecycleState;
   updated_at: string;
 }

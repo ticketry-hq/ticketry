@@ -4,6 +4,7 @@ import { useTerminalStore } from "../features/agents/terminal/internal/sessionSt
 import { useWorkspaceTabsStore } from "../features/agents/terminal/internal/workspaceTabsStore";
 import { closeTerminalTab } from "../app/shell/ticket-workspace/selected-ticket/internal/closeTerminalTab";
 import { useTicketWorkspaceStore } from "../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
+import * as agentApi from "../features/agents/api/agentApi";
 
 const terminatePersisted = useTerminalStore.getState().terminatePersisted;
 
@@ -53,6 +54,35 @@ describe("closeTerminalTab", () => {
         kind: "error",
         message: expect.stringContaining("backend refused termination"),
       }),
+    ]);
+  });
+
+  it("terminates a persisted run and closes its tab", async () => {
+    const terminate = vi.spyOn(agentApi, "terminateTerminal").mockResolvedValue({
+      agent_run_id: "run-1",
+      terminated: true,
+    });
+    const refresh = vi
+      .spyOn(agentApi, "listResumableTerminals")
+      .mockResolvedValue([]);
+    const sessionId = useTerminalStore.getState().openSession({
+      taskId: "task-1",
+      projectId: "project-1",
+      moduleId: "module-1",
+      agent: "codex",
+      ticketSeq: 12,
+      agentRunId: "run-1",
+    });
+
+    await closeTerminalTab(sessionId, "task-1", "CODIN-12");
+
+    expect(terminate).toHaveBeenCalledWith("run-1");
+    expect(refresh).toHaveBeenCalled();
+    expect(useTerminalStore.getState().sessions[sessionId]).toBeUndefined();
+    expect(
+      useTicketWorkspaceStore.getState().workspaces["task-1"].history,
+    ).toEqual([
+      expect.objectContaining({ agentRunId: "run-1", agent: "codex" }),
     ]);
   });
 });

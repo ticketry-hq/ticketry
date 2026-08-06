@@ -1,28 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useModalStore } from "../app/modal";
-import { useBacklogStore } from "../features/work-items/internal/backlogStore";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import { useClientStore } from "../state/clientStore";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
 import type { State } from "../shared/api/types";
+import { getStatesSnapshot, seedStates } from "../shared/query/stateCatalog";
 
 const workflowApi = vi.hoisted(() => ({
   reorderWorkflowStates: vi.fn(),
 }));
-const tasksApi = vi.hoisted(() => ({
-  getTasks: vi.fn(),
-}));
-const backlogApi = vi.hoisted(() => ({
-  listProjectWorkItems: vi.fn(),
-  listStates: vi.fn(),
-}));
-
 vi.mock("../shared/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...workflowApi,
-  getTasks: tasksApi.getTasks,
-  listProjectWorkItems: backlogApi.listProjectWorkItems,
-  listStates: backlogApi.listStates,
 }));
 
 const TODO: State = {
@@ -56,14 +45,11 @@ describe("workflow-state reorder synchronization", () => {
       notice: null,
       error: null,
     });
+    seedStates("project-1", [TODO, REVIEW, DONE]);
     useTasksStore.setState({
       selectedProjectId: "project-1",
       selectedModuleId: "module-1",
       selectedTaskId: "task-1",
-      states: [TODO, REVIEW, DONE],
-    });
-    useBacklogStore.setState({
-      projectId: "project-1",
       states: [TODO, REVIEW, DONE],
     });
     useClientStore.setState({
@@ -75,7 +61,7 @@ describe("workflow-state reorder synchronization", () => {
     });
   });
 
-  it("applies authoritative order to every active catalog without disturbing workspace state", async () => {
+  it("publishes authoritative order to the single catalog without disturbing workspace state", async () => {
     const reordered = [
       { ...REVIEW, sort_order: 0 },
       { ...TODO, sort_order: 1 },
@@ -86,8 +72,7 @@ describe("workflow-state reorder synchronization", () => {
     await useWorkflowEditorStore.getState().moveState("review", -1);
 
     expect(useWorkflowEditorStore.getState().states).toEqual(reordered);
-    expect(useTasksStore.getState().states).toEqual(reordered);
-    expect(useBacklogStore.getState().states).toEqual(reordered);
+    expect(getStatesSnapshot("project-1")).toEqual(reordered);
     expect(useTasksStore.getState().selectedTaskId).toBe("task-1");
     expect(useClientStore.getState().expandedIdsByModule).toEqual({
       "module-1": ["task-1"],
@@ -97,54 +82,4 @@ describe("workflow-state reorder synchronization", () => {
     ]);
   });
 
-  it("does not let an older Stories catalog load restore stale order", async () => {
-    let resolveTasks!: (value: {
-      tasks: [];
-      states: State[];
-      subtasks: {};
-    }) => void;
-    tasksApi.getTasks.mockReturnValue(
-      new Promise((resolve) => {
-        resolveTasks = resolve;
-      }),
-    );
-    const loading = useTasksStore
-      .getState()
-      .loadTasks("project-1", "module-1");
-    const reordered = [
-      { ...REVIEW, sort_order: 0 },
-      { ...TODO, sort_order: 1 },
-      DONE,
-    ];
-    workflowApi.reorderWorkflowStates.mockResolvedValue(reordered);
-
-    await useWorkflowEditorStore.getState().moveState("review", -1);
-    resolveTasks({ tasks: [], states: [TODO, REVIEW, DONE], subtasks: {} });
-    await loading;
-
-    expect(useTasksStore.getState().states).toEqual(reordered);
-  });
-
-  it("does not let an older IssueDetail catalog load restore stale order", async () => {
-    let resolveStates!: (value: State[]) => void;
-    backlogApi.listProjectWorkItems.mockResolvedValue([]);
-    backlogApi.listStates.mockReturnValue(
-      new Promise((resolve) => {
-        resolveStates = resolve;
-      }),
-    );
-    const loading = useBacklogStore.getState().loadBacklog("project-1");
-    const reordered = [
-      { ...REVIEW, sort_order: 0 },
-      { ...TODO, sort_order: 1 },
-      DONE,
-    ];
-    workflowApi.reorderWorkflowStates.mockResolvedValue(reordered);
-
-    await useWorkflowEditorStore.getState().moveState("review", -1);
-    resolveStates([TODO, REVIEW, DONE]);
-    await loading;
-
-    expect(useBacklogStore.getState().states).toEqual(reordered);
-  });
 });

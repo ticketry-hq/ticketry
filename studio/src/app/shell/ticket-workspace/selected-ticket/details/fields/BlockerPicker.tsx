@@ -10,7 +10,7 @@ import { GhostChipAdd } from "./QuietChipControls";
 interface Props {
   /** The issue being edited. */
   issueId: string;
-  items?: WorkItem[];
+  items: WorkItem[];
   /** Its current blocker ids — already-added candidates are hidden. */
   currentIds: string[];
   /** Add one blocker (the parent folds it into the replace-set). */
@@ -21,7 +21,7 @@ interface Props {
 // Blocker picker: project work-items minus self, current blockers, and any
 // candidate that would create a cycle. Mirrors the ParentPicker
 // idiom; selecting one folds it into the open issue's blocked_by replace-set.
-export default function BlockerPicker({ issueId, items = [], currentIds, onPick, saving }: Props) {
+export default function BlockerPicker({ issueId, items, currentIds, onPick, saving }: Props) {
   const current = new Set(currentIds);
   // Ids this issue blocks (transitively) would close a cycle if added as a
   // blocker — hide them up front; the server's BFS guard is the backstop.

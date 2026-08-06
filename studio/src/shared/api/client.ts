@@ -265,7 +265,7 @@ export const acknowledgeOnboarding = () =>
 
 export const createProject = (body: ProjectCreate) =>
   call<Project>(async () =>
-    (await sdk().projects.createProject({ projectIn: body })) as Project
+    (await sdk().projects.createProject({ project: body })) as Project
   );
 
 export const createProjectSummary = (body: ProjectCreate) =>

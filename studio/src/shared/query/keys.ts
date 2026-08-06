@@ -80,8 +80,6 @@ export const queryKeys = {
       ownerId,
       { projectId: projectId ?? null, moduleId: moduleId ?? null },
     ] as const,
-    content: (documentId: string, relativePath: string) =>
-      ["documents", "content", documentId, relativePath] as const,
   },
 
   terminalSessions: {
@@ -100,9 +98,5 @@ export const queryKeys = {
       "resumable",
       { taskId: taskId ?? null, projectId: projectId ?? null, moduleId: moduleId ?? null },
     ] as const,
-  },
-
-  agentStatus: {
-    byProject: (projectId: string) => ["agent-status", projectId] as const,
   },
 } as const;

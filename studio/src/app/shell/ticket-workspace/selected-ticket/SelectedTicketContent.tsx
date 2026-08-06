@@ -14,7 +14,6 @@ import {
 } from "./documents/queries";
 import {
   bucketOfMeta,
-  docChatKey,
   isScratchBucket,
   scratchResumableKey,
   useActiveSession,
@@ -269,7 +268,6 @@ export function SelectedTicketContent({
   } = useActivatedProviders();
   const tabs = useTaskSessions(bucket);
   const activeTermIdOrNull = useActiveSession(bucket);
-  const chatByDoc = useWorkspaceTabsStore((s) => s.chatByDoc);
   const resumableSessions = useTerminalStore((s) =>
     isScratchBucket(bucket) && projectId && moduleId
       ? s.resumableSessions[scratchResumableKey(projectId, moduleId)]
@@ -296,7 +294,6 @@ export function SelectedTicketContent({
   const workspaces = useTicketWorkspaceStore((s) => s.workspaces);
   const ensureWorkspace = useTicketWorkspaceStore((s) => s.ensureWorkspace);
   const setActive = useTicketWorkspaceStore((s) => s.setActive);
-  const setOverlayOpen = useTicketWorkspaceStore((s) => s.setOverlayOpen);
   const setActiveDoc = useTicketWorkspaceStore((s) => s.setActiveDoc);
   const closeDoc = useTicketWorkspaceStore((s) => s.closeDoc);
   const reopenDoc = useTicketWorkspaceStore((s) => s.reopenDoc);
@@ -371,7 +368,6 @@ export function SelectedTicketContent({
     const generation = ++restoreGenerationRef.current;
     requestedSurfaceRef.current = null;
     requestedTerminalRef.current = null;
-    useWorkspaceTabsStore.setState({ focusRequest: null });
     rememberPendingTerminalRef.current = false;
     restoreRequestRef.current = null;
     if (!bucket || owner !== "studio") return;
@@ -842,17 +838,6 @@ export function SelectedTicketContent({
 
   if (!bucket) return <div className="text-text-muted">No task selected</div>;
 
-  // Doc-agent overlay (#625): a ~75% window that dims the active doc and hosts
-  // THAT document's dedicated doc-chat run (chatByDoc) in the single
-  // TerminalHost. Per-document — shown only when the active doc's own overlay
-  // flag is set; closing flips just that flag (background, not kill). The agent
-  // label comes from the doc-chat session, not the tab strip.
-  const overlayActive =
-    effActive === "doc" && !!activeDoc && (ws.overlayOpenByDoc[activeDoc.docId] ?? false);
-  const chatSessionId = activeDoc
-    ? chatByDoc[docChatKey(bucket, activeDoc.relPath)]
-    : undefined;
-  const chatSession = chatSessionId ? sessions[chatSessionId] : null;
   const canLaunch = !!launchContext?.profileReady;
   const showZoneChrome = isEditView && navigationModality === "keyboard";
   // The ring cannot live on the terminal host wrapper: `ring-inset` is an
@@ -877,7 +862,6 @@ export function SelectedTicketContent({
   // reads as hugging the terminal with dead panel space outside it. On the
   // full-pane terminal both rings span that padding instead, landing flush on
   // the pane's outer left/right/bottom edges (the top edge belongs to the tab
-  // strip). The doc-chat overlay window keeps its own rounded bounds.
   const terminalRingBox =
     effActive === "terminal" ? "top-0 -bottom-2 -left-2 -right-2" : "inset-0";
   const showTabHighlight = showZoneChrome && editViewZone === "tab-strip";
@@ -1022,7 +1006,7 @@ export function SelectedTicketContent({
               highlightedTab.id === id
             }
             allowHoverEmphasis={allowTabHoverEmphasis}
-            dim={meta.status === "exited"}
+            dim={lifecycle === "exited" || lifecycle === "lost" || lifecycle === "error"}
             lifecycle={lifecycle}
             onClick={() => selectWorkspaceTab({ kind: "terminal", id })}
             onClose={() => closeWorkspaceTerminal(id)}
@@ -1105,7 +1089,7 @@ export function SelectedTicketContent({
             <button
               key={session.agent_run_id}
               type="button"
-              title={`Resume · ${session.ended_at}`}
+              title={`Resume · ${session.started_at}`}
               onClick={() => void resumeWorkspaceTerminal(session.agent_run_id)}
               className="shrink-0 border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary"
             >
@@ -1186,13 +1170,6 @@ export function SelectedTicketContent({
             <Suspense fallback={null}>
               <WorkspaceDocument
                 doc={d}
-                bucket={bucket}
-                projectId={projectId}
-                moduleId={moduleId}
-                taskId={isScratchBucket(bucket) ? null : bucket}
-                ticketSeq={
-                  launchContext?.kind === "task" ? launchContext.ticketSeq : null
-                }
                 focusSignal={
                   requestedSurfaceRef.current?.kind === "doc" &&
                   requestedSurfaceRef.current.id === d.docId
@@ -1203,20 +1180,7 @@ export function SelectedTicketContent({
             </Suspense>
           </div>
         ))}
-        {/* Overlay scrim (#625): dims the active doc behind the agent window.
-            A separate element so the single TerminalHost is never re-parented
-            (which would reset its session). Click-to-close, like the × button. */}
-        {overlayActive && (
-          <div
-            role="presentation"
-            onClick={() => activeDoc && setOverlayOpen(bucket, activeDoc.docId, false)}
-            className="absolute inset-0 z-30 bg-black/50"
-          />
-        )}
-        {/* The single terminal host has three presentations driven entirely by
-            CSS so the xterm DOM is never re-parented (which would reset the
-            session): a full pane on its own tab, a ~75% overlay window over a
-            dimmed doc, or an invisible-but-measurable box otherwise. Hidden
+        {/* The single terminal host stays mounted across tab changes. Hidden
             with `invisible` (visibility:hidden) rather than `hidden`
             (display:none) so fit() never measures a zero-size container. */}
         <div
@@ -1224,32 +1188,11 @@ export function SelectedTicketContent({
           className={
             effActive === "terminal"
               ? "group absolute inset-0 flex flex-col"
-              : overlayActive
-                ? "group absolute inset-x-[12.5%] inset-y-[10%] z-40 flex flex-col overflow-hidden rounded-lg border border-pane-border bg-pane-bg shadow-2xl"
-                : "absolute inset-0 flex flex-col invisible pointer-events-none"
+              : "absolute inset-0 flex flex-col invisible pointer-events-none"
           }
         >
-          {overlayActive && (
-            <div className="flex shrink-0 items-center gap-2 border-b border-pane-border bg-pane-title px-3 py-1.5 text-xs">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-green-400" />
-              <span className="flex-1 truncate text-text-primary">
-                agent · {chatSession?.agent ?? "doc-chat"}
-                {activeDoc ? ` · ${activeDoc.label}` : ""}
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  activeDoc && setOverlayOpen(bucket, activeDoc.docId, false)
-                }
-                className="text-text-muted hover:text-text-primary"
-                aria-label="Close agent overlay"
-              >
-                ×
-              </button>
-            </div>
-          )}
           <div className="relative min-h-0 flex-1">
-            {(termIds.length > 0 || overlayActive) && (
+            {termIds.length > 0 && (
               <Suspense fallback={null}>
                 <SelectedTicketTerminal
                   bucket={bucket}
@@ -1269,14 +1212,10 @@ export function SelectedTicketContent({
               data-testid="terminal-mode-ring"
               data-terminal-mode={terminalEngaged ? "engaged" : "idle"}
               className={`pointer-events-none absolute ${terminalRingBox} z-50 ${
-                overlayActive ? "rounded-lg" : ""
-              } ${
                 terminalEngaged ? "ring-2 ring-inset ring-lifecycle-success" : "opacity-0"
               }`}
             />
           )}
-          {/* Full-pane presentation only: the agent overlay has its own title
-              bar where this tag would otherwise land. */}
           {showZoneChrome && terminalEngaged && effActive === "terminal" && (
             <div
               data-testid="terminal-mode-tag"

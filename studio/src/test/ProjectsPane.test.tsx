@@ -14,12 +14,12 @@ import { useTasksStore } from "../features/studio/stores/tasksStore";
 
 vi.mock("../shared/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../shared/api/client")>()),
-  createProjectSummary: vi.fn(),
+  createProject: vi.fn(),
 }));
 
 import * as api from "../shared/api/client";
 
-const createProject = vi.mocked(api.createProjectSummary);
+const createProject = vi.mocked(api.createProject);
 
 beforeEach(() => {
   createProject.mockReset();
@@ -91,7 +91,7 @@ describe("ProjectsPane", () => {
     createProject.mockResolvedValueOnce({
       id: "created",
       name: "Created project",
-      identifier: "NEW",
+      slug: "NEW",
     });
 
     render(

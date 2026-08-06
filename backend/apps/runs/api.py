@@ -98,14 +98,17 @@ async def ingest_lifecycle_event(request, event: LifecycleEvent):
         # so the client places it without a lookup; missing routing is skipped.
 
         if routing is not None:
-            project_id, task_id, module_id, scope = routing
+            project_id, task_id, module_id, scope, agent, started_at = routing
             frame = AgentLifecycleFrame(
                 at=event_at,
                 run=RunRecord(
                     agent_run_id=event.agent_run_id,
+                    project_id=project_id,
                     task_id=task_id,
                     module_id=module_id,
+                    agent=agent,
                     scope=scope,
+                    started_at=started_at,
                     state=state,
                     updated_at=event_at,
                 ),

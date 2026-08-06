@@ -38,10 +38,12 @@ export function loadScratchDocuments(
 }
 
 export function loadDocumentContent(doc: DocTabState): Promise<LoadedMarkdown> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.documents.content(doc.docId, doc.relPath),
-    queryFn: async ({ signal }) => {
-      const response = await fetch(docUrl(doc.docId, doc.relPath), { signal });
+  const controller = new AbortController();
+  return fetch(docUrl(doc.docId, doc.relPath), {
+    cache: "no-store",
+    signal: controller.signal,
+  }).then(
+    async (response) => {
       if (!response.ok) {
         throw new Error(`Document request failed: ${response.status}`);
       }
@@ -51,6 +53,5 @@ export function loadDocumentContent(doc: DocTabState): Promise<LoadedMarkdown> {
         markdown: await response.text(),
       };
     },
-    staleTime: 0,
-  });
+  );
 }

@@ -1,25 +1,25 @@
 import {
-  createAgentStatusClient,
   type AgentStatusFrame,
   type StatusDocumentFrame,
   type WorkItemStateFrame,
   type WorkflowStateFrame,
 } from "@worktracker/typescript-sdk/agent-status";
-import {
-  agentApiBase,
-  apiKey,
-} from "../../../shared/api/client";
 import { useClientStore } from "../../../state/clientStore";
 import { scratchBucketId, useTerminalStore } from "../terminal";
 import { SCRATCH_RUN_TASK_ID } from "../types";
 import { useTicketWorkspaceStore } from "../../../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
-import { synchronizeActiveStateCatalogs } from "../../workflows/stateCatalogSync";
 import { useWorkflowEditorStore } from "../../workflows/workflowEditorStore";
 import type { DesignDoc } from "../types";
 import { useAgentStatusStore } from "./store";
 import { statusWebSocketUrl } from "../../../runtime";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
+import {
+  getStatesSnapshot,
+  setStatesSorted,
+  upsertState,
+} from "../../../shared/query/stateCatalog";
+import { advanceStateCatalogRevision } from "../../../shared/stateCatalogRevision";
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_CAP_MS = 15_000;
@@ -57,7 +57,7 @@ function dispatch(frame: AgentStatusFrame): void {
     const sessionId = sessions.sessionByRun[frame.agent_run_id];
     if (sessionId) {
       if (frame.status === "lost") sessions.setSessionLost(sessionId);
-      else sessions.setBackendSession(sessionId, "exited");
+      else sessions.setExited(sessionId);
     }
     runs.applyState(
       frame.agent_run_id,
@@ -89,16 +89,11 @@ function dispatch(frame: AgentStatusFrame): void {
 
 function routeWorkflowStateFrame(frame: WorkflowStateFrame): void {
   if (active && active.projectId !== frame.project_id) return;
+  advanceStateCatalogRevision(frame.project_id, frame.state);
+  const states = upsertState(frame.project_id, frame.state);
   const editor = useWorkflowEditorStore.getState();
-  const editorStates =
-    editor.projectId === frame.project_id ? editor.states : [];
-  const synchronized = synchronizeActiveStateCatalogs(
-    frame.project_id,
-    frame.state,
-    editorStates,
-  );
   if (editor.projectId === frame.project_id) {
-    useWorkflowEditorStore.setState({ states: synchronized });
+    useWorkflowEditorStore.setState({ states });
   }
 }
 
@@ -107,17 +102,13 @@ function routeWorkflowStateSnapshot(
   states: WorkflowStateFrame["state"][],
 ): void {
   if (active && active.projectId !== projectId) return;
+  advanceStateCatalogRevision(projectId, states);
+  setStatesSorted(projectId, states);
   const editor = useWorkflowEditorStore.getState();
-  let editorStates = editor.projectId === projectId ? editor.states : [];
-  for (const state of states) {
-    editorStates = synchronizeActiveStateCatalogs(
-      projectId,
-      state,
-      editorStates,
-    );
-  }
   if (editor.projectId === projectId) {
-    useWorkflowEditorStore.setState({ states: editorStates });
+    useWorkflowEditorStore.setState({
+      states: getStatesSnapshot(projectId),
+    });
   }
 }
 
@@ -172,45 +163,14 @@ export const statusFeed = {
     active?.stop();
     useAgentStatusStore.getState().switchProject(projectId);
 
-    const client = createAgentStatusClient({
-      baseUrl: agentApiBase(),
-      apiKey: apiKey(),
-    });
     let socket: WebSocket | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
     let stopped = false;
     let workItemCursor =
       useClientStore.getState().workItemCursorsByProject[projectId];
-    let snapshotRequest: object | null = null;
     const pendingWorkItemIds = new Set<string>();
     let invalidationTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const snapshot = () => {
-      const request = {};
-      snapshotRequest = request;
-      const queryKey = queryKeys.agentStatus.byProject(projectId);
-      void queryClient.cancelQueries({ queryKey, exact: true }).then(() =>
-        queryClient.fetchQuery({
-          queryKey,
-          queryFn: ({ signal }) => client.getAgentStatus({ projectId, signal }),
-          staleTime: 0,
-        }),
-      )
-        .then((body) => {
-          // An abort only rejects an in-flight request; a response that has
-          // already resolved would still dispatch after stop() or a project
-          // switch. Gate on being the live controller of the live feed.
-          if (stopped || snapshotRequest !== request) return;
-          if (active?.projectId !== projectId) return;
-          dispatch({ v: 1, type: "snapshot", ...body });
-        })
-        .catch((error: unknown) => {
-          if (!(error instanceof DOMException && error.name === "AbortError")) {
-            console.warn("[statusFeed] snapshot failed", error);
-          }
-        });
-    };
 
     const acceptCursor = (frameProjectId: string, revision: number) => {
       if (frameProjectId !== projectId || !Number.isSafeInteger(revision)) return;
@@ -255,7 +215,6 @@ export const statusFeed = {
       socket = next;
       next.onopen = () => {
         attempt = 0;
-        if (refreshSnapshotOnSocketOpen) snapshot();
       };
       next.onmessage = (event: MessageEvent) => {
         if (typeof event.data !== "string") return;
@@ -277,7 +236,6 @@ export const statusFeed = {
 
     const onVisibility = () => {
       if (document.visibilityState !== "visible") return;
-      snapshot();
       if (retry) {
         clearTimeout(retry);
         retry = null;
@@ -288,17 +246,11 @@ export const statusFeed = {
       connect();
     };
     document.addEventListener("visibilitychange", onVisibility);
-    snapshot();
     connect();
 
     const stop = () => {
       stopped = true;
       document.removeEventListener("visibilitychange", onVisibility);
-      snapshotRequest = null;
-      void queryClient.cancelQueries({
-        queryKey: queryKeys.agentStatus.byProject(projectId),
-        exact: true,
-      });
       pendingWorkItemIds.clear();
       if (invalidationTimer) clearTimeout(invalidationTimer);
       if (retry) clearTimeout(retry);

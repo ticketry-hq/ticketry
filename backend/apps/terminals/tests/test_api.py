@@ -235,26 +235,36 @@ def test_list_terminals_returns_active_sessions(client, monkeypatch):
     assert [row["agent_run_id"] for row in response.json()] == ["run-new", "run-old"]
 
 
-def test_list_terminals_serializes_doc_chat_fields(client, monkeypatch):
-    """A doc-chat row exposes scope=docchat + doc_rel_path for restore (#625)."""
+def test_list_terminals_serializes_only_immutable_session_fields(client, monkeypatch):
     _no_reconcile(monkeypatch)
 
-    _insert_run("doc-run")
+    _insert_run("task-run")
+    _insert_run("hidden-doc-run")
     _insert_session(
-        "doc-run",
+        "task-run",
         task_id="task-1",
         created_at="2026-05-29T09:00:00",
         agent="claude-code",
-        scope="docchat",
         doc_rel_path="spec/x/LLD.html",
     )
+    _insert_session(
+        "hidden-doc-run",
+        task_id="task-1",
+        created_at="2026-05-29T10:00:00",
+        agent="codex",
+        scope="docchat",
+        doc_rel_path="spec/x/hidden.html",
+    )
 
-    response = client.get("/api/terminals", {"task_id": "task-1"})
+    rows = terminals_api.list_terminals(None, "task-1")
 
-    assert response.status_code == 200
-    row = response.json()[0]
-    assert row["scope"] == "docchat"
+    assert [item["agent_run_id"] for item in rows] == ["task-run"]
+    row = rows[0]
     assert row["doc_rel_path"] == "spec/x/LLD.html"
+    assert "scope" not in row
+    assert "task_id" not in row
+    assert "module_id" not in row
+    assert "terminated_at" not in row
 
 
 def test_list_terminals_reconciles_dead_session_before_responding(client, monkeypatch):
@@ -341,8 +351,8 @@ def test_list_scratch_terminals_returns_active_no_task_sessions(client, monkeypa
     assert resp.status_code == 200
     rows = resp.json()
     assert [r["agent_run_id"] for r in rows] == ["scratch-run"]
-    assert rows[0]["scope"] == "plan"
-    assert rows[0]["task_id"] == SCRATCH_TASK_ID
+    assert "scope" not in rows[0]
+    assert "task_id" not in rows[0]
 
     # Regression: the task-bound list never includes the scratch session.
     task_resp = client.get("/api/terminals", {"task_id": "task-1"})
@@ -373,7 +383,11 @@ def test_list_scratch_terminals_can_hydrate_all_project_modules(client, monkeypa
     response = client.get("/api/terminals/scratch", {"project_id": "proj-1"})
 
     assert response.status_code == 200
-    assert {row["module_id"] for row in response.json()} == {"mod-1", "mod-2"}
+    assert {row["agent_run_id"] for row in response.json()} == {
+        "scratch-one",
+        "scratch-two",
+    }
+    assert all("module_id" not in row for row in response.json())
 
 
 def test_resume_terminal_returns_new_and_old_ids(client, monkeypatch):
@@ -503,20 +517,16 @@ def test_list_resumable_terminals_filters_collapses_and_excludes_live(client):
             "agent": "claude-code",
             "status": "terminated",
             "started_at": "2026-05-29T12:30:00",
-            "ended_at": "2026-05-29T13:00:00",
             "provider_session_id": "sess-chain",
             "resumed_from": "chain-a",
-            "scope": "task",
         },
         {
             "agent_run_id": "plain-run",
             "agent": "claude-code",
             "status": "terminated",
             "started_at": "2026-05-29T10:00:00",
-            "ended_at": "2026-05-29T12:00:00",
             "provider_session_id": "sess-plain",
             "resumed_from": None,
-            "scope": "task",
         },
     ]
 
@@ -661,7 +671,7 @@ def test_list_resumable_terminals_can_scope_scratch_runs_by_project_and_module(c
     ]
 
 
-def test_list_resumable_module_runs_preserves_plan_and_instant_scope(client):
+def test_list_resumable_module_runs_includes_plan_and_instant_runs(client):
     module = _create_module_issue()
     for run_id, scope, hour in (
         ("module-plan", "plan", 10),
@@ -684,12 +694,11 @@ def test_list_resumable_module_runs_preserves_plan_and_instant_scope(client):
     )
 
     assert response.status_code == 200
-    assert [
-        (row["agent_run_id"], row["scope"]) for row in response.json()
-    ] == [
-        ("module-instant", "instant"),
-        ("module-plan", "plan"),
+    assert [row["agent_run_id"] for row in response.json()] == [
+        "module-instant",
+        "module-plan",
     ]
+    assert all("scope" not in row for row in response.json())
 
 
 def test_deleting_issue_cascades_to_agent_runs():

@@ -15,8 +15,8 @@ import {
  * enter rich document edit mode. HTML stays in its sandboxed iframe
  * (`allow-scripts` only, in an opaque origin).
  *
- * Viewer chrome (for example, the edit-with-agent overlay) is the host's
- * business, rendered over this frame — never inside it.
+ * Viewer chrome is the host's business, rendered over this frame — never
+ * inside it.
  */
 export default function DocViewer({
   doc,

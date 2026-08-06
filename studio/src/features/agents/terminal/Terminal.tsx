@@ -14,7 +14,7 @@ import {
 import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
 import { useTerminalPresentation } from "./internal/useTerminalPresentation";
-import { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
+import { registerTerminalFocus } from "./internal/terminalRegistry";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -41,9 +41,7 @@ function XtermTerminal({
   const sessions = useTerminalStore((state) => state.sessions);
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
   const unregisterHost = useTerminalForegroundStore((state) => state.unregisterHost);
-  const focusRequest = useWorkspaceTabsStore((state) => state.focusRequest);
   const handledFocusSignalRef = useRef(0);
-  const handledFocusRequestRef = useRef(0);
 
   useEffect(() => syncEntries(sessions), [sessions]);
 
@@ -67,16 +65,20 @@ function XtermTerminal({
   }, [hostRef, owner, registerHost, unregisterHost]);
 
   useEffect(() => {
+    if (!visibleSessionId) return;
+    return registerTerminalFocus(visibleSessionId, () => {
+      if (mountedIdRef.current !== visibleSessionId) return;
+      getEntry(visibleSessionId)?.term.focus?.();
+    });
+  }, [mountedIdRef, visibleSessionId]);
+
+  useEffect(() => {
     const pendingSignal =
       focusSignal !== undefined &&
       focusSignal !== 0 &&
       focusSignal !== handledFocusSignalRef.current;
-    const pendingRequest =
-      focusRequest !== null &&
-      focusRequest.sessionId === visibleSessionId &&
-      focusRequest.sequence !== handledFocusRequestRef.current;
     if (
-      (!pendingSignal && !pendingRequest) ||
+      !pendingSignal ||
       !visibleSessionId ||
       mountedIdRef.current !== visibleSessionId
     ) {
@@ -88,11 +90,8 @@ function XtermTerminal({
     if (pendingSignal && focusSignal !== undefined) {
       handledFocusSignalRef.current = focusSignal;
     }
-    if (pendingRequest && focusRequest) {
-      handledFocusRequestRef.current = focusRequest.sequence;
-    }
     entry.term.focus?.();
-  }, [focusRequest, focusSignal, mountedIdRef, visibleSessionId]);
+  }, [focusSignal, mountedIdRef, visibleSessionId]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
 

@@ -14,7 +14,7 @@ import {
 } from "./internal/entryPool";
 import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
-import { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
+import { registerTerminalFocus } from "./internal/terminalRegistry";
 
 type NativeTerminalStatus = {
   handle: string;
@@ -55,14 +55,12 @@ export function NativeGhosttyTerminal({
   const sessions = useTerminalStore((state) => state.sessions);
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
   const unregisterHost = useTerminalForegroundStore((state) => state.unregisterHost);
-  const focusRequest = useWorkspaceTabsStore((state) => state.focusRequest);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<string | null>(null);
   const [nativeHandle, setNativeHandle] = useState<string | null>(null);
   const focusOnAttachRef = useRef(focusSignal === undefined);
   const resizeFrameRef = useRef(0);
   const handledFocusSignalRef = useRef(0);
-  const handledFocusRequestRef = useRef(0);
 
   useEffect(() => syncEntries(sessions), [sessions]);
   const session = sessions[sessionId] ?? null;
@@ -70,6 +68,13 @@ export function NativeGhosttyTerminal({
   const key = session ? foregroundKey(session) : null;
   const { acquire, resolvedOwner } = useTerminalOwnership(key, owner);
   const visible = !!runId && resolvedOwner === owner;
+
+  useEffect(() => {
+    if (!nativeHandle || !visible) return;
+    return registerTerminalFocus(sessionId, () => {
+      void invoke("native_terminal_focus", { handle: nativeHandle });
+    });
+  }, [nativeHandle, sessionId, visible]);
 
   useEffect(() => {
     if (manageForegroundHost) registerHost(owner, hostRef.current);
@@ -223,19 +228,12 @@ export function NativeGhosttyTerminal({
       focusSignal !== undefined &&
       focusSignal !== 0 &&
       focusSignal !== handledFocusSignalRef.current;
-    const pendingRequest =
-      focusRequest !== null &&
-      focusRequest.sessionId === sessionId &&
-      focusRequest.sequence !== handledFocusRequestRef.current;
-    if (!pendingSignal && !pendingRequest) return;
+    if (!pendingSignal) return;
     if (pendingSignal && focusSignal !== undefined) {
       handledFocusSignalRef.current = focusSignal;
     }
-    if (pendingRequest && focusRequest) {
-      handledFocusRequestRef.current = focusRequest.sequence;
-    }
     void invoke("native_terminal_focus", { handle });
-  }, [focusRequest, focusSignal, nativeHandle, sessionId, visible]);
+  }, [focusSignal, nativeHandle, sessionId, visible]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
   return (

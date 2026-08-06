@@ -20,14 +20,8 @@ export type SessionId = string;
 export interface PersistedTerminalSession {
   agent_run_id: string;
   tmux_session_name: string;
-  task_id: string;
-  module_id: string;
-  project_id: string;
-  agent: AgentName;
-  scope: "task" | "plan" | "instant" | "docchat";
   doc_rel_path?: string | null;
   created_at: string;
-  terminated_at: string | null;
 }
 
 export interface ResumableTerminalSession {
@@ -35,7 +29,6 @@ export interface ResumableTerminalSession {
   agent: AgentName;
   status: string;
   started_at: string;
-  ended_at: string;
   provider_session_id: string | null;
   resumed_from: string | null;
 }

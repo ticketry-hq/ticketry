@@ -2,22 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { launchScratchPlanning } from "./create/launchTerminalCreate";
-import { launchAgent, launchDocumentAgent } from "./internal/actions";
+import { launchAgent } from "./internal/actions";
 import { useTicketWorkspaceStore } from "../../../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
 import {
   providerListPlaceholder,
   useActivatedProviders,
 } from "../../workflows/launchProviderCatalog";
-import { TEMP_TASK_ID } from "../types";
-import { bucketFor, isScratchBucket } from "./internal/sessionStore";
+import { bucketFor } from "./internal/sessionStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 
 export const AGENTS = ["claude", "agy", "codex", "gemini"] as const;
 export type Agent = (typeof AGENTS)[number];
 
 export interface AgentPickerPayload {
-  /** "open" → open agent on selected task; "open-with-prompt" → carried prompt; "plan" → planning mode; "doc-chat" → fresh doc-scoped overlay run (#625). */
-  mode: "open" | "open-with-prompt" | "plan" | "instant" | "doc-chat";
+  /** "open" → open agent on selected task; "open-with-prompt" → carried prompt; "plan" → planning mode. */
+  mode: "open" | "open-with-prompt" | "plan" | "instant";
   initialPrompt?: string;
   /** Studio terminal-create callers pass explicit launch context. */
   projectId?: string;
@@ -28,10 +27,6 @@ export interface AgentPickerPayload {
    */
   taskId?: string;
   ticketSeq?: number | null;
-  /** #625: the active doc's design-dir-relative .html path the doc-chat run is scoped to. */
-  docRelPath?: string;
-  /** #625: the active doc's registered id, for unambiguous backend resolution. */
-  docId?: string;
   /** Optional surface callback after a launch has been placed in its workspace. */
   onLaunched?: () => void;
 }
@@ -61,36 +56,7 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
     }
     const mode = payload?.mode ?? "open";
     const prompt = payload?.initialPrompt ?? null;
-    const { setActive, setOverlayOpen } = useTicketWorkspaceStore.getState();
-    if (mode === "doc-chat") {
-      // #625: summon a fresh, dedicated agent scoped to one document. It lives
-      // in chatByDoc (the overlay) per document, never as a tab, and never
-      // adopts the ticket's existing run. Works for ticket-bound and scratch
-      // docs alike. docId identifies which doc's overlay to open.
-      const docRelPath = payload?.docRelPath;
-      const docId = payload?.docId;
-      if (!docRelPath || !docId) {
-        popModal();
-        return;
-      }
-      const taskId =
-        !payload.taskId || payload.taskId === TEMP_TASK_ID || isScratchBucket(payload.taskId)
-          ? null
-          : payload.taskId;
-      const bucket = bucketFor(taskId, moduleId);
-      launchDocumentAgent({
-        taskId,
-        projectId,
-        moduleId,
-        agent,
-        ticketSeq: payload.ticketSeq ?? null,
-        docRelPath,
-        docId,
-      });
-      setOverlayOpen(bucket, docId, true);
-      popModal();
-      return;
-    }
+    const { setActive } = useTicketWorkspaceStore.getState();
     if (mode === "plan") {
       // The launch contract lives in the shared terminal-create launcher
       // (CODIN-839); this component owns only the presentation seam around it.

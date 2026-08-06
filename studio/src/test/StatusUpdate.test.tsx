@@ -3,15 +3,26 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useModalStore } from "../app/modal";
 import { StatusUpdate } from "../features/studio/modals/StatusUpdate";
 import { useTasksStore } from "../features/studio/stores/tasksStore";
 import StatePicker from "../app/shell/ticket-workspace/selected-ticket/details/fields/StatePicker";
 import { useBacklogStore } from "../features/work-items/internal/backlogStore";
-import { synchronizeActiveStateCatalogOrder } from "../features/workflows/stateCatalogSync";
+import { seedStates, setStatesSorted } from "../shared/query/stateCatalog";
+import { queryClient } from "../shared/query/queryClient";
+import { queryKeys } from "../shared/query/keys";
+import * as api from "../shared/api/client";
+import type { WorkItem } from "../shared/api/types";
+
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
+  patchWorkItem: vi.fn(),
+}));
 
 const TODO = {
   id: "todo",
@@ -44,17 +55,33 @@ describe("Set Status workflow-state reorder", () => {
     useTasksStore.setState({
       selectedProjectId: "project-1",
       selectedTaskId: "task-1",
-      states: [TODO, REVIEW, DONE],
-      updateTaskStatus: vi.fn().mockResolvedValue(undefined),
     });
     useBacklogStore.setState({
       projectId: "project-1",
       states: [TODO, REVIEW, DONE],
     });
+    seedStates("project-1", [TODO, REVIEW, DONE]);
+    const selected = {
+      id: "task-1",
+      project_id: "project-1",
+      state: TODO,
+    } as unknown as WorkItem;
+    queryClient.setQueryData(queryKeys.workItems.byId(selected.id), selected);
+    vi.mocked(api.patchWorkItem).mockReset().mockImplementation(
+      async (_id, patch) => ({
+        ...selected,
+        state: [TODO, REVIEW, DONE].find((state) => state.id === patch.state_id) ?? TODO,
+      }),
+    );
   });
 
+  const renderWithClient = (node: React.ReactNode) =>
+    render(
+      <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>,
+    );
+
   it("follows the new order while preserving the selected state", async () => {
-    render(<StatusUpdate />);
+    renderWithClient(<StatusUpdate />);
     const dialog = screen.getByRole("dialog", { name: "Set Status" });
 
     fireEvent.keyDown(dialog, { key: "ArrowDown" });
@@ -63,13 +90,11 @@ describe("Set Status workflow-state reorder", () => {
     );
 
     act(() => {
-      useTasksStore.setState({
-        states: [
-          { ...REVIEW, sort_order: 0 },
-          { ...TODO, sort_order: 1 },
-          DONE,
-        ],
-      });
+      setStatesSorted("project-1", [
+        { ...REVIEW, sort_order: 0 },
+        { ...TODO, sort_order: 1 },
+        DONE,
+      ]);
     });
 
     expect(
@@ -81,20 +106,20 @@ describe("Set Status workflow-state reorder", () => {
 
     fireEvent.keyDown(dialog, { key: "Enter" });
 
-    expect(useTasksStore.getState().updateTaskStatus).toHaveBeenCalledWith(
-      "project-1",
-      "task-1",
-      "review",
+    await waitFor(() =>
+      expect(api.patchWorkItem).toHaveBeenCalledWith("task-1", {
+        state_id: "review",
+      }),
     );
   });
 
   it("reorders an open IssueDetail StatePicker without losing its selection", () => {
-    render(<StatePicker value={TODO} onChange={vi.fn()} />);
+    render(<StatePicker projectId="project-1" value={TODO} onChange={vi.fn()} />);
     const picker = screen.getByTestId("state-picker");
     fireEvent.click(within(picker).getByRole("button", { name: "Todo" }));
 
     act(() => {
-      synchronizeActiveStateCatalogOrder("project-1", [
+      setStatesSorted("project-1", [
         { ...REVIEW, sort_order: 0 },
         { ...TODO, sort_order: 1 },
         DONE,
@@ -110,27 +135,27 @@ describe("Set Status workflow-state reorder", () => {
   });
 
   it("does not submit a state removed before an open StatusUpdate rerenders", () => {
-    render(<StatusUpdate />);
+    renderWithClient(<StatusUpdate />);
     const reviewRow = screen.getByText("Review").closest("li");
     expect(reviewRow).not.toBeNull();
 
     act(() => {
-      useTasksStore.setState({ states: [TODO, DONE] });
+      seedStates("project-1", [TODO, DONE]);
       fireEvent.click(reviewRow as HTMLLIElement);
     });
 
-    expect(useTasksStore.getState().updateTaskStatus).not.toHaveBeenCalled();
+    expect(api.patchWorkItem).not.toHaveBeenCalled();
   });
 
   it("does not submit a state removed before an open StatePicker rerenders", () => {
     const onChange = vi.fn();
-    render(<StatePicker value={TODO} onChange={onChange} />);
+    render(<StatePicker projectId="project-1" value={TODO} onChange={onChange} />);
     const picker = screen.getByTestId("state-picker");
     fireEvent.click(within(picker).getByRole("button", { name: "Todo" }));
     const reviewOption = within(picker).getByRole("button", { name: "Review" });
 
     act(() => {
-      useBacklogStore.setState({ states: [TODO, DONE] });
+      seedStates("project-1", [TODO, DONE]);
       fireEvent.click(reviewOption);
     });
 

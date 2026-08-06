@@ -3,10 +3,9 @@ import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { apiErrorMessage } from "../../../shared/api/client";
-import { useTasksStore } from "../stores/tasksStore";
+import { createProjectRecord } from "../../projects/queries";
 
 export function AddProject() {
-  const createProject = useTasksStore((state) => state.createProject);
   const popModal = useModalStore((state) => state.popModal);
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
@@ -22,7 +21,7 @@ export function AddProject() {
     setBusy(true);
     setError(null);
     try {
-      await createProject({
+      await createProjectRecord({
         name: name.trim(),
         slug: key.trim(),
       });

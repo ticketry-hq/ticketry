@@ -138,14 +138,8 @@ def _terminal_session_payload(session) -> dict[str, Any]:
     return {
         "agent_run_id": session.agent_run_id,
         "tmux_session_name": session.tmux_session_name,
-        "task_id": session.task_id,
-        "module_id": session.module_id,
-        "project_id": session.project_id,
-        "agent": session.agent,
-        "scope": session.scope,
         "doc_rel_path": session.doc_rel_path,
         "created_at": session.created_at,
-        "terminated_at": session.terminated_at,
     }
 
 
@@ -217,7 +211,11 @@ def list_terminals(request, task_id: str) -> list[dict[str, Any]]:
     except Exception as exc:
         logger.warning("terminal reconcile before list failed: %s", exc)
 
-    sessions = terminal_session.sessions_for(task_id)
+    sessions = [
+        session
+        for session in terminal_session.sessions_for(task_id)
+        if session.scope != "docchat"
+    ]
     return [_terminal_session_payload(s) for s in sessions]
 
 
@@ -264,7 +262,9 @@ def list_resumable_terminals(
                 }
             else:
                 return []
-            terminated_query = AgentRun.objects.filter(ended_at__isnull=False, **scope)
+            terminated_query = AgentRun.objects.filter(
+                ended_at__isnull=False, **scope
+            ).exclude(scope="docchat")
             # Scratch history is deliberately limited to the two launch modes
             # rendered in the Scratch workspace. A sentinel-task doc-chat (or
             # any future scratch-only mode) must not consume a resume chip.
@@ -282,7 +282,7 @@ def list_resumable_terminals(
                 provider_session_id
                 for provider_session_id in AgentRun.objects.filter(
                     ended_at__isnull=True, **scope
-                )
+                ).exclude(scope="docchat")
                 .exclude(provider_session_id__isnull=True)
                 .exclude(provider_session_id="")
                 .values_list("provider_session_id", flat=True)
@@ -291,7 +291,7 @@ def list_resumable_terminals(
                 resumed_from
                 for resumed_from in AgentRun.objects.filter(
                     ended_at__isnull=True, **scope
-                )
+                ).exclude(scope="docchat")
                 .exclude(resumed_from__isnull=True)
                 .exclude(resumed_from="")
                 .values_list("resumed_from", flat=True)
@@ -311,10 +311,8 @@ def list_resumable_terminals(
             "agent": run.agent,
             "status": run.status,
             "started_at": run.started_at,
-            "ended_at": run.ended_at,
             "provider_session_id": run.provider_session_id,
             "resumed_from": run.resumed_from,
-            "scope": run.scope,
         }
         for run in runs
     ]
@@ -339,6 +337,7 @@ def list_scratch_terminals(
         session
         for session in scratch_sessions
         if session.project_id == project_id
+        and session.scope != "docchat"
         and (module_id is None or session.module_id == module_id)
     ]
     return [_terminal_session_payload(s) for s in sessions]

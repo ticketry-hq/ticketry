@@ -279,9 +279,12 @@ async def _launch(
             at=started_at,
             run=RunRecord(
                 agent_run_id=agent_run_id,
+                project_id=project_id,
                 task_id=task_id,
                 module_id=module_id,
+                agent=agent,
                 scope=scope,
+                started_at=started_at,
                 state="starting",
                 updated_at=started_at,
             ),

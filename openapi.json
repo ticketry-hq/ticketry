@@ -3923,6 +3923,9 @@
                     "agent_run_id": {
                         "type": "string"
                     },
+                    "project_id": {
+                        "type": "string"
+                    },
                     "task_id": {
                         "type": "string",
                         "nullable": true
@@ -3930,8 +3933,14 @@
                     "module_id": {
                         "type": "string"
                     },
+                    "agent": {
+                        "type": "string"
+                    },
                     "scope": {
                         "$ref": "#/components/schemas/ScopeEnum"
+                    },
+                    "started_at": {
+                        "type": "string"
                     },
                     "state": {
                         "type": "string"
@@ -3941,9 +3950,12 @@
                     }
                 },
                 "required": [
+                    "agent",
                     "agent_run_id",
                     "module_id",
+                    "project_id",
                     "scope",
+                    "started_at",
                     "state",
                     "task_id",
                     "updated_at"
@@ -5231,27 +5243,19 @@
                     "started_at": {
                         "type": "string"
                     },
-                    "ended_at": {
-                        "type": "string"
-                    },
                     "provider_session_id": {
                         "type": "string"
                     },
                     "resumed_from": {
                         "type": "string",
                         "nullable": true
-                    },
-                    "scope": {
-                        "type": "string"
                     }
                 },
                 "required": [
                     "agent",
                     "agent_run_id",
-                    "ended_at",
                     "provider_session_id",
                     "resumed_from",
-                    "scope",
                     "started_at",
                     "status"
                 ]
@@ -5412,32 +5416,12 @@
                     "tmux_session_name": {
                         "type": "string"
                     },
-                    "task_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "module_id": {
-                        "type": "string"
-                    },
-                    "project_id": {
-                        "type": "string"
-                    },
-                    "agent": {
-                        "type": "string"
-                    },
-                    "scope": {
-                        "type": "string"
-                    },
                     "doc_rel_path": {
                         "type": "string",
                         "nullable": true
                     },
                     "created_at": {
                         "type": "string"
-                    },
-                    "terminated_at": {
-                        "type": "string",
-                        "nullable": true
                     }
                 },
                 "required": [

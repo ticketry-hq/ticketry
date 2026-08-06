@@ -1,33 +1,36 @@
-import { useTasksStore } from "../stores/tasksStore";
-import type { ProjectSummary } from "./types";
+import {
+  createProjectRecord,
+  getProjectsSnapshot,
+  loadProjects,
+} from "../../projects/queries";
+import type { Project } from "../../../shared/api/types";
 
 export const DEFAULT_PROJECT_KEY = "CDN";
 export const LEGACY_PROJECT_KEY = "CODING";
 
-function findDefaultProject(projects: ProjectSummary[]): ProjectSummary | null {
+function findDefaultProject(projects: Project[]): Project | null {
   return (
-    projects.find((project) => project.identifier === DEFAULT_PROJECT_KEY) ??
-    projects.find((project) => project.identifier === LEGACY_PROJECT_KEY) ??
+    projects.find((project) => project.slug === DEFAULT_PROJECT_KEY) ??
+    projects.find((project) => project.slug === LEGACY_PROJECT_KEY) ??
     null
   );
 }
 
 /** Resolve the installation's default project, creating canonical Coding last. */
-export async function resolveDefaultProject(): Promise<ProjectSummary> {
-  const tasks = useTasksStore.getState();
-  const existing = findDefaultProject(tasks.projects);
+export async function resolveDefaultProject(): Promise<Project> {
+  const existing = findDefaultProject(getProjectsSnapshot());
   if (existing) return existing;
 
   try {
-    return await tasks.createProject({
+    return await createProjectRecord({
       name: "Coding",
       slug: DEFAULT_PROJECT_KEY,
     });
   } catch {
     // Another bootstrap/onboarding attempt may have created the project first.
     // Refresh once and prefer the authoritative row before reporting failure.
-    await tasks.loadProjects();
-    const refreshed = findDefaultProject(useTasksStore.getState().projects);
+    await loadProjects();
+    const refreshed = findDefaultProject(getProjectsSnapshot());
     if (refreshed) return refreshed;
     throw new Error("The resolved default project is unavailable.");
   }

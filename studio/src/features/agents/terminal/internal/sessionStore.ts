@@ -23,6 +23,8 @@ import {
 } from "./foregroundStore";
 import { useWorkspaceTabsStore } from "./workspaceTabsStore";
 import { readVersionedItem } from "../../../../shared/storage/versioned";
+import { useAgentStatusStore } from "../../status";
+import { rekeyTerminalFocus } from "./terminalRegistry";
 
 export type PersistedSessionsFetchOutcome =
   | "applied"
@@ -47,7 +49,6 @@ export type SessionStatus =
   | "session_lost";
 
 export type TerminalTransport = "connecting" | "ready" | "reconnecting" | "closed";
-export type BackendSessionState = "alive" | "lost" | "exited";
 
 // App-scoped set of agent_run_ids whose tabs were live (reached `ready`).
 // Persisted to localStorage so a reload can silently re-attach exactly those
@@ -160,7 +161,7 @@ function removeDismissedRun(bucket: string, id: string | null): void {
   writeDismissedRuns(map);
 }
 
-function dismissedRunsFor(bucket: string): Set<string> {
+export function dismissedRunsFor(bucket: string): Set<string> {
   return new Set(readDismissedRuns()[bucket] ?? []);
 }
 
@@ -173,23 +174,12 @@ export interface SessionMeta {
   ticketSeq: number | null;
   status: SessionStatus;
   transport?: TerminalTransport;
-  backendSession?: BackendSessionState;
   isPlanning: boolean;
   isInstant: boolean;
   initialPrompt: string | null;
   // Set when this tab reattaches to a persisted tmux session rather than
   // spawning a fresh agent. Drives the attach-mode init frame in ws.ts.
   agentRunId: string | null;
-  // #625 doc-agent overlay: a dedicated doc-chat run lives in `sessions` (so
-  // TerminalHost owns its xterm) but outside byTaskId/activeByTask (never a
-  // tab), tracked only by chatByDoc. `docRelPath` is the design-dir-relative .html
-  // it is scoped to; both flow into the spawn-branch init frame.
-  isDocChat: boolean;
-  docRelPath: string | null;
-  // The registered document's id (#625). Sent on the spawn frame so the
-  // backend resolves the doc's exact design dir unambiguously (a task can have
-  // the same rel_path under more than one root — worktree + canonical folder).
-  docId: string | null;
 }
 
 export interface OpenSessionArgs {
@@ -203,20 +193,6 @@ export interface OpenSessionArgs {
   isInstant?: boolean;
   agentRunId?: string | null;
   select?: boolean;
-}
-
-// A doc-chat summon (or its reattach on restore). Distinct from OpenSessionArgs
-// because a doc-chat run is never a tab: it carries the scoped doc path and is
-// always task-bound to the bucket whose doc is in front of the user.
-export interface OpenDocChatArgs {
-  taskId: TaskId | null;
-  projectId: string;
-  moduleId?: string;
-  agent: SessionMeta["agent"];
-  ticketSeq: number | null;
-  docRelPath: string;
-  docId?: string | null;
-  agentRunId?: string | null;
 }
 
 // A session's *bucket* is its real taskId when set, else a per-module scratch
@@ -241,16 +217,6 @@ export function bucketOfMeta(
   return bucketFor(meta.taskId, meta.moduleId);
 }
 
-// A doc-chat session is keyed per *document* (#625), not per bucket: every
-// generated doc in a ticket can host its own dedicated overlay run, so the
-// "edit with agent" affordance works on all documents independently. The key
-// folds the bucket with the doc's design-dir-relative path — the doc's identity
-// within a ticket (the workspace dedupes doc tabs by relPath) — and is the same
-// on summon and on a reload's restore (the persisted row carries doc_rel_path).
-export function docChatKey(bucket: string | null, docRelPath: string): string {
-  return `${bucket ?? scratchBucketId("")}::${docRelPath}`;
-}
-
 export function scratchResumableKey(projectId: string, moduleId: string): string {
   return `${TEMP_TASK_ID}:${projectId}:${moduleId}`;
 }
@@ -267,8 +233,6 @@ export function selectScratchAgentCount(
 
   // Count only active no-task (scratch) sessions.
   for (const meta of Object.values(state.sessions)) {
-    // A doc-chat run is never a tab and never inflates a count (#625).
-    if (meta.isDocChat) continue;
     if (meta.taskId !== null) continue;
     if (moduleId && meta.moduleId !== moduleId) continue;
     if (projectId && meta.projectId !== projectId) continue;
@@ -287,14 +251,12 @@ export function selectScratchAgentCount(
 interface TerminalStoreState {
   sessions: Record<SessionId, SessionMeta>;
   sessionByRun: Record<string, SessionId>;
-  // Tab/doc-chat indexes (byTaskId / activeByTask / chatByDoc) live in the
-  // workspace-tabs store (CODIN-981) — this store owns sessions and transport
+  // Terminal selection lives in the client store; this store owns sessions and transport
   // only, and notifies that store on open/rekey/focus/close.
   persistedSessions: Record<TaskId, PersistedTerminalSession[]>;
   resumableSessions: Record<TaskId, ResumableTerminalSession[]>;
 
   openSession: (args: OpenSessionArgs) => SessionId;
-  openDocChat: (args: OpenDocChatArgs) => SessionId;
   setReady: (
     tempId: SessionId,
     sessionId: SessionId,
@@ -302,7 +264,6 @@ interface TerminalStoreState {
   ) => void;
   bindRun: (sessionId: SessionId, agentRunId: string) => void;
   setTransport: (sessionId: SessionId, transport: TerminalTransport) => void;
-  setBackendSession: (sessionId: SessionId, state: BackendSessionState) => void;
   setPersisted: (taskId: TaskId, sessions: PersistedTerminalSession[]) => void;
   setResumable: (taskId: TaskId, sessions: ResumableTerminalSession[]) => void;
   setExited: (sessionId: SessionId) => void;
@@ -375,76 +336,15 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       ticketSeq: args.ticketSeq,
       status: "connecting",
       transport: "connecting",
-      backendSession: "alive",
       isPlanning: args.isPlanning ?? false,
       isInstant: args.isInstant ?? false,
       initialPrompt: args.initialPrompt ?? null,
       agentRunId: args.agentRunId ?? null,
-      isDocChat: false,
-      docRelPath: null,
-      docId: null,
     };
     set((s) => ({ sessions: { ...s.sessions, [tempId]: meta } }));
     useWorkspaceTabsStore
       .getState()
       .tabOpened(bucketOfMeta(meta), tempId, args.select);
-    if (args.agentRunId) get().bindRun(tempId, args.agentRunId);
-    return tempId;
-  },
-
-  openDocChat(args) {
-    const key = docChatKey(
-      bucketFor(args.taskId, args.moduleId),
-      args.docRelPath,
-    );
-    // Dedupe: if a live doc-chat run already exists for THIS document, reveal it
-    // rather than forking a second (#625 one run per document). A dead prior run
-    // (exited/error) is replaced by the fresh spawn below. Other documents in
-    // the same ticket keep their own independent runs.
-    const priorId = useWorkspaceTabsStore.getState().chatByDoc[key];
-    const prior = priorId ? get().sessions[priorId] : null;
-    if (
-      prior &&
-      (prior.status === "connecting" ||
-        prior.status === "ready" ||
-        prior.status === "reconnecting")
-    ) {
-      return priorId;
-    }
-    const tempId = makeTempId();
-    const meta: SessionMeta = {
-      sessionId: tempId,
-      taskId: args.taskId,
-      projectId: args.projectId,
-      moduleId: args.moduleId ?? "",
-      agent: args.agent,
-      ticketSeq: args.ticketSeq,
-      status: "connecting",
-      transport: "connecting",
-      backendSession: "alive",
-      isPlanning: false,
-      isInstant: false,
-      initialPrompt: null,
-      agentRunId: args.agentRunId ?? null,
-      isDocChat: true,
-      docRelPath: args.docRelPath,
-      docId: args.docId ?? null,
-    };
-    // Dropping a dead prior must also drop it from the auto-reattach live-set:
-    // a run that died via lostConnection keeps its agentRunId there (unlike
-    // setExited/setError), so without this it would linger and could re-attach
-    // on the next reload as a second doc-chat run for the bucket.
-    if (prior && prior.sessionId !== tempId) removeLiveRun(prior.agentRunId);
-    set((s) => {
-      const sessions = { ...s.sessions };
-      // Drop a dead prior doc-chat session so its xterm entry is disposed.
-      if (priorId && priorId !== tempId) delete sessions[priorId];
-      sessions[tempId] = meta;
-      return { sessions };
-    });
-    // Deliberately NOT tabOpened: a doc-chat session is never a tab and never
-    // surfaces the ticket's existing run. chatByDoc is the sole index.
-    useWorkspaceTabsStore.getState().docChatOpened(key, tempId);
     if (args.agentRunId) get().bindRun(tempId, args.agentRunId);
     return tempId;
   },
@@ -480,8 +380,9 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       if (updated.agentRunId) sessionByRun[updated.agentRunId] = sessionId;
       return { sessions, sessionByRun };
     });
-    // Rekey tempId -> serverId in the tab/doc-chat indexes (all buckets).
+    // Rekey tempId -> serverId in the terminal selection index.
     useWorkspaceTabsStore.getState().tabRekeyed(tempId, sessionId);
+    rekeyTerminalFocus(tempId, sessionId);
     if (before) {
       const oldKey = foregroundKey(before);
       const newKey = (agentRunId ?? before.agentRunId) ?? sessionId;
@@ -521,40 +422,6 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     });
   },
 
-  setBackendSession(sessionId, backendSession) {
-    if (backendSession === "exited") {
-      const session = get().sessions[sessionId];
-      // A tab still `connecting` has never been presented: its socket opens
-      // only on first view, so its buffer is empty and, once exited, can never
-      // connect — presenting it would show a blank pane. Drop the tab (what a
-      // reload does with a terminated row); the resumable chip offers the run
-      // back.
-      // Not a dismissal: the server says this run is over, so there is nothing
-      // for the restore path to resurrect and nothing to remember.
-      if (session?.status === "connecting") {
-        get().closeTab(sessionId, { dismiss: false });
-      } else get().setExited(sessionId);
-      if (session) {
-        void get().refreshResumable(
-          session.taskId ?? undefined,
-          session.projectId,
-          session.moduleId,
-        );
-      }
-      return;
-    }
-    set((state) => {
-      const existing = state.sessions[sessionId];
-      if (!existing) return state;
-      return {
-        sessions: {
-          ...state.sessions,
-          [sessionId]: { ...existing, backendSession },
-        },
-      };
-    });
-  },
-
   setPersisted(taskId, sessions) {
     set((state) => ({
       persistedSessions: { ...state.persistedSessions, [taskId]: sessions },
@@ -587,7 +454,6 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
           [sessionId]: {
             ...existing,
             status: "exited",
-            backendSession: "exited",
           },
         },
       };
@@ -665,7 +531,6 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
           [sessionId]: {
             ...existing,
             status: "session_lost",
-            backendSession: "lost",
           },
         },
       };
@@ -735,8 +600,6 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       delete nextSessionByRun[target.agentRunId];
     }
     set({ sessions: nextSessions, sessionByRun: nextSessionByRun });
-    // Drop the tab (or a doc-chat's per-document pointer) from the indexes.
-    useWorkspaceTabsStore.getState().tabClosed(sessionId);
   },
 
   focusSession(sessionId) {
@@ -823,7 +686,9 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       const byModule = new Map<string, PersistedTerminalSession[]>();
       if (moduleId) byModule.set(scratchBucketId(moduleId), []);
       for (const row of list) {
-        const key = scratchBucketId(row.module_id ?? "");
+        const run = useAgentStatusStore.getState().runs[row.agent_run_id];
+        if (!run || run.projectId !== projectId || run.taskId !== null) continue;
+        const key = scratchBucketId(run.moduleId);
         byModule.set(key, [...(byModule.get(key) ?? []), row]);
       }
       for (const [key, rows] of byModule) {
@@ -880,9 +745,11 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     // dismissed, so this must not be widened into gating on the live-set.
     const dismissed = dismissedRunsFor(taskId);
     for (const session of persistedSessions[taskId] ?? []) {
-      // The run ended server-side: drop any stale live-set id and spend any
-      // dismissal (the tab it suppressed can never come back), do not attach.
-      if (session.terminated_at) {
+      const run = useAgentStatusStore.getState().runs[session.agent_run_id];
+      if (!run) continue;
+      // Liveness is read only from the pushed run projection. The immutable
+      // terminal row can therefore never disagree with a lifecycle frame.
+      if (run.state === "exited" || run.state === "lost" || run.state === "error") {
         removeLiveRun(session.agent_run_id);
         removeDismissedRun(taskId, session.agent_run_id);
         continue;
@@ -895,20 +762,9 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
   },
 
   attachPersisted(session) {
-    // #625: a doc-chat row restores into chatByDoc (the overlay), never a tab.
-    // openDocChat carries its own dedupe; restoreLiveSessions already guards
-    // against re-attaching a run id that a live session holds, so routing here
-    // before the generic tab path keeps a restored doc-chat run off the strip.
-    if (session.scope === "docchat") {
-      return get().openDocChat({
-        taskId: session.task_id,
-        projectId: session.project_id,
-        moduleId: session.module_id,
-        agent: session.agent,
-        ticketSeq: null,
-        docRelPath: session.doc_rel_path ?? "",
-        agentRunId: session.agent_run_id,
-      });
+    const run = useAgentStatusStore.getState().runs[session.agent_run_id];
+    if (!run) {
+      throw new Error(`run projection missing for terminal ${session.agent_run_id}`);
     }
     const { sessions } = get();
     const existingId = get().sessionByRun[session.agent_run_id];
@@ -928,16 +784,16 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     }
     // Scratch rows carry the backend sentinel task id; fold them back into the
     // local scratch bucket (taskId null) and restore their plan/instant label.
-    const isScratch = session.scope !== "task";
+    const isScratch = run.scope !== "task";
     return get().openSession({
-      taskId: isScratch ? null : session.task_id,
-      projectId: session.project_id,
-      moduleId: session.module_id,
-      agent: session.agent,
+      taskId: isScratch ? null : run.taskId,
+      projectId: run.projectId ?? "",
+      moduleId: run.moduleId,
+      agent: (run.agent ?? "codex") as SessionMeta["agent"],
       ticketSeq: null,
       agentRunId: session.agent_run_id,
-      isPlanning: session.scope === "plan",
-      isInstant: session.scope === "instant",
+      isPlanning: run.scope === "plan",
+      isInstant: run.scope === "instant",
       select: false,
     });
   },

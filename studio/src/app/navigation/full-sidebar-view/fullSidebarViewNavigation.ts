@@ -117,7 +117,6 @@ function cycleLiveTerminal(
       : selectModuleTaskOrder(tasks.tasks, tasks.states, tasks.subtasks),
     agentStatus: useAgentStatusStore.getState(),
     sessions: terminal.sessions,
-    tabsByTask: tabs.byTaskId,
   });
   const currentSessionId = tasks.selectedTaskId
     ? tabs.activeByTask[tasks.selectedTaskId] ?? null

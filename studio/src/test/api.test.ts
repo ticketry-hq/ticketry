@@ -22,6 +22,7 @@ import {
   reorderIssueTypes,
   reorderStates,
 } from "../shared/api/client";
+import { terminateTerminal } from "../features/agents/api/agentApi";
 
 const fetchMock = vi.fn();
 
@@ -56,6 +57,19 @@ describe("api client", () => {
     expect(agentApiBase()).toBe("/api");
     vi.stubEnv("VITE_AGENT_API_BASE", "https://agents.example.com/api");
     expect(agentApiBase()).toBe("https://agents.example.com/api");
+  });
+
+  it("terminates a run on the canonical terminal collection route", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({
+      agent_run_id: "run/1",
+      terminated: true,
+    }));
+
+    await terminateTerminal("run/1");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/terminals?agent_run_id=run%2F1");
+    expect(init.method).toBe("DELETE");
   });
 
   it("sends x-api-key on every request and hits the projects path", async () => {

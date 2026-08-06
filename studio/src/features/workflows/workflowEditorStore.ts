@@ -14,18 +14,18 @@ import type {
 import * as api from "../../shared/api/client";
 import { loadProviderCapabilities } from "./providerQueries";
 import {
-  synchronizeActiveStateCatalogOrder,
-  synchronizeActiveStateCatalogs,
-} from "./stateCatalogSync";
-import {
+  advanceStateCatalogRevision,
   overlayAuthoritativeState,
   stateCatalogChangedSince,
   stateCatalogRevision,
 } from "../../shared/stateCatalogRevision";
 import {
-  prepareActiveStateRemoval,
-  reconcileActiveStateRemoval,
-} from "./stateRemovalSync";
+  removeState as removeStateFromCatalog,
+  setStatesSorted,
+  upsertState,
+} from "../../shared/query/stateCatalog";
+import { queryClient } from "../../shared/query/queryClient";
+import { queryKeys } from "../../shared/query/keys";
 import { synchronizeSubtreeRunCapabilities } from "../settings";
 import {
   loadAllWorkflowSettings,
@@ -488,12 +488,9 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     try {
       const created = await api.createState(projectId, { name, group });
       if (get().projectId !== projectId) return;
+      advanceStateCatalogRevision(projectId, created);
       set({
-        states: synchronizeActiveStateCatalogs(
-          projectId,
-          created,
-          get().states,
-        ),
+        states: upsertState(projectId, created),
         action: null,
         notice: `State ${created.name} created.`,
       });
@@ -511,12 +508,9 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     try {
       const updated = await api.updateState(stateId, patch);
       if (get().projectId !== projectId) return;
+      advanceStateCatalogRevision(projectId, updated);
       set({
-        states: synchronizeActiveStateCatalogs(
-          projectId,
-          updated,
-          get().states,
-        ),
+        states: upsertState(projectId, updated),
         action: null,
         notice: `State ${updated.name} updated.`,
       });
@@ -538,32 +532,21 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
         command.impactToken,
       );
       if (get().projectId !== projectId) return;
-      const replacement =
-        command.replacement ??
-        (command.replacementId
-          ? get().states.find((state) => state.id === command.replacementId) ?? null
-          : null);
-      const prepared = prepareActiveStateRemoval(
-        projectId,
-        command.stateId,
-        replacement,
-        get().states,
-      );
-      set({ states: prepared.workflowStates });
+      removeStateFromCatalog(projectId, command.stateId);
+      set({ states: getWorkflowStatesSnapshot(projectId) });
       const [states, workflowRows, workItems] = await Promise.all([
         loadWorkflowStates(projectId),
         loadAllWorkflowSettings(issueTypes.map((type) => type.id)),
         loadWorkflowProjectItems(projectId),
       ]);
       if (get().projectId !== projectId) return;
+      advanceStateCatalogRevision(projectId, states);
+      setStatesSorted(projectId, states);
+      for (const item of workItems) {
+        queryClient.setQueryData(queryKeys.workItems.byId(item.id), item);
+      }
       set({
-        states: reconcileActiveStateRemoval(
-          projectId,
-          command.stateId,
-          prepared.affectedIds,
-          states,
-          workItems,
-        ),
+        states: getWorkflowStatesSnapshot(projectId),
         stateWorkItemCounts: countWorkItemsByState(workItems),
         workflows: Object.fromEntries(workflowRows.map((row) => [
           row.issue_type_id,
@@ -593,8 +576,10 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     try {
       const reordered = await api.reorderWorkflowStates(projectId, orderedIds);
       if (get().projectId !== projectId) return;
+      advanceStateCatalogRevision(projectId, reordered);
+      setStatesSorted(projectId, reordered);
       set({
-        states: synchronizeActiveStateCatalogOrder(projectId, reordered),
+        states: getWorkflowStatesSnapshot(projectId),
         action: null,
       });
     } catch (error) {
@@ -617,8 +602,10 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     try {
       const reordered = await api.reorderWorkflowStates(projectId, orderedIds);
       if (get().projectId !== projectId) return;
+      advanceStateCatalogRevision(projectId, reordered);
+      setStatesSorted(projectId, reordered);
       set({
-        states: synchronizeActiveStateCatalogOrder(projectId, reordered),
+        states: getWorkflowStatesSnapshot(projectId),
         action: null,
       });
     } catch (error) {

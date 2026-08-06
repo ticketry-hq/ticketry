@@ -12,7 +12,7 @@ import {
 
 type CycleSession = Pick<
   SessionMeta,
-  "sessionId" | "agentRunId" | "taskId" | "moduleId" | "isDocChat"
+  "sessionId" | "agentRunId" | "taskId" | "moduleId"
 >;
 
 export interface LiveTerminalStop {
@@ -29,7 +29,8 @@ interface LiveTerminalStopInput {
   taskOrder?: readonly TaskId[];
   agentStatus: AgentStatusData;
   sessions: Readonly<Record<string, CycleSession>>;
-  tabsByTask: Readonly<Record<string, readonly string[]>>;
+  /** @deprecated Tabs are derived from runs and the live-session registry. */
+  tabsByTask?: Readonly<Record<string, readonly string[]>>;
 }
 
 export function selectLiveTerminalStops({
@@ -38,7 +39,6 @@ export function selectLiveTerminalStops({
   taskOrder,
   agentStatus,
   sessions,
-  tabsByTask,
 }: LiveTerminalStopInput): LiveTerminalStop[] {
   if (!moduleId) return [];
 
@@ -49,11 +49,21 @@ export function selectLiveTerminalStops({
       isPlanningRow(row) ? [planningRowId(row)] : [],
     );
   for (const taskId of taskIds) {
-    for (const sessionId of tabsByTask[taskId] ?? []) {
-      const session = sessions[sessionId];
+    const taskSessions = Object.values(sessions)
+      .filter((session) => session.taskId === taskId)
+      .sort((left, right) => {
+        const leftAt = left.agentRunId
+          ? agentStatus.runs[left.agentRunId]?.startedAt ?? ""
+          : "";
+        const rightAt = right.agentRunId
+          ? agentStatus.runs[right.agentRunId]?.startedAt ?? ""
+          : "";
+        return leftAt.localeCompare(rightAt) ||
+          left.sessionId.localeCompare(right.sessionId);
+      });
+    for (const session of taskSessions) {
+      const sessionId = session.sessionId;
       if (
-        !session ||
-        session.isDocChat ||
         !session.agentRunId ||
         session.taskId !== taskId ||
         session.moduleId !== moduleId

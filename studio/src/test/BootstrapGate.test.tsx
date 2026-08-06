@@ -20,6 +20,22 @@ vi.mock("../shared/api/client", async () => {
   return { ...actual, getWorkspace: mocks.getWorkspace };
 });
 
+vi.mock("../features/projects/queries", () => ({
+  getProjectsSnapshot: () => projects.map((project) => ({
+    ...project,
+    name: project.identifier,
+    slug: project.identifier,
+  })),
+  loadProjects: mocks.loadProjects,
+  createProjectRecord: async (body: { name: string; slug: string }) => {
+    const project = await mocks.createProject(body);
+    return project && {
+      ...project,
+      slug: project.slug ?? project.identifier,
+    };
+  },
+}));
+
 let profiles: Array<{ recent_project_id?: string | null }> = [];
 let features = { sidebar: true, projects: true };
 let projects: Array<{ id: string; identifier: string }> = [];

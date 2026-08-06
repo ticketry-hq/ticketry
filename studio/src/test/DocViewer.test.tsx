@@ -354,7 +354,7 @@ describe("DocViewer", () => {
     expect(screen.getByLabelText("Document source")).toHaveValue(htmlDocument);
   });
 
-  it("keeps Edit with agent available in rich edit mode", async () => {
+  it("keeps rich document editing without an agent-chat action", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -365,16 +365,11 @@ describe("DocViewer", () => {
     render(
       <WorkspaceDocument
         doc={markdownDoc}
-        bucket="task-1"
-        projectId="project-1"
-        moduleId="module-1"
-        taskId="task-1"
-        ticketSeq={1367}
       />,
     );
 
     expect(await screen.findByTestId("rich-markdown-editor")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit with agent" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit with agent" })).not.toBeInTheDocument();
   });
 
   it("autosaves dirty content every 10 seconds and does nothing while clean", async () => {

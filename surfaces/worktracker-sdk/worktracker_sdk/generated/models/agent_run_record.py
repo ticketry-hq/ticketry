@@ -30,12 +30,15 @@ class AgentRunRecord(BaseModel):
     AgentRunRecord
     """ # noqa: E501
     agent_run_id: StrictStr
+    project_id: StrictStr
     task_id: Optional[StrictStr]
     module_id: StrictStr
+    agent: StrictStr
     scope: ScopeEnum
+    started_at: StrictStr
     state: StrictStr
     updated_at: StrictStr
-    __properties: ClassVar[List[str]] = ["agent_run_id", "task_id", "module_id", "scope", "state", "updated_at"]
+    __properties: ClassVar[List[str]] = ["agent_run_id", "project_id", "task_id", "module_id", "agent", "scope", "started_at", "state", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -94,9 +97,12 @@ class AgentRunRecord(BaseModel):
 
         _obj = cls.model_validate({
             "agent_run_id": obj.get("agent_run_id"),
+            "project_id": obj.get("project_id"),
             "task_id": obj.get("task_id"),
             "module_id": obj.get("module_id"),
+            "agent": obj.get("agent"),
             "scope": obj.get("scope"),
+            "started_at": obj.get("started_at"),
             "state": obj.get("state"),
             "updated_at": obj.get("updated_at")
         })

@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useTasksStore } from "../stores/tasksStore";
+import { useStudioStore } from "../../projects/store";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { setModuleFolder, useConfig } from "../stores/configStore";
 import {
@@ -18,7 +19,6 @@ import {
  */
 export function AddModule() {
   const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
-  const createModule = useTasksStore((s) => s.createModule);
   const popModal = useModalStore((s) => s.popModal);
   const { profiles, recentProfileIndex } = useConfig();
 
@@ -49,7 +49,10 @@ export function AddModule() {
     try {
       let moduleId = createdModuleIdRef.current;
       if (!moduleId) {
-        moduleId = await createModule(selectedProjectId, name.trim());
+        const created = await useStudioStore
+          .getState()
+          .createModuleForProjectWithError(selectedProjectId, name.trim());
+        moduleId = created.id;
         createdModuleIdRef.current = moduleId;
         setCreatedModuleId(moduleId);
       }

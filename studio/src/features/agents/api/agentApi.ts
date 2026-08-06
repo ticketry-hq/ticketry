@@ -67,7 +67,7 @@ export const getScratchTerminals = (
   return request<PersistedTerminalSession[]>(url, { signal });
 };
 export const terminateTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; terminated: boolean }>(`/api/terminals/?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "DELETE" });
+  request<{ agent_run_id: string; terminated: boolean }>(`/api/terminals?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "DELETE" });
 export const resumeTerminal = (agentRunId: string) =>
   request<{ agent_run_id: string; resumed_from: string }>(`/api/terminals/resume?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "POST" });
 
@@ -80,9 +80,6 @@ export interface CreateTerminalRunRequest {
   is_planning: boolean;
   is_instant: boolean;
   instant_prompt: string | null;
-  is_doc_chat: boolean;
-  doc_rel_path: string | null;
-  doc_id: string | null;
 }
 
 export const createTerminalRun = (body: CreateTerminalRunRequest) =>

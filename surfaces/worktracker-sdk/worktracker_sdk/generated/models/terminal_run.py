@@ -30,15 +30,9 @@ class TerminalRun(BaseModel):
     """ # noqa: E501
     agent_run_id: StrictStr
     tmux_session_name: Optional[StrictStr] = None
-    task_id: Optional[StrictStr] = None
-    module_id: Optional[StrictStr] = None
-    project_id: Optional[StrictStr] = None
-    agent: Optional[StrictStr] = None
-    scope: Optional[StrictStr] = None
     doc_rel_path: Optional[StrictStr] = None
     created_at: Optional[StrictStr] = None
-    terminated_at: Optional[StrictStr] = None
-    __properties: ClassVar[List[str]] = ["agent_run_id", "tmux_session_name", "task_id", "module_id", "project_id", "agent", "scope", "doc_rel_path", "created_at", "terminated_at"]
+    __properties: ClassVar[List[str]] = ["agent_run_id", "tmux_session_name", "doc_rel_path", "created_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -79,20 +73,10 @@ class TerminalRun(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # set to None if task_id (nullable) is None
-        # and model_fields_set contains the field
-        if self.task_id is None and "task_id" in self.model_fields_set:
-            _dict['task_id'] = None
-
         # set to None if doc_rel_path (nullable) is None
         # and model_fields_set contains the field
         if self.doc_rel_path is None and "doc_rel_path" in self.model_fields_set:
             _dict['doc_rel_path'] = None
-
-        # set to None if terminated_at (nullable) is None
-        # and model_fields_set contains the field
-        if self.terminated_at is None and "terminated_at" in self.model_fields_set:
-            _dict['terminated_at'] = None
 
         return _dict
 
@@ -108,13 +92,7 @@ class TerminalRun(BaseModel):
         _obj = cls.model_validate({
             "agent_run_id": obj.get("agent_run_id"),
             "tmux_session_name": obj.get("tmux_session_name"),
-            "task_id": obj.get("task_id"),
-            "module_id": obj.get("module_id"),
-            "project_id": obj.get("project_id"),
-            "agent": obj.get("agent"),
-            "scope": obj.get("scope"),
             "doc_rel_path": obj.get("doc_rel_path"),
-            "created_at": obj.get("created_at"),
-            "terminated_at": obj.get("terminated_at")
+            "created_at": obj.get("created_at")
         })
         return _obj

@@ -71,36 +71,7 @@ export interface TaskDetails {
   task: TaskSummary;
 }
 
-// Per-task worktree types live in features/agents/worktrees.
-
-export interface PersistedTerminalSession {
-  agent_run_id: string;
-  tmux_session_name: string;
-  // The reserved scratch sentinel for no-task plan/instant runs (see scope).
-  task_id: string;
-  module_id: string;
-  project_id: string;
-  agent: "claude" | "agy" | "codex" | "gemini";
-  // Run scope: "task" for ticket-bound, "plan"/"instant" for scratch runs,
-  // "docchat" for a doc-agent overlay run (#625) — restored into chatByTask,
-  // never a tab.
-  scope: "task" | "plan" | "instant" | "docchat";
-  // Repo-relative .html the doc-chat run is scoped to; null for non-docchat
-  // rows. Lets a reload re-associate the restored overlay with its document.
-  doc_rel_path?: string | null;
-  created_at: string;
-  terminated_at: string | null;
-}
-
-export interface ResumableTerminalSession {
-  agent_run_id: string;
-  agent: AgentName;
-  status: string;
-  started_at: string;
-  ended_at: string;
-  provider_session_id: string | null;
-  resumed_from: string | null;
-}
+// Per-task worktree and terminal types live in features/agents.
 
 export interface RunningAgentCount {
   direct: number;

@@ -31,6 +31,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/types",
   "features/agents/worktrees",
   "features/studio/lib/liveTerminalCycle",
+  "features/studio/lib/defaultProject",
   "features/studio/lib/planeUrl",
   "features/studio/lib/taskTree",
   "features/studio/lib/types",
@@ -61,7 +62,6 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/workflows/launchProviderCatalog",
   "features/workflows/StateConfigurationPanel",
   "features/workflows/WorkflowSettingsPanel",
-  "features/workflows/stateCatalogSync",
   "features/workflows/workflowEditorStore",
 ]);
 

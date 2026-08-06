@@ -321,7 +321,7 @@ async def test_connect_reconciles_unresolved_automation_attempts() -> None:
 
 
 async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
-    await _seed_run("run-1", scope="docchat")
+    await _seed_run("run-1", scope="task")
     socket = await _connect(PROJECT_1_ID)
     assert (await socket.connect())[0]
     await socket.receive_json_from()  # snapshot
@@ -342,9 +342,12 @@ async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
         "at": "2026-07-12T10:01:00+00:00",
         "run": {
             "agent_run_id": "run-1",
+            "project_id": PROJECT_1_ID,
             "task_id": TASK_1_ID,
             "module_id": MODULE_1_ID,
-            "scope": "docchat",
+            "agent": "codex",
+            "scope": "task",
+            "started_at": "2026-07-12T10:00:00+00:00",
             "state": "working",
             "updated_at": "2026-07-12T10:01:00+00:00",
         },

@@ -215,9 +215,6 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
       is_planning: entry.isPlanning,
       is_instant: entry.isInstant,
       instant_prompt: entry.isInstant ? entry.initialPrompt : null,
-      is_doc_chat: meta.isDocChat,
-      doc_rel_path: meta.docRelPath,
-      doc_id: meta.docId,
     })
       .then(({ agent_run_id }) => {
         entry.creatingRun = false;

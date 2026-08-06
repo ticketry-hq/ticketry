@@ -18,9 +18,12 @@ export type AgentLifecycle = "idle" | "active" | "attention";
 
 export interface AgentStatusRun {
   runId: string;
+  projectId?: string;
   taskId: string | null;
   moduleId: string;
+  agent?: string;
   scope: AgentRunScope;
+  startedAt?: string;
   state: RawLifecycleState;
   updatedAt: string;
 }

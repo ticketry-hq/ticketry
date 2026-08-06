@@ -70,9 +70,9 @@ async def agent_status_records(
 ) -> list[RunRecord]:
     """Return active runs plus recent ended tombstones for a status scope."""
 
-    rows = AgentRun.objects.filter(issue__project_id=project_id).select_related(
-        "issue"
-    )
+    rows = AgentRun.objects.filter(issue__project_id=project_id).exclude(
+        scope="docchat"
+    ).select_related("issue")
     if task_id is not None:
         rows = rows.filter(issue_id=task_id)
     rows = rows.annotate(
@@ -103,9 +103,12 @@ async def agent_status_records(
         records.append(
             RunRecord(
                 agent_run_id=run.id,
+                project_id=str(run.issue.project_id),
                 task_id=str(run.issue_id) if run.issue.type == "task" else None,
                 module_id=str(run.run_module_id),
+                agent=run.agent,
                 scope=run.scope,
+                started_at=run.started_at,
                 state=state,
                 updated_at=updated_at,
             )

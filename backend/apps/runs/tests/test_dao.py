@@ -360,7 +360,26 @@ async def test_status_routing_uses_run_scope_before_terminal_session_exists() ->
         fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1"),
         fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None),
         "plan",
+        "claude",
+        "2026-05-29T10:00:00",
     )
+
+
+async def test_doc_chat_runs_are_not_published_to_the_client() -> None:
+    run = _make_run(
+        "hidden-doc-run",
+        task_id="task-1",
+        started_at="2026-05-29T10:00:00",
+    )
+    run.scope = "docchat"
+    await dao.insert_agent_run(run)
+
+    assert await dao.get_status_routing(run.id) is None
+    records = await dao.agent_status_records(
+        fixture_uuid("proj-1"),
+        now=datetime(2026, 5, 29, 11, tzinfo=timezone.utc),
+    )
+    assert run.id not in {record.agent_run_id for record in records}
 
 
 async def test_parentless_task_run_routes_as_a_task() -> None:
@@ -404,4 +423,6 @@ async def test_parentless_task_run_routes_as_a_task() -> None:
         task_id,
         task_id,
         "task",
+        "codex",
+        "2026-08-03T10:00:00+00:00",
     )

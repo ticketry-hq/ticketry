@@ -40,6 +40,12 @@ export interface AgentRunRecord {
      * @type {string}
      * @memberof AgentRunRecord
      */
+    project_id: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentRunRecord
+     */
     task_id: string | null;
     /**
      *
@@ -49,10 +55,22 @@ export interface AgentRunRecord {
     module_id: string;
     /**
      *
+     * @type {string}
+     * @memberof AgentRunRecord
+     */
+    agent: string;
+    /**
+     *
      * @type {ScopeEnum}
      * @memberof AgentRunRecord
      */
     scope: ScopeEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentRunRecord
+     */
+    started_at: string;
     /**
      *
      * @type {string}
@@ -74,9 +92,12 @@ export interface AgentRunRecord {
  */
 export function instanceOfAgentRunRecord(value: object): value is AgentRunRecord {
     if (!('agent_run_id' in value) || value['agent_run_id'] === undefined) return false;
+    if (!('project_id' in value) || value['project_id'] === undefined) return false;
     if (!('task_id' in value) || value['task_id'] === undefined) return false;
     if (!('module_id' in value) || value['module_id'] === undefined) return false;
+    if (!('agent' in value) || value['agent'] === undefined) return false;
     if (!('scope' in value) || value['scope'] === undefined) return false;
+    if (!('started_at' in value) || value['started_at'] === undefined) return false;
     if (!('state' in value) || value['state'] === undefined) return false;
     if (!('updated_at' in value) || value['updated_at'] === undefined) return false;
     return true;
@@ -93,9 +114,12 @@ export function AgentRunRecordFromJSONTyped(json: any, ignoreDiscriminator: bool
     return {
 
         'agent_run_id': json['agent_run_id'],
+        'project_id': json['project_id'],
         'task_id': json['task_id'],
         'module_id': json['module_id'],
+        'agent': json['agent'],
         'scope': ScopeEnumFromJSON(json['scope']),
+        'started_at': json['started_at'],
         'state': json['state'],
         'updated_at': json['updated_at'],
     };
@@ -113,9 +137,12 @@ export function AgentRunRecordToJSONTyped(value?: AgentRunRecord | null, ignoreD
     return {
 
         'agent_run_id': value['agent_run_id'],
+        'project_id': value['project_id'],
         'task_id': value['task_id'],
         'module_id': value['module_id'],
+        'agent': value['agent'],
         'scope': ScopeEnumToJSON(value['scope']),
+        'started_at': value['started_at'],
         'state': value['state'],
         'updated_at': value['updated_at'],
     };

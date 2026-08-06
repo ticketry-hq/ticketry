@@ -1,15 +1,16 @@
 import { useMemo } from "react";
 import {
   useTerminalStore,
-  type OpenDocChatArgs,
   type OpenSessionArgs,
   type SessionMeta,
 } from "./internal/sessionStore";
-import { launchAgent, launchDocumentAgent } from "./internal/actions";
-import { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
+import { launchAgent } from "./internal/actions";
 import type { SessionId, TaskId } from "../types";
 import type { LifecycleState } from "./lifecycle";
 import { selectRunState, useAgentStatusStore } from "../status";
+import type { AgentStatusRun } from "../status";
+import { bucketOfMeta, dismissedRunsFor } from "./internal/sessionStore";
+import { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
 
 // Public query + launch surface of the terminal module. Hosts that render a
 // tab strip, a badge, or a launch button import these — never the store
@@ -23,10 +24,6 @@ export function launchSession(args: OpenSessionArgs): SessionId {
   return launchAgent(args);
 }
 
-export function launchDocChat(args: OpenDocChatArgs): SessionId {
-  return launchDocumentAgent(args);
-}
-
 // One terminal tab of a task bucket, ready to render: the session meta plus
 // the lifecycle the strip shows ("reconnecting" transport state beats the
 // run's own lifecycle).
@@ -36,36 +33,60 @@ export interface SessionTab {
   lifecycle: LifecycleState;
 }
 
+export function deriveTaskSessions(
+  taskId: TaskId | null,
+  sessions: Readonly<Record<string, SessionMeta>>,
+  runs: Readonly<Record<string, AgentStatusRun>>,
+  dismissed: ReadonlySet<string>,
+): SessionTab[] {
+  if (!taskId) return [];
+  return Object.values(sessions)
+    .filter((meta) =>
+      bucketOfMeta(meta) === taskId &&
+      (!meta.agentRunId || !dismissed.has(meta.agentRunId)),
+    )
+    .sort((left, right) => {
+      const leftStarted = left.agentRunId
+        ? runs[left.agentRunId]?.startedAt ?? ""
+        : "";
+      const rightStarted = right.agentRunId
+        ? runs[right.agentRunId]?.startedAt ?? ""
+        : "";
+      return leftStarted.localeCompare(rightStarted) ||
+        left.sessionId.localeCompare(right.sessionId);
+    })
+    .map((meta) => {
+      const lifecycle: LifecycleState =
+        meta.status === "reconnecting"
+          ? "reconnecting"
+          : (selectRunState(
+              {
+                projectId: null,
+                runs,
+                byTask: {},
+                automationAttempts: {},
+                automationByTask: {},
+              },
+              meta.agentRunId ?? "",
+            ) ?? "unknown");
+      return { id: meta.sessionId, meta, lifecycle };
+    });
+}
+
 // Tab-strip query: the ordered terminal tabs of a task bucket (null → none —
 // callers pass the bucket id they render, including per-module scratch
 // buckets). The workspace-tabs store is the sole tab index (CODIN-981/982).
 export function useTaskSessions(taskId: TaskId | null): SessionTab[] {
   const sessions = useTerminalStore((s) => s.sessions);
-  const ids = useWorkspaceTabsStore((s) =>
-    taskId ? s.byTaskId[taskId] : undefined,
-  );
   const runStates = useAgentStatusStore((s) => s.runs);
   return useMemo(
-    () =>
-      (ids ?? []).flatMap((id) => {
-        const meta = sessions[id];
-        if (!meta) return [];
-        const lifecycle: LifecycleState =
-          meta.status === "reconnecting"
-            ? "reconnecting"
-            : (selectRunState(
-                {
-                  projectId: null,
-                  runs: runStates,
-                  byTask: {},
-                  automationAttempts: {},
-                  automationByTask: {},
-                },
-                meta.agentRunId ?? "",
-              ) ?? "unknown");
-        return [{ id, meta, lifecycle }];
-      }),
-    [ids, sessions, runStates],
+    () => deriveTaskSessions(
+      taskId,
+      sessions,
+      runStates,
+      taskId ? dismissedRunsFor(taskId) : new Set(),
+    ),
+    [taskId, sessions, runStates],
   );
 }
 

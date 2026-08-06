@@ -32,11 +32,9 @@ class ResumableTerminal(BaseModel):
     agent: StrictStr
     status: StrictStr
     started_at: StrictStr
-    ended_at: StrictStr
     provider_session_id: StrictStr
     resumed_from: Optional[StrictStr]
-    scope: StrictStr
-    __properties: ClassVar[List[str]] = ["agent_run_id", "agent", "status", "started_at", "ended_at", "provider_session_id", "resumed_from", "scope"]
+    __properties: ClassVar[List[str]] = ["agent_run_id", "agent", "status", "started_at", "provider_session_id", "resumed_from"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -98,9 +96,7 @@ class ResumableTerminal(BaseModel):
             "agent": obj.get("agent"),
             "status": obj.get("status"),
             "started_at": obj.get("started_at"),
-            "ended_at": obj.get("ended_at"),
             "provider_session_id": obj.get("provider_session_id"),
-            "resumed_from": obj.get("resumed_from"),
-            "scope": obj.get("scope")
+            "resumed_from": obj.get("resumed_from")
         })
         return _obj

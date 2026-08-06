@@ -309,17 +309,23 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
         "runs": [
             {
                 "agent_run_id": "pre-event",
+                "project_id": PROJECT_ID,
                 "task_id": _task_id("t2"),
                 "module_id": MODULE_1_ID,
+                "agent": "codex",
                 "scope": "plan",
+                "started_at": "2026-07-12T15:05:00+00:00",
                 "state": "unknown",
                 "updated_at": "2026-07-12T15:05:00+00:00",
             },
             {
                 "agent_run_id": "with-event",
+                "project_id": PROJECT_ID,
                 "task_id": _task_id("t1"),
                 "module_id": MODULE_1_ID,
+                "agent": "codex",
                 "scope": "task",
+                "started_at": "2026-07-12T14:00:00+00:00",
                 "state": "needs_input",
                 "updated_at": "2026-07-12T15:00:00+00:00",
             },

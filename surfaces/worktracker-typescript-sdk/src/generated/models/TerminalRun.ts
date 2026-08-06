@@ -38,36 +38,6 @@ export interface TerminalRun {
      * @type {string}
      * @memberof TerminalRun
      */
-    task_id?: string | null;
-    /**
-     *
-     * @type {string}
-     * @memberof TerminalRun
-     */
-    module_id?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof TerminalRun
-     */
-    project_id?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof TerminalRun
-     */
-    agent?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof TerminalRun
-     */
-    scope?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof TerminalRun
-     */
     doc_rel_path?: string | null;
     /**
      *
@@ -75,12 +45,6 @@ export interface TerminalRun {
      * @memberof TerminalRun
      */
     created_at?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof TerminalRun
-     */
-    terminated_at?: string | null;
 }
 
 /**
@@ -103,14 +67,8 @@ export function TerminalRunFromJSONTyped(json: any, ignoreDiscriminator: boolean
 
         'agent_run_id': json['agent_run_id'],
         'tmux_session_name': json['tmux_session_name'] == null ? undefined : json['tmux_session_name'],
-        'task_id': json['task_id'] == null ? undefined : json['task_id'],
-        'module_id': json['module_id'] == null ? undefined : json['module_id'],
-        'project_id': json['project_id'] == null ? undefined : json['project_id'],
-        'agent': json['agent'] == null ? undefined : json['agent'],
-        'scope': json['scope'] == null ? undefined : json['scope'],
         'doc_rel_path': json['doc_rel_path'] == null ? undefined : json['doc_rel_path'],
         'created_at': json['created_at'] == null ? undefined : json['created_at'],
-        'terminated_at': json['terminated_at'] == null ? undefined : json['terminated_at'],
     };
 }
 
@@ -127,13 +85,7 @@ export function TerminalRunToJSONTyped(value?: TerminalRun | null, ignoreDiscrim
 
         'agent_run_id': value['agent_run_id'],
         'tmux_session_name': value['tmux_session_name'],
-        'task_id': value['task_id'],
-        'module_id': value['module_id'],
-        'project_id': value['project_id'],
-        'agent': value['agent'],
-        'scope': value['scope'],
         'doc_rel_path': value['doc_rel_path'],
         'created_at': value['created_at'],
-        'terminated_at': value['terminated_at'],
     };
 }

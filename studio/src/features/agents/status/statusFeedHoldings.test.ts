@@ -9,6 +9,7 @@ import { queryKeys } from "../../../shared/query/keys";
 import { useClientStore } from "../../../state/clientStore";
 import { useAgentStatusStore } from "./store";
 import { dispatchStatusFrame, statusFeed } from "./statusFeed";
+import { getStatesSnapshot, seedStates } from "../../../shared/query/stateCatalog";
 
 const getAgentStatus = vi.fn<() => Promise<AgentStatusSnapshot>>();
 
@@ -76,6 +77,34 @@ afterEach(() => {
 });
 
 describe("status feed holdings", () => {
+  it("publishes workflow changes only to the shared state catalogue", () => {
+    seedStates("project-1", [{
+      id: "review",
+      name: "Review",
+      group: "started",
+      color: null,
+      sort_order: 1,
+    }]);
+
+    dispatchStatusFrame({
+      v: 1,
+      type: "workflow_state",
+      project_id: "project-1",
+      state: {
+        id: "review",
+        name: "Quality review",
+        group: "started",
+        color: null,
+        sort_order: 1,
+      },
+      at: "2026-08-06T12:00:00Z",
+    });
+
+    expect(getStatesSnapshot("project-1")).toMatchObject([
+      { id: "review", name: "Quality review" },
+    ]);
+  });
+
   it("refreshes each named holding once per burst and structural membership once", async () => {
     const itemKey = queryKeys.workItems.byId("item-a");
     const treeKey = queryKeys.tasks.byModule("project-1", "module-1");

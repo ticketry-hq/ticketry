@@ -37,7 +37,12 @@ describe("BlockerPicker", () => {
     useBacklogStore.setState({ items: [a, b, c, existing] });
 
     render(
-      <BlockerPicker issueId="a" currentIds={["x"]} onPick={() => {}} />,
+      <BlockerPicker
+        issueId="a"
+        items={[a, b, c, existing]}
+        currentIds={["x"]}
+        onPick={() => {}}
+      />,
     );
     fireEvent.click(screen.getByTestId("blocker-picker").querySelector("button")!);
 
@@ -54,7 +59,14 @@ describe("BlockerPicker", () => {
     useBacklogStore.setState({ items: [a, b] });
     const onPick = vi.fn();
 
-    render(<BlockerPicker issueId="a" currentIds={[]} onPick={onPick} />);
+    render(
+      <BlockerPicker
+        issueId="a"
+        items={[a, b]}
+        currentIds={[]}
+        onPick={onPick}
+      />,
+    );
     fireEvent.click(screen.getByTestId("blocker-picker").querySelector("button")!);
     fireEvent.click(screen.getByText("MEML-2"));
     expect(onPick).toHaveBeenCalledWith("b");

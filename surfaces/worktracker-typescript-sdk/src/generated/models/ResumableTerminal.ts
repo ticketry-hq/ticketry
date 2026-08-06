@@ -50,12 +50,6 @@ export interface ResumableTerminal {
      * @type {string}
      * @memberof ResumableTerminal
      */
-    ended_at: string;
-    /**
-     *
-     * @type {string}
-     * @memberof ResumableTerminal
-     */
     provider_session_id: string;
     /**
      *
@@ -63,12 +57,6 @@ export interface ResumableTerminal {
      * @memberof ResumableTerminal
      */
     resumed_from: string | null;
-    /**
-     *
-     * @type {string}
-     * @memberof ResumableTerminal
-     */
-    scope: string;
 }
 
 /**
@@ -79,10 +67,8 @@ export function instanceOfResumableTerminal(value: object): value is ResumableTe
     if (!('agent' in value) || value['agent'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('started_at' in value) || value['started_at'] === undefined) return false;
-    if (!('ended_at' in value) || value['ended_at'] === undefined) return false;
     if (!('provider_session_id' in value) || value['provider_session_id'] === undefined) return false;
     if (!('resumed_from' in value) || value['resumed_from'] === undefined) return false;
-    if (!('scope' in value) || value['scope'] === undefined) return false;
     return true;
 }
 
@@ -100,10 +86,8 @@ export function ResumableTerminalFromJSONTyped(json: any, ignoreDiscriminator: b
         'agent': json['agent'],
         'status': json['status'],
         'started_at': json['started_at'],
-        'ended_at': json['ended_at'],
         'provider_session_id': json['provider_session_id'],
         'resumed_from': json['resumed_from'],
-        'scope': json['scope'],
     };
 }
 
@@ -122,9 +106,7 @@ export function ResumableTerminalToJSONTyped(value?: ResumableTerminal | null, i
         'agent': value['agent'],
         'status': value['status'],
         'started_at': value['started_at'],
-        'ended_at': value['ended_at'],
         'provider_session_id': value['provider_session_id'],
         'resumed_from': value['resumed_from'],
-        'scope': value['scope'],
     };
 }

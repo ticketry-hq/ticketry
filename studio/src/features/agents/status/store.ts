@@ -43,9 +43,12 @@ function supersedes(incoming: AgentStatusRun, current: AgentStatusRun): boolean 
 function normalize(run: RunRecord): AgentStatusRun {
   return {
     runId: run.agent_run_id,
+    projectId: run.project_id,
     taskId: run.task_id,
     moduleId: run.module_id,
+    agent: run.agent,
     scope: run.scope,
+    startedAt: run.started_at,
     state: run.state,
     updatedAt: run.updated_at,
   };

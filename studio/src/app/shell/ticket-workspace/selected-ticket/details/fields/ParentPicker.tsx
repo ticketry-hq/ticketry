@@ -14,7 +14,7 @@ interface Props {
   value: string | null;
   /** The issue being edited — excluded (with its descendants) to avoid cycles. */
   currentId?: string;
-  items?: WorkItem[];
+  items: WorkItem[];
   onChange: (parentId: string | null) => void;
   saving?: boolean;
 }
@@ -53,7 +53,7 @@ function matches(
 }
 
 // Parent picker: an Epic (module) or a task. Reparents the tree.
-export default function ParentPicker({ value, currentId, items = [], onChange, saving }: Props) {
+export default function ParentPicker({ value, currentId, items, onChange, saving }: Props) {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const modules = useModulesQuery(selectedProjectId).data ?? EMPTY_MODULES;
   const blocked = currentId

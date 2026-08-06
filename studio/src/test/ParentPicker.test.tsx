@@ -35,7 +35,7 @@ describe("ParentPicker search", () => {
     useStudioStore.setState({ selectedProjectId: "p1" });
   seedModules("p1", [a, b]);
 
-    render(<ParentPicker value={null} onChange={() => {}} />);
+    render(<ParentPicker value={null} items={[]} onChange={() => {}} />);
     open();
     fireEvent.change(screen.getByPlaceholderText(/search/i), {
       target: { value: "42" },
@@ -51,7 +51,7 @@ describe("ParentPicker search", () => {
     useStudioStore.setState({ selectedProjectId: "p1" });
   seedModules("p1", [a, b]);
 
-    render(<ParentPicker value={null} onChange={() => {}} />);
+    render(<ParentPicker value={null} items={[]} onChange={() => {}} />);
     open();
 
     const input = screen.getByPlaceholderText(/search/i);
@@ -70,7 +70,7 @@ describe("ParentPicker search", () => {
   seedModules("p1", [a]);
     const onChange = vi.fn();
 
-    render(<ParentPicker value={null} onChange={onChange} />);
+    render(<ParentPicker value={null} items={[]} onChange={onChange} />);
     open();
     fireEvent.change(screen.getByPlaceholderText(/search/i), {
       target: { value: "7" },

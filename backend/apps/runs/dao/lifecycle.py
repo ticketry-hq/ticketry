@@ -106,11 +106,11 @@ async def get_run_routing(run_id: str) -> Optional[tuple[Optional[str], str]]:
 
 async def get_status_routing(
     run_id: str,
-) -> Optional[tuple[str, Optional[str], str, str]]:
-    """Return a run's project, task, module, and durable scope routing keys."""
+) -> Optional[tuple[str, Optional[str], str, str, str, str]]:
+    """Return the immutable identity and routing fields owned by a run."""
 
     routing = (
-        await AgentRun.objects.filter(id=run_id)
+        await AgentRun.objects.filter(id=run_id).exclude(scope="docchat")
         .annotate(run_module_id=Coalesce("issue__module_id", "issue_id"))
         .values_list(
             "issue__project_id",
@@ -118,17 +118,21 @@ async def get_status_routing(
             "issue__type",
             "run_module_id",
             "scope",
+            "agent",
+            "started_at",
         )
         .afirst()
     )
     if routing is None:
         return None
-    project_id, issue_id, issue_type, module_id, scope = routing
+    project_id, issue_id, issue_type, module_id, scope, agent, started_at = routing
     return (
         str(project_id),
         str(issue_id) if issue_type == "task" else None,
         str(module_id),
         scope,
+        agent,
+        started_at,
     )
 
 

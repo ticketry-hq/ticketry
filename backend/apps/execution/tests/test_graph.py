@@ -7,6 +7,8 @@ import pytest
 from apps.execution import driver
 from apps.execution.models import GraphRun, LaunchedTask
 from apps.execution.signals import observe_completion
+from apps.runs.models import AgentRun
+from apps.terminals.models import AgentTerminalSession
 from worktracker.models import (
     Issue,
     IssueType,
@@ -126,6 +128,19 @@ def _task(
         name=name,
         sequence_id=sequence_id,
         is_archived=archived,
+    )
+
+
+def _agent_run(issue, run_id: str, *, active: bool) -> AgentRun:
+    return AgentRun.objects.create(
+        id=run_id,
+        issue=issue,
+        ticket_seq=issue.sequence_id,
+        agent="codex",
+        status="running" if active else "exited",
+        started_at="2026-08-08T10:00:00+00:00",
+        ended_at=None if active else "2026-08-08T10:05:00+00:00",
+        scope="task",
     )
 
 
@@ -292,7 +307,7 @@ def test_spawn_exception_leaves_no_row_and_later_advance_retries(graph_project):
     assert calls == [str(retry.id), str(independent.id), str(retry.id)]
 
 
-def test_launched_child_never_relaunches_without_a_terminal_state(graph_project):
+def test_repeat_execute_refuses_while_launched_child_run_is_active(graph_project):
     _successful_spawn.calls.clear()
     project, _, root, states, story_type = graph_project
     child = _task(project, story_type, root, "Child", 3, states["started"])
@@ -300,10 +315,55 @@ def test_launched_child_never_relaunches_without_a_terminal_state(graph_project)
     assert driver.execute_graph(
         str(root.id), agent="codex", spawn=_successful_spawn
     ) == [str(child.id)]
+    _agent_run(child, "run-1", active=True)
     assert driver.advance(str(root.id), spawn=_successful_spawn) == []
     with pytest.raises(ValueError, match="^graph_run_exists$"):
         driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn)
     assert [call["task_id"] for call in _successful_spawn.calls] == [str(child.id)]
+
+
+def test_repeat_execute_revives_an_ended_launched_child(graph_project):
+    _successful_spawn.calls.clear()
+    project, _, root, states, story_type = graph_project
+    child = _task(project, story_type, root, "Child", 3, states["started"])
+
+    assert driver.execute_graph(
+        str(root.id), agent="codex", spawn=_successful_spawn
+    ) == [str(child.id)]
+    _agent_run(child, "run-1", active=False)
+
+    assert driver.execute_graph(
+        str(root.id), agent="claude", spawn=_successful_spawn
+    ) == [str(child.id)]
+    assert [call["task_id"] for call in _successful_spawn.calls] == [
+        str(child.id),
+        str(child.id),
+    ]
+    assert LaunchedTask.objects.get(task=child).agent_run_id == "run-2"
+    assert GraphRun.objects.get(root=root).agent == "claude"
+
+
+def test_repeat_execute_refuses_while_a_terminal_session_is_active(graph_project):
+    _successful_spawn.calls.clear()
+    project, module, root, states, story_type = graph_project
+    child = _task(project, story_type, root, "Child", 3, states["started"])
+    driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn)
+    run = _agent_run(child, "run-1", active=False)
+    AgentTerminalSession.objects.create(
+        agent_run=run,
+        tmux_session_name="pt-run-1",
+        task_id=str(child.id),
+        module_id=str(module.id),
+        project_id=str(project.id),
+        agent="codex",
+        created_at="2026-08-08T10:00:00+00:00",
+        terminated_at=None,
+        scope="task",
+    )
+
+    with pytest.raises(ValueError, match="^graph_run_exists$"):
+        driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn)
+    assert len(_successful_spawn.calls) == 1
 
 
 def test_reset_subtree_clears_rows_and_launches_nothing(graph_project):

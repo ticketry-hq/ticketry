@@ -28,6 +28,7 @@ export interface HttpFixture {
     id: string,
     body: { before_id: string | null; after_id: string | null },
   ): Promise<void>;
+  graphRunCount(id: string): number;
   failNext(status: number, body?: unknown): void;
 }
 
@@ -65,6 +66,7 @@ class BoundaryFixture implements StudioFixture {
   readonly documentRows = new Map<string, DesignDoc[]>();
   readonly patches: PatchCall[] = [];
   readonly reorders: ReorderCall[] = [];
+  readonly graphRuns: string[] = [];
   private nextFailure: { status: number; body: unknown } | null = null;
   private patchWaiters: Array<{
     id: string;
@@ -160,6 +162,10 @@ class BoundaryFixture implements StudioFixture {
     return new Promise((resolve) => this.reorderWaiters.push({ id, body, resolve }));
   }
 
+  graphRunCount(id: string): number {
+    return this.graphRuns.filter((candidate) => candidate === id).length;
+  }
+
   failNext(status: number, body: unknown = null): void {
     this.nextFailure = { status, body };
   }
@@ -206,6 +212,26 @@ class BoundaryFixture implements StudioFixture {
       }
       return json([...states.values()]);
     }
+    if (
+      method === "GET" &&
+      /\/work-tracker\/projects\/[^/]+\/launch-bindings$/.test(path)
+    ) {
+      const bindings = new Map<string, unknown>();
+      for (const item of this.items.values()) {
+        if (!item.issue_type?.id || !item.state?.id) continue;
+        const key = `${item.issue_type.id}:${item.state.id}`;
+        bindings.set(key, {
+          id: bindings.size + 1,
+          issue_type: item.issue_type.id,
+          state: item.state.id,
+          subtree_run_enabled: true,
+          workflow_revision: 1,
+          created_at: "2026-08-08T10:00:00Z",
+          updated_at: "2026-08-08T10:00:00Z",
+        });
+      }
+      return json([...bindings.values()]);
+    }
     if (method === "GET" && path.endsWith("/work-tracker/work-items")) {
       const moduleId = url.searchParams.get("module");
       const ids = moduleId ? this.trees.get(moduleId)?.order ?? [] : [...this.items.keys()];
@@ -220,6 +246,14 @@ class BoundaryFixture implements StudioFixture {
         const item = this.items.get(id);
         return item ? [item] : [];
       }));
+    }
+    const graphRunMatch = path.match(
+      /\/work-tracker\/work-items\/([^/]+)\/graph-run$/,
+    );
+    if (method === "POST" && graphRunMatch) {
+      const id = decodeURIComponent(graphRunMatch[1]);
+      this.graphRuns.push(id);
+      return json({ root_id: id, launched: [] }, 201);
     }
     const itemMatch = path.match(/\/work-tracker\/work-items\/([^/]+)$/);
     if (method === "PATCH" && itemMatch) {

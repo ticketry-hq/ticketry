@@ -46,9 +46,10 @@ class GraphRun(models.Model):
 class LaunchedTask(models.Model):
     """One durable fact: this task was launched by a subtree run.
 
-    Its presence prevents relaunch until the graph-run resource is reset — see
-    ``apps.execution.driver.reset_subtree``, which deletes these rows and their
-    run header so the root can be armed again.
+    Its presence prevents relaunch while the associated run is active. An
+    explicit repeat execute request may clear inactive facts to revive a
+    stalled subtree; ``apps.execution.driver.reset_subtree`` clears the whole
+    resource without launching replacement work.
     """
 
     task = models.OneToOneField(

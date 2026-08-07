@@ -1,3 +1,6 @@
 packages:
   - "studio"
   - "surfaces/worktracker-typescript-sdk"
+allowBuilds:
+  '@openapitools/openapi-generator-cli': true
+  esbuild: true

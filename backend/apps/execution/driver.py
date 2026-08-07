@@ -5,8 +5,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from asgiref.sync import async_to_sync
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 
+from apps.runs.models import AgentRun
+from apps.terminals.models import AgentTerminalSession
 from worktracker.models import Issue, LaunchBinding
 from worktracker.state import state_group
 
@@ -156,7 +158,14 @@ def execute_graph(
     agent: str | None,
     spawn: SpawnRun | None = None,
 ) -> list[str]:
-    """Arm a root and launch its eligible direct children."""
+    """Arm or manually revive a root and launch eligible direct children.
+
+    A repeat request keeps the duplicate-live-run guard: if any launch recorded
+    for this root is still active, the existing campaign wins and the caller
+    receives ``graph_run_exists``.  Once every recorded run and terminal has
+    ended, however, the request is an explicit user-driven revival.  Its stale
+    launch facts are cleared and the current graph is advanced again.
+    """
 
     root = (
         Issue.objects.select_related("project", "issue_type", "state")
@@ -165,8 +174,6 @@ def execute_graph(
     )
     if root is None:
         raise ValueError("task_not_found")
-    if GraphRun.objects.filter(pk=root.id).exists():
-        raise ValueError("graph_run_exists")
     if not LaunchBinding.objects.filter(
         issue_type_id=root.issue_type_id,
         state_id=root.state_id,
@@ -184,16 +191,54 @@ def execute_graph(
         raise ValueError("graph_empty")
 
     try:
-        GraphRun.objects.create(
-            root_id=root.id,
-            project_id=root.project_id,
-            module_id=module_id,
-            agent=agent,
-        )
+        with transaction.atomic():
+            header = (
+                GraphRun.objects.select_for_update().filter(pk=root.id).first()
+            )
+            if header is None:
+                GraphRun.objects.create(
+                    root_id=root.id,
+                    project_id=root.project_id,
+                    module_id=module_id,
+                    agent=agent,
+                )
+            else:
+                if _has_active_subtree_launch(str(root.id)):
+                    raise ValueError("graph_run_exists")
+                # This POST is the manual recovery boundary. Completed children
+                # remain satisfied by workflow state; unfinished children whose
+                # prior run ended become launchable again.
+                LaunchedTask.objects.filter(root_id=root.id).delete()
+                header.project_id = root.project_id
+                header.module_id = module_id
+                header.agent = agent
+                header.save(
+                    update_fields=["project", "module", "agent", "updated_at"]
+                )
+
+            return advance(str(root.id), spawn=spawn)
     except IntegrityError as exc:
         # Preserve the resource-level conflict when concurrent creates race.
         raise ValueError("graph_run_exists") from exc
-    return advance(str(root.id), spawn=spawn)
+
+
+def _has_active_subtree_launch(root_id: str) -> bool:
+    """Return whether a recorded launch still has a live run or terminal."""
+
+    run_ids = list(
+        LaunchedTask.objects.filter(root_id=root_id).values_list(
+            "agent_run_id", flat=True
+        )
+    )
+    if not run_ids:
+        return False
+    return (
+        AgentRun.objects.filter(id__in=run_ids, ended_at__isnull=True).exists()
+        or AgentTerminalSession.objects.filter(
+            agent_run_id__in=run_ids,
+            terminated_at__isnull=True,
+        ).exists()
+    )
 
 
 def advance(root_id: str, *, spawn: SpawnRun | None = None) -> list[str]:

@@ -8,6 +8,7 @@ from django.test import Client, override_settings
 
 from apps.execution import driver
 from apps.execution.models import GraphRun, LaunchedTask
+from apps.runs.models import AgentRun
 from apps.terminals.launch_configuration import resolve_task_launch_configuration
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from worktracker.models import (
@@ -126,6 +127,19 @@ def _child(project, parent, state, sequence_id, name="Child"):
     )
 
 
+def _agent_run(issue, run_id: str, *, active: bool) -> AgentRun:
+    return AgentRun.objects.create(
+        id=run_id,
+        issue=issue,
+        ticket_seq=issue.sequence_id,
+        agent="codex",
+        status="running" if active else "exited",
+        started_at="2026-08-08T10:00:00+00:00",
+        ended_at=None if active else "2026-08-08T10:05:00+00:00",
+        scope="task",
+    )
+
+
 def _catalog_launch_policy(*, provider_slug, model_name, reasoning_name=None):
     provider = Provider.objects.get(slug=provider_slug)
     model, _ = AgentModel.objects.get_or_create(
@@ -232,6 +246,7 @@ def test_create_graph_run_conflicts_when_header_is_already_armed(
         data={"agent": "codex"},
         content_type="application/json",
     )
+    _agent_run(a, "run-1", active=True)
     second = client.post(
         f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={"agent": "codex"},
@@ -251,6 +266,36 @@ def test_create_graph_run_conflicts_when_header_is_already_armed(
     ledger = LaunchedTask.objects.get(task=a)
     assert (ledger.root_id, ledger.agent_run_id) == (root.id, "run-1")
     assert not LaunchedTask.objects.filter(task=b).exists()
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_create_graph_run_revives_inactive_launches(
+    client, project, module, todo, monkeypatch
+):
+    root = task(project, module, todo)
+    child = _child(project, root, todo, 3)
+    successful_spawn.calls.clear()
+    monkeypatch.setattr(driver, "spawn_run", successful_spawn)
+
+    first = client.post(
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
+        data={"agent": "codex"},
+        content_type="application/json",
+    )
+    _agent_run(child, "run-1", active=False)
+    revived = client.post(
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
+        data={"agent": "codex"},
+        content_type="application/json",
+    )
+
+    assert first.status_code == 201
+    assert revived.status_code == 201
+    assert revived.json() == {
+        "root_id": str(root.id),
+        "launched": [str(child.id)],
+    }
+    assert LaunchedTask.objects.get(task=child).agent_run_id == "run-2"
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)

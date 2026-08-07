@@ -83,7 +83,7 @@ def _value_error_status(error: str) -> int:
 
 
 def create_execute_graph(issue_id: str, payload: ExecuteGraphIn):
-    """Arm a root and launch its eligible direct children."""
+    """Arm a root, or revive it when all prior launches are inactive."""
 
     try:
         launched = driver.execute_graph(issue_id, agent=payload.agent)

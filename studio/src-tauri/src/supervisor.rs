@@ -31,6 +31,17 @@ const SIDECAR_LOG_FILE_NAME: &str = "sidecar.log";
 const MCP_PORT_FILE_NAME: &str = "mcp-port";
 const MCP_RESPONSE_LIMIT_BYTES: usize = 64 * 1024;
 const READINESS_TERMINAL_DRAIN: Duration = Duration::from_millis(50);
+const PYINSTALLER_PARENT_ENV: [&str; 3] = [
+    "_PYI_APPLICATION_HOME_DIR",
+    "_PYI_ARCHIVE_FILE",
+    "_PYI_PARENT_PROCESS_LEVEL",
+];
+
+fn sanitize_packaged_process_environment(command: &mut Command) {
+    for name in PYINSTALLER_PARENT_ENV {
+        command.env_remove(name);
+    }
+}
 
 pub fn sidecar_log_path(data_directory: impl AsRef<Path>) -> PathBuf {
     data_directory.as_ref().join(SIDECAR_LOG_FILE_NAME)
@@ -151,7 +162,11 @@ pub struct SupervisorOptions {
 impl Default for SupervisorOptions {
     fn default() -> Self {
         Self {
-            readiness_timeout: Duration::from_secs(15),
+            // A cold one-file PyInstaller extraction can take longer than 15
+            // seconds on development machines. Keep this aligned with the
+            // packaged-sidecar acceptance budget so a healthy backend is not
+            // terminated just as it reports readiness.
+            readiness_timeout: Duration::from_secs(30),
             shutdown_grace: Duration::from_secs(3),
             bind_retry_timeout: Duration::from_secs(2),
             bind_retry_interval: Duration::from_millis(100),
@@ -958,6 +973,7 @@ impl Supervisor {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        sanitize_packaged_process_environment(&mut command);
         if let Some(mcp_port) = mcp_port {
             command.env(MCP_URL_ENV, format!("http://127.0.0.1:{mcp_port}/mcp"));
         }
@@ -1080,6 +1096,7 @@ impl Supervisor {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        sanitize_packaged_process_environment(&mut command);
         let mut child = command.spawn().map_err(process_error)?;
         self.emit(SupervisorEvent::Spawned {
             service: "mcp".to_owned(),
@@ -1296,9 +1313,18 @@ fn backend_health_probe_succeeds(port: u16, timeout: Duration) -> bool {
         return false;
     }
     let mut response = String::new();
-    stream.read_to_string(&mut response).is_ok()
-        && response.starts_with("HTTP/1.1 200")
-        && response.contains("\"ok\": true")
+    stream.read_to_string(&mut response).is_ok() && backend_health_response_is_healthy(&response)
+}
+
+fn backend_health_response_is_healthy(response: &str) -> bool {
+    let Some((headers, body)) = response.split_once("\r\n\r\n") else {
+        return false;
+    };
+    headers.starts_with("HTTP/1.1 200")
+        && serde_json::from_str::<serde_json::Value>(body)
+            .ok()
+            .and_then(|payload| payload.get("ok").and_then(serde_json::Value::as_bool))
+            == Some(true)
 }
 
 fn mcp_initialize_succeeds(port: u16, deadline: Instant) -> bool {
@@ -1626,6 +1652,22 @@ mod tests {
     static MCP_TEST_LOCK: Mutex<()> = Mutex::new(());
     static TEMP_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
 
+    #[test]
+    fn health_probe_accepts_compact_json() {
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"ok\":true}";
+
+        assert!(backend_health_response_is_healthy(response));
+    }
+
+    #[test]
+    fn health_probe_rejects_false_or_non_success_responses() {
+        let unhealthy = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"ok\":false}";
+        let failed = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\n\r\n{\"ok\":true}";
+
+        assert!(!backend_health_response_is_healthy(unhealthy));
+        assert!(!backend_health_response_is_healthy(failed));
+    }
+
     fn stub_table(mode: &str, environment: Vec<(OsString, OsString)>) -> CommandTable {
         stub_table_at(
             mode,
@@ -1739,6 +1781,14 @@ mod tests {
     }
 
     #[test]
+    fn contract_allows_packaged_cold_start_before_readiness_timeout() {
+        assert_eq!(
+            SupervisorOptions::default().readiness_timeout,
+            Duration::from_secs(30)
+        );
+    }
+
+    #[test]
     fn contract_normal_start_and_quit() {
         let mut supervisor = Supervisor::new(stub_table("ready", vec![]), fast_options());
         supervisor.launch().expect("starts normally");
@@ -1748,6 +1798,28 @@ mod tests {
             .events()
             .iter()
             .any(|event| matches!(event, SupervisorEvent::Ready { .. })));
+    }
+
+    #[test]
+    fn contract_packaged_services_remove_pyinstaller_parent_state() {
+        let contaminated = PYINSTALLER_PARENT_ENV
+            .into_iter()
+            .map(|name| (OsString::from(name), OsString::from("/deleted/_MEI-parent")))
+            .collect::<Vec<_>>();
+        let mut table = stub_table_with_mcp();
+        table.backend.environment.extend(contaminated.clone());
+        table
+            .mcp
+            .as_mut()
+            .expect("MCP command")
+            .environment
+            .extend(contaminated);
+        let mut supervisor = Supervisor::new(table, fast_options());
+
+        supervisor
+            .launch()
+            .expect("packaged services ignore stale parent bootloader state");
+        supervisor.shutdown().expect("packaged services stop");
     }
 
     #[test]
@@ -2788,6 +2860,13 @@ mod tests {
         };
         let port = env::var("MUXED_BACKEND_PORT").expect("port passed by supervisor");
         let credential = env::var(CREDENTIAL_ENV).expect("credential passed by supervisor");
+        if PYINSTALLER_PARENT_ENV
+            .into_iter()
+            .any(|name| env::var_os(name).is_some())
+        {
+            println!("{FAILURE_PREFIX}crash stale PyInstaller parent state was inherited");
+            std::process::exit(39);
+        }
         match mode.as_str() {
             "ready" => serve_health(&port),
             "ready-with-mcp" => {

@@ -593,19 +593,7 @@ def test_packaged_sidecar_starts_mcp_and_completes_initialize():
 def test_sidecar_migrates_authenticates_and_stops(tmp_path):
     port = _free_port()
     credential = "ephemeral-test-credential"
-    environment = {
-        key: value
-        for key, value in os.environ.items()
-        if key
-        not in {
-            "MUXED_DATA_DIR",
-            "MUXED_DESKTOP_ORIGIN",
-            "MUXED_STATE_DB",
-            "DJANGO_SETTINGS_MODULE",
-            "WORKTRACKER_API_TOKEN",
-            "WORKTRACKER_DISABLE_AUTH",
-        }
-    }
+    environment = _isolated_sidecar_environment()
     environment["MUXED_SIDECAR_CREDENTIAL"] = credential
     environment["MUXED_ADMIN_ENABLED"] = "true"
     process = subprocess.Popen(
@@ -800,7 +788,7 @@ def test_sidecar_startup_installs_skills_before_readiness(tmp_path):
         assert {path.name for path in root.iterdir() if path.is_dir()} == expected
 
 
-def test_sidecar_startup_refuses_a_user_owned_skill_collision(tmp_path):
+def test_sidecar_startup_reports_a_user_owned_skill_collision_without_blocking(tmp_path):
     home = tmp_path / "home"
     conflict = home / ".codex/skills/to-spec"
     conflict.mkdir(parents=True)
@@ -809,19 +797,37 @@ def test_sidecar_startup_refuses_a_user_owned_skill_collision(tmp_path):
     environment = _isolated_sidecar_environment()
     environment["HOME"] = str(home)
 
-    result = subprocess.run(
+    process = subprocess.Popen(
         _sidecar_command(_free_port(), data_dir),
         cwd=tmp_path,
         env=environment,
         text=True,
-        capture_output=True,
-        timeout=30,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
+    try:
+        _wait_for_readiness(process)
+        process.terminate()
+        assert process.wait(timeout=10) == 0
+        stderr = process.stderr.read()
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=10)
 
-    assert result.returncode == 1
-    assert "skill_installation_failed" in result.stderr
-    assert "Refusing to overwrite" in result.stderr
-    assert '"event":"ready"' not in result.stdout
+    diagnostic = next(
+        json.loads(line)
+        for line in stderr.splitlines()
+        if '"event":"provider_skill_preparation_failed"' in line
+    )
+    assert diagnostic == {
+        "event": "provider_skill_preparation_failed",
+        "reason": "collision",
+        "message": "Refusing to overwrite a user-owned or modified skill.",
+        "provider": "codex",
+        "skill": "to-spec",
+        "path": str(conflict),
+    }
     assert (conflict / "SKILL.md").read_text().endswith("user-owned\n")
 
 

@@ -12,6 +12,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  assertInstalledTicketryIsNotRunning,
   buildConnectLaunch,
   createTemporarySqliteProfile,
   formatDevelopmentIdentity,
@@ -198,6 +199,41 @@ test("the Tauri CLI is resolved through the workspace dependency tree", () => {
 
   assert.equal(resolved, "/repository/node_modules/@tauri-apps/cli/tauri.js");
   assert.deepEqual(requests, ["@tauri-apps/cli/tauri.js"]);
+});
+
+test("desktop development rejects a running installed macOS app actionably", () => {
+  assert.throws(
+    () => assertInstalledTicketryIsNotRunning({
+      platform: "darwin",
+      runner(command, args, options) {
+        assert.equal(command, "ps");
+        assert.deepEqual(args, ["-axo", "pid=,comm="]);
+        assert.deepEqual(options, {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        return [
+          "  100 /usr/bin/example",
+          "  321 /Applications/Ticketry.app/Contents/MacOS/ticketry",
+          "  654 /repository/studio/src-tauri/target/debug/ticketry",
+        ].join("\n");
+      },
+    }),
+    /installed Ticketry app is still running.*PID 321.*Command-Q.*closing its window is not enough.*pnpm run dev/,
+  );
+});
+
+test("desktop development allows raw debug processes and non-macOS hosts", () => {
+  assert.doesNotThrow(() => assertInstalledTicketryIsNotRunning({
+    platform: "darwin",
+    runner: () => "654 /repository/studio/src-tauri/target/debug/ticketry\n",
+  }));
+  assert.doesNotThrow(() => assertInstalledTicketryIsNotRunning({
+    platform: "linux",
+    runner: () => {
+      throw new Error("runner must not be called");
+    },
+  }));
 });
 
 test("connect mode reuses the established pnpm dev stack without a sidecar command", () => {

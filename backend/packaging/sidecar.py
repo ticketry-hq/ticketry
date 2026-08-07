@@ -27,6 +27,7 @@ PACKAGED_HOOK_RUNNER_ENV = "MUXED_PACKAGED_HOOK_RUNNER"
 HOOK_SPOOL_DIR_ENV = "MUXED_HOOK_SPOOL_DIR"
 MIGRATION_FAILURE_LINE = "MUXED_FAILURE migration database could not be migrated"
 STARTUP_FAILURE_LINE = "MUXED_FAILURE crash sidecar could not start"
+SKILL_PREPARATION_EVENT = "provider_skill_preparation_failed"
 SNAPSHOT_RETENTION = 3
 POSTGRES_MIGRATION_LOCK_ID = 0x5449434B45545259
 
@@ -327,6 +328,33 @@ def install_skill_catalog() -> int:
     return 0
 
 
+def prepare_provider_skills() -> None:
+    """Prepare optional provider integrations without gating application use."""
+
+    from apps.terminals.agents.skills.installation import (
+        SkillInstallationError,
+        install_packaged_skills,
+    )
+
+    try:
+        install_packaged_skills()
+    except Exception as exc:
+        diagnostic = {
+            "event": SKILL_PREPARATION_EVENT,
+            "reason": getattr(exc, "reason", "unexpected"),
+            "message": getattr(exc, "message", str(exc)),
+        }
+        if isinstance(exc, SkillInstallationError):
+            diagnostic.update(
+                {
+                    "provider": exc.provider,
+                    "skill": exc.skill,
+                    "path": str(exc.path),
+                }
+            )
+        print(json.dumps(diagnostic, separators=(",", ":")), file=sys.stderr, flush=True)
+
+
 def verify_skill_installations() -> int:
     """Verify the persistent provider installations without changing them."""
 
@@ -479,9 +507,6 @@ def main(argv: list[str] | None = None) -> int:
     # that was never going to succeed. Classify it as ``crash`` instead.
     try:
         configure_environment(args)
-        from apps.terminals.agents.skills.installation import install_packaged_skills
-
-        install_packaged_skills()
     except BaseException as exc:
         if isinstance(exc, KeyboardInterrupt):
             raise
@@ -498,6 +523,7 @@ def main(argv: list[str] | None = None) -> int:
         traceback.print_exc()
         print(MIGRATION_FAILURE_LINE, flush=True)
         return 1
+    prepare_provider_skills()
     serve(args.port)
     return 0
 

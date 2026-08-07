@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
-
 from asgiref.sync import async_to_sync
-from django.http import HttpResponseBase
+from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from pydantic import ValidationError as PydanticValidationError
@@ -103,6 +101,8 @@ class AutomationAttemptSerializer(serializers.Serializer):
     work_item_id = serializers.CharField()
     status = serializers.ChoiceField(choices=("pending", "succeeded", "failed"))
     error = serializers.CharField(allow_null=True)
+    failure = serializers.JSONField(allow_null=True)
+    retryable = serializers.BooleanField()
     agent_run_id = serializers.CharField(allow_null=True)
     updated_at = serializers.CharField()
 
@@ -303,37 +303,6 @@ class LaunchedAgentResponseSerializer(serializers.Serializer):
 
 
 def _serialize_result(result):
-    if isinstance(result, HttpResponseBase):
-        if result.status_code < 400:
-            return result
-        try:
-            payload = json.loads(result.content)
-        except (AttributeError, TypeError, ValueError):
-            return Response(
-                {"detail": "Host operation failed."}, status=result.status_code
-            )
-        if isinstance(payload, dict) and "detail" in payload:
-            detail = payload["detail"]
-            if isinstance(detail, dict) and "error" in detail:
-                code = detail["error"]
-                message = detail.get("message") or code
-                metadata = {
-                    key: value
-                    for key, value in detail.items()
-                    if key not in {"error", "message"}
-                }
-                payload = {"detail": message, "code": code, **metadata}
-        elif isinstance(payload, dict) and "error" in payload:
-            code = payload["error"]
-            detail = payload.get("message") or payload.get("reason") or code
-            payload = {"detail": detail, "code": code}
-        else:
-            payload = {"detail": payload}
-        return Response(
-            payload,
-            status=result.status_code,
-            headers=dict(result.items()),
-        )
     response_status = status.HTTP_200_OK
     if isinstance(result, tuple):
         response_status, result = result
@@ -372,63 +341,63 @@ class HealthView(PublicAPIView):
 class KeybindingsView(AuthenticatedAPIView):
     @extend_schema(tags=["settings"], responses=SettingValueSerializer)
     def get(self, request):
-        return _serialize_result(async_to_sync(settings.get_keybindings)(request))
+        return _serialize_result(async_to_sync(settings.get_keybindings)())
 
     @extend_schema(tags=["settings"], request=SettingValueSerializer, responses=SettingValueSerializer)
     def put(self, request):
         body = _pydantic(settings.SettingValueBody, request.data)
-        return _serialize_result(async_to_sync(settings.put_keybindings)(request, body))
+        return _serialize_result(async_to_sync(settings.put_keybindings)(body))
 
 
 class ProviderCatalogView(AuthenticatedAPIView):
     @extend_schema(tags=["settings"], responses=ProviderCatalogEnvelopeSerializer)
     def get(self, request):
-        return _serialize_result(async_to_sync(settings.get_provider_catalog)(request))
+        return _serialize_result(async_to_sync(settings.get_provider_catalog)())
 
     @extend_schema(tags=["settings"], request=ProviderCatalogEnvelopeSerializer, responses={200: ProviderCatalogEnvelopeSerializer, 422: OpenSerializer})
     def put(self, request):
         body = _pydantic(settings.ProviderCatalogBody, request.data)
-        return _serialize_result(async_to_sync(settings.put_provider_catalog)(request, body))
+        return _serialize_result(async_to_sync(settings.put_provider_catalog)(body))
 
 
 class ConfigView(AuthenticatedAPIView):
     @extend_schema(tags=["configuration"], responses=ConfigSerializer)
     def get(self, request):
-        return _serialize_result(async_to_sync(settings.get_config)(request))
+        return _serialize_result(async_to_sync(settings.get_config)())
 
     @extend_schema(tags=["configuration"], request=RecentIndexSerializer, responses={200: ConfigSerializer, 400: ErrorEnvelopeSerializer})
     def patch(self, request):
         body = _pydantic(settings.RecentIndexBody, request.data)
-        return _serialize_result(async_to_sync(settings.patch_config)(request, body))
+        return _serialize_result(async_to_sync(settings.patch_config)(body))
 
 
 class ProfileCollectionView(AuthenticatedAPIView):
     @extend_schema(tags=["configuration"], request=ProfileSerializer, responses=ConfigSerializer)
     def post(self, request):
-        return _serialize_result(async_to_sync(settings.add_profile)(request, _pydantic(ProfileBody, request.data)))
+        return _serialize_result(async_to_sync(settings.add_profile)(_pydantic(ProfileBody, request.data)))
 
 
 class ProfileDetailView(AuthenticatedAPIView):
     @extend_schema(tags=["configuration"], request=ProfileSerializer, responses={200: ConfigSerializer, 400: ErrorEnvelopeSerializer})
     def put(self, request, index):
-        return _serialize_result(async_to_sync(settings.replace_profile)(request, index, _pydantic(ProfileBody, request.data)))
+        return _serialize_result(async_to_sync(settings.replace_profile)(index, _pydantic(ProfileBody, request.data)))
 
     @extend_schema(tags=["configuration"], responses={200: ConfigSerializer, 400: ErrorEnvelopeSerializer})
     def delete(self, request, index):
-        return _serialize_result(async_to_sync(settings.delete_profile)(request, index))
+        return _serialize_result(async_to_sync(settings.delete_profile)(index))
 
 
 class AutomationRetryView(AuthenticatedAPIView):
     @extend_schema(tags=["runs"], request=None, responses={200: AutomationAttemptSerializer, 404: OpenSerializer, 409: OpenSerializer})
     def post(self, request, attempt_id):
-        return _serialize_result(runs.retry_automation_attempt(request, attempt_id))
+        return _serialize_result(runs.retry_automation_attempt(attempt_id))
 
 
 class LifecycleEventView(PublicAPIView):
     @extend_schema(tags=["runs"], request=LifecycleEventSerializer, responses={202: LifecycleAcceptedSerializer})
     def post(self, request):
         event = _pydantic(LifecycleEvent, request.data)
-        return _serialize_result(async_to_sync(runs.ingest_lifecycle_event)(request, event))
+        return _serialize_result(async_to_sync(runs.ingest_lifecycle_event)(event))
 
 
 class ModuleActivityView(AuthenticatedAPIView):
@@ -438,7 +407,7 @@ class ModuleActivityView(AuthenticatedAPIView):
         if not project_id:
             return Response({"detail": {"error": "project_id_required"}}, status=400)
         window_days = int(request.query_params.get("window_days", runs.dao.DEFAULT_ACTIVITY_WINDOW_DAYS))
-        return _serialize_result(async_to_sync(runs.get_module_activity)(request, project_id, window_days))
+        return _serialize_result(async_to_sync(runs.get_module_activity)(project_id, window_days))
 
 
 class AgentStatusView(AuthenticatedAPIView):
@@ -447,25 +416,25 @@ class AgentStatusView(AuthenticatedAPIView):
         project_id = request.query_params.get("project_id")
         if not project_id:
             return Response({"detail": {"error": "project_id_required"}}, status=400)
-        return _serialize_result(async_to_sync(runs.agent_status)(request, project_id, request.query_params.get("task_id")))
+        return _serialize_result(async_to_sync(runs.agent_status)(project_id, request.query_params.get("task_id")))
 
 
 class ViewerLeaseView(AuthenticatedAPIView):
     @extend_schema(tags=["terminals"], request=ViewerLeaseSerializer, responses={200: ViewerLeaseResultSerializer, 400: ErrorEnvelopeSerializer, 404: ErrorEnvelopeSerializer})
     def post(self, request):
-        return _serialize_result(terminals.acquire_viewer_lease(request, _pydantic(terminals.ViewerLeaseBody, request.data)))
+        return _serialize_result(terminals.acquire_viewer_lease(_pydantic(terminals.ViewerLeaseBody, request.data)))
 
 
 class ViewerLeaseRenewView(AuthenticatedAPIView):
     @extend_schema(tags=["terminals"], request=ViewerLeaseReleaseSerializer, responses={200: ViewerLeaseResultSerializer, 409: ErrorEnvelopeSerializer})
     def post(self, request):
-        return _serialize_result(terminals.renew_viewer_lease(request, _pydantic(terminals.ViewerLeaseReleaseBody, request.data)))
+        return _serialize_result(terminals.renew_viewer_lease(_pydantic(terminals.ViewerLeaseReleaseBody, request.data)))
 
 
 class ViewerLeaseReleaseView(AuthenticatedAPIView):
     @extend_schema(tags=["terminals"], request=ViewerLeaseReleaseSerializer, responses=ReleaseResultSerializer)
     def post(self, request):
-        return _serialize_result(terminals.release_viewer_lease(request, _pydantic(terminals.ViewerLeaseReleaseBody, request.data)))
+        return _serialize_result(terminals.release_viewer_lease(_pydantic(terminals.ViewerLeaseReleaseBody, request.data)))
 
 
 class TerminalCollectionView(AuthenticatedAPIView):
@@ -474,18 +443,18 @@ class TerminalCollectionView(AuthenticatedAPIView):
         task_id = request.query_params.get("task_id")
         if not task_id:
             return Response({"detail": {"error": "task_id_required"}}, status=400)
-        return _serialize_result(terminals.list_terminals(request, task_id))
+        return _serialize_result(terminals.list_terminals(task_id))
 
     @extend_schema(tags=["terminals"], request=CreateTerminalSerializer, responses={200: AgentRunIdSerializer, 400: ErrorEnvelopeSerializer, 500: ErrorEnvelopeSerializer})
     def post(self, request):
-        return _serialize_result(terminals.create_terminal(request, _pydantic(terminals.CreateTerminalRunBody, request.data)))
+        return _serialize_result(terminals.create_terminal(_pydantic(terminals.CreateTerminalRunBody, request.data)))
 
     @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("agent_run_id", str, required=True)], responses={200: TerminateResultSerializer, 404: ErrorEnvelopeSerializer, 500: ErrorEnvelopeSerializer})
     def delete(self, request):
         agent_run_id = request.query_params.get("agent_run_id")
         if not agent_run_id:
             return Response({"detail": {"error": "agent_run_id_required"}}, status=400)
-        return _serialize_result(terminals.terminate_terminal(request, agent_run_id))
+        return _serialize_result(terminals.terminate_terminal(agent_run_id))
 
 
 class TerminalResumeView(AuthenticatedAPIView):
@@ -494,13 +463,13 @@ class TerminalResumeView(AuthenticatedAPIView):
         agent_run_id = request.query_params.get("agent_run_id")
         if not agent_run_id:
             return Response({"detail": {"error": "agent_run_id_required"}}, status=400)
-        return _serialize_result(terminals.resume_terminal(request, agent_run_id))
+        return _serialize_result(terminals.resume_terminal(agent_run_id))
 
 
 class ResumableTerminalsView(AuthenticatedAPIView):
     @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("task_id", str), OpenApiParameter("project_id", str), OpenApiParameter("module_id", str)], responses=ResumableTerminalSerializer(many=True))
     def get(self, request):
-        return _serialize_result(terminals.list_resumable_terminals(request, request.query_params.get("task_id"), request.query_params.get("project_id"), request.query_params.get("module_id")))
+        return _serialize_result(terminals.list_resumable_terminals(request.query_params.get("task_id"), request.query_params.get("project_id"), request.query_params.get("module_id")))
 
 
 class ScratchTerminalsView(AuthenticatedAPIView):
@@ -509,13 +478,15 @@ class ScratchTerminalsView(AuthenticatedAPIView):
         project_id = request.query_params.get("project_id")
         if not project_id:
             return Response({"detail": {"error": "project_id_required"}}, status=400)
-        return _serialize_result(terminals.list_scratch_terminals(request, project_id, request.query_params.get("module_id")))
+        return _serialize_result(terminals.list_scratch_terminals(project_id, request.query_params.get("module_id")))
 
 
 class SelfTerminateView(PublicAPIView):
     @extend_schema(tags=["terminals"], request=None, responses={200: SelfTerminateResultSerializer, 401: OpenSerializer, 404: OpenSerializer, 500: OpenSerializer})
     def post(self, request):
-        return _serialize_result(terminals.self_terminate_terminal(request))
+        return _serialize_result(
+            terminals.self_terminate_terminal(request.headers.get("Authorization"))
+        )
 
 
 class DocumentsView(AuthenticatedAPIView):
@@ -523,25 +494,48 @@ class DocumentsView(AuthenticatedAPIView):
     def get(self, request):
         q = request.query_params
         profile = int(q["profile"]) if "profile" in q else None
-        return _serialize_result(async_to_sync(documents.list_documents)(request, q.get("task_id"), q.get("scope"), q.get("project_id"), q.get("module_id"), profile))
+        return _serialize_result(async_to_sync(documents.list_documents)(q.get("task_id"), q.get("scope"), q.get("project_id"), q.get("module_id"), profile))
 
 
 class DocumentAssetView(PublicAPIView):
     @extend_schema(tags=["documents"], responses={(200, "application/octet-stream"): OpenApiTypes.BINARY, 404: ErrorEnvelopeSerializer})
     def get(self, request, doc_id, asset_path):
-        return _serialize_result(async_to_sync(documents.serve_document_asset)(request, doc_id, asset_path))
+        asset = async_to_sync(documents.read_document_asset)(doc_id, asset_path)
+        response = HttpResponse(asset.content, content_type=asset.media_type)
+        response["Cache-Control"] = "no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        if asset.etag is not None:
+            response["ETag"] = f'"{asset.etag}"'
+        return response
 
 
 class DocumentSaveView(AuthenticatedAPIView):
     @extend_schema(tags=["documents"], request=SaveDocumentSerializer, responses={200: DigestSerializer, 404: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer})
     def put(self, request, doc_id):
-        return _serialize_result(async_to_sync(documents.save_document)(request, doc_id, _pydantic(documents.SaveDocumentIn, request.data)))
+        saved = async_to_sync(documents.save_document)(
+            doc_id, _pydantic(documents.SaveDocumentIn, request.data)
+        )
+        if saved.conflict:
+            payload = {
+                "detail": "conflict",
+                "code": "conflict",
+                "digest": saved.digest,
+            }
+            response_status = status.HTTP_409_CONFLICT
+        else:
+            payload = {"digest": saved.digest}
+            response_status = status.HTTP_200_OK
+        return Response(
+            payload,
+            status=response_status,
+            headers={"ETag": f'"{saved.digest}"'},
+        )
 
 
 class FsCompleteView(AuthenticatedAPIView):
     @extend_schema(tags=["documents"], parameters=[OpenApiParameter("path", str)], responses=FsEntriesSerializer)
     def get(self, request):
-        return _serialize_result(async_to_sync(documents.fs_complete)(request, request.query_params.get("path", "")))
+        return _serialize_result(async_to_sync(documents.fs_complete)(request.query_params.get("path", "")))
 
 
 class WorktreeView(AuthenticatedAPIView):
@@ -550,36 +544,36 @@ class WorktreeView(AuthenticatedAPIView):
         q = request.query_params
         if not q.get("task_id"):
             return Response({"detail": {"error": "task_id_required"}}, status=400)
-        return _serialize_result(worktrees.get_worktree(request, q["task_id"], q.get("parent_id"), q.get("module_id")))
+        return _serialize_result(worktrees.get_worktree(q["task_id"], q.get("parent_id"), q.get("module_id")))
 
 
 class WorktreeCreateView(AuthenticatedAPIView):
     @extend_schema(tags=["worktrees"], request=CreateWorktreeSerializer, responses=WorktreeStatusSerializer)
     def post(self, request, task_id):
-        return _serialize_result(worktrees.create_worktree(request, task_id, _pydantic(worktrees.CreateWorktreeIn, request.data)))
+        return _serialize_result(worktrees.create_worktree(task_id, _pydantic(worktrees.CreateWorktreeIn, request.data)))
 
 
 class WorktreeDiscardView(AuthenticatedAPIView):
     @extend_schema(tags=["worktrees"], parameters=[OpenApiParameter("parent_id", str), OpenApiParameter("module_id", str)], request=None, responses=DiscardSerializer)
     def post(self, request, task_id):
-        return _serialize_result(worktrees.discard_worktree(request, task_id, request.query_params.get("parent_id"), request.query_params.get("module_id")))
+        return _serialize_result(worktrees.discard_worktree(task_id, request.query_params.get("parent_id"), request.query_params.get("module_id")))
 
 
 class GraphRunView(AuthenticatedAPIView):
     @extend_schema(operation_id="workItemsGraphRunRetrieve", tags=["execution"], responses={200: GraphSerializer, 404: ErrorEnvelopeSerializer})
     def get(self, request, issue_id):
-        return _serialize_result(execution.get_dependency_graph(request, issue_id))
+        return _serialize_result(execution.get_dependency_graph(issue_id))
 
     @extend_schema(operation_id="workItemsGraphRunCreate", tags=["execution"], request=AgentOverrideSerializer, responses={201: GraphRunResultSerializer, 404: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer, 422: ErrorEnvelopeSerializer})
     def post(self, request, issue_id):
-        return _serialize_result(execution.create_execute_graph(request, issue_id, _pydantic(execution.ExecuteGraphIn, request.data)))
+        return _serialize_result(execution.create_execute_graph(issue_id, _pydantic(execution.ExecuteGraphIn, request.data)))
 
     @extend_schema(operation_id="workItemsGraphRunDestroy", tags=["execution"], responses={200: GraphResetResultSerializer, 404: ErrorEnvelopeSerializer})
     def delete(self, request, issue_id):
-        return _serialize_result(execution.reset_execute_graph(request, issue_id))
+        return _serialize_result(execution.reset_execute_graph(issue_id))
 
 
 class LaunchAgentView(AuthenticatedAPIView):
     @extend_schema(operation_id="workItemsLaunchAgentCreate", tags=["execution"], request=AgentOverrideSerializer, responses={201: LaunchedAgentResponseSerializer, 400: ErrorEnvelopeSerializer, 404: ErrorEnvelopeSerializer, 422: ErrorEnvelopeSerializer, 503: ErrorEnvelopeSerializer})
     def post(self, request, issue_id):
-        return _serialize_result(execution.create_launch_agent(request, issue_id, _pydantic(execution.LaunchAgentIn, request.data)))
+        return _serialize_result(execution.create_launch_agent(issue_id, _pydantic(execution.LaunchAgentIn, request.data)))

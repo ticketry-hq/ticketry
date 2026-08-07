@@ -97,3 +97,4 @@ export {
   type ForegroundOwner,
 } from "./internal/foregroundStore";
 export { focusTerminal } from "./internal/terminalRegistry";
+export { launchFailureMessage } from "./internal/launchFailure";

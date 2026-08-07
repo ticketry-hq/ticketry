@@ -286,6 +286,17 @@ def get_workflow(type_id):
     }
 
 
+def list_transitions(type_id):
+    """Return one issue type's transition rows in canonical display order."""
+
+    issue_type = _issue_type(type_id)
+    return list(
+        IssueTypeTransition.objects.filter(issue_type=issue_type).order_by(
+            "from_state__sort_order", "to_state__sort_order", "id"
+        )
+    )
+
+
 @transaction.atomic
 def add_transition(
     type_id,

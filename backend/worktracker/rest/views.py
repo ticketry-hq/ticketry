@@ -1,7 +1,6 @@
 """DRF views introduced during the expand phase."""
 
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
-from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, viewsets
@@ -13,8 +12,6 @@ from worktracker.models import (
     AgentModel,
     Issue,
     IssueType,
-    IssueTypeTransition,
-    LaunchBinding,
     Project,
     Provider,
     ReasoningLevel,
@@ -36,8 +33,8 @@ from worktracker.rest.serializers import (
     WorkspaceSerializer,
 )
 from worktracker.rest.schema import DeleteRequestBodyAutoSchema
-from worktracker.services import scoped_workflows, workflow_config
-from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
+from worktracker.services import launch_bindings, scoped_workflows, workflow_config
+from worktracker.services.errors import ConflictError, ValidationError
 from worktracker.services.modules import create_module
 from worktracker.services.projects import create_project, delete_project, update_project
 from worktracker.services.workspaces import get_installation_workspace
@@ -277,27 +274,22 @@ class IssueTypeViewSet(ProjectConfigurationViewSet):
         )
         serializer.instance = issue_type
 
-    @transaction.atomic
     def perform_update(self, serializer):
         changes = dict(serializer.validated_data)
         start_state = changes.pop("start_state", None)
         workflow_revision = changes.pop("workflow_revision", None)
-        if start_state is not None:
-            scoped_workflows.set_start_state(
-                self.kwargs["type_id"],
-                state_id=start_state.id,
-                workflow_revision=workflow_revision,
-            )
-        serializer.instance = workflow_config.update_issue_type(
-            self.kwargs["type_id"], changes
+        serializer.instance = workflow_config.update_issue_type_configuration(
+            self.kwargs["type_id"],
+            changes,
+            start_state_id=start_state.id if start_state is not None else None,
+            workflow_revision=workflow_revision,
         )
 
     def destroy(self, request, *args, **kwargs):
         serializer = IssueTypeDeleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        instance = self.get_object()
         workflow_config.delete_issue_type(
-            instance.id, serializer.validated_data.get("reassign_to")
+            self.kwargs["type_id"], serializer.validated_data.get("reassign_to")
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -305,22 +297,13 @@ class IssueTypeViewSet(ProjectConfigurationViewSet):
 class IssueTypeTransitionListView(APIView):
     """Canonical transition collection read and revision-guarded create."""
 
-    def _issue_type(self, type_id):
-        try:
-            return IssueType.objects.get(pk=type_id)
-        except IssueType.DoesNotExist as exc:
-            raise NotFoundError("Work-item type not found.") from exc
-
     @extend_schema(
         operation_id="listIssueTypeTransitions",
         tags=["Workflows"],
         responses=IssueTypeTransitionSerializer(many=True),
     )
     def get(self, request, type_id):
-        issue_type = self._issue_type(type_id)
-        transitions = IssueTypeTransition.objects.filter(
-            issue_type=issue_type
-        ).order_by("from_state__sort_order", "to_state__sort_order", "id")
+        transitions = scoped_workflows.list_transitions(type_id)
         return Response(IssueTypeTransitionSerializer(transitions, many=True).data)
 
     @extend_schema(
@@ -330,12 +313,11 @@ class IssueTypeTransitionListView(APIView):
         responses=IssueTypeTransitionSerializer,
     )
     def post(self, request, type_id):
-        issue_type = self._issue_type(type_id)
         serializer = IssueTypeTransitionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         edge = scoped_workflows.add_transition(
-            issue_type.id,
+            type_id,
             from_state_id=data["from_state"].id,
             to_state_id=data["to_state"].id,
             agent_allowed=data.get("agent_allowed", True),
@@ -405,31 +387,12 @@ class LaunchBindingListView(APIView):
         responses=LaunchBindingSerializer(many=True),
     )
     def get(self, request, project_id):
-        bindings = (
-            LaunchBinding.objects.filter(issue_type__project_id=project_id)
-            .select_related("issue_type", "state", "model__provider", "reasoning")
-            .order_by("issue_type__sort_order", "state__sort_order", "id")
-        )
+        bindings = launch_bindings.list_launch_bindings(project_id)
         return Response(LaunchBindingSerializer(bindings, many=True).data)
 
 
 class LaunchBindingDetailView(APIView):
     """Revision-guarded upsert/delete at the row's composite domain key."""
-
-    def _locked_context(self, type_id, state_id, workflow_revision):
-        try:
-            issue_type = IssueType.objects.select_for_update().get(pk=type_id)
-        except IssueType.DoesNotExist as exc:
-            raise NotFoundError("Work-item type not found.") from exc
-        if issue_type.workflow_revision != workflow_revision:
-            raise ConflictError(
-                "Workflow revision is stale; read the current workflow and retry."
-            )
-        try:
-            state = State.objects.get(pk=state_id, project_id=issue_type.project_id)
-        except State.DoesNotExist as exc:
-            raise ValidationError("State does not belong to this project.") from exc
-        return issue_type, state
 
     @extend_schema(
         operation_id="upsertLaunchBinding",
@@ -437,28 +400,22 @@ class LaunchBindingDetailView(APIView):
         request=LaunchBindingSerializer,
         responses=LaunchBindingSerializer,
     )
-    @transaction.atomic
     def put(self, request, type_id, state_id):
-        guard = WorkflowRevisionSerializer(data=request.data)
-        guard.is_valid(raise_exception=True)
-        issue_type, state = self._locked_context(
-            type_id, state_id, guard.validated_data["workflow_revision"]
-        )
-        current = LaunchBinding.objects.filter(
-            issue_type=issue_type, state=state
-        ).first()
-        serializer = LaunchBindingSerializer(
-            current,
-            data=request.data,
-            context={"issue_type": issue_type, "state": state},
-        )
+        serializer = LaunchBindingSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        binding = serializer.save()
-        issue_type.workflow_revision += 1
-        issue_type.save(update_fields=("workflow_revision", "updated_at"))
+        data = dict(serializer.validated_data)
+        workflow_revision = data.pop("workflow_revision")
+        result = launch_bindings.upsert_launch_binding(
+            type_id,
+            state_id,
+            workflow_revision=workflow_revision,
+            **data,
+        )
         return Response(
-            LaunchBindingSerializer(binding).data,
-            status=status.HTTP_200_OK if current else status.HTTP_201_CREATED,
+            LaunchBindingSerializer(result.binding).data,
+            status=(
+                status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
+            ),
         )
 
     @extend_schema(
@@ -467,14 +424,12 @@ class LaunchBindingDetailView(APIView):
         request={"application/json": {"type": "object"}},
         responses={204: None},
     )
-    @transaction.atomic
     def delete(self, request, type_id, state_id):
         guard = WorkflowRevisionSerializer(data=request.data)
         guard.is_valid(raise_exception=True)
-        issue_type, state = self._locked_context(
-            type_id, state_id, guard.validated_data["workflow_revision"]
+        launch_bindings.delete_launch_binding(
+            type_id,
+            state_id,
+            workflow_revision=guard.validated_data["workflow_revision"],
         )
-        LaunchBinding.objects.filter(issue_type=issue_type, state=state).delete()
-        issue_type.workflow_revision += 1
-        issue_type.save(update_fields=("workflow_revision", "updated_at"))
         return Response(status=status.HTTP_204_NO_CONTENT)

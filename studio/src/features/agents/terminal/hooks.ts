@@ -59,6 +59,8 @@ export function deriveTaskSessions(
       const lifecycle: LifecycleState =
         meta.status === "reconnecting"
           ? "reconnecting"
+          : meta.status === "session_lost"
+            ? "lost"
           : (selectRunState(
               {
                 projectId: null,

@@ -2,14 +2,12 @@
 
 import uuid
 
-from django.db.models import QuerySet
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from worktracker.models import Attachment, Issue
 from worktracker.rest.serializers import (
     AttachmentSerializer,
     WorkItemBatchSerializer,
@@ -17,14 +15,15 @@ from worktracker.rest.serializers import (
     WorkItemPatchSerializer,
     WorkItemSerializer,
 )
+from worktracker.services.attachments import create_attachment, list_attachments
 from worktracker.services.work_items import (
-    create_project_work_item,
-    create_review_finding,
+    batch_work_items,
+    create_work_item,
     delete_work_item,
-    get_issue,
+    list_work_items,
+    retrieve_work_item,
     update_work_item,
 )
-from worktracker.work_items import resolve_issue, task_qs
 
 
 def _uuid_query(request, name):
@@ -49,34 +48,6 @@ def _bool_query(request, name, default=False):
     raise DRFValidationError({name: "Must be true or false."})
 
 
-def _ordered_tasks() -> QuerySet:
-    return task_qs().order_by("rank", "sequence_id", "id")
-
-
-def _pathfind_subtree_ids(*, project_id=None, module_id=None):
-    """Return canonical PathFind roots and every task descendant."""
-
-    roots = Issue.objects.filter(type="task", issue_type__is_pathfind=True)
-    if project_id is not None:
-        roots = roots.filter(project_id=project_id)
-    if module_id is not None:
-        roots = roots.filter(module_id=module_id)
-    seen = set(roots.values_list("id", flat=True))
-    frontier = set(seen)
-    while frontier:
-        children = (
-            set(
-                Issue.objects.filter(type="task", parent_id__in=frontier).values_list(
-                    "id", flat=True
-                )
-            )
-            - seen
-        )
-        seen.update(children)
-        frontier = children
-    return seen
-
-
 class WorkItemListView(APIView):
     """The only task collection read, narrowed by declared query parameters."""
 
@@ -93,26 +64,17 @@ class WorkItemListView(APIView):
         responses=WorkItemSerializer(many=True),
     )
     def get(self, request):
-        queryset = _ordered_tasks()
         project_id = _uuid_query(request, "project")
         module_id = _uuid_query(request, "module")
         state_id = _uuid_query(request, "state")
-        if project_id is not None:
-            queryset = queryset.filter(project_id=project_id)
-        if module_id is not None:
-            queryset = queryset.filter(module_id=module_id)
-        if state_id is not None:
-            queryset = queryset.filter(state_id=state_id)
-        if not _bool_query(request, "include_archived"):
-            queryset = queryset.exclude(is_archived=True)
-        if not _bool_query(request, "include_pathfind"):
-            queryset = queryset.exclude(
-                id__in=_pathfind_subtree_ids(
-                    project_id=project_id,
-                    module_id=module_id,
-                )
-            )
-        return Response(WorkItemSerializer(queryset, many=True).data)
+        items = list_work_items(
+            project_id=project_id,
+            module_id=module_id,
+            state_id=state_id,
+            include_archived=_bool_query(request, "include_archived"),
+            include_pathfind=_bool_query(request, "include_pathfind"),
+        )
+        return Response(WorkItemSerializer(items, many=True).data)
 
 
 class WorkItemBatchView(APIView):
@@ -127,9 +89,7 @@ class WorkItemBatchView(APIView):
     def post(self, request):
         serializer = WorkItemBatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        ids = tuple(dict.fromkeys(serializer.validated_data["ids"]))
-        items_by_id = {item.id: item for item in task_qs().filter(id__in=ids)}
-        items = [items_by_id[item_id] for item_id in ids if item_id in items_by_id]
+        items = batch_work_items(serializer.validated_data["ids"])
         return Response(WorkItemSerializer(items, many=True).data)
 
 
@@ -145,25 +105,9 @@ class WorkItemCreateView(APIView):
     def post(self, request, project_id):
         serializer = WorkItemCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        if not data.get("issue_type_id"):
-            issue = create_review_finding(
-                project_id,
-                parent_id=data["parent_id"],
-                name=data["name"],
-                description=data.get("description") or "",
-            )
-        else:
-            issue = create_project_work_item(
-                project_id,
-                name=data["name"],
-                issue_type_id=data["issue_type_id"],
-                state_id=data.get("state_id"),
-                description=data.get("description"),
-                parent_id=data.get("parent_id"),
-            )
+        issue = create_work_item(project_id, **serializer.validated_data)
         return Response(
-            WorkItemSerializer(resolve_issue(str(issue.id))).data,
+            WorkItemSerializer(issue).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -175,7 +119,7 @@ class WorkItemDetailView(APIView):
         operation_id="getWorkItem", tags=["Work Items"], responses=WorkItemSerializer
     )
     def get(self, request, issue_id):
-        return Response(WorkItemSerializer(resolve_issue(issue_id)).data)
+        return Response(WorkItemSerializer(retrieve_work_item(issue_id)).data)
 
     @extend_schema(
         operation_id="updateWorkItem",
@@ -187,7 +131,7 @@ class WorkItemDetailView(APIView):
         serializer = WorkItemPatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         issue = update_work_item(issue_id, **serializer.validated_data)
-        return Response(WorkItemSerializer(resolve_issue(str(issue.id))).data)
+        return Response(WorkItemSerializer(issue).data)
 
     @extend_schema(
         operation_id="deleteWorkItem", tags=["Work Items"], responses={204: None}
@@ -206,10 +150,7 @@ class AttachmentCollectionView(APIView):
         responses=AttachmentSerializer(many=True),
     )
     def get(self, request, issue_id):
-        get_issue(issue_id)
-        attachments = Attachment.objects.filter(issue_id=issue_id).order_by(
-            "created_at", "id"
-        )
+        attachments = list_attachments(issue_id)
         return Response(AttachmentSerializer(attachments, many=True).data)
 
     @extend_schema(
@@ -228,17 +169,13 @@ class AttachmentCollectionView(APIView):
         responses={201: AttachmentSerializer},
     )
     def post(self, request, issue_id):
-        issue = get_issue(issue_id)
         uploaded = request.FILES.get("file")
         if uploaded is None:
             raise DRFValidationError({"file": "This field is required."})
-        attachment = Attachment.objects.create(
-            id=uuid.uuid4(),
-            issue=issue,
-            file=uploaded,
-            filename=request.data.get("name") or uploaded.name,
-            mime_type=uploaded.content_type or "",
-            size=uploaded.size,
+        attachment = create_attachment(
+            issue_id,
+            uploaded,
+            filename=request.data.get("name"),
         )
         return Response(
             AttachmentSerializer(attachment).data,

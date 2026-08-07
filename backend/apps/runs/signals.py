@@ -11,7 +11,7 @@ from apps.runs.bus import publish_status
 from apps.runs.projections import work_item_state_frame
 from studio_server.contracts import WorkflowStateFrame
 from worktracker.models import State
-from worktracker.signals import issue_state_changed, workflow_state_changed
+from worktracker.signals import work_item_changed, workflow_state_changed
 
 
 logger = logging.getLogger(__name__)
@@ -39,19 +39,20 @@ def publish_authoritative_workflow_state(
         )
 
 
-@receiver(issue_state_changed, dispatch_uid="runs_publish_work_item_state")
+@receiver(work_item_changed, dispatch_uid="runs_publish_work_item_state")
 def publish_work_item_state(
     *,
     issue_id: str,
     project_id: str | None = None,
-    to_state_id: str | None = None,
+    state_id: str | None = None,
     revision: int | None = None,
     updated_at: str | None = None,
+    membership_changed: bool = False,
     **kwargs,
 ) -> None:
     """Publish the durable post-commit state projection without affecting the write.
 
-    ``issue_state_changed`` itself is emitted only after commit and uses robust
+    ``work_item_changed`` itself is emitted only after commit and uses robust
     dispatch. This receiver deliberately reads the committed row, then treats
     feed publication as best-effort: a failed channel layer must never alter an
     already-successful workflow transition.
@@ -66,8 +67,8 @@ def publish_work_item_state(
         if revision is None or updated_at is None:
             return
         state = (
-            State.objects.get(pk=to_state_id, project_id=project_id)
-            if to_state_id is not None
+            State.objects.get(pk=state_id, project_id=project_id)
+            if state_id is not None
             else None
         )
         frame = work_item_state_frame(
@@ -76,6 +77,7 @@ def publish_work_item_state(
             state=state,
             revision=revision,
             updated_at=updated_at,
+            membership_changed=membership_changed,
         )
         async_to_sync(publish_status)(project_id, frame.model_dump())
     except Exception:

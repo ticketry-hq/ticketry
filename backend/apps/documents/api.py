@@ -1,4 +1,4 @@
-"""HTTP endpoints for design-document discovery, serving, and fs completion.
+"""Application operations for document discovery, serving, and fs completion.
 
 Ported from ``web/backend/api/workspace.py``:
 
@@ -11,37 +11,42 @@ Ported from ``web/backend/api/workspace.py``:
   document when its content digest is current.
 - ``GET /api/fs/complete`` autocompletes filesystem directories.
 
-These routes are thin translators: parameter validation and response shaping
-live here, while the discovery/serve/complete logic lives in
+DRF owns HTTP validation and response construction. These operations resolve
+application-level inputs and delegate discovery/serve/complete mechanics to
 :mod:`apps.documents.service`.
 """
 
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from typing import Optional
 
-from django.http import HttpResponse, JsonResponse
 from pydantic import BaseModel
 
+from apps.errors import ApplicationError
 from apps.documents import service
+
+
 class SaveDocumentIn(BaseModel):
     content: str
     digest: str
 
 
-def _error_response(error: str, *, status: int) -> JsonResponse:
-    """Build a uniform ``{"detail": {"error": ...}}`` error response."""
+@dataclass(frozen=True)
+class DocumentAsset:
+    content: bytes
+    media_type: str
+    etag: str | None
 
-    return JsonResponse(
-        {"detail": {"error": error}},
-        status=status,
-        json_dumps_params={"separators": (",", ":")},
-    )
+
+@dataclass(frozen=True)
+class SavedDocument:
+    digest: str
+    conflict: bool
 
 
 async def list_documents(
-    request,
     task_id: Optional[str] = None,
     scope: Optional[str] = None,
     project_id: Optional[str] = None,
@@ -56,12 +61,14 @@ async def list_documents(
 
     if scope == "scratch":
         if not module_id:
-            return _error_response("module_id_required", status=400)
+            raise ApplicationError(
+                400, "module_id_required", code="module_id_required"
+            )
         documents = await service.list_scratch_documents(module_id)
         return {"documents": documents}
 
     if not task_id:
-        return _error_response("task_id_required", status=400)
+        raise ApplicationError(400, "task_id_required", code="task_id_required")
 
     documents = await service.list_task_documents(
         task_id, project_id=project_id, module_id=module_id, profile=profile
@@ -69,7 +76,7 @@ async def list_documents(
     return {"documents": documents}
 
 
-async def serve_document_asset(request, doc_id: str, asset_path: str):
+async def read_document_asset(doc_id: str, asset_path: str) -> DocumentAsset:
     """Serve a registered document or one of its relative assets.
 
     The path-style URL mirrors the document's directory levels, so relative
@@ -80,40 +87,26 @@ async def serve_document_asset(request, doc_id: str, asset_path: str):
 
     result = await service.read_document_asset(doc_id, asset_path)
     if result is None:
-        return _error_response("not_found", status=404)
+        raise ApplicationError(404, "not_found", code="not_found")
 
     content, media_type = result
-    response = HttpResponse(content, content_type=media_type)
-    response["Cache-Control"] = "no-store"
-    response["X-Content-Type-Options"] = "nosniff"
-    if media_type == "text/markdown":
-        response["ETag"] = f'"{hashlib.sha256(content).hexdigest()}"'
-    return response
+    etag = hashlib.sha256(content).hexdigest() if media_type == "text/markdown" else None
+    return DocumentAsset(content=content, media_type=media_type, etag=etag)
 
 
-async def save_document(request, doc_id: str, payload: SaveDocumentIn):
+async def save_document(doc_id: str, payload: SaveDocumentIn) -> SavedDocument:
     """Digest-guarded save of a registered primary Markdown document."""
 
     result = await service.save_primary_markdown(
         doc_id, payload.content.encode("utf-8"), payload.digest
     )
     if result is None:
-        return _error_response("not_found", status=404)
-
-    if result.status == "conflict":
-        response = JsonResponse(
-            {"detail": {"error": "conflict", "digest": result.digest}},
-            status=409,
-            json_dumps_params={"separators": (",", ":")},
-        )
-    else:
-        response = JsonResponse(
-            {"digest": result.digest},
-            json_dumps_params={"separators": (",", ":")},
-        )
-    response["ETag"] = f'"{result.digest}"'
-    return response
+        raise ApplicationError(404, "not_found", code="not_found")
+    return SavedDocument(
+        digest=result.digest,
+        conflict=result.status == "conflict",
+    )
 
 
-async def fs_complete(request, path: str = ""):
+async def fs_complete(path: str = ""):
     return {"entries": service.complete_directories(path)}

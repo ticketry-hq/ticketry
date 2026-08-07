@@ -103,7 +103,8 @@ async def test_connect_sends_versioned_authoritative_snapshot() -> None:
     assert frame["v"] == 1
     assert frame["type"] == "snapshot"
     assert frame["scope"] == {"project_id": PROJECT_1_ID, "task_id": None}
-    assert frame["work_item_cursor"] == 0
+    project = await Project.objects.aget(pk=PROJECT_1_ID)
+    assert frame["work_item_cursor"] == project.state_revision
     assert frame["workflow_states"] == []
     assert [run["agent_run_id"] for run in frame["runs"]] == ["run-1"]
     assert frame["at"]
@@ -313,6 +314,8 @@ async def test_connect_reconciles_unresolved_automation_attempts() -> None:
             "work_item_id": str(issue.id),
             "status": "failed",
             "error": "tmux unavailable",
+            "failure": None,
+            "retryable": True,
             "agent_run_id": None,
             "updated_at": attempt.updated_at.isoformat(),
         }
@@ -327,7 +330,6 @@ async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
     await socket.receive_json_from()  # snapshot
 
     await ingest_lifecycle_event(
-        None,
         LifecycleEvent(
             agent_run_id="run-1",
             agent="codex",
@@ -401,6 +403,7 @@ async def test_automation_attempt_frame_is_typed_and_project_scoped() -> None:
             work_item_id="task-1",
             status="failed",
             error="tmux unavailable",
+            retryable=True,
             agent_run_id=None,
             updated_at="2026-07-16T10:00:00+00:00",
         ),
@@ -417,6 +420,8 @@ async def test_automation_attempt_frame_is_typed_and_project_scoped() -> None:
             "work_item_id": "task-1",
             "status": "failed",
             "error": "tmux unavailable",
+            "failure": None,
+            "retryable": True,
             "agent_run_id": None,
             "updated_at": "2026-07-16T10:00:00+00:00",
         },
@@ -488,6 +493,54 @@ async def test_committed_state_change_publishes_complete_project_delta() -> None
     await other_project_socket.disconnect()
 
 
+async def test_create_and_field_edit_publish_distinct_change_revisions() -> None:
+    workspace = await sync_to_async(Workspace.objects.create)(
+        id=uuid.uuid4(), slug="changed", name="changed"
+    )
+    project = await sync_to_async(Project.objects.create)(
+        id=uuid.uuid4(), workspace=workspace, name="Changed", slug="CHANGED"
+    )
+    state = await sync_to_async(State.objects.create)(
+        id=uuid.uuid4(), project=project, name="Todo", group="unstarted"
+    )
+    issue_type = await _issue_type(project)
+    socket = await _connect(str(project.id))
+    assert (await socket.connect())[0]
+    assert (await socket.receive_json_from())["work_item_cursor"] == 0
+
+    issue = await sync_to_async(Issue.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="Created",
+        sequence_id=1,
+        state=state,
+    )
+    created = await socket.receive_json_from()
+    assert (created["work_item_id"], created["revision"]) == (str(issue.id), 1)
+    assert created["membership_changed"] is True
+
+    issue.name = "Edited externally"
+    issue.description = "Fresh description"
+    await sync_to_async(issue.save)(
+        update_fields=["name", "description", "updated_at"]
+    )
+    edited = await socket.receive_json_from()
+    assert (edited["work_item_id"], edited["revision"]) == (str(issue.id), 2)
+    assert edited["membership_changed"] is False
+    await socket.disconnect()
+
+    replay = await _connect(str(project.id), cursor=0)
+    assert (await replay.connect())[0]
+    assert (await replay.receive_json_from())["work_item_cursor"] == 0
+    latest = await replay.receive_json_from()
+    assert (latest["work_item_id"], latest["revision"]) == (str(issue.id), 2)
+    assert latest["membership_changed"] is True
+    assert (await replay.receive_json_from())["revision"] == 2
+    await replay.disconnect()
+
+
 async def test_cursor_reconnect_replays_latest_project_projections_in_order() -> None:
     workspace = await sync_to_async(Workspace.objects.create)(
         id=uuid.uuid4(), slug="replay", name="replay"
@@ -546,26 +599,26 @@ async def test_cursor_reconnect_replays_latest_project_projections_in_order() ->
 
     replay = [await socket.receive_json_from(), await socket.receive_json_from()]
     assert [(frame["work_item_id"], frame["revision"]) for frame in replay] == [
-        (str(second.id), 2),
-        (str(first.id), 3),
+        (str(second.id), 4),
+        (str(first.id), 5),
     ]
     assert replay[-1]["state"]["id"] == str(done.id)
     assert await socket.receive_json_from() == {
         "v": 1,
         "type": "cursor",
         "project_id": str(project.id),
-        "revision": 3,
+        "revision": 5,
     }
     await socket.disconnect()
 
-    duplicate = await _connect(str(project.id), cursor=3)
+    duplicate = await _connect(str(project.id), cursor=5)
     assert (await duplicate.connect())[0]
-    assert (await duplicate.receive_json_from())["work_item_cursor"] == 3
+    assert (await duplicate.receive_json_from())["work_item_cursor"] == 5
     assert await duplicate.receive_json_from() == {
         "v": 1,
         "type": "cursor",
         "project_id": str(project.id),
-        "revision": 3,
+        "revision": 5,
     }
     assert await duplicate.receive_nothing()
     await duplicate.disconnect()
@@ -599,7 +652,7 @@ async def test_concurrent_project_transitions_publish_distinct_revisions() -> No
 
     socket = await _connect(str(project.id))
     assert (await socket.connect())[0]
-    assert (await socket.receive_json_from())["work_item_cursor"] == 0
+    assert (await socket.receive_json_from())["work_item_cursor"] == 2
 
     def move(issue_id, state_id):
         # Django's shared in-memory SQLite test database locks whole tables;
@@ -625,9 +678,9 @@ async def test_concurrent_project_transitions_publish_distinct_revisions() -> No
         ]
     )
 
-    assert sorted(revisions) == [1, 2]
+    assert sorted(revisions) == [3, 4]
     frames = [await socket.receive_json_from(), await socket.receive_json_from()]
-    assert sorted(frame["revision"] for frame in frames) == [1, 2]
+    assert sorted(frame["revision"] for frame in frames) == [3, 4]
     await socket.disconnect()
 
 
@@ -714,6 +767,7 @@ async def test_unset_destination_is_live_and_replayable() -> None:
         "state": None,
         "revision": 2,
         "updated_at": issue.updated_at.isoformat(),
+        "membership_changed": False,
     }
     await live.disconnect()
 

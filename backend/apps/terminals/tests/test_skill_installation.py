@@ -62,6 +62,24 @@ def test_install_refuses_user_owned_collision_without_overwriting(tmp_path):
     assert skill_file.read_text().endswith("user-owned\n")
 
 
+def test_collision_preflight_leaves_other_providers_unmodified(tmp_path):
+    home = tmp_path / "home"
+    conflict = provider_skill_root("codex", home=home, environ={}) / "to-spec"
+    conflict.mkdir(parents=True)
+    skill_file = conflict / "SKILL.md"
+    skill_file.write_text("---\nname: to-spec\n---\nuser-owned\n")
+    claude_root = provider_skill_root("claude", home=home, environ={})
+
+    with pytest.raises(SkillInstallationError) as caught:
+        install_packaged_skills(
+            providers=("claude", "codex"), home=home, environ={}
+        )
+
+    assert caught.value.reason == "collision"
+    assert not claude_root.exists()
+    assert skill_file.read_text().endswith("user-owned\n")
+
+
 @pytest.mark.parametrize("kind", ("file", "symlink"))
 def test_install_refuses_non_directory_collision_without_overwriting(tmp_path, kind):
     home = tmp_path / "home"

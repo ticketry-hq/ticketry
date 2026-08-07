@@ -4076,6 +4076,12 @@
                         "type": "string",
                         "nullable": true
                     },
+                    "failure": {
+                        "nullable": true
+                    },
+                    "retryable": {
+                        "type": "boolean"
+                    },
                     "agent_run_id": {
                         "type": "string",
                         "nullable": true
@@ -4088,7 +4094,9 @@
                     "agent_run_id",
                     "attempt_id",
                     "error",
+                    "failure",
                     "retry_of_attempt_id",
+                    "retryable",
                     "root_attempt_id",
                     "status",
                     "updated_at",

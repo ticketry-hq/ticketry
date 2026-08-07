@@ -32,6 +32,7 @@ import ptyprocess
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from apps.terminals.control_plane import create_terminal_run, launch_intent_from_spawn
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.session import (
     LaunchUnavailable,
     SessionNotFound,
@@ -179,6 +180,13 @@ class TerminalConsumer(AsyncWebsocketConsumer):
             # for existing Channels clients through the same control-plane
             # operation.
             agent_run_id = await create_terminal_run(init)
+        except RequiredSkillUnavailable as exc:
+            payload = {"type": "error", **exc.as_payload()}
+            try:
+                await self.send(text_data=json.dumps(payload))
+            finally:
+                await self.close(code=1008)
+            return
         except NoConfigurationSelected:
             await self._send_error("no_profile_selected", close_code=1008)
             return

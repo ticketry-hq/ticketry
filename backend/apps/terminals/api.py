@@ -1,4 +1,4 @@
-"""Terminal-session REST endpoints (list, scratch, counts, resume, terminate)."""
+"""Transport-independent terminal-session application operations."""
 
 from __future__ import annotations
 
@@ -6,11 +6,12 @@ import logging
 from typing import Any, Optional
 
 from asgiref.sync import async_to_sync
-from django.http import JsonResponse
 from django.db import close_old_connections
 from pydantic import BaseModel
 
+from apps.errors import ApplicationError
 import apps.terminals.agents.registry as registry
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals import dao
 from apps.terminals.control_plane import create_terminal_run
 from apps.terminals.models import AgentTerminalSession
@@ -76,11 +77,11 @@ def _viewer_lease_payload(lease: viewer_leases.ViewerLease) -> dict[str, Any]:
     }
 
 
-def acquire_viewer_lease(request, body: ViewerLeaseBody):
+def acquire_viewer_lease(body: ViewerLeaseBody):
     """Acquire the durable newest-viewer-wins lease for a terminal run."""
 
     if body.transport not in {"browser", "desktop"}:
-        return JsonResponse({"detail": {"error": "invalid_transport"}}, status=400)
+        raise ApplicationError(400, "invalid_transport", code="invalid_transport")
     try:
         lease = viewer_leases.acquire(
             agent_run_id=body.agent_run_id,
@@ -88,11 +89,11 @@ def acquire_viewer_lease(request, body: ViewerLeaseBody):
             transport=body.transport,
         )
     except viewer_leases.ViewerLeaseRunNotFound:
-        return JsonResponse({"detail": {"error": "session_not_found"}}, status=404)
+        raise ApplicationError(404, "session_not_found", code="session_not_found")
     return _viewer_lease_payload(lease)
 
 
-def renew_viewer_lease(request, body: ViewerLeaseReleaseBody):
+def renew_viewer_lease(body: ViewerLeaseReleaseBody):
     """Renew a lease or tell a displaced viewer why it must detach."""
 
     lease = viewer_leases.renew(
@@ -100,11 +101,15 @@ def renew_viewer_lease(request, body: ViewerLeaseReleaseBody):
         viewer_id=body.viewer_id,
     )
     if lease is None:
-        return JsonResponse({"detail": {"error": "replaced_by_another_viewer"}}, status=409)
+        raise ApplicationError(
+            409,
+            "replaced_by_another_viewer",
+            code="replaced_by_another_viewer",
+        )
     return _viewer_lease_payload(lease)
 
 
-def release_viewer_lease(request, body: ViewerLeaseReleaseBody):
+def release_viewer_lease(body: ViewerLeaseReleaseBody):
     """Release only this viewer's lease; never terminate the tmux run."""
 
     released = viewer_leases.release(
@@ -143,25 +148,28 @@ def _terminal_session_payload(session) -> dict[str, Any]:
     }
 
 
-def create_terminal(request, body: CreateTerminalRunBody):
+def create_terminal(body: CreateTerminalRunBody):
     """Create a durable run and tmux session before a terminal attaches."""
 
     init, error = _create_request_as_spawn_init(body)
     if error is not None:
-        return JsonResponse({"detail": {"error": error}}, status=400)
+        raise ApplicationError(400, error, code=error)
 
     try:
         agent_run_id = async_to_sync(create_terminal_run)(init)
+    except RequiredSkillUnavailable as exc:
+        raise ApplicationError(409, exc.message, body=exc.as_payload()) from exc
     except NoConfigurationSelected:
-        return JsonResponse({"detail": {"error": "no_profile_selected"}}, status=400)
-    except LaunchUnavailable as exc:
-        return JsonResponse(
-            {"detail": {"error": "launch_unavailable", "message": str(exc)}},
-            status=500,
+        raise ApplicationError(
+            400, "no_profile_selected", code="no_profile_selected"
         )
+    except LaunchUnavailable as exc:
+        raise ApplicationError(
+            500, str(exc), code="launch_unavailable"
+        ) from exc
     except ValueError as exc:
         error = str(exc) or exc.__class__.__name__
-        return JsonResponse({"detail": {"error": error}}, status=400)
+        raise ApplicationError(400, error, code=error) from exc
 
     return {"agent_run_id": agent_run_id}
 
@@ -199,7 +207,7 @@ def _select_resumable_runs(
     return list(selected.values())[:10]
 
 
-def list_terminals(request, task_id: str) -> list[dict[str, Any]]:
+def list_terminals(task_id: str) -> list[dict[str, Any]]:
     """List active persisted terminal sessions for a work item."""
 
     # Reap dead/orphaned tmux sessions first so the UI is never offered a
@@ -219,23 +227,22 @@ def list_terminals(request, task_id: str) -> list[dict[str, Any]]:
     return [_terminal_session_payload(s) for s in sessions]
 
 
-def resume_terminal(request, agent_run_id: str):
+def resume_terminal(agent_run_id: str):
     """Resume a terminated provider conversation in a fresh tmux run."""
 
     try:
         new_agent_run_id = async_to_sync(terminal_session.resume)(agent_run_id)
     except ResumeUnavailable as exc:
         status = 404 if exc.reason == "unknown_run" else 409
-        return JsonResponse({"detail": {"error": exc.reason}}, status=status)
+        raise ApplicationError(status, exc.reason, code=exc.reason) from exc
     except registry.ResumeUnsupported:
-        return JsonResponse({"detail": {"error": "resume_unsupported"}}, status=409)
+        raise ApplicationError(409, "resume_unsupported", code="resume_unsupported")
     except LaunchUnavailable as exc:
-        return JsonResponse(
-            {"detail": {"error": "launch_unavailable", "message": str(exc)}},
-            status=500,
-        )
+        raise ApplicationError(
+            500, str(exc), code="launch_unavailable"
+        ) from exc
     except registry.UnknownAgent:
-        return JsonResponse({"detail": {"error": "unknown_agent"}}, status=409)
+        raise ApplicationError(409, "unknown_agent", code="unknown_agent")
 
     return {
         "agent_run_id": new_agent_run_id,
@@ -244,7 +251,6 @@ def resume_terminal(request, agent_run_id: str):
 
 
 def list_resumable_terminals(
-    request,
     task_id: str | None = None,
     project_id: str | None = None,
     module_id: str | None = None,
@@ -319,7 +325,6 @@ def list_resumable_terminals(
 
 
 def list_scratch_terminals(
-    request,
     project_id: str,
     module_id: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -343,36 +348,29 @@ def list_scratch_terminals(
     return [_terminal_session_payload(s) for s in sessions]
 
 
-def terminate_terminal(request, agent_run_id: str):
+def terminate_terminal(agent_run_id: str):
     """Terminate a tmux session and soft-delete its metadata row."""
 
     try:
         known = AgentTerminalSession.objects.filter(agent_run_id=agent_run_id).exists()
         terminal_session.terminate(agent_run_id)
     except TerminalSessionError as exc:
-        return JsonResponse(
-            {"detail": {"error": "terminate_failed", "message": str(exc)}},
-            status=500,
-        )
+        raise ApplicationError(500, str(exc), code="terminate_failed") from exc
     if not known:
-        return JsonResponse(
-            {"detail": {"error": "session_not_found"}},
-            status=404,
-        )
+        raise ApplicationError(404, "session_not_found", code="session_not_found")
 
     return {"agent_run_id": agent_run_id, "terminated": True}
 
 
-def self_terminate_terminal(request):
+def self_terminate_terminal(authorization: str | None):
     """Terminate only the run named by Studio-issued request authorization."""
 
     try:
-        agent_run_id = verify_run_authorization(request.headers.get("Authorization"))
+        agent_run_id = verify_run_authorization(authorization)
     except RunAuthorizationError as exc:
-        return JsonResponse(
-            {"ok": False, "error": "caller_run_unbound", "reason": str(exc)},
-            status=401,
-        )
+        raise ApplicationError(
+            401, str(exc), code="caller_run_unbound"
+        ) from exc
 
     def _run_state() -> tuple[bool, bool]:
         known = AgentRun.objects.filter(id=agent_run_id).exists()
@@ -387,9 +385,8 @@ def self_terminate_terminal(request):
 
     known, active = _run_state()
     if not known:
-        return JsonResponse(
-            {"ok": False, "error": "caller_run_unknown"},
-            status=404,
+        raise ApplicationError(
+            404, "caller_run_unknown", code="caller_run_unknown"
         )
     if not active:
         return {
@@ -402,10 +399,7 @@ def self_terminate_terminal(request):
     try:
         terminal_session.terminate(agent_run_id)
     except TerminalSessionError as exc:
-        return JsonResponse(
-            {"ok": False, "error": "terminate_failed", "message": str(exc)},
-            status=500,
-        )
+        raise ApplicationError(500, str(exc), code="terminate_failed") from exc
 
     return {
         "ok": True,

@@ -67,6 +67,18 @@ export interface AutomationAttempt {
     error: string | null;
     /**
      *
+     * @type {any}
+     * @memberof AutomationAttempt
+     */
+    failure: any | null;
+    /**
+     *
+     * @type {boolean}
+     * @memberof AutomationAttempt
+     */
+    retryable: boolean;
+    /**
+     *
      * @type {string}
      * @memberof AutomationAttempt
      */
@@ -91,6 +103,8 @@ export function instanceOfAutomationAttempt(value: object): value is AutomationA
     if (!('work_item_id' in value) || value['work_item_id'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('error' in value) || value['error'] === undefined) return false;
+    if (!('failure' in value) || value['failure'] === undefined) return false;
+    if (!('retryable' in value) || value['retryable'] === undefined) return false;
     if (!('agent_run_id' in value) || value['agent_run_id'] === undefined) return false;
     if (!('updated_at' in value) || value['updated_at'] === undefined) return false;
     return true;
@@ -112,6 +126,8 @@ export function AutomationAttemptFromJSONTyped(json: any, ignoreDiscriminator: b
         'work_item_id': json['work_item_id'],
         'status': StatusEnumFromJSON(json['status']),
         'error': json['error'],
+        'failure': json['failure'],
+        'retryable': json['retryable'],
         'agent_run_id': json['agent_run_id'],
         'updated_at': json['updated_at'],
     };
@@ -134,6 +150,8 @@ export function AutomationAttemptToJSONTyped(value?: AutomationAttempt | null, i
         'work_item_id': value['work_item_id'],
         'status': StatusEnumToJSON(value['status']),
         'error': value['error'],
+        'failure': value['failure'],
+        'retryable': value['retryable'],
         'agent_run_id': value['agent_run_id'],
         'updated_at': value['updated_at'],
     };

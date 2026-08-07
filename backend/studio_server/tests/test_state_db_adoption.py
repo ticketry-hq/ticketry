@@ -270,6 +270,7 @@ def test_fake_initial_adopts_existing_database_without_data_change(
             # below still survive adoption untouched.
             ("runs", "0007_backfill_terminal_lifecycle_state"),
             ("runs", "0008_agentrun_issue"),
+            ("runs", "0009_automationattempt_launch_rejection"),
             ("settings_store", "0001_initial"),
             ("settings_store", "0002_migrate_profile_prompt_authority"),
             ("terminals", "0001_initial"),

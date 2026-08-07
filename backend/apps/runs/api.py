@@ -4,9 +4,8 @@ import logging
 from datetime import datetime, timezone
 
 from django.db import transaction
-from django.http import JsonResponse
+from apps.errors import ApplicationError
 from studio_server.contracts import (
-    AutomationAttemptRecord,
     AgentStatusScope,
     AgentStatusSnapshot,
     AgentLifecycleFrame,
@@ -23,7 +22,7 @@ from apps.runs.projections import automation_attempt_record
 
 logger = logging.getLogger(__name__)
 
-def retry_automation_attempt(request, attempt_id: str):
+def retry_automation_attempt(attempt_id: str):
     """Create at most one explicit retry child for one failed attempt."""
 
     with transaction.atomic():
@@ -34,12 +33,27 @@ def retry_automation_attempt(request, attempt_id: str):
             .first()
         )
         if source is None:
-            return JsonResponse({"error": "automation_attempt_not_found"}, status=404)
+            raise ApplicationError(
+                404,
+                "automation_attempt_not_found",
+                code="automation_attempt_not_found",
+            )
         existing = AutomationAttempt.objects.filter(retry_of=source).first()
         if existing is not None:
             return automation_attempt_record(existing)
         if source.status != AutomationAttempt.Status.FAILED:
-            return JsonResponse({"error": "automation_attempt_not_failed"}, status=409)
+            raise ApplicationError(
+                409,
+                "automation_attempt_not_failed",
+                code="automation_attempt_not_failed",
+            )
+        if not source.retryable:
+            raise ApplicationError(
+                409,
+                "automation_attempt_not_retryable",
+                code="automation_attempt_not_retryable",
+                metadata={"failure": source.error_details},
+            )
         retry = AutomationAttempt.objects.create(
             transition_id=source.transition_id,
             issue=source.issue,
@@ -57,10 +71,9 @@ def retry_automation_attempt(request, attempt_id: str):
     return automation_attempt_record(retry)
 
 
-async def ingest_lifecycle_event(request, event: LifecycleEvent):
+async def ingest_lifecycle_event(event: LifecycleEvent):
     """Ingest one agent lifecycle/attention event and relay it (#498/#512).
 
-    :param request: the inbound HTTP request (unused).
     :param event: the normalized lifecycle envelope from a per-agent hook.
     :return: a ``202`` tuple echoing the event and its receive timestamp.
     """
@@ -119,7 +132,6 @@ async def ingest_lifecycle_event(request, event: LifecycleEvent):
 
 
 async def get_module_activity(
-    request,
     project_id: str,
     window_days: int = dao.DEFAULT_ACTIVITY_WINDOW_DAYS,
 ):
@@ -128,7 +140,6 @@ async def get_module_activity(
     Backs the frontend's recency sort of the module list. Modules with no
     qualifying run within the window are simply absent from the map.
 
-    :param request: the inbound HTTP request (unused).
     :param project_id: scope the activity query to one project.
     :param window_days: lookback cap in days; older runs are excluded.
     :return: a ``{module_id: iso8601}`` map.
@@ -137,7 +148,7 @@ async def get_module_activity(
     return await dao.last_activity_by_module(project_id, window_days=window_days)
 
 
-async def agent_status(request, project_id: str, task_id: str | None = None):
+async def agent_status(project_id: str, task_id: str | None = None):
     """Return the authoritative run-status snapshot for a project or task."""
 
     at = datetime.now(timezone.utc).isoformat()

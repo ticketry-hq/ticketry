@@ -16,6 +16,7 @@ import type {
 import { queryClient } from "../shared/query/queryClient";
 import { queryKeys } from "../shared/query/keys";
 import { useClientStore } from "../state/clientStore";
+import { rankBetween } from "../features/work-items/utilities/rank";
 
 export interface HttpFixture {
   tree(moduleId: string, tree: ModuleTree): void;
@@ -23,11 +24,15 @@ export interface HttpFixture {
   runs(issueId: string, runs: RunRecord[]): void;
   documents(issueId: string, docs: DesignDoc[]): void;
   expectPatch(id: string, body: unknown): Promise<void>;
+  expectReorder(
+    id: string,
+    body: { before_id: string | null; after_id: string | null },
+  ): Promise<void>;
   failNext(status: number, body?: unknown): void;
 }
 
 export interface FeedFixture {
-  workItemChanged(id: string, revision: number): void;
+  workItemChanged(id: string, revision: number, membershipChanged?: boolean): void;
   runLifecycle(runId: string, state: string, at: string): void;
   disconnect(): void;
   reconnect(): void;
@@ -42,6 +47,11 @@ interface PatchCall {
   body: unknown;
 }
 
+interface ReorderCall {
+  id: string;
+  body: { before_id: string | null; after_id: string | null };
+}
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -54,23 +64,44 @@ class BoundaryFixture implements StudioFixture {
   readonly runRows = new Map<string, RunRecord[]>();
   readonly documentRows = new Map<string, DesignDoc[]>();
   readonly patches: PatchCall[] = [];
+  readonly reorders: ReorderCall[] = [];
   private nextFailure: { status: number; body: unknown } | null = null;
   private patchWaiters: Array<{
     id: string;
     body: unknown;
     resolve: () => void;
   }> = [];
+  private reorderWaiters: Array<{
+    id: string;
+    body: ReorderCall["body"];
+    resolve: () => void;
+  }> = [];
   private connected = true;
+  private cursor = 0;
+  private readonly missedWorkItemChanges = new Map<
+    string,
+    { revision: number; membershipChanged: boolean }
+  >();
+
+  private applyWorkItemChange(id: string, membershipChanged: boolean): void {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.workItems.byId(id),
+      exact: true,
+    });
+    if (membershipChanged) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    }
+  }
 
   readonly notifications: FeedFixture = {
-    workItemChanged: (id, revision) => {
-      if (!this.connected) return;
-      void revision;
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.workItems.byId(id),
-        exact: true,
-      });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    workItemChanged: (id, revision, membershipChanged = false) => {
+      if (revision <= this.cursor) return;
+      this.cursor = revision;
+      if (!this.connected) {
+        this.missedWorkItemChanges.set(id, { revision, membershipChanged });
+        return;
+      }
+      this.applyWorkItemChange(id, membershipChanged);
     },
     runLifecycle: (runId, state, at) => {
       if (!this.connected) return;
@@ -89,6 +120,13 @@ class BoundaryFixture implements StudioFixture {
     },
     reconnect: () => {
       this.connected = true;
+      const replay = [...this.missedWorkItemChanges.entries()].sort(
+        ([, left], [, right]) => left.revision - right.revision,
+      );
+      this.missedWorkItemChanges.clear();
+      for (const [id, change] of replay) {
+        this.applyWorkItemChange(id, change.membershipChanged);
+      }
     },
   };
 
@@ -113,6 +151,13 @@ class BoundaryFixture implements StudioFixture {
       return Promise.resolve();
     }
     return new Promise((resolve) => this.patchWaiters.push({ id, body, resolve }));
+  }
+
+  expectReorder(id: string, body: ReorderCall["body"]): Promise<void> {
+    if (this.reorders.some((call) => call.id === id && deepEqual(call.body, body))) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => this.reorderWaiters.push({ id, body, resolve }));
   }
 
   failNext(status: number, body: unknown = null): void {
@@ -179,16 +224,56 @@ class BoundaryFixture implements StudioFixture {
     const itemMatch = path.match(/\/work-tracker\/work-items\/([^/]+)$/);
     if (method === "PATCH" && itemMatch) {
       const id = decodeURIComponent(itemMatch[1]);
-      const body = await requestBody(request, init) as Partial<WorkItem>;
+      const body = await requestBody(request, init) as Partial<WorkItem> & {
+        state_id?: string;
+        issue_type_id?: string;
+      };
       const current = this.items.get(id);
       if (!current) return json({ detail: "Not found" }, 404);
-      const updated = { ...current, ...body };
+      const state = body.state_id
+        ? [...this.items.values()]
+            .map((item) => item.state)
+            .find((candidate) => candidate?.id === body.state_id) ?? current.state
+        : current.state;
+      const issueType = body.issue_type_id
+        ? [...this.items.values()]
+            .map((item) => item.issue_type)
+            .find((candidate) => candidate?.id === body.issue_type_id) ?? current.issue_type
+        : current.issue_type;
+      const updated = {
+        ...current,
+        ...body,
+        state,
+        issue_type: issueType,
+        parent_id: body.parent_id === undefined ? current.parent_id : body.parent_id,
+      };
       this.items.set(id, updated);
       const call = { id, body };
       this.patches.push(call);
       for (const waiter of this.patchWaiters.splice(0)) {
         if (waiter.id === id && deepEqual(waiter.body, body)) waiter.resolve();
         else this.patchWaiters.push(waiter);
+      }
+      return json(updated);
+    }
+    const reorderMatch = path.match(/\/work-tracker\/work-items\/([^/]+)\/reorder$/);
+    if (method === "POST" && reorderMatch) {
+      const id = decodeURIComponent(reorderMatch[1]);
+      const body = await requestBody(request, init) as ReorderCall["body"];
+      const current = this.items.get(id);
+      if (!current) return json({ detail: "Not found" }, 404);
+      const beforeRank = body.before_id
+        ? this.items.get(body.before_id)?.rank ?? null
+        : null;
+      const afterRank = body.after_id
+        ? this.items.get(body.after_id)?.rank ?? null
+        : null;
+      const updated = { ...current, rank: rankBetween(beforeRank, afterRank) };
+      this.items.set(id, updated);
+      this.reorders.push({ id, body });
+      for (const waiter of this.reorderWaiters.splice(0)) {
+        if (waiter.id === id && deepEqual(waiter.body, body)) waiter.resolve();
+        else this.reorderWaiters.push(waiter);
       }
       return json(updated);
     }

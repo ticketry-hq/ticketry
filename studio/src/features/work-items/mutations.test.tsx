@@ -20,11 +20,17 @@ import {
   useSetWorkItemState,
 } from "./mutations";
 
-vi.mock("../../shared/api/client", () => ({
-  createWorkItem: vi.fn(),
-  patchWorkItem: vi.fn(),
-  reorderWorkItem: vi.fn(),
-}));
+vi.mock("../../shared/api/client", async () => {
+  const actual = await vi.importActual<typeof import("../../shared/api/client")>(
+    "../../shared/api/client",
+  );
+  return {
+    ...actual,
+    createWorkItem: vi.fn(),
+    patchWorkItem: vi.fn(),
+    reorderWorkItem: vi.fn(),
+  };
+});
 
 const TODO: State & { id: string } = {
   id: "todo",
@@ -187,8 +193,14 @@ describe("work-item optimistic mutations", () => {
           ?.state,
       ).toEqual(REVIEW),
     );
-    requests[2].resolve(workItem({ state: REVIEW }));
+    requests[2].resolve(
+      workItem({ state: REVIEW.id as unknown as State }),
+    );
     await waitFor(() => expect(result.current.state.isSuccess).toBe(true));
+    expect(
+      client.getQueryData<WorkItem>(queryKeys.workItems.byId(original.id))
+        ?.state,
+    ).toEqual(REVIEW);
 
     expect(vi.mocked(api.patchWorkItem).mock.calls).toEqual([
       [original.id, { description: "New description" }],

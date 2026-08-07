@@ -50,6 +50,16 @@ export interface AutomationAttemptRecord {
   work_item_id: string;
   status: AutomationAttemptStatus;
   error: string | null;
+  failure: {
+    code: string;
+    provider: string;
+    skill: string;
+    reason: string;
+    detail: string;
+    remediation: string;
+    retryable: boolean;
+  } | null;
+  retryable: boolean;
   agent_run_id: string | null;
   updated_at: string;
 }
@@ -91,7 +101,7 @@ export type WorkItemState = Omit<State, "id" | "group" | "color"> & {
   color: string | null;
 };
 
-/** One committed work-item state projection on the project status feed. */
+/** One committed work-item change projection on the project status feed. */
 export interface WorkItemStateFrame {
   v: 1;
   type: "work_item_state";
@@ -100,6 +110,7 @@ export interface WorkItemStateFrame {
   state: WorkItemState | null;
   revision: number;
   updated_at: string;
+  membership_changed?: boolean;
 }
 
 /** One authoritative workflow-state catalog row on the project status feed. */

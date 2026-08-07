@@ -9,6 +9,7 @@ from django.test import Client, override_settings
 from apps.execution import driver
 from apps.execution.models import GraphRun, LaunchedTask
 from apps.terminals.launch_configuration import resolve_task_launch_configuration
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from worktracker.models import (
     AgentModel,
     Issue,
@@ -657,3 +658,41 @@ def test_launch_agent_launch_unavailable_returns_503(
 
     assert response.status_code == 503
     assert response.json()["code"] == "launch_unavailable"
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_launch_agent_required_skill_collision_returns_structured_409(
+    client, project, module, todo, monkeypatch
+):
+    issue = task(project, module, todo)
+
+    async def rejected_spawn(**kwargs):
+        raise RequiredSkillUnavailable(
+            provider="claude",
+            skill="grilling",
+            reason="collision",
+            message="A different provider-visible skill already reserves 'grilling'.",
+        )
+
+    monkeypatch.setattr(driver, "spawn_run", rejected_spawn)
+    response = client.post(
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
+        data={"agent": "claude"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "required_skill_unavailable",
+        "provider": "claude",
+        "skill": "grilling",
+        "reason": "collision",
+        "detail": "A different provider-visible skill already reserves 'grilling'.",
+        "remediation": (
+            "Rename the provider-visible skill or change its declared name, then "
+            "retry. Ticketry will not modify user-installed skills."
+        ),
+        "retryable": False,
+    }
+    assert not GraphRun.objects.exists()
+    assert not LaunchedTask.objects.exists()

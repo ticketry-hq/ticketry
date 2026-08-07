@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 # The seam. Sent with ``sender=Issue`` and the eight payload kwargs documented in
 # ``_emit_on_state_change``. Future consumers (graph executor, #700) connect here.
 issue_state_changed = Signal()
+work_item_changed = Signal()
 workflow_state_changed = Signal()
 
 
@@ -105,6 +106,36 @@ def _snapshot_old_state(sender, instance, **kwargs):
         .filter(pk=instance.pk)
         .values_list("state_id", flat=True)
         .first()
+    )
+    instance._old_parent_id = (
+        Issue.objects.using(using)
+        .filter(pk=instance.pk)
+        .values_list("parent_id", flat=True)
+        .first()
+    )
+
+
+@receiver(post_save, sender=Issue)
+def _emit_on_work_item_change(sender, instance, created, **kwargs):
+    """Publish every committed WorkItem save on the durable project cursor."""
+
+    if not getattr(instance, "_work_item_change_revision_advanced", False):
+        return
+    using = kwargs.get("using")
+    old_parent_id = getattr(instance, "_old_parent_id", None)
+    payload = {
+        "issue_id": str(instance.pk),
+        "project_id": str(instance.project_id),
+        "state_id": str(instance.state_id) if instance.state_id else None,
+        "revision": instance.state_revision,
+        "updated_at": instance.updated_at.isoformat(),
+        "membership_changed": created
+        or normalize_state_id(old_parent_id)
+        != normalize_state_id(instance.parent_id),
+    }
+    transaction.on_commit(
+        lambda: work_item_changed.send_robust(sender=Issue, **payload),
+        using=using,
     )
 
 

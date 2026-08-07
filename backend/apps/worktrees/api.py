@@ -1,4 +1,4 @@
-"""HTTP surface for opt-in worktrees (Worktrees W3, #589).
+"""Application operations for opt-in worktrees (Worktrees W3, #589).
 
 Three thin endpoints that wrap the W1 engine for the Details-tab worktree
 block: read live status, opt in by creating a worktree, and discard one.
@@ -6,8 +6,8 @@ There is deliberately **no integrate route** — integration is not a browser
 action; it fires automatically when a task is marked Done (see
 :mod:`worktrees.signals`).
 
-Each operation is transport-independent synchronous application code called by
-the host's DRF adapters. Django runs the adapter in a threadpool under ASGI, so
+Each operation is transport-independent synchronous code called by the host's
+DRF adapters. Django runs the adapter in a threadpool under ASGI, so
 the synchronous git engine and ORM are called directly without an
 ``asyncio.to_thread`` dance.
 
@@ -169,7 +169,6 @@ def _status_payload(
 
 
 def get_worktree(
-    request,
     task_id: str,
     parent_id: Optional[str] = None,
     module_id: Optional[str] = None,
@@ -189,7 +188,7 @@ def get_worktree(
     )
 
 
-def create_worktree(request, task_id: str, payload: CreateWorktreeIn):
+def create_worktree(task_id: str, payload: CreateWorktreeIn):
     """Opt in: cut a worktree off HEAD for the top-level task. Idempotent."""
 
     tlt = service.top_level_task_id(
@@ -235,7 +234,6 @@ def create_worktree(request, task_id: str, payload: CreateWorktreeIn):
 
 
 def discard_worktree(
-    request,
     task_id: str,
     parent_id: Optional[str] = None,
     module_id: Optional[str] = None,

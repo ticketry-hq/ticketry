@@ -3,7 +3,6 @@
 import re
 import uuid
 
-from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from worktracker.models import (
@@ -19,7 +18,6 @@ from worktracker.models import (
     State,
     Workspace,
 )
-from worktracker.services.launch_bindings import validate_unattended_launch_binding
 
 
 class WorkspaceSerializer(serializers.ModelSerializer):
@@ -427,47 +425,3 @@ class LaunchBindingSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-
-    def validate(self, attrs):
-        issue_type = self.context["issue_type"]
-        state = self.context["state"]
-        current = self.instance
-        candidate = LaunchBinding(
-            issue_type=issue_type,
-            state=state,
-            prompt=attrs.get("prompt", current.prompt if current else ""),
-            required_skills=attrs.get(
-                "required_skills", current.required_skills if current else []
-            ),
-            model=attrs.get("model", current.model if current else None),
-            reasoning=attrs.get("reasoning", current.reasoning if current else None),
-            auto_start=attrs.get(
-                "auto_start", current.auto_start if current else False
-            ),
-            subtree_run_enabled=attrs.get(
-                "subtree_run_enabled",
-                current.subtree_run_enabled if current else False,
-            ),
-        )
-        try:
-            candidate.full_clean(validate_unique=False, validate_constraints=False)
-            if candidate.auto_start:
-                validate_unattended_launch_binding(candidate)
-        except DjangoValidationError as exc:
-            raise serializers.ValidationError(
-                getattr(exc, "message_dict", {"non_field_errors": exc.messages})
-            ) from exc
-        attrs["required_skills"] = candidate.required_skills
-        return attrs
-
-    def create(self, validated_data):
-        validated_data.pop("workflow_revision")
-        return LaunchBinding.objects.create(
-            issue_type=self.context["issue_type"],
-            state=self.context["state"],
-            **validated_data,
-        )
-
-    def update(self, instance, validated_data):
-        validated_data.pop("workflow_revision")
-        return super().update(instance, validated_data)

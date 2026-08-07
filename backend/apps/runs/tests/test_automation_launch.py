@@ -12,6 +12,7 @@ from django.test import Client, override_settings
 from apps.execution import signals as execution_signals
 from apps.runs.models import AutomationAttempt
 from apps.settings_store.models import AppSetting
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from worktracker.models import (
     AgentModel,
     Issue,
@@ -523,6 +524,8 @@ def test_failed_attempt_retry_is_user_initiated_and_idempotent(monkeypatch):
         "work_item_id": str(issue.id),
         "status": "succeeded",
         "error": None,
+        "failure": None,
+        "retryable": False,
         "agent_run_id": "agent-run-retry",
         "updated_at": first.json()["updated_at"],
     }
@@ -531,3 +534,48 @@ def test_failed_attempt_retry_is_user_initiated_and_idempotent(monkeypatch):
     assert AutomationAttempt.objects.filter(issue=issue).count() == 2
     issue.refresh_from_db()
     assert issue.state_id == after.id
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_required_skill_collision_is_actionable_and_not_retryable(monkeypatch):
+    issue, after = _automation_policy()
+
+    async def rejected_spawn(**kwargs):
+        raise RequiredSkillUnavailable(
+            provider="codex",
+            skill="code-review",
+            reason="collision",
+            message="A different provider-visible skill already reserves 'code-review'.",
+        )
+
+    monkeypatch.setattr("apps.execution.driver.spawn_run", rejected_spawn)
+    monkeypatch.setattr(
+        "apps.execution.signals.publish_automation_attempt_sync", lambda attempt: None
+    )
+    issue.state = after
+    issue.save(update_fields=["state", "updated_at"])
+
+    failed = AutomationAttempt.objects.get(issue=issue)
+    assert failed.status == AutomationAttempt.Status.FAILED
+    assert failed.retryable is False
+    assert failed.error_details == {
+        "code": "required_skill_unavailable",
+        "provider": "codex",
+        "skill": "code-review",
+        "reason": "collision",
+        "detail": "A different provider-visible skill already reserves 'code-review'.",
+        "remediation": (
+            "Rename the provider-visible skill or change its declared name, then "
+            "retry. Ticketry will not modify user-installed skills."
+        ),
+        "retryable": False,
+    }
+
+    response = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "automation_attempt_not_retryable",
+        "code": "automation_attempt_not_retryable",
+        "failure": failed.error_details,
+    }
+    assert AutomationAttempt.objects.filter(issue=issue).count() == 1

@@ -1,5 +1,6 @@
 """Framework-neutral work item mutation services."""
 
+import re
 import uuid
 
 from django.db import transaction
@@ -12,6 +13,7 @@ from worktracker.work_items import (
     append_rank,
     blocker_would_cycle,
     resolve_issue_type,
+    task_qs,
 )
 from worktracker.workflow import (
     InvalidTransition,
@@ -45,6 +47,102 @@ def get_issue(issue_id, *, message="Work item not found."):
         return Issue.objects.get(pk=issue_id)
     except Issue.DoesNotExist as exc:
         raise NotFoundError(message) from exc
+
+
+def retrieve_work_item(issue_id):
+    """Return one task by UUID or key through the framework-neutral boundary."""
+
+    value = str(issue_id)
+    key_match = re.fullmatch(r"([^-]+)-(\d+)", value)
+    try:
+        if key_match:
+            slug, sequence_id = key_match.groups()
+            return task_qs().get(
+                project__slug__iexact=slug,
+                sequence_id=int(sequence_id),
+            )
+        return task_qs().get(pk=uuid.UUID(value))
+    except (Issue.DoesNotExist, ValueError) as exc:
+        raise NotFoundError("Work item not found.") from exc
+
+
+def _pathfind_subtree_ids(*, project_id=None, module_id=None):
+    roots = Issue.objects.filter(type="task", issue_type__is_pathfind=True)
+    if project_id is not None:
+        roots = roots.filter(project_id=project_id)
+    if module_id is not None:
+        roots = roots.filter(module_id=module_id)
+    seen = set(roots.values_list("id", flat=True))
+    frontier = set(seen)
+    while frontier:
+        children = (
+            set(
+                Issue.objects.filter(type="task", parent_id__in=frontier).values_list(
+                    "id", flat=True
+                )
+            )
+            - seen
+        )
+        seen.update(children)
+        frontier = children
+    return seen
+
+
+def list_work_items(
+    *,
+    project_id=None,
+    module_id=None,
+    state_id=None,
+    include_archived=False,
+    include_pathfind=False,
+):
+    """Return the canonical filtered task collection in stable rank order."""
+
+    queryset = task_qs().order_by("rank", "sequence_id", "id")
+    if project_id is not None:
+        queryset = queryset.filter(project_id=project_id)
+    if module_id is not None:
+        queryset = queryset.filter(module_id=module_id)
+    if state_id is not None:
+        queryset = queryset.filter(state_id=state_id)
+    if not include_archived:
+        queryset = queryset.exclude(is_archived=True)
+    if not include_pathfind:
+        queryset = queryset.exclude(
+            id__in=_pathfind_subtree_ids(
+                project_id=project_id,
+                module_id=module_id,
+            )
+        )
+    return list(queryset)
+
+
+def batch_work_items(ids):
+    """Return existing tasks in the caller's de-duplicated id order."""
+
+    ordered_ids = tuple(dict.fromkeys(ids))
+    items_by_id = {item.id: item for item in task_qs().filter(id__in=ordered_ids)}
+    return [items_by_id[item_id] for item_id in ordered_ids if item_id in items_by_id]
+
+
+def create_work_item(project_id, **data):
+    """Choose the canonical ordinary-task or review-finding create workflow."""
+
+    if not data.get("issue_type_id"):
+        return create_review_finding(
+            project_id,
+            parent_id=data["parent_id"],
+            name=data["name"],
+            description=data.get("description") or "",
+        )
+    return create_project_work_item(
+        project_id,
+        name=data["name"],
+        issue_type_id=data["issue_type_id"],
+        state_id=data.get("state_id"),
+        description=data.get("description"),
+        parent_id=data.get("parent_id"),
+    )
 
 
 def create_project_work_item(
@@ -261,7 +359,7 @@ def update_work_item(issue_id: uuid.UUID, **data):
         issue.description = data["description"]
 
     with transaction.atomic():
-        issue.save()
+        issue.save(force_change_revision="blocked_by_ids" in data)
 
         if parent_changed:
             descendants = []

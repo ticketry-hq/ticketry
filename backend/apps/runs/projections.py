@@ -23,15 +23,23 @@ def automation_attempt_record(attempt: AutomationAttempt) -> AutomationAttemptRe
         work_item_id=str(attempt.issue_id),
         status=attempt.status,
         error=attempt.error,
+        failure=attempt.error_details,
+        retryable=attempt.status == AutomationAttempt.Status.FAILED and attempt.retryable,
         agent_run_id=attempt.agent_run_id,
         updated_at=attempt.updated_at.isoformat(),
     )
 
 
 def work_item_state_frame(
-    *, project_id: str, work_item_id: str, state, revision: int, updated_at: str
+    *,
+    project_id: str,
+    work_item_id: str,
+    state,
+    revision: int,
+    updated_at: str,
+    membership_changed: bool = False,
 ) -> WorkItemStateFrame:
-    """Project one frozen WorkItem state into the socket contract."""
+    """Project one frozen WorkItem change into the socket contract."""
 
     return WorkItemStateFrame(
         project_id=project_id,
@@ -43,6 +51,7 @@ def work_item_state_frame(
         ),
         revision=revision,
         updated_at=updated_at,
+        membership_changed=membership_changed,
     )
 
 
@@ -91,6 +100,10 @@ def project_work_item_replay(
             state=issue.state,
             revision=issue.state_revision,
             updated_at=issue.updated_at.isoformat(),
+            # Replay is latest-per-item, so an earlier create/reparent can be
+            # compacted behind a later field edit. Refresh membership once to
+            # recover that structural history without duplicating rows.
+            membership_changed=True,
         )
         for issue in issues
     ]

@@ -47,10 +47,47 @@ class RequiredSkillUnavailable(RuntimeError):
         self.reason = reason
         self.message = message
         self.conflicting_path = conflicting_path
+        self.remediation = self._remediation()
         super().__init__(
             f"required_skill_unavailable: provider={provider} skill={skill} "
-            f"reason={reason}: {message}"
+            f"reason={reason}: {message} Next action: {self.remediation}"
         )
+
+    def _remediation(self) -> str:
+        if self.reason in {"collision", "installation_collision"}:
+            location = (
+                f" at {self.conflicting_path}"
+                if self.conflicting_path is not None
+                else ""
+            )
+            return (
+                f"Rename the provider-visible skill{location} or change its declared "
+                "name, then retry. Ticketry will not modify user-installed skills."
+            )
+        if self.reason == "unknown":
+            return "Choose a skill from Ticketry's packaged catalog, then retry."
+        if self.reason == "tool_unavailable":
+            return "Restore the required WorkTracker MCP tools, then retry."
+        if self.reason.startswith("installation_"):
+            return "Repair Ticketry's packaged provider-skill installation, then retry."
+        if self.reason == "provider_unsupported":
+            return "Select a supported, up-to-date provider, then retry."
+        if self.reason == "catalog_invalid":
+            return "Repair or reinstall the Ticketry application, then retry."
+        return "Repair the required-skill launch configuration, then retry."
+
+    def as_payload(self) -> dict[str, object]:
+        """Return the stable transport contract for an expected rejection."""
+
+        return {
+            "code": "required_skill_unavailable",
+            "provider": self.provider,
+            "skill": self.skill,
+            "reason": self.reason,
+            "detail": self.message,
+            "remediation": self.remediation,
+            "retryable": False,
+        }
 
 
 @dataclass(frozen=True)

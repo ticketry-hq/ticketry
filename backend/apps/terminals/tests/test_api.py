@@ -7,12 +7,14 @@ import uuid
 
 import pytest
 from django.db import connection
+from django.test import override_settings
 
 import apps.terminals.agents.registry as registry
 import apps.terminals.api as terminals_api
 import apps.terminals.launch as launch
 from apps.terminals import dao, tmux
 import apps.terminals.session as session_module
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.validation import SpawnRequest
@@ -206,6 +208,45 @@ def test_create_terminal_run_surfaces_shared_launcher_failure(client, monkeypatc
     }
 
 
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_scratch_launch_required_skill_collision_returns_structured_409(
+    client, monkeypatch
+):
+    async def rejected_create(request) -> str:
+        del request
+        raise RequiredSkillUnavailable(
+            provider="codex",
+            skill="code-review",
+            reason="collision",
+            message="A different provider-visible skill already reserves 'code-review'.",
+        )
+
+    monkeypatch.setattr(terminals_api, "create_terminal_run", rejected_create)
+    response = client.post(
+        "/api/terminals",
+        data=json.dumps(
+            _create_body(
+                agent="codex",
+                task_id=None,
+                is_planning=True,
+                initial_prompt=None,
+            )
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "required_skill_unavailable"
+    assert response.json()["provider"] == "codex"
+    assert response.json()["skill"] == "code-review"
+    assert response.json()["reason"] == "collision"
+    assert "Next action" not in response.json()["detail"]
+    assert response.json()["remediation"]
+    assert response.json()["retryable"] is False
+    assert AgentRun.objects.count() == 0
+    assert AgentTerminalSession.objects.count() == 0
+
+
 def test_list_terminals_returns_active_sessions(client, monkeypatch):
     _no_reconcile(monkeypatch)
 
@@ -256,7 +297,7 @@ def test_list_terminals_serializes_only_immutable_session_fields(client, monkeyp
         doc_rel_path="spec/x/hidden.html",
     )
 
-    rows = terminals_api.list_terminals(None, "task-1")
+    rows = terminals_api.list_terminals("task-1")
 
     assert [item["agent_run_id"] for item in rows] == ["task-run"]
     row = rows[0]

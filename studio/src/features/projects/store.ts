@@ -7,6 +7,7 @@ import { useClientStore } from "../../state/clientStore";
 import {
   createProjectRecord,
   deleteProjectRecord,
+  getModulesSnapshot,
   getProjectsSnapshot,
   loadModules,
   loadProjects,
@@ -20,6 +21,7 @@ import type {
   View,
 } from "../../shared/api/types";
 import { loadIssueTypes } from "../settings";
+import { getConfigSnapshot } from "../studio/stores/configStore";
 
 const VIEWS: View[] = ["backlog", "settings"];
 
@@ -99,6 +101,17 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     });
     try {
       await loadModules(id);
+      const { recentProfileIndex, profiles } = getConfigSnapshot();
+      const recentModuleId =
+        recentProfileIndex === null
+          ? undefined
+          : profiles[recentProfileIndex]?.recent_module_ids?.[id];
+      if (
+        recentModuleId &&
+        getModulesSnapshot(id).some((module) => module.id === recentModuleId)
+      ) {
+        await useClientStore.getState().selectModule(recentModuleId);
+      }
     } catch (e) {
       set({ error: errMessage(e) });
     }

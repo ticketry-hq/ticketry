@@ -170,6 +170,30 @@ def test_collision_scan_uses_canonical_metadata_not_only_folder_name(
     assert caught.value.conflicting_path == conflict
 
 
+def test_required_skill_rejection_payload_contains_remediation(tmp_path):
+    rejection = RequiredSkillUnavailable(
+        provider="claude",
+        skill="grilling",
+        reason="collision",
+        message="A different provider-visible skill already reserves 'grilling'.",
+        conflicting_path=tmp_path / "skills" / "grilling",
+    )
+
+    assert rejection.as_payload() == {
+        "code": "required_skill_unavailable",
+        "provider": "claude",
+        "skill": "grilling",
+        "reason": "collision",
+        "detail": "A different provider-visible skill already reserves 'grilling'.",
+        "remediation": (
+            f"Rename the provider-visible skill at {tmp_path / 'skills' / 'grilling'} "
+            "or change its declared name, then retry. Ticketry will not modify "
+            "user-installed skills."
+        ),
+        "retryable": False,
+    }
+
+
 def test_identical_provider_visible_reserved_name_is_accepted(monkeypatch, tmp_path):
     home, repo = _isolate_visible_skills(monkeypatch, tmp_path)
     install_packaged_skills(providers=("claude",), home=home)

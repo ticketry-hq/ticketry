@@ -34,6 +34,10 @@ function pruneExitedRuns(at: string): void {
 function dispatch(frame: AgentStatusFrame): void {
   const runs = useAgentStatusStore.getState();
   if (frame.type === "snapshot") {
+    // A project switch closes the previous socket asynchronously. A final
+    // queued snapshot from that socket must never reconcile the newly selected
+    // project's runs as absent (and therefore exited).
+    if (runs.projectId !== frame.scope.project_id) return;
     if (frame.work_item_cursor !== undefined) {
       active?.acceptCursor(frame.scope.project_id, frame.work_item_cursor);
     }
@@ -49,6 +53,7 @@ function dispatch(frame: AgentStatusFrame): void {
     return;
   }
   if (frame.type === "agent_lifecycle") {
+    if (frame.run.project_id && runs.projectId !== frame.run.project_id) return;
     runs.upsertRun(frame.run);
     return;
   }
@@ -200,25 +205,36 @@ export const statusFeed = {
       invalidationTimer = null;
       const ids = [...pendingWorkItemIds];
       pendingWorkItemIds.clear();
+      const refreshMembership = pendingMembershipRefresh;
+      pendingMembershipRefresh = false;
       for (const id of ids) {
+        // The mutation's own settle invalidation is authoritative. Refetching
+        // while its optimistic value is visible could paint an older external
+        // value over the person's in-flight edit.
+        const locallyMutating = queryClient.isMutating({
+          predicate: (mutation) =>
+            (mutation.state.variables as { id?: unknown } | undefined)?.id === id,
+        });
+        if (locallyMutating > 0) continue;
         void queryClient.invalidateQueries({
           queryKey: queryKeys.workItems.byId(id),
           exact: true,
         });
       }
-      if (ids.length > 0) {
-        // The unchanged protocol's work_item_state frame is structural: a
-        // state change can move an id between rendered membership sections.
+      if (refreshMembership) {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.tasks.all,
         });
       }
     };
 
+    let pendingMembershipRefresh = false;
+
     const acceptWorkItemFrame = (frame: WorkItemStateFrame) => {
       if (frame.project_id !== projectId || stopped) return;
       acceptCursor(frame.project_id, frame.revision);
       pendingWorkItemIds.add(frame.work_item_id);
+      pendingMembershipRefresh ||= frame.membership_changed === true;
       invalidationTimer ??= setTimeout(
         flushWorkItemInvalidations,
         WORK_ITEM_INVALIDATION_WINDOW_MS,
@@ -233,6 +249,9 @@ export const statusFeed = {
         attempt = 0;
       };
       next.onmessage = (event: MessageEvent) => {
+        // close() does not discard messages already queued by the browser.
+        // Only the currently owned socket may write into the project store.
+        if (stopped || socket !== next) return;
         if (typeof event.data !== "string") return;
         try {
           const frame = JSON.parse(event.data) as AgentStatusFrame;

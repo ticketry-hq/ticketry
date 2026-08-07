@@ -20,9 +20,9 @@ class Project(models.Model):
     slug = models.CharField(max_length=64)
     description = models.TextField(blank=True, default="")
     seq_counter = models.PositiveIntegerField(default=0)
-    # Durable cursor for committed WorkItem workflow-state transitions. The
-    # Issue persistence boundary allocates from this counter while holding the
-    # project row lock, in the same transaction as the state write.
+    # Durable cursor for committed WorkItem changes. The Issue persistence
+    # boundary allocates from this counter while holding the project row lock,
+    # in the same transaction as the write.
     state_revision = models.PositiveBigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -35,7 +35,7 @@ class Project(models.Model):
 
     @classmethod
     def next_state_revision(cls, project_id, *, using="default"):
-        """Allocate the next project state revision inside the caller's txn."""
+        """Allocate the next project WorkItem revision inside the caller's txn."""
 
         project = (
             cls.objects.using(using)

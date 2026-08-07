@@ -1,26 +1,9 @@
 import { useRef, useState } from "react";
 import { createAgentStatusClient } from "@worktracker/typescript-sdk/agent-status";
-import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
 import { toast } from "../../../../../state/clientStore";
-import {
-  agentApiBase,
-  apiErrorMessage,
-  apiKey,
-} from "../../../../../shared/api/client";
+import { agentApiBase, apiKey } from "../../../../../shared/api/client";
+import { launchFailureMessage } from "../../../../../features/agents/terminal";
 import { IconPlay } from "../../../../../shared/ui/icons";
-
-function launchErrorMessage(error: unknown): string {
-  if (error instanceof WorkTrackerApiError) {
-    const body = error.body;
-    if (body && typeof body === "object") {
-      const code = (body as { error?: unknown }).error;
-      if (typeof code === "string" && code) {
-        return code.replace(/_/g, " ");
-      }
-    }
-  }
-  return apiErrorMessage(error);
-}
 
 /** Starts one task-scoped run using the work item's current-state binding. */
 export function LaunchAgentAction({ issueId }: { issueId: string }) {
@@ -40,7 +23,7 @@ export function LaunchAgentAction({ issueId }: { issueId: string }) {
       await client.launchAgent({ issueId });
       toast.success("Agent run started.");
     } catch (error) {
-      toast.error(`Agent run could not be started: ${launchErrorMessage(error)}`);
+      toast.error(`Agent run could not be started: ${launchFailureMessage(error)}`);
     } finally {
       inFlightRef.current = false;
       setPending(false);

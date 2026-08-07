@@ -177,6 +177,52 @@ def install_packaged_skills(
 
     lock = verify_catalog()
     package_names = {package["name"] for package in lock["packages"]}
+    providers = tuple(providers)
+
+    # Detect every user-owned collision before creating a provider root or
+    # replacing any managed package. Otherwise a collision in a later provider
+    # could leave earlier providers upgraded even though the catalog operation
+    # as a whole was rejected.
+    for provider in providers:
+        root = provider_skill_root(provider, home=home, environ=environ)
+        _assert_no_alias_collision(
+            root, provider=provider, package_names=package_names
+        )
+        previous = _load_manifest(root).get("packages", {})
+        for package in lock["packages"]:
+            name = package["name"]
+            destination = root / name
+            if destination.is_symlink() or (
+                destination.exists() and not destination.is_dir()
+            ):
+                raise SkillInstallationError(
+                    provider=provider,
+                    skill=name,
+                    reason="collision",
+                    path=destination,
+                    message="Refusing to overwrite a user-owned skill path.",
+                )
+            try:
+                actual = tree_digest(destination) if destination.is_dir() else None
+            except (OSError, CatalogValidationError) as exc:
+                raise SkillInstallationError(
+                    provider=provider,
+                    skill=name,
+                    reason="invalid",
+                    path=destination,
+                    message=f"The installed skill cannot be verified: {exc}",
+                ) from exc
+            if actual is not None and actual != package["digest"]:
+                previously_managed = previous.get(name)
+                if actual != previously_managed:
+                    raise SkillInstallationError(
+                        provider=provider,
+                        skill=name,
+                        reason="collision",
+                        path=destination,
+                        message="Refusing to overwrite a user-owned or modified skill.",
+                    )
+
     installed: dict[str, Path] = {}
     for provider in providers:
         root = provider_skill_root(provider, home=home, environ=environ)

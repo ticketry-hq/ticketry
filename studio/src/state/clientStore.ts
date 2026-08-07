@@ -3,6 +3,7 @@ import {
   getConfigSnapshot,
   isSidebarEnabled,
   sidebarPaneComposition,
+  updateProfile,
   type SidebarPaneComposition,
 } from "../features/studio/stores/configStore";
 import { useStudioStore } from "../features/projects/store";
@@ -325,7 +326,23 @@ export const useClientStore = create<ClientState>((set, get) => ({
       workspaceSelection: { kind: "task" },
     });
     const { loadModuleTree } = await import("../features/work-items/queries");
-    await loadModuleTree(projectId, id);
+    const { recentProfileIndex, profiles } = getConfigSnapshot();
+    const profile =
+      recentProfileIndex === null ? undefined : profiles[recentProfileIndex];
+    const persistRecentModule =
+      profile && profile.recent_module_ids?.[projectId] !== id
+        ? updateProfile(recentProfileIndex!, {
+            ...profile,
+            recent_project_id: projectId,
+            recent_module_ids: {
+              ...(profile.recent_module_ids ?? {}),
+              [projectId]: id,
+            },
+          }).catch((error) => {
+            console.warn("[clientStore] persist recent module failed", error);
+          })
+        : Promise.resolve();
+    await Promise.all([loadModuleTree(projectId, id), persistRecentModule]);
     if (get().selectedModuleId !== id) return;
     get().setSidebarVisible(false);
     get().setFocusedPane("tasks");

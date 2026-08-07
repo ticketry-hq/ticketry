@@ -16,7 +16,6 @@ from worktracker.rest.serializers import (
 from worktracker.services import scoped_workflows, workflow_config
 from worktracker.services.work_items import reorder_work_item
 from worktracker.services.workspaces import acknowledge_onboarding
-from worktracker.work_items import resolve_issue
 
 
 class WorkItemReorderView(APIView):
@@ -32,7 +31,7 @@ class WorkItemReorderView(APIView):
         serializer = WorkItemReorderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         issue = reorder_work_item(issue_id, **serializer.validated_data)
-        return Response(WorkItemSerializer(resolve_issue(str(issue.id))).data)
+        return Response(WorkItemSerializer(issue).data)
 
 
 class StateReorderView(APIView):

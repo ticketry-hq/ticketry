@@ -1,8 +1,11 @@
+"""Transport-independent execution application operations used by DRF."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
 
 from apps.execution import driver
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.launch import LaunchUnavailable
 from apps.settings_store.config import NoConfigurationSelected
 from worktracker.services.errors import ServiceError
@@ -79,7 +82,7 @@ def _value_error_status(error: str) -> int:
     return 422
 
 
-def create_execute_graph(request, issue_id: str, payload: ExecuteGraphIn):
+def create_execute_graph(issue_id: str, payload: ExecuteGraphIn):
     """Arm a root and launch its eligible direct children."""
 
     try:
@@ -91,7 +94,7 @@ def create_execute_graph(request, issue_id: str, payload: ExecuteGraphIn):
     return 201, ExecuteGraphOut(root_id=str(issue_id), launched=launched)
 
 
-def get_dependency_graph(request, issue_id: str):
+def get_dependency_graph(issue_id: str):
     """Return a read-only workflow-state projection of a task subtree."""
 
     try:
@@ -114,7 +117,7 @@ def get_dependency_graph(request, issue_id: str):
         )
 
 
-def reset_execute_graph(request, issue_id: str):
+def reset_execute_graph(issue_id: str):
     """Delete a root's run header and launch ledger without launching work."""
 
     try:
@@ -125,7 +128,7 @@ def reset_execute_graph(request, issue_id: str):
     return 200, ResetGraphOut(root_id=str(issue_id), cleared=cleared)
 
 
-def create_launch_agent(request, issue_id: str, payload: LaunchAgentIn):
+def create_launch_agent(issue_id: str, payload: LaunchAgentIn):
     """Launch one direct coding session for the target work item (CODIN-924).
 
     Not the execution engine: this seeds no graph/engine state and moves no
@@ -140,6 +143,8 @@ def create_launch_agent(request, issue_id: str, payload: LaunchAgentIn):
 
     try:
         result = driver.launch_task_agent(issue_id, agent=payload.agent)
+    except RequiredSkillUnavailable as exc:
+        raise RequiredSkillHttpError(exc) from exc
     except NoConfigurationSelected as exc:
         raise ExecutionHttpError("no_profile_selected", 400) from exc
     except LaunchUnavailable as exc:
@@ -153,3 +158,14 @@ def create_launch_agent(request, issue_id: str, payload: LaunchAgentIn):
             agent=result.agent,
             agent_run_id=result.agent_run_id,
         )
+
+
+class RequiredSkillHttpError(ServiceError):
+    """Expected required-skill rejection shared by launch transports."""
+
+    def __init__(self, rejection: RequiredSkillUnavailable):
+        super().__init__(409, rejection.message)
+        self.rejection = rejection
+
+    def as_body(self):
+        return self.rejection.as_payload()

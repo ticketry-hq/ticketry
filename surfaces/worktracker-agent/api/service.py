@@ -1189,6 +1189,9 @@ class WorktrackerService:
         try:
             launched = self.sdk.launch.default_coding_agent(target_id)
         except ApiException as error:
+            body = self._sdk_error_body(error)
+            if body and body.get("code") == "required_skill_unavailable":
+                return {"target_id": target_id, "error": body}
             detail = self._sdk_execution_error(error)
             if detail is None:
                 raise

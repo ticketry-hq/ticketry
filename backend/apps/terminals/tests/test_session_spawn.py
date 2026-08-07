@@ -261,13 +261,16 @@ async def test_spawn_publishes_a_starting_lifecycle_delta(
     assert published[0][0] == fixture_uuid(PROJECT_ID)
     assert frame["run"] == {
         "agent_run_id": run_id,
+        "project_id": fixture_uuid(PROJECT_ID),
         "task_id": fixture_issue_id(
             project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
         ),
         "module_id": fixture_issue_id(
             project_id=PROJECT_ID, module_id=MODULE_ID, task_id=None
         ),
+        "agent": "claude",
         "scope": "task",
+        "started_at": frame["at"],
         "state": "starting",
         "updated_at": frame["at"],
     }

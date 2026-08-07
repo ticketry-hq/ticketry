@@ -37,7 +37,11 @@ class FakeWebSocket {
   close() {}
 }
 
-function workItemFrame(id: string, revision: number): WorkItemStateFrame {
+function workItemFrame(
+  id: string,
+  revision: number,
+  membershipChanged = false,
+): WorkItemStateFrame {
   return {
     v: 1,
     type: "work_item_state",
@@ -46,6 +50,7 @@ function workItemFrame(id: string, revision: number): WorkItemStateFrame {
     state: null,
     revision,
     updated_at: "2026-08-06T12:00:00Z",
+    membership_changed: membershipChanged,
   };
 }
 
@@ -129,7 +134,7 @@ describe("status feed holdings", () => {
     statusFeed.start("project-1");
     dispatchStatusFrame(workItemFrame("item-a", 4));
     dispatchStatusFrame(workItemFrame("item-a", 4));
-    dispatchStatusFrame(workItemFrame("item-b", 5));
+    dispatchStatusFrame(workItemFrame("item-b", 5, true));
 
     expect(useClientStore.getState().workItemCursorsByProject["project-1"])
       .toBe(5);
@@ -188,6 +193,28 @@ describe("status feed holdings", () => {
     expect(invalidations).not.toHaveBeenCalled();
   });
 
+  it("does not overwrite an optimistic local edit with a feed refetch", async () => {
+    const itemKey = queryKeys.workItems.byId("item-a");
+    queryClient.setQueryData(itemKey, { id: "item-a", name: "local draft" });
+    vi.spyOn(queryClient, "isMutating").mockReturnValue(1);
+    const invalidations = vi.spyOn(queryClient, "invalidateQueries");
+    statusFeed.start("project-1");
+
+    dispatchStatusFrame(workItemFrame("item-a", 4));
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(queryClient.getQueryData(itemKey)).toEqual({
+      id: "item-a",
+      name: "local draft",
+    });
+    expect(invalidations).not.toHaveBeenCalledWith({
+      queryKey: itemKey,
+      exact: true,
+    });
+    expect(useClientStore.getState().workItemCursorsByProject["project-1"])
+      .toBe(4);
+  });
+
   it("sends the client-store cursor again after a disconnect", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
     useClientStore.setState({ workItemCursorsByProject: { "project-1": 7 } });
@@ -212,5 +239,36 @@ describe("status feed holdings", () => {
       .toBe(11);
     expect(FakeWebSocket.instances).toHaveLength(2);
     expect(FakeWebSocket.instances[1].url).toContain("cursor=11");
+  });
+
+  it("ignores a queued snapshot from the project socket that was just closed", () => {
+    statusFeed.start("project-1");
+    const previous = FakeWebSocket.instances[0];
+
+    statusFeed.start("project-2");
+    useAgentStatusStore.getState().upsertRun({
+      agent_run_id: "run-2",
+      project_id: "project-2",
+      task_id: "item-2",
+      module_id: "module-2",
+      agent: "codex",
+      scope: "task",
+      started_at: "2026-08-07T12:00:00Z",
+      state: "working",
+      updated_at: "2026-08-07T12:00:00Z",
+    });
+
+    previous.onmessage?.({
+      data: JSON.stringify({
+        v: 1,
+        type: "snapshot",
+        scope: { project_id: "project-1", task_id: null },
+        runs: [],
+        automation_attempts: [],
+        at: "2026-08-07T12:01:00Z",
+      }),
+    } as MessageEvent);
+
+    expect(useAgentStatusStore.getState().runs["run-2"]?.state).toBe("working");
   });
 });

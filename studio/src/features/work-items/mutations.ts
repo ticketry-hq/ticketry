@@ -12,6 +12,7 @@ import type {
 } from "../../shared/api/types";
 import { queryKeys } from "../../shared/query/keys";
 import { rankBetween } from "./utilities/rank";
+import { normalizeWorkItemRelations } from "./queries";
 
 export interface ModuleMembership {
   projectId: string;
@@ -102,9 +103,12 @@ function useOptimisticWorkItemMutation<TVariables>({
       // A response may reconcile only the entry that was mutated. Creation has
       // no such entry yet and is discovered through the refreshed membership.
       if (context.id && authoritative.id === context.id) {
+        const optimistic = queryClient.getQueryData<WorkItem>(
+          queryKeys.workItems.byId(context.id),
+        );
         queryClient.setQueryData(
           queryKeys.workItems.byId(context.id),
-          authoritative,
+          normalizeWorkItemRelations(authoritative, [], [], optimistic),
         );
       }
     },

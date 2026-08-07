@@ -88,6 +88,28 @@ def update_issue_type(type_id, data):
     return issue_type
 
 
+@transaction.atomic
+def update_issue_type_configuration(
+    type_id,
+    changes,
+    *,
+    start_state_id=None,
+    workflow_revision=None,
+):
+    """Apply row fields and an optional revision-guarded start-state edit."""
+
+    if start_state_id is not None:
+        # Local import keeps the two workflow service modules acyclic at import time.
+        from worktracker.services.scoped_workflows import set_start_state
+
+        set_start_state(
+            type_id,
+            state_id=start_state_id,
+            workflow_revision=workflow_revision,
+        )
+    return update_issue_type(type_id, changes)
+
+
 def delete_issue_type(type_id, reassign_to=None):
     """Delete a type; conflict if it is in use without ``reassign_to``."""
 

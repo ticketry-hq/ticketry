@@ -18,7 +18,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from worktracker_sdk.generated.models.status_enum import StatusEnum
 from typing import Optional, Set
@@ -35,9 +35,11 @@ class AutomationAttempt(BaseModel):
     work_item_id: StrictStr
     status: StatusEnum
     error: Optional[StrictStr]
+    failure: Optional[Any]
+    retryable: StrictBool
     agent_run_id: Optional[StrictStr]
     updated_at: StrictStr
-    __properties: ClassVar[List[str]] = ["attempt_id", "root_attempt_id", "retry_of_attempt_id", "work_item_id", "status", "error", "agent_run_id", "updated_at"]
+    __properties: ClassVar[List[str]] = ["attempt_id", "root_attempt_id", "retry_of_attempt_id", "work_item_id", "status", "error", "failure", "retryable", "agent_run_id", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -88,6 +90,11 @@ class AutomationAttempt(BaseModel):
         if self.error is None and "error" in self.model_fields_set:
             _dict['error'] = None
 
+        # set to None if failure (nullable) is None
+        # and model_fields_set contains the field
+        if self.failure is None and "failure" in self.model_fields_set:
+            _dict['failure'] = None
+
         # set to None if agent_run_id (nullable) is None
         # and model_fields_set contains the field
         if self.agent_run_id is None and "agent_run_id" in self.model_fields_set:
@@ -111,6 +118,8 @@ class AutomationAttempt(BaseModel):
             "work_item_id": obj.get("work_item_id"),
             "status": obj.get("status"),
             "error": obj.get("error"),
+            "failure": obj.get("failure"),
+            "retryable": obj.get("retryable"),
             "agent_run_id": obj.get("agent_run_id"),
             "updated_at": obj.get("updated_at")
         })

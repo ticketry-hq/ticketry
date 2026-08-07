@@ -12,6 +12,7 @@ from apps.runs.bus import publish_automation_attempt
 from apps.runs.models import AutomationAttempt
 from apps.runs.projections import automation_attempt_record
 from apps.terminals.launch_configuration import resolve_task_launch_configuration
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from worktracker.models import Issue
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,21 @@ def run_automation_attempt(
     except Exception as exc:
         attempt.status = AutomationAttempt.Status.FAILED
         attempt.error = str(exc) or exc.__class__.__name__
-        attempt.save(update_fields=["status", "error", "updated_at"])
+        if isinstance(exc, RequiredSkillUnavailable):
+            attempt.error_details = exc.as_payload()
+            attempt.retryable = False
+        else:
+            attempt.error_details = None
+            attempt.retryable = True
+        attempt.save(
+            update_fields=[
+                "status",
+                "error",
+                "error_details",
+                "retryable",
+                "updated_at",
+            ]
+        )
         publish_automation_attempt_sync(attempt)
         logger.exception("automated launch failed issue=%s", attempt.issue_id)
         return attempt
@@ -51,8 +66,18 @@ def run_automation_attempt(
     attempt.agent = result.agent
     attempt.agent_run_id = result.agent_run_id
     attempt.error = None
+    attempt.error_details = None
+    attempt.retryable = False
     attempt.save(
-        update_fields=["status", "agent", "agent_run_id", "error", "updated_at"]
+        update_fields=[
+            "status",
+            "agent",
+            "agent_run_id",
+            "error",
+            "error_details",
+            "retryable",
+            "updated_at",
+        ]
     )
     publish_automation_attempt_sync(attempt)
     return attempt

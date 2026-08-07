@@ -61,6 +61,8 @@ class AutomationAttempt(models.Model):
     agent = models.CharField(max_length=64, null=True, blank=True)
     agent_run_id = models.CharField(max_length=255, null=True, blank=True)
     error = models.TextField(null=True, blank=True)
+    error_details = models.JSONField(null=True, blank=True)
+    retryable = models.BooleanField(default=True)
     retry_of = models.OneToOneField(
         "self",
         null=True,

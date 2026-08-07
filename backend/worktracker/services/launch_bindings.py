@@ -3,17 +3,39 @@
 from __future__ import annotations
 
 from collections.abc import Set
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from worktracker.models import AgentModel, LaunchBinding, Provider, ReasoningLevel
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
+
+from worktracker.models import (
+    AgentModel,
+    IssueType,
+    LaunchBinding,
+    Provider,
+    ReasoningLevel,
+    State,
+)
 from worktracker.required_skills import (
     RequiredSkillsValidationError,
     normalize_required_skills,
 )
-from worktracker.services.errors import ValidationError
+from worktracker.services.errors import (
+    ConflictError,
+    FieldValidationError,
+    NotFoundError,
+    ValidationError,
+)
 
 if TYPE_CHECKING:
     from apps.settings_store.provider_catalog import ProviderCatalog
+
+
+@dataclass(frozen=True)
+class LaunchBindingMutation:
+    binding: LaunchBinding
+    created: bool
 
 
 class LaunchBindingError(ValidationError):
@@ -169,6 +191,109 @@ def get_launch_binding(issue_type_id, state_id) -> LaunchBinding | None:
         .select_related("issue_type", "state", "model__provider", "reasoning")
         .first()
     )
+
+
+def _locked_workflow_context(issue_type_id, state_id, workflow_revision):
+    try:
+        issue_type = IssueType.objects.select_for_update().get(pk=issue_type_id)
+    except IssueType.DoesNotExist as exc:
+        raise NotFoundError("Work-item type not found.") from exc
+    if issue_type.workflow_revision != workflow_revision:
+        raise ConflictError(
+            "Workflow revision is stale; read the current workflow and retry."
+        )
+    try:
+        state = State.objects.get(pk=state_id, project_id=issue_type.project_id)
+    except State.DoesNotExist as exc:
+        raise ValidationError("State does not belong to this project.") from exc
+    return issue_type, state
+
+
+def _validated_binding_candidate(issue_type, state, current, changes):
+    candidate = LaunchBinding(
+        issue_type=issue_type,
+        state=state,
+        prompt=changes.get("prompt", current.prompt if current else ""),
+        required_skills=changes.get(
+            "required_skills", current.required_skills if current else []
+        ),
+        model=changes.get("model", current.model if current else None),
+        reasoning=changes.get("reasoning", current.reasoning if current else None),
+        auto_start=changes.get(
+            "auto_start", current.auto_start if current else False
+        ),
+        subtree_run_enabled=changes.get(
+            "subtree_run_enabled",
+            current.subtree_run_enabled if current else False,
+        ),
+    )
+    try:
+        candidate.full_clean(validate_unique=False, validate_constraints=False)
+        if candidate.auto_start:
+            validate_unattended_launch_binding(candidate)
+    except DjangoValidationError as exc:
+        raise FieldValidationError(
+            getattr(exc, "message_dict", {"non_field_errors": exc.messages})
+        ) from exc
+    return candidate
+
+
+def upsert_launch_binding(
+    issue_type_id,
+    state_id,
+    *,
+    workflow_revision: int,
+    **changes,
+) -> LaunchBindingMutation:
+    """Atomically validate and persist one revision-guarded launch binding."""
+
+    with transaction.atomic():
+        issue_type, state = _locked_workflow_context(
+            issue_type_id, state_id, workflow_revision
+        )
+        current = LaunchBinding.objects.filter(
+            issue_type=issue_type, state=state
+        ).first()
+        candidate = _validated_binding_candidate(
+            issue_type, state, current, changes
+        )
+        if current is None:
+            candidate.save()
+            binding = candidate
+            created = True
+        else:
+            for field in (
+                "prompt",
+                "required_skills",
+                "model",
+                "reasoning",
+                "auto_start",
+                "subtree_run_enabled",
+            ):
+                setattr(current, field, getattr(candidate, field))
+            current.save()
+            binding = current
+            created = False
+        issue_type.workflow_revision += 1
+        issue_type.save(update_fields=("workflow_revision", "updated_at"))
+    return LaunchBindingMutation(binding=binding, created=created)
+
+
+def delete_launch_binding(
+    issue_type_id,
+    state_id,
+    *,
+    workflow_revision: int,
+) -> None:
+    """Atomically delete one binding and advance its workflow revision."""
+
+    with transaction.atomic():
+        issue_type, state = _locked_workflow_context(
+            issue_type_id, state_id, workflow_revision
+        )
+        LaunchBinding.objects.filter(issue_type=issue_type, state=state).delete()
+        issue_type.workflow_revision += 1
+        issue_type.save(update_fields=("workflow_revision", "updated_at"))
 
 
 def resolve_issue_launch_binding(

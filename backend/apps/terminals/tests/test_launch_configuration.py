@@ -9,6 +9,7 @@ import pytest
 from apps import worktracker_queries
 import apps.terminals.launch as launch
 import apps.terminals.session as session_module
+from apps.terminals.agents.skills.preflight import ResolvedSkills
 from apps.terminals.launch_configuration import (
     resolve_task_launch_configuration as real_resolve_task_launch_configuration,
 )
@@ -347,6 +348,13 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
 
     monkeypatch.setattr(tmux_sessions, "create_session", create_session)
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kwargs: None)
+    monkeypatch.setattr(
+        session_module,
+        "resolve_required_skills",
+        lambda **kwargs: ResolvedSkills(
+            ("to-spec",), (), frozenset(), "a" * 40
+        ),
+    )
 
     await session_module.session.spawn(
         LaunchIntent(

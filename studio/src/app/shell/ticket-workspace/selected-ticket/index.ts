@@ -10,16 +10,12 @@ export type {
 } from "./SelectedTicketContent";
 export { routeTaskWorkspaceTabAction } from "./internal/useTaskWorkspaceTabNavigation";
 export {
-  useIssueStore,
   deriveEpic,
   resolveBlockerChips,
-} from "../../../../features/work-items/issueStore";
+} from "../../../../features/work-items";
 export {
   DEFAULT_WORKSPACE,
-  useTicketWorkspaceStore,
-} from "./state/ticketWorkspaceStore";
-export {
-  resumeTerminalTab,
-} from "./internal/workspaceActions";
+  useClientStore as useTicketWorkspaceStore,
+} from "../../../../state/clientStore";
 export { closeTerminalTab } from "./internal/closeTerminalTab";
 export { terminalLabel } from "./internal/terminalLabel";

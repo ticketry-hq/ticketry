@@ -27,7 +27,6 @@ export type {
   AgentLifecycle,
   AgentRunScope,
   AgentStatusData,
-  AgentStatusRun,
   AgentStatusScope,
   AutomationAttemptRecord,
   RawLifecycleState,

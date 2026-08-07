@@ -10,7 +10,7 @@ import {
 } from "../../shared/ui/SettingsPrimitives";
 import { LaunchConfigurationForm } from "./LaunchConfigurationForm";
 import { validateLaunchBindingOptions } from "./launchBindingValidation";
-import { useTasksStore } from "../studio/stores/tasksStore";
+import { useStudioStore } from "../projects/store";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
 import { workflowMemberStateIds } from "./workflowMembership";
 
@@ -29,7 +29,7 @@ export function StateConfigurationPanel({
   state: State;
   onClose: () => void;
 }) {
-  const selectedProjectId = useTasksStore((store) => store.selectedProjectId);
+  const selectedProjectId = useStudioStore((store) => store.selectedProjectId);
   const issueTypes = useWorkflowEditorStore((store) => store.issueTypes);
   const states = useWorkflowEditorStore((store) => store.states);
   const workflows = useWorkflowEditorStore((store) => store.workflows);

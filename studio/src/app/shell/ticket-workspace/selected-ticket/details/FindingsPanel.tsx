@@ -1,6 +1,6 @@
 import { type WorkItem } from "../../../../../shared/api/types";
 import { stateColor, stateLabel } from "../../../../../shared/utilities/display";
-import { useTasksStore } from "../../../../../features/studio/stores/tasksStore";
+import { useClientStore } from "../../../../../state/clientStore";
 import {
   findings as selectFindings,
   queuedFindingCount,
@@ -18,10 +18,9 @@ interface FindingsPanelProps {
 // via CODIN-905) with key, title, state chip, and parsed location, plus a
 // "N fixes queued" count of the ones at the Implementation start stage.
 // Open/edit selects the child in the Studio task store; cancel reuses the child
-// state-move path (issueStore.cancelChild), after which the parent detail
-// reconciles.
+// state-move mutation, after which the parent detail reconciles.
 export default function FindingsPanel({ children, onCancel }: FindingsPanelProps) {
-  const selectTask = useTasksStore((state) => state.selectTask);
+  const selectTask = useClientStore((state) => state.selectTask);
   const items = selectFindings(children);
   const queued = queuedFindingCount(children);
 

@@ -8,14 +8,17 @@ import {
 import { toast } from "../../../../../state/clientStore";
 import { useOnboardingTourStore } from "../../../../onboarding/onboardingTourStore";
 import { apiErrorMessage } from "../../../../../shared/api/client";
-import { useTasksStore } from "../../../../../features/studio/stores/tasksStore";
+import * as api from "../../../../../shared/api/client";
+import { useStudioStore } from "../../../../../features/projects/store";
+import { loadIssueTypes } from "../../../../../features/settings";
+import { queryClient } from "../../../../../shared/query/queryClient";
+import { queryKeys } from "../../../../../shared/query/keys";
 import { useClientStore } from "../../../../../state/clientStore";
 import { focusFirstStory } from "../storiesFocus";
 
 export function IdeaEntry() {
-  const selectedProjectId = useTasksStore((state) => state.selectedProjectId);
-  const selectedModuleId = useTasksStore((state) => state.selectedModuleId);
-  const createStory = useTasksStore((state) => state.createStory);
+  const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
+  const selectedModuleId = useClientStore((state) => state.selectedModuleId);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -52,16 +55,30 @@ export function IdeaEntry() {
     setPending(true);
 
     try {
-      const created = await createStory(projectId, moduleId, name);
+      const issueTypes = await loadIssueTypes(projectId);
+      const storyType = issueTypes.find(
+        (type) => type.level === "task" && type.name === "Story",
+      );
+      if (!storyType) throw new Error("The Story issue type is unavailable.");
+      const created = await api.createTask(
+        projectId,
+        name,
+        moduleId,
+        storyType.id,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tasks.byModule(projectId, moduleId),
+        exact: true,
+      });
       if (
         submissionRef.current !== submission ||
-        useTasksStore.getState().selectedModuleId !== moduleId
+        useClientStore.getState().selectedModuleId !== moduleId
       ) {
         return;
       }
 
       const ui = useClientStore.getState();
-      if (created.state.id && ui.collapsedStateIds.has(created.state.id)) {
+      if (created.state?.id && ui.collapsedStateIds.has(created.state.id)) {
         ui.toggleStateCollapsed(created.state.id);
       }
       useOnboardingTourStore.getState().storyCreated(created.id);

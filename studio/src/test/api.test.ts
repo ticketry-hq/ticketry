@@ -145,21 +145,21 @@ describe("S2 fetchers", () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await listProjectWorkItems("p1", { state: "s1" });
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/work-tracker/projects/p1/work-items?state=s1",
+      "/api/work-tracker/work-items?project=p1&state=s1",
     );
   });
 
   it("omits the query string when no filters are set", async () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await listProjectWorkItems("p1");
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/projects/p1/work-items");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/work-items?project=p1");
   });
 
   it("forwards PathFind inclusion only when explicitly requested", async () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await listProjectWorkItems("p1", { includePathfind: true });
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/work-tracker/projects/p1/work-items?include_pathfind=true",
+      "/api/work-tracker/work-items?include_pathfind=true&project=p1",
     );
   });
 
@@ -235,12 +235,11 @@ describe("S6 config fetchers", () => {
     expect(JSON.parse(init.body)).toEqual({ name: "Bug" });
   });
 
-  it("DELETEs an issue type with a reassign_to query when given", async () => {
+  it("DELETEs an issue type with a reassignment body when given", async () => {
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
     await deleteIssueType("t1", "t2");
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/work-tracker/issue-types/t1?reassign_to=t2",
-    );
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/issue-types/t1");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ reassign_to: "t2" });
   });
 
   it("DELETEs an issue type without a query when no reassign target", async () => {
@@ -269,9 +268,7 @@ describe("S6 config fetchers", () => {
 
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
     await deleteState("s1", "s2");
-    expect(fetchMock.mock.calls[2][0]).toBe(
-      "/api/work-tracker/states/s1?reassign_to=s2",
-    );
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/work-tracker/states/s1");
 
     fetchMock.mockResolvedValue(jsonResponse([]));
     await reorderStates("p1", ["s2", "s1"]);

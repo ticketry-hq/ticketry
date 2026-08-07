@@ -1,6 +1,13 @@
 import type { ModuleTree } from "../../../shared/api/types";
-import { groupAndOrderTasks } from "./presenter";
-import type { TaskId, TaskState, TaskSummary } from "./types";
+import type { TaskId, TaskState } from "./types";
+
+const STATE_GROUP_ORDER: Record<string, number> = {
+  backlog: 0,
+  unstarted: 1,
+  started: 2,
+  completed: 3,
+  cancelled: 4,
+};
 
 export interface TreeWorkItem {
   id: TaskId;
@@ -59,11 +66,24 @@ export function orderedTaskSections(
   states: readonly TaskState[],
   canonicalOrder: readonly TaskId[] = rootIds,
 ): OrderedTaskSection[] {
-  const { groups, orderedStates } = groupAndOrderTasks(
-    rootIds,
-    itemsById,
-    states,
-  );
+  const groups: Record<string, TaskId[]> = {};
+  for (const id of rootIds) {
+    const stateName = itemsById[id]?.state?.name;
+    if (stateName) (groups[stateName] ??= []).push(id);
+  }
+  const orderedStates = [...states].sort((a, b) => {
+    if (
+      typeof a.sort_order === "number" &&
+      typeof b.sort_order === "number" &&
+      a.sort_order !== b.sort_order
+    ) {
+      return a.sort_order - b.sort_order;
+    }
+    return (
+      (STATE_GROUP_ORDER[a.group.toLowerCase()] ?? 99) -
+      (STATE_GROUP_ORDER[b.group.toLowerCase()] ?? 99)
+    );
+  });
   return orderedStates.map((state) => ({
     state,
     ids: orderIdsByRank(groups[state.name] ?? [], itemsById, canonicalOrder),
@@ -146,47 +166,15 @@ export function visibleRows(
 }
 
 export function selectModuleTaskOrder(
-  tasks: readonly TaskSummary[],
-  states: readonly TaskState[],
-  subtasks: Readonly<Record<TaskId, readonly TaskSummary[]>>,
-): TaskId[];
-export function selectModuleTaskOrder(
   tree: ModuleTree,
   itemsById: Readonly<Record<TaskId, TreeWorkItem>>,
   states: readonly TaskState[],
 ): TaskId[];
 export function selectModuleTaskOrder(
-  treeOrTasks: ModuleTree | readonly TaskSummary[],
-  itemsOrStates: Readonly<Record<TaskId, TreeWorkItem>> | readonly TaskState[],
-  statesOrSubtasks:
-    | readonly TaskState[]
-    | Readonly<Record<TaskId, readonly TaskSummary[]>>,
+  tree: ModuleTree,
+  itemsById: Readonly<Record<TaskId, TreeWorkItem>>,
+  states: readonly TaskState[],
 ): TaskId[] {
-  const legacy = Array.isArray(treeOrTasks);
-  const legacyTasks = legacy ? treeOrTasks as readonly TaskSummary[] : [];
-  const legacySubtasks = legacy
-    ? statesOrSubtasks as Readonly<Record<TaskId, readonly TaskSummary[]>>
-    : {};
-  const legacyItems = [
-    ...legacyTasks,
-    ...Object.values(legacySubtasks).flat(),
-  ];
-  const tree: ModuleTree = legacy
-    ? {
-        rootIds: legacyTasks.map((item) => item.id),
-        children: Object.fromEntries(
-          Object.entries(legacySubtasks).map(([id, children]) => [
-            id,
-            children.map((item) => item.id),
-          ]),
-        ),
-        order: legacyItems.map((item) => item.id),
-      }
-    : treeOrTasks as ModuleTree;
-  const itemsById: Readonly<Record<TaskId, TreeWorkItem>> = legacy
-    ? Object.fromEntries(legacyItems.map((item) => [item.id, item]))
-    : itemsOrStates as Readonly<Record<TaskId, TreeWorkItem>>;
-  const states = (legacy ? itemsOrStates : statesOrSubtasks) as readonly TaskState[];
   const order: TaskId[] = [];
   const visited = new Set<TaskId>();
 
@@ -222,42 +210,14 @@ export interface TaskRevealPath {
 
 export function taskRevealPath(
   taskId: TaskId,
-  moduleId: string,
-  tasks: readonly TaskSummary[],
-  subtasks: Readonly<Record<TaskId, readonly TaskSummary[]>>,
-): TaskRevealPath;
-export function taskRevealPath(
-  taskId: TaskId,
   tree: ModuleTree,
   itemsById: Readonly<Record<TaskId, TreeWorkItem>>,
 ): TaskRevealPath;
 export function taskRevealPath(
   taskId: TaskId,
-  treeOrModuleId: ModuleTree | string,
-  itemsOrTasks:
-    | Readonly<Record<TaskId, TreeWorkItem>>
-    | readonly TaskSummary[],
-  maybeSubtasks?: Readonly<Record<TaskId, readonly TaskSummary[]>>,
+  tree: ModuleTree,
+  itemsById: Readonly<Record<TaskId, TreeWorkItem>>,
 ): TaskRevealPath {
-  const legacy = typeof treeOrModuleId === "string";
-  const legacyTasks = legacy ? itemsOrTasks as readonly TaskSummary[] : [];
-  const legacySubtasks = legacy ? maybeSubtasks ?? {} : {};
-  const legacyItems = [legacyTasks, ...Object.values(legacySubtasks)].flat();
-  const tree: ModuleTree = legacy
-    ? {
-        rootIds: legacyTasks.map((item) => item.id),
-        children: Object.fromEntries(
-          Object.entries(legacySubtasks).map(([id, children]) => [
-            id,
-            children.map((item) => item.id),
-          ]),
-        ),
-        order: legacyItems.map((item) => item.id),
-      }
-    : treeOrModuleId;
-  const itemsById: Readonly<Record<TaskId, TreeWorkItem>> = legacy
-    ? Object.fromEntries(legacyItems.map((item) => [item.id, item]))
-    : itemsOrTasks as Readonly<Record<TaskId, TreeWorkItem>>;
   const parentById = new Map<TaskId, TaskId>();
   for (const [parentId, children] of Object.entries(tree.children)) {
     for (const childId of children) parentById.set(childId, parentId);

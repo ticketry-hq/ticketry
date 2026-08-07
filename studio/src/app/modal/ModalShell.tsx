@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import {
   MODAL_ACTIONS,
   studioKeymapRegistry,
-  type KeyChord,
 } from "../navigation/keymapRegistry";
 import { useModalStore, type ModalKeyBinding } from "./modalStore";
 
@@ -21,26 +20,6 @@ interface ModalShellProps {
   interceptKeyDown?: (event: KeyboardEvent) => boolean;
 }
 
-function formatChord(chord: KeyChord): string {
-  const key =
-    chord.key === "Escape"
-      ? "Esc"
-      : chord.key === "ArrowDown"
-        ? "↓"
-        : chord.key === "ArrowUp"
-          ? "↑"
-          : chord.key;
-  return [
-    chord.control && "Ctrl",
-    chord.alt && "Alt",
-    chord.shift && "Shift",
-    chord.meta && "Cmd",
-    key,
-  ]
-    .filter(Boolean)
-    .join("+");
-}
-
 /**
  * Shared modal shell: scrim, centered card, Escape→popModal, and focus trap.
  * Initial focus prefers the supplied target, then the first focusable child.
@@ -57,27 +36,7 @@ export function ModalShell({
   interceptKeyDown,
 }: ModalShellProps) {
   const popModal = useModalStore((s) => s.popModal);
-  const setActiveBindings = useModalStore((s) => s.setActiveBindings);
   const cardRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setActiveBindings(
-      bindings?.flatMap(({ actionId, label }) => {
-        const actionIds =
-          typeof actionId === "string" ? [actionId] : actionId;
-        const keys = actionIds.flatMap((id) => {
-          const binding = studioKeymapRegistry.getEffectiveBinding("modal", id);
-          return binding ? [formatChord(binding.chord)] : [];
-        });
-        if (!keys.length) return [];
-        const separator = keys.every((key) => key === "↑" || key === "↓")
-          ? ""
-          : "/";
-        return [{ key: keys.join(separator), label }];
-      }) ?? null,
-    );
-    return () => setActiveBindings(null);
-  }, [bindings, setActiveBindings]);
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;

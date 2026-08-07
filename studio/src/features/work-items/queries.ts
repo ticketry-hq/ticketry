@@ -1,10 +1,12 @@
 import * as api from "../../shared/api/client";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type {
+  ModuleTree,
   WorkItem,
   WorkItemDetail,
   WorkItemFilters,
 } from "../../shared/api/types";
+import { setStatesSorted } from "../../shared/query/stateCatalog";
 import {
   FIVE_MINUTES,
   queryClient,
@@ -25,6 +27,60 @@ export const workItemQuery = (id: string) => ({
   queryFn: () => fetchWorkItem(id),
   staleTime: FIVE_MINUTES,
 });
+
+export const EMPTY_MODULE_TREE: ModuleTree = {
+  rootIds: [],
+  children: {},
+  order: [],
+};
+
+export function getModuleTreeSnapshot(
+  projectId: string | null,
+  moduleId: string | null,
+): ModuleTree {
+  if (!projectId || !moduleId) return EMPTY_MODULE_TREE;
+  return (
+    queryClient.getQueryData<ModuleTree>(
+      queryKeys.tasks.byModule(projectId, moduleId),
+    ) ?? EMPTY_MODULE_TREE
+  );
+}
+
+export async function loadModuleTree(
+  projectId: string,
+  moduleId: string,
+): Promise<ModuleTree> {
+  return queryClient.fetchQuery({
+    queryKey: queryKeys.tasks.byModule(projectId, moduleId),
+    staleTime: 0,
+    queryFn: async () => {
+      const { rootIds, children, order, states } = await api.getTasks(
+        projectId,
+        moduleId,
+      );
+      setStatesSorted(projectId, states);
+      return { rootIds, children, order };
+    },
+  });
+}
+
+export function useModuleTree(
+  projectId: string | null,
+  moduleId: string | null,
+): ModuleTree {
+  const { data } = useQuery(
+    {
+      queryKey:
+        projectId && moduleId
+          ? queryKeys.tasks.byModule(projectId, moduleId)
+          : queryKeys.tasks.emptyTree,
+      queryFn: () => EMPTY_MODULE_TREE,
+      enabled: false,
+    },
+    queryClient,
+  );
+  return data ?? EMPTY_MODULE_TREE;
+}
 
 /** Subscribe to the one server-state holding for a work item. */
 export function useWorkItem(id: string | null) {

@@ -1,6 +1,5 @@
 import { useModalStore } from "../../modal/modalStore";
 import { startInstantChangeFlow } from "../../../features/studio/modals/PlanFeature";
-import { useTasksStore } from "../../../features/studio/stores/tasksStore";
 import {
   foregroundKey,
   useTerminalForegroundStore,
@@ -18,7 +17,12 @@ import {
   useTicketWorkspaceStore,
 } from "../../shell/ticket-workspace/selected-ticket/appNavigation";
 import type { TreeRow } from "../../shell/ticket-workspace/tasks/TasksPane";
-import { useIssueStore } from "../../../features/work-items/issueStore";
+import { queryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/keys";
+import type { WorkItem } from "../../../shared/api/types";
+import { getModuleTreeSnapshot } from "../../../features/work-items/queries";
+import { getStatesSnapshot } from "../../../shared/query/stateCatalog";
+import { useStudioStore } from "../../../features/projects/store";
 import {
   selectLiveTerminalStops,
   selectLiveTerminalStop,
@@ -27,6 +31,7 @@ import {
 import {
   selectModuleTaskOrder,
   taskRevealPath,
+  type TreeWorkItem,
 } from "../../../features/studio/lib/taskTree";
 import {
   consume,
@@ -104,22 +109,27 @@ function cycleLiveTerminal(
 ): void {
   consume(event);
 
-  const tasks = useTasksStore.getState();
+  const projectId = useStudioStore.getState().selectedProjectId;
+  const ui = useClientStore.getState();
+  const tree = getModuleTreeSnapshot(projectId, ui.selectedModuleId);
+  const itemsById = Object.fromEntries(tree.order.flatMap((id) => {
+    const item = queryClient.getQueryData<WorkItem>(queryKeys.workItems.byId(id));
+    return item ? [[id, item] as const] : [];
+  })) as unknown as Record<string, TreeWorkItem>;
   const terminal = useTerminalStore.getState();
   const tabs = useWorkspaceTabsStore.getState();
   const workspace = useTicketWorkspaceStore.getState();
-  const ui = useClientStore.getState();
   const stops = selectLiveTerminalStops({
-    moduleId: tasks.selectedModuleId,
+    moduleId: ui.selectedModuleId,
     taskRows,
     taskOrder: ui.storySearchQuery.trim()
       ? undefined
-      : selectModuleTaskOrder(tasks.tasks, tasks.states, tasks.subtasks),
+      : selectModuleTaskOrder(tree, itemsById, getStatesSnapshot(projectId)),
     agentStatus: useAgentStatusStore.getState(),
     sessions: terminal.sessions,
   });
-  const currentSessionId = tasks.selectedTaskId
-    ? tabs.activeByTask[tasks.selectedTaskId] ?? null
+  const currentSessionId = ui.selectedTaskId
+    ? tabs.activeByTask[ui.selectedTaskId] ?? null
     : null;
   const next = selectLiveTerminalStop(stops, currentSessionId, direction);
   if (!next) return;
@@ -127,20 +137,19 @@ function cycleLiveTerminal(
   const session = terminal.sessions[next.sessionId];
   if (!session) return;
 
-  const moduleId = tasks.selectedModuleId;
+  const moduleId = ui.selectedModuleId;
   if (moduleId) {
     const reveal = taskRevealPath(
       next.taskId,
-      moduleId,
-      tasks.tasks,
-      tasks.subtasks,
+      tree,
+      itemsById,
     );
     if (reveal.stateId && ui.collapsedStateIds.has(reveal.stateId)) {
       ui.toggleStateCollapsed(reveal.stateId);
     }
   }
 
-  useTasksStore.setState({
+  useClientStore.setState({
     selectedTaskId: next.taskId,
     workspaceSelection: { kind: "task" },
   });
@@ -236,12 +245,7 @@ function openAgentPicker(ctx: NavigationContext): boolean {
 
   const { selectedProjectId, selectedModuleId } = ctx.tasks;
   if (!selectedProjectId || !selectedModuleId) return true;
-  const task =
-    useIssueStore.getState().getWorkItem(row.id) ??
-    ctx.tasks.tasks.find((candidate) => candidate.id === row.id) ??
-    Object.values(ctx.tasks.subtasks)
-      .flat()
-      .find((candidate) => candidate.id === row.id);
+  const task = ctx.tasks.itemsById[row.id];
   if (!task) return true;
   const launchContext = {
     projectId: selectedProjectId,

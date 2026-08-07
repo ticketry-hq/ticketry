@@ -1,16 +1,17 @@
 import { useCallback, useEffect } from "react";
 import { statusFeed } from "../../features/agents/status/statusFeed";
-import { useTasksStore } from "../../features/studio/stores/tasksStore";
+import { useStudioStore } from "../../features/projects/store";
+import { useClientStore } from "../../state/clientStore";
 import OnboardingTour from "../onboarding/OnboardingTour";
 import { useGlobalKeymap } from "../navigation/useGlobalKeymap";
 import { StudioFooter } from "./StudioFooter";
 import { StudioLayout } from "./StudioLayout";
-import { useTaskTree } from "./ticket-workspace/tasks/hooks/useTaskTree";
+import { useStoriesTree } from "./ticket-workspace/tasks/useStoriesTree";
 
 export function StudioShell() {
-  const { rows } = useTaskTree();
-  const selectedProjectId = useTasksStore((state) => state.selectedProjectId);
-  const selectTask = useTasksStore((state) => state.selectTask);
+  const { rows } = useStoriesTree();
+  const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
+  const selectTask = useClientStore((state) => state.selectTask);
   const selectOnboardingStory = useCallback(
     (storyId: string) => void selectTask(storyId),
     [selectTask],

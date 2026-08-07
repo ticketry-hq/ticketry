@@ -1,7 +1,6 @@
-import type { StateImpactOut } from "@worktracker/typescript-sdk";
 import { useRef, useState } from "react";
 import { ApiError, apiErrorMessage } from "../../shared/api/client";
-import type { State } from "../../shared/api/types";
+import type { State, StateImpact } from "../../shared/api/types";
 import { STATE_GROUP_ORDER } from "../../shared/utilities/display";
 import {
   SETTINGS_FIELD_CLASS,
@@ -35,7 +34,7 @@ export function StateCatalog() {
   const [name, setName] = useState("");
   const [group, setGroup] = useState<string>(STATE_GROUP_ORDER[0]);
   const [previewStateId, setPreviewStateId] = useState<string | null>(null);
-  const [impact, setImpact] = useState<StateImpactOut | null>(null);
+  const [impact, setImpact] = useState<StateImpact | null>(null);
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactError, setImpactError] = useState<string | null>(null);
   const [impactConflict, setImpactConflict] = useState<string | null>(null);

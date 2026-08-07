@@ -599,13 +599,6 @@ function SettingsFrame({
   onClose: () => void;
 }) {
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const setActiveBindings = useModalStore((state) => state.setActiveBindings);
-
-  useEffect(() => {
-    setActiveBindings([{ key: "Esc", label: "Close Settings" }]);
-    return () => setActiveBindings(null);
-  }, [setActiveBindings]);
-
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
     const card = cardRef.current;

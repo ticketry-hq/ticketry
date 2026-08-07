@@ -12,7 +12,7 @@ import {
   getProviderCapabilitiesSnapshot,
   setProviderCapabilities,
 } from "./providerQueries";
-import type { StateImpactOut } from "@worktracker/typescript-sdk";
+import type { StateImpact } from "../../shared/api/types";
 
 const EMPTY_ISSUE_TYPES: IssueType[] = [];
 const EMPTY_STATES: State[] = [];
@@ -190,7 +190,7 @@ export async function loadAllWorkflowSettings(
   return Promise.all(issueTypeIds.map(loadWorkflowSettings));
 }
 
-export function loadStateImpact(stateId: string): Promise<StateImpactOut> {
+export function loadStateImpact(stateId: string): Promise<StateImpact> {
   return queryClient.fetchQuery({
     queryKey: queryKeys.workflows.stateImpact(stateId),
     queryFn: () => api.getStateImpact(stateId),

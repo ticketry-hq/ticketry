@@ -1,4 +1,5 @@
-import { useTasksStore } from "../../../../../features/studio/stores/tasksStore";
+import { useStudioStore } from "../../../../../features/projects/store";
+import { useClientStore } from "../../../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import {
   selectScratchLifecycleChips,
@@ -32,9 +33,9 @@ function ScratchDetails({
  * scratch task shows its module's lifecycle aggregate.
  */
 export function SelectedTicketDetails() {
-  const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
-  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
-  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
+  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const selectedModuleId = useClientStore((s) => s.selectedModuleId);
 
   if (selectedTaskId === TEMP_TASK_ID) {
     return (

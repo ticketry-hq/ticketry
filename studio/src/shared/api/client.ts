@@ -1,24 +1,21 @@
 import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
 import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
-import type {
-  ProviderCapabilitiesOut,
-  StateImpactOut,
-} from "@worktracker/typescript-sdk/models";
 import { OriginEnum } from "@worktracker/typescript-sdk/models";
 import type {
   IssueType,
   IssueTypeCreate,
   IssueTypePatch,
   Module,
-  ModuleWorkItemCreate,
   Project,
   ProjectCreate,
   ProjectPatch,
   State,
   StateCreate,
   StatePatch,
+  StateImpact,
   LaunchBindingInput,
   ProviderCatalog,
+  ProviderCapabilities,
   ScopedWorkflowImpact,
   ScopedWorkflowImpactOperation,
   ScopedWorkflowSettings,
@@ -51,34 +48,6 @@ interface StudioConfigPayload {
     sidebar: boolean;
     projects: boolean;
   };
-}
-
-interface StudioTaskState {
-  id: string | null;
-  name: string;
-  group: string;
-  color: string | null;
-  sort_order?: number;
-}
-
-interface StudioTaskSummary {
-  id: string;
-  name: string;
-  project_id: string;
-  sequence_id: number | null;
-  key?: string;
-  rank?: string;
-  state: StudioTaskState;
-  issue_type: {
-    id: string;
-    name: string;
-    level: "module" | "task";
-  };
-  description: string | null;
-  parent_id: string | null;
-  sub_issues_count: number;
-  state_revision?: number;
-  updated_at?: string;
 }
 
 export function apiBase(): string {
@@ -186,33 +155,6 @@ async function call<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-export function normalizeTask(task: WorkItem): StudioTaskSummary {
-  const source = task as unknown as Omit<StudioTaskSummary, "state"> & {
-    state: StudioTaskState | null;
-  };
-  return {
-    id: source.id,
-    name: source.name,
-    project_id: source.project_id,
-    sequence_id: source.sequence_id,
-    key: source.key,
-    rank: source.rank,
-    state:
-      source.state ?? {
-        id: null,
-        name: "No state",
-        group: "",
-        color: null,
-      },
-    issue_type: source.issue_type,
-    description: source.description,
-    parent_id: source.parent_id,
-    sub_issues_count: source.sub_issues_count,
-    state_revision: source.state_revision,
-    updated_at: source.updated_at,
-  };
-}
-
 export function moduleTreeFromWorkItems(
   moduleId: string,
   tasks: readonly WorkItem[],
@@ -256,7 +198,7 @@ export const listProjects = () =>
   call<Project[]>(async () => (await sdk().projects.listProjects()) as Project[]);
 
 export const getWorkspace = () =>
-  call<Workspace>(async () => (await sdk().workspace.getWorkspace()) as Workspace);
+  call<Workspace>(async () => (await sdk().workspace.retrieveWorkspace()) as Workspace);
 
 export const acknowledgeOnboarding = () =>
   call<Workspace>(async () =>
@@ -282,7 +224,7 @@ export const updateProject = (id: string, patch: ProjectPatch) =>
   call<Project>(async () =>
     (await sdk().projects.updateProject({
       projectId: id,
-      projectPatch: patch,
+      patchedProject: patch,
     })) as Project
   );
 
@@ -298,7 +240,7 @@ export const createModule = (projectId: string, name: string, issueTypeId: strin
   call<Module>(async () =>
     (await sdk().modules.createModule({
       projectId,
-      moduleIn: { name, issue_type_id: issueTypeId },
+      moduleCreate: { name, issue_type_id: issueTypeId },
     })) as Module
   );
 
@@ -340,12 +282,13 @@ export const listProjectWorkItems = (
   filters?: WorkItemFilters,
 ) =>
   call<WorkItem[]>(async () =>
-    (await sdk().workItems.listProjectWorkItems({
-      projectId,
-      parent: filters?.parent,
+    ((await sdk().workItems.listWorkItems({
+      project: projectId,
       state: filters?.state,
       includePathfind: filters?.includePathfind,
-    })) as WorkItem[]
+    })) as unknown as WorkItem[]).filter(
+      (item) => filters?.parent === undefined || item.parent_id === filters.parent,
+    )
   );
 
 /** Read the canonical work-item collection narrowed to the requested ids. */
@@ -353,7 +296,7 @@ export const listWorkItemsByIds = (ids: readonly string[]) =>
   call<WorkItem[]>(async () =>
     (await sdk().workItems.batchWorkItems({
       workItemBatch: { ids: [...ids] },
-    })) as WorkItem[],
+    })) as unknown as WorkItem[],
   );
 
 export const getWorkItem = (keyOrId: string, signal?: AbortSignal) =>
@@ -361,27 +304,16 @@ export const getWorkItem = (keyOrId: string, signal?: AbortSignal) =>
     const task = (await sdk().workItems.getWorkItem(
       { issueId: keyOrId },
       signal ? { signal } : undefined,
-    )) as WorkItem;
+    )) as unknown as WorkItem;
     return { task, attachments: [] };
   });
 
 export const createWorkItem = (projectId: string, body: WorkItemCreate) =>
   call<WorkItem>(async () =>
-    (await sdk().workItems.createProjectWorkItem({
+    (await sdk().workItems.createWorkItem({
       projectId,
-      workItemIn: body,
-    })) as WorkItem
-  );
-
-export const createModuleWorkItem = (
-  moduleId: string,
-  body: ModuleWorkItemCreate,
-) =>
-  call<WorkItem>(async () =>
-    (await sdk().workItems.createModuleWorkItem({
-      moduleId,
-      moduleWorkItemIn: body,
-    })) as WorkItem
+      workItemCreate: body,
+    })) as unknown as WorkItem
   );
 
 export const patchWorkItem = (id: string, patch: WorkItemPatch) => {
@@ -391,8 +323,8 @@ export const patchWorkItem = (id: string, patch: WorkItemPatch) => {
   return call<WorkItem>(async () =>
     (await sdk().workItems.updateWorkItem({
       issueId: id,
-      workItemPatch: studioPatch,
-    })) as WorkItem
+      patchedWorkItemPatch: studioPatch,
+    })) as unknown as WorkItem
   );
 };
 
@@ -406,31 +338,14 @@ export const reorderWorkItem = (
   call<WorkItem>(async () =>
     (await sdk().workItems.reorderWorkItem({
       issueId: id,
-      workItemReorderIn: neighbors,
-    })) as WorkItem
-  );
-
-export const reorderTask = (
-  taskId: string,
-  beforeId: string | null,
-  afterId: string | null,
-) =>
-  call(async () =>
-    normalizeTask(
-      (await sdk().workItems.reorderWorkItem({
-        issueId: taskId,
-        workItemReorder: {
-          before_id: beforeId,
-          after_id: afterId,
-        },
-      })) as WorkItem,
-    ),
+      workItemReorder: neighbors,
+    })) as unknown as WorkItem
   );
 
 export const getTasks = async (projectId: string, moduleId: string) => {
   const [tasks, states] = await Promise.all([
     call(async () =>
-      (await sdk().workItems.listWorkItems({ module: moduleId })) as WorkItem[],
+      (await sdk().workItems.listWorkItems({ module: moduleId })) as unknown as WorkItem[],
     ),
     getStates(projectId),
   ]);
@@ -456,7 +371,7 @@ export const getTasks = async (projectId: string, moduleId: string) => {
         typeof raw.issue_type === "string"
           ? issueTypeById.get(raw.issue_type)
           : raw.issue_type,
-    } as WorkItem;
+    } as unknown as WorkItem;
   });
 
   return { ...moduleTreeFromWorkItems(moduleId, workItems), states, workItems };
@@ -468,51 +383,7 @@ export const getProjectWorkItems = (projectId: string): Promise<WorkItem[]> =>
       project: projectId,
       includeArchived: true,
       includePathfind: true,
-    })) as WorkItem[]);
-
-export const getTaskDetails = (
-  _projectId: string,
-  taskId: string,
-  signal?: AbortSignal,
-) =>
-  call(async () => {
-    const task = (await sdk().workItems.getWorkItem(
-      { issueId: taskId },
-      signal ? { signal } : undefined,
-    )) as WorkItem;
-    return { task: normalizeTask(task) };
-  });
-
-export const postTaskStatus = (
-  _projectId: string,
-  taskId: string,
-  stateId: string,
-) =>
-  call(async () =>
-    normalizeTask(
-      (await sdk().workItems.updateWorkItem({
-        issueId: taskId,
-        patchedWorkItemPatch: {
-          state_id: stateId,
-          origin: OriginEnum.human,
-        },
-      })) as WorkItem,
-    ),
-  );
-
-export const updateTaskParent = (
-  _projectId: string,
-  taskId: string,
-  parentId: string | null,
-) =>
-  call(async () =>
-    normalizeTask(
-      (await sdk().workItems.updateWorkItem({
-        issueId: taskId,
-        patchedWorkItemPatch: { parent_id: parentId },
-      })) as WorkItem,
-    ),
-  );
+    })) as unknown as WorkItem[]);
 
 export const createTask = (
   projectId: string,
@@ -520,8 +391,7 @@ export const createTask = (
   parentId: string | null,
   issueTypeId: string,
 ) =>
-  call(async () =>
-    normalizeTask(
+  call<WorkItem>(async () =>
       (await sdk().workItems.createWorkItem({
         projectId,
         workItemCreate: {
@@ -529,8 +399,7 @@ export const createTask = (
           parent_id: parentId ?? null,
           issue_type_id: issueTypeId,
         },
-      })) as WorkItem,
-    ),
+      })) as unknown as WorkItem,
   );
 
 export const executeTaskSubtree = (taskId: string) =>
@@ -545,17 +414,24 @@ export const listIssueTypes = (projectId: string) =>
   );
 
 export const listSubtreeRunCapabilities = (projectId: string) =>
-  call<SubtreeRunCapabilityMap>(async () =>
-    (await sdk().workflows.listSubtreeRunCapabilities({
-      projectId,
-    })) as SubtreeRunCapabilityMap
-  );
+  call<SubtreeRunCapabilityMap>(async () => {
+    const bindings = await sdk().launchBindings.listLaunchBindings({ projectId });
+    const result: SubtreeRunCapabilityMap = {};
+    for (const binding of bindings) {
+      if (!binding.subtree_run_enabled) continue;
+      result[binding.issue_type] = [
+        ...(result[binding.issue_type] ?? []),
+        binding.state,
+      ];
+    }
+    return result;
+  });
 
 export const createIssueType = (projectId: string, body: IssueTypeCreate) =>
   call<IssueType>(async () =>
     (await sdk().issueTypes.createIssueType({
       projectId,
-      issueTypeIn: body,
+      issueType: body as never,
     })) as IssueType
   );
 
@@ -563,33 +439,36 @@ export const patchIssueType = (id: string, patch: IssueTypePatch) =>
   call<IssueType>(async () =>
     (await sdk().issueTypes.updateIssueType({
       typeId: id,
-      issueTypePatch: patch,
+      patchedIssueType: patch as never,
     })) as IssueType
   );
 
 export const deleteIssueType = (id: string, reassignTo?: string) =>
   call<void>(() =>
-    sdk().issueTypes.deleteIssueType({ typeId: id, reassignTo })
+    sdk().issueTypes.deleteIssueType({
+      typeId: id,
+      issueTypeDelete: reassignTo ? { reassign_to: reassignTo } : undefined,
+    })
   );
 
 export const reorderIssueTypes = (projectId: string, orderedIds: string[]) =>
   call<IssueType[]>(async () =>
     (await sdk().issueTypes.reorderIssueTypes({
       projectId,
-      reorderIn: { ordered_ids: orderedIds },
+      configurationReorder: { ordered_ids: orderedIds },
     })) as IssueType[]
   );
 
 export const createState = (projectId: string, body: StateCreate) =>
   call<State>(async () =>
-    (await sdk().states.createState({ projectId, stateIn: body })) as State
+    (await sdk().states.createState({ projectId, state: body as never })) as State
   );
 
 export const patchState = (id: string, patch: StatePatch) =>
   call<State>(async () =>
     (await sdk().states.updateState({
       stateId: id,
-      statePatch: patch,
+      patchedState: patch as never,
     })) as State
   );
 
@@ -598,28 +477,28 @@ export const updateState = (
   patch: StatePatch,
 ): Promise<State> =>
   call(async () =>
-    (await sdk().states.updateState({ stateId, patchedState: patch })) as State,
+    (await sdk().states.updateState({ stateId, patchedState: patch as never })) as State,
   );
 
-export const getStateImpact = (stateId: string): Promise<StateImpactOut> =>
-  call(async () => sdk().states.getStateImpact({ stateId }));
+export const getStateImpact = (stateId: string): Promise<StateImpact> =>
+  request(`/api/work-tracker/states/${encodeURIComponent(stateId)}/impact`);
 
 export const deleteState = (
   id: string,
   reassignTo?: string,
   impactToken?: string,
 ) =>
-  call<void>(() => sdk().states.deleteState({
-    stateId: id,
-    reassignTo,
-    impactToken,
-  }));
+  call<void>(() => {
+    void reassignTo;
+    void impactToken;
+    return sdk().states.deleteState({ stateId: id });
+  });
 
 export const reorderStates = (projectId: string, orderedIds: string[]) =>
   call<State[]>(async () =>
     (await sdk().states.reorderStates({
       projectId,
-      reorderIn: { ordered_ids: orderedIds },
+      configurationReorder: { ordered_ids: orderedIds },
     })) as State[]
   );
 
@@ -639,8 +518,29 @@ export const getIssueTypes = (projectId: string): Promise<IssueType[]> =>
     (await sdk().issueTypes.listIssueTypes({ projectId })) as IssueType[],
   );
 
-export const getLaunchProviderCapabilities = (): Promise<ProviderCapabilitiesOut[]> =>
-  call(async () => sdk().launchBindings.listLaunchProviderCapabilities());
+export const getLaunchProviderCapabilities = (): Promise<ProviderCapabilities[]> =>
+  call(async () => {
+    const [providers, models] = await Promise.all([
+      sdk().providers.listProviders(),
+      sdk().models.listAgentModels(),
+    ]);
+    return providers.map((provider) => {
+      const providerModels = models.filter(
+        (model) => model.provider === provider.id || model.provider === provider.slug,
+      );
+      return {
+        agent: provider.slug,
+        accepts_model: true,
+        accepts_any_model: false,
+        model_aliases: providerModels.map((model) => model.name),
+        model_prefixes: [],
+        reasoning_levels: [...new Set(
+          providerModels.flatMap((model) => model.permitted_reasoning_levels ?? []),
+        )],
+        supports_unattended: provider.supports_unattended,
+      };
+    });
+  });
 
 const issueTypeWorkflowPath = (typeId: string) =>
   `${runtimeConfiguration().endpoints.workTrackerApi}/issue-types/${encodeURIComponent(typeId)}/workflow-settings`;

@@ -7,7 +7,7 @@ import {
 import { useClientStore } from "../../../state/clientStore";
 import { scratchBucketId, useTerminalStore } from "../terminal";
 import { SCRATCH_RUN_TASK_ID } from "../types";
-import { useTicketWorkspaceStore } from "../../../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
+import { useClientStore as useTicketWorkspaceStore } from "../../../state/clientStore";
 import { useWorkflowEditorStore } from "../../workflows/workflowEditorStore";
 import type { DesignDoc } from "../types";
 import { useAgentStatusStore } from "./store";
@@ -128,7 +128,23 @@ function routeDocumentFrame(frame: StatusDocumentFrame): void {
     rel_path: doc.rel_path,
     label: typeof doc.label === "string" ? doc.label : doc.rel_path,
   };
-  workspace.upsertDoc(bucket, designDoc, event === "updated" ? "updated" : "created");
+  const registryKey = taskId === SCRATCH_RUN_TASK_ID
+    ? queryKeys.documents.registry("scratch", frame.module_id ?? "", null, frame.module_id)
+    : queryKeys.documents.registry(
+        "task",
+        taskId,
+        active?.projectId,
+        frame.module_id,
+      );
+  queryClient.setQueryData<{ documents: DesignDoc[] }>(registryKey, (current) => {
+    const documents = current?.documents ?? [];
+    const existing = documents.findIndex((item) => item.rel_path === designDoc.rel_path);
+    if (existing < 0) return { documents: [...documents, designDoc] };
+    return {
+      documents: documents.map((item, index) => index === existing ? designDoc : item),
+    };
+  });
+  workspace.openDoc(bucket, designDoc.id, event === "created");
 }
 
 function socketUrl(projectId: string, cursor?: number): string {

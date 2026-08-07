@@ -4,7 +4,7 @@ import type { ProviderCatalog } from "../../shared/api/types";
 import * as api from "../../shared/api/client";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { getConfigSnapshot } from "../../features/studio/stores/configStore";
-import { useTasksStore } from "../../features/studio/stores/tasksStore";
+import { useStudioStore } from "../../features/projects/store";
 import {
   setProviderCapabilities,
   setProviderCatalog,
@@ -23,7 +23,7 @@ const EMPTY_CATALOG: ProviderCatalog = {
 export default function OnboardingWelcome() {
   const projectsEnabled = getConfigSnapshot().features.projects;
   const [pane, setPane] = useState<WelcomePane>("providers");
-  const createProject = useTasksStore((state) => state.createProject);
+  const createProject = useStudioStore((state) => state.createProjectWithError);
   const startTour = useOnboardingTourStore((state) => state.start);
   const [name, setName] = useState("Coding");
   const [slug, setSlug] = useState("CDN");
@@ -38,13 +38,13 @@ export default function OnboardingWelcome() {
       return;
     }
 
-    let projectId = useTasksStore.getState().selectedProjectId;
+    let projectId = useStudioStore.getState().selectedProjectId;
     if (!projectId) {
       const project = await resolveDefaultProject();
-      await useTasksStore.getState().selectProject(project.id);
+      await useStudioStore.getState().selectProject(project.id);
       projectId = project.id;
     }
-    startTour(projectId);
+    if (projectId) startTour(projectId);
   };
 
   const submit = async (event: FormEvent) => {
@@ -58,6 +58,7 @@ export default function OnboardingWelcome() {
         slug: slug.trim(),
         description: "",
       });
+      if (!project.id) throw new Error("The created project has no id.");
       startTour(project.id);
     } catch (cause) {
       setCreateError(apiErrorMessage(cause));

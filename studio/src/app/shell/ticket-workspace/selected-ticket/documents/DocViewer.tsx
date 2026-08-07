@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { dialog } from "../../../../../state/clientStore";
 import { docUrl } from "../../../../../features/agents/api/agentApi";
-import type { DocTabState } from "../../../../../features/agents/types";
+import type { DesignDoc } from "../../../../../features/agents/types";
 import { ApiError, saveDocument } from "../../../../../shared/api/client";
 import { renderMarkdown } from "./markdown";
 import {
@@ -23,14 +23,14 @@ export default function DocViewer({
   focusSignal = 0,
   editable = false,
 }: {
-  doc: DocTabState;
+  doc: DesignDoc;
   focusSignal?: number;
   editable?: boolean;
 }) {
-  if (/\.md$/i.test(doc.relPath)) {
+  if (/\.md$/i.test(doc.rel_path)) {
     return (
       <MarkdownDocViewer
-        key={`${doc.docId}:${doc.relPath}`}
+        key={`${doc.id}:${doc.rel_path}`}
         doc={doc}
         focusSignal={focusSignal}
         editable={editable}
@@ -64,7 +64,7 @@ function HtmlDocViewer({
   doc,
   focusSignal,
 }: {
-  doc: DocTabState;
+  doc: DesignDoc;
   focusSignal: number;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -76,9 +76,8 @@ function HtmlDocViewer({
   return (
     <iframe
       ref={frameRef}
-      key={doc.reloadToken}
       title={doc.label}
-      src={docUrl(doc.docId, doc.relPath)}
+      src={docUrl(doc.id, doc.rel_path)}
       sandbox="allow-scripts"
       className="h-full w-full border-0 bg-white"
       data-testid="workspace-doc-frame"
@@ -91,7 +90,7 @@ function MarkdownDocViewer({
   focusSignal,
   editable,
 }: {
-  doc: DocTabState;
+  doc: DesignDoc;
   focusSignal: number;
   editable: boolean;
 }) {
@@ -137,7 +136,7 @@ function MarkdownDocViewer({
         setDigest(loaded.digest);
         setMarkdown(loaded.markdown);
         setHtml(renderMarkdown(loaded.markdown));
-        const docKey = `${doc.docId}:${doc.relPath}`;
+        const docKey = `${doc.id}:${doc.rel_path}`;
         if (
           editable &&
           !isFullHtmlDocument(loaded.markdown) &&
@@ -157,7 +156,7 @@ function MarkdownDocViewer({
         setError(true);
       });
 
-  }, [doc.docId, doc.relPath, doc.reloadToken, editable]);
+  }, [doc, editable]);
 
   useEffect(() => {
     if (focusSignal > 0) contentRef.current?.focus();
@@ -217,7 +216,7 @@ function MarkdownDocViewer({
     setSaving(true);
     setSaveError(false);
     try {
-      const saved = await saveDocument(doc.docId, {
+      const saved = await saveDocument(doc.id, {
         content,
         digest: expectedDigest,
       });
@@ -255,7 +254,7 @@ function MarkdownDocViewer({
     }, 10_000);
 
     return () => window.clearInterval(timer);
-  }, [editing, doc.docId]);
+  }, [editing, doc.id]);
 
   if (error) {
     return (
@@ -415,7 +414,7 @@ function MarkdownDocViewer({
                 }
               >
                 <RichMarkdownEditor
-                  key={`${doc.docId}:${doc.relPath}:${digest}`}
+                  key={`${doc.id}:${doc.rel_path}:${digest}`}
                   markdown={draft}
                   onChange={setDraft}
                   onParseError={(source) => {

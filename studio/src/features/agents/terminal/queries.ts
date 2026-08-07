@@ -1,91 +1,46 @@
-import type {
-  PersistedTerminalSession,
-  ResumableTerminalSession,
-} from "../types";
+import { useQuery } from "@tanstack/react-query";
+import type { PersistedTerminalSession } from "../types";
 import * as api from "../api/agentApi";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
 
-const EMPTY_PERSISTED_INDEX: Record<string, PersistedTerminalSession[]> = {};
-const EMPTY_RESUMABLE_INDEX: Record<string, ResumableTerminalSession[]> = {};
+const EMPTY_SESSIONS: PersistedTerminalSession[] = [];
 
-export async function loadPersistedTerminalSessions(
-  taskId: string,
-): Promise<PersistedTerminalSession[]> {
-  const queryKey = queryKeys.terminalSessions.persisted(taskId);
-  await queryClient.cancelQueries({ queryKey, exact: true });
-  return queryClient.fetchQuery({
-    queryKey,
-    queryFn: ({ signal }) => api.getTerminals(taskId, signal),
-    staleTime: 0,
-  });
-}
-
-export async function loadScratchTerminalSessions(
-  projectId: string,
-  moduleId?: string,
-): Promise<PersistedTerminalSession[]> {
-  const queryKey = queryKeys.terminalSessions.scratch(projectId, moduleId);
-  await queryClient.cancelQueries({ queryKey, exact: true });
-  return queryClient.fetchQuery({
-    queryKey,
-    queryFn: ({ signal }) =>
-      moduleId
-        ? api.getScratchTerminals(projectId, moduleId, signal)
-        : api.getScratchTerminals(projectId, undefined, signal),
-    staleTime: 0,
-  });
-}
-
-export async function loadResumableTerminalSessions(
-  taskId?: string,
-  projectId?: string,
-  moduleId?: string,
-): Promise<ResumableTerminalSession[]> {
-  const queryKey = queryKeys.terminalSessions.resumable(
-    taskId,
-    projectId,
-    moduleId,
+/** The one immutable holding for a task's durable terminal-session rows. */
+export function usePersistedTerminalSessions(
+  taskId: string | null,
+): { sessions: PersistedTerminalSession[]; isFetched: boolean } {
+  const query = useQuery(
+    {
+      queryKey: taskId
+        ? queryKeys.terminalSessions.persisted(taskId)
+        : queryKeys.terminalSessions.persisted("none"),
+      queryFn: ({ signal }) => api.getTerminals(taskId!, signal),
+      enabled: taskId !== null,
+      staleTime: 0,
+    },
+    queryClient,
   );
-  await queryClient.cancelQueries({ queryKey, exact: true });
-  return queryClient.fetchQuery({
-    queryKey,
-    queryFn: ({ signal }) =>
-      taskId
-        ? api.listResumableTerminals(taskId, undefined, undefined, signal)
-        : api.listResumableTerminals(undefined, projectId, moduleId, signal),
-    staleTime: 0,
-  });
+  return { sessions: query.data ?? EMPTY_SESSIONS, isFetched: query.isFetched };
 }
 
-export function getPersistedTerminalSessionIndex(): Record<
-  string,
-  PersistedTerminalSession[]
-> {
-  return (
-    queryClient.getQueryData(queryKeys.terminalSessions.persistedIndex) ??
-    EMPTY_PERSISTED_INDEX
+/** The one immutable holding for a module scratch workspace's sessions. */
+export function useScratchTerminalSessions(
+  projectId: string | null,
+  moduleId: string | null,
+): { sessions: PersistedTerminalSession[]; isFetched: boolean } {
+  const query = useQuery(
+    {
+      queryKey:
+        projectId && moduleId
+          ? queryKeys.terminalSessions.scratch(projectId, moduleId)
+          : queryKeys.terminalSessions.scratch("none", null),
+      queryFn: ({ signal }) =>
+        api.getScratchTerminals(projectId!, moduleId!, signal),
+      enabled: projectId !== null && moduleId !== null,
+      staleTime: 0,
+    },
+    queryClient,
   );
-}
-
-export function setPersistedTerminalSessionIndex(
-  sessions: Record<string, PersistedTerminalSession[]>,
-): void {
-  queryClient.setQueryData(queryKeys.terminalSessions.persistedIndex, sessions);
-}
-
-export function getResumableTerminalSessionIndex(): Record<
-  string,
-  ResumableTerminalSession[]
-> {
-  return (
-    queryClient.getQueryData(queryKeys.terminalSessions.resumableIndex) ??
-    EMPTY_RESUMABLE_INDEX
-  );
-}
-
-export function setResumableTerminalSessionIndex(
-  sessions: Record<string, ResumableTerminalSession[]>,
-): void {
-  queryClient.setQueryData(queryKeys.terminalSessions.resumableIndex, sessions);
+  return { sessions: query.data ?? EMPTY_SESSIONS, isFetched: query.isFetched };
 }

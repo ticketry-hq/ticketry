@@ -114,11 +114,8 @@ export async function selectProfile(index: number): Promise<void> {
   queryClient.setQueryData<ConfigSnapshot>(queryKeys.config, (old) =>
     old ? { ...old, recentProfileIndex: index } : old,
   );
-  // Selecting a profile loads its projects. The project tree lives in the
-  // tasks store; dynamic import keeps the configStore ↔ tasksStore cycle from
-  // biting at module-eval time.
-  const { useTasksStore } = await import("./tasksStore");
-  await useTasksStore.getState().loadProjects();
+  const { loadProjects } = await import("../../projects/queries");
+  await loadProjects();
 }
 
 export async function createProfile(body: Partial<Profile>): Promise<void> {

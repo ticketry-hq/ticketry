@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
-import {
-  useStudioModules,
-  useStudioTaskMembership,
-  useTasksStore,
-} from "../stores/tasksStore";
+import { useModulesQuery } from "../../projects";
+import { useStudioStore } from "../../projects/store";
+import { useClientStore } from "../../../state/clientStore";
+import { useModuleTree } from "../../work-items/queries";
 import {
   useSetWorkItemParent,
   useWorkItem,
@@ -35,12 +34,12 @@ export interface ParentUpdatePayload {
  */
 export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
   const mode = payload?.mode ?? "parent";
-  const membership = useStudioTaskMembership();
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const membership = useModuleTree(selectedProjectId, selectedModuleId);
   const tasks = useWorkItemsByIds(membership.order);
-  const modules = useStudioModules();
-  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
-  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
-  const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
+  const modules = useModulesQuery(selectedProjectId).data ?? [];
   const { data: selectedTask } = useWorkItem(
     selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,
   );

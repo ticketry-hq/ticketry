@@ -10,7 +10,8 @@ import {
   sidebarPaneComposition,
   type SidebarPaneComposition,
 } from "../../features/studio/stores/configStore";
-import { useTasksStore } from "../../features/studio/stores/tasksStore";
+import { getProjectsSnapshot } from "../../features/projects";
+import { useStudioStore } from "../../features/projects/store";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { loadKeybindingOverrides } from "../navigation/keymapSettings";
 import {
@@ -76,12 +77,12 @@ async function restoreWorkspace(profileIndex: number): Promise<void> {
   }
 
   const profile = getConfigSnapshot().profiles[profileIndex];
-  const recentProject = useTasksStore
-    .getState()
-    .projects.find((project) => project.id === profile?.recent_project_id);
+  const recentProject = getProjectsSnapshot().find(
+    (project) => project.id === profile?.recent_project_id,
+  );
 
   if (recentProject) {
-    await useTasksStore.getState().selectProject(recentProject.id);
+    await useStudioStore.getState().selectProject(recentProject.id);
     focusVisiblePane("modules");
     return;
   }
@@ -97,12 +98,12 @@ async function restoreWorkspace(profileIndex: number): Promise<void> {
 
 async function selectResolvedProject(): Promise<void> {
   const resolved = await resolveDefaultProject();
-  await useTasksStore.getState().selectProject(resolved.id);
+  await useStudioStore.getState().selectProject(resolved.id);
 }
 
 function focusVisiblePane(preferredPane: FocusedPane): void {
   const { sidebarVisible, setFocusedPane } = useClientStore.getState();
-  const projectIsSelected = useTasksStore.getState().selectedProjectId !== null;
+  const projectIsSelected = useStudioStore.getState().selectedProjectId !== null;
   const config = getConfigSnapshot();
   const paneComposition: SidebarPaneComposition = sidebarPaneComposition(
     config.features.projects,

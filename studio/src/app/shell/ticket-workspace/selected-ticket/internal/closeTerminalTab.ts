@@ -4,26 +4,18 @@ import {
 import { toast } from "../../../../../state/clientStore";
 import { apiErrorMessage } from "../../../../../shared/api/client";
 import type { SessionId } from "../../../../../features/agents/types";
-import { useTicketWorkspaceStore } from "../state/ticketWorkspaceStore";
-import { terminalLabel } from "./terminalLabel";
 
 /**
- * Close a terminal tab and retain its inert history chip. Kept separate from
- * resume actions so the app-level keymap does not load the resume graph.
+ * Close a terminal tab. Run history remains in the run projection.
  */
 export async function closeTerminalTab(
   sessionId: SessionId,
   bucket: string,
-  ticketKey?: string,
+  _ticketKey?: string,
 ): Promise<void> {
   const term = useTerminalStore.getState();
   const meta = term.sessions[sessionId];
   if (!meta) return;
-  const chip = {
-    agentRunId: meta.agentRunId,
-    agent: meta.agent,
-    label: terminalLabel(meta, ticketKey),
-  };
   if (meta.agentRunId) {
     try {
       await term.terminatePersisted(meta.agentRunId, bucket);
@@ -34,5 +26,4 @@ export async function closeTerminalTab(
   } else {
     term.closeTab(sessionId);
   }
-  useTicketWorkspaceStore.getState().recordClosedRun(bucket, chip);
 }

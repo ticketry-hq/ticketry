@@ -1,7 +1,6 @@
 import type {
   DesignDoc,
   PersistedTerminalSession,
-  ResumableTerminalSession,
 } from "../types";
 import { agentApiUrl } from "../../../runtime";
 export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
@@ -46,18 +45,6 @@ export const getTerminals = (taskId: string, signal?: AbortSignal) => {
   const url = `/api/terminals?task_id=${encodeURIComponent(taskId)}`;
   return request<PersistedTerminalSession[]>(url, { signal });
 };
-export const listResumableTerminals = (
-  taskId?: string,
-  projectId?: string,
-  moduleId?: string,
-  signal?: AbortSignal,
-) => {
-  const params = new URLSearchParams();
-  if (taskId) params.set("task_id", taskId);
-  if (projectId) params.set("project_id", projectId);
-  if (moduleId) params.set("module_id", moduleId);
-  return request<ResumableTerminalSession[]>(`/api/terminals/resumable?${params}`, { signal });
-};
 export const getScratchTerminals = (
   projectId: string,
   moduleId?: string,
@@ -68,9 +55,6 @@ export const getScratchTerminals = (
 };
 export const terminateTerminal = (agentRunId: string) =>
   request<{ agent_run_id: string; terminated: boolean }>(`/api/terminals?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "DELETE" });
-export const resumeTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; resumed_from: string }>(`/api/terminals/resume?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "POST" });
-
 export interface CreateTerminalRunRequest {
   agent: "claude" | "agy" | "codex" | "gemini";
   project_id: string;

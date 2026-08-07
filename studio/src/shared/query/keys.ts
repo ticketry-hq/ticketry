@@ -83,20 +83,9 @@ export const queryKeys = {
   },
 
   terminalSessions: {
-    persistedIndex: ["terminal-sessions", "persisted-index"] as const,
-    resumableIndex: ["terminal-sessions", "resumable-index"] as const,
     persisted: (taskId: string) =>
       ["terminal-sessions", "persisted", taskId] as const,
     scratch: (projectId: string, moduleId?: string | null) =>
       ["terminal-sessions", "scratch", projectId, moduleId ?? null] as const,
-    resumable: (
-      taskId?: string | null,
-      projectId?: string | null,
-      moduleId?: string | null,
-    ) => [
-      "terminal-sessions",
-      "resumable",
-      { taskId: taskId ?? null, projectId: projectId ?? null, moduleId: moduleId ?? null },
-    ] as const,
   },
 } as const;

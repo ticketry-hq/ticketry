@@ -8,9 +8,9 @@ import { launchAgent } from "./internal/actions";
 import type { SessionId, TaskId } from "../types";
 import type { LifecycleState } from "./lifecycle";
 import { selectRunState, useAgentStatusStore } from "../status";
-import type { AgentStatusRun } from "../status";
+import type { RunRecord } from "../status";
 import { bucketOfMeta, dismissedRunsFor } from "./internal/sessionStore";
-import { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
+import { useClientStore as useWorkspaceTabsStore } from "../../../state/clientStore";
 
 // Public query + launch surface of the terminal module. Hosts that render a
 // tab strip, a badge, or a launch button import these — never the store
@@ -36,7 +36,7 @@ export interface SessionTab {
 export function deriveTaskSessions(
   taskId: TaskId | null,
   sessions: Readonly<Record<string, SessionMeta>>,
-  runs: Readonly<Record<string, AgentStatusRun>>,
+  runs: Readonly<Record<string, RunRecord>>,
   dismissed: ReadonlySet<string>,
 ): SessionTab[] {
   if (!taskId) return [];
@@ -47,10 +47,10 @@ export function deriveTaskSessions(
     )
     .sort((left, right) => {
       const leftStarted = left.agentRunId
-        ? runs[left.agentRunId]?.startedAt ?? ""
+        ? runs[left.agentRunId]?.started_at ?? ""
         : "";
       const rightStarted = right.agentRunId
-        ? runs[right.agentRunId]?.startedAt ?? ""
+        ? runs[right.agentRunId]?.started_at ?? ""
         : "";
       return leftStarted.localeCompare(rightStarted) ||
         left.sessionId.localeCompare(right.sessionId);
@@ -63,7 +63,6 @@ export function deriveTaskSessions(
               {
                 projectId: null,
                 runs,
-                byTask: {},
                 automationAttempts: {},
                 automationByTask: {},
               },

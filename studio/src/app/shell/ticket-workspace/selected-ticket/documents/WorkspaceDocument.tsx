@@ -1,4 +1,4 @@
-import type { DocTabState } from "../../../../../features/agents/types";
+import type { DesignDoc } from "../../../../../features/agents/types";
 import DocViewer from "./DocViewer";
 
 /**
@@ -12,7 +12,7 @@ export function WorkspaceDocument({
   doc,
   focusSignal = 0,
 }: {
-  doc: DocTabState;
+  doc: DesignDoc;
   focusSignal?: number;
 }) {
   return <DocViewer doc={doc} focusSignal={focusSignal} editable />;

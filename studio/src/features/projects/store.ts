@@ -92,6 +92,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     // reload and drives both startup selection and post-delete redirect.
     recentProjects.touch(id);
     set({ selectedProjectId: id, error: null });
+    useClientStore.setState({
+      selectedModuleId: null,
+      selectedTaskId: null,
+      workspaceSelection: { kind: "task" },
+    });
     try {
       await loadModules(id);
     } catch (e) {

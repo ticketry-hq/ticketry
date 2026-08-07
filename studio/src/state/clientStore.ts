@@ -5,15 +5,12 @@ import {
   sidebarPaneComposition,
   type SidebarPaneComposition,
 } from "../features/studio/stores/configStore";
-import { useTasksStore } from "../features/studio/stores/tasksStore";
+import { useStudioStore } from "../features/projects/store";
 import type {
-  DesignDoc,
-  DocTabState,
-  RunChip,
   TabKind,
   SessionId,
 } from "../features/agents/types";
-import { focusTerminal } from "../features/agents/terminal/internal/terminalRegistry";
+import { focusTerminal } from "../features/agents/terminal";
 import {
   finishCollapsedStateMigration,
   isPanelLayout,
@@ -93,6 +90,9 @@ export interface Toast {
 }
 
 export interface ClientState {
+  selectedModuleId: string | null;
+  selectedTaskId: string | null;
+  workspaceSelection: WorkspaceSelection;
   workspaces: Record<string, TicketWorkspaceViewState>;
   activeByTask: Record<string, SessionId>;
   focusedPane: FocusedPane;
@@ -124,15 +124,18 @@ export interface ClientState {
   /** Highest status-feed revision observed for each project. */
   workItemCursorsByProject: Record<string, number>;
 
+  selectModule: (id: string) => Promise<void>;
+  selectTask: (id: string) => void;
+  toggleStateConfiguration: (projectId: string, stateId: string) => void;
+  dismissStateConfiguration: () => void;
+
   resetWorkspaces: () => void;
   ensureWorkspace: (bucket: string) => void;
   setActive: (bucket: string, active: TabKind) => void;
   setActiveDoc: (bucket: string, docId: string) => void;
-  upsertDoc: (bucket: string, doc: DesignDoc, event: "created" | "updated") => void;
-  hydrateDocs: (bucket: string, docs: DesignDoc[]) => void;
+  openDoc: (bucket: string, docId: string, select?: boolean) => void;
   closeDoc: (bucket: string, docId: string) => void;
   reopenDoc: (bucket: string, docId: string) => void;
-  recordClosedRun: (bucket: string, chip: RunChip) => void;
   tabOpened: (bucket: string, sessionId: SessionId, select?: boolean) => void;
   tabRekeyed: (from: SessionId, to: SessionId) => void;
   tabSelected: (bucket: string, sessionId: SessionId) => void;
@@ -188,30 +191,18 @@ export interface ClientState {
 export interface TicketWorkspaceViewState {
   active: TabKind;
   activeDocId: string | null;
-  docs: DocTabState[];
-  history: RunChip[];
+  closedDocIds: string[];
 }
+
+export type WorkspaceSelection =
+  | { kind: "task" }
+  | { kind: "state-configuration"; projectId: string; stateId: string };
 
 export const DEFAULT_WORKSPACE: TicketWorkspaceViewState = {
   active: "details",
   activeDocId: null,
-  docs: [],
-  history: [],
+  closedDocIds: [],
 };
-
-function relabelWorkspaceDocs(docs: DocTabState[]): DocTabState[] {
-  const stems = new Map<string, number>();
-  for (const doc of docs) {
-    const stem = doc.relPath.split("/").pop()?.replace(/\.html?$/i, "") ?? doc.relPath;
-    stems.set(stem, (stems.get(stem) ?? 0) + 1);
-  }
-  return docs.map((doc) => {
-    const parts = doc.relPath.split("/");
-    const stem = parts.pop()?.replace(/\.html?$/i, "") ?? doc.relPath;
-    const duplicate = (stems.get(stem) ?? 0) > 1 && parts.length > 0;
-    return { ...doc, label: duplicate ? `${parts[parts.length - 1]}/${stem}` : stem };
-  });
-}
 
 export const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "o", label: "Open Agent" },
@@ -280,7 +271,7 @@ function moveCursorId(
 }
 
 function hasProject(): boolean {
-  return useTasksStore.getState().selectedProjectId !== null;
+  return useStudioStore.getState().selectedProjectId !== null;
 }
 
 function currentSidebarPaneComposition(): SidebarPaneComposition {
@@ -302,6 +293,9 @@ function nextExpandedMap(
 }
 
 export const useClientStore = create<ClientState>((set, get) => ({
+  selectedModuleId: null,
+  selectedTaskId: null,
+  workspaceSelection: { kind: "task" },
   workspaces: {},
   activeByTask: {},
   focusedPane: "tasks",
@@ -321,6 +315,40 @@ export const useClientStore = create<ClientState>((set, get) => ({
   dialogs: [],
   toasts: [],
   workItemCursorsByProject: {},
+
+  async selectModule(id) {
+    const projectId = useStudioStore.getState().selectedProjectId;
+    if (!projectId) return;
+    set({
+      selectedModuleId: id,
+      selectedTaskId: null,
+      workspaceSelection: { kind: "task" },
+    });
+    const { loadModuleTree } = await import("../features/work-items/queries");
+    await loadModuleTree(projectId, id);
+    if (get().selectedModuleId !== id) return;
+    get().setSidebarVisible(false);
+    get().setFocusedPane("tasks");
+  },
+
+  selectTask(id) {
+    set({ selectedTaskId: id, workspaceSelection: { kind: "task" } });
+  },
+
+  toggleStateConfiguration(projectId, stateId) {
+    set((state) => ({
+      workspaceSelection:
+        state.workspaceSelection.kind === "state-configuration" &&
+        state.workspaceSelection.projectId === projectId &&
+        state.workspaceSelection.stateId === stateId
+          ? { kind: "task" }
+          : { kind: "state-configuration", projectId, stateId },
+    }));
+  },
+
+  dismissStateConfiguration() {
+    set({ workspaceSelection: { kind: "task" } });
+  },
 
   resetWorkspaces() {
     set({ workspaces: {} });
@@ -349,40 +377,13 @@ export const useClientStore = create<ClientState>((set, get) => ({
     });
   },
 
-  upsertDoc(bucket, doc, event) {
+  openDoc(bucket, docId, select = true) {
     set((state) => {
       const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
-      const existing = current.docs.find((candidate) => candidate.relPath === doc.rel_path);
-      if (existing) {
-        return { workspaces: { ...state.workspaces, [bucket]: {
-          ...current,
-          docs: current.docs.map((candidate) => candidate.relPath === doc.rel_path
-            ? { ...candidate, docId: doc.id, reloadToken: candidate.reloadToken + 1 }
-            : candidate),
-        } } };
-      }
-      const docs = relabelWorkspaceDocs([...current.docs, {
-        docId: doc.id, relPath: doc.rel_path, label: doc.label, open: true, reloadToken: 0,
-      }]);
-      return { workspaces: { ...state.workspaces, [bucket]: event === "created"
-        ? { ...current, docs, active: "doc", activeDocId: doc.id }
-        : { ...current, docs } } };
-    });
-  },
-
-  hydrateDocs(bucket, incoming) {
-    set((state) => {
-      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
-      const byPath = new Map(current.docs.map((doc) => [doc.relPath, doc]));
-      const docs = relabelWorkspaceDocs(incoming.map((doc) => {
-        const known = byPath.get(doc.rel_path);
-        return known ? { ...known, docId: doc.id } : {
-          docId: doc.id, relPath: doc.rel_path, label: doc.label, open: true, reloadToken: 0,
-        };
-      }));
-      // Validity is derived by the view. Never rewrite the person's selected
-      // tab merely because a refreshed registry no longer contains it.
-      return { workspaces: { ...state.workspaces, [bucket]: { ...current, docs } } };
+      const closedDocIds = current.closedDocIds.filter((id) => id !== docId);
+      return { workspaces: { ...state.workspaces, [bucket]: select
+        ? { ...current, closedDocIds, active: "doc", activeDocId: docId }
+        : { ...current, closedDocIds } } };
     });
   },
 
@@ -391,7 +392,7 @@ export const useClientStore = create<ClientState>((set, get) => ({
       const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
       return { workspaces: { ...state.workspaces, [bucket]: {
         ...current,
-        docs: current.docs.map((doc) => doc.docId === docId ? { ...doc, open: false } : doc),
+        closedDocIds: [...new Set([...current.closedDocIds, docId])],
       } } };
     });
   },
@@ -401,20 +402,8 @@ export const useClientStore = create<ClientState>((set, get) => ({
       const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
       return { workspaces: { ...state.workspaces, [bucket]: {
         ...current,
-        docs: current.docs.map((doc) => doc.docId === docId ? { ...doc, open: true } : doc),
+        closedDocIds: current.closedDocIds.filter((id) => id !== docId),
         active: "doc", activeDocId: docId,
-      } } };
-    });
-  },
-
-  recordClosedRun(bucket, chip) {
-    set((state) => {
-      const current = state.workspaces[bucket] ?? DEFAULT_WORKSPACE;
-      if (chip.agentRunId && current.history.some((entry) => entry.agentRunId === chip.agentRunId)) {
-        return state;
-      }
-      return { workspaces: { ...state.workspaces, [bucket]: {
-        ...current, history: [...current.history, chip],
       } } };
     });
   },

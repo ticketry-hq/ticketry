@@ -1,35 +1,36 @@
 import { useLayoutEffect, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
-import {
-  useStudioTaskMembership,
-  useTaskStates,
-  useTasksStore,
-} from "../../../../../features/studio/stores/tasksStore";
-import { useClientStore } from "../../../../../state/clientStore";
+import { useClientStore } from "../../../../state/clientStore";
+import { useStudioStore } from "../../../../features/projects/store";
 import {
   orderedTaskSections,
   searchHits,
   taskRevealPath,
   type TreeWorkItem,
   visibleRows,
-} from "../../../../../features/studio/lib/taskTree";
-import { workItemQuery } from "../../../../../features/work-items/queries";
-import { queryClient } from "../../../../../shared/query/queryClient";
-import { stateColor } from "../../../../../shared/utilities/display";
+} from "../../../../features/studio/lib/taskTree";
+import {
+  useModuleTree,
+  workItemQuery,
+} from "../../../../features/work-items/queries";
+import { useCachedStates } from "../../../../shared/query/stateCatalog";
+import { queryClient } from "../../../../shared/query/queryClient";
+import { stateColor } from "../../../../shared/utilities/display";
 import {
   type TreeRow,
   HEADER,
   PLACEHOLDER,
-} from "../TasksPane";
+} from "./TasksPane";
 
 const EMPTY_EXPANDED_IDS: string[] = [];
 
-export function useTaskTree() {
-  const tree = useStudioTaskMembership();
-  const states = useTaskStates();
-  const loadingTasks = useTasksStore((s) => s.loading.tasks);
-  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
-  const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
+export function useStoriesTree() {
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const tree = useModuleTree(selectedProjectId, selectedModuleId);
+  const states = useCachedStates(selectedProjectId);
+  const loadingTasks = false;
   const rememberedExpandedIds = useClientStore((s) =>
     selectedModuleId
       ? s.expandedIdsByModule[selectedModuleId] ?? EMPTY_EXPANDED_IDS

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { type WorkItem } from "../../../../../shared/api/types";
 import { stateColor } from "../../../../../shared/utilities/display";
 import { useIssueTypesQuery } from "../../../../../features/settings";
-import { useTasksStore } from "../../../../../features/studio/stores/tasksStore";
+import { useClientStore } from "../../../../../state/clientStore";
 
 interface ChildIssuesProps {
   children: WorkItem[];
@@ -15,7 +15,7 @@ export default function ChildIssues({
   projectId,
   onAddSubtask,
 }: ChildIssuesProps) {
-  const selectTask = useTasksStore((state) => state.selectTask);
+  const selectTask = useClientStore((state) => state.selectTask);
   const [newSub, setNewSub] = useState("");
   const [issueTypeId, setIssueTypeId] = useState("");
   const { data: allIssueTypes = [] } = useIssueTypesQuery(projectId);

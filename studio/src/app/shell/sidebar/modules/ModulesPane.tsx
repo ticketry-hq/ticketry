@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useModalStore } from "../../../modal/modalStore";
-import { useStudioModules, useTasksStore } from "../../../../features/studio/stores/tasksStore";
+import { useModulesQuery } from "../../../../features/projects";
+import { useStudioStore } from "../../../../features/projects/store";
 import {
   resolveCursorId,
   useClientStore,
@@ -8,10 +9,12 @@ import {
 import { PaneShell } from "../../PaneShell";
 
 export function ModulesPane() {
-  const modules = useStudioModules();
-  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
-  const selectModule = useTasksStore((s) => s.selectModule);
-  const loading = useTasksStore((s) => s.loading.modules);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const modulesQuery = useModulesQuery(selectedProjectId);
+  const modules = modulesQuery.data ?? [];
+  const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const selectModule = useClientStore((s) => s.selectModule);
+  const loading = modulesQuery.isPending;
 
   const cursorId = useClientStore((s) => s.modulesCursorId);
   const setCursor = useClientStore((s) => s.setModulesCursor);

@@ -12,10 +12,14 @@ import type {
 import { useModalStore } from "../../../app/modal/modalStore";
 import { getConfigSnapshot, getModuleFolder } from "../stores/configStore";
 import { TEMP_TASK_ID } from "../../agents/types";
-import { useTasksStore } from "../stores/tasksStore";
+import { useStudioStore } from "../../projects/store";
+import { useClientStore } from "../../../state/clientStore";
+import { queryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/keys";
+import type { WorkItem } from "../../../shared/api/types";
 
 function selectScratchWorkspace(): void {
-  void useTasksStore.getState().selectTask(TEMP_TASK_ID);
+  useClientStore.getState().selectTask(TEMP_TASK_ID);
 }
 
 // The Studio adapter for the shared terminal-create launcher (CODIN-839): it
@@ -75,7 +79,8 @@ function studioPlanFlow(): TerminalCreateFlow {
  * modal chain. Behaviour is unchanged from the user's point of view.
  */
 export function startPlanFlow(): void {
-  const { selectedProjectId, selectedModuleId } = useTasksStore.getState();
+  const { selectedProjectId } = useStudioStore.getState();
+  const { selectedModuleId } = useClientStore.getState();
   if (!selectedProjectId || !selectedModuleId) return;
   const req: TerminalCreateRequest = {
     projectId: selectedProjectId,
@@ -92,7 +97,10 @@ export function startPlanFlow(): void {
  */
 export function startInstantChangeFlow(): void {
   const cfg = getConfigSnapshot();
-  const tasks = useTasksStore.getState();
+  const tasks = {
+    ...useStudioStore.getState(),
+    ...useClientStore.getState(),
+  };
   const modal = useModalStore.getState();
 
   const { recentProfileIndex, profiles } = cfg;
@@ -133,7 +141,10 @@ function selectedTaskLaunchContext(): {
   taskId: string;
   ticketSeq: number | null;
 } | null {
-  const tasks = useTasksStore.getState();
+  const tasks = {
+    ...useStudioStore.getState(),
+    ...useClientStore.getState(),
+  };
   const { selectedProjectId, selectedModuleId, selectedTaskId } = tasks;
   if (
     !selectedProjectId ||
@@ -141,10 +152,9 @@ function selectedTaskLaunchContext(): {
     !selectedTaskId ||
     selectedTaskId === TEMP_TASK_ID
   ) return null;
-  const selected = [
-    ...tasks.tasks,
-    ...Object.values(tasks.subtasks).flat(),
-  ].find((task) => task.id === selectedTaskId);
+  const selected = queryClient.getQueryData<WorkItem>(
+    queryKeys.workItems.byId(selectedTaskId),
+  );
   if (!selected) return null;
   return {
     projectId: selectedProjectId,

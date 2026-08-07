@@ -2,10 +2,9 @@ import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import { scratchBucketId } from "../../../../features/agents/terminal";
 import { PaneShell } from "../../PaneShell";
 import { useConfig } from "../../../../features/studio/stores/configStore";
-import {
-  useTaskStates,
-  useTasksStore,
-} from "../../../../features/studio/stores/tasksStore";
+import { useStudioStore } from "../../../../features/projects/store";
+import { useClientStore } from "../../../../state/clientStore";
+import { useCachedStates } from "../../../../shared/query/stateCatalog";
 import { useWorkItem } from "../../../../features/work-items";
 import type { WorkspaceLauncherContext } from "./SelectedTicketContent";
 import { SelectedTicketDetails } from "./details/SelectedTicketDetails";
@@ -18,12 +17,12 @@ import { StateConfigurationPanel } from "../../../../features/workflows/StateCon
 
 /** Adapts Studio selection state to the selected-ticket workspace. */
 export function SelectedTicket() {
-  const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
-  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
-  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
-  const workspaceSelection = useTasksStore((s) => s.workspaceSelection);
-  const states = useTaskStates();
-  const dismissStateConfiguration = useTasksStore(
+  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const workspaceSelection = useClientStore((s) => s.workspaceSelection);
+  const states = useCachedStates(selectedProjectId);
+  const dismissStateConfiguration = useClientStore(
     (s) => s.dismissStateConfiguration,
   );
   const { profiles, recentProfileIndex } = useConfig();

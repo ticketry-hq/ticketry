@@ -20,7 +20,7 @@ function run(
 
 describe("AgentStateBadge direct-task status", () => {
   beforeEach(() => {
-    useAgentStatusStore.setState({ projectId: null, runs: {}, byTask: {} });
+    useAgentStatusStore.setState({ projectId: null, runs: {} });
   });
 
   it("shows compact count chicklets for each live state on the task", () => {

@@ -1,4 +1,4 @@
-import { useTasksStore } from "../../../../features/studio/stores/tasksStore";
+import { useClientStore } from "../../../../state/clientStore";
 
 const TASKS_PANE_SELECTOR = '[data-pane="tasks"]';
 const IDEA_ENTRY_SELECTOR = '[data-idea-entry="true"]';
@@ -32,7 +32,7 @@ export function focusFirstStory(from: HTMLElement | null): void {
   const taskId = firstStory?.dataset.taskId;
   if (!firstStory || !taskId) return;
 
-  useTasksStore.setState({
+  useClientStore.setState({
     selectedTaskId: taskId,
     workspaceSelection: { kind: "task" },
   });

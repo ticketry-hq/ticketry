@@ -1,30 +1,25 @@
 import type {
-  AttachmentOut as GeneratedAttachment,
-  IssueTypeIn as GeneratedIssueTypeCreate,
-  IssueTypeOut as GeneratedIssueType,
-  IssueTypePatch as GeneratedIssueTypePatch,
-  LaunchBindingOut as GeneratedLaunchBinding,
-  ModuleOut as GeneratedModule,
-  ModuleWorkItemIn as GeneratedModuleWorkItemCreate,
-  ProjectIn as GeneratedProjectCreate,
-  ProjectOut as GeneratedProject,
-  ProjectPatch as GeneratedProjectPatch,
-  ProviderCapabilitiesOut as GeneratedProviderCapabilities,
-  StateIn as GeneratedStateCreate,
-  StateOut as GeneratedState,
-  StatePatch as GeneratedStatePatch,
-  WorkItemDetailOut as GeneratedWorkItemDetail,
-  WorkItemIn as GeneratedWorkItemCreate,
-  WorkItemOut as GeneratedWorkItem,
-  WorkItemPatch as GeneratedWorkItemPatch,
-  WorkspaceOut as GeneratedWorkspace,
+  Attachment as GeneratedAttachment,
+  Module as GeneratedModule,
+  Project as GeneratedProject,
+  PatchedProject as GeneratedProjectPatch,
+  WorkItemCreate as GeneratedWorkItemCreate,
+  PatchedWorkItemPatch as GeneratedWorkItemPatch,
+  Workspace as GeneratedWorkspace,
 } from "@worktracker/typescript-sdk";
 
 export type Project = GeneratedProject;
-export type ProjectCreate = GeneratedProjectCreate;
+export type ProjectCreate = Omit<GeneratedProject, "id">;
 export type ProjectPatch = GeneratedProjectPatch;
 export type Workspace = GeneratedWorkspace;
-export type LaunchBinding = GeneratedLaunchBinding;
+export interface LaunchBinding extends LaunchBindingInput {
+  id: number;
+  issue_type_id: string;
+  state_id: string;
+  auto_start?: boolean;
+  subtree_run_enabled?: boolean;
+  workflow_revision: number;
+}
 export interface LaunchBindingInput {
   prompt?: string | null;
   required_skills?: string[] | null;
@@ -32,7 +27,23 @@ export interface LaunchBindingInput {
   model?: string | null;
   reasoning?: string | null;
 }
-export type ProviderCapabilities = GeneratedProviderCapabilities;
+export interface ProviderCapabilities {
+  agent: string;
+  accepts_model: boolean;
+  accepts_any_model: boolean;
+  model_aliases?: string[];
+  model_prefixes?: string[];
+  reasoning_levels?: string[];
+  supports_unattended?: boolean;
+}
+
+export interface StateImpact {
+  state_id: string;
+  total_work_items: number;
+  impact_token: string;
+  protection_rules?: Array<{ code: string; message: string }>;
+  valid_replacements?: State[];
+}
 
 // Host-wide provider activation plus the single global launch default
 // (ADR-0015). The `agy` adapter stays in code but is not configurable here.
@@ -51,20 +62,17 @@ export type SubtreeRunCapabilityMap = Record<string, string[]>;
 export type Module = GeneratedModule;
 
 export type IssueLevel = "module" | "task";
-export type IssueType = Omit<
-  GeneratedIssueType,
-  "level" | "name" | "color" | "sort_order"
-> & {
+export interface IssueType {
+  id: string;
   name: string;
   level: IssueLevel;
   color: string | null;
   sort_order: number;
-};
+  start_state?: string | null;
+  workflow_revision?: number;
+}
 
-export type State = Omit<
-  GeneratedState,
-  "id" | "name" | "group" | "color" | "sort_order"
-> & {
+export interface State {
   id: string | null;
   name: string;
   group: string;
@@ -72,30 +80,27 @@ export type State = Omit<
   sort_order?: number;
   /** #629 · read-only — server is the sole writer; never sent on create/patch. */
   is_protected?: boolean;
-};
+}
 
-export type WorkItem = Omit<
-  GeneratedWorkItem,
-  | "blocked_by_ids"
-  | "blocks_ids"
-  | "description"
-  | "is_archived"
-  | "parent_id"
-  | "rank"
-  | "sequence_id"
-  | "state"
-  | "sub_issues_count"
-> & {
-  sequence_id: number | null;
+export interface WorkItem {
+  id: string;
+  name: string;
+  project_id: string;
+  sequence_id: number;
   state: State | null;
-  description: string | null;
+  state_revision: number;
+  description: string;
   parent_id: string | null;
   sub_issues_count: number;
-  is_archived?: boolean;
-  rank?: string;
+  key: string;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+  rank: string;
+  issue_type: IssueType;
   blocked_by_ids: string[];
   blocks_ids: string[];
-};
+}
 
 export interface ModuleTree {
   rootIds: string[];
@@ -113,16 +118,13 @@ export type Attachment = Omit<
   size: number | null;
 };
 
-export type WorkItemDetail = Omit<
-  GeneratedWorkItemDetail,
-  "task" | "attachments"
-> & {
+export interface WorkItemDetail {
   task: WorkItem;
   attachments: Attachment[];
-};
+}
 
 export type WorkItemCreate = GeneratedWorkItemCreate;
-export type ModuleWorkItemCreate = GeneratedModuleWorkItemCreate;
+export type ModuleWorkItemCreate = GeneratedWorkItemCreate;
 
 export type WorkItemPatch = Omit<
   GeneratedWorkItemPatch,
@@ -130,32 +132,31 @@ export type WorkItemPatch = Omit<
 > & {
   blocked_by_ids?: string[];
   name?: string;
+  issue_type_id?: string;
 };
 
-export type IssueTypeCreate = Omit<
-  GeneratedIssueTypeCreate,
-  "level"
-> & {
+export interface IssueTypeCreate {
+  name: string;
   level: IssueLevel;
-};
-export type IssueTypePatch = Omit<
-  GeneratedIssueTypePatch,
-  "name" | "color" | "sort_order"
-> & {
+  color?: string | null;
+}
+export interface IssueTypePatch {
   name?: string;
-  color?: string;
+  level?: IssueLevel;
+  color?: string | null;
   sort_order?: number;
-};
-export type StateCreate = GeneratedStateCreate;
-export type StatePatch = Omit<
-  GeneratedStatePatch,
-  "name" | "color" | "group" | "sort_order"
-> & {
+}
+export interface StateCreate {
+  name: string;
+  group: string;
+  color?: string | null;
+}
+export interface StatePatch {
   name?: string;
-  color?: string;
+  color?: string | null;
   group?: string;
   sort_order?: number;
-};
+}
 
 export interface WorkflowEdge {
   from: string;

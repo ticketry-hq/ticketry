@@ -7,7 +7,9 @@ import {
   useAgentStatusStore,
 } from "../../../features/agents/status";
 import { LifecycleBadge } from "../../../features/agents/terminal";
-import { useStudioModules, useTasksStore } from "../../../features/studio/stores/tasksStore";
+import { useModulesQuery } from "../../../features/projects";
+import { useStudioStore } from "../../../features/projects/store";
+import { useClientStore } from "../../../state/clientStore";
 
 function ModuleLifecycleChicklets({ moduleId }: { moduleId: string }) {
   const counts = useAgentStatusStore(
@@ -34,10 +36,12 @@ function ModuleLifecycleChicklets({ moduleId }: { moduleId: string }) {
 }
 
 export function ModuleTabStrip() {
-  const modules = useStudioModules();
-  const selectedModuleId = useTasksStore((state) => state.selectedModuleId);
-  const selectModule = useTasksStore((state) => state.selectModule);
-  const loading = useTasksStore((state) => state.loading.modules);
+  const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
+  const modulesQuery = useModulesQuery(selectedProjectId);
+  const modules = modulesQuery.data ?? [];
+  const selectedModuleId = useClientStore((state) => state.selectedModuleId);
+  const selectModule = useClientStore((state) => state.selectModule);
+  const loading = modulesQuery.isPending;
   const pushModal = useModalStore((state) => state.pushModal);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 

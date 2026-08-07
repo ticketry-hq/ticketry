@@ -1,4 +1,5 @@
-import type { DesignDoc, DocTabState } from "../../../../../features/agents/types";
+import { useQuery } from "@tanstack/react-query";
+import type { DesignDoc } from "../../../../../features/agents/types";
 import { getDocuments, getScratchDocuments } from "../../../../../features/agents/api/agentApi";
 import { docUrl } from "../../../../../features/agents/api/agentApi";
 import { queryClient } from "../../../../../shared/query/queryClient";
@@ -9,37 +10,36 @@ export interface LoadedMarkdown {
   markdown: string;
 }
 
-export function loadTaskDocuments(
-  taskId: string,
-  projectId?: string,
-  moduleId?: string,
-): Promise<{ documents: DesignDoc[] }> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.documents.registry(
-      "task",
-      taskId,
-      projectId,
-      moduleId,
-    ),
-    queryFn: ({ signal }) =>
-      getDocuments(taskId, projectId, moduleId, signal),
-    staleTime: 0,
-  });
+const EMPTY_DOCUMENTS: DesignDoc[] = [];
+
+export function useWorkspaceDocuments(
+  bucket: string | null,
+  projectId: string | null,
+  moduleId: string | null,
+  scratch: boolean,
+): { documents: DesignDoc[]; isFetched: boolean } {
+  const query = useQuery(
+    {
+      queryKey: scratch
+        ? queryKeys.documents.registry("scratch", moduleId ?? "none", null, moduleId)
+        : queryKeys.documents.registry("task", bucket ?? "none", projectId, moduleId),
+      queryFn: ({ signal }) => scratch
+        ? getScratchDocuments(moduleId!, signal)
+        : getDocuments(bucket!, projectId ?? undefined, moduleId ?? undefined, signal),
+      enabled: bucket !== null && (!scratch || moduleId !== null),
+      staleTime: 0,
+    },
+    queryClient,
+  );
+  return {
+    documents: query.data?.documents ?? EMPTY_DOCUMENTS,
+    isFetched: query.isFetched,
+  };
 }
 
-export function loadScratchDocuments(
-  moduleId: string,
-): Promise<{ documents: DesignDoc[] }> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.documents.registry("scratch", moduleId, null, moduleId),
-    queryFn: ({ signal }) => getScratchDocuments(moduleId, signal),
-    staleTime: 0,
-  });
-}
-
-export function loadDocumentContent(doc: DocTabState): Promise<LoadedMarkdown> {
+export function loadDocumentContent(doc: DesignDoc): Promise<LoadedMarkdown> {
   const controller = new AbortController();
-  return fetch(docUrl(doc.docId, doc.relPath), {
+  return fetch(docUrl(doc.id, doc.rel_path), {
     cache: "no-store",
     signal: controller.signal,
   }).then(

@@ -5,5 +5,5 @@ export {
   routeTaskWorkspaceEditViewAction,
   routeTaskWorkspaceTabAction,
 } from "./internal/useTaskWorkspaceTabNavigation";
-export { useTicketWorkspaceStore } from "./state/ticketWorkspaceStore";
+export { useClientStore as useTicketWorkspaceStore } from "../../../../state/clientStore";
 export { closeTerminalTab } from "./internal/closeTerminalTab";

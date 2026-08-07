@@ -4,7 +4,7 @@ import {
   useTerminalStore,
   type OpenSessionArgs,
 } from "./sessionStore";
-import { useWorkspaceTabsStore } from "./workspaceTabsStore";
+import { useClientStore as useWorkspaceTabsStore } from "../../../../state/clientStore";
 
 // The launch/close verbs hosts call. The session store registers every
 // open/rekey/focus/close with the workspace-tabs store itself (CODIN-981), so

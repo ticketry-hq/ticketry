@@ -24,15 +24,6 @@ export interface PersistedTerminalSession {
   created_at: string;
 }
 
-export interface ResumableTerminalSession {
-  agent_run_id: string;
-  agent: AgentName;
-  status: string;
-  started_at: string;
-  provider_session_id: string | null;
-  resumed_from: string | null;
-}
-
 export const TEMP_TASK_ID = "__scratch__";
 export const SCRATCH_RUN_TASK_ID = "00000000-0000-0000-0000-000000000000";
 
@@ -42,18 +33,4 @@ export interface DesignDoc {
   label: string;
 }
 
-export interface DocTabState {
-  docId: string;
-  relPath: string;
-  label: string;
-  open: boolean;
-  reloadToken: number;
-}
-
 export type TabKind = "details" | "doc" | "terminal";
-
-export interface RunChip {
-  agentRunId: string | null;
-  agent: string;
-  label: string;
-}

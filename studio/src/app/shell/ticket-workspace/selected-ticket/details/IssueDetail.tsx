@@ -8,22 +8,21 @@ import {
   useSetWorkItemBlockers,
   useSetWorkItemParent,
   useSetWorkItemState,
-  useBacklogStore,
   usePlanningFilterStore,
   useWorkItem,
   useWorkItemsByIds,
 } from "../../../../../features/work-items";
-import { dialog, toast } from "../../../../../state/clientStore";
+import { dialog, toast, useClientStore } from "../../../../../state/clientStore";
 import { useStudioStore } from "../../../../../features/projects/store";
 import { useModulesQuery, useProjectsQuery } from "../../../../../features/projects";
 import type { Module, Project } from "../../../../../shared/api/types";
 import { apiErrorMessage, isNoOpTransition } from "../../../../../shared/api/client";
+import { deleteWorkItem } from "../../../../../shared/api/client";
+import { queryClient } from "../../../../../shared/query/queryClient";
+import { queryKeys } from "../../../../../shared/query/keys";
 import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher";
 import { useCachedStates } from "../../../../../shared/query/stateCatalog";
-import {
-  useStudioTaskMembership,
-  useTasksStore,
-} from "../../../../../features/studio/stores/tasksStore";
+import { useModuleTree } from "../../../../../features/work-items/queries";
 
 const EMPTY_MODULES: Module[] = [];
 const EMPTY_PROJECTS: Project[] = [];
@@ -58,18 +57,17 @@ function readSidebarVisible(): boolean {
 export default function IssueDetail({ issueId }: { issueId: string }) {
   const taskQuery = useWorkItem(issueId);
   const task = taskQuery.data ?? null;
-  const membership = useStudioTaskMembership();
+  const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const membership = useModuleTree(selectedProjectId, selectedModuleId);
   const items = useWorkItemsByIds(membership.order);
   const displayedChildren = useWorkItemsByIds(
     task ? membership.children[task.id] ?? NO_CHILD_IDS : NO_CHILD_IDS,
   );
-  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
-  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
   const projectContextId = selectedProjectId ?? task?.project_id ?? null;
   const modules = useModulesQuery(projectContextId).data ?? EMPTY_MODULES;
   const projects = useProjectsQuery().data ?? EMPTY_PROJECTS;
   const states = useCachedStates(task?.project_id ?? null);
-  const deleteIssue = useBacklogStore((s) => s.deleteIssue);
   const epic = deriveEpic(task, modules, items);
   const moduleMembership =
     task && (epic?.id ?? selectedModuleId)
@@ -196,7 +194,14 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
       danger: true,
     });
     if (!ok) return;
-    await deleteIssue(task.id);
+    await deleteWorkItem(task.id);
+    queryClient.removeQueries({ queryKey: queryKeys.workItems.byId(task.id) });
+    if (selectedProjectId && selectedModuleId) {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tasks.byModule(selectedProjectId, selectedModuleId),
+        exact: true,
+      });
+    }
   };
 
   return (

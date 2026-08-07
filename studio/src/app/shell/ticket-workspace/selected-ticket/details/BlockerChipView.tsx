@@ -1,7 +1,7 @@
 import { type BlockerChip } from "../../../../../features/work-items";
 import { IconAlertTriangle, IconX } from "../../../../../shared/ui/icons";
 import { quietChipRemoveClassName } from "./fields/QuietChipControls";
-import { useTasksStore } from "../../../../../features/studio/stores/tasksStore";
+import { useClientStore } from "../../../../../state/clientStore";
 
 export default function BlockerChipView({
   chip,
@@ -12,7 +12,7 @@ export default function BlockerChipView({
   onRemove?: () => void;
   disabled?: boolean;
 }) {
-  const selectTask = useTasksStore((state) => state.selectTask);
+  const selectTask = useClientStore((state) => state.selectTask);
   const warn = chip.unresolved;
   return (
     <span

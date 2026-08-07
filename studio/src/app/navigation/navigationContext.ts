@@ -2,7 +2,16 @@ import {
   getConfigSnapshot,
   type ConfigSnapshot,
 } from "../../features/studio/stores/configStore";
-import { useTasksStore } from "../../features/studio/stores/tasksStore";
+import {
+  getModulesSnapshot,
+  getProjectsSnapshot,
+} from "../../features/projects";
+import { useStudioStore } from "../../features/projects/store";
+import { getModuleTreeSnapshot } from "../../features/work-items/queries";
+import { getStatesSnapshot } from "../../shared/query/stateCatalog";
+import { queryClient } from "../../shared/query/queryClient";
+import { queryKeys } from "../../shared/query/keys";
+import type { Module, ModuleTree, Project, State, WorkItem } from "../../shared/api/types";
 import { useClientStore } from "../../state/clientStore";
 import type {
   TreeRow,
@@ -20,20 +29,53 @@ export interface NavigationContext {
   event: KeyboardEvent;
   taskRows: TreeRow[];
   cfg: ConfigSnapshot;
-  tasks: ReturnType<typeof useTasksStore.getState>;
+  tasks: NavigationTasks;
   ui: ReturnType<typeof useClientStore.getState>;
+}
+
+export interface NavigationTasks {
+  projects: Project[];
+  modules: Module[];
+  tree: ModuleTree;
+  itemsById: Record<string, WorkItem>;
+  states: State[];
+  selectedProjectId: string | null;
+  selectedModuleId: string | null;
+  selectedTaskId: string | null;
+  selectProject: (id: string) => Promise<void>;
+  selectModule: (id: string) => Promise<void>;
 }
 
 export function createNavigationContext(
   event: KeyboardEvent,
   taskRows: TreeRow[],
 ): NavigationContext {
+  const project = useStudioStore.getState();
+  const ui = useClientStore.getState();
+  const tree = getModuleTreeSnapshot(project.selectedProjectId, ui.selectedModuleId);
+  const itemsById = Object.fromEntries(
+    tree.order.flatMap((id) => {
+      const item = queryClient.getQueryData<WorkItem>(queryKeys.workItems.byId(id));
+      return item ? [[id, item] as const] : [];
+    }),
+  );
   return {
     event,
     taskRows,
     cfg: getConfigSnapshot(),
-    tasks: useTasksStore.getState(),
-    ui: useClientStore.getState(),
+    tasks: {
+      projects: getProjectsSnapshot(),
+      modules: getModulesSnapshot(project.selectedProjectId),
+      tree,
+      itemsById,
+      states: getStatesSnapshot(project.selectedProjectId),
+      selectedProjectId: project.selectedProjectId,
+      selectedModuleId: ui.selectedModuleId,
+      selectedTaskId: ui.selectedTaskId,
+      selectProject: project.selectProject,
+      selectModule: ui.selectModule,
+    },
+    ui,
   };
 }
 
@@ -55,7 +97,7 @@ export function selectedTaskIndex(
 export function selectTaskAt(rows: TreeRow[], index: number): void {
   const row = rows[index];
   if (!row || !isPlanningRow(row)) return;
-  useTasksStore.setState({
+  useClientStore.setState({
     selectedTaskId: planningRowId(row),
     workspaceSelection: { kind: "task" },
   });

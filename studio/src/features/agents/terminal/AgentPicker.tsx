@@ -3,7 +3,7 @@ import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { launchScratchPlanning } from "./create/launchTerminalCreate";
 import { launchAgent } from "./internal/actions";
-import { useTicketWorkspaceStore } from "../../../app/shell/ticket-workspace/selected-ticket/state/ticketWorkspaceStore";
+import { useClientStore as useTicketWorkspaceStore } from "../../../state/clientStore";
 import {
   providerListPlaceholder,
   useActivatedProviders,

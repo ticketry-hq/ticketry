@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import DocViewer from "../app/shell/ticket-workspace/selected-ticket/documents/DocViewer";
 import { WorkspaceDocument } from "../app/shell/ticket-workspace/selected-ticket/documents/WorkspaceDocument";
-import type { DocTabState } from "../features/agents/types";
+import type { DesignDoc } from "../features/agents/types";
 
 const { confirmReload } = vi.hoisted(() => ({
   confirmReload: vi.fn(),
@@ -37,12 +37,10 @@ vi.mock("../app/shell/ticket-workspace/selected-ticket/documents/RichMarkdownEdi
   ),
 }));
 
-const markdownDoc: DocTabState = {
-  docId: "doc-1",
-  relPath: "SPEC.MD",
+const markdownDoc: DesignDoc = {
+  id: "doc-1",
+  rel_path: "SPEC.MD",
   label: "SPEC",
-  open: true,
-  reloadToken: 0,
 };
 
 describe("DocViewer", () => {
@@ -74,7 +72,7 @@ describe("DocViewer", () => {
     );
   });
 
-  it("refetches Markdown when its reload token changes", async () => {
+  it("refetches Markdown when its registry record changes", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response("# Version 1"))
       .mockResolvedValueOnce(new Response("# Version 2"));
@@ -83,7 +81,7 @@ describe("DocViewer", () => {
     const { rerender } = render(<DocViewer doc={markdownDoc} />);
     expect(await screen.findByRole("heading", { name: "Version 1" })).toBeInTheDocument();
 
-    rerender(<DocViewer doc={{ ...markdownDoc, reloadToken: 1 }} />);
+    rerender(<DocViewer doc={{ ...markdownDoc }} />);
 
     expect(await screen.findByRole("heading", { name: "Version 2" })).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -289,7 +287,7 @@ describe("DocViewer", () => {
     expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
   });
 
-  it("does not replace a dirty editor when the reload token changes", async () => {
+  it("does not replace a dirty editor when the registry record changes", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response("# Original", { headers: { ETag: '"revision-1"' } }),
     );
@@ -300,7 +298,7 @@ describe("DocViewer", () => {
       target: { value: "# Mine" },
     });
 
-    rerender(<DocViewer doc={{ ...markdownDoc, reloadToken: 1 }} editable />);
+    rerender(<DocViewer doc={{ ...markdownDoc }} editable />);
 
     expect(screen.getByLabelText("Document content")).toHaveValue("# Mine");
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -469,7 +467,7 @@ describe("DocViewer", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(
       <DocViewer
-        doc={{ ...markdownDoc, relPath: "interactive.HTML", reloadToken: 4 }}
+        doc={{ ...markdownDoc, rel_path: "interactive.HTML" }}
       />,
     );
 

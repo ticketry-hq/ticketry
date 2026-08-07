@@ -1,6 +1,11 @@
 import { useCallback, useMemo } from "react";
-import { useTaskStates, useTasksStore } from "../../../../features/studio/stores/tasksStore";
 import { useClientStore } from "../../../../state/clientStore";
+import { useStudioStore } from "../../../../features/projects/store";
+import { useCachedStates } from "../../../../shared/query/stateCatalog";
+import {
+  useReorderWorkItem,
+  useSetWorkItemState,
+} from "../../../../features/work-items";
 import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import { PaneShell } from "../../PaneShell";
 import { TaskRow } from "./components/TaskRow";
@@ -8,7 +13,7 @@ import { StateHeaderRow } from "./components/StateHeaderRow";
 import { LoadingPlaceholderRow } from "./components/LoadingPlaceholderRow";
 import { IdeaEntry } from "./components/IdeaEntry";
 import { StoriesSearchInput } from "./components/StoriesSearchInput";
-import { useTaskTree } from "./hooks/useTaskTree";
+import { useStoriesTree } from "./useStoriesTree";
 import {
   useAxisDragAndDrop,
   type DragPayloadCodec,
@@ -97,19 +102,19 @@ function groupRootBlocks(rows: TreeRow[]): RenderBlock[] {
 }
 
 export function TasksPane() {
-  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
-  const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
-  const selectedModuleId = useTasksStore((s) => s.selectedModuleId);
-  const moveTaskWithinState = useTasksStore((s) => s.moveTaskWithinState);
-  const moveTaskToState = useTasksStore((s) => s.moveTaskToState);
-  const states = useTaskStates();
-  const pendingReorderTaskIds = useTasksStore(
-    (s) => s.pendingReorderTaskIds,
-  );
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const selectedModuleId = useClientStore((s) => s.selectedModuleId);
+  const states = useCachedStates(selectedProjectId);
+  const reorder = useReorderWorkItem({
+    projectId: selectedProjectId ?? "",
+    moduleId: selectedModuleId ?? "",
+  });
+  const setState = useSetWorkItemState();
   const toggleExpanded = useClientStore((s) => s.toggleExpanded);
   const collapsedStateIds = useClientStore((s) => s.collapsedStateIds);
   const toggleStateCollapsed = useClientStore((s) => s.toggleStateCollapsed);
-  const toggleStateConfiguration = useTasksStore(
+  const toggleStateConfiguration = useClientStore(
     (s) => s.toggleStateConfiguration,
   );
 
@@ -119,7 +124,7 @@ export function TasksPane() {
     sectionIdsByState,
     loadingTasks,
     isSearchActive,
-  } = useTaskTree();
+  } = useStoriesTree();
   const renderBlocks = useMemo(() => groupRootBlocks(rows), [rows]);
   const visibleBlocks = useMemo<VisibleRootBlock[]>(
     () =>
@@ -177,23 +182,27 @@ export function TasksPane() {
       );
       if (!neighbors) return;
       if (source.state?.id === destinationState.id) {
-        void moveTaskWithinState(
-          payload.taskId,
-          neighbors.beforeId,
-          neighbors.afterId,
-        );
+        reorder.mutate({
+          id: payload.taskId,
+          beforeId: neighbors.beforeId,
+          afterId: neighbors.afterId,
+        });
       } else {
-        void moveTaskToState(
-          payload.taskId,
-          destinationState,
-          neighbors.beforeId,
-          neighbors.afterId,
+        setState.mutate(
+          { id: payload.taskId, state: destinationState as typeof destinationState & { id: string } },
+          {
+            onSuccess: () => reorder.mutate({
+              id: payload.taskId,
+              beforeId: neighbors.beforeId,
+              afterId: neighbors.afterId,
+            }),
+          },
         );
       }
     },
     [
-      moveTaskToState,
-      moveTaskWithinState,
+      reorder,
+      setState,
       selectedModuleId,
       selectedProjectId,
       states,
@@ -212,7 +221,7 @@ export function TasksPane() {
   // Stable, id-taking handlers so memoized rows don't re-render when the
   // pane does (e.g. on selection change).
   const handleSelect = useCallback((taskId: string) => {
-    void useTasksStore.getState().selectTask(taskId);
+    useClientStore.getState().selectTask(taskId);
   }, []);
   const handleToggleExpand = useCallback(
     (taskId: string) => {
@@ -294,7 +303,7 @@ export function TasksPane() {
     const canDrag =
       root.kind === "work-item" &&
       root.parentId === null &&
-      !pendingReorderTaskIds.has(root.id) &&
+      !(reorder.isPending && reorder.variables?.id === root.id) &&
       !isSearchActive;
     const canTarget =
       root.kind === "work-item" &&

@@ -68,8 +68,8 @@ export function ModuleFolder({
       }
       popModal();
       if (payload?.resumeModuleSelection) {
-        const { useTasksStore } = await import("../../studio/stores/tasksStore");
-        await useTasksStore.getState().selectModule(moduleId);
+        const { useClientStore } = await import("../../../state/clientStore");
+        await useClientStore.getState().selectModule(moduleId);
       }
       if (payload?.next) {
         pushModal({ type: payload.next, payload: payload.nextPayload });

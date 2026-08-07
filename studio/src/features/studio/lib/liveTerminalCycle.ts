@@ -53,10 +53,10 @@ export function selectLiveTerminalStops({
       .filter((session) => session.taskId === taskId)
       .sort((left, right) => {
         const leftAt = left.agentRunId
-          ? agentStatus.runs[left.agentRunId]?.startedAt ?? ""
+          ? agentStatus.runs[left.agentRunId]?.started_at ?? ""
           : "";
         const rightAt = right.agentRunId
-          ? agentStatus.runs[right.agentRunId]?.startedAt ?? ""
+          ? agentStatus.runs[right.agentRunId]?.started_at ?? ""
           : "";
         return leftAt.localeCompare(rightAt) ||
           left.sessionId.localeCompare(right.sessionId);
@@ -74,8 +74,8 @@ export function selectLiveTerminalStops({
       const run = agentStatus.runs[session.agentRunId];
       if (
         !run ||
-        run.taskId !== taskId ||
-        run.moduleId !== moduleId ||
+        run.task_id !== taskId ||
+        run.module_id !== moduleId ||
         !isLiveAgentRunState(run.state)
       ) {
         continue;

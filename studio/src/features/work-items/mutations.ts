@@ -167,7 +167,10 @@ export function useEditWorkItemDescription() {
     id: ({ id }) => id,
     mutationFn: ({ id, description }) =>
       api.patchWorkItem(id, { description }),
-    update: (current, { description }) => ({ ...current, description }),
+    update: (current, { description }) => ({
+      ...current,
+      description: description ?? "",
+    }),
   });
 }
 

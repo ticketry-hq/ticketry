@@ -63,7 +63,6 @@ beforeEach(() => {
   useAgentStatusStore.setState({
     projectId: null,
     runs: {},
-    byTask: {},
     automationAttempts: {},
     automationByTask: {},
   });
@@ -96,8 +95,8 @@ describe("status feed holdings", () => {
         group: "started",
         color: null,
         sort_order: 1,
-      },
-      at: "2026-08-06T12:00:00Z",
+      } as NonNullable<WorkItemStateFrame["state"]>,
+      updated_at: "2026-08-06T12:00:00Z",
     });
 
     expect(getStatesSnapshot("project-1")).toMatchObject([
@@ -183,7 +182,7 @@ describe("status feed holdings", () => {
     await vi.advanceTimersByTimeAsync(50);
 
     expect(useAgentStatusStore.getState().runs["run-1"]).toMatchObject({
-      runId: "run-1",
+      agent_run_id: "run-1",
       state: "working",
     });
     expect(invalidations).not.toHaveBeenCalled();

@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import type {
   AgentStatusData,
-  AgentStatusRun,
   AgentStatusScope,
   AutomationAttemptRecord,
   RawLifecycleState,
@@ -34,58 +33,22 @@ const PRUNABLE_STATES: ReadonlySet<string> = new Set(["exited", "lost"]);
  * a terminal state beats a non-terminal one, everything else keeps what's
  * already there.
  */
-function supersedes(incoming: AgentStatusRun, current: AgentStatusRun): boolean {
-  const cmp = Date.parse(incoming.updatedAt) - Date.parse(current.updatedAt);
+function supersedes(incoming: RunRecord, current: RunRecord): boolean {
+  const cmp = Date.parse(incoming.updated_at) - Date.parse(current.updated_at);
   if (cmp !== 0) return cmp > 0;
   return TERMINAL_STATES.has(incoming.state) && !TERMINAL_STATES.has(current.state);
 }
 
-function normalize(run: RunRecord): AgentStatusRun {
-  return {
-    runId: run.agent_run_id,
-    projectId: run.project_id,
-    taskId: run.task_id,
-    moduleId: run.module_id,
-    agent: run.agent,
-    scope: run.scope,
-    startedAt: run.started_at,
-    state: run.state,
-    updatedAt: run.updated_at,
-  };
-}
-
-function removeFromTask(
-  byTask: Record<string, string[]>,
-  taskId: string | null,
-  runId: string,
-): void {
-  if (!taskId) return;
-  const remaining = (byTask[taskId] ?? []).filter((id) => id !== runId);
-  if (remaining.length) byTask[taskId] = remaining;
-  else delete byTask[taskId];
-}
-
-function putRun(data: AgentStatusData, incoming: AgentStatusRun): void {
-  const current = data.runs[incoming.runId];
+function putRun(data: AgentStatusData, incoming: RunRecord): void {
+  const current = data.runs[incoming.agent_run_id];
   if (current && !supersedes(incoming, current)) return;
-
-  if (current?.taskId !== incoming.taskId) {
-    removeFromTask(data.byTask, current?.taskId ?? null, incoming.runId);
-  }
-  data.runs[incoming.runId] = incoming;
-  if (incoming.taskId) {
-    const ids = data.byTask[incoming.taskId] ?? [];
-    if (!ids.includes(incoming.runId)) data.byTask[incoming.taskId] = [...ids, incoming.runId];
-  }
+  data.runs[incoming.agent_run_id] = incoming;
 }
 
 function mutableCopy(state: AgentStatusData): AgentStatusData {
   return {
     projectId: state.projectId,
     runs: { ...state.runs },
-    byTask: Object.fromEntries(
-      Object.entries(state.byTask).map(([taskId, runIds]) => [taskId, [...runIds]]),
-    ),
     automationAttempts: { ...state.automationAttempts },
     automationByTask: Object.fromEntries(
       Object.entries(state.automationByTask).map(([taskId, roots]) => [
@@ -114,18 +77,6 @@ function putAutomationAttempt(
 ): void {
   const rootId = attempt.root_attempt_id;
   const current = data.automationAttempts[rootId];
-  if (current) {
-    const timestampOrder =
-      Date.parse(attempt.updated_at) - Date.parse(current.updated_at);
-    const statusRank = { pending: 0, failed: 1, succeeded: 2 } as const;
-    if (
-      timestampOrder < 0 ||
-      (timestampOrder === 0 &&
-        statusRank[attempt.status] <= statusRank[current.status])
-    ) {
-      return;
-    }
-  }
   if (current && current.work_item_id !== attempt.work_item_id) {
     removeAutomationRoot(data, current.work_item_id, rootId);
   }
@@ -139,7 +90,6 @@ function putAutomationAttempt(
 export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
   projectId: null,
   runs: {},
-  byTask: {},
   automationAttempts: {},
   automationByTask: {},
 
@@ -149,7 +99,6 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
       : {
           projectId,
           runs: {},
-          byTask: {},
           automationAttempts: {},
           automationByTask: {},
         });
@@ -158,7 +107,7 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
   upsertRun(run) {
     set((state) => {
       const next = mutableCopy(state);
-      putRun(next, normalize(run));
+      putRun(next, run);
       return next;
     });
   },
@@ -167,7 +116,7 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
     set((current) => {
       const run = current.runs[runId];
       if (!run) return current;
-      const incoming = { ...run, state, updatedAt: at };
+      const incoming = { ...run, state, updated_at: at };
       if (!supersedes(incoming, run)) return current;
       return { ...current, runs: { ...current.runs, [runId]: incoming } };
     });
@@ -177,17 +126,17 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
     set((state) => {
       const next = mutableCopy(state);
       const listed = new Set(records.map((record) => record.agent_run_id));
-      for (const record of records) putRun(next, normalize(record));
+      for (const record of records) putRun(next, record);
 
       for (const run of Object.values(next.runs)) {
-        const inScope = scope.task_id === null || run.taskId === scope.task_id;
+        const inScope = scope.task_id === null || run.task_id === scope.task_id;
         if (
           inScope &&
-          !listed.has(run.runId) &&
+          !listed.has(run.agent_run_id) &&
           run.state !== "exited" &&
-          !isOlder(at, run.updatedAt)
+          !isOlder(at, run.updated_at)
         ) {
-          next.runs[run.runId] = { ...run, state: "exited", updatedAt: at };
+          next.runs[run.agent_run_id] = { ...run, state: "exited", updated_at: at };
         }
       }
       return next;
@@ -216,9 +165,8 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
     set((state) => {
       const next = mutableCopy(state);
       for (const run of Object.values(next.runs)) {
-        if (PRUNABLE_STATES.has(run.state) && isOlder(run.updatedAt, olderThan)) {
-          delete next.runs[run.runId];
-          removeFromTask(next.byTask, run.taskId, run.runId);
+        if (PRUNABLE_STATES.has(run.state) && isOlder(run.updated_at, olderThan)) {
+          delete next.runs[run.agent_run_id];
         }
       }
       return next;

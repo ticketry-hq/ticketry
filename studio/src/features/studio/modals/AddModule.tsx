@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { useTasksStore } from "../stores/tasksStore";
+import { useClientStore } from "../../../state/clientStore";
 import { useStudioStore } from "../../projects/store";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { setModuleFolder, useConfig } from "../stores/configStore";
@@ -18,7 +18,7 @@ import {
  * duplicate module.
  */
 export function AddModule() {
-  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const popModal = useModalStore((s) => s.popModal);
   const { profiles, recentProfileIndex } = useConfig();
 
@@ -53,21 +53,23 @@ export function AddModule() {
           .getState()
           .createModuleForProjectWithError(selectedProjectId, name.trim());
         moduleId = created.id;
+        if (!moduleId) throw new Error("The created module has no id.");
         createdModuleIdRef.current = moduleId;
         setCreatedModuleId(moduleId);
       }
 
+      const resolvedModuleId = moduleId;
       const folder = folderSelection.value.trim();
       try {
-        await setModuleFolder(moduleId, folder);
+        await setModuleFolder(resolvedModuleId, folder);
       } catch {
         setError(
           "Module created, but its folder could not be saved. Retry to save the folder.",
         );
         return;
       }
-      if (useTasksStore.getState().selectedModuleId !== moduleId) {
-        await useTasksStore.getState().selectModule(moduleId);
+      if (useClientStore.getState().selectedModuleId !== resolvedModuleId) {
+        await useClientStore.getState().selectModule(resolvedModuleId);
       }
       popModal();
     } catch {

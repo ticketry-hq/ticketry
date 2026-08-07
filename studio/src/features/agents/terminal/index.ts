@@ -47,6 +47,10 @@ export {
   useActiveSession,
   type SessionTab,
 } from "./hooks";
+export {
+  usePersistedTerminalSessions,
+  useScratchTerminalSessions,
+} from "./queries";
 
 // The store hook plus the pure keys/types hosts need to address sessions.
 // Deliberately named — the selector library and mutation internals stay in
@@ -56,12 +60,11 @@ export {
   bucketOfMeta,
   isScratchBucket,
   scratchBucketId,
-  scratchResumableKey,
   useTerminalStore,
   type SessionMeta,
   type SessionStatus,
 } from "./internal/sessionStore";
-export { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
+export { useClientStore as useWorkspaceTabsStore } from "../../../state/clientStore";
 export {
   launchAgent,
   attachToRun,
@@ -83,8 +86,6 @@ export type {
   ScratchPlanningLaunch,
 } from "./create/types";
 
-export type { ResumableTerminalSession } from "../types";
-
 // Foreground arbitration helpers. `<Terminal>` absorbs claim handling, so most
 // callers never need these; exported for the shells that reason about
 // ownership transfer explicitly (and their tests).
@@ -95,3 +96,4 @@ export {
   useTerminalForegroundStore,
   type ForegroundOwner,
 } from "./internal/foregroundStore";
+export { focusTerminal } from "./internal/terminalRegistry";

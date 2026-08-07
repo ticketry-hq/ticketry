@@ -8,28 +8,23 @@ import {
   type ReactNode,
 } from "react";
 import { useShallow } from "zustand/react/shallow";
-import {
-  loadScratchDocuments,
-  loadTaskDocuments,
-} from "./documents/queries";
+import { useWorkspaceDocuments } from "./documents/queries";
 import {
   bucketOfMeta,
   isScratchBucket,
-  scratchResumableKey,
   useActiveSession,
   useTaskSessions,
   useTerminalStore,
+  usePersistedTerminalSessions,
+  useScratchTerminalSessions,
   useWorkspaceTabsStore,
   type ForegroundOwner,
   type SessionMeta,
 } from "../../../../features/agents/terminal";
 import {
   DEFAULT_WORKSPACE,
-  useTicketWorkspaceStore,
-} from "./state/ticketWorkspaceStore";
-import {
-  resumeTerminalTab,
-} from "./internal/workspaceActions";
+  useClientStore as useTicketWorkspaceStore,
+} from "../../../../state/clientStore";
 import { closeTerminalTab } from "./internal/closeTerminalTab";
 import { terminalLabel } from "./internal/terminalLabel";
 import type { LifecycleState } from "../../../../features/agents/terminal";
@@ -51,6 +46,8 @@ import { useClientStore } from "../../../../state/clientStore";
 import { formatChordSymbols } from "../../../navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../navigation/three-zone/threeZoneNavigation";
 import { selectScratchRunIds, useAgentStatusStore } from "../../../../features/agents/status";
+import { queryClient } from "../../../../shared/query/queryClient";
+import { queryKeys } from "../../../../shared/query/keys";
 
 const AVAILABLE_AGENTS: SessionMeta["agent"][] = ["claude", "agy", "codex", "gemini"];
 // Versioned key (client-localstorage-schema): bump the suffix on shape
@@ -268,20 +265,27 @@ export function SelectedTicketContent({
   } = useActivatedProviders();
   const tabs = useTaskSessions(bucket);
   const activeTermIdOrNull = useActiveSession(bucket);
-  const resumableSessions = useTerminalStore((s) =>
-    isScratchBucket(bucket) && projectId && moduleId
-      ? s.resumableSessions[scratchResumableKey(projectId, moduleId)]
-      : bucket
-        ? s.resumableSessions[bucket]
-        : undefined,
+  const scratch = isScratchBucket(bucket);
+  const persistedTerminalQuery = usePersistedTerminalSessions(
+    bucket && !scratch ? bucket : null,
   );
+  const scratchTerminalQuery = useScratchTerminalSessions(
+    scratch ? projectId : null,
+    scratch ? moduleId : null,
+  );
+  const persistedSessions = scratch
+    ? scratchTerminalQuery.sessions
+    : persistedTerminalQuery.sessions;
+  const terminalSessionsFetched = scratch
+    ? scratchTerminalQuery.isFetched
+    : persistedTerminalQuery.isFetched;
   const focusSession = useTerminalStore((s) => s.focusSession);
   const openSession = useTerminalStore((s) => s.openSession);
-  const fetchPersistedSessions = useTerminalStore((s) => s.fetchPersistedSessions);
-  const fetchScratchSessions = useTerminalStore((s) => s.fetchScratchSessions);
   const mountedTaskRunIds = useAgentStatusStore((s) =>
     bucket && !isScratchBucket(bucket)
-      ? s.byTask[bucket] ?? EMPTY_RUN_IDS
+      ? Object.values(s.runs)
+          .filter((run) => run.task_id === bucket)
+          .map((run) => run.agent_run_id)
       : EMPTY_RUN_IDS,
   );
   const mountedScratchRunIds = useAgentStatusStore(
@@ -297,7 +301,6 @@ export function SelectedTicketContent({
   const setActiveDoc = useTicketWorkspaceStore((s) => s.setActiveDoc);
   const closeDoc = useTicketWorkspaceStore((s) => s.closeDoc);
   const reopenDoc = useTicketWorkspaceStore((s) => s.reopenDoc);
-  const hydrateDocs = useTicketWorkspaceStore((s) => s.hydrateDocs);
   const [launchOpen, setLaunchOpen] = useState(false);
   const launchCommittedRef = useRef(false);
   const launchTriggerRef = useRef<HTMLButtonElement>(null);
@@ -314,7 +317,6 @@ export function SelectedTicketContent({
     target: StudioWorkspaceTarget;
   } | null>(null);
   const restoreGenerationRef = useRef(0);
-  const discoveryAbortRef = useRef<AbortController | null>(null);
   const rememberPendingTerminalRef = useRef(false);
   const observedBucketRunsRef = useRef<{
     bucket: string | null;
@@ -455,99 +457,46 @@ export function SelectedTicketContent({
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [launchOpen]);
 
-  // Discovery is deliberately background-only: Details has already painted.
-  // Both resource reads share one selection debounce and abort lifecycle.
-  useEffect(() => {
-    if (!bucket) return;
-    const controller = new AbortController();
-    discoveryAbortRef.current = controller;
-    const generation = restoreGenerationRef.current;
-    const timeout = window.setTimeout(() => {
-      if (controller.signal.aborted) return;
-      const load = isScratchBucket(bucket)
-        ? moduleId
-          ? loadScratchDocuments(moduleId)
-          : null
-        : loadTaskDocuments(
-            bucket,
-            projectId ?? undefined,
-            moduleId ?? undefined,
-          );
-      if (!load) return;
-      void load.then((res) => {
-        if (controller.signal.aborted || generation !== restoreGenerationRef.current) return;
-        hydrateDocs(bucket, res.documents);
-        // Resolve documents only after registry hydration.
-
-        const request = restoreRequestRef.current;
-        if (
-          owner !== "studio" ||
-          request?.bucket !== bucket ||
-          request.generation !== generation ||
-          request.target.kind !== "doc"
-        ) {
-          return;
-        }
-        const relPath = request.target.relPath;
-        const target = res.documents.find(
-          (document) => document.rel_path === relPath,
-        );
-        restoreRequestRef.current = null;
-        if (target) {
-          setActiveDoc(bucket, target.id);
-        } else {
-          setActive(bucket, "details");
-          rememberStudioWorkspaceTarget(bucket, { kind: "details" });
-        }
-      }).catch(() => {
-        if (controller.signal.aborted || generation !== restoreGenerationRef.current) return;
-        const request = restoreRequestRef.current;
-        if (
-          owner !== "studio" ||
-          request?.bucket !== bucket ||
-          request.generation !== generation ||
-          request.target.kind !== "doc"
-        ) {
-          return;
-        }
-        restoreRequestRef.current = null;
-        setActive(bucket, "details");
-      });
-
-      const finishTerminalRestore = () => {
-        if (!controller.signal.aborted) {
-          restoreTerminalTarget(bucket, generation, true);
-        }
-      };
-      if (!isScratchBucket(bucket)) {
-        void fetchPersistedSessions(bucket, controller.signal).then((outcome) => {
-          if (outcome === "applied") finishTerminalRestore();
-        });
-      } else if (projectId && moduleId) {
-        void fetchScratchSessions(projectId, moduleId, controller.signal).then(
-          finishTerminalRestore,
-        );
-      }
-    }, 150);
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
-      if (discoveryAbortRef.current === controller) {
-        discoveryAbortRef.current = null;
-      }
-    };
-  }, [
+  const documentQuery = useWorkspaceDocuments(
     bucket,
     projectId,
     moduleId,
+    isScratchBucket(bucket),
+  );
+
+  useEffect(() => {
+    if (!bucket || !documentQuery.isFetched) return;
+    const request = restoreRequestRef.current;
+    if (
+      owner !== "studio" ||
+      request?.bucket !== bucket ||
+      request.generation !== restoreGenerationRef.current ||
+      request.target.kind !== "doc"
+    ) return;
+    const relPath = request.target.relPath;
+    const target = documentQuery.documents.find(
+      (document) => document.rel_path === relPath,
+    );
+    restoreRequestRef.current = null;
+    if (target) setActiveDoc(bucket, target.id);
+    else {
+      setActive(bucket, "details");
+      rememberStudioWorkspaceTarget(bucket, { kind: "details" });
+    }
+  }, [
+    bucket,
+    documentQuery.documents,
+    documentQuery.isFetched,
     owner,
-    hydrateDocs,
     setActive,
     setActiveDoc,
-    fetchPersistedSessions,
-    fetchScratchSessions,
-    restoreTerminalTarget,
   ]);
+
+  useEffect(() => {
+    if (!bucket || !terminalSessionsFetched) return;
+    useTerminalStore.getState().restoreLiveSessions(bucket, persistedSessions);
+    restoreTerminalTarget(bucket, restoreGenerationRef.current, true);
+  }, [bucket, persistedSessions, restoreTerminalTarget, terminalSessionsFetched]);
 
   // A run appearing for the mounted bucket is the one trigger to reconcile its
   // terminal tabs, so a spawn surfaces its tab without navigating away. The
@@ -572,17 +521,18 @@ export function SelectedTicketContent({
       mountedBucketRunIds.some((runId) => !previous.ids.has(runId));
     observedBucketRunsRef.current = { bucket, ids: new Set(mountedBucketRunIds) };
     if (!runAdded) return;
-    if (scratchTarget) {
-      void fetchScratchSessions(scratchTarget.projectId, scratchTarget.moduleId);
-    } else {
-      void fetchPersistedSessions(bucket);
-    }
+    void queryClient.invalidateQueries({
+      queryKey: scratchTarget
+        ? queryKeys.terminalSessions.scratch(
+            scratchTarget.projectId,
+            scratchTarget.moduleId,
+          )
+        : queryKeys.terminalSessions.persisted(bucket),
+    });
   }, [
     bucket,
     projectId,
     moduleId,
-    fetchPersistedSessions,
-    fetchScratchSessions,
     mountedBucketRunIds,
   ]);
 
@@ -619,18 +569,20 @@ export function SelectedTicketContent({
     requestedTerminalRef.current = activeTermId;
     setTerminalFocusSignal((signal) => signal + 1);
   }, [activeTermId, sessions]);
-  const openDocs = ws.docs.filter((d) => d.open);
-  const closedDocs = ws.docs.filter((d) => !d.open);
-  // The API already selects the newest ten, but retain the presentation bound
-  // at the UI seam too: a stale or malformed response must never let Scratch
-  // chips grow without bound.
-  const resumable = (resumableSessions ?? []).slice(0, 10);
-  const resumableRunIds = new Set(resumable.map((session) => session.agent_run_id));
-  const visibleHistory = ws.history.filter(
-    (chip) => !chip.agentRunId || !resumableRunIds.has(chip.agentRunId),
-  );
+  const closedDocIds = new Set(ws.closedDocIds);
+  const openDocs = documentQuery.documents.filter((doc) => !closedDocIds.has(doc.id));
+  const closedDocs = documentQuery.documents.filter((doc) => closedDocIds.has(doc.id));
+  const visibleHistory = useAgentStatusStore((state) => {
+    if (!bucket) return [];
+    return Object.values(state.runs).filter((run) =>
+      (isScratchBucket(bucket)
+        ? run.task_id === null && run.project_id === projectId && run.module_id === moduleId
+        : run.task_id === bucket) &&
+      (run.state === "exited" || run.state === "lost" || run.state === "error"),
+    );
+  });
   const activeDoc =
-    openDocs.find((d) => d.docId === ws.activeDocId) ?? openDocs[0] ?? null;
+    openDocs.find((d) => d.id === ws.activeDocId) ?? openDocs[0] ?? null;
 
   // Active-tab fallback: a terminal/doc selection with nothing to show falls
   // back to Details (the pinned tab is always renderable).
@@ -642,12 +594,12 @@ export function SelectedTicketContent({
 
   const navigableTabs: TaskWorkspaceTabIdentity[] = [
     { kind: "details" },
-    ...openDocs.map((doc) => ({ kind: "doc" as const, id: doc.docId })),
+    ...openDocs.map((doc) => ({ kind: "doc" as const, id: doc.id })),
     ...termIds.map((id) => ({ kind: "terminal" as const, id })),
   ];
   const activeTab: TaskWorkspaceTabIdentity =
     effActive === "doc" && activeDoc
-      ? { kind: "doc", id: activeDoc.docId }
+      ? { kind: "doc", id: activeDoc.id }
       : effActive === "terminal" && activeTermId
         ? { kind: "terminal", id: activeTermId }
         : { kind: "details" };
@@ -694,7 +646,7 @@ export function SelectedTicketContent({
     if (!isEditView || editViewZone !== "tab-strip") return;
     setHighlightedTab(activeTab);
   }, [
-    activeDoc?.docId,
+    activeDoc?.id,
     activeTermId,
     bucket,
     editViewZone,
@@ -730,7 +682,7 @@ export function SelectedTicketContent({
       }
     } else if (tab.kind === "doc") {
       setActiveDoc(bucket, tab.id);
-      const relPath = ws.docs.find((document) => document.docId === tab.id)?.relPath;
+      const relPath = documentQuery.documents.find((document) => document.id === tab.id)?.rel_path;
       if (owner === "studio" && relPath) {
         rememberStudioWorkspaceTarget(bucket, { kind: "doc", relPath });
       }
@@ -762,7 +714,7 @@ export function SelectedTicketContent({
 
   function closeWorkspaceDocument(docId: string): void {
     if (!bucket) return;
-    const wasActive = effActive === "doc" && activeDoc?.docId === docId;
+    const wasActive = effActive === "doc" && activeDoc?.id === docId;
     closeDoc(bucket, docId);
     if (owner === "studio" && wasActive) {
       rememberStudioWorkspaceTarget(bucket, { kind: "details" });
@@ -772,7 +724,7 @@ export function SelectedTicketContent({
   function reopenWorkspaceDocument(docId: string): void {
     if (!bucket) return;
     reopenDoc(bucket, docId);
-    const relPath = ws.docs.find((document) => document.docId === docId)?.relPath;
+    const relPath = documentQuery.documents.find((document) => document.id === docId)?.rel_path;
     if (owner === "studio" && relPath) {
       rememberStudioWorkspaceTarget(bucket, { kind: "doc", relPath });
     }
@@ -797,31 +749,6 @@ export function SelectedTicketContent({
       );
     }
     void closeTerminalTab(sessionId, bucket, ticketKey);
-  }
-
-  async function resumeWorkspaceTerminal(agentRunId: string): Promise<void> {
-    if (!bucket) return;
-    // A deliberate resume supersedes the background restoration pass for this
-    // selection, so its late result cannot replace the terminal just opened.
-    discoveryAbortRef.current?.abort();
-    const restored = await resumeTerminalTab(
-      bucket,
-      bucket,
-      agentRunId,
-      projectId ?? undefined,
-      moduleId ?? undefined,
-    );
-    if (!restored || owner !== "studio") return;
-    const sessionId = useWorkspaceTabsStore.getState().activeByTask[bucket];
-    const restoredRunId = sessionId
-      ? useTerminalStore.getState().sessions[sessionId]?.agentRunId
-      : null;
-    if (restoredRunId) {
-      rememberStudioWorkspaceTarget(bucket, {
-        kind: "terminal",
-        agentRunId: restoredRunId,
-      });
-    }
   }
 
   useTaskWorkspaceTabNavigation({
@@ -982,17 +909,17 @@ export function SelectedTicketContent({
         />
         {openDocs.map((d) => (
           <Tab
-            key={d.docId}
+            key={d.id}
             label={d.label}
-            active={effActive === "doc" && activeDoc?.docId === d.docId}
+            active={effActive === "doc" && activeDoc?.id === d.id}
             highlighted={
               showTabHighlight &&
               highlightedTab.kind === "doc" &&
-              highlightedTab.id === d.docId
+              highlightedTab.id === d.id
             }
             allowHoverEmphasis={allowTabHoverEmphasis}
-            onClick={() => selectWorkspaceTab({ kind: "doc", id: d.docId })}
-            onClose={() => closeWorkspaceDocument(d.docId)}
+            onClick={() => selectWorkspaceTab({ kind: "doc", id: d.id })}
+            onClose={() => closeWorkspaceDocument(d.id)}
           />
         ))}
         {tabs.map(({ id, meta, lifecycle }) => (
@@ -1071,38 +998,27 @@ export function SelectedTicketContent({
         )}
       </div>
 
-      {/* Dormant chips: reopen closed docs, resume runs, or inert terminated runs. */}
-      {(closedDocs.length > 0 || visibleHistory.length > 0 || resumable.length > 0) && (
+      {/* Dormant chips: reopen closed docs or show inert terminated runs. */}
+      {(closedDocs.length > 0 || visibleHistory.length > 0) && (
         <div className="mb-1 flex shrink-0 flex-wrap gap-1">
           {closedDocs.map((d) => (
             <button
-              key={d.docId}
+              key={d.id}
               type="button"
               aria-label={`Reopen ${d.label}`}
-              onClick={() => reopenWorkspaceDocument(d.docId)}
+              onClick={() => reopenWorkspaceDocument(d.id)}
               className="shrink-0 border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary"
             >
               + {d.label}
             </button>
           ))}
-          {resumable.map((session) => (
-            <button
-              key={session.agent_run_id}
-              type="button"
-              title={`Resume · ${session.started_at}`}
-              onClick={() => void resumeWorkspaceTerminal(session.agent_run_id)}
-              className="shrink-0 border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary"
-            >
-              ↻ {session.agent}
-            </button>
-          ))}
           {visibleHistory.map((chip, i) => (
             <span
-              key={`${chip.agentRunId ?? "ephemeral"}-${i}`}
+              key={`${chip.agent_run_id}-${i}`}
               title="Terminated run"
               className="shrink-0 border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted opacity-60"
             >
-              {chip.label} ✕
+              {chip.agent ?? "Agent"} ✕
             </span>
           ))}
         </div>
@@ -1160,9 +1076,9 @@ export function SelectedTicketContent({
             or tabs never reloads them; visibility toggles per active doc. */}
         {openDocs.map((d) => (
           <div
-            key={d.docId}
+            key={d.id}
             className={
-              effActive === "doc" && activeDoc?.docId === d.docId
+              effActive === "doc" && activeDoc?.id === d.id
                 ? "absolute inset-0"
                 : "hidden"
             }
@@ -1172,7 +1088,7 @@ export function SelectedTicketContent({
                 doc={d}
                 focusSignal={
                   requestedSurfaceRef.current?.kind === "doc" &&
-                  requestedSurfaceRef.current.id === d.docId
+                  requestedSurfaceRef.current.id === d.id
                     ? surfaceFocusSignal
                     : 0
                 }

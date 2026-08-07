@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { formatSequenceId } from "../../../../../features/studio/lib/planeUrl";
 import {
   type Row,
@@ -11,12 +11,13 @@ import {
   ScratchStateBadge,
 } from "../../../../../features/agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
-import {
-  useStudioTaskDescendantIds,
-  useTasksStore,
-} from "../../../../../features/studio/stores/tasksStore";
+import { useStudioStore } from "../../../../../features/projects/store";
+import { useClientStore } from "../../../../../state/clientStore";
 import { useQuery } from "@tanstack/react-query";
-import { workItemQuery } from "../../../../../features/work-items/queries";
+import {
+  useModuleTree,
+  workItemQuery,
+} from "../../../../../features/work-items/queries";
 import { queryClient } from "../../../../../shared/query/queryClient";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
 
@@ -72,7 +73,22 @@ function WorkItemPlanningRow({
   dragSourceProps,
 }: Omit<TaskRowProps, "row"> & { row: WorkItemRow }) {
   const { data: task } = useQuery(workItemQuery(row.id), queryClient);
-  const descendantIds = useStudioTaskDescendantIds(row.id);
+  const projectId = useStudioStore((state) => state.selectedProjectId);
+  const moduleId = useClientStore((state) => state.selectedModuleId);
+  const tree = useModuleTree(projectId, moduleId);
+  const descendantIds = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set([row.id]);
+    const pending = [...(tree.children[row.id] ?? [])];
+    while (pending.length) {
+      const id = pending.pop();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+      pending.push(...(tree.children[id] ?? []));
+    }
+    return ids;
+  }, [row.id, tree]);
   if (!task) return null;
 
   return (
@@ -237,7 +253,7 @@ function PlanningRowView({
 // subscriptions here means ordinary rows never evaluate the agent-status
 // selector on status updates.
 function ScratchTaskStateBadge({ moduleId }: { moduleId: string }) {
-  const selectedProjectId = useTasksStore((state) => state.selectedProjectId);
+  const selectedProjectId = useStudioStore((state) => state.selectedProjectId);
   return (
     <ScratchStateBadge
       projectId={selectedProjectId}

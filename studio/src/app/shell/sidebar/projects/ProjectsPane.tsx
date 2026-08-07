@@ -1,5 +1,6 @@
 import { useModalStore } from "../../../modal/modalStore";
-import { useStudioProjects, useTasksStore } from "../../../../features/studio/stores/tasksStore";
+import { useProjectsQuery } from "../../../../features/projects";
+import { useStudioStore } from "../../../../features/projects/store";
 import {
   resolveCursorId,
   useClientStore,
@@ -7,10 +8,11 @@ import {
 import { PaneShell } from "../../PaneShell";
 
 export function ProjectsPane() {
-  const projects = useStudioProjects();
-  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
-  const selectProject = useTasksStore((s) => s.selectProject);
-  const loading = useTasksStore((s) => s.loading.projects);
+  const projectsQuery = useProjectsQuery();
+  const projects = projectsQuery.data ?? [];
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const selectProject = useStudioStore((s) => s.selectProject);
+  const loading = projectsQuery.isPending;
   const cursorId = useClientStore((s) => s.projectsCursorId);
   const setCursor = useClientStore((s) => s.setProjectsCursor);
   const pushModal = useModalStore((s) => s.pushModal);

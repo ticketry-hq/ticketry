@@ -4,7 +4,8 @@ import {
   setModuleFolder,
   useConfig,
 } from "../../features/studio/stores/configStore";
-import { useTasksStore } from "../../features/studio/stores/tasksStore";
+import { useStudioStore } from "../../features/projects/store";
+import { useClientStore } from "../../state/clientStore";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,
@@ -27,7 +28,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
   const showModuleCreate = useOnboardingTourStore((state) => state.showModuleCreate);
   const moduleCreated = useOnboardingTourStore((state) => state.moduleCreated);
   const reset = useOnboardingTourStore((state) => state.reset);
-  const createModule = useTasksStore((state) => state.createModule);
+  const createModule = useStudioStore((state) => state.createModuleForProjectWithError);
   const { profiles, recentProfileIndex } = useConfig();
   const [moduleName, setModuleName] = useState("General");
   const [createdModuleId, setCreatedModuleId] = useState<string | null>(null);
@@ -72,12 +73,14 @@ export default function OnboardingTour({ onSelectStory }: Props) {
     try {
       let moduleId = createdModuleIdRef.current;
       if (!moduleId) {
-        moduleId = await createModule(projectId, moduleName.trim());
+        moduleId = (await createModule(projectId, moduleName.trim())).id;
+        if (!moduleId) throw new Error("The created module has no id.");
         createdModuleIdRef.current = moduleId;
         setCreatedModuleId(moduleId);
       }
+      const resolvedModuleId = moduleId;
       try {
-        await setModuleFolder(moduleId, folderSelection.value.trim());
+        await setModuleFolder(resolvedModuleId, folderSelection.value.trim());
       } catch {
         setError(
           "Module created, but its folder could not be saved. Retry to save the folder.",
@@ -85,10 +88,10 @@ export default function OnboardingTour({ onSelectStory }: Props) {
         setBusy(false);
         return;
       }
-      if (useTasksStore.getState().selectedModuleId !== moduleId) {
-        await useTasksStore.getState().selectModule(moduleId);
+      if (useClientStore.getState().selectedModuleId !== resolvedModuleId) {
+        await useClientStore.getState().selectModule(resolvedModuleId);
       }
-      moduleCreated(moduleId);
+      moduleCreated(resolvedModuleId);
       setBusy(false);
     } catch (cause) {
       setError(apiErrorMessage(cause));

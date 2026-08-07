@@ -1,19 +1,8 @@
 import { create } from "zustand";
-import { isCancelledError } from "@tanstack/react-query";
 import * as api from "../../api/agentApi";
-import {
-  getPersistedTerminalSessionIndex,
-  getResumableTerminalSessionIndex,
-  loadPersistedTerminalSessions,
-  loadResumableTerminalSessions,
-  loadScratchTerminalSessions,
-  setPersistedTerminalSessionIndex,
-  setResumableTerminalSessionIndex,
-} from "../queries";
 import {
   TEMP_TASK_ID,
   type PersistedTerminalSession,
-  type ResumableTerminalSession,
   type SessionId,
   type TaskId,
 } from "../../types";
@@ -21,15 +10,10 @@ import {
   foregroundKey,
   useTerminalForegroundStore,
 } from "./foregroundStore";
-import { useWorkspaceTabsStore } from "./workspaceTabsStore";
+import { useClientStore as useWorkspaceTabsStore } from "../../../../state/clientStore";
 import { readVersionedItem } from "../../../../shared/storage/versioned";
 import { useAgentStatusStore } from "../../status";
 import { rekeyTerminalFocus } from "./terminalRegistry";
-
-export type PersistedSessionsFetchOutcome =
-  | "applied"
-  | "superseded"
-  | "failed";
 
 export type SessionStatus =
   | "connecting"
@@ -217,10 +201,6 @@ export function bucketOfMeta(
   return bucketFor(meta.taskId, meta.moduleId);
 }
 
-export function scratchResumableKey(projectId: string, moduleId: string): string {
-  return `${TEMP_TASK_ID}:${projectId}:${moduleId}`;
-}
-
 // Live running-agent count for the synthetic scratch bucket (#496). The count
 // is derived purely from local sessions (including reattached scratch tabs) —
 // never from task-bound persisted-session hydration.
@@ -253,8 +233,6 @@ interface TerminalStoreState {
   sessionByRun: Record<string, SessionId>;
   // Terminal selection lives in the client store; this store owns sessions and transport
   // only, and notifies that store on open/rekey/focus/close.
-  persistedSessions: Record<TaskId, PersistedTerminalSession[]>;
-  resumableSessions: Record<TaskId, ResumableTerminalSession[]>;
 
   openSession: (args: OpenSessionArgs) => SessionId;
   setReady: (
@@ -264,8 +242,6 @@ interface TerminalStoreState {
   ) => void;
   bindRun: (sessionId: SessionId, agentRunId: string) => void;
   setTransport: (sessionId: SessionId, transport: TerminalTransport) => void;
-  setPersisted: (taskId: TaskId, sessions: PersistedTerminalSession[]) => void;
-  setResumable: (taskId: TaskId, sessions: ResumableTerminalSession[]) => void;
   setExited: (sessionId: SessionId) => void;
   setViewerClosed: (sessionId: SessionId) => void;
   setPtyEof: (sessionId: SessionId) => void;
@@ -281,38 +257,15 @@ interface TerminalStoreState {
   // pass false.
   closeTab: (sessionId: SessionId, opts?: { dismiss?: boolean }) => void;
   focusSession: (sessionId: SessionId) => void;
-  fetchPersistedSessions: (
+  restoreLiveSessions: (
     taskId: TaskId,
-    signal?: AbortSignal,
-  ) => Promise<PersistedSessionsFetchOutcome>;
-  refreshResumable: (
-    taskId?: TaskId,
-    projectId?: string,
-    moduleId?: string,
-    signal?: AbortSignal,
-  ) => Promise<void>;
-  fetchScratchSessions: (
-    projectId: string,
-    moduleId?: string,
-    signal?: AbortSignal,
-  ) => Promise<void>;
-  restoreLiveSessions: (taskId: TaskId) => void;
+    sessions: readonly PersistedTerminalSession[],
+  ) => void;
   attachPersisted: (session: PersistedTerminalSession) => SessionId;
   terminatePersisted: (agentRunId: string, taskId: TaskId) => Promise<void>;
-  resumePersisted: (agentRunId: string, taskId: TaskId, projectId?: string, moduleId?: string) => Promise<string>;
 }
 
 let _tempCounter = 0;
-let _persistedFetchGeneration = 0;
-let _resumableFetchGeneration = 0;
-// Each map is keyed by task id for a real ticket, and by project/module for
-// scratch, so a slower in-flight response can never overwrite a newer one.
-const latestPersistedFetch = new Map<string, number>();
-const latestResumableFetch = new Map<string, number>();
-
-function scratchFetchKey(projectId: string, moduleId?: string): string {
-  return `scratch::${projectId}::${moduleId ?? "*"}`;
-}
 
 function makeTempId(): string {
   _tempCounter += 1;
@@ -322,8 +275,6 @@ function makeTempId(): string {
 export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
   sessions: {},
   sessionByRun: {},
-  persistedSessions: {},
-  resumableSessions: {},
 
   openSession(args) {
     const tempId = makeTempId();
@@ -420,18 +371,6 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
         },
       };
     });
-  },
-
-  setPersisted(taskId, sessions) {
-    set((state) => ({
-      persistedSessions: { ...state.persistedSessions, [taskId]: sessions },
-    }));
-  },
-
-  setResumable(taskId, sessions) {
-    set((state) => ({
-      resumableSessions: { ...state.resumableSessions, [taskId]: sessions },
-    }));
   },
 
   setExited(sessionId) {
@@ -608,109 +547,8 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     useWorkspaceTabsStore.getState().tabFocused(bucketOfMeta(meta), sessionId);
   },
 
-  async fetchPersistedSessions(taskId, signal) {
-    const generation = ++_persistedFetchGeneration;
-    latestPersistedFetch.set(taskId, generation);
-    try {
-      // The resumable list is independent of the persisted list; start it
-      // first so the two requests overlap (refreshResumable handles its own
-      // errors, so partial success is preserved).
-      const resumable = signal
-        ? get().refreshResumable(taskId, undefined, undefined, signal)
-        : get().refreshResumable(taskId);
-      const list = await loadPersistedTerminalSessions(taskId);
-      if (signal?.aborted) return "superseded";
-      if (latestPersistedFetch.get(taskId) !== generation) return "superseded";
-      get().setPersisted(taskId, list);
-      // Silently re-attach any of this task's previously-live tabs.
-      get().restoreLiveSessions(taskId);
-      await resumable;
-      return "applied";
-    } catch (err) {
-      if (isCancelledError(err)) return "superseded";
-      // Non-fatal: leave any previously-fetched list intact and log.
-      console.warn("[terminalStore] fetchPersistedSessions failed", err);
-      return "failed";
-    } finally {
-      if (latestPersistedFetch.get(taskId) === generation) {
-        latestPersistedFetch.delete(taskId);
-      }
-    }
-  },
-
-  async refreshResumable(taskId, projectId, moduleId, signal) {
-    // A real task always owns the result even when its caller also carries
-    // project/module context. Only a genuinely taskless request is scratch.
-    const key = taskId ?? (
-      projectId && moduleId ? scratchResumableKey(projectId, moduleId) : undefined
-    );
-    const generation = key ? ++_resumableFetchGeneration : undefined;
-    if (key && generation) latestResumableFetch.set(key, generation);
-    try {
-      const list = await loadResumableTerminalSessions(
-        taskId,
-        projectId,
-        moduleId,
-      );
-      if (signal?.aborted) return;
-      if (key && latestResumableFetch.get(key) !== generation) return;
-      if (key) {
-        get().setResumable(key, list);
-      }
-    } catch (err) {
-      if (isCancelledError(err)) return;
-      console.warn("[terminalStore] refreshResumable failed", err);
-    } finally {
-      if (key && latestResumableFetch.get(key) === generation) {
-        latestResumableFetch.delete(key);
-      }
-    }
-  },
-
-  async fetchScratchSessions(projectId, moduleId, signal) {
-    const fetchKey = scratchFetchKey(projectId, moduleId);
-    const generation = ++_persistedFetchGeneration;
-    latestPersistedFetch.set(fetchKey, generation);
-    try {
-      // Independent of the scratch list below — start it first so the two
-      // requests overlap; it swallows its own errors.
-      const resumable = signal
-        ? get().refreshResumable(undefined, projectId, moduleId, signal)
-        : get().refreshResumable(undefined, projectId, moduleId);
-      const list = await loadScratchTerminalSessions(projectId, moduleId);
-      if (signal?.aborted) return;
-      if (latestPersistedFetch.get(fetchKey) !== generation) return;
-      // Scratch rows are bucketed per module (CODIN-986): a project-wide
-      // hydration and a module-scoped fetch write disjoint keys instead of
-      // clobbering one shared list.
-      const byModule = new Map<string, PersistedTerminalSession[]>();
-      if (moduleId) byModule.set(scratchBucketId(moduleId), []);
-      for (const row of list) {
-        const run = useAgentStatusStore.getState().runs[row.agent_run_id];
-        if (!run || run.projectId !== projectId || run.taskId !== null) continue;
-        const key = scratchBucketId(run.moduleId);
-        byModule.set(key, [...(byModule.get(key) ?? []), row]);
-      }
-      for (const [key, rows] of byModule) {
-        get().setPersisted(key, rows);
-        // Silently re-attach live scratch sessions. Backlog omits moduleId to
-        // hydrate every module badge in one project-scoped request.
-        get().restoreLiveSessions(key);
-      }
-      await resumable;
-    } catch (err) {
-      if (isCancelledError(err)) return;
-      // Non-fatal: leave any previously-fetched list intact and log.
-      console.warn("[terminalStore] fetchScratchSessions failed", err);
-    } finally {
-      if (latestPersistedFetch.get(fetchKey) === generation) {
-        latestPersistedFetch.delete(fetchKey);
-      }
-    }
-  },
-
-  restoreLiveSessions(taskId) {
-    const { sessions, sessionByRun, persistedSessions } = get();
+  restoreLiveSessions(taskId, persistedSessions) {
+    const { sessions, sessionByRun } = get();
     // Ids already held by a live (or reconnecting) tab must not be duplicated.
     const attached = new Set(
       Object.values(sessions)
@@ -744,7 +582,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     // may override the list; the reasoning above still governs every id *not*
     // dismissed, so this must not be widened into gating on the live-set.
     const dismissed = dismissedRunsFor(taskId);
-    for (const session of persistedSessions[taskId] ?? []) {
+    for (const session of persistedSessions) {
       const run = useAgentStatusStore.getState().runs[session.agent_run_id];
       if (!run) continue;
       // Liveness is read only from the pushed run projection. The immutable
@@ -786,9 +624,9 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     // local scratch bucket (taskId null) and restore their plan/instant label.
     const isScratch = run.scope !== "task";
     return get().openSession({
-      taskId: isScratch ? null : run.taskId,
-      projectId: run.projectId ?? "",
-      moduleId: run.moduleId,
+      taskId: isScratch ? null : run.task_id,
+      projectId: run.project_id ?? "",
+      moduleId: run.module_id,
       agent: (run.agent ?? "codex") as SessionMeta["agent"],
       ticketSeq: null,
       agentRunId: session.agent_run_id,
@@ -798,7 +636,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     });
   },
 
-  async terminatePersisted(agentRunId, taskId) {
+  async terminatePersisted(agentRunId, _taskId) {
     await api.terminateTerminal(agentRunId);
     // The session is gone for good: drop it from the auto-reattach set.
     removeLiveRun(agentRunId);
@@ -812,75 +650,5 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       ? get().sessions[liveId]
       : Object.values(get().sessions).find((session) => session.agentRunId === agentRunId);
     if (live) get().closeTab(live.sessionId);
-    // Drop the row locally so the list reflects the kill without a refetch.
-    set((s) => {
-      const list = s.persistedSessions[taskId];
-      if (!list) return s;
-      return {
-        persistedSessions: {
-          ...s.persistedSessions,
-          [taskId]: list.filter((x) => x.agent_run_id !== agentRunId),
-        },
-      };
-    });
-    // A scratch bucket is a local key, not a backend task id — refresh its
-    // project/module resumables using the session metadata captured above.
-    const scratch = isScratchBucket(taskId);
-    await get().refreshResumable(
-      scratch ? undefined : taskId,
-      scratch ? live?.projectId : undefined,
-      scratch ? live?.moduleId : undefined,
-    );
-  },
-
-  async resumePersisted(agentRunId, taskId, projectId, moduleId) {
-    const result = await api.resumeTerminal(agentRunId);
-    if (isScratchBucket(taskId) && projectId && moduleId) {
-      await get().fetchScratchSessions(projectId, moduleId);
-    } else {
-      await get().fetchPersistedSessions(taskId);
-    }
-    return result.agent_run_id;
   },
 }));
-
-function attachQueryBackedServerSessionIndexes(state: TerminalStoreState): void {
-  const persisted = Object.getOwnPropertyDescriptor(state, "persistedSessions");
-  if (persisted && "value" in persisted) {
-    setPersistedTerminalSessionIndex(persisted.value);
-  }
-  const resumable = Object.getOwnPropertyDescriptor(state, "resumableSessions");
-  if (resumable && "value" in resumable) {
-    setResumableTerminalSessionIndex(resumable.value);
-  }
-  Object.defineProperties(state, {
-    persistedSessions: {
-      configurable: true,
-      enumerable: true,
-      get: getPersistedTerminalSessionIndex,
-    },
-    resumableSessions: {
-      configurable: true,
-      enumerable: true,
-      get: getResumableTerminalSessionIndex,
-    },
-  });
-}
-
-attachQueryBackedServerSessionIndexes(useTerminalStore.getState());
-useTerminalStore.subscribe(attachQueryBackedServerSessionIndexes);
-
-const rawSetTerminalState = useTerminalStore.setState;
-useTerminalStore.setState = ((partial, replace) => {
-  const current = useTerminalStore.getState();
-  const next = typeof partial === "function" ? partial(current) : partial;
-  const { persistedSessions, resumableSessions, ...clientState } = next;
-  if (persistedSessions !== undefined) {
-    setPersistedTerminalSessionIndex(persistedSessions);
-  }
-  if (resumableSessions !== undefined) {
-    setResumableTerminalSessionIndex(resumableSessions);
-  }
-  rawSetTerminalState(clientState, replace);
-  attachQueryBackedServerSessionIndexes(useTerminalStore.getState());
-}) as typeof useTerminalStore.setState;

@@ -9,7 +9,7 @@ import {
 
 const item = (id: string) => ({ id }) as unknown as WorkItem;
 
-describe("work-item batcher", () => {
+describe("deliberate architectural exception: work-item batcher invariants", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 

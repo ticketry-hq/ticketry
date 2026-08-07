@@ -42,6 +42,7 @@ export default function NameEditor({
   };
   return (
     <input
+      aria-label="Name"
       autoFocus
       value={value}
       onChange={(e) => setValue(e.target.value)}

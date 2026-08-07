@@ -28,6 +28,7 @@ jobs:
       - name: Studio typecheck, tests, and build
         run: |
           npm run typecheck
+          npm run test:overhaul --workspace @worktracker/studio
           npm run test --workspace @worktracker/studio
           npm run build
 

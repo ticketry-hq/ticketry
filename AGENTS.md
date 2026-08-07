@@ -16,3 +16,8 @@ removes it.
 Development data must remain isolated from live application data. Generated
 databases, caches, sidecars, native libraries, and build output must not be
 committed.
+
+Every user-visible Studio UI behavior change must add or update an automated
+acceptance case in `studio/src/test/*Acceptance.test.tsx`. Keep the numbered
+overhaul gate current and run `npm run test:overhaul --workspace
+@worktracker/studio` before handing the change off.

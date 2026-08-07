@@ -17,6 +17,8 @@ dist/
 # Node / Studio
 node_modules/
 studio/dist/
+studio/playwright-report/
+studio/test-results/
 docs/eventcatalog/.astro/
 docs/eventcatalog/.eventcatalog-core/
 docs/eventcatalog/dist/

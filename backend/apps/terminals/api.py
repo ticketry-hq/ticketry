@@ -14,7 +14,6 @@ from pydantic import BaseModel
 import apps.terminals.agents.registry as registry
 from apps.terminals import dao
 from apps.terminals.control_plane import create_terminal_run
-from apps.terminals.models import AgentTerminalSession
 from apps.terminals.launch import LaunchUnavailable
 from apps.terminals.authorization import (
     RunAuthorizationError,
@@ -23,6 +22,7 @@ from apps.terminals.authorization import (
 from apps.terminals.session import (
     ResumeUnavailable,
     TerminalSessionError,
+    session_name_for,
     session as terminal_session,
 )
 from apps.terminals.validation import _validate_init
@@ -138,20 +138,20 @@ def _create_request_as_spawn_init(body: CreateTerminalRunBody) -> tuple[dict | N
     )
 
 
-def _terminal_session_payload(session) -> dict[str, Any]:
+def _terminal_session_payload(run: AgentRun) -> dict[str, Any]:
     """Return API-safe terminal-session metadata."""
 
     return {
-        "agent_run_id": session.agent_run_id,
-        "tmux_session_name": session.tmux_session_name,
-        "task_id": session.task_id,
-        "module_id": session.module_id,
-        "project_id": session.project_id,
-        "agent": session.agent,
-        "scope": session.scope,
-        "doc_rel_path": session.doc_rel_path,
-        "created_at": session.created_at,
-        "terminated_at": session.terminated_at,
+        "agent_run_id": run.id,
+        "tmux_session_name": session_name_for(run.id),
+        "task_id": dao.task_id_for_run(run),
+        "module_id": dao.module_id_for_run(run),
+        "project_id": dao.project_id_for_run(run),
+        "agent": run.agent,
+        "scope": run.scope,
+        "doc_rel_path": run.doc_rel_path,
+        "created_at": run.started_at,
+        "terminated_at": run.ended_at,
     }
 
 
@@ -350,10 +350,10 @@ async def list_scratch_terminals(
         dao.SCRATCH_TASK_ID,
     )
     sessions = [
-        session
-        for session in scratch_sessions
-        if session.project_id == project_id
-        and (module_id is None or session.module_id == module_id)
+        run
+        for run in scratch_sessions
+        if dao.project_id_for_run(run) == project_id
+        and (module_id is None or dao.module_id_for_run(run) == module_id)
     ]
     return [_terminal_session_payload(s) for s in sessions]
 
@@ -364,9 +364,7 @@ async def terminate_terminal(request, agent_run_id: str):
 
     try:
         known = await asyncio.to_thread(
-            lambda: AgentTerminalSession.objects.filter(
-                agent_run_id=agent_run_id
-            ).exists()
+            lambda: AgentRun.objects.filter(id=agent_run_id).exists()
         )
         await asyncio.to_thread(terminal_session.terminate, agent_run_id)
     except TerminalSessionError as exc:
@@ -397,13 +395,9 @@ async def self_terminate_terminal(request):
 
     def _run_state() -> tuple[bool, bool]:
         known = AgentRun.objects.filter(id=agent_run_id).exists()
-        active = (
-            AgentRun.objects.filter(id=agent_run_id, ended_at__isnull=True).exists()
-            or AgentTerminalSession.objects.filter(
-                agent_run_id=agent_run_id,
-                terminated_at__isnull=True,
-            ).exists()
-        )
+        active = AgentRun.objects.filter(
+            id=agent_run_id, ended_at__isnull=True
+        ).exists()
         return known, active
 
     known, active = await asyncio.to_thread(_run_state)

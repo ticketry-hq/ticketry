@@ -16,7 +16,6 @@ from apps.runs.bus import (
     publish_document,
 )
 from apps.runs.models import AgentRun, AutomationAttempt
-from apps.terminals.models import AgentTerminalSession
 from studio_server.asgi import application
 from studio_server.contracts import AutomationAttemptRecord, LifecycleEvent
 from django.db import OperationalError, close_old_connections, transaction
@@ -61,16 +60,6 @@ async def _seed_run(
             started_at="2026-07-12T10:00:00+00:00",
             scope=scope,
         )
-    )
-    await AgentTerminalSession.objects.acreate(
-        agent_run_id=run_id,
-        tmux_session_name=f"tmux-{run_id}",
-        task_id="task-1",
-        module_id="mod-1",
-        project_id=project_id,
-        agent="codex",
-        created_at="2026-07-12T10:00:00+00:00",
-        scope=scope,
     )
 
 

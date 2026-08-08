@@ -14,7 +14,6 @@ from ninja.testing import TestAsyncClient
 from apps.runs import dao
 from apps.runs.api import router
 from apps.runs.models import AgentRun
-from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 
@@ -56,16 +55,6 @@ async def _seed_run(
             started_at="2026-06-02T10:00:00",
             scope=scope,
         )
-    )
-    await AgentTerminalSession.objects.acreate(
-        agent_run_id=run_id,
-        tmux_session_name=f"tmux-{run_id}",
-        task_id=task_id or "scratch",
-        module_id=module_id,
-        project_id="proj-1",
-        agent="codex",
-        created_at="2026-06-02T10:00:00",
-        scope=scope,
     )
 
 
@@ -257,16 +246,6 @@ async def _seed_status_run(
             lifecycle_updated_at=lifecycle_updated_at,
             scope=scope,
         )
-    )
-    await AgentTerminalSession.objects.acreate(
-        agent_run_id=run_id,
-        tmux_session_name=f"tmux-{run_id}",
-        task_id=task_id or "scratch",
-        module_id="mod-1",
-        project_id=project_id,
-        agent="codex",
-        created_at=started_at,
-        scope=scope,
     )
 
 

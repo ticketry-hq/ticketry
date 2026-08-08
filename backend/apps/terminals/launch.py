@@ -238,12 +238,14 @@ async def _launch(
         design_dir=design_dir,
         resumed_from=resumed_from,
         scope=scope,
+        doc_rel_path=doc_rel_path,
     )
 
     def _persist_and_create() -> tuple[str, str, str | None]:
         # Runs in a to_thread worker: direct sync ORM insert then
-        # create_session, which runs the agent command inside tmux and
-        # writes its own terminal-session row. Close the thread connection.
+        # create_session, which runs the agent command inside tmux. Close the
+        # thread connection when the atomic launch attempt finishes.
+        created_session = False
         try:
             issue = Issue.objects.only("id", "project_id", "module_id").get(
                 id=issue_id
@@ -263,7 +265,24 @@ async def _launch(
                 scope=scope,
                 doc_rel_path=doc_rel_path,
             )
+            created_session = True
+            # This is also the durable transport-ready marker. Reconciliation
+            # deliberately ignores the run between its insert and this update.
+            updated = AgentRun.objects.filter(id=agent_run_id).update(
+                terminal_owner_id=tmux_sessions.terminal_owner_id()
+            )
+            if updated != 1:
+                raise RuntimeError("persist terminal ownership failed")
             return project_id, module_id, task_id
+        except Exception:
+            if created_session:
+                try:
+                    tmux_sessions.terminate_session(agent_run_id)
+                except Exception:
+                    logger.exception(
+                        "failed to roll back tmux session run=%s", agent_run_id
+                    )
+            raise
         finally:
             close_old_connections()
 

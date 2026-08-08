@@ -1,9 +1,9 @@
 """Per-session metadata round-tripped via tmux user-options.
 
-Every Muxed session stamps its identity into ``@pt-*`` user-options so it
-stays self-describing even when the SQLite mirror is unavailable. This module
-owns the option keys, the :class:`TmuxSession` snapshot they hydrate, and the
-parsing/setting helpers — no session lifecycle, no DB.
+Every Muxed session stamps a recovery snapshot into ``@pt-*`` user-options so
+the transport stays self-describing when the authoritative ``AgentRun`` row is
+unavailable. This module owns the option keys, the :class:`TmuxSession`
+snapshot they hydrate, and the parsing/setting helpers — no lifecycle or DB.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import libtmux
 from apps.terminals.tmux._core import TmuxSessionError
 
 
-# User-option keys mirrored on every session.
+# Recovery-snapshot keys stamped on every session.
 
 _OPT_AGENT_RUN_ID = "@pt-agent-run-id"
 _OPT_TASK_ID = "@pt-task-id"

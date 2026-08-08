@@ -1,9 +1,7 @@
 """Session lifecycle: create, list, look up, terminate, reconcile.
 
-These are the DB-touching helpers — each mirrors a tmux session into the
-``AgentTerminalSession`` table and, because it runs inside an
-``asyncio.to_thread`` worker, closes stale per-thread connections before
-returning. ``agent_runs`` rows are owned elsewhere and never touched here.
+The durable record is ``AgentRun``; this module owns only the tmux transport
+and returns reconciliation classifications to the run service.
 """
 
 from __future__ import annotations
@@ -13,16 +11,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
-import django.db
 import libtmux
 
-from apps.terminals.models import AgentTerminalSession
+from apps.runs.models import AgentRun
 from apps.terminals.tmux._core import (
     SESSION_PREFIX,
     TmuxSessionError,
     _has_session,
     _server,
     _session_name,
+    tmux_socket,
 )
 from apps.terminals.tmux.metadata import (
     _OPT_AGENT,
@@ -42,13 +40,26 @@ from apps.terminals.tmux.metadata import (
 
 logger = logging.getLogger(__name__)
 
+
+def session_name_for(agent_run_id: str) -> str:
+    """Return the deterministic tmux session name for a run."""
+
+    return _session_name(agent_run_id)
+
+
+def terminal_owner_id() -> str:
+    """Return the stable identity of this profile's terminal transport."""
+
+    return tmux_socket()
+
+
 @dataclass(frozen=True)
 class ReconcileResult:
-    """Outcome of one reconciliation pass over the terminal-session table.
+    """Outcome of one reconciliation pass over active terminal-backed runs.
 
-    - ``soft_deleted`` holds the ``agent_run_id`` of every active row whose
-      tmux session was gone and was therefore soft-deleted.
-    - ``exited`` holds rows whose tmux session survived with a dead provider
+    - ``soft_deleted`` holds the id of every active run whose tmux session was
+      gone and must be ended as lost by the run service.
+    - ``exited`` holds runs whose tmux session survived with a dead provider
       pane. Those are cleanly classifiable provider exits, not lost sessions.
     - ``untracked`` holds live tmux sessions with no active row in this
       database. Reconciliation reports but never terminates them because they
@@ -176,46 +187,13 @@ def create_session(
         doc_rel_path=doc_rel_path,
     )
 
-    # Commit the mirror row before starting the provider. A failed insert can
-    # then roll back only the inert setup shell rather than killing live work.
-    # This runs in an asyncio.to_thread worker, so close the thread connection.
-
-    try:
-        AgentTerminalSession.objects.create(
-            agent_run_id=agent_run_id,
-            tmux_session_name=name,
-            task_id=task_id,
-            module_id=module_id,
-            project_id=project_id,
-            agent=agent,
-            created_at=created_at.isoformat(),
-            scope=scope,
-            doc_rel_path=doc_rel_path,
-        )
-    except Exception as exc:
-        # No provider has started yet; discard the incomplete setup shell.
-        server.cmd("kill-session", "-t", name)
-        raise TmuxSessionError(
-            f"persist session metadata failed for {name!r}: {exc}"
-        ) from exc
-    finally:
-        django.db.close_old_connections()
-
-    # All durability, identity, and database state is now in place. Replace
-    # the setup shell with the provider command; even an immediate exit leaves
-    # a retained dead pane that reconciliation can classify.
+    # The AgentRun was persisted before this call. Replace the setup shell with
+    # the provider command; even an immediate exit leaves a retained dead pane
+    # that reconciliation can classify.
     res = server.cmd("respawn-pane", "-k", "-t", name, command)
     if res.returncode != 0:
         stderr = "\n".join(res.stderr or [])
         server.cmd("kill-session", "-t", name)
-        terminated_at = datetime.now(timezone.utc).isoformat()
-        try:
-            AgentTerminalSession.objects.filter(
-                agent_run_id=agent_run_id,
-                terminated_at__isnull=True,
-            ).update(terminated_at=terminated_at)
-        finally:
-            django.db.close_old_connections()
         raise TmuxSessionError(f"respawn-pane failed for {name!r}: {stderr}")
 
     logger.info("tmux session created name=%s agent_run_id=%s", name, agent_run_id)
@@ -293,22 +271,6 @@ def terminate_session(agent_run_id: str) -> bool:
     if res.returncode != 0:
         stderr = "\n".join(res.stderr or [])
         raise TmuxSessionError(f"kill-session failed for {name!r}: {stderr}")
-    terminated_at = datetime.now(timezone.utc).isoformat()
-
-    # Soft-delete the metadata row with a direct sync ORM update; this runs
-    # in an asyncio.to_thread worker, so close the thread connection.
-
-    try:
-        AgentTerminalSession.objects.filter(
-            agent_run_id=agent_run_id,
-            terminated_at__isnull=True,
-        ).update(terminated_at=terminated_at)
-    except Exception as exc:
-        raise TmuxSessionError(
-            f"soft-delete session metadata failed for {name!r}: {exc}"
-        ) from exc
-    finally:
-        django.db.close_old_connections()
     logger.info("tmux session terminated name=%s agent_run_id=%s", name, agent_run_id)
     return True
 
@@ -381,15 +343,15 @@ def _dead_session_names(server: libtmux.Server) -> set[str]:
 
 
 def reconcile_sessions() -> ReconcileResult:
-    """Reconcile the terminal-session table against live tmux reality.
+    """Reconcile active agent runs against live tmux reality.
 
-    For every active row (``terminated_at IS NULL``) whose tmux session no
-    longer exists, soft-delete the row so it stops being offered as
-    attachable. Live tmux sessions are authoritative and are never terminated
-    by reconciliation, even when this database has no row for them.
+    For every active ``AgentRun`` whose tmux session no longer exists, report
+    it so the run service can end it. Live tmux sessions are authoritative and
+    are never terminated by reconciliation, even when this database has no
+    run for them.
 
-    Idempotent: only active rows are inspected. ``agent_runs`` rows are
-    deliberately left untouched (owned by the run reconciler).
+    Idempotent: only active runs are inspected. Rows are deliberately left
+    untouched here; the run service owns lifecycle persistence.
 
     Synchronous like the rest of this module; callers in the Django layer
     wrap it with ``asyncio.to_thread``. The DB phase uses direct sync ORM.
@@ -408,32 +370,20 @@ def reconcile_sessions() -> ReconcileResult:
     live_names = set(live_births)
     dead_names = _dead_session_names(server) & live_names
 
-    # Soft-delete dead rows and capture the names still backed by an active
-    # row, all with direct sync ORM in this to_thread worker.
-
-    try:
-        rows = list(AgentTerminalSession.objects.filter(terminated_at__isnull=True))
-        terminated_at = datetime.now(timezone.utc).isoformat()
-        soft_deleted: list[str] = []
-        exited: list[str] = []
-        for row in rows:
-            if row.tmux_session_name in dead_names:
-                AgentTerminalSession.objects.filter(
-                    agent_run_id=row.agent_run_id,
-                    terminated_at__isnull=True,
-                ).update(terminated_at=terminated_at)
-                exited.append(row.agent_run_id)
-                continue
-            if row.tmux_session_name in live_names:
-                continue
-            AgentTerminalSession.objects.filter(
-                agent_run_id=row.agent_run_id,
-                terminated_at__isnull=True,
-            ).update(terminated_at=terminated_at)
-            soft_deleted.append(row.agent_run_id)
-        recorded_names = {row.tmux_session_name for row in rows}
-    finally:
-        django.db.close_old_connections()
+    runs = list(
+        AgentRun.objects.filter(
+            ended_at__isnull=True,
+            terminal_owner_id__isnull=False,
+        ).only("id")
+    )
+    recorded = {_session_name(run.id): run.id for run in runs}
+    recorded_names = set(recorded)
+    exited = [recorded[name] for name in sorted(recorded_names & dead_names)]
+    soft_deleted = [
+        recorded[name]
+        for name in sorted(recorded_names - live_names)
+        if name not in dead_names
+    ]
 
     # A retained dead pane has now been durably classified. Remove its tmux
     # shell so it cannot be offered as attachable on the next list.

@@ -36,7 +36,6 @@ from apps.terminals.launch_configuration import (
     ResolvedLaunchConfiguration,
     resolve_task_launch_configuration,
 )
-from apps.terminals.models import AgentTerminalSession
 from apps.terminals import viewer_leases
 from apps.terminals.prompt_builder import _build_prompt, _resolve_profile_index
 from apps.terminals.session_registry import (
@@ -84,6 +83,12 @@ class ResumeUnavailable(Exception):
 
 
 TerminalSessionError = TmuxSessionError
+
+
+def session_name_for(agent_run_id: str) -> str:
+    """Return the transport session name exposed by the terminal API."""
+
+    return tmux_sessions.session_name_for(agent_run_id)
 
 
 class AttachHandle:
@@ -312,15 +317,7 @@ class TerminalSessionService:
 
         adapter = get_adapter(run.agent)
         argv = adapter.resume_command(run.provider_session_id)
-        terminal_session = await (
-            AgentTerminalSession.objects.filter(agent_run_id=agent_run_id)
-            .order_by("-created_at")
-            .afirst()
-        )
         scope = run.scope
-        doc_rel_path = (
-            terminal_session.doc_rel_path if terminal_session is not None else None
-        )
         new_run_id = uuid.uuid4().hex
         return await _launch(
             adapter=adapter,
@@ -329,7 +326,7 @@ class TerminalSessionService:
             cwd=run.cwd,
             design_dir=run.design_dir,
             scope=scope,
-            doc_rel_path=doc_rel_path,
+            doc_rel_path=run.doc_rel_path,
             agent_run_id=new_run_id,
             resumed_from=agent_run_id,
             resolved_skills=ResolvedSkills((), (), frozenset(), ""),
@@ -342,13 +339,9 @@ class TerminalSessionService:
             .values_list("issue__project_id", flat=True)
             .first()
         )
-        active = (
-            AgentTerminalSession.objects.filter(
-                agent_run_id=agent_run_id,
-                terminated_at__isnull=True,
-            ).exists()
-            or AgentRun.objects.filter(id=agent_run_id, ended_at__isnull=True).exists()
-        )
+        active = AgentRun.objects.filter(
+            id=agent_run_id, ended_at__isnull=True
+        ).exists()
         if not active:
             cleanup_temporary_artifacts_for_run(agent_run_id)
             return
@@ -362,10 +355,6 @@ class TerminalSessionService:
         documents_watch.stop_watch(agent_run_id)
         cleanup_temporary_artifacts_for_run(agent_run_id)
         try:
-            AgentTerminalSession.objects.filter(
-                agent_run_id=agent_run_id,
-                terminated_at__isnull=True,
-            ).update(terminated_at=ended_at)
             # Stamp the terminal lifecycle state alongside the terminal status:
             # process exit is authoritative even when a provider has no reliable
             # session-end hook, so reload cannot render a dead run in its last
@@ -390,7 +379,7 @@ class TerminalSessionService:
             .first()
         )
 
-    def sessions_for(self, task_id: str) -> list[AgentTerminalSession]:
+    def sessions_for(self, task_id: str) -> list[AgentRun]:
         return async_to_sync(session_dao.list_terminal_sessions_for_task)(task_id)
 
     def attach(
@@ -449,11 +438,9 @@ class TerminalSessionService:
                             project_id, agent_run_id, "exited", at=ended_at
                         )
             active_run_ids = set(
-                AgentTerminalSession.objects.filter(
-                    terminated_at__isnull=True
-                )
-                .exclude(agent_run_id__in=ended_run_ids)
-                .values_list("agent_run_id", flat=True)
+                AgentRun.objects.filter(ended_at__isnull=True)
+                .exclude(id__in=ended_run_ids)
+                .values_list("id", flat=True)
             )
             reconcile_temporary_artifacts(active_run_ids)
         finally:

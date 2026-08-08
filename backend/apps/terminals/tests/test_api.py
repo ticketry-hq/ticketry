@@ -13,7 +13,6 @@ import apps.terminals.api as terminals_api
 import apps.terminals.launch as launch
 from apps.terminals import dao, tmux
 import apps.terminals.session as session_module
-from apps.terminals.models import AgentTerminalSession
 from apps.terminals.authorization import issue_run_authorization
 from apps.runs.models import AgentRun
 from worktracker.models import Issue, IssueType, Project, Workspace
@@ -23,6 +22,16 @@ from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_
 pytestmark = pytest.mark.django_db(transaction=True)
 
 SCRATCH_TASK_ID = dao.SCRATCH_TASK_ID
+PROJECT_1_ID = fixture_uuid("proj-1")
+MODULE_1_ID = fixture_issue_id(
+    project_id="proj-1", module_id="mod-1", task_id=None
+)
+MODULE_2_ID = fixture_issue_id(
+    project_id="proj-1", module_id="mod-2", task_id=None
+)
+TASK_1_ID = fixture_issue_id(
+    project_id="proj-1", module_id="mod-1", task_id="task-1"
+)
 
 
 def _create_module_issue() -> Issue:
@@ -58,7 +67,7 @@ def _insert_run(
     resumed_from=None,
     status=None,
 ):
-    """Insert a parent agent_run for terminal-session rows."""
+    """Insert one normalized terminal-backed agent run."""
 
     issue = ensure_issue(
         project_id=project_id,
@@ -68,7 +77,6 @@ def _insert_run(
     AgentRun.objects.create(
         id=run_id,
         issue=issue,
-        ticket_seq=484,
         agent="claude-code",
         status=status or ("terminated" if ended_at is not None else "running"),
         started_at=started_at,
@@ -78,6 +86,7 @@ def _insert_run(
         lifecycle_state=lifecycle_state,
         resumed_from=resumed_from,
         scope="plan" if task_id == SCRATCH_TASK_ID else "task",
+        terminal_owner_id="test-owner",
     )
 
 
@@ -93,19 +102,15 @@ def _insert_session(
     terminated_at=None,
     doc_rel_path=None,
 ):
-    AgentTerminalSession.objects.create(
-        agent_run_id=run_id,
-        tmux_session_name=f"pt-{run_id}",
-        task_id=task_id,
-        module_id=module_id,
-        project_id=project_id,
+    del task_id, module_id, project_id
+    AgentRun.objects.filter(id=run_id).update(
         agent=agent,
-        created_at=created_at,
+        started_at=created_at,
         scope=scope,
-        terminated_at=terminated_at,
+        ended_at=terminated_at,
+        status="terminated" if terminated_at else "running",
         doc_rel_path=doc_rel_path,
     )
-    AgentRun.objects.filter(id=run_id).update(scope=scope)
 
 
 def _no_reconcile(monkeypatch):
@@ -224,7 +229,7 @@ def test_list_terminals_returns_active_sessions(client, monkeypatch):
         terminated_at="2026-05-29T12:30:00",
     )
 
-    response = client.get("/api/terminals", {"task_id": "task-1"})
+    response = client.get("/api/terminals", {"task_id": TASK_1_ID})
 
     assert response.status_code == 200
     assert [row["agent_run_id"] for row in response.json()] == ["run-new", "run-old"]
@@ -244,7 +249,7 @@ def test_list_terminals_serializes_doc_chat_fields(client, monkeypatch):
         doc_rel_path="spec/x/LLD.html",
     )
 
-    response = client.get("/api/terminals", {"task_id": "task-1"})
+    response = client.get("/api/terminals", {"task_id": TASK_1_ID})
 
     assert response.status_code == 200
     row = response.json()[0]
@@ -280,7 +285,7 @@ def test_list_terminals_reconciles_dead_session_before_responding(client, monkey
         session_module.tmux_sessions, "reconcile_sessions", fake_reconcile
     )
 
-    response = client.get("/api/terminals", {"task_id": "task-1"})
+    response = client.get("/api/terminals", {"task_id": TASK_1_ID})
 
     assert response.status_code == 200
     assert reconcile_calls == [1]
@@ -303,7 +308,7 @@ def test_list_terminals_survives_reconcile_failure(client, monkeypatch):
 
     monkeypatch.setattr(session_module.tmux_sessions, "reconcile_sessions", boom)
 
-    response = client.get("/api/terminals", {"task_id": "task-1"})
+    response = client.get("/api/terminals", {"task_id": TASK_1_ID})
 
     assert response.status_code == 200
     assert [row["agent_run_id"] for row in response.json()] == ["run-live"]
@@ -330,7 +335,7 @@ def test_list_scratch_terminals_returns_active_no_task_sessions(client, monkeypa
 
     resp = client.get(
         "/api/terminals/scratch",
-        {"project_id": "proj-1", "module_id": "mod-1"},
+        {"project_id": PROJECT_1_ID, "module_id": MODULE_1_ID},
     )
 
     assert resp.status_code == 200
@@ -340,14 +345,14 @@ def test_list_scratch_terminals_returns_active_no_task_sessions(client, monkeypa
     assert rows[0]["task_id"] == SCRATCH_TASK_ID
 
     # Regression: the task-bound list never includes the scratch session.
-    task_resp = client.get("/api/terminals", {"task_id": "task-1"})
+    task_resp = client.get("/api/terminals", {"task_id": TASK_1_ID})
     assert [r["agent_run_id"] for r in task_resp.json()] == ["task-run"]
 
 
 def test_list_scratch_terminals_can_hydrate_all_project_modules(client, monkeypatch):
     _no_reconcile(monkeypatch)
     _insert_run("scratch-one", task_id=SCRATCH_TASK_ID)
-    _insert_run("scratch-two", task_id=SCRATCH_TASK_ID)
+    _insert_run("scratch-two", task_id=SCRATCH_TASK_ID, module_id="mod-2")
     _insert_session(
         "scratch-one",
         task_id=SCRATCH_TASK_ID,
@@ -365,10 +370,15 @@ def test_list_scratch_terminals_can_hydrate_all_project_modules(client, monkeypa
         scope="instant",
     )
 
-    response = client.get("/api/terminals/scratch", {"project_id": "proj-1"})
+    response = client.get(
+        "/api/terminals/scratch", {"project_id": PROJECT_1_ID}
+    )
 
     assert response.status_code == 200
-    assert {row["module_id"] for row in response.json()} == {"mod-1", "mod-2"}
+    assert {row["module_id"] for row in response.json()} == {
+        MODULE_1_ID,
+        MODULE_2_ID,
+    }
 
 
 def test_resume_terminal_returns_new_and_old_ids(client, monkeypatch):
@@ -807,7 +817,6 @@ def test_delete_terminal_terminates_and_soft_deletes(client, monkeypatch):
     )
 
     def fake_terminate(agent_run_id):
-        dao_soft_delete(agent_run_id, "2026-05-29T10:30:00")
         return True
 
     monkeypatch.setattr(
@@ -818,8 +827,8 @@ def test_delete_terminal_terminates_and_soft_deletes(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"agent_run_id": "run-delete", "terminated": True}
-    row = AgentTerminalSession.objects.get(agent_run_id="run-delete")
-    assert row.terminated_at == "2026-05-29T10:30:00"
+    run = AgentRun.objects.get(id="run-delete")
+    assert run.ended_at is not None
 
 
 def test_self_terminate_ends_only_the_authorized_active_run(client, monkeypatch):
@@ -841,7 +850,7 @@ def test_self_terminate_ends_only_the_authorized_active_run(client, monkeypatch)
     monkeypatch.setattr(
         session_module.tmux_sessions,
         "terminate_session",
-        lambda run_id: dao_soft_delete(run_id, "2026-05-29T10:30:00"),
+        lambda run_id: True,
     )
 
     response = client.post(
@@ -858,9 +867,7 @@ def test_self_terminate_ends_only_the_authorized_active_run(client, monkeypatch)
     }
     assert AgentRun.objects.get(id="run-caller").status == "terminated"
     assert AgentRun.objects.get(id="run-other").status == "running"
-    assert (
-        AgentTerminalSession.objects.get(agent_run_id="run-other").terminated_at is None
-    )
+    assert AgentRun.objects.get(id="run-other").ended_at is None
 
 
 def test_self_terminate_is_idempotent_for_an_inactive_run(client, monkeypatch):
@@ -976,10 +983,7 @@ def test_predecessor_identity_cannot_terminate_its_resumed_run(client, monkeypat
     assert response.status_code == 200
     assert response.json()["already_terminated"] is True
     assert AgentRun.objects.get(id="run-resumed").status == "running"
-    assert (
-        AgentTerminalSession.objects.get(agent_run_id="run-resumed").terminated_at
-        is None
-    )
+    assert AgentRun.objects.get(id="run-resumed").ended_at is None
 
 
 def test_mcp_tool_crosses_studio_and_uses_terminal_authority(client, monkeypatch):
@@ -1012,7 +1016,7 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(client, monkeypatch
     monkeypatch.setattr(
         session_module.tmux_sessions,
         "terminate_session",
-        lambda run_id: dao_soft_delete(run_id, "2026-05-29T10:30:00"),
+        lambda run_id: True,
     )
     stopped_watches = []
     published = []
@@ -1065,7 +1069,6 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(client, monkeypatch
 def dao_soft_delete(agent_run_id, terminated_at):
     """Soft-delete a row synchronously for fake reaper/terminate stubs."""
 
-    AgentTerminalSession.objects.filter(
-        agent_run_id=agent_run_id,
-        terminated_at__isnull=True,
-    ).update(terminated_at=terminated_at)
+    AgentRun.objects.filter(id=agent_run_id, ended_at__isnull=True).update(
+        ended_at=terminated_at
+    )

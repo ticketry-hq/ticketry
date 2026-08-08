@@ -19,5 +19,4 @@ This is a generated contract fixture, not hand-maintained source. The focused
 contract tests validate Ticketry's initialize, thread-start, thread-resume,
 turn-start, interrupt, approval, and user-input payloads against them.
 Regenerate deliberately when the bundled/approved Codex CLI protocol is
-upgraded and review the schema diff together with the T3-derived adapter
-mapping.
+upgraded and review the schema diff together with the runtime adapter changes.

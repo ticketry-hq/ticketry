@@ -21,6 +21,16 @@ case "$(uname -s)-$(uname -m)" in
     ;;
 esac
 
+if [ -f "$VENDOR_DIR/REVISION" ] &&
+    [ "$(tr -d '\r\n' < "$VENDOR_DIR/REVISION")" = "$GHOSTTY_REVISION" ] &&
+    [ -f "$VENDOR_DIR/include/ghostty.h" ] &&
+    [ -f "$VENDOR_DIR/lib/libghostty.a" ] &&
+    [ -d "$VENDOR_DIR/resources/ghostty" ] &&
+    [ -d "$VENDOR_DIR/resources/terminfo" ]; then
+  echo "Prepared libghostty $GHOSTTY_TAG ($GHOSTTY_REVISION) is current"
+  exit 0
+fi
+
 if [ ! -x "$ZIG_DIR/zig" ]; then
   mkdir -p "$CACHE_DIR"
   ARCHIVE_PATH="$CACHE_DIR/$ZIG_ARCHIVE.tar.xz"

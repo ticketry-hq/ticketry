@@ -1,12 +1,16 @@
 import { type ReactNode } from "react";
-import { type WorkItem, type Module } from "../../../../../shared/api/types";
+import {
+  type IssueType,
+  type Module,
+  type WorkItem,
+} from "../../../../../shared/api/types";
 import { type BlockerChip } from "../../../../../features/work-items";
 import ParentPicker from "./fields/ParentPicker";
 import BlockerPicker from "./fields/BlockerPicker";
 import { formatDate } from "../../../../../shared/utilities/display";
-import { IssueTypeLabel } from "../../../../../shared/ui/IssueTypeLabel";
 import Field from "./Field";
 import BlockerChipView from "./BlockerChipView";
+import IssueTypePicker from "./fields/IssueTypePicker";
 
 interface IssueSidebarProps {
   task: WorkItem;
@@ -15,6 +19,7 @@ interface IssueSidebarProps {
   blockedByChips: BlockerChip[];
   blocksChips: BlockerChip[];
   items: WorkItem[];
+  setIssueType: (issueType: IssueType) => void;
   setParent: (parentId: string | null) => void;
   addBlocker: (id: string) => void;
   removeBlocker: (id: string) => void;
@@ -29,6 +34,7 @@ export default function IssueSidebar({
   blockedByChips,
   blocksChips,
   items,
+  setIssueType,
   setParent,
   addBlocker,
   removeBlocker,
@@ -53,8 +59,13 @@ export default function IssueSidebar({
       </div>
 
       <div className="mt-2 divide-y divide-pane-border/60" data-testid="details-fields">
-        <Field label="Type">
-          <IssueTypeLabel issueType={task.issue_type} />
+        <Field label="Type" saving={Boolean(saving.issue_type_id)}>
+          <IssueTypePicker
+            projectId={task.project_id}
+            value={task.issue_type}
+            saving={Boolean(saving.issue_type_id)}
+            onChange={setIssueType}
+          />
         </Field>
         <Field label="Parent" saving={Boolean(saving.parent_id)}>
           <ParentPicker

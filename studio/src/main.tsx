@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import StudioApp from "./app/StudioApp";
 import { ModalHost } from "./app/modal/ModalHost";
+import { DialogHost } from "./app/shell/DialogHost";
 import ToastHost from "./app/shell/ToastHost";
 import { queryClient } from "./shared/query/queryClient";
 
@@ -55,6 +56,7 @@ async function startStudio(): Promise<void> {
               <StudioApp />
             </div>
             <ModalHost />
+            <DialogHost />
             <ToastHost />
           </div>
         </QueryClientProvider>

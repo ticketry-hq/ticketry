@@ -35,9 +35,10 @@ class PatchedWorkItemPatch(BaseModel):
     description: Optional[StrictStr] = None
     parent_id: Optional[UUID] = None
     state_id: Optional[UUID] = None
+    issue_type_id: Optional[UUID] = None
     blocked_by_ids: Optional[List[UUID]] = None
     origin: Optional[OriginEnum] = None
-    __properties: ClassVar[List[str]] = ["name", "description", "parent_id", "state_id", "blocked_by_ids", "origin"]
+    __properties: ClassVar[List[str]] = ["name", "description", "parent_id", "state_id", "issue_type_id", "blocked_by_ids", "origin"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -114,6 +115,7 @@ class PatchedWorkItemPatch(BaseModel):
             "description": obj.get("description"),
             "parent_id": obj.get("parent_id"),
             "state_id": obj.get("state_id"),
+            "issue_type_id": obj.get("issue_type_id"),
             "blocked_by_ids": obj.get("blocked_by_ids"),
             "origin": obj.get("origin")
         })

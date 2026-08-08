@@ -3,12 +3,14 @@
 import asyncio
 import time
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from asgiref.sync import sync_to_async
 from channels.testing.websocket import WebsocketCommunicator
 
 from apps.runs import dao
+from apps.runs.consumers import StatusStreamConsumer
 from apps.runs.api import ingest_lifecycle_event
 from apps.runs.bus import (
     publish_automation_attempt,
@@ -83,6 +85,18 @@ async def _connect(
         if cursor is not None:
             path += f"&cursor={cursor}"
     return WebsocketCommunicator(application, path)
+
+
+async def test_status_frame_is_ignored_after_disconnect() -> None:
+    """A group event queued behind disconnect must not write to a closed ASGI socket."""
+
+    consumer = StatusStreamConsumer()
+    consumer._disconnected = True
+    consumer.send_json = AsyncMock()
+
+    await consumer.status_frame({"frame": {"v": 1, "type": "test"}})
+
+    consumer.send_json.assert_not_awaited()
 
 
 async def test_status_requires_project_id() -> None:

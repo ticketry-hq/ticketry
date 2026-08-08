@@ -125,6 +125,30 @@ def test_declared_work_item_writes_reject_invalid_input_and_persist_valid_input(
         assert not Issue.objects.filter(pk=work_item["id"]).exists()
 
 
+def test_patch_changes_a_task_issue_type_without_moving_its_state(
+    client, project, task_type, work_item, auth
+):
+    replacement = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Implementation",
+        level="task",
+    )
+
+    response = patch_json(
+        client,
+        f"{BASE}/work-items/{work_item['id']}",
+        {"issue_type_id": str(replacement.id)},
+        auth,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["issue_type"] == str(replacement.id)
+    changed = Issue.objects.get(pk=work_item["id"])
+    assert changed.issue_type_id == replacement.id
+    assert str(changed.state_id) == work_item["state"]
+
+
 def test_one_list_route_narrows_by_project_module_and_state(
     client, project, module, task_type, auth
 ):

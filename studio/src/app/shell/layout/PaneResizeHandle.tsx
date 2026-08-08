@@ -25,7 +25,10 @@ disableGlobalCursorStyles();
 export function PaneResizeHandle() {
   return (
     <PanelResizeHandle
+      aria-label="Resize adjacent panes"
+      aria-orientation="vertical"
       className={RESIZE_HANDLE_CLASS}
+      data-testid="pane-resize-handle"
       style={RESIZE_HANDLE_STYLE}
     >
       <span aria-hidden="true" style={HOVER_TARGET_STYLE} />

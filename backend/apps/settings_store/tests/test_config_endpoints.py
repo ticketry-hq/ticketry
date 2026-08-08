@@ -184,7 +184,9 @@ def test_round_trip_profile_crud(client, tmp_config, sample_profile):
     assert response.json()["recent_profile_index"] is None
 
 
-def test_profile_module_links_round_trip_canonically(client, tmp_config, sample_profile):
+def test_profile_module_links_round_trip_canonically(
+    client, tmp_config, sample_profile
+):
     linked_profile = {
         **sample_profile,
         "module_links": [
@@ -219,7 +221,7 @@ def test_profile_writes_reject_legacy_module_folders(client, sample_profile):
         content_type="application/json",
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 def test_profile_writes_reject_features_and_do_not_disturb_file(
@@ -228,9 +230,7 @@ def test_profile_writes_reject_features_and_do_not_disturb_file(
     from apps.settings_store import config as config_module
 
     features_file = tmp_config.with_name("features.json")
-    features_contents = (
-        '{"sidebar": true, "projects": true, "newer_flag": false}\n'
-    )
+    features_contents = '{"sidebar": true, "projects": true, "newer_flag": false}\n'
     features_file.parent.mkdir(parents=True, exist_ok=True)
     features_file.write_text(features_contents)
     monkeypatch.setattr(config_module, "features", config_module.load_features())
@@ -241,7 +241,7 @@ def test_profile_writes_reject_features_and_do_not_disturb_file(
         content_type="application/json",
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 400
     assert features_file.read_text() == features_contents
     assert client.get("/api/config").json()["features"] == {
         "sidebar": True,
@@ -266,7 +266,7 @@ def test_profile_writes_reject_features_and_do_not_disturb_file(
         data={**sample_profile, "features": {"projects": False}},
         content_type="application/json",
     )
-    assert response.status_code == 422
+    assert response.status_code == 400
     assert features_file.read_text() == features_contents
     assert client.get("/api/config").json()["features"] == {
         "sidebar": True,
@@ -307,9 +307,7 @@ def test_profile_optional_fields_use_source_defaults(client):
     ]
 
 
-def test_get_config_preserves_recent_profile_index(
-    client, tmp_config, sample_profile
-):
+def test_get_config_preserves_recent_profile_index(client, tmp_config, sample_profile):
     first = {**sample_profile, "name": "First"}
     second = {**sample_profile, "name": "Second"}
     tmp_config.parent.mkdir(parents=True, exist_ok=True)

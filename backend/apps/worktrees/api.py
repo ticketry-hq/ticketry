@@ -24,55 +24,56 @@ import logging
 import os
 from typing import Optional
 
-from pydantic import BaseModel
-
 from apps.settings_store import config as cfgmod
 from apps.settings_store.config import (
     NoConfigurationSelected,
     module_link_path,
     resolve_profile_index,
 )
-from apps.worktrees import dao, service
+from apps.worktrees import service
+from apps.worktrees.models import Worktree
 
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Schemas (mirrored by lib/types.ts WorktreeStatus / DiscardResult)
-# ---------------------------------------------------------------------------
 
+def _worktree_status(
+    *,
+    kind: str,
+    task_id: str,
+    top_level_task_id: str,
+    is_shared: bool = False,
+    branch: Optional[str] = None,
+    base_branch: Optional[str] = None,
+    path: Optional[str] = None,
+    state: Optional[str] = None,
+    clean: Optional[bool] = None,
+    dirty: Optional[bool] = None,
+    ahead: Optional[int] = None,
+    behind: Optional[int] = None,
+    conflict: Optional[bool] = None,
+    ephemeral: bool = False,
+    reason: Optional[str] = None,
+) -> dict:
+    """Build the application result mirrored by the DRF response serializer."""
 
-class WorktreeStatusOut(BaseModel):
-    """Discriminated on ``kind``: worktree | no_repo | none."""
-
-    kind: str
-    task_id: str
-    top_level_task_id: str
-    is_shared: bool = False
-    branch: Optional[str] = None
-    base_branch: Optional[str] = None
-    path: Optional[str] = None
-    state: Optional[str] = None
-    clean: Optional[bool] = None
-    dirty: Optional[bool] = None
-    ahead: Optional[int] = None
-    behind: Optional[int] = None
-    conflict: Optional[bool] = None
-    ephemeral: bool = False
-    reason: Optional[str] = None
-
-
-class CreateWorktreeIn(BaseModel):
-    parent_id: Optional[str] = None
-    module_id: Optional[str] = None
-    project_id: Optional[str] = None
-    ticket_seq: Optional[int] = None
-    task_name: Optional[str] = None
-
-
-class DiscardOut(BaseModel):
-    removed: bool
-    reason: str = ""
+    return {
+        "kind": kind,
+        "task_id": task_id,
+        "top_level_task_id": top_level_task_id,
+        "is_shared": is_shared,
+        "branch": branch,
+        "base_branch": base_branch,
+        "path": path,
+        "state": state,
+        "clean": clean,
+        "dirty": dirty,
+        "ahead": ahead,
+        "behind": behind,
+        "conflict": conflict,
+        "ephemeral": ephemeral,
+        "reason": reason,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -107,19 +108,19 @@ def _module_folder(profile, module_id: Optional[str]) -> Optional[str]:
 
 def _none_or_no_repo(
     *, task_id: str, tlt: str, is_shared: bool, working_path: Optional[str]
-) -> WorktreeStatusOut:
+) -> dict:
     """No record yet: decide between offer-create (``none``) and ``no_repo``."""
 
     repo_root = service.discover_repo(working_path) if working_path else None
     if repo_root is None:
-        return WorktreeStatusOut(
+        return _worktree_status(
             kind="no_repo",
             task_id=task_id,
             top_level_task_id=tlt,
             is_shared=is_shared,
             reason="no git repository encloses this task's working path",
         )
-    return WorktreeStatusOut(
+    return _worktree_status(
         kind="none",
         task_id=task_id,
         top_level_task_id=tlt,
@@ -129,10 +130,10 @@ def _none_or_no_repo(
 
 def _status_payload(
     *, task_id: str, tlt: str, is_shared: bool, working_path: Optional[str]
-) -> WorktreeStatusOut:
+) -> dict:
     """Build the block's data from the record + W1's live ``status()``."""
 
-    record = dao.get_by_task(tlt)
+    record = Worktree.objects.get_by_task(tlt)
     if record is None:
         return _none_or_no_repo(
             task_id=task_id, tlt=tlt, is_shared=is_shared, working_path=working_path
@@ -145,7 +146,7 @@ def _status_payload(
             task_id=task_id, tlt=tlt, is_shared=is_shared, working_path=working_path
         )
 
-    return WorktreeStatusOut(
+    return _worktree_status(
         kind="worktree",
         task_id=task_id,
         top_level_task_id=tlt,
@@ -188,18 +189,26 @@ def get_worktree(
     )
 
 
-def create_worktree(task_id: str, payload: CreateWorktreeIn):
+def create_worktree(
+    task_id: str,
+    *,
+    parent_id: Optional[str] = None,
+    module_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    ticket_seq: Optional[int] = None,
+    task_name: Optional[str] = None,
+):
     """Opt in: cut a worktree off HEAD for the top-level task. Idempotent."""
 
     tlt = service.top_level_task_id(
-        task_id=task_id, parent_id=payload.parent_id, module_id=payload.module_id
+        task_id=task_id, parent_id=parent_id, module_id=module_id
     )
     profile = _current_profile()
-    working_path = _module_folder(profile, payload.module_id)
+    working_path = _module_folder(profile, module_id)
 
     if working_path is None:
         # No configured/existing folder → nothing encloses the task.
-        return WorktreeStatusOut(
+        return _worktree_status(
             kind="no_repo",
             task_id=task_id,
             top_level_task_id=tlt,
@@ -210,14 +219,14 @@ def create_worktree(task_id: str, payload: CreateWorktreeIn):
     result = service.create(
         task_id=tlt,
         working_path=working_path,
-        task_name=payload.task_name,
-        ticket_seq=payload.ticket_seq,
+        task_name=task_name,
+        ticket_seq=ticket_seq,
         workspace_slug=getattr(profile, "workspace_slug", None),
-        project_id=payload.project_id,
-        module_id=payload.module_id,
+        project_id=project_id,
+        module_id=module_id,
     )
     if isinstance(result, service.NoWorktree):
-        return WorktreeStatusOut(
+        return _worktree_status(
             kind="no_repo",
             task_id=task_id,
             top_level_task_id=tlt,
@@ -244,4 +253,4 @@ def discard_worktree(
         task_id=task_id, parent_id=parent_id, module_id=module_id
     )
     result = service.discard(tlt)
-    return DiscardOut(removed=result.removed, reason=result.reason)
+    return {"removed": result.removed, "reason": result.reason}

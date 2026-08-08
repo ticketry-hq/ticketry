@@ -11,13 +11,13 @@ from datetime import datetime, timezone
 import pytest
 from django.test import AsyncClient
 
-from apps.runs import dao
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
+
 
 class HostAsyncClient(AsyncClient):
     async def get(self, path, *args, **kwargs):
@@ -31,18 +31,12 @@ class HostAsyncClient(AsyncClient):
 
 client = HostAsyncClient()
 PROJECT_ID = fixture_uuid("proj-1")
-MODULE_1_ID = fixture_issue_id(
-    project_id="proj-1", module_id="mod-1", task_id=None
-)
-MODULE_2_ID = fixture_issue_id(
-    project_id="proj-1", module_id="mod-2", task_id=None
-)
+MODULE_1_ID = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None)
+MODULE_2_ID = fixture_issue_id(project_id="proj-1", module_id="mod-2", task_id=None)
 
 
 def _task_id(label: str) -> str:
-    return fixture_issue_id(
-        project_id="proj-1", module_id="mod-1", task_id=label
-    )
+    return fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=label)
 
 
 async def _seed_run(
@@ -54,17 +48,15 @@ async def _seed_run(
 ) -> None:
     """Insert a minimal running agent run."""
 
-    await dao.insert_agent_run(
-        AgentRun(
-            id=run_id,
-            issue_id=fixture_issue_id(
-                project_id="proj-1", module_id=module_id, task_id=task_id
-            ),
-            agent="codex",
-            status="running",
-            started_at="2026-06-02T10:00:00",
-            scope=scope,
-        )
+    await AgentRun.objects.acreate(
+        id=run_id,
+        issue_id=fixture_issue_id(
+            project_id="proj-1", module_id=module_id, task_id=task_id
+        ),
+        agent="codex",
+        status="running",
+        started_at="2026-06-02T10:00:00",
+        scope=scope,
     )
     await AgentTerminalSession.objects.acreate(
         agent_run_id=run_id,
@@ -80,11 +72,13 @@ async def _seed_run(
 
 async def test_module_activity_endpoint_returns_scoped_map(monkeypatch) -> None:
     from datetime import datetime, timezone
+
     class MockDatetime:
         @classmethod
         def now(cls, tz=None):
             return datetime(2026, 6, 15, tzinfo=timezone.utc)
-    monkeypatch.setattr("apps.runs.dao.activity.datetime", MockDatetime)
+
+    monkeypatch.setattr("apps.runs.api.datetime", MockDatetime)
 
     # Scratch run (null task) under mod-2 must still rank its module (#598).
     await _seed_run("r1", module_id="mod-1")
@@ -100,11 +94,13 @@ async def test_module_activity_endpoint_returns_scoped_map(monkeypatch) -> None:
 
 async def test_module_activity_window_param_excludes_old_runs(monkeypatch) -> None:
     from datetime import datetime, timezone
+
     class MockDatetime:
         @classmethod
         def now(cls, tz=None):
             return datetime(2026, 6, 15, tzinfo=timezone.utc)
-    monkeypatch.setattr("apps.runs.dao.activity.datetime", MockDatetime)
+
+    monkeypatch.setattr("apps.runs.api.datetime", MockDatetime)
 
     await _seed_run("r1", module_id="mod-1")  # started 2026-06-02, well past
 
@@ -189,7 +185,7 @@ async def test_kind_is_reduced_and_persisted_as_lifecycle_state() -> None:
     await _seed_run("run-life")
 
     # awaiting_input reduces to needs_input (agrees with
-        # studio/src/coding/lib/lifecycle.ts).
+    # studio/src/coding/lib/lifecycle.ts).
     response = await client.post(
         "/lifecycle/events", json=_event("run-life", kind="awaiting_input")
     )
@@ -219,9 +215,7 @@ async def test_latest_event_overwrites_lifecycle_state() -> None:
     await client.post("/lifecycle/events", json=_event("run-seq", kind="turn_start"))
     await client.post(
         "/lifecycle/events",
-        json=_event(
-            "run-seq", kind="turn_complete", ts="2026-06-02T10:00:02+00:00"
-        ),
+        json=_event("run-seq", kind="turn_complete", ts="2026-06-02T10:00:02+00:00"),
     )
 
     # The column holds the most recent transition, not the first.
@@ -252,20 +246,18 @@ async def _seed_status_run(
     ended_at: str | None = None,
     scope: str = "task",
 ) -> None:
-    await dao.insert_agent_run(
-        AgentRun(
-            id=run_id,
-            issue_id=fixture_issue_id(
-                project_id=project_id, module_id="mod-1", task_id=task_id
-            ),
-            agent="codex",
-            status=status,
-            started_at=started_at,
-            ended_at=ended_at,
-            lifecycle_state=lifecycle_state,
-            lifecycle_updated_at=lifecycle_updated_at,
-            scope=scope,
-        )
+    await AgentRun.objects.acreate(
+        id=run_id,
+        issue_id=fixture_issue_id(
+            project_id=project_id, module_id="mod-1", task_id=task_id
+        ),
+        agent="codex",
+        status=status,
+        started_at=started_at,
+        ended_at=ended_at,
+        lifecycle_state=lifecycle_state,
+        lifecycle_updated_at=lifecycle_updated_at,
+        scope=scope,
     )
     await AgentTerminalSession.objects.acreate(
         agent_run_id=run_id,
@@ -291,12 +283,16 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
 
     monkeypatch.setattr("apps.runs.api.datetime", MockDatetime)
     await _seed_status_run(
-        "with-event", task_id="t1", started_at="2026-07-12T14:00:00+00:00",
+        "with-event",
+        task_id="t1",
+        started_at="2026-07-12T14:00:00+00:00",
         lifecycle_state="needs_input",
         lifecycle_updated_at="2026-07-12T15:00:00+00:00",
     )
     await _seed_status_run(
-        "pre-event", task_id="t2", started_at="2026-07-12T15:05:00+00:00",
+        "pre-event",
+        task_id="t2",
+        started_at="2026-07-12T15:05:00+00:00",
         lifecycle_state=None,
         scope="plan",
     )
@@ -340,7 +336,8 @@ async def test_agent_status_ended_run_is_an_exited_tombstone() -> None:
     lifecycle event said `working` (or it recorded none at all)."""
 
     await _seed_status_run(
-        "ended-working", task_id="t1",
+        "ended-working",
+        task_id="t1",
         started_at="2026-07-12T14:00:00+00:00",
         lifecycle_state="working",
         lifecycle_updated_at="2026-07-12T14:30:00+00:00",
@@ -348,7 +345,8 @@ async def test_agent_status_ended_run_is_an_exited_tombstone() -> None:
         ended_at="2026-07-12T15:00:00+00:00",
     )
     await _seed_status_run(
-        "ended-silent", task_id="t2",
+        "ended-silent",
+        task_id="t2",
         started_at="2026-07-12T14:10:00+00:00",
         lifecycle_state=None,
         status="completed",
@@ -368,11 +366,17 @@ async def test_agent_status_ended_run_is_an_exited_tombstone() -> None:
 async def test_agent_status_optional_task_filter_is_authoritative_scope() -> None:
     now = datetime.now(timezone.utc).isoformat()
     await _seed_status_run(
-        "wanted", task_id="t1", started_at=now, lifecycle_state="working",
+        "wanted",
+        task_id="t1",
+        started_at=now,
+        lifecycle_state="working",
         lifecycle_updated_at=now,
     )
     await _seed_status_run(
-        "other", task_id="t2", started_at=now, lifecycle_state="quiet",
+        "other",
+        task_id="t2",
+        started_at=now,
+        lifecycle_state="quiet",
         lifecycle_updated_at=now,
     )
 
@@ -396,28 +400,37 @@ async def test_agent_status_omits_old_ended_runs_but_keeps_old_active_runs(
         def now(cls, tz=None):
             return fixed
 
-    monkeypatch.setattr("apps.runs.dao.activity.datetime", MockDatetime)
+    monkeypatch.setattr("apps.runs.api.datetime", MockDatetime)
     await _seed_status_run(
-        "old-ended", task_id="t1", started_at="2026-01-01T00:00:00+00:00",
-        lifecycle_state="working", status="completed",
+        "old-ended",
+        task_id="t1",
+        started_at="2026-01-01T00:00:00+00:00",
+        lifecycle_state="working",
+        status="completed",
         ended_at="2026-01-02T00:00:00+00:00",
     )
     await _seed_status_run(
-        "old-active", task_id="t2", started_at="2026-01-01T00:00:00+00:00",
+        "old-active",
+        task_id="t2",
+        started_at="2026-01-01T00:00:00+00:00",
         lifecycle_state="working",
         lifecycle_updated_at="2026-01-01T01:00:00+00:00",
     )
     await _seed_status_run(
-        "recently-ended", task_id="t3", started_at="2026-01-01T00:00:00+00:00",
+        "recently-ended",
+        task_id="t3",
+        started_at="2026-01-01T00:00:00+00:00",
         lifecycle_state="working",
         lifecycle_updated_at="2026-01-01T01:00:00+00:00",
-        status="completed", ended_at="2026-07-12T15:00:00+00:00",
+        status="completed",
+        ended_at="2026-07-12T15:00:00+00:00",
     )
 
     response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
 
     assert [run["agent_run_id"] for run in response.json()["runs"]] == [
-        "recently-ended", "old-active",
+        "recently-ended",
+        "old-active",
     ]
 
 
@@ -425,9 +438,7 @@ async def test_older_lifecycle_event_does_not_regress_snapshot_state() -> None:
     await _seed_run("ordered", task_id="t1")
     await client.post(
         "/lifecycle/events",
-        json=_event(
-            "ordered", kind="turn_complete", ts="2026-07-12T15:00:00Z"
-        ),
+        json=_event("ordered", kind="turn_complete", ts="2026-07-12T15:00:00Z"),
     )
     await client.post(
         "/lifecycle/events",
@@ -439,6 +450,4 @@ async def test_older_lifecycle_event_does_not_regress_snapshot_state() -> None:
     )
 
     assert response.json()["runs"][0]["state"] == "turn_complete"
-    assert response.json()["runs"][0]["updated_at"] == (
-        "2026-07-12T15:00:00+00:00"
-    )
+    assert response.json()["runs"][0]["updated_at"] == ("2026-07-12T15:00:00+00:00")

@@ -14,7 +14,8 @@ from unittest.mock import Mock
 import pytest
 
 from worktracker.models import Issue, IssueType, Project, State, Workspace
-from apps.worktrees import dao, service, signals
+from apps.worktrees import service, signals
+from apps.worktrees.models import Worktree
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -58,7 +59,7 @@ def _task(project, *, seq: int, state: State) -> Issue:
 
 
 def _seed_worktree(task_id: str) -> None:
-    dao.create(
+    Worktree.objects.create_for_task(
         task_id=task_id,
         repo_root="/repo",
         path="/repo/wt",
@@ -122,7 +123,7 @@ def test_close_hook_subtask_does_not_land_parent(project, monkeypatch):
 
     # Only the sub-task entered completed; its own id owns no worktree.
     integrate.assert_not_called()
-    assert dao.get_by_task(str(sub.id)) is None
+    assert Worktree.objects.get_by_task(str(sub.id)) is None
 
 
 def test_close_hook_cancelled_leaves(project, monkeypatch):
@@ -142,4 +143,4 @@ def test_close_hook_cancelled_leaves(project, monkeypatch):
 
     integrate.assert_not_called()
     discard.assert_not_called()
-    assert dao.get_by_task(str(task.id)) is not None
+    assert Worktree.objects.get_by_task(str(task.id)) is not None

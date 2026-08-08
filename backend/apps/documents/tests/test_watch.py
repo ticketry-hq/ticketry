@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from apps.documents import dao, watch
+from apps.documents import service, watch
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -84,7 +84,7 @@ async def test_create_and_update_flow(tmp_path: Path):
     finally:
         watch.stop_all()
 
-    rows = await dao.list_for_task("t1")
+    rows = await service.document_rows_for_task("t1")
     assert len(rows) == 1
     assert rows[0].rel_path == "design.html"
     assert rows[0].discovered_by_run_id == "run-1"
@@ -122,7 +122,7 @@ async def test_markdown_create_and_update_flow_is_case_insensitive(tmp_path: Pat
     finally:
         watch.stop_all()
 
-    rows = await dao.list_for_task("t1")
+    rows = await service.document_rows_for_task("t1")
     assert [row.rel_path for row in rows] == ["SPEC.MD"]
 
 
@@ -159,7 +159,9 @@ async def test_non_document_files_are_ignored(tmp_path: Path):
         watch.stop_all()
 
     assert [f["doc"]["rel_path"] for f in frames] == ["real.html"]
-    assert [r.rel_path for r in await dao.list_for_task("t1")] == ["real.html"]
+    assert [r.rel_path for r in await service.document_rows_for_task("t1")] == [
+        "real.html"
+    ]
 
 
 async def test_start_without_dir_is_noop_and_stop_is_idempotent(tmp_path: Path):

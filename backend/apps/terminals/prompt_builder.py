@@ -18,7 +18,7 @@ from typing import Optional
 
 from django.db import close_old_connections
 
-from apps.documents import dao as documents_dao
+from apps.documents import service as documents_service
 from apps.documents import design_docs
 from apps import worktracker_queries
 from apps.settings_store import config as cfgmod
@@ -34,8 +34,8 @@ from apps.terminals.agents.prompts import (
     build_planning_context_prompt,
 )
 from apps.terminals.agents.registry import get_adapter
-from apps.terminals.dao import SCRATCH_TASK_ID
-from apps.worktrees import dao as worktrees_dao
+from apps.terminals.constants import SCRATCH_TASK_ID
+from apps.worktrees.models import Worktree
 from apps.worktrees import service as worktrees_service
 
 
@@ -91,7 +91,7 @@ def _worktree_root(
         tlt = worktrees_service.top_level_task_id(
             task_id=task_id, parent_id=parent_id, module_id=module_id
         )
-        rec = worktrees_dao.get_by_task(tlt)
+        rec = Worktree.objects.get_by_task(tlt)
         if rec is None or not os.path.isdir(rec.path):
             return None
         return rec.path
@@ -148,13 +148,13 @@ async def _build_prompt(
         root_dir: Optional[str] = None
         resolved_rel = doc_rel_path
         if doc_id:
-            row = await documents_dao.get_document(doc_id)
+            row = await documents_service.get_document(doc_id)
             if row is not None:
                 root_dir = row.root_dir
                 resolved_rel = row.rel_path
         if root_dir is None:
             lookup_task_id = persist_task_id or task_id or SCRATCH_TASK_ID
-            root_dir = await documents_dao.get_document_root(
+            root_dir = await documents_service.get_document_root(
                 task_id=lookup_task_id,
                 module_id=module_id,
                 rel_path=doc_rel_path,

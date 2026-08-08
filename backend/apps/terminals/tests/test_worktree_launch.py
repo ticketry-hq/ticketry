@@ -18,7 +18,7 @@ from asgiref.sync import sync_to_async
 import apps.terminals.consumers as consumers
 from apps import worktracker_queries
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
-from apps.worktrees import dao as worktrees_dao
+from apps.worktrees.models import Worktree
 
 from .conftest import write_profiles
 
@@ -76,7 +76,7 @@ async def _worktree(
     wt_path = tmp_path / f"wt-{task_id}"
     if live:
         wt_path.mkdir(parents=True, exist_ok=True)
-    return await sync_to_async(worktrees_dao.create)(
+    return await sync_to_async(Worktree.objects.create_for_task)(
         task_id=task_id,
         repo_root=str(tmp_path / "repo"),
         path=str(wt_path),
@@ -141,7 +141,7 @@ async def test_subtask_resolves_up_to_parent(tmp_config, tmp_path, monkeypatch):
     assert cwd == parent_wt.path
     assert design_dir == str((Path(parent_wt.path) / DESIGN_REL).resolve())
     # ...and never mints its own worktree.
-    assert await sync_to_async(worktrees_dao.get_by_task)("sub1") is None
+    assert await sync_to_async(Worktree.objects.get_by_task)("sub1") is None
 
 
 async def test_no_worktree_falls_back(tmp_config, tmp_path, monkeypatch):

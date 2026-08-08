@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Optional, Union
 
-from apps.worktrees import dao, naming
+from apps.worktrees import naming
 from apps.worktrees.models import Worktree
 from apps.worktrees.service.types import (
     NoWorktree,
@@ -60,7 +60,7 @@ def create(
     :class:`NoWorktree` with a reason — never an exception.
     """
 
-    existing = dao.get_by_task(task_id)
+    existing = Worktree.objects.get_by_task(task_id)
     if existing is not None:
         return existing
 
@@ -82,7 +82,7 @@ def create(
     # intentionally not carried into the isolated worktree.
     _git(["worktree", "add", "-b", branch, path, base_commit], repo_root)
 
-    record = dao.create(
+    record = Worktree.objects.create_for_task(
         task_id=task_id,
         repo_root=repo_root,
         path=path,
@@ -103,7 +103,7 @@ def create(
 def status(task_id: str) -> Union[WorktreeStatus, NoWorktree]:
     """Report live clean/dirty + ahead/behind + conflict for a task's worktree."""
 
-    record = dao.get_by_task(task_id)
+    record = Worktree.objects.get_by_task(task_id)
     if record is None:
         return NoWorktree(reason=f"no worktree for task {task_id!r}")
 
@@ -162,7 +162,7 @@ def list_worktrees(
 ) -> list[Worktree]:
     """List persisted worktree records, optionally scoped."""
 
-    return dao.list_by_scope(project_id=project_id, module_id=module_id)
+    return Worktree.objects.by_scope(project_id=project_id, module_id=module_id)
 
 
 def integrate(task_id: str) -> IntegrateResult:
@@ -175,7 +175,7 @@ def integrate(task_id: str) -> IntegrateResult:
     the primary checkout is never left in a half-merged state.
     """
 
-    record = dao.get_by_task(task_id)
+    record = Worktree.objects.get_by_task(task_id)
     if record is None:
         return IntegrateResult(task_id, "no_worktree", "no worktree for task")
     if record.ephemeral:
@@ -196,7 +196,7 @@ def integrate(task_id: str) -> IntegrateResult:
         # Conflict (or other merge failure): leave the tree as-is for resolution.
         unmerged = _git(["diff", "--name-only", "--diff-filter=U"], path).stdout.strip()
         if unmerged:
-            dao.set_status(task_id, "conflict")
+            Worktree.objects.set_status(task_id, "conflict")
             logger.info("worktree integrate conflict task=%s", task_id)
             return IntegrateResult(task_id, "conflict", "merge conflict; resolve in the worktree")
         # Non-conflict merge failure — surface it without losing the tree.
@@ -220,7 +220,7 @@ def integrate(task_id: str) -> IntegrateResult:
     # Otherwise HEAD is some other branch, so -d would wrongly refuse — but we
     # just set base == branch tip via branch -f, proving the merge, so -D.
     _git(["branch", "-d" if base_checked_out else "-D", branch], repo_root)
-    dao.delete(task_id)
+    Worktree.objects.delete_for_task(task_id)
     logger.info("worktree integrated task=%s branch=%s -> %s", task_id, branch, base_branch)
     return IntegrateResult(task_id, "integrated")
 
@@ -228,7 +228,7 @@ def integrate(task_id: str) -> IntegrateResult:
 def discard(task_id: str) -> DiscardResult:
     """Remove a worktree without integrating (also the scratch/ephemeral path)."""
 
-    record = dao.get_by_task(task_id)
+    record = Worktree.objects.get_by_task(task_id)
     if record is None:
         return DiscardResult(task_id, removed=False, reason="no worktree for task")
 
@@ -238,7 +238,7 @@ def discard(task_id: str) -> DiscardResult:
         _git(["worktree", "prune"], record.repo_root, check=False)
     # -D: dirty / un-merged is expected on discard.
     _git(["branch", "-D", record.branch], record.repo_root, check=False)
-    dao.delete(task_id)
+    Worktree.objects.delete_for_task(task_id)
     logger.info("worktree discarded task=%s branch=%s", task_id, record.branch)
     return DiscardResult(task_id, removed=True)
 
@@ -254,14 +254,14 @@ def reconcile() -> ReconcileResult:
     pruned: list[str] = []
     kept = 0
     known_by_repo: dict[str, set[str]] = {}
-    for record in dao.list_all():
+    for record in Worktree.objects.all_records():
         repo_root = record.repo_root
         if repo_root not in known_by_repo:
             known_by_repo[repo_root] = _known_worktree_paths(repo_root)
         if os.path.normpath(record.path) in known_by_repo[repo_root]:
             kept += 1
         else:
-            dao.delete(record.task_id)
+            Worktree.objects.delete_for_task(record.task_id)
             pruned.append(record.task_id)
     if pruned:
         logger.info("worktree reconcile pruned %d stale rows", len(pruned))

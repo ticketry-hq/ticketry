@@ -4705,7 +4705,12 @@
                         "nullable": true
                     },
                     "source": {
-                        "$ref": "#/components/schemas/SourceEnum"
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SourceEnum"
+                            }
+                        ],
+                        "default": "hook"
                     },
                     "provider_session_id": {
                         "type": "string",

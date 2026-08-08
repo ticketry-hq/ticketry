@@ -4,28 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    field_validator,
-)
+from dataclasses import asdict, dataclass
 
 PROVIDER_CATALOG_SCOPE = "host"
 PROVIDER_CATALOG_KEY = "provider_catalog"
-
-_CATALOG_FIELDS = ("global_default",)
 
 logger = logging.getLogger(__name__)
 
 
 def parse_provider_catalog(value: str) -> "ProviderCatalog":
     """Read the remaining settings-owned global launch default defensively."""
-
-    try:
-        return ProviderCatalog.model_validate_json(value)
-    except ValueError as exc:
-        logger.warning("provider catalog unreadable, salvaging default: %s", exc)
 
     try:
         raw = json.loads(value)
@@ -42,14 +30,35 @@ def parse_provider_catalog(value: str) -> "ProviderCatalog":
         )
         return ProviderCatalog()
 
-    salvaged = {field: raw[field] for field in _CATALOG_FIELDS if field in raw}
-    for candidate in (salvaged, {}):
-        try:
-            return ProviderCatalog.model_validate(candidate)
-        except ValueError as exc:
-            logger.warning("provider catalog salvage attempt failed: %s", exc)
-    logger.error("provider catalog unrecoverable; falling back to first-run defaults")
-    return ProviderCatalog()
+    default = raw.get("global_default")
+    if default is None:
+        return ProviderCatalog()
+    if not isinstance(default, dict):
+        logger.error("provider catalog default is not an object; dropping it")
+        return ProviderCatalog()
+    if set(default) - {"provider", "model", "reasoning"}:
+        logger.error("provider catalog default has unknown fields; dropping it")
+        return ProviderCatalog()
+
+    provider = default.get("provider")
+    model = default.get("model")
+    reasoning = default.get("reasoning")
+    if not isinstance(provider, str):
+        logger.error("provider catalog default has no string provider; dropping it")
+        return ProviderCatalog()
+    if model is not None and not isinstance(model, str):
+        logger.error("provider catalog default has a non-string model; dropping it")
+        return ProviderCatalog()
+    if reasoning is not None and not isinstance(reasoning, str):
+        logger.error("provider catalog default has non-string reasoning; dropping it")
+        return ProviderCatalog()
+    return ProviderCatalog(
+        global_default=GlobalLaunchDefault(
+            provider=provider,
+            model=model,
+            reasoning=reasoning,
+        )
+    )
 
 
 def load_provider_catalog() -> "ProviderCatalog":
@@ -70,36 +79,21 @@ def load_provider_catalog() -> "ProviderCatalog":
     return parse_provider_catalog(value)
 
 
-class GlobalLaunchDefault(BaseModel):
-    """The catalog's optional launch default.
-
-    This settings-owned shape only normalizes values. Catalog foreign-key
-    validation is applied by the launch-binding write seam that owns the triple.
-    """
-
-    model_config = ConfigDict(extra="forbid")
+@dataclass(frozen=True)
+class GlobalLaunchDefault:
+    """The settings-owned launch triple after transport validation."""
 
     provider: str
     model: str | None = None
     reasoning: str | None = None
 
-    @field_validator("provider", mode="before")
-    @classmethod
-    def strip_provider(cls, value):
-        return value.strip() if isinstance(value, str) else value
 
-    @field_validator("model", "reasoning", mode="before")
-    @classmethod
-    def normalize_optional_text(cls, value):
-        if not isinstance(value, str):
-            return value
-        return value.strip() or None
-
-
-class ProviderCatalog(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+@dataclass(frozen=True)
+class ProviderCatalog:
     global_default: GlobalLaunchDefault | None = None
+
+    def as_dict(self) -> dict:
+        return asdict(self)
 
 
 def validate_global_launch_default(default: GlobalLaunchDefault | None) -> None:
@@ -115,9 +109,7 @@ def validate_global_launch_default(default: GlobalLaunchDefault | None) -> None:
         raise ValueError(f"Provider '{default.provider}' is not in the catalog.")
     model = None
     if default.model is not None:
-        model = AgentModel.objects.filter(
-            provider=provider, name=default.model
-        ).first()
+        model = AgentModel.objects.filter(provider=provider, name=default.model).first()
         if model is None:
             raise ValueError(
                 f"Model '{default.model}' is not in the catalog for provider "
@@ -128,9 +120,10 @@ def validate_global_launch_default(default: GlobalLaunchDefault | None) -> None:
     if model is None:
         raise ValueError("Choose a catalog model before configuring reasoning.")
     reasoning = ReasoningLevel.objects.filter(name=default.reasoning).first()
-    if reasoning is None or not model.permitted_reasoning_levels.filter(
-        pk=reasoning.pk
-    ).exists():
+    if (
+        reasoning is None
+        or not model.permitted_reasoning_levels.filter(pk=reasoning.pk).exists()
+    ):
         raise ValueError(
             f"Reasoning '{default.reasoning}' is not permitted for model "
             f"'{default.model}'."

@@ -2,37 +2,22 @@
 
 import json
 from datetime import datetime, timezone
-from typing import Any
-
-from asgiref.sync import sync_to_async
-from pydantic import BaseModel
 
 from apps.errors import ApplicationError
-from apps.settings_store import dao, service
+from apps.settings_store import service
+from apps.settings_store.models import AppSetting
 from apps.settings_store.provider_catalog import (
+    GlobalLaunchDefault,
     PROVIDER_CATALOG_KEY,
     PROVIDER_CATALOG_SCOPE,
     ProviderCatalog,
     parse_provider_catalog,
     validate_global_launch_default,
 )
-from apps.settings_store.schemas import ProfileBody
 
 
 KEYBINDINGS_SCOPE = "host"
 KEYBINDINGS_KEY = "keybindings"
-
-
-class SettingValueBody(BaseModel):
-    value: Any
-
-
-class ProviderCatalogBody(BaseModel):
-    value: ProviderCatalog
-
-
-class RecentIndexBody(BaseModel):
-    recent_profile_index: int
 
 
 def _raise_index_out_of_range() -> None:
@@ -43,8 +28,27 @@ def _raise_index_out_of_range() -> None:
     )
 
 
-async def get_keybindings():
-    value = await dao.get_setting(KEYBINDINGS_SCOPE, KEYBINDINGS_KEY)
+def _get_setting(scope: str, key: str) -> str | None:
+    return (
+        AppSetting.objects.filter(scope=scope, key=key)
+        .values_list("value", flat=True)
+        .first()
+    )
+
+
+def _upsert_setting(*, scope: str, key: str, value: str) -> None:
+    AppSetting.objects.update_or_create(
+        scope=scope,
+        key=key,
+        defaults={
+            "value": value,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+
+def get_keybindings():
+    value = _get_setting(KEYBINDINGS_SCOPE, KEYBINDINGS_KEY)
     if value is None:
         return {"value": None}
     try:
@@ -53,60 +57,60 @@ async def get_keybindings():
         return {"value": None}
 
 
-async def put_keybindings(body: SettingValueBody):
-    await dao.upsert_setting(
+def put_keybindings(*, value):
+    _upsert_setting(
         scope=KEYBINDINGS_SCOPE,
         key=KEYBINDINGS_KEY,
-        value=json.dumps(body.value),
-        updated_at=datetime.now(timezone.utc).isoformat(),
+        value=json.dumps(value),
     )
-    return {"value": body.value}
+    return {"value": value}
 
 
-async def get_provider_catalog():
-    value = await dao.get_setting(PROVIDER_CATALOG_SCOPE, PROVIDER_CATALOG_KEY)
+def get_provider_catalog():
+    value = _get_setting(PROVIDER_CATALOG_SCOPE, PROVIDER_CATALOG_KEY)
     catalog = ProviderCatalog() if value is None else parse_provider_catalog(value)
-    return {"value": catalog.model_dump(mode="json")}
+    return {"value": catalog.as_dict()}
 
 
-async def put_provider_catalog(body: ProviderCatalogBody):
+def put_provider_catalog(*, value: dict):
+    default_data = value.get("global_default")
+    default = None if default_data is None else GlobalLaunchDefault(**default_data)
     try:
-        await sync_to_async(validate_global_launch_default)(body.value.global_default)
+        validate_global_launch_default(default)
     except ValueError as exc:
         raise ApplicationError(422, str(exc)) from exc
-    await dao.upsert_setting(
+    _upsert_setting(
         scope=PROVIDER_CATALOG_SCOPE,
         key=PROVIDER_CATALOG_KEY,
-        value=body.value.model_dump_json(),
-        updated_at=datetime.now(timezone.utc).isoformat(),
+        value=json.dumps(value),
     )
-    return {"value": body.value.model_dump(mode="json")}
+    return {"value": value}
 
 
-async def get_config():
+def get_config():
     return service.list_config()
 
 
-async def add_profile(body: ProfileBody):
-    return service.add_profile(body.model_dump())
+def add_profile(data: dict):
+    return service.add_profile(data)
 
 
-async def replace_profile(index: int, body: ProfileBody):
+def replace_profile(index: int, data: dict):
     try:
-        return service.replace_profile(index, body.model_dump())
+        return service.replace_profile(index, data)
     except service.IndexOutOfRange:
         _raise_index_out_of_range()
 
 
-async def delete_profile(index: int):
+def delete_profile(index: int):
     try:
         return service.delete_profile(index)
     except service.IndexOutOfRange:
         _raise_index_out_of_range()
 
 
-async def patch_config(body: RecentIndexBody):
+def patch_config(*, recent_profile_index: int):
     try:
-        return service.set_recent_index(body.recent_profile_index)
+        return service.set_recent_index(recent_profile_index)
     except service.IndexOutOfRange:
         _raise_index_out_of_range()

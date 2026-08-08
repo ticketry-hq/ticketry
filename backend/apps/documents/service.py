@@ -19,11 +19,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from apps.documents import dao as documents_dao
+from django.db import IntegrityError
+
 from apps.documents import design_docs
 from apps.documents.models import DesignDocument
-from apps.runs import dao as runs_dao
-from apps.terminals.dao import SCRATCH_TASK_ID
+from apps.runs.api import list_design_dirs_for_task
+from apps.terminals.constants import SCRATCH_TASK_ID
 from apps import worktracker_queries
 from apps.settings_store.config import module_link_path, resolve_profile
 from studio_server.atomic_files import atomic_write_bytes
@@ -59,6 +60,84 @@ class SaveDocumentResult:
     digest: str
 
 
+async def upsert_document(
+    *,
+    doc_id: str,
+    module_id: str,
+    task_id: str,
+    scope: str,
+    root_dir: str,
+    rel_path: str,
+    discovered_by_run_id: Optional[str],
+    now: str,
+) -> tuple[DesignDocument, bool]:
+    """Register a document or refresh only its update timestamp."""
+
+    defaults = {
+        "id": doc_id,
+        "module_id": module_id,
+        "task_id": task_id,
+        "scope": scope,
+        "discovered_by_run_id": discovered_by_run_id,
+        "created_at": now,
+        "updated_at": now,
+    }
+    try:
+        row, created = await DesignDocument.objects.aget_or_create(
+            root_dir=root_dir,
+            rel_path=rel_path,
+            defaults=defaults,
+        )
+    except IntegrityError:
+        row = await DesignDocument.objects.aget(root_dir=root_dir, rel_path=rel_path)
+        created = False
+    if not created:
+        await DesignDocument.objects.filter(pk=row.pk).aupdate(updated_at=now)
+        row.updated_at = now
+    return row, created
+
+
+async def get_document(doc_id: str) -> Optional[DesignDocument]:
+    return await DesignDocument.objects.filter(id=doc_id).afirst()
+
+
+async def get_document_root(
+    *, task_id: str, module_id: str, rel_path: str
+) -> Optional[str]:
+    row = (
+        await DesignDocument.objects.filter(
+            task_id=task_id,
+            module_id=module_id,
+            rel_path=rel_path,
+        )
+        .order_by("-updated_at")
+        .afirst()
+    )
+    return row.root_dir if row else None
+
+
+async def delete_documents(ids: list[str]) -> int:
+    if not ids:
+        return 0
+    deleted, _ = await DesignDocument.objects.filter(id__in=ids).adelete()
+    return deleted
+
+
+async def document_rows_for_task(task_id: str) -> list[DesignDocument]:
+    rows = DesignDocument.objects.filter(task_id=task_id).order_by(
+        "created_at", "rel_path"
+    )
+    return sorted([row async for row in rows], key=lambda row: row.rel_path)
+
+
+async def document_rows_for_scratch(module_id: str) -> list[DesignDocument]:
+    rows = DesignDocument.objects.filter(
+        task_id=SCRATCH_TASK_ID,
+        module_id=module_id,
+    ).order_by("created_at", "rel_path")
+    return sorted([row async for row in rows], key=lambda row: row.rel_path)
+
+
 def doc_payload(row: DesignDocument) -> dict:
     """Shape one registry row for the wire.
 
@@ -81,7 +160,7 @@ async def _prune_missing_documents(rows: list[DesignDocument]) -> None:
         target = Path(row.root_dir) / row.rel_path
         if not await asyncio.to_thread(target.is_file):
             stale_ids.append(row.id)
-    await documents_dao.delete_documents(stale_ids)
+    await delete_documents(stale_ids)
 
 
 async def _rescan_roots(
@@ -109,7 +188,7 @@ async def _rescan_roots(
         for rel_path in design_docs.scan_documents(Path(root)):
             if (root, rel_path) in known:
                 continue
-            await documents_dao.upsert_document(
+            await upsert_document(
                 doc_id=uuid.uuid4().hex,
                 module_id=module_id,
                 task_id=task_id,
@@ -124,8 +203,8 @@ async def _rescan_roots(
 async def list_scratch_documents(module_id: str) -> list[dict]:
     """List the plan/instant (scratch) bucket for a module, rescanning first."""
 
-    rows = await documents_dao.list_for_scratch(module_id, SCRATCH_TASK_ID)
-    run_roots = await runs_dao.list_design_dirs_for_task(
+    rows = await document_rows_for_scratch(module_id)
+    run_roots = await list_design_dirs_for_task(
         SCRATCH_TASK_ID, module_id=module_id
     )
     roots = {r.root_dir for r in rows} | set(run_roots)
@@ -133,9 +212,9 @@ async def list_scratch_documents(module_id: str) -> list[dict]:
     await _rescan_roots(
         roots, known, module_id=module_id, task_id=SCRATCH_TASK_ID, scope="plan"
     )
-    rows = await documents_dao.list_for_scratch(module_id, SCRATCH_TASK_ID)
+    rows = await document_rows_for_scratch(module_id)
     await _prune_missing_documents(rows)
-    rows = await documents_dao.list_for_scratch(module_id, SCRATCH_TASK_ID)
+    rows = await document_rows_for_scratch(module_id)
     return [doc_payload(r) for r in rows]
 
 
@@ -153,8 +232,8 @@ async def list_task_documents(
     promotion, backend downtime — are still discovered.
     """
 
-    rows = await documents_dao.list_for_task(task_id)
-    run_roots = await runs_dao.list_design_dirs_for_task(task_id)
+    rows = await document_rows_for_task(task_id)
+    run_roots = await list_design_dirs_for_task(task_id)
     roots = {r.root_dir for r in rows} | set(run_roots)
 
     # Re-resolve the canonical directory from owned worktracker data; failures
@@ -183,9 +262,9 @@ async def list_task_documents(
     await _rescan_roots(
         roots, known, module_id=resolved_module_id, task_id=task_id, scope="task"
     )
-    rows = await documents_dao.list_for_task(task_id)
+    rows = await document_rows_for_task(task_id)
     await _prune_missing_documents(rows)
-    rows = await documents_dao.list_for_task(task_id)
+    rows = await document_rows_for_task(task_id)
     return [doc_payload(r) for r in rows]
 
 
@@ -202,7 +281,7 @@ async def read_document_asset(
     :return: ``(content_bytes, media_type)`` on success, else ``None``.
     """
 
-    row = await documents_dao.get_document(doc_id)
+    row = await get_document(doc_id)
     if row is None:
         return None
 
@@ -243,7 +322,7 @@ async def save_primary_markdown(
     the same containment, symlink and extension checks as the read path.
     """
 
-    row = await documents_dao.get_document(doc_id)
+    row = await get_document(doc_id)
     if row is None:
         return None
 

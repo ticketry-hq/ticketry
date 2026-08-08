@@ -18,7 +18,7 @@ from channels.testing.websocket import WebsocketCommunicator
 
 from studio_server.asgi import application
 from apps.runs.models import AgentRun
-from apps.terminals.dao import SCRATCH_TASK_ID
+from apps.terminals.constants import SCRATCH_TASK_ID
 from apps.terminals.tmux import client as tmux_client
 from apps.terminals.tmux import sessions as tmux_sessions
 from apps.terminals.tmux._core import TmuxSessionError
@@ -1522,9 +1522,9 @@ async def test_doc_chat_prompt_runs_in_doc_design_dir(
     profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
 
-    from apps.documents import dao as ddao
+    from apps.documents import service as document_service
 
-    await ddao.upsert_document(
+    await document_service.upsert_document(
         doc_id="d1",
         module_id=MODULE_ID,
         task_id=TASK_ID,
@@ -1563,11 +1563,11 @@ async def test_doc_chat_doc_id_disambiguates_among_multiple_roots(
     profile["module_links"] = [{"module_id": MODULE_ID, "path": str(module_folder)}]
     write_profiles(tmp_config, [profile], recent=0)
 
-    from apps.documents import dao as ddao
+    from apps.documents import service as document_service
 
     # Same (task_id, module_id, rel_path) under two distinct roots. The worktree
     # copy is registered LAST, so a -updated_at tiebreak would pick it.
-    await ddao.upsert_document(
+    await document_service.upsert_document(
         doc_id="canon",
         module_id=MODULE_ID,
         task_id=TASK_ID,
@@ -1577,7 +1577,7 @@ async def test_doc_chat_doc_id_disambiguates_among_multiple_roots(
         discovered_by_run_id=None,
         now="2026-06-21T00:00:00Z",
     )
-    await ddao.upsert_document(
+    await document_service.upsert_document(
         doc_id="wt",
         module_id=MODULE_ID,
         task_id=TASK_ID,

@@ -56,6 +56,12 @@ def test_host_drf_adapter_does_not_reinterpret_nested_http_responses():
     assert "JsonResponse" not in source
 
 
+def test_host_http_path_uses_native_drf_validation():
+    adapter_source = (BACKEND_ROOT / "apps/rest_api.py").read_text()
+    assert "UnprocessableEntity" not in adapter_source
+    assert "is_valid(raise_exception=True)" in adapter_source
+
+
 def test_launch_binding_view_delegates_transaction_work_to_service():
     source = inspect.getsource(LaunchBindingDetailView)
 

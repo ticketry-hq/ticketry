@@ -9,7 +9,6 @@ import pytest
 from asgiref.sync import sync_to_async
 from channels.testing.websocket import WebsocketCommunicator
 
-from apps.runs import dao
 from apps.runs.consumers import StatusStreamConsumer
 from apps.runs.api import ingest_lifecycle_event
 from apps.runs.bus import (
@@ -20,7 +19,7 @@ from apps.runs.bus import (
 from apps.runs.models import AgentRun, AutomationAttempt
 from apps.terminals.models import AgentTerminalSession
 from studio_server.asgi import application
-from studio_server.contracts import AutomationAttemptRecord, LifecycleEvent
+from studio_server.contracts import AutomationAttemptRecord
 from django.db import OperationalError, close_old_connections, transaction
 from django.utils import timezone
 from worktracker.models import Issue, IssueType, Project, State, Workspace
@@ -49,17 +48,15 @@ async def _issue_type(project: Project, *, level: str = "task") -> IssueType:
 async def _seed_run(
     run_id: str, *, project_id: str = "proj-1", scope: str = "task"
 ) -> None:
-    await dao.insert_agent_run(
-        AgentRun(
-            id=run_id,
-            issue_id=fixture_issue_id(
-                project_id=project_id, module_id="mod-1", task_id="task-1"
-            ),
-            agent="codex",
-            status="running",
-            started_at="2026-07-12T10:00:00+00:00",
-            scope=scope,
-        )
+    await AgentRun.objects.acreate(
+        id=run_id,
+        issue_id=fixture_issue_id(
+            project_id=project_id, module_id="mod-1", task_id="task-1"
+        ),
+        agent="codex",
+        status="running",
+        started_at="2026-07-12T10:00:00+00:00",
+        scope=scope,
     )
     await AgentTerminalSession.objects.acreate(
         agent_run_id=run_id,
@@ -378,12 +375,10 @@ async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
     await socket.receive_json_from()  # snapshot
 
     await ingest_lifecycle_event(
-        LifecycleEvent(
-            agent_run_id="run-1",
-            agent="codex",
-            kind="turn_start",
-            ts="2026-07-12T10:01:00Z",
-        ),
+        agent_run_id="run-1",
+        agent="codex",
+        kind="turn_start",
+        ts="2026-07-12T10:01:00Z",
     )
 
     assert await socket.receive_json_from() == {

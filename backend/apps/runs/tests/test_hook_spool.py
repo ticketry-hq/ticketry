@@ -12,7 +12,7 @@ async def test_spooled_codex_event_reaches_normal_lifecycle_ingress(
 ):
     captured = []
 
-    async def ingest(event):
+    async def ingest(**event):
         captured.append(event)
 
     monkeypatch.setenv(hook_spool.HOOK_SPOOL_DIR_ENV, str(tmp_path))
@@ -32,12 +32,12 @@ async def test_spooled_codex_event_reaches_normal_lifecycle_ingress(
     assert not path.exists()
     assert len(captured) == 1
     event = captured[0]
-    assert event.agent_run_id == "run-123"
-    assert event.agent == "codex"
-    assert event.kind == "session_start"
-    assert event.source == "hook"
-    assert event.provider_session_id == "provider-session"
-    assert event.message == "ready"
+    assert event["agent_run_id"] == "run-123"
+    assert event["agent"] == "codex"
+    assert event["kind"] == "session_start"
+    assert event["source"] == "hook"
+    assert event["provider_session_id"] == "provider-session"
+    assert event["message"] == "ready"
 
 
 async def test_spool_uses_the_existing_provider_specific_event_mapping(
@@ -45,7 +45,7 @@ async def test_spool_uses_the_existing_provider_specific_event_mapping(
 ):
     captured = []
 
-    async def ingest(event):
+    async def ingest(**event):
         captured.append(event)
 
     monkeypatch.setenv(hook_spool.HOOK_SPOOL_DIR_ENV, str(tmp_path))
@@ -60,14 +60,12 @@ async def test_spool_uses_the_existing_provider_specific_event_mapping(
     )
 
     assert await hook_spool.drain_once() == 1
-    assert captured[0].kind == "awaiting_input"
-    assert captured[0].provider_session_id == "agy-conversation"
+    assert captured[0]["kind"] == "awaiting_input"
+    assert captured[0]["provider_session_id"] == "agy-conversation"
 
 
-async def test_malformed_or_unmapped_spool_files_are_discarded(
-    monkeypatch, tmp_path
-):
-    async def unexpected_ingest(_event):
+async def test_malformed_or_unmapped_spool_files_are_discarded(monkeypatch, tmp_path):
+    async def unexpected_ingest(**_event):
         raise AssertionError("malformed events must not reach ingress")
 
     monkeypatch.setenv(hook_spool.HOOK_SPOOL_DIR_ENV, str(tmp_path))

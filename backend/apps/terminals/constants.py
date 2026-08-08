@@ -1,3 +1,3 @@
-from __future__ import annotations
+"""Terminal domain constants."""
 
 SCRATCH_TASK_ID = "00000000-0000-0000-0000-000000000000"

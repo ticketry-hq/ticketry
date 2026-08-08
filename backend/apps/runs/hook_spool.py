@@ -24,8 +24,6 @@ from apps.terminals.agents.hooks import (
     codex_hook,
     gemini_hook,
 )
-from studio_server.contracts import LifecycleEvent
-
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +92,7 @@ async def drain_file(path: Path) -> bool:
         # creating an apps.runs.api import cycle.
         from apps.runs.api import ingest_lifecycle_event
 
-        await ingest_lifecycle_event(LifecycleEvent(**payload))
+        await ingest_lifecycle_event(**payload)
         return True
     except Exception as exc:
         logger.warning("discarding invalid lifecycle hook spool file %s: %s", path, exc)
@@ -103,7 +101,9 @@ async def drain_file(path: Path) -> bool:
         try:
             path.unlink(missing_ok=True)
         except OSError as exc:
-            logger.warning("could not remove lifecycle hook spool file %s: %s", path, exc)
+            logger.warning(
+                "could not remove lifecycle hook spool file %s: %s", path, exc
+            )
 
 
 async def drain_once() -> int:

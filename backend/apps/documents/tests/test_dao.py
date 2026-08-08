@@ -1,8 +1,8 @@
-"""Tests for the design-documents Django DAO."""
+"""Tests for the design-document service persistence operations."""
 
 import pytest
 
-from apps.documents import dao
+from apps.documents import service
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -19,7 +19,7 @@ async def _upsert(
     run_id: str | None = "run-1",
     now: str = "2026-06-11T10:00:00",
 ):
-    return await dao.upsert_document(
+    return await service.upsert_document(
         doc_id=doc_id,
         module_id=module_id,
         task_id=task_id,
@@ -61,19 +61,19 @@ async def test_same_rel_path_under_other_root_is_distinct() -> None:
 async def test_get_document() -> None:
     await _upsert()
 
-    row = await dao.get_document("doc-1")
+    row = await service.get_document("doc-1")
     assert row is not None and row.rel_path == "design.html"
-    assert await dao.get_document("nope") is None
+    assert await service.get_document("nope") is None
 
 
 async def test_list_for_task_ordered_oldest_first() -> None:
     await _upsert(doc_id="doc-b", rel_path="b.html", now="2026-06-11T12:00:00")
     await _upsert(doc_id="doc-a", rel_path="a.html", now="2026-06-11T10:00:00")
 
-    rows = await dao.list_for_task("task-1")
+    rows = await service.document_rows_for_task("task-1")
 
     assert [row.rel_path for row in rows] == ["a.html", "b.html"]
-    assert await dao.list_for_task("other") == []
+    assert await service.document_rows_for_task("other") == []
 
 
 async def test_list_for_scratch_filters_by_module() -> None:
@@ -85,6 +85,6 @@ async def test_list_for_scratch_filters_by_module() -> None:
         root_dir="/repo/spec/other",
     )
 
-    rows = await dao.list_for_scratch("mod-1", SCRATCH)
+    rows = await service.document_rows_for_scratch("mod-1")
 
     assert [row.id for row in rows] == ["doc-1"]

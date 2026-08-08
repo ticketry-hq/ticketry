@@ -22,7 +22,7 @@ def test_legacy_activation_and_unknown_fields_do_not_reenter_the_settings_shape(
         )
     )
 
-    assert catalog.model_dump(mode="json") == {
+    assert catalog.as_dict() == {
         "global_default": {
             "provider": "claude",
             "model": "opus",
@@ -36,7 +36,7 @@ def test_invalid_default_is_dropped_without_reintroducing_activation():
         json.dumps({"global_default": {"provider": "future-provider"}})
     )
 
-    assert catalog.model_dump(mode="json") == {
+    assert catalog.as_dict() == {
         "global_default": {
             "provider": "future-provider",
             "model": None,
@@ -49,7 +49,7 @@ def test_unrecoverable_data_falls_back_to_no_default_loudly(caplog):
     with caplog.at_level("ERROR"):
         catalog = parse_provider_catalog("not json at all")
 
-    assert catalog.model_dump(mode="json") == {"global_default": None}
+    assert catalog.as_dict() == {"global_default": None}
     assert "provider catalog" in caplog.text
 
 
@@ -75,5 +75,5 @@ def test_settings_view_and_launch_accessor_salvage_the_same_default(client):
             "reasoning": None,
         }
     }
-    assert load_provider_catalog().model_dump(mode="json") == expected
+    assert load_provider_catalog().as_dict() == expected
     assert client.get("/api/settings/provider-catalog").json() == {"value": expected}

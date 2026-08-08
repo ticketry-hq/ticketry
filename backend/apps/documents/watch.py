@@ -28,8 +28,8 @@ from typing import Dict, Optional
 
 from watchfiles import Change, awatch
 
-from apps.documents import dao, design_docs
-from apps.documents.service import doc_payload
+from apps.documents import design_docs
+from apps.documents.service import doc_payload, upsert_document
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ async def _register_document(
     """
 
     now = datetime.now(timezone.utc).isoformat()
-    row, created = await dao.upsert_document(
+    row, created = await upsert_document(
         doc_id=uuid.uuid4().hex,
         module_id=module_id,
         task_id=task_id,

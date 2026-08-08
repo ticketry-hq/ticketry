@@ -11,7 +11,8 @@ import shutil
 
 import pytest
 
-from apps.worktrees import dao, service
+from apps.worktrees import service
+from apps.worktrees.models import Worktree
 from apps.worktrees.tests.conftest import git
 
 
@@ -144,7 +145,7 @@ def test_integrate_clean(repo):
     assert git(["rev-parse", "main"], repo).stdout.strip() == task_tip  # base ff'd
     assert not os.path.isdir(wt.path)  # worktree removed
     assert wt.branch not in git(["branch", "--list", wt.branch], repo).stdout
-    assert dao.get_by_task("t1") is None  # row deleted
+    assert Worktree.objects.get_by_task("t1") is None  # row deleted
 
 
 def test_integrate_conflict(repo):
@@ -162,7 +163,7 @@ def test_integrate_conflict(repo):
     result = service.integrate("t1")
     assert result.outcome == "conflict"
 
-    record = dao.get_by_task("t1")
+    record = Worktree.objects.get_by_task("t1")
     assert record is not None and record.status == "conflict"  # row intact, flagged
     assert os.path.isdir(wt.path)  # tree intact for resolution
     # The primary checkout is never left mid-merge.
@@ -190,7 +191,7 @@ def test_integrate_conflict_then_resolve(repo):
     result = service.integrate("t1")
     assert result.outcome == "integrated"
     assert not os.path.isdir(wt.path)
-    assert dao.get_by_task("t1") is None
+    assert Worktree.objects.get_by_task("t1") is None
 
 
 def test_integrate_base_not_checked_out(repo):
@@ -205,7 +206,7 @@ def test_integrate_base_not_checked_out(repo):
     assert result.outcome == "integrated"
     assert git(["rev-parse", "main"], repo).stdout.strip() == task_tip
     assert not os.path.isdir(wt.path)
-    assert dao.get_by_task("t1") is None
+    assert Worktree.objects.get_by_task("t1") is None
 
 
 def test_integrate_refuses_dirty(repo):
@@ -216,14 +217,14 @@ def test_integrate_refuses_dirty(repo):
     result = service.integrate("t1")
     assert result.outcome == "dirty"
     assert os.path.isdir(wt.path)  # nothing destroyed
-    assert dao.get_by_task("t1") is not None
+    assert Worktree.objects.get_by_task("t1") is not None
 
 
 def test_integrate_refuses_ephemeral(repo):
     service.create(task_id="t1", working_path=str(repo), ticket_seq=1, ephemeral=True)
     result = service.integrate("t1")
     assert result.outcome == "ephemeral"
-    assert dao.get_by_task("t1") is not None
+    assert Worktree.objects.get_by_task("t1") is not None
 
 
 # --------------------------------------------------------------------------- discard
@@ -240,7 +241,7 @@ def test_discard(repo):
     assert git(["rev-parse", "main"], repo).stdout.strip() == base_before  # base untouched
     assert not os.path.isdir(wt.path)
     assert wt.branch not in git(["branch", "--list", wt.branch], repo).stdout
-    assert dao.get_by_task("t1") is None
+    assert Worktree.objects.get_by_task("t1") is None
 
 
 # --------------------------------------------------------------------------- persistence / reconcile
@@ -250,7 +251,7 @@ def test_persist_restore(repo):
     wt = service.create(task_id="t1", working_path=str(repo), ticket_seq=9)
 
     # Simulate a restart: a fresh query must re-attach path/branch/base.
-    restored = dao.get_by_task("t1")
+    restored = Worktree.objects.get_by_task("t1")
     assert restored.path == wt.path
     assert restored.branch == wt.branch
     assert restored.base_branch == wt.base_branch
@@ -258,7 +259,7 @@ def test_persist_restore(repo):
 
 
 def test_reconcile_prunes_stale(repo):
-    live = service.create(task_id="live", working_path=str(repo), ticket_seq=1)
+    service.create(task_id="live", working_path=str(repo), ticket_seq=1)
     stale = service.create(task_id="stale", working_path=str(repo), ticket_seq=2)
 
     # Remove one worktree out of band — git forgets it, the row lingers.
@@ -269,5 +270,5 @@ def test_reconcile_prunes_stale(repo):
     assert "live" not in result.pruned
     assert result.kept == 1
 
-    assert dao.get_by_task("stale") is None
-    assert dao.get_by_task("live") is not None
+    assert Worktree.objects.get_by_task("stale") is None
+    assert Worktree.objects.get_by_task("live") is not None

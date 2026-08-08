@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from apps.terminals.dao import SCRATCH_TASK_ID
+from apps.terminals.constants import SCRATCH_TASK_ID
 from apps.terminals.session import LaunchIntent, session as terminal_session
 from apps.terminals.validation import SpawnRequest
 

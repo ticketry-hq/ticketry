@@ -22,15 +22,8 @@ import hashlib
 from dataclasses import dataclass
 from typing import Optional
 
-from pydantic import BaseModel
-
 from apps.errors import ApplicationError
 from apps.documents import service
-
-
-class SaveDocumentIn(BaseModel):
-    content: str
-    digest: str
 
 
 @dataclass(frozen=True)
@@ -61,9 +54,7 @@ async def list_documents(
 
     if scope == "scratch":
         if not module_id:
-            raise ApplicationError(
-                400, "module_id_required", code="module_id_required"
-            )
+            raise ApplicationError(400, "module_id_required", code="module_id_required")
         documents = await service.list_scratch_documents(module_id)
         return {"documents": documents}
 
@@ -90,15 +81,17 @@ async def read_document_asset(doc_id: str, asset_path: str) -> DocumentAsset:
         raise ApplicationError(404, "not_found", code="not_found")
 
     content, media_type = result
-    etag = hashlib.sha256(content).hexdigest() if media_type == "text/markdown" else None
+    etag = (
+        hashlib.sha256(content).hexdigest() if media_type == "text/markdown" else None
+    )
     return DocumentAsset(content=content, media_type=media_type, etag=etag)
 
 
-async def save_document(doc_id: str, payload: SaveDocumentIn) -> SavedDocument:
+async def save_document(doc_id: str, *, content: str, digest: str) -> SavedDocument:
     """Digest-guarded save of a registered primary Markdown document."""
 
     result = await service.save_primary_markdown(
-        doc_id, payload.content.encode("utf-8"), payload.digest
+        doc_id, content.encode("utf-8"), digest
     )
     if result is None:
         raise ApplicationError(404, "not_found", code="not_found")

@@ -4,7 +4,6 @@ from django.core.exceptions import ValidationError
 
 from apps.runs.models import AutomationAttempt
 from studio_server.contracts import (
-    AutomationAttemptRecord,
     WorkItemState,
     WorkItemStateFrame,
 )
@@ -12,22 +11,26 @@ from worktracker.models import Issue, Project, State
 from worktracker.state import workflow_state_projection
 
 
-def automation_attempt_record(attempt: AutomationAttempt) -> AutomationAttemptRecord:
+def automation_attempt_record(attempt: AutomationAttempt) -> dict:
     """Project one durable automation attempt into its public status contract."""
 
     root_id = attempt.root_attempt_id or attempt.id
-    return AutomationAttemptRecord(
-        attempt_id=str(attempt.id),
-        root_attempt_id=str(root_id),
-        retry_of_attempt_id=(str(attempt.retry_of_id) if attempt.retry_of_id else None),
-        work_item_id=str(attempt.issue_id),
-        status=attempt.status,
-        error=attempt.error,
-        failure=attempt.error_details,
-        retryable=attempt.status == AutomationAttempt.Status.FAILED and attempt.retryable,
-        agent_run_id=attempt.agent_run_id,
-        updated_at=attempt.updated_at.isoformat(),
-    )
+    return {
+        "attempt_id": str(attempt.id),
+        "root_attempt_id": str(root_id),
+        "retry_of_attempt_id": (
+            str(attempt.retry_of_id) if attempt.retry_of_id else None
+        ),
+        "work_item_id": str(attempt.issue_id),
+        "status": attempt.status,
+        "error": attempt.error,
+        "failure": attempt.error_details,
+        "retryable": (
+            attempt.status == AutomationAttempt.Status.FAILED and attempt.retryable
+        ),
+        "agent_run_id": attempt.agent_run_id,
+        "updated_at": attempt.updated_at.isoformat(),
+    }
 
 
 def work_item_state_frame(
@@ -62,10 +65,7 @@ def project_workflow_states(project_id: str) -> list[WorkItemState]:
         states = State.objects.filter(project_id=project_id).order_by(
             "sort_order", "created_at"
         )
-        return [
-            WorkItemState(**workflow_state_projection(state))
-            for state in states
-        ]
+        return [WorkItemState(**workflow_state_projection(state)) for state in states]
     except (ValidationError, ValueError):
         return []
 

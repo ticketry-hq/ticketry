@@ -1,26 +1,196 @@
 """Transport-independent lifecycle application operations."""
 
 import logging
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from django.db import transaction
+from django.db.models import Max, Q
+from django.db.models.functions import Coalesce, Greatest
 from apps.errors import ApplicationError
-from studio_server.contracts import (
-    AgentStatusScope,
-    AgentStatusSnapshot,
-    AgentLifecycleFrame,
-    LifecycleEvent,
-    RunRecord,
-    reduce_lifecycle,
-)
+from studio_server.contracts import reduce_lifecycle
 
-from apps.runs import dao
 from apps.runs.bus import publish_status
-from apps.runs.models import AutomationAttempt
+from apps.runs.models import AgentRun, AutomationAttempt
 from apps.runs.projections import automation_attempt_record
 
 
 logger = logging.getLogger(__name__)
+DEFAULT_ACTIVITY_WINDOW_DAYS = 30
+
+
+def normalize_utc_timestamp(value: str) -> str:
+    """Return one sortable ISO-8601 representation, treating naive input as UTC."""
+
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
+async def set_provider_session_id(run_id: str, provider_session_id: str) -> bool:
+    updated = await AgentRun.objects.filter(id=run_id).aupdate(
+        provider_session_id=provider_session_id
+    )
+    return updated > 0
+
+
+async def set_lifecycle_state(
+    run_id: str, lifecycle_state: str, *, updated_at: str
+) -> bool:
+    """Persist a newer lifecycle state only while the run remains active."""
+
+    normalized = normalize_utc_timestamp(updated_at)
+    updated = (
+        await AgentRun.objects.filter(id=run_id, ended_at__isnull=True)
+        .filter(
+            Q(lifecycle_updated_at__isnull=True)
+            | Q(lifecycle_updated_at__lt=normalized)
+        )
+        .aupdate(lifecycle_state=lifecycle_state, lifecycle_updated_at=normalized)
+    )
+    return updated > 0
+
+
+async def get_status_routing(
+    run_id: str,
+) -> Optional[tuple[str, Optional[str], str, str, str, str]]:
+    routing = (
+        await AgentRun.objects.filter(id=run_id)
+        .exclude(scope="docchat")
+        .annotate(run_module_id=Coalesce("issue__module_id", "issue_id"))
+        .values_list(
+            "issue__project_id",
+            "issue_id",
+            "issue__type",
+            "run_module_id",
+            "scope",
+            "agent",
+            "started_at",
+        )
+        .afirst()
+    )
+    if routing is None:
+        return None
+    project_id, issue_id, issue_type, module_id, scope, agent, started_at = routing
+    return (
+        str(project_id),
+        str(issue_id) if issue_type == "task" else None,
+        str(module_id),
+        scope,
+        agent,
+        started_at,
+    )
+
+
+async def list_design_dirs_for_task(
+    task_id: str, *, module_id: Optional[str] = None
+) -> list[str]:
+    rows = AgentRun.objects.filter(issue_id=task_id, design_dir__isnull=False)
+    if module_id is not None:
+        rows = rows.filter(issue__module_id=module_id)
+    values = rows.values_list("design_dir", flat=True).distinct()
+    return [value async for value in values]
+
+
+async def last_activity_by_module(
+    project_id: str,
+    *,
+    window_days: int = DEFAULT_ACTIVITY_WINDOW_DAYS,
+    now: Optional[datetime] = None,
+) -> dict[str, str]:
+    cutoff = (
+        (now or datetime.now(timezone.utc)) - timedelta(days=window_days)
+    ).isoformat()
+    rows = (
+        AgentRun.objects.filter(issue__project_id=project_id, started_at__gte=cutoff)
+        .annotate(module_key=Coalesce("issue__module_id", "issue_id"))
+        .values("module_key")
+        .annotate(last_activity=Max(Coalesce("lifecycle_updated_at", "started_at")))
+    )
+    return {str(row["module_key"]): row["last_activity"] async for row in rows}
+
+
+async def agent_status_records(
+    project_id: str,
+    *,
+    task_id: Optional[str] = None,
+    window_days: int = DEFAULT_ACTIVITY_WINDOW_DAYS,
+    now: Optional[datetime] = None,
+) -> list[dict]:
+    rows = (
+        AgentRun.objects.filter(issue__project_id=project_id)
+        .exclude(scope="docchat")
+        .select_related("issue")
+    )
+    if task_id is not None:
+        rows = rows.filter(issue_id=task_id)
+    rows = rows.annotate(
+        run_module_id=Coalesce("issue__module_id", "issue_id"),
+        status_updated_at=Greatest(
+            Coalesce("lifecycle_updated_at", "started_at"),
+            Coalesce("ended_at", "started_at"),
+        ),
+    )
+    cutoff = (
+        (now or datetime.now(timezone.utc)) - timedelta(days=window_days)
+    ).isoformat()
+    rows = rows.filter(
+        Q(ended_at__isnull=True) | Q(status_updated_at__gte=cutoff)
+    ).order_by("-status_updated_at", "-id")
+
+    records: list[dict] = []
+    async for run in rows:
+        if run.ended_at:
+            state = "exited"
+            updated_at = max(filter(None, (run.ended_at, run.lifecycle_updated_at)))
+        else:
+            state = run.lifecycle_state or "unknown"
+            updated_at = run.lifecycle_updated_at or run.started_at
+        records.append(
+            {
+                "agent_run_id": run.id,
+                "project_id": str(run.issue.project_id),
+                "task_id": str(run.issue_id) if run.issue.type == "task" else None,
+                "module_id": str(run.run_module_id),
+                "agent": run.agent,
+                "scope": run.scope,
+                "started_at": run.started_at,
+                "state": state,
+                "updated_at": updated_at,
+            }
+        )
+    return records
+
+
+async def automation_attempt_status_records(
+    project_id: str, *, task_id: str | None = None
+) -> list[dict]:
+    try:
+        scoped_project_id = uuid.UUID(project_id)
+        scoped_task_id = uuid.UUID(task_id) if task_id is not None else None
+    except ValueError:
+        return []
+    rows = AutomationAttempt.objects.filter(
+        issue__project_id=scoped_project_id,
+        dismissed_at__isnull=True,
+    )
+    if task_id is not None:
+        rows = rows.filter(issue_id=scoped_task_id)
+    rows = rows.order_by("-updated_at", "-created_at").select_related("root_attempt")
+    seen_roots: set[str] = set()
+    records: list[dict] = []
+    async for attempt in rows:
+        root_id = str(attempt.root_attempt_id or attempt.id)
+        if root_id in seen_roots:
+            continue
+        seen_roots.add(root_id)
+        if attempt.status == AutomationAttempt.Status.SUCCEEDED:
+            continue
+        records.append(automation_attempt_record(attempt))
+    return records
+
 
 def retry_automation_attempt(attempt_id: str):
     """Create at most one explicit retry child for one failed attempt."""
@@ -71,39 +241,46 @@ def retry_automation_attempt(attempt_id: str):
     return automation_attempt_record(retry)
 
 
-async def ingest_lifecycle_event(event: LifecycleEvent):
+async def ingest_lifecycle_event(
+    *,
+    agent_run_id: str,
+    agent: str,
+    kind: str,
+    ts: str,
+    message: str | None = None,
+    source: str = "hook",
+    provider_session_id: str | None = None,
+):
     """Ingest one agent lifecycle/attention event and relay it (#498/#512).
 
-    :param event: the normalized lifecycle envelope from a per-agent hook.
+    Inputs are already validated by the calling transport (DRF or hook adapter).
     :return: a ``202`` tuple echoing the event and its receive timestamp.
     """
 
     received_at = datetime.now(timezone.utc).isoformat()
 
-    if event.provider_session_id:
+    if provider_session_id:
         try:
-            await dao.set_provider_session_id(
-                event.agent_run_id, event.provider_session_id
-            )
+            await set_provider_session_id(agent_run_id, provider_session_id)
         except Exception as exc:
             logger.warning("failed to persist provider_session_id: %s", exc)
 
     # Reduce the event kind to a lifecycle state and persist it as the run's
     # latest state (#515). Unrecognized kinds reduce to None and are skipped.
 
-    state = reduce_lifecycle(event.kind)
+    state = reduce_lifecycle(kind)
     if state is not None:
         # Persist the state and read the run's routing keys, so the relayed
         # frame can be placed under the right task (#512).
 
         routing = None
         try:
-            event_at = dao.normalize_utc_timestamp(event.ts)
-            persisted = await dao.set_lifecycle_state(
-                event.agent_run_id, state, updated_at=event_at
+            event_at = normalize_utc_timestamp(ts)
+            persisted = await set_lifecycle_state(
+                agent_run_id, state, updated_at=event_at
             )
             if persisted:
-                routing = await dao.get_status_routing(event.agent_run_id)
+                routing = await get_status_routing(agent_run_id)
         except Exception as exc:
             logger.warning("failed to persist lifecycle_state: %s", exc)
 
@@ -111,29 +288,44 @@ async def ingest_lifecycle_event(event: LifecycleEvent):
         # so the client places it without a lookup; missing routing is skipped.
 
         if routing is not None:
-            project_id, task_id, module_id, scope, agent, started_at = routing
-            frame = AgentLifecycleFrame(
-                at=event_at,
-                run=RunRecord(
-                    agent_run_id=event.agent_run_id,
-                    project_id=project_id,
-                    task_id=task_id,
-                    module_id=module_id,
-                    agent=agent,
-                    scope=scope,
-                    started_at=started_at,
-                    state=state,
-                    updated_at=event_at,
-                ),
+            project_id, task_id, module_id, scope, run_agent, started_at = routing
+            await publish_status(
+                project_id,
+                {
+                    "v": 1,
+                    "type": "agent_lifecycle",
+                    "at": event_at,
+                    "run": {
+                        "agent_run_id": agent_run_id,
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "module_id": module_id,
+                        "agent": run_agent,
+                        "scope": scope,
+                        "started_at": started_at,
+                        "state": state,
+                        "updated_at": event_at,
+                    },
+                },
             )
-            await publish_status(project_id, frame.model_dump())
 
-    return 202, {"accepted": event.model_dump(), "received_at": received_at}
+    return 202, {
+        "accepted": {
+            "agent_run_id": agent_run_id,
+            "agent": agent,
+            "kind": kind,
+            "ts": ts,
+            "message": message,
+            "source": source,
+            "provider_session_id": provider_session_id,
+        },
+        "received_at": received_at,
+    }
 
 
 async def get_module_activity(
     project_id: str,
-    window_days: int = dao.DEFAULT_ACTIVITY_WINDOW_DAYS,
+    window_days: int = DEFAULT_ACTIVITY_WINDOW_DAYS,
 ):
     """Return the most recent agent interaction per module (#598).
 
@@ -145,18 +337,18 @@ async def get_module_activity(
     :return: a ``{module_id: iso8601}`` map.
     """
 
-    return await dao.last_activity_by_module(project_id, window_days=window_days)
+    return await last_activity_by_module(project_id, window_days=window_days)
 
 
 async def agent_status(project_id: str, task_id: str | None = None):
     """Return the authoritative run-status snapshot for a project or task."""
 
     at = datetime.now(timezone.utc).isoformat()
-    return AgentStatusSnapshot(
-        scope=AgentStatusScope(project_id=project_id, task_id=task_id),
-        runs=await dao.agent_status_records(project_id, task_id=task_id),
-        automation_attempts=await dao.automation_attempt_status_records(
+    return {
+        "scope": {"project_id": project_id, "task_id": task_id},
+        "runs": await agent_status_records(project_id, task_id=task_id),
+        "automation_attempts": await automation_attempt_status_records(
             project_id, task_id=task_id
         ),
-        at=at,
-    )
+        "at": at,
+    }

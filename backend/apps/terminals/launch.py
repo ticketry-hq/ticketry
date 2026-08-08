@@ -42,12 +42,11 @@ from apps.terminals.agents.skills.preflight import (
     RequiredSkillUnavailable,
     ResolvedSkills,
 )
-from apps.terminals.dao.constants import SCRATCH_TASK_ID
+from apps.terminals.constants import SCRATCH_TASK_ID
 from apps.documents import watch as documents_watch
 from apps.runs.bus import publish_document, publish_status
 from apps.runs.models import AgentRun
 from apps.terminals.tmux import sessions as tmux_sessions
-from studio_server.contracts import AgentLifecycleFrame, RunRecord
 from worktracker.models import Issue
 
 logger = logging.getLogger(__name__)
@@ -231,9 +230,7 @@ async def _launch(
         # create_session, which runs the agent command inside tmux and
         # writes its own terminal-session row. Close the thread connection.
         try:
-            issue = Issue.objects.only("id", "project_id", "module_id").get(
-                id=issue_id
-            )
+            issue = Issue.objects.only("id", "project_id", "module_id").get(id=issue_id)
             project_id = str(issue.project_id)
             module_id = str(issue.module_id or issue.id)
             task_id = str(issue.id) if issue.module_id else None
@@ -254,9 +251,7 @@ async def _launch(
             close_old_connections()
 
     try:
-        project_id, module_id, task_id = await asyncio.to_thread(
-            _persist_and_create
-        )
+        project_id, module_id, task_id = await asyncio.to_thread(_persist_and_create)
     except Exception as exc:
         # tmux missing/broken, or persistence failed — delete the half-created
         # row so no orphan remains, then signal the caller to decide.
@@ -275,20 +270,22 @@ async def _launch(
     # regress this live run to the deliberately hidden `unknown` state.
     await publish_status(
         project_id,
-        AgentLifecycleFrame(
-            at=started_at,
-            run=RunRecord(
-                agent_run_id=agent_run_id,
-                project_id=project_id,
-                task_id=task_id,
-                module_id=module_id,
-                agent=agent,
-                scope=scope,
-                started_at=started_at,
-                state="starting",
-                updated_at=started_at,
-            ),
-        ).model_dump(),
+        {
+            "v": 1,
+            "type": "agent_lifecycle",
+            "at": started_at,
+            "run": {
+                "agent_run_id": agent_run_id,
+                "project_id": project_id,
+                "task_id": task_id,
+                "module_id": module_id,
+                "agent": agent,
+                "scope": scope,
+                "started_at": started_at,
+                "state": "starting",
+                "updated_at": started_at,
+            },
+        },
     )
 
     # Watch the run's design directory for generated HTML for the rest of the

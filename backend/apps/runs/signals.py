@@ -9,7 +9,7 @@ from django.dispatch import receiver
 
 from apps.runs.bus import publish_status
 from apps.runs.projections import work_item_state_frame
-from studio_server.contracts import WorkflowStateFrame
+from studio_server.contracts import WorkflowStateFrame, contract_payload
 from worktracker.models import State
 from worktracker.signals import work_item_changed, workflow_state_changed
 
@@ -32,7 +32,7 @@ def publish_authoritative_workflow_state(
             state=state,
             updated_at=updated_at,
         )
-        async_to_sync(publish_status)(project_id, frame.model_dump())
+        async_to_sync(publish_status)(project_id, contract_payload(frame))
     except Exception:
         logger.exception(
             "failed to publish committed workflow state state=%s", state.get("id")
@@ -79,7 +79,7 @@ def publish_work_item_state(
             updated_at=updated_at,
             membership_changed=membership_changed,
         )
-        async_to_sync(publish_status)(project_id, frame.model_dump())
+        async_to_sync(publish_status)(project_id, contract_payload(frame))
     except Exception:
         logger.exception(
             "failed to publish committed work-item state issue=%s", issue_id

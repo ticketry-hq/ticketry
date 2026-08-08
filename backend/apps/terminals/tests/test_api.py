@@ -12,11 +12,12 @@ from django.test import override_settings
 import apps.terminals.agents.registry as registry
 import apps.terminals.api as terminals_api
 import apps.terminals.launch as launch
-from apps.terminals import dao, tmux
+from apps.terminals import tmux
 import apps.terminals.session as session_module
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.authorization import issue_run_authorization
+from apps.terminals.constants import SCRATCH_TASK_ID
 from apps.terminals.validation import SpawnRequest
 from apps.runs.models import AgentRun
 from worktracker.models import Issue, IssueType, Project, Workspace
@@ -24,8 +25,6 @@ from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
-
-SCRATCH_TASK_ID = dao.SCRATCH_TASK_ID
 
 
 def _create_module_issue() -> Issue:

@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-from asgiref.sync import async_to_sync
 from django.db import close_old_connections
 
 from apps.documents import watch as documents_watch
@@ -29,7 +28,6 @@ from apps.terminals.agents.skills.preflight import (
     resolve_required_skills,
     skill_prompt_envelope,
 )
-from apps.terminals.dao import sessions as session_dao
 from apps.terminals.launch import LaunchUnavailable, _launch  # noqa: F401 - public seam
 from apps.terminals.launch_configuration import (
     LaunchConfigurationError,
@@ -391,7 +389,12 @@ class TerminalSessionService:
         )
 
     def sessions_for(self, task_id: str) -> list[AgentTerminalSession]:
-        return async_to_sync(session_dao.list_terminal_sessions_for_task)(task_id)
+        return list(
+            AgentTerminalSession.objects.filter(
+                task_id=task_id,
+                terminated_at__isnull=True,
+            ).order_by("-created_at")
+        )
 
     def attach(
         self, agent_run_id: str, *, viewer_id: str | None = None

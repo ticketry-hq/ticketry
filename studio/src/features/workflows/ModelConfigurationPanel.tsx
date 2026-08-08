@@ -92,9 +92,8 @@ function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.body && typeof error.body === "object") {
     const detail = (error.body as { detail?: unknown }).detail;
     if (typeof detail === "string" && detail) return detail;
-    // A pydantic/Ninja 422 arrives as a list of per-field objects. Reading only
-    // the string form replaced the server's actual message ("reasoning is not
-    // valid for provider 'gemini'") with a bare "HTTP 422".
+    // Preserve structured service-error messages instead of collapsing them to
+    // a bare HTTP status.
     if (Array.isArray(detail)) {
       const messages = detail
         .map((entry) =>

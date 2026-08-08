@@ -6,13 +6,14 @@ from urllib.parse import parse_qs
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from asgiref.sync import sync_to_async
 
-from apps.runs import dao
+from apps.runs.api import agent_status_records, automation_attempt_status_records
 from apps.runs.bus import STATUS_GROUP_FMT
 from apps.runs.projections import project_work_item_replay, project_workflow_states
 from studio_server.contracts import (
     AgentStatusScope,
     StatusCursorFrame,
     StatusSnapshotFrame,
+    contract_payload,
 )
 
 
@@ -42,20 +43,20 @@ class StatusStreamConsumer(AsyncJsonWebsocketConsumer):
         )(project_id, cursor)
         frame = StatusSnapshotFrame(
             scope=AgentStatusScope(project_id=project_id),
-            runs=await dao.agent_status_records(project_id),
-            automation_attempts=await dao.automation_attempt_status_records(project_id),
+            runs=await agent_status_records(project_id),
+            automation_attempts=await automation_attempt_status_records(project_id),
             at=datetime.now(timezone.utc).isoformat(),
             work_item_cursor=upper if cursor is None else cursor,
             workflow_states=await sync_to_async(
                 project_workflow_states, thread_sensitive=True
             )(project_id),
         )
-        await self.send_json(frame.model_dump())
+        await self.send_json(contract_payload(frame))
         if cursor is not None:
             for projection in replay:
-                await self.send_json(projection.model_dump())
+                await self.send_json(contract_payload(projection))
             await self.send_json(
-                StatusCursorFrame(project_id=project_id, revision=upper).model_dump()
+                contract_payload(StatusCursorFrame(project_id=project_id, revision=upper))
             )
 
     async def status_frame(self, event: dict) -> None:

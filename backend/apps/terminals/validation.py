@@ -20,10 +20,8 @@ import os
 from dataclasses import dataclass
 from typing import Optional, Union
 
-from pydantic import ValidationError
-
 from apps.terminals.agents.registry import all_slugs
-from apps.terminals.frames import InitAttachFrame, InitSpawnFrame
+from apps.terminals.frames import frame_is_valid
 
 
 MAX_SESSIONS = 32
@@ -67,6 +65,67 @@ def _clamp_dim(value: int) -> int:
     return max(1, min(value, 1000))
 
 
+def normalize_spawn_request(
+    *,
+    agent: str,
+    project_id: str,
+    module_id: str,
+    task_id: Optional[str] = None,
+    initial_prompt: Optional[str] = None,
+    cols: int = 1,
+    rows: int = 1,
+    is_planning: bool = False,
+    is_instant: bool = False,
+    instant_prompt: Optional[str] = None,
+    is_doc_chat: bool = False,
+    doc_rel_path: Optional[str] = None,
+    doc_id: Optional[str] = None,
+) -> tuple[Optional[SpawnRequest], Optional[str]]:
+    """Apply transport-neutral spawn rules to already typed input."""
+
+    if agent not in VALID_AGENTS:
+        return None, "unknown_agent"
+    if not project_id or not module_id or cols <= 0 or rows <= 0:
+        return None, "bad_init"
+    if sum((is_planning, is_instant, is_doc_chat)) > 1:
+        return None, "bad_init"
+
+    if is_doc_chat:
+        if not doc_rel_path or not doc_rel_path.strip():
+            return None, "bad_init"
+        if doc_rel_path.startswith("/") or os.path.isabs(doc_rel_path):
+            return None, "bad_init"
+        if any(part == ".." for part in doc_rel_path.split("/")):
+            return None, "bad_init"
+    else:
+        doc_rel_path = None
+        doc_id = None
+
+    if not is_planning and not is_instant and not is_doc_chat and not task_id:
+        return None, "bad_init"
+    if is_instant and (not instant_prompt or not instant_prompt.strip()):
+        return None, "bad_init"
+
+    return (
+        SpawnRequest(
+            agent=agent,
+            project_id=project_id,
+            module_id=module_id,
+            task_id=task_id,
+            initial_prompt=initial_prompt,
+            cols=_clamp_dim(cols),
+            rows=_clamp_dim(rows),
+            is_planning=is_planning,
+            is_instant=is_instant,
+            instant_prompt=instant_prompt,
+            is_doc_chat=is_doc_chat,
+            doc_rel_path=doc_rel_path,
+            doc_id=doc_id,
+        ),
+        None,
+    )
+
+
 def _validate_init(payload: dict) -> tuple[Optional[InitRequest], Optional[str]]:
     """Validate an init frame, dispatching on the explicit ``mode`` field (#692).
 
@@ -99,19 +158,17 @@ def _validate_attach_init(
 ) -> tuple[Optional[AttachRequest], Optional[str]]:
     # An attach frame must carry a non-empty run id; rejecting the mismatch is
     # what gives the discriminated union teeth.
-    try:
-        frame = InitAttachFrame.model_validate(payload)
-    except ValidationError:
+    if not frame_is_valid("InitAttachFrame", payload):
         return None, "bad_init"
-    if not frame.agent_run_id:
+    if not payload["agent_run_id"]:
         return None, "bad_init"
-    if frame.cols <= 0 or frame.rows <= 0:
+    if payload["cols"] <= 0 or payload["rows"] <= 0:
         return None, "bad_init"
     return (
         AttachRequest(
-            agent_run_id=frame.agent_run_id,
-            cols=_clamp_dim(frame.cols),
-            rows=_clamp_dim(frame.rows),
+            agent_run_id=payload["agent_run_id"],
+            cols=_clamp_dim(payload["cols"]),
+            rows=_clamp_dim(payload["rows"]),
         ),
         None,
     )
@@ -130,63 +187,21 @@ def _validate_spawn_init(
     if payload.get("agent") not in VALID_AGENTS:
         return None, "unknown_agent"
 
-    try:
-        frame = InitSpawnFrame.model_validate(payload)
-    except ValidationError:
+    if not frame_is_valid("InitSpawnFrame", payload):
         return None, "bad_init"
 
-    if not frame.project_id or not frame.module_id:
-        return None, "bad_init"
-    if frame.cols <= 0 or frame.rows <= 0:
-        return None, "bad_init"
-
-    # The three spawn modes are mutually exclusive.
-    if sum((frame.is_planning, frame.is_instant, frame.is_doc_chat)) > 1:
-        return None, "bad_init"
-
-    # #625: a doc-chat run must carry a safe, design-dir-relative .html path.
-    doc_rel_path = frame.doc_rel_path
-    if frame.is_doc_chat:
-        if not doc_rel_path or not doc_rel_path.strip():
-            return None, "bad_init"
-        # Never let the path be absolute or escape its design directory.
-        if doc_rel_path.startswith("/") or os.path.isabs(doc_rel_path):
-            return None, "bad_init"
-        if any(part == ".." for part in doc_rel_path.split("/")):
-            return None, "bad_init"
-    else:
-        doc_rel_path = None
-
-    # #625: the registered document id only applies to a doc-chat run.
-    doc_id = frame.doc_id if frame.is_doc_chat else None
-
-    # Only a task-scoped run requires a task id; plan/instant/doc-chat may be
-    # scratch (no task) and fold under the reserved sentinel.
-    task_id = frame.task_id
-    if not frame.is_planning and not frame.is_instant and not frame.is_doc_chat:
-        if not task_id:
-            return None, "bad_init"
-
-    # An instant run needs a non-empty change prompt.
-    if frame.is_instant:
-        if not frame.instant_prompt or not frame.instant_prompt.strip():
-            return None, "bad_init"
-
-    return (
-        SpawnRequest(
-            agent=frame.agent,
-            project_id=frame.project_id,
-            module_id=frame.module_id,
-            task_id=task_id,
-            initial_prompt=frame.initial_prompt,
-            cols=_clamp_dim(frame.cols),
-            rows=_clamp_dim(frame.rows),
-            is_planning=frame.is_planning,
-            is_instant=frame.is_instant,
-            instant_prompt=frame.instant_prompt,
-            is_doc_chat=frame.is_doc_chat,
-            doc_rel_path=doc_rel_path,
-            doc_id=doc_id,
-        ),
-        None,
+    return normalize_spawn_request(
+        agent=payload["agent"],
+        project_id=payload["project_id"],
+        module_id=payload["module_id"],
+        task_id=payload["task_id"],
+        initial_prompt=payload["initial_prompt"],
+        cols=payload["cols"],
+        rows=payload["rows"],
+        is_planning=payload["is_planning"],
+        is_instant=payload["is_instant"],
+        instant_prompt=payload["instant_prompt"],
+        is_doc_chat=payload["is_doc_chat"],
+        doc_rel_path=payload["doc_rel_path"],
+        doc_id=payload["doc_id"],
     )

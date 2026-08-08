@@ -12,7 +12,7 @@ thread so a git merge never blocks the close response.
 Design notes:
 
 - Only top-level tasks have worktrees (keyed by their own id), so the natural
-  guard is ``dao.get_by_task(str(issue.id))`` — completing a *sub-task* finds
+  guard is ``Worktree.objects.get_by_task(str(issue.id))`` — completing a sub-task finds
   no record and is a clean no-op.
 - ``integrate`` is re-entrant: a clean land deletes the row (later completed
   saves no-op); a conflict leaves a ``conflict`` row intact, so re-marking the
@@ -34,7 +34,8 @@ from django.dispatch import receiver
 
 from worktracker.models import Issue
 
-from apps.worktrees import dao, service
+from apps.worktrees import service
+from apps.worktrees.models import Worktree
 
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ def integrate_on_complete(sender, instance, **kwargs) -> None:
         if state is None or state.group != "completed":
             return
         task_id = str(instance.id)
-        if dao.get_by_task(task_id) is None:
+        if Worktree.objects.get_by_task(task_id) is None:
             # Not a top-level task with a worktree (sub-task / no opt-in).
             return
         integrate_executor(lambda: _safe_integrate(task_id))

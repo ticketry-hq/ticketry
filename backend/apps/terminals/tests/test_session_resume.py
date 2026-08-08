@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-import apps.runs.dao as runs_dao
-import apps.terminals.dao as terminals_dao
 import apps.terminals.session as session_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
@@ -70,12 +68,14 @@ def _session(
 
 
 async def _seed_run_and_session(
-    *, cwd: str, provider_session_id: str | None, ended_at: str | None = "2026-05-29T10:05:00"
+    *,
+    cwd: str,
+    provider_session_id: str | None,
+    ended_at: str | None = "2026-05-29T10:05:00",
 ) -> None:
-    await runs_dao.insert_agent_run(
-        _run(cwd=cwd, provider_session_id=provider_session_id, ended_at=ended_at)
-    )
-    await terminals_dao.insert_terminal_session(_session())
+    run = _run(cwd=cwd, provider_session_id=provider_session_id, ended_at=ended_at)
+    await run.asave(force_insert=True)
+    await _session().asave(force_insert=True)
 
 
 def _patch_resume_adapter(monkeypatch, *, resume_fn=None, slug: str = AGENT) -> None:
@@ -132,13 +132,17 @@ async def test_resume_unknown_run_raises_resume_unavailable() -> None:
     assert excinfo.value.reason == "unknown_run"
 
 
-async def test_resume_active_run_raises_resume_unavailable(tmp_path, monkeypatch) -> None:
+async def test_resume_active_run_raises_resume_unavailable(
+    tmp_path, monkeypatch
+) -> None:
     cwd = tmp_path / "repo"
     cwd.mkdir()
     await _seed_run_and_session(
         cwd=str(cwd), provider_session_id=PROVIDER_SESSION_ID, ended_at=None
     )
-    _patch_resume_adapter(monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid])
+    _patch_resume_adapter(
+        monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid]
+    )
 
     with pytest.raises(session_module.ResumeUnavailable) as excinfo:
         await session_module.session.resume(OLD_RUN_ID)
@@ -152,7 +156,9 @@ async def test_resume_without_provider_session_id_raises_resume_unavailable(
     cwd = tmp_path / "repo"
     cwd.mkdir()
     await _seed_run_and_session(cwd=str(cwd), provider_session_id=None)
-    _patch_resume_adapter(monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid])
+    _patch_resume_adapter(
+        monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid]
+    )
 
     with pytest.raises(session_module.ResumeUnavailable) as excinfo:
         await session_module.session.resume(OLD_RUN_ID)
@@ -160,10 +166,14 @@ async def test_resume_without_provider_session_id_raises_resume_unavailable(
     assert excinfo.value.reason == "no_provider_session_id"
 
 
-async def test_resume_with_missing_cwd_raises_resume_unavailable(tmp_path, monkeypatch) -> None:
+async def test_resume_with_missing_cwd_raises_resume_unavailable(
+    tmp_path, monkeypatch
+) -> None:
     cwd = tmp_path / "missing"
     await _seed_run_and_session(cwd=str(cwd), provider_session_id=PROVIDER_SESSION_ID)
-    _patch_resume_adapter(monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid])
+    _patch_resume_adapter(
+        monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid]
+    )
 
     with pytest.raises(session_module.ResumeUnavailable) as excinfo:
         await session_module.session.resume(OLD_RUN_ID)

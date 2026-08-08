@@ -10,8 +10,8 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from studio_server.contracts import (
     AutomationAttemptFrame,
-    AutomationAttemptRecord,
     BackendSessionFrame,
+    contract_payload,
 )
 
 
@@ -59,12 +59,12 @@ async def publish_backend_session(
         status=status,
         at=at or datetime.now(timezone.utc).isoformat(),
     )
-    await publish_status(project_id, frame.model_dump())
+    await publish_status(project_id, contract_payload(frame))
 
 
 async def publish_automation_attempt(
     project_id: str,
-    attempt: AutomationAttemptRecord,
+    attempt: dict,
 ) -> None:
     """Publish one typed launch-attempt outcome on the existing project feed."""
 
@@ -72,7 +72,7 @@ async def publish_automation_attempt(
         project_id=project_id,
         attempt=attempt,
     )
-    await publish_status(project_id, frame.model_dump())
+    await publish_status(project_id, contract_payload(frame))
 
 
 async def publish_document(

@@ -1,12 +1,11 @@
-"""Tests for the agent-runs Django DAO."""
+"""Tests for the agent-run persistence queries used by production."""
 
 from datetime import datetime, timezone
 
 import pytest
 from asgiref.sync import sync_to_async
-from django.db import IntegrityError
 
-from apps.runs import dao
+from apps.runs import api as runs_api
 from apps.runs.models import AgentRun
 from worktracker.models import Issue
 from worktracker.tests.factories import (
@@ -32,9 +31,7 @@ def issue_graphs():
     ):
         ensure_issue(project_id=project_id, module_id=module_id, task_id=None)
         for task_id in task_ids:
-            ensure_issue(
-                project_id=project_id, module_id=module_id, task_id=task_id
-            )
+            ensure_issue(project_id=project_id, module_id=module_id, task_id=task_id)
 
 
 def _make_run(
@@ -61,113 +58,34 @@ def _make_run(
     )
 
 
-async def test_insert_round_trips_full_row() -> None:
-    await dao.insert_agent_run(
-        _make_run("run-1", task_id="task-1", started_at="2026-05-29T10:00:00")
-    )
+async def _insert_agent_run(run: AgentRun) -> None:
+    """Persist test setup without exposing a production-only wrapper."""
 
-    stored = await dao.list_agent_runs_for_task(
-        fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1")
-    )
-
-    assert len(stored) == 1
-    assert stored[0].id == "run-1"
-    assert str(stored[0].issue_id) == fixture_issue_id(
-        project_id="proj-1", module_id="mod-1", task_id="task-1"
-    )
-    assert stored[0].ticket_seq == 472
-    assert stored[0].cwd == "/tmp/work"
-
-
-async def test_insert_round_trips_nullable_fields() -> None:
-    await dao.insert_agent_run(
-        AgentRun(
-            id="run-null",
-            issue_id=fixture_issue_id(
-                project_id="proj-1", module_id="mod-1", task_id=None
-            ),
-            agent="codex",
-            status="running",
-            started_at="2026-05-29T10:00:00",
-            scope="plan",
-        )
-    )
-
-    run = await AgentRun.objects.aget(id="run-null")
-
-    assert run.issue_id is not None
-    assert run.ticket_seq is None
-    assert run.ended_at is None
-    assert run.exit_code is None
-    assert run.error is None
-    assert run.cwd is None
-    assert run.provider_session_id is None
-
-
-async def test_insert_round_trips_resumed_from() -> None:
-    run = _make_run("run-resume", task_id="task-1", started_at="2026-05-29T10:00:00")
-    run.resumed_from = "run-old"
-    await dao.insert_agent_run(run)
-
-    stored = await AgentRun.objects.aget(id="run-resume")
-
-    assert stored.resumed_from == "run-old"
-
-
-async def test_duplicate_insert_raises_integrity_error() -> None:
-    await dao.insert_agent_run(
-        _make_run("run-1", task_id="task-1", started_at="2026-05-29T10:00:00")
-    )
-
-    with pytest.raises(IntegrityError):
-        await dao.insert_agent_run(
-            _make_run("run-1", task_id="task-1", started_at="2026-05-29T11:00:00")
-        )
-
-
-async def test_update_on_exit_patches_only_terminal_fields() -> None:
-    await dao.insert_agent_run(
-        _make_run("run-1", task_id="task-1", started_at="2026-05-29T10:00:00")
-    )
-
-    updated = await dao.update_agent_run_exit(
-        "run-1",
-        status="failed",
-        ended_at="2026-05-29T10:05:00",
-        exit_code=1,
-        error="boom",
-    )
-    stored = await AgentRun.objects.aget(id="run-1")
-
-    assert updated is True
-    assert stored.status == "failed"
-    assert stored.ended_at == "2026-05-29T10:05:00"
-    assert stored.exit_code == 1
-    assert stored.error == "boom"
-    assert str(stored.issue_id) == fixture_issue_id(
-        project_id="proj-1", module_id="mod-1", task_id="task-1"
-    )
+    await run.asave(force_insert=True)
 
 
 async def test_targeted_updates_return_false_for_unknown_id() -> None:
-    assert await dao.update_agent_run_exit(
-        "missing", status="exited", ended_at="2026-05-29T10:05:00"
-    ) is False
-    assert await dao.set_provider_session_id("missing", "abc") is False
-    assert await dao.set_lifecycle_state(
-        "missing", "working", updated_at="2026-05-29T10:05:00"
-    ) is False
+    assert await runs_api.set_provider_session_id("missing", "abc") is False
+    assert (
+        await runs_api.set_lifecycle_state(
+            "missing", "working", updated_at="2026-05-29T10:05:00"
+        )
+        is False
+    )
 
 
 async def test_provider_session_and_lifecycle_updates() -> None:
-    await dao.insert_agent_run(
+    await _insert_agent_run(
         _make_run("run-1", task_id="task-1", started_at="2026-05-29T10:00:00")
     )
 
-    assert await dao.set_provider_session_id("run-1", "provider-1") is True
-    assert await dao.set_lifecycle_state(
-        "run-1", "needs_input", updated_at="2026-05-29T10:05:00"
-    ) is True
+    assert await runs_api.set_provider_session_id("run-1", "provider-1") is True
+    assert (
+        await runs_api.set_lifecycle_state(
+            "run-1", "needs_input", updated_at="2026-05-29T10:05:00"
+        )
+        is True
+    )
     stored = await AgentRun.objects.aget(id="run-1")
 
     assert stored.provider_session_id == "provider-1"
@@ -176,32 +94,44 @@ async def test_provider_session_and_lifecycle_updates() -> None:
 
 
 async def test_lifecycle_timestamp_normalizes_naive_and_zulu_input() -> None:
-    await dao.insert_agent_run(
+    await _insert_agent_run(
         _make_run("normalized", task_id="task-1", started_at="2026-05-29T10:00:00")
     )
 
-    assert await dao.set_lifecycle_state(
-        "normalized", "working", updated_at="2026-05-29T10:05:00"
-    ) is True
-    assert await dao.set_lifecycle_state(
-        "normalized", "turn_complete", updated_at="2026-05-29T10:06:00Z"
-    ) is True
+    assert (
+        await runs_api.set_lifecycle_state(
+            "normalized", "working", updated_at="2026-05-29T10:05:00"
+        )
+        is True
+    )
+    assert (
+        await runs_api.set_lifecycle_state(
+            "normalized", "turn_complete", updated_at="2026-05-29T10:06:00Z"
+        )
+        is True
+    )
 
     stored = await AgentRun.objects.aget(id="normalized")
     assert stored.lifecycle_updated_at == "2026-05-29T10:06:00+00:00"
 
 
 async def test_older_lifecycle_update_is_ignored() -> None:
-    await dao.insert_agent_run(
+    await _insert_agent_run(
         _make_run("run-ordered", task_id="task-1", started_at="2026-05-29T10:00:00")
     )
-    assert await dao.set_lifecycle_state(
-        "run-ordered", "turn_complete", updated_at="2026-05-29T10:05:00+00:00"
-    ) is True
+    assert (
+        await runs_api.set_lifecycle_state(
+            "run-ordered", "turn_complete", updated_at="2026-05-29T10:05:00+00:00"
+        )
+        is True
+    )
 
-    assert await dao.set_lifecycle_state(
-        "run-ordered", "working", updated_at="2026-05-29T10:04:00+00:00"
-    ) is False
+    assert (
+        await runs_api.set_lifecycle_state(
+            "run-ordered", "working", updated_at="2026-05-29T10:04:00+00:00"
+        )
+        is False
+    )
     stored = await AgentRun.objects.aget(id="run-ordered")
     assert stored.lifecycle_state == "turn_complete"
 
@@ -215,22 +145,28 @@ async def test_lifecycle_update_is_refused_once_a_run_has_ended() -> None:
     run that ended days earlier.
     """
 
-    await dao.insert_agent_run(
+    await _insert_agent_run(
         _make_run("run-ended", task_id="task-1", started_at="2026-05-29T10:00:00")
     )
-    assert await dao.set_lifecycle_state(
-        "run-ended", "permission_required", updated_at="2026-05-29T10:05:00+00:00"
-    ) is True
+    assert (
+        await runs_api.set_lifecycle_state(
+            "run-ended", "permission_required", updated_at="2026-05-29T10:05:00+00:00"
+        )
+        is True
+    )
 
-    await dao.update_agent_run_exit(
-        "run-ended", status="exited", ended_at="2026-05-29T10:06:00+00:00"
+    await AgentRun.objects.filter(id="run-ended").aupdate(
+        status="exited", ended_at="2026-05-29T10:06:00+00:00"
     )
 
     # Strictly newer than both the last state and the exit, so only the
     # ended_at guard can reject it.
-    assert await dao.set_lifecycle_state(
-        "run-ended", "working", updated_at="2026-06-12T09:00:00+00:00"
-    ) is False
+    assert (
+        await runs_api.set_lifecycle_state(
+            "run-ended", "working", updated_at="2026-06-12T09:00:00+00:00"
+        )
+        is False
+    )
 
     stored = await AgentRun.objects.aget(id="run-ended")
     assert stored.lifecycle_state == "permission_required"
@@ -240,85 +176,114 @@ async def test_lifecycle_update_is_refused_once_a_run_has_ended() -> None:
 async def test_lifecycle_update_still_applies_while_a_run_is_live() -> None:
     """The ended_at guard must not freeze a run that is still going."""
 
-    await dao.insert_agent_run(
+    await _insert_agent_run(
         _make_run("run-live", task_id="task-1", started_at="2026-05-29T10:00:00")
     )
 
-    assert await dao.set_lifecycle_state(
-        "run-live", "working", updated_at="2026-05-29T10:05:00+00:00"
-    ) is True
-    assert await dao.set_lifecycle_state(
-        "run-live", "exited", updated_at="2026-05-29T10:07:00+00:00"
-    ) is True
+    assert (
+        await runs_api.set_lifecycle_state(
+            "run-live", "working", updated_at="2026-05-29T10:05:00+00:00"
+        )
+        is True
+    )
+    assert (
+        await runs_api.set_lifecycle_state(
+            "run-live", "exited", updated_at="2026-05-29T10:07:00+00:00"
+        )
+        is True
+    )
 
     stored = await AgentRun.objects.aget(id="run-live")
     assert stored.lifecycle_state == "exited"
-
-
-async def test_history_filters_task_orders_and_limits() -> None:
-    for run_id, task_id, started_at in (
-        ("old", "task-1", "2026-05-29T09:00:00"),
-        ("new", "task-1", "2026-05-29T11:00:00"),
-        ("other", "task-2", "2026-05-29T12:00:00"),
-    ):
-        await dao.insert_agent_run(
-            _make_run(run_id, task_id=task_id, started_at=started_at)
-        )
-
-    task_id = fixture_issue_id(
-        project_id="proj-1", module_id="mod-1", task_id="task-1"
-    )
-    runs = await dao.list_agent_runs_for_task(task_id)
-    limited = await dao.list_agent_runs_for_task(task_id, limit=1)
-
-    assert [run.id for run in runs] == ["new", "old"]
-    assert [run.id for run in limited] == ["new"]
 
 
 async def test_last_activity_by_module_ranks_and_coalesces() -> None:
     # Two modules; mod-a's newest run only has started_at, mod-b's newest run
     # bumped lifecycle_updated_at past its own (older) started_at.
     runs = [
-        _make_run("a-old", task_id="t", module_id="mod-a", started_at="2026-06-10T09:00:00+00:00"),
-        _make_run("a-new", task_id="t", module_id="mod-a", started_at="2026-06-12T09:00:00+00:00"),
-        _make_run("b-1", task_id=None, module_id="mod-b", started_at="2026-06-11T08:00:00+00:00"),
+        _make_run(
+            "a-old",
+            task_id="t",
+            module_id="mod-a",
+            started_at="2026-06-10T09:00:00+00:00",
+        ),
+        _make_run(
+            "a-new",
+            task_id="t",
+            module_id="mod-a",
+            started_at="2026-06-12T09:00:00+00:00",
+        ),
+        _make_run(
+            "b-1",
+            task_id=None,
+            module_id="mod-b",
+            started_at="2026-06-11T08:00:00+00:00",
+        ),
     ]
     # mod-b's run emitted a lifecycle event after start → coalesce picks it.
     runs[2].lifecycle_updated_at = "2026-06-13T12:00:00+00:00"
     for run in runs:
-        await dao.insert_agent_run(run)
+        await _insert_agent_run(run)
 
-    activity = await dao.last_activity_by_module(
+    activity = await runs_api.last_activity_by_module(
         fixture_uuid("proj-1"), now=datetime(2026, 6, 20, tzinfo=timezone.utc)
     )
 
     assert activity == {
-        fixture_issue_id(project_id="proj-1", module_id="mod-a", task_id=None): "2026-06-12T09:00:00+00:00",
-        fixture_issue_id(project_id="proj-1", module_id="mod-b", task_id=None): "2026-06-13T12:00:00+00:00",
+        fixture_issue_id(
+            project_id="proj-1", module_id="mod-a", task_id=None
+        ): "2026-06-12T09:00:00+00:00",
+        fixture_issue_id(
+            project_id="proj-1", module_id="mod-b", task_id=None
+        ): "2026-06-13T12:00:00+00:00",
     }
 
 
 async def test_last_activity_window_and_project_scope() -> None:
     # Outside the window → excluded. Different project → excluded.
-    old = _make_run("old", task_id="t", module_id="mod-old", started_at="2026-01-01T00:00:00+00:00")
-    other = _make_run(
-        "other", task_id="t", project_id="proj-2", module_id="mod-other", started_at="2026-06-15T00:00:00+00:00"
+    old = _make_run(
+        "old", task_id="t", module_id="mod-old", started_at="2026-01-01T00:00:00+00:00"
     )
-    recent = _make_run("recent", task_id=None, module_id="mod-recent", started_at="2026-06-18T00:00:00+00:00")
+    other = _make_run(
+        "other",
+        task_id="t",
+        project_id="proj-2",
+        module_id="mod-other",
+        started_at="2026-06-15T00:00:00+00:00",
+    )
+    recent = _make_run(
+        "recent",
+        task_id=None,
+        module_id="mod-recent",
+        started_at="2026-06-18T00:00:00+00:00",
+    )
     for run in (old, other, recent):
-        await dao.insert_agent_run(run)
+        await _insert_agent_run(run)
 
     # Large window so "old" would qualify by date but project scope drops
     # proj-2; tiny window would drop "old". Use default 30d relative to now is
     # brittle, so assert scope with a wide window and absence of proj-2.
-    activity = await dao.last_activity_by_module(fixture_uuid("proj-1"), window_days=100000)
+    activity = await runs_api.last_activity_by_module(
+        fixture_uuid("proj-1"), window_days=100000
+    )
 
-    assert fixture_issue_id(project_id="proj-2", module_id="mod-other", task_id=None) not in activity
-    assert activity.get(fixture_issue_id(project_id="proj-1", module_id="mod-recent", task_id=None)) == "2026-06-18T00:00:00+00:00"
-    assert fixture_issue_id(project_id="proj-1", module_id="mod-old", task_id=None) in activity
+    assert (
+        fixture_issue_id(project_id="proj-2", module_id="mod-other", task_id=None)
+        not in activity
+    )
+    assert (
+        activity.get(
+            fixture_issue_id(project_id="proj-1", module_id="mod-recent", task_id=None)
+        )
+        == "2026-06-18T00:00:00+00:00"
+    )
+    assert (
+        fixture_issue_id(project_id="proj-1", module_id="mod-old", task_id=None)
+        in activity
+    )
 
 
-async def test_routing_design_dirs_and_delete() -> None:
+async def test_design_dirs_are_distinct_and_scoped() -> None:
     for run_id, module_id, design_dir in (
         ("run-1", "mod-1", "/repo/spec/a"),
         ("run-2", "mod-1", "/repo/spec/a"),
@@ -326,24 +291,23 @@ async def test_routing_design_dirs_and_delete() -> None:
         ("run-4", "mod-1", None),
     ):
         task_label = "task-1" if module_id == "mod-1" else "task-2"
-        run = _make_run(run_id, task_id=task_label, module_id=module_id, started_at="2026-05-29T10:00:00")
+        run = _make_run(
+            run_id,
+            task_id=task_label,
+            module_id=module_id,
+            started_at="2026-05-29T10:00:00",
+        )
         run.design_dir = design_dir
-        await dao.insert_agent_run(run)
+        await _insert_agent_run(run)
 
-    task_1_id = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1")
+    task_1_id = fixture_issue_id(
+        project_id="proj-1", module_id="mod-1", task_id="task-1"
+    )
     mod_1_id = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None)
-    assert await dao.get_run_routing("run-1") == (task_1_id, mod_1_id)
-    assert await dao.get_run_routing("missing") is None
-    assert await dao.list_design_dirs_for_task(task_1_id) == [
+    assert await runs_api.list_design_dirs_for_task(task_1_id) == ["/repo/spec/a"]
+    assert await runs_api.list_design_dirs_for_task(task_1_id, module_id=mod_1_id) == [
         "/repo/spec/a"
     ]
-    assert await dao.list_design_dirs_for_task(task_1_id, module_id=mod_1_id) == [
-        "/repo/spec/a"
-    ]
-
-    await dao.delete_agent_run("run-1")
-    await dao.delete_agent_run("missing")
-    assert await dao.get_run_routing("run-1") is None
 
 
 async def test_status_routing_uses_run_scope_before_terminal_session_exists() -> None:
@@ -353,9 +317,9 @@ async def test_status_routing_uses_run_scope_before_terminal_session_exists() ->
         started_at="2026-05-29T10:00:00",
     )
     run.scope = "plan"
-    await dao.insert_agent_run(run)
+    await _insert_agent_run(run)
 
-    assert await dao.get_status_routing("run-early-hook") == (
+    assert await runs_api.get_status_routing("run-early-hook") == (
         fixture_uuid("proj-1"),
         fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1"),
         fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None),
@@ -372,14 +336,14 @@ async def test_doc_chat_runs_are_not_published_to_the_client() -> None:
         started_at="2026-05-29T10:00:00",
     )
     run.scope = "docchat"
-    await dao.insert_agent_run(run)
+    await _insert_agent_run(run)
 
-    assert await dao.get_status_routing(run.id) is None
-    records = await dao.agent_status_records(
+    assert await runs_api.get_status_routing(run.id) is None
+    records = await runs_api.agent_status_records(
         fixture_uuid("proj-1"),
         now=datetime(2026, 5, 29, 11, tzinfo=timezone.utc),
     )
-    assert run.id not in {record.agent_run_id for record in records}
+    assert run.id not in {record["agent_run_id"] for record in records}
 
 
 async def test_parentless_task_run_routes_as_a_task() -> None:
@@ -407,18 +371,17 @@ async def test_parentless_task_run_routes_as_a_task() -> None:
         started_at="2026-08-03T10:00:00+00:00",
         scope="task",
     )
-    await dao.insert_agent_run(run)
+    await _insert_agent_run(run)
 
-    records = await dao.agent_status_records(
+    records = await runs_api.agent_status_records(
         str(task.project_id),
         now=datetime(2026, 8, 3, 11, tzinfo=timezone.utc),
     )
 
     assert len(records) == 1
-    assert records[0].task_id == task_id
-    assert records[0].module_id == task_id
-    assert await dao.get_run_routing(run.id) == (task_id, task_id)
-    assert await dao.get_status_routing(run.id) == (
+    assert records[0]["task_id"] == task_id
+    assert records[0]["module_id"] == task_id
+    assert await runs_api.get_status_routing(run.id) == (
         str(task.project_id),
         task_id,
         task_id,

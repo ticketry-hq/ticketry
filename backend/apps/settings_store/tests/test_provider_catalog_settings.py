@@ -39,6 +39,25 @@ def test_global_default_round_trips_as_one_host_scoped_setting(client):
     assert client.get("/api/settings/provider-catalog").json() == {"value": catalog}
 
 
+@pytest.mark.parametrize("field", ["provider", "model", "reasoning"])
+def test_global_default_rejects_blank_catalog_values(client, field):
+    value = {
+        "provider": "codex",
+        "model": "gpt-5",
+        "reasoning": "high",
+    }
+    value[field] = "   "
+
+    response = client.put(
+        "/api/settings/provider-catalog",
+        data={"value": {"global_default": value}},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert not AppSetting.objects.exists()
+
+
 def test_activation_impact_route_is_removed(client):
     response = client.post(
         "/api/settings/provider-catalog/impact",

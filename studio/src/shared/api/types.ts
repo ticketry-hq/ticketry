@@ -40,9 +40,7 @@ export interface ProviderCapabilities {
 export interface StateImpact {
   state_id: string;
   total_work_items: number;
-  impact_token: string;
   protection_rules?: Array<{ code: string; message: string }>;
-  valid_replacements?: State[];
 }
 
 // Host-wide provider activation plus the single global launch default
@@ -145,6 +143,8 @@ export interface IssueTypePatch {
   level?: IssueLevel;
   color?: string | null;
   sort_order?: number;
+  start_state?: string | null;
+  workflow_revision?: number;
 }
 export interface StateCreate {
   name: string;

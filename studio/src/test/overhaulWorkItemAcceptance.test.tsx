@@ -77,6 +77,19 @@ describe("overhaul acceptance — Stories and details", () => {
       await within(details).findByText("Old copy", {}, { timeout: 5_000 }),
     ).toBeVisible();
 
+    const typeChanged = http.expectPatch("story-1", {
+      issue_type_id: "implementation",
+    });
+    const issueTypePicker = within(details).getByTestId("issue-type-picker");
+    fireEvent.click(within(issueTypePicker).getByRole("button", { name: "Story" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Implementation" }));
+    await typeChanged;
+    expect(
+      await within(issueTypePicker).findByRole("button", {
+        name: "Implementation",
+      }),
+    ).toBeEnabled();
+
     http.workItems([
       workItem({
         id: "story-1",
@@ -109,7 +122,12 @@ describe("overhaul acceptance — Stories and details", () => {
     expect(
       await within(details).findByText("Fresh copy", {}, { timeout: 5_000 }),
     ).toBeVisible();
-    expect(within(details).getByText("Implementation")).toBeVisible();
+    expect(
+      within(within(details).getByTestId("issue-type-picker")).getByRole(
+        "button",
+        { name: "Implementation" },
+      ),
+    ).toBeVisible();
     expect(
       within(within(details).getByTestId("parent-picker")).getByRole("button", {
         name: "MODULE-1",

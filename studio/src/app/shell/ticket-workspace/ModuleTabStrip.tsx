@@ -74,7 +74,7 @@ export function ModuleTabStrip() {
           onClick={() => void selectModule(module.id)}
           className={`flex max-w-64 shrink-0 items-center border-r border-pane-border px-3 text-xs ${
             module.id === selectedModuleId
-              ? "bg-pane-panel font-semibold text-text-primary shadow-[inset_0_-2px_0_0_theme(colors.focus-accent)]"
+              ? "bg-pane-panel font-semibold text-text-primary shadow-[inset_0_-2px_0_0_#7aa2f7]"
               : "text-text-muted hover:bg-pane-panel hover:text-text-primary"
           }`}
         >

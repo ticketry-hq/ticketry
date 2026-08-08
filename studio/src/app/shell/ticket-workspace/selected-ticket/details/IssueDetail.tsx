@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import {
   deriveEpic,
+  useChangeWorkItemType,
   resolveBlockerChips,
   useCreateWorkItem,
   useEditWorkItemDescription,
@@ -75,6 +76,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
       : [];
   const rename = useRenameWorkItem();
   const editDescription = useEditWorkItemDescription();
+  const changeType = useChangeWorkItemType();
   const setState = useSetWorkItemState();
   const setChildState = useSetWorkItemState();
   const setParent = useSetWorkItemParent(moduleMembership);
@@ -89,6 +91,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   const saving = {
     name: rename.isPending,
     description: editDescription.isPending,
+    issue_type_id: changeType.isPending,
     state_id: setState.isPending,
     parent_id: setParent.isPending,
     blocked_by_ids: setBlockers.isPending,
@@ -309,6 +312,12 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           blockedByChips={blockedByChips}
           blocksChips={blocksChips}
           items={items}
+          setIssueType={(issueType) =>
+            changeType.mutate(
+              { id: task.id, issueType },
+              { onError: reportMutationError },
+            )
+          }
           setParent={(parentId) =>
             setParent.mutate(
               { id: task.id, parentId },

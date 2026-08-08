@@ -241,6 +241,16 @@ describe("status feed holdings", () => {
     expect(FakeWebSocket.instances[1].url).toContain("cursor=11");
   });
 
+  it("reconnects immediately with the retained cursor when the browser comes online", () => {
+    useClientStore.setState({ workItemCursorsByProject: { "project-1": 13 } });
+    statusFeed.start("project-1");
+
+    window.dispatchEvent(new Event("online"));
+
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(FakeWebSocket.instances[1].url).toContain("cursor=13");
+  });
+
   it("ignores a queued snapshot from the project socket that was just closed", () => {
     statusFeed.start("project-1");
     const previous = FakeWebSocket.instances[0];

@@ -38,6 +38,7 @@ import {
   loadWorkflowProjectItems,
   loadWorkflowSettings,
   loadWorkflowStates,
+  deriveWorkflowImpact,
   setWorkflowSettings,
   setProjectWorkflowSettings,
   setWorkflowIssueTypes,
@@ -49,15 +50,11 @@ import {
 interface RemoveStateCommand {
   stateId: string;
   stateName: string;
-  replacementId?: string;
-  replacementName?: string;
-  replacement?: State;
-  impactToken: string;
 }
 
 type ScopedOperation = (
   workflowRevision: number,
-) => Promise<ScopedWorkflowSettings>;
+) => Promise<unknown>;
 
 interface WorkflowEditorState {
   projectId: string | null;
@@ -149,7 +146,12 @@ const bySortOrder = <T extends { sort_order?: number }>(rows: T[]): T[] =>
 
 const countWorkItemsByState = (items: WorkItem[]): Record<string, number> =>
   items.reduce<Record<string, number>>((counts, item) => {
-    if (item.state?.id) counts[item.state.id] = (counts[item.state.id] ?? 0) + 1;
+    // Canonical work-item rows carry relation UUIDs. Older hydrated callers
+    // may still supply the full State object, so accept both while the Studio
+    // view model remains richer than the generated wire model.
+    const state = (item as unknown as { state: string | State | null }).state;
+    const stateId = typeof state === "string" ? state : state?.id;
+    if (stateId) counts[stateId] = (counts[stateId] ?? 0) + 1;
     return counts;
   }, {});
 
@@ -199,7 +201,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       const workflowIssueTypes = issueTypes.filter((type) => type.level !== "module");
       const selectedTypeId = workflowIssueTypes[0]?.id ?? null;
       const selectedWorkflow = selectedTypeId
-        ? await loadWorkflowSettings(selectedTypeId)
+        ? await loadWorkflowSettings(projectId, selectedTypeId)
         : null;
       if (generation !== loadGeneration) return;
       set({
@@ -244,9 +246,10 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     const missingTypeIds = typeIds.filter((typeId) => !get().workflows[typeId]);
     if (missingTypeIds.length === 0) return;
     const projectId = get().projectId;
+    if (!projectId) return;
     set({ action: "load:workflows", notice: null, error: null });
     try {
-      const rows = await loadAllWorkflowSettings(missingTypeIds);
+      const rows = await loadAllWorkflowSettings(projectId, missingTypeIds);
       if (get().projectId !== projectId) return;
       set((state) => ({
         workflows: {
@@ -271,9 +274,11 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       controlErrors: {},
     });
     if (get().workflows[typeId]) return;
+    const projectId = get().projectId;
+    if (!projectId) return;
     set({ action: `load:${typeId}` });
     try {
-      const workflow = await loadWorkflowSettings(typeId);
+      const workflow = await loadWorkflowSettings(projectId, typeId);
       if (get().selectedTypeId !== typeId) return;
       set((state) => ({
         workflows: { ...state.workflows, [typeId]: workflow },
@@ -300,7 +305,8 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
 
   async applyScoped(control, typeId, operation) {
     const workflow = get().workflows[typeId];
-    if (!workflow) return null;
+    const projectId = get().projectId;
+    if (!workflow || !projectId) return null;
     set((state) => ({
       action: control,
       notice: null,
@@ -308,14 +314,10 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       controlErrors: { ...state.controlErrors, [control]: "" },
     }));
     try {
-      const next = await operation(workflow.workflow_revision);
+      await operation(workflow.workflow_revision);
+      if (get().projectId !== projectId) return null;
+      const next = await loadWorkflowSettings(projectId, typeId);
       setWorkflowSettings(next);
-      const projectId = get().projectId;
-      if (projectId === null) return null;
-      // `next` is the authoritative response the server just returned, so the
-      // capability map is derivable from it. Refetching the same fact — and
-      // awaiting it before publishing — would make every control in the editor
-      // block its spinner on a GET it does not need.
       synchronizeSubtreeRunCapabilities(
         projectId,
         next.issue_type_id,
@@ -332,7 +334,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         try {
-          const latest = await loadWorkflowSettings(typeId);
+          const latest = await loadWorkflowSettings(projectId, typeId);
           set((state) => ({
             workflows: { ...state.workflows, [typeId]: latest },
             action: null,
@@ -365,27 +367,10 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       controlErrors: { ...state.controlErrors, [control]: "" },
     }));
     try {
-      const impact = await api.previewIssueTypeWorkflowImpact(
-        typeId,
-        operation,
-        workflow.workflow_revision,
-      );
+      const impact = deriveWorkflowImpact(workflow, operation);
       set({ action: null });
       return impact;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        try {
-          const latest = await loadWorkflowSettings(typeId);
-          set((state) => ({
-            workflows: { ...state.workflows, [typeId]: latest },
-            action: null,
-            notice: "Workflow changed elsewhere. Latest settings loaded.",
-          }));
-        } catch (refreshError) {
-          set({ action: null, error: errorMessage(refreshError) });
-        }
-        return null;
-      }
       set((state) => ({
         action: null,
         controlErrors: {
@@ -526,17 +511,13 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     if (!projectId) return;
     set({ action: "remove-state", notice: null, error: null });
     try {
-      await api.deleteState(
-        command.stateId,
-        command.replacementId,
-        command.impactToken,
-      );
+      await api.deleteState(command.stateId);
       if (get().projectId !== projectId) return;
       removeStateFromCatalog(projectId, command.stateId);
       set({ states: getWorkflowStatesSnapshot(projectId) });
       const [states, workflowRows, workItems] = await Promise.all([
         loadWorkflowStates(projectId),
-        loadAllWorkflowSettings(issueTypes.map((type) => type.id)),
+        loadAllWorkflowSettings(projectId, issueTypes.map((type) => type.id)),
         loadWorkflowProjectItems(projectId),
       ]);
       if (get().projectId !== projectId) return;
@@ -553,9 +534,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
           row,
         ])),
         action: null,
-        notice: command.replacementName
-          ? `State ${command.stateName} replaced with ${command.replacementName}.`
-          : `State ${command.stateName} deleted.`,
+        notice: `State ${command.stateName} deleted.`,
       });
     } catch (error) {
       if (get().projectId === projectId) set({ action: null });

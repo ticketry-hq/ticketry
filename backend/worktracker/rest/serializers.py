@@ -197,6 +197,7 @@ class WorkItemPatchSerializer(serializers.Serializer):
     )
     parent_id = serializers.UUIDField(required=False, allow_null=True)
     state_id = serializers.UUIDField(required=False, allow_null=True)
+    issue_type_id = serializers.UUIDField(required=False)
     blocked_by_ids = serializers.ListField(
         child=serializers.UUIDField(), required=False, allow_null=True
     )

@@ -20,6 +20,7 @@ const GROUP_LABELS: Record<string, string> = {
 
 export function StateCatalog() {
   const states = useWorkflowEditorStore((state) => state.states);
+  const projectId = useWorkflowEditorStore((state) => state.projectId);
   const stateWorkItemCounts = useWorkflowEditorStore(
     (state) => state.stateWorkItemCounts,
   );
@@ -38,7 +39,6 @@ export function StateCatalog() {
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactError, setImpactError] = useState<string | null>(null);
   const [impactConflict, setImpactConflict] = useState<string | null>(null);
-  const [replacementId, setReplacementId] = useState("");
   const previewGeneration = useRef(0);
 
   const submit = async () => {
@@ -50,6 +50,7 @@ export function StateCatalog() {
   };
 
   const preview = async (stateId: string) => {
+    if (!projectId) return;
     const generation = ++previewGeneration.current;
     setPreviewStateId(stateId);
     setImpact(null);
@@ -57,10 +58,9 @@ export function StateCatalog() {
     setImpactConflict(null);
     setImpactLoading(true);
     try {
-      const nextImpact = await loadStateImpact(stateId);
+      const nextImpact = await loadStateImpact(projectId, stateId);
       if (previewGeneration.current !== generation) return;
       setImpact(nextImpact);
-      setReplacementId(nextImpact.valid_replacements?.[0]?.id ?? "");
     } catch (error) {
       if (previewGeneration.current !== generation) return;
       const failure = classifyImpactFailure(error);
@@ -72,15 +72,7 @@ export function StateCatalog() {
   };
 
   const previewState = states.find((state) => state.id === previewStateId);
-  const hardBlocked = impact?.protection_rules?.some((rule) =>
-    rule.code === "protected_state" || rule.code === "last_state_in_group"
-  ) ?? false;
-  const replacementRequired = impact?.protection_rules?.some(
-    (rule) => rule.code === "replacement_required",
-  ) ?? false;
-  const replacement = impact?.valid_replacements?.find(
-    (candidate) => candidate.id === replacementId,
-  );
+  const hardBlocked = (impact?.protection_rules?.length ?? 0) > 0;
 
   const confirmRemoval = async () => {
     if (!impact || !previewState || impact.state_id !== previewStateId) return;
@@ -90,19 +82,6 @@ export function StateCatalog() {
       await removeState({
         stateId: impact.state_id,
         stateName: previewState.name,
-        replacementId: replacementRequired ? replacementId : undefined,
-        replacementName: replacementRequired ? replacement?.name : undefined,
-        replacement: replacementRequired && replacement
-          ? {
-              id: replacement.id ?? replacementId,
-              name: replacement.name,
-              group: replacement.group ?? "",
-              color: replacement.color ?? null,
-              sort_order: replacement.sort_order,
-              is_protected: replacement.is_protected,
-            }
-          : undefined,
-        impactToken: impact.impact_token,
       });
       previewGeneration.current += 1;
       setPreviewStateId(null);
@@ -182,24 +161,6 @@ export function StateCatalog() {
                     ))}
                   </ul>
                 ) : null}
-                {replacementRequired && impact.total_work_items > 0 && !hardBlocked ? (
-                  <label className="grid gap-1 text-text-muted">
-                    Move work items to
-                    <select
-                      aria-label="Move work items to"
-                      value={replacementId}
-                      onChange={(event) => setReplacementId(event.target.value)}
-                      className={SETTINGS_FIELD_CLASS}
-                    >
-                      {(impact.valid_replacements ?? []).map((candidate) =>
-                        candidate.id ? (
-                          <option key={candidate.id} value={candidate.id}>
-                            {candidate.name}
-                          </option>
-                        ) : null)}
-                    </select>
-                  </label>
-                ) : null}
               </div>
             ) : null}
             <div className="mt-5 flex justify-end gap-2">
@@ -222,8 +183,7 @@ export function StateCatalog() {
                   type="button"
                   onClick={() => void confirmRemoval()}
                   disabled={
-                    (replacementRequired && !replacementId)
-                    || action !== null
+                    action !== null
                     || impactConflict !== null
                   }
                   className={settingsButtonClass("danger-filled")}

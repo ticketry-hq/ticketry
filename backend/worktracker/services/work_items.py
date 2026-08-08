@@ -357,6 +357,12 @@ def update_work_item(issue_id: uuid.UUID, **data):
         issue.name = data["name"]
     if "description" in data:
         issue.description = data["description"]
+    if "issue_type_id" in data:
+        issue.issue_type = resolve_issue_type(
+            issue.project_id,
+            data["issue_type_id"],
+            issue.type,
+        )
 
     with transaction.atomic():
         issue.save(force_change_revision="blocked_by_ids" in data)

@@ -9,15 +9,13 @@ import type {
   Project,
   ProjectCreate,
   ProjectPatch,
+  ConfigurableProvider,
   State,
   StateCreate,
   StatePatch,
-  StateImpact,
   LaunchBindingInput,
   ProviderCatalog,
   ProviderCapabilities,
-  ScopedWorkflowImpact,
-  ScopedWorkflowImpactOperation,
   ScopedWorkflowSettings,
   SubtreeRunCapabilityMap,
   WorkItem,
@@ -480,9 +478,6 @@ export const updateState = (
     (await sdk().states.updateState({ stateId, patchedState: patch as never })) as State,
   );
 
-export const getStateImpact = (stateId: string): Promise<StateImpact> =>
-  request(`/api/work-tracker/states/${encodeURIComponent(stateId)}/impact`);
-
 export const deleteState = (
   id: string,
   reassignTo?: string,
@@ -520,11 +515,15 @@ export const getIssueTypes = (projectId: string): Promise<IssueType[]> =>
 
 export const getLaunchProviderCapabilities = (): Promise<ProviderCapabilities[]> =>
   call(async () => {
-    const [providers, models] = await Promise.all([
+    const [providers, models, reasoningLevels] = await Promise.all([
       sdk().providers.listProviders(),
       sdk().models.listAgentModels(),
+      sdk().reasoningLevels.listReasoningLevels(),
     ]);
-    return providers.map((provider) => {
+    const reasoningNames = new Map(
+      reasoningLevels.map((level) => [level.id, level.name]),
+    );
+    return providers.filter((provider) => provider.activated).map((provider) => {
       const providerModels = models.filter(
         (model) => model.provider === provider.id || model.provider === provider.slug,
       );
@@ -535,34 +534,233 @@ export const getLaunchProviderCapabilities = (): Promise<ProviderCapabilities[]>
         model_aliases: providerModels.map((model) => model.name),
         model_prefixes: [],
         reasoning_levels: [...new Set(
-          providerModels.flatMap((model) => model.permitted_reasoning_levels ?? []),
+          providerModels.flatMap((model) =>
+            (model.permitted_reasoning_levels ?? []).map(
+              (level) => reasoningNames.get(level) ?? level,
+            )),
         )],
         supports_unattended: provider.supports_unattended,
       };
     });
   });
 
+const issueTypePath = (typeId: string) =>
+  `${runtimeConfiguration().endpoints.workTrackerApi}/issue-types/${encodeURIComponent(typeId)}`;
+
+const issueTypeTransitionPath = (typeId: string) =>
+  `${issueTypePath(typeId)}/transitions`;
+
 const issueTypeWorkflowPath = (typeId: string) =>
-  `${runtimeConfiguration().endpoints.workTrackerApi}/issue-types/${encodeURIComponent(typeId)}/workflow-settings`;
+  `${issueTypePath(typeId)}/workflow-settings`;
+
+interface WorkflowCatalogProvider {
+  id: string;
+  slug: string;
+  activated?: boolean;
+}
+
+interface WorkflowCatalogModel {
+  id: string;
+  provider: string;
+  name: string;
+}
+
+interface WorkflowCatalogReasoning {
+  id: string;
+  name: string;
+}
+
+interface CanonicalWorkflowTransition {
+  from_state: string;
+  to_state: string;
+  agent_allowed?: boolean;
+}
+
+interface CanonicalLaunchBinding {
+  issue_type: string;
+  state: string;
+  prompt?: string;
+  required_skills?: unknown;
+  model?: string | null;
+  reasoning?: string | null;
+  auto_start?: boolean;
+  subtree_run_enabled?: boolean;
+}
+
+const reachableStateIds = (
+  startStateId: string | null,
+  transitions: readonly ScopedWorkflowSettings["transitions"][number][],
+): Set<string> => {
+  if (!startStateId) return new Set();
+  const outgoing = new Map<string, string[]>();
+  for (const transition of transitions) {
+    outgoing.set(transition.from_state_id, [
+      ...(outgoing.get(transition.from_state_id) ?? []),
+      transition.to_state_id,
+    ]);
+  }
+  const reachable = new Set([startStateId]);
+  const queue = [startStateId];
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    for (const target of outgoing.get(current) ?? []) {
+      if (reachable.has(target)) continue;
+      reachable.add(target);
+      queue.push(target);
+    }
+  }
+  return reachable;
+};
+
+function assembleScopedWorkflowSettings(
+  issueType: IssueType,
+  states: State[],
+  transitions: CanonicalWorkflowTransition[],
+  bindings: CanonicalLaunchBinding[],
+  providers: WorkflowCatalogProvider[],
+  models: WorkflowCatalogModel[],
+  reasoningLevels: WorkflowCatalogReasoning[],
+  hasGlobalDefault: boolean,
+): ScopedWorkflowSettings {
+  const providerById = new Map(providers.map((provider) => [provider.id, provider]));
+  const modelById = new Map(models.map((model) => [model.id, model]));
+  const reasoningById = new Map(
+    reasoningLevels.map((reasoning) => [reasoning.id, reasoning]),
+  );
+  const scopedTransitions = transitions.map((transition) => ({
+    from_state_id: transition.from_state,
+    to_state_id: transition.to_state,
+    agent_allowed: transition.agent_allowed ?? true,
+  }));
+  const scopedBindings = bindings
+    .filter((binding) => binding.issue_type === issueType.id)
+    .map((binding) => {
+      const model = binding.model ? modelById.get(binding.model) : undefined;
+      const provider = model
+        ? providerById.get(model.provider)
+          ?? providers.find((candidate) => candidate.slug === model.provider)
+        : undefined;
+      return {
+        state_id: binding.state,
+        prompt: binding.prompt ?? "",
+        required_skills: Array.isArray(binding.required_skills)
+          ? binding.required_skills.filter(
+              (skill): skill is string => typeof skill === "string",
+            )
+          : [],
+        agent: provider?.slug ?? null,
+        model: model?.name ?? null,
+        reasoning: binding.reasoning
+          ? reasoningById.get(binding.reasoning)?.name ?? null
+          : null,
+        auto_start: binding.auto_start ?? false,
+        subtree_run_enabled: binding.subtree_run_enabled ?? false,
+      };
+    });
+
+  const startStateId = issueType.start_state ?? null;
+  const stateById = new Map(
+    states.flatMap((state) => state.id ? [[state.id, state] as const] : []),
+  );
+  const warnings: ScopedWorkflowSettings["warnings"] = [];
+  if (!startStateId || !stateById.has(startStateId)) {
+    warnings.push({
+      code: "start_state_not_configured",
+      state_id: null,
+      message: "No start state is configured for this work-item type.",
+    });
+  } else {
+    const members = reachableStateIds(startStateId, scopedTransitions);
+    const completed = new Set(
+      [...members].filter((stateId) => stateById.get(stateId)?.group === "completed"),
+    );
+    const reverseTransitions = scopedTransitions.map((transition) => ({
+      from_state_id: transition.to_state_id,
+      to_state_id: transition.from_state_id,
+      agent_allowed: transition.agent_allowed,
+    }));
+    const canReachCompleted = new Set<string>();
+    for (const completedStateId of completed) {
+      for (const stateId of reachableStateIds(completedStateId, reverseTransitions)) {
+        canReachCompleted.add(stateId);
+      }
+    }
+    for (const stateId of members) {
+      if (canReachCompleted.has(stateId)) continue;
+      warnings.push({
+        code: "no_path_to_completed",
+        state_id: stateId,
+        message: `${stateById.get(stateId)?.name ?? stateId} has no path to a completed state.`,
+      });
+    }
+  }
+
+  const activatedProviders = new Set(
+    providers.filter((provider) => provider.activated).map((provider) => provider.slug),
+  );
+  for (const binding of scopedBindings) {
+    if (!binding.prompt.trim() && !binding.model) continue;
+    const stateName = stateById.get(binding.state_id)?.name ?? "This state";
+    if (binding.agent && !activatedProviders.has(binding.agent)) {
+      warnings.push({
+        code: "provider_not_activated",
+        state_id: binding.state_id,
+        message: `${stateName} launches with ${binding.agent}, which is deactivated in Settings → Model configuration; those launches are blocked.`,
+      });
+    } else if (binding.auto_start && !binding.agent && !hasGlobalDefault) {
+      warnings.push({
+        code: "auto_start_without_default",
+        state_id: binding.state_id,
+        message: `${stateName} auto-starts through the global launch default, and none is configured.`,
+      });
+    }
+  }
+
+  return {
+    issue_type_id: issueType.id,
+    start_state_id: startStateId,
+    workflow_revision: issueType.workflow_revision ?? 0,
+    transitions: scopedTransitions,
+    launch_bindings: scopedBindings,
+    warnings,
+  };
+}
 
 export const getIssueTypeWorkflowSettings = (
+  projectId: string,
   typeId: string,
-): Promise<ScopedWorkflowSettings> => request(issueTypeWorkflowPath(typeId));
-
-export const previewIssueTypeWorkflowImpact = (
-  typeId: string,
-  operation: ScopedWorkflowImpactOperation,
-  workflowRevision: number,
-): Promise<ScopedWorkflowImpact> => request(
-  `${issueTypeWorkflowPath(typeId)}/impact`,
-  {
-    method: "POST",
-    body: JSON.stringify({
-      ...operation,
-      workflow_revision: workflowRevision,
-    }),
-  },
-);
+): Promise<ScopedWorkflowSettings> => call(async () => {
+  const client = sdk();
+  const [
+    issueType,
+    states,
+    transitions,
+    bindings,
+    providers,
+    models,
+    reasoningLevels,
+    providerCatalog,
+  ] = await Promise.all([
+    client.issueTypes.getIssueType({ typeId }),
+    client.states.listStates({ projectId }),
+    client.workflows.listIssueTypeTransitions({ typeId }),
+    client.launchBindings.listLaunchBindings({ projectId }),
+    client.providers.listProviders(),
+    client.models.listAgentModels(),
+    client.reasoningLevels.listReasoningLevels(),
+    client.settings.settingsProviderCatalogRetrieve(),
+  ]);
+  return assembleScopedWorkflowSettings(
+    issueType as IssueType,
+    states as State[],
+    transitions,
+    bindings,
+    providers,
+    models,
+    reasoningLevels,
+    Boolean(providerCatalog.value.global_default),
+  );
+});
 
 export const addIssueTypeWorkflowTransition = (
   typeId: string,
@@ -572,9 +770,17 @@ export const addIssueTypeWorkflowTransition = (
     agent_allowed: boolean;
     workflow_revision: number;
   },
-): Promise<ScopedWorkflowSettings> => request(
-  `${issueTypeWorkflowPath(typeId)}/transitions`,
-  { method: "POST", body: JSON.stringify(input) },
+): Promise<unknown> => request(
+  issueTypeTransitionPath(typeId),
+  {
+    method: "POST",
+    body: JSON.stringify({
+      from_state: input.from_state_id,
+      to_state: input.to_state_id,
+      agent_allowed: input.agent_allowed,
+      workflow_revision: input.workflow_revision,
+    }),
+  },
 );
 
 export const removeIssueTypeWorkflowTransition = (
@@ -582,8 +788,8 @@ export const removeIssueTypeWorkflowTransition = (
   fromStateId: string,
   toStateId: string,
   workflowRevision: number,
-): Promise<ScopedWorkflowSettings> => request(
-  `${issueTypeWorkflowPath(typeId)}/transitions/${encodeURIComponent(fromStateId)}/${encodeURIComponent(toStateId)}`,
+): Promise<void> => request(
+  `${issueTypeTransitionPath(typeId)}/${encodeURIComponent(fromStateId)}/${encodeURIComponent(toStateId)}`,
   {
     method: "DELETE",
     body: JSON.stringify({ workflow_revision: workflowRevision }),
@@ -594,7 +800,7 @@ export const removeIssueTypeWorkflowState = (
   typeId: string,
   stateId: string,
   workflowRevision: number,
-): Promise<ScopedWorkflowSettings> => request(
+): Promise<void> => request(
   `${issueTypeWorkflowPath(typeId)}/states/${encodeURIComponent(stateId)}`,
   {
     method: "DELETE",
@@ -608,8 +814,8 @@ export const setIssueTypeWorkflowTransitionPermission = (
   toStateId: string,
   agentAllowed: boolean,
   workflowRevision: number,
-): Promise<ScopedWorkflowSettings> => request(
-  `${issueTypeWorkflowPath(typeId)}/transitions/${encodeURIComponent(fromStateId)}/${encodeURIComponent(toStateId)}`,
+): Promise<unknown> => request(
+  `${issueTypeTransitionPath(typeId)}/${encodeURIComponent(fromStateId)}/${encodeURIComponent(toStateId)}`,
   {
     method: "PATCH",
     body: JSON.stringify({
@@ -623,42 +829,82 @@ export const setIssueTypeWorkflowStartState = (
   typeId: string,
   stateId: string,
   workflowRevision: number,
-): Promise<ScopedWorkflowSettings> => request(
-  `${issueTypeWorkflowPath(typeId)}/start-state`,
-  {
-    method: "PUT",
-    body: JSON.stringify({
-      state_id: stateId,
-      workflow_revision: workflowRevision,
-    }),
-  },
-);
+): Promise<IssueType> => patchIssueType(typeId, {
+  start_state: stateId,
+  workflow_revision: workflowRevision,
+});
+
+async function resolveLaunchBindingIds(binding: LaunchBindingInput): Promise<{
+  model: string | null;
+  reasoning: string | null;
+}> {
+  const client = sdk();
+  const [providers, models, reasoningLevels] = await Promise.all([
+    client.providers.listProviders(),
+    client.models.listAgentModels(),
+    client.reasoningLevels.listReasoningLevels(),
+  ]);
+  const provider = binding.agent
+    ? providers.find((candidate) => candidate.slug === binding.agent)
+    : undefined;
+  if (binding.agent && !provider) {
+    throw new Error(`Agent/provider '${binding.agent}' is not in the catalog.`);
+  }
+  const model = binding.model
+    ? models.find((candidate) =>
+        candidate.name === binding.model
+        && (!provider
+          || candidate.provider === provider.id
+          || candidate.provider === provider.slug))
+    : undefined;
+  if (binding.model && !model) {
+    throw new Error(
+      `Model '${binding.model}' is not in the catalog for agent/provider '${binding.agent ?? ""}'.`,
+    );
+  }
+  const reasoning = binding.reasoning
+    ? reasoningLevels.find((candidate) => candidate.name === binding.reasoning)
+    : undefined;
+  if (binding.reasoning && !reasoning) {
+    throw new Error(`Reasoning '${binding.reasoning}' is not in the catalog.`);
+  }
+  return {
+    model: model?.id ?? null,
+    reasoning: reasoning?.id ?? null,
+  };
+}
 
 export const upsertIssueTypeWorkflowLaunchBinding = (
   typeId: string,
   stateId: string,
   binding: LaunchBindingInput,
   workflowRevision: number,
-): Promise<ScopedWorkflowSettings> => request(
-  `${issueTypeWorkflowPath(typeId)}/launch-bindings/${encodeURIComponent(stateId)}`,
-  {
-    method: "PUT",
-    body: JSON.stringify({
-      ...binding,
-      workflow_revision: workflowRevision,
-    }),
-  },
-);
+): Promise<unknown> => call(async () => {
+  const resolved = await resolveLaunchBindingIds(binding);
+  return request(
+    `${issueTypeWorkflowPath(typeId)}/launch-bindings/${encodeURIComponent(stateId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        prompt: binding.prompt,
+        required_skills: binding.required_skills,
+        model: resolved.model,
+        reasoning: resolved.reasoning,
+        workflow_revision: workflowRevision,
+      }),
+    },
+  );
+});
 
 export const setIssueTypeWorkflowAutoStart = (
   typeId: string,
   stateId: string,
   autoStart: boolean,
   workflowRevision: number,
-): Promise<ScopedWorkflowSettings> => request(
-  `${issueTypeWorkflowPath(typeId)}/launch-bindings/${encodeURIComponent(stateId)}/auto-start`,
+): Promise<unknown> => request(
+  `${issueTypeWorkflowPath(typeId)}/launch-bindings/${encodeURIComponent(stateId)}`,
   {
-    method: "PATCH",
+    method: "PUT",
     body: JSON.stringify({
       auto_start: autoStart,
       workflow_revision: workflowRevision,
@@ -671,12 +917,12 @@ export const setIssueTypeWorkflowSubtreeRun = (
   stateId: string,
   enabled: boolean,
   workflowRevision: number,
-): Promise<ScopedWorkflowSettings> => request(
-  `${issueTypeWorkflowPath(typeId)}/launch-bindings/${encodeURIComponent(stateId)}/subtree-run`,
+): Promise<unknown> => request(
+  `${issueTypeWorkflowPath(typeId)}/launch-bindings/${encodeURIComponent(stateId)}`,
   {
     method: "PUT",
     body: JSON.stringify({
-      enabled,
+      subtree_run_enabled: enabled,
       workflow_revision: workflowRevision,
     }),
   },
@@ -690,18 +936,81 @@ export const putKeybindingOverrides = (value: unknown) =>
     settingValue: { value },
   }));
 
+const CONFIGURABLE_PROVIDER_SLUGS: readonly ConfigurableProvider[] = [
+  "claude",
+  "codex",
+  "gemini",
+];
+
 export const getProviderCatalog = () =>
-  call(() => sdk().settings.settingsProviderCatalogRetrieve()) as Promise<{
-    value: ProviderCatalog;
-  }>;
+  call(async () => {
+    const [providers, response] = await Promise.all([
+      sdk().providers.listProviders(),
+      sdk().settings.settingsProviderCatalogRetrieve(),
+    ]);
+    const activated = new Set(
+      providers
+        .filter((provider) => provider.activated)
+        .map((provider) => provider.slug),
+    );
+    const globalDefault = response.value.global_default;
+    return {
+      value: {
+        activated_providers: CONFIGURABLE_PROVIDER_SLUGS.filter((provider) =>
+          activated.has(provider)),
+        global_default: globalDefault
+          ? {
+              provider: globalDefault.provider as ConfigurableProvider,
+              model: globalDefault.model ?? null,
+              reasoning: globalDefault.reasoning ?? null,
+            }
+          : null,
+      } satisfies ProviderCatalog,
+    };
+  });
 
 export const putProviderCatalog = (value: ProviderCatalog) =>
-  call(() => sdk().settings.settingsProviderCatalogUpdate({
-    providerCatalogEnvelope: { value } as never,
-  })) as Promise<{
-    value: ProviderCatalog;
-    blocked_launch_bindings: number;
-  }>;
+  call(async () => {
+    const providers = await sdk().providers.listProviders();
+    const activated = new Set(value.activated_providers);
+
+    for (const provider of providers) {
+      if (!CONFIGURABLE_PROVIDER_SLUGS.includes(
+        provider.slug as ConfigurableProvider,
+      )) {
+        continue;
+      }
+      const shouldActivate = activated.has(
+        provider.slug as ConfigurableProvider,
+      );
+      if (provider.activated !== shouldActivate) {
+        await sdk().providers.updateProvider({
+          id: provider.id,
+          patchedProvider: { activated: shouldActivate },
+        });
+      }
+    }
+
+    const response = await sdk().settings.settingsProviderCatalogUpdate({
+      providerCatalogEnvelope: {
+        value: { global_default: value.global_default },
+      } as never,
+    });
+    const globalDefault = response.value.global_default;
+    return {
+      value: {
+        activated_providers: CONFIGURABLE_PROVIDER_SLUGS.filter((provider) =>
+          activated.has(provider)),
+        global_default: globalDefault
+          ? {
+              provider: globalDefault.provider as ConfigurableProvider,
+              model: globalDefault.model ?? null,
+              reasoning: globalDefault.reasoning ?? null,
+            }
+          : null,
+      } satisfies ProviderCatalog,
+    };
+  });
 
 export const saveDocument = (
   docId: string,

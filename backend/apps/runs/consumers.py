@@ -20,6 +20,7 @@ class StatusStreamConsumer(AsyncJsonWebsocketConsumer):
     """Project-scoped, receive-only v1 agent status stream."""
 
     async def connect(self) -> None:
+        self._disconnected = False
         params = parse_qs(self.scope["query_string"].decode())
         project_id = params.get("project_id", [None])[0]
         if not project_id:
@@ -58,12 +59,19 @@ class StatusStreamConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def status_frame(self, event: dict) -> None:
+        # Channel-layer messages already queued for this consumer may be
+        # dispatched immediately after the peer disconnects. ASGI forbids a
+        # websocket.send after websocket.close, so discard that stale frame;
+        # the reconnect snapshot/replay is authoritative for the new socket.
+        if getattr(self, "_disconnected", False):
+            return
         await self.send_json(event["frame"])
 
     async def receive(self, text_data=None, bytes_data=None) -> None:
         """Ignore client data; this feed is receive-only."""
 
     async def disconnect(self, code: int) -> None:
+        self._disconnected = True
         project_id = getattr(self, "project_id", None)
         if project_id:
             await self.channel_layer.group_discard(

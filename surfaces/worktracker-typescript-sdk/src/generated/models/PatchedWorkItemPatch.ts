@@ -55,6 +55,12 @@ export interface PatchedWorkItemPatch {
     state_id?: string | null;
     /**
      *
+     * @type {string}
+     * @memberof PatchedWorkItemPatch
+     */
+    issue_type_id?: string;
+    /**
+     *
      * @type {Array<string>}
      * @memberof PatchedWorkItemPatch
      */
@@ -90,6 +96,7 @@ export function PatchedWorkItemPatchFromJSONTyped(json: any, ignoreDiscriminator
         'description': json['description'] == null ? undefined : json['description'],
         'parent_id': json['parent_id'] == null ? undefined : json['parent_id'],
         'state_id': json['state_id'] == null ? undefined : json['state_id'],
+        'issue_type_id': json['issue_type_id'] == null ? undefined : json['issue_type_id'],
         'blocked_by_ids': json['blocked_by_ids'] == null ? undefined : json['blocked_by_ids'],
         'origin': json['origin'] == null ? undefined : OriginEnumFromJSON(json['origin']),
     };
@@ -110,6 +117,7 @@ export function PatchedWorkItemPatchToJSONTyped(value?: PatchedWorkItemPatch | n
         'description': value['description'],
         'parent_id': value['parent_id'],
         'state_id': value['state_id'],
+        'issue_type_id': value['issue_type_id'],
         'blocked_by_ids': value['blocked_by_ids'],
         'origin': OriginEnumToJSON(value['origin']),
     };

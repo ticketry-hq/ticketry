@@ -5060,6 +5060,10 @@
                         "format": "uuid",
                         "nullable": true
                     },
+                    "issue_type_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
                     "blocked_by_ids": {
                         "type": "array",
                         "items": {

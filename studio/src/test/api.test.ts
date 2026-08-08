@@ -15,14 +15,17 @@ import {
   listModules,
   listProjectWorkItems,
   listProjects,
+  getProviderCatalog,
   getWorkspace,
   patchIssueType,
   patchState,
   patchWorkItem,
+  putProviderCatalog,
   reorderIssueTypes,
   reorderStates,
 } from "../shared/api/client";
 import { terminateTerminal } from "../features/agents/api/agentApi";
+import type { ProviderCatalog } from "../shared/api/types";
 
 const fetchMock = vi.fn();
 
@@ -109,6 +112,132 @@ describe("api client", () => {
       "/api/work-tracker/workspace/onboarding/acknowledge",
     );
     expect(fetchMock.mock.calls[1][1].method).toBe("POST");
+  });
+
+  it("composes provider activation with the global launch default", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/work-tracker/providers")) {
+        return Promise.resolve(jsonResponse([
+          {
+            id: "provider-claude",
+            slug: "claude",
+            activated: false,
+            supports_unattended: true,
+          },
+          {
+            id: "provider-codex",
+            slug: "codex",
+            activated: true,
+            supports_unattended: true,
+          },
+          {
+            id: "provider-agy",
+            slug: "agy",
+            activated: true,
+            supports_unattended: true,
+          },
+        ]));
+      }
+      if (url.endsWith("/settings/provider-catalog")) {
+        return Promise.resolve(jsonResponse({
+          value: {
+            global_default: {
+              provider: "codex",
+              model: "gpt-5.6-luna",
+              reasoning: "medium",
+            },
+          },
+        }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await expect(getProviderCatalog()).resolves.toEqual({
+      value: {
+        activated_providers: ["codex"],
+        global_default: {
+          provider: "codex",
+          model: "gpt-5.6-luna",
+          reasoning: "medium",
+        },
+      },
+    });
+  });
+
+  it("persists provider activation separately from the global launch default", async () => {
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        if (method === "GET" && url.endsWith("/work-tracker/providers")) {
+          return jsonResponse([
+            {
+              id: "provider-claude",
+              slug: "claude",
+              activated: true,
+              supports_unattended: true,
+            },
+            {
+              id: "provider-codex",
+              slug: "codex",
+              activated: true,
+              supports_unattended: true,
+            },
+            {
+              id: "provider-gemini",
+              slug: "gemini",
+              activated: true,
+              supports_unattended: true,
+            },
+          ]);
+        }
+        if (method === "PATCH" && url.includes("/work-tracker/providers/")) {
+          const slug = url.endsWith("provider-claude") ? "claude" : "gemini";
+          return jsonResponse({
+            id: url.split("/").at(-1),
+            slug,
+            activated: JSON.parse(String(init?.body)).activated,
+            supports_unattended: true,
+          });
+        }
+        if (method === "PUT" && url.endsWith("/settings/provider-catalog")) {
+          return jsonResponse({ value: JSON.parse(String(init?.body)).value });
+        }
+        throw new Error(`Unexpected ${method} request: ${url}`);
+      },
+    );
+
+    const catalog: ProviderCatalog = {
+      activated_providers: ["codex"],
+      global_default: {
+        provider: "codex",
+        model: "gpt-5.6-luna",
+        reasoning: "medium",
+      },
+    };
+
+    await expect(putProviderCatalog(catalog)).resolves.toEqual({ value: catalog });
+    const writes = fetchMock.mock.calls.filter(([, init]) =>
+      ["PATCH", "PUT"].includes(init?.method),
+    );
+    expect(writes.map(([url, init]) => [
+      String(url),
+      JSON.parse(String(init?.body)),
+    ])).toEqual([
+      [
+        "/api/work-tracker/providers/provider-claude",
+        { activated: false },
+      ],
+      [
+        "/api/work-tracker/providers/provider-gemini",
+        { activated: false },
+      ],
+      [
+        "/api/settings/provider-catalog",
+        { value: { global_default: catalog.global_default } },
+      ],
+    ]);
   });
 
   it("builds the modules path with the project id", async () => {

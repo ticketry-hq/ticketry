@@ -214,6 +214,18 @@ class BoundaryFixture implements StudioFixture {
     }
     if (
       method === "GET" &&
+      /\/work-tracker\/projects\/[^/]+\/issue-types$/.test(path)
+    ) {
+      const issueTypes = new Map<string, WorkItem["issue_type"]>();
+      for (const item of this.items.values()) {
+        if (item.issue_type?.id) {
+          issueTypes.set(item.issue_type.id, item.issue_type);
+        }
+      }
+      return json([...issueTypes.values()]);
+    }
+    if (
+      method === "GET" &&
       /\/work-tracker\/projects\/[^/]+\/launch-bindings$/.test(path)
     ) {
       const bindings = new Map<string, unknown>();

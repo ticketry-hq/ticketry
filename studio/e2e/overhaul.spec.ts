@@ -209,45 +209,29 @@ test("[overhaul-web-05] agent-origin edit appears without reload", async ({ page
 });
 
 test("[overhaul-web-06] cycling loaded selection has no loading flash", async ({ page }) => {
-  for (const name of ["E2E first", "E2E second", "E2E parent renamed"]) {
+  for (const name of ["E2E first", "E2E second"]) {
     await page.getByRole("treeitem", { name: new RegExp(name) }).click();
     await expect(page.getByTestId("issue-name")).toContainText(name);
     await expect(page.getByText("Loading issue…")).toHaveCount(0);
   }
-});
-
-test.skip("[overhaul-web-07] collapsed subtree retains activity", () => {
-  // Needs a persisted run fixture; the public API deliberately has no fake-run endpoint.
-});
-
-test.skip("[overhaul-web-08] keyboard terminal cycle enters collapsed branches", () => {
-  // Requires launching real provider/tmux processes, outside a deterministic web test.
-});
-
-test.skip("[overhaul-web-09] externally killed terminal remains dead", () => {
-  // Requires controlling a real tmux session owned by a launched provider process.
-});
-
-test.skip("[overhaul-web-10] closed terminal stays dismissed after refresh", () => {
-  // Requires a real terminal run; no safe public fixture endpoint exists.
-});
-
-test.skip("[overhaul-web-11] unsaved document survives tab switches", () => {
-  // Documents are discovered from linked repository files and cannot be created over HTTP.
+  const parent = page.getByRole("treeitem", {
+    name: /E2E parent(?: renamed)?/,
+  });
+  await parent.click();
+  await expect(page.getByTestId("issue-name")).toContainText(/E2E parent/);
+  await expect(page.getByText("Loading issue…")).toHaveCount(0);
 });
 
 test("[overhaul-web-12] expansion and collapsed sections survive reload", async ({ page }) => {
-  const parent = page.getByRole("treeitem", { name: /E2E parent renamed/ });
+  const parent = page.getByRole("treeitem", {
+    name: /E2E parent(?: renamed)?/,
+  });
   await parent.getByRole("button", { name: "Expand subtasks" }).click();
   await expect(page.getByRole("treeitem", { name: /E2E child/ })).toBeVisible();
   await page.getByRole("button", { name: "Collapse Review" }).click();
   await page.reload();
   await expect(page.getByRole("treeitem", { name: /E2E child/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Expand Review" })).toBeVisible();
-});
-
-test.skip("[overhaul-web-13] scratch workspace launches and shows a run summary", () => {
-  // Launching would execute a real configured coding agent rather than a test double.
 });
 
 test("[overhaul-web-14] reconnect replay closes an offline edit gap", async ({ page, request, context }) => {

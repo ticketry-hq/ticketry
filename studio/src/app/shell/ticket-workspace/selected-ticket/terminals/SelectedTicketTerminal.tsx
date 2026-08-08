@@ -1,9 +1,11 @@
 import {
   Terminal,
-  useTerminalStore,
-  useWorkspaceTabsStore,
   type ForegroundOwner,
 } from "../../../../../features/agents/terminal";
+import {
+  useTerminalStore,
+  useWorkspaceTabsStore,
+} from "../../../../../features/agents/terminal/appNavigation";
 
 /**
  * The Studio terminal host: derives WHICH session the workspace shows —

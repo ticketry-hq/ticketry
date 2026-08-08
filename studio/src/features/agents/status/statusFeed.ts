@@ -269,8 +269,7 @@ export const statusFeed = {
       next.onerror = () => {};
     };
 
-    const onVisibility = () => {
-      if (document.visibilityState !== "visible") return;
+    const reconnectNow = () => {
       if (retry) {
         clearTimeout(retry);
         retry = null;
@@ -280,12 +279,21 @@ export const statusFeed = {
       previous?.close();
       connect();
     };
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      reconnectNow();
+    };
     document.addEventListener("visibilitychange", onVisibility);
+    // Browsers do not consistently deliver a timely WebSocket `close` while
+    // the network is offline. Replacing the stale socket as soon as the page
+    // comes online guarantees that the retained cursor is replayed promptly.
+    window.addEventListener("online", reconnectNow);
     connect();
 
     const stop = () => {
       stopped = true;
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", reconnectNow);
       pendingWorkItemIds.clear();
       if (invalidationTimer) clearTimeout(invalidationTimer);
       if (retry) clearTimeout(retry);

@@ -11,7 +11,6 @@ import apps.terminals.session as session_module
 import apps.terminals.agents.registry as agent_registry
 from apps.runs.models import AgentRun
 from apps.terminals.tests.fakes import InMemorySessionService
-from apps.terminals.models import AgentTerminalSession
 from apps.terminals.session import LaunchIntent, TerminalSessionService
 from apps.terminals.session_registry import SESSIONS, TMUX_VIEWERS
 from apps.terminals.tmux.metadata import TmuxSession
@@ -33,20 +32,14 @@ def _insert_run(run_id: str, *, task_id: str = "task-1") -> None:
         started_at="2026-07-05T10:00:00+00:00",
         cwd="/tmp",
         scope="task",
+        terminal_owner_id="test-owner",
     )
 
 
 def _insert_session(run_id: str, *, task_id: str = "task-1") -> None:
-    AgentTerminalSession.objects.create(
-        agent_run_id=run_id,
-        tmux_session_name=f"pt-{run_id}",
-        task_id=task_id,
-        module_id="mod-1",
-        project_id="proj-1",
-        agent="claude",
-        created_at="2026-07-05T10:00:00+00:00",
-        scope="task",
-    )
+    """Compatibility helper: terminal durability now lives on AgentRun."""
+
+    del run_id, task_id
 
 
 def _tmux_session(run_id: str = "run-1") -> TmuxSession:
@@ -95,7 +88,6 @@ def test_terminate_is_idempotent_and_marks_run(monkeypatch, tmp_path):
     service.terminate("run-1")
 
     run = AgentRun.objects.get(id="run-1")
-    terminal = AgentTerminalSession.objects.get(agent_run_id="run-1")
     assert killed == ["run-1"]
     assert stopped == ["run-1"]
     assert run.status == "terminated"
@@ -105,7 +97,6 @@ def test_terminate_is_idempotent_and_marks_run(monkeypatch, tmp_path):
     # render forever as working or awaiting input (#1462).
     assert run.lifecycle_state == "exited"
     assert run.lifecycle_updated_at == run.ended_at
-    assert terminal.terminated_at is not None
     assert not overlay.exists()
 
 

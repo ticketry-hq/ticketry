@@ -22,7 +22,6 @@ class PtySession:
     agent: str
     task_id: Optional[str]
     module_id: str
-    ticket_seq: Optional[int] = None
     agent_run_id: Optional[str] = None
     project_id: Optional[str] = None
     extra: dict[str, Any] = field(default_factory=dict)

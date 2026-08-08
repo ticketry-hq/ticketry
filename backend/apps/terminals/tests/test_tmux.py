@@ -2,7 +2,7 @@
 
 Each test creates and tears down its own tmux session on the dedicated
 ``Muxed`` socket and is skipped (not failed) if ``tmux`` is missing
-from ``PATH``. Metadata persistence is checked against the Django ORM.
+from ``PATH``. Durable metadata lives on ``AgentRun``.
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from apps.terminals.tmux._core import (
 )
 from apps.terminals.tmux.client import attach_argv, refresh_client_size, scroll
 from apps.terminals.tmux.metadata import TmuxSession, _parse_show_options
-from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id
 
 
@@ -76,7 +75,7 @@ def isolated_tmux_socket(monkeypatch):
 def agent_run_id():
     rid = _run_id()
 
-    # A parent run row must exist for the terminal-session FK.
+    # The run is the durable terminal record.
 
     AgentRun.objects.create(
         id=rid,
@@ -85,12 +84,12 @@ def agent_run_id():
             module_id="module-456",
             task_id="task-123",
         ),
-        ticket_seq=484,
         agent="claude-code",
         status="running",
         started_at="2026-05-29T10:00:00",
         cwd="/tmp",
         scope="task",
+        terminal_owner_id=tmux.terminal_owner_id(),
     )
     yield rid
 
@@ -142,14 +141,12 @@ def test_create_session_returns_populated_dataclass_and_is_listed(agent_run_id):
     assert any(s.name == session.name for s in listed)
 
 
-def test_create_session_persists_metadata(agent_run_id):
+def test_create_session_uses_run_as_only_relational_record(agent_run_id):
     _make(agent_run_id)
 
-    row = AgentTerminalSession.objects.get(agent_run_id=agent_run_id)
-
-    assert row.tmux_session_name == f"pt-{agent_run_id}"
-    assert row.task_id == "task-123"
-    assert row.terminated_at is None
+    run = AgentRun.objects.get(id=agent_run_id)
+    assert run.terminal_owner_id == tmux.terminal_owner_id()
+    assert run.ended_at is None
 
 
 def test_user_options_round_trip_through_get_session(agent_run_id):
@@ -207,9 +204,11 @@ def test_doc_rel_path_round_trips_through_get_session(agent_run_id):
     assert fetched is not None
     assert fetched.scope == "docchat"
     assert fetched.doc_rel_path == "spec/x/LLD.html"
-    # And it is persisted on the mirror row.
-    row = AgentTerminalSession.objects.get(agent_run_id=agent_run_id)
-    assert row.doc_rel_path == "spec/x/LLD.html"
+    # Relational restore context is run-owned; tmux is only the recovery copy.
+    AgentRun.objects.filter(id=agent_run_id).update(
+        doc_rel_path="spec/x/LLD.html"
+    )
+    assert AgentRun.objects.get(id=agent_run_id).doc_rel_path == "spec/x/LLD.html"
 
 
 def test_non_doc_chat_session_has_null_doc_path(agent_run_id):
@@ -299,10 +298,9 @@ def test_reconcile_classifies_retained_dead_pane_as_exited(agent_run_id):
 
     assert result.exited == [agent_run_id]
     assert result.soft_deleted == []
-    assert (
-        AgentTerminalSession.objects.get(agent_run_id=agent_run_id).terminated_at
-        is not None
-    )
+    # The transport layer classifies only; TerminalSessionService projects the
+    # result to the run lifecycle.
+    assert AgentRun.objects.get(id=agent_run_id).ended_at is None
     assert tmux.get_session(agent_run_id) is None
 
 
@@ -359,10 +357,7 @@ def test_reconcile_preserves_rows_when_tmux_listing_is_uncertain(
         with pytest.raises(TmuxSessionError, match="list-sessions failed"):
             tmux.reconcile_sessions()
 
-    assert (
-        AgentTerminalSession.objects.get(agent_run_id=agent_run_id).terminated_at
-        is None
-    )
+    assert AgentRun.objects.get(id=agent_run_id).ended_at is None
 
 
 def test_reconcile_preserves_rows_when_tmux_server_is_absent(agent_run_id):
@@ -376,10 +371,7 @@ def test_reconcile_preserves_rows_when_tmux_server_is_absent(agent_run_id):
     assert result.inventory_available is False
     assert result.soft_deleted == []
     assert result.exited == []
-    assert (
-        AgentTerminalSession.objects.get(agent_run_id=agent_run_id).terminated_at
-        is None
-    )
+    assert AgentRun.objects.get(id=agent_run_id).ended_at is None
 
 
 def test_scroll_hides_position_marker_and_returns_to_live_prompt(agent_run_id):
@@ -452,8 +444,8 @@ def test_scroll_hides_position_marker_and_returns_to_live_prompt(agent_run_id):
         mouse = server.cmd("show-options", "-gv", "mouse")
         assert (mouse.stdout or ["off"])[0].strip() == "off"
         assert tmux.get_session(agent_run_id) is not None
-        assert AgentTerminalSession.objects.filter(
-            agent_run_id=agent_run_id, terminated_at__isnull=True
+        assert AgentRun.objects.filter(
+            id=agent_run_id, ended_at__isnull=True
         ).exists()
 
         with pytest.raises(TmuxSessionError):
@@ -471,14 +463,11 @@ def test_terminate_returns_true_then_false(agent_run_id):
     assert tmux.terminate_session(agent_run_id) is False
 
 
-def test_terminate_soft_deletes_metadata(agent_run_id):
+def test_transport_termination_leaves_lifecycle_to_run_service(agent_run_id):
     _make(agent_run_id)
 
     assert tmux.terminate_session(agent_run_id) is True
-
-    row = AgentTerminalSession.objects.get(agent_run_id=agent_run_id)
-
-    assert row.terminated_at is not None
+    assert AgentRun.objects.get(id=agent_run_id).ended_at is None
 
 
 def test_list_sessions_ignores_non_pt_sessions(agent_run_id):
@@ -511,24 +500,6 @@ def test_list_sessions_ignores_non_pt_sessions(agent_run_id):
             ["tmux", "-L", TMUX_SOCKET, "kill-session", "-t", foreign],
             check=False,
         )
-
-
-def test_create_session_does_not_start_provider_when_db_insert_fails(
-    agent_run_id, monkeypatch, tmp_path
-):
-    """A failed metadata insert rolls back before any provider work starts."""
-
-    def boom(**kwargs):
-        raise RuntimeError("db down")
-
-    launched = tmp_path / "provider-started"
-    monkeypatch.setattr(AgentTerminalSession.objects, "create", boom)
-
-    with pytest.raises(TmuxSessionError, match="persist session metadata failed"):
-        _make(agent_run_id, command=f"touch {launched}; sleep 60")
-
-    assert not launched.exists()
-    assert tmux.get_session(agent_run_id) is None
 
 
 def test_attach_argv_shape():

@@ -5,12 +5,10 @@ from __future__ import annotations
 import pytest
 
 import apps.runs.dao as runs_dao
-import apps.terminals.dao as terminals_dao
 import apps.terminals.session as session_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
 from apps.terminals.tests.fakes import FakeAdapter
-from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id
 
 
@@ -44,28 +42,7 @@ def _run(
         provider_session_id=provider_session_id,
         design_dir="/repo/design",
         scope="docchat",
-    )
-
-
-def _session(
-    run_id: str = OLD_RUN_ID,
-    *,
-    created_at: str = "2026-05-29T10:05:00",
-    terminated_at: str | None = "2026-05-29T10:10:00",
-    scope: str = "docchat",
-    doc_rel_path: str | None = "specs/notes.md",
-) -> AgentTerminalSession:
-    return AgentTerminalSession(
-        agent_run_id=run_id,
-        tmux_session_name=f"pt-{run_id}",
-        task_id=TASK_ID,
-        module_id=MODULE_ID,
-        project_id=PROJECT_ID,
-        agent=AGENT,
-        created_at=created_at,
-        terminated_at=terminated_at,
-        scope=scope,
-        doc_rel_path=doc_rel_path,
+        doc_rel_path="specs/notes.md",
     )
 
 
@@ -75,7 +52,6 @@ async def _seed_run_and_session(
     await runs_dao.insert_agent_run(
         _run(cwd=cwd, provider_session_id=provider_session_id, ended_at=ended_at)
     )
-    await terminals_dao.insert_terminal_session(_session())
 
 
 def _patch_resume_adapter(monkeypatch, *, resume_fn=None, slug: str = AGENT) -> None:

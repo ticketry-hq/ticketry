@@ -50,7 +50,6 @@ def _make_run(
         issue_id=fixture_issue_id(
             project_id=project_id, module_id=module_id, task_id=task_id
         ),
-        ticket_seq=472,
         agent="claude",
         status="running",
         started_at=started_at,
@@ -73,7 +72,6 @@ async def test_insert_round_trips_full_row() -> None:
     assert str(stored[0].issue_id) == fixture_issue_id(
         project_id="proj-1", module_id="mod-1", task_id="task-1"
     )
-    assert stored[0].ticket_seq == 472
     assert stored[0].cwd == "/tmp/work"
 
 
@@ -94,7 +92,6 @@ async def test_insert_round_trips_nullable_fields() -> None:
     run = await AgentRun.objects.aget(id="run-null")
 
     assert run.issue_id is not None
-    assert run.ticket_seq is None
     assert run.ended_at is None
     assert run.exit_code is None
     assert run.error is None

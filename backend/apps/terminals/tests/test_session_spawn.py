@@ -173,14 +173,14 @@ async def test_spawn_happy_path_returns_id_and_persists(tmp_config, tmp_path, mo
     assert run.status == "running"
     assert run.lifecycle_state == "starting"
     assert run.lifecycle_updated_at == run.started_at
+    assert run.terminal_owner_id == session_module.tmux_sessions.terminal_owner_id()
     assert created["project_id"] == fixture_uuid(PROJECT_ID)
     assert created["module_id"] == fixture_issue_id(
         project_id=PROJECT_ID, module_id=MODULE_ID, task_id=None
     )
 
-    # create_session (which writes the AgentTerminalSession row) got the run
-    # facts keyed by task_id, task scope, the module-folder cwd, and a command
-    # built from the agent argv.
+    # The tmux transport got recovery metadata derived from AgentRun/Issue,
+    # plus the module-folder cwd and built agent command.
     assert created["agent_run_id"] == run_id
     assert created["task_id"] == fixture_issue_id(
         project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID

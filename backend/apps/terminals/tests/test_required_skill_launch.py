@@ -8,7 +8,6 @@ import pytest
 import apps.terminals.launch as launch
 import apps.terminals.agents.registry as agent_registry
 from apps.runs.models import AgentRun
-from apps.terminals.models import AgentTerminalSession
 from apps.terminals.agents.registry import (
     cleanup_temporary_artifacts,
     get_adapter,
@@ -145,7 +144,6 @@ def test_different_provider_visible_reserved_name_fails_closed(
     assert caught.value.conflicting_path == conflict
     assert (conflict / "SKILL.md").read_text().endswith("changed\n")
     assert AgentRun.objects.count() == 0
-    assert AgentTerminalSession.objects.count() == 0
 
 
 def test_collision_scan_uses_canonical_metadata_not_only_folder_name(
@@ -202,7 +200,6 @@ def test_missing_required_worktracker_tool_fails_preflight(
     assert caught.value.reason == "tool_unavailable"
     assert "create_sub_task" in caught.value.message
     assert AgentRun.objects.count() == 0
-    assert AgentTerminalSession.objects.count() == 0
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
@@ -228,7 +225,6 @@ def test_approved_provider_below_locked_minimum_fails_preflight(
 
     assert caught.value.reason == "provider_unsupported"
     assert AgentRun.objects.count() == 0
-    assert AgentTerminalSession.objects.count() == 0
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
@@ -254,7 +250,6 @@ def test_corrupt_packaged_catalog_fails_before_durable_state(
 
     assert caught.value.reason == "catalog_invalid"
     assert AgentRun.objects.count() == 0
-    assert AgentTerminalSession.objects.count() == 0
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
@@ -344,7 +339,6 @@ async def test_overlay_failure_happens_before_agent_run_or_tmux(
     assert caught.value.reason == "launch_configuration_failed"
     assert not tmux_called
     assert await AgentRun.objects.acount() == 0
-    assert await AgentTerminalSession.objects.acount() == 0
     assert not (
         tmp_path / "ticketry-agent-runs" / f"preflight-failure-{provider}"
     ).exists()
@@ -378,5 +372,4 @@ async def test_tmux_launch_failure_removes_run_session_and_overlay(
         )
 
     assert await AgentRun.objects.acount() == 0
-    assert await AgentTerminalSession.objects.acount() == 0
     assert not (tmp_path / "ticketry-agent-runs" / run_id).exists()

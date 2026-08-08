@@ -12,7 +12,6 @@ class AgentRun(models.Model):
     issue = models.ForeignKey(
         Issue, on_delete=models.CASCADE, related_name="agent_runs"
     )
-    ticket_seq = models.IntegerField(null=True)
     agent = models.CharField()
     status = models.CharField()
     started_at = models.CharField()
@@ -25,9 +24,16 @@ class AgentRun(models.Model):
     lifecycle_updated_at = models.CharField(null=True)
     design_dir = models.CharField(null=True)
     resumed_from = models.CharField(null=True)
-    # Hooks can report lifecycle before the terminal-session mirror exists, so
-    # the run itself owns the durable routing scope.
+    # Hooks can report lifecycle immediately after launch, so the run owns the
+    # durable routing scope directly.
     scope = models.CharField()
+    # Document context belongs to the run: resume creates a new run and copies
+    # this value, while every non-doc-chat run leaves it null.
+    doc_rel_path = models.CharField(null=True)
+    # Stable identity of the terminal transport owner (currently the
+    # profile-scoped tmux socket). Null means terminal provisioning has not
+    # completed; migrated transports use the explicit unknown owner "legacy".
+    terminal_owner_id = models.CharField(null=True)
 
     class Meta:
         db_table = "agent_runs"

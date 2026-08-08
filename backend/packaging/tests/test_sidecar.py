@@ -418,25 +418,6 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
                     "task",
                 ),
             )
-            database.execute(
-                """
-                INSERT INTO agent_terminal_sessions (
-                    agent_run_id, tmux_session_name, task_id, module_id,
-                    project_id, agent, created_at, scope
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run_id,
-                    f"pt-{run_id}",
-                    task_id,
-                    module_id,
-                    project_id,
-                    "codex",
-                    "2020-01-01T00:00:00+00:00",
-                    "task",
-                ),
-            )
-
         spool_identity = hashlib.sha256(
             str(tmp_path.resolve()).encode("utf-8")
         ).hexdigest()[:16]

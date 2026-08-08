@@ -49,6 +49,7 @@ export {
 } from "./hooks";
 export {
   usePersistedTerminalSessions,
+  useResumableTerminalSessions,
   useScratchTerminalSessions,
 } from "./queries";
 

@@ -56,6 +56,24 @@ describe("clientStore", () => {
     expect(useClientStore.getState().modulesCursorId).toBe("first");
   });
 
+  it("migrates and updates remembered task selections by module", async () => {
+    localStorage.setItem(
+      "studio.coding.selectedTaskByModule",
+      JSON.stringify({ legacy: "old-story" }),
+    );
+    const { useClientStore } = await import("../state/clientStore");
+
+    useClientStore.setState({ selectedModuleId: "current" });
+    useClientStore.getState().selectTask("new-story");
+
+    expect(
+      JSON.parse(localStorage.getItem("studio.selectedTaskByModule:v1")!),
+    ).toEqual({ legacy: "old-story", current: "new-story" });
+    expect(
+      localStorage.getItem("studio.coding.selectedTaskByModule"),
+    ).toBeNull();
+  });
+
   it("does not retain the deleted active bindings field", async () => {
     const { useClientStore } = await import("../state/clientStore");
     const state = useClientStore.getState() as unknown as Record<string, unknown>;

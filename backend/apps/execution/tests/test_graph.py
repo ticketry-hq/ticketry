@@ -366,6 +366,33 @@ def test_repeat_execute_refuses_while_a_terminal_session_is_active(graph_project
     assert len(_successful_spawn.calls) == 1
 
 
+def test_execute_does_not_hold_a_database_transaction_while_spawning(graph_project):
+    project, _, root, states, story_type = graph_project
+    child = _task(project, story_type, root, "Child", 3, states["todo"])
+
+    async def database_spawn(**kwargs):
+        run_id = "persisted-during-spawn"
+        await AgentRun.objects.acreate(
+            id=run_id,
+            issue_id=kwargs["task_id"],
+            ticket_seq=child.sequence_id,
+            agent="codex",
+            status="running",
+            started_at="2026-08-08T10:00:00+00:00",
+            scope="task",
+        )
+        return run_id
+
+    assert driver.execute_graph(
+        str(root.id), agent="codex", spawn=database_spawn
+    ) == [str(child.id)]
+    assert AgentRun.objects.filter(id="persisted-during-spawn").exists()
+    assert (
+        LaunchedTask.objects.get(task=child).agent_run_id
+        == "persisted-during-spawn"
+    )
+
+
 def test_reset_subtree_clears_rows_and_launches_nothing(graph_project):
     _successful_spawn.calls.clear()
     project, _, root, states, story_type = graph_project

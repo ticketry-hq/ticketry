@@ -63,6 +63,7 @@ class AutomationAttempt(models.Model):
     error = models.TextField(null=True, blank=True)
     error_details = models.JSONField(null=True, blank=True)
     retryable = models.BooleanField(default=True)
+    dismissed_at = models.DateTimeField(null=True, blank=True)
     retry_of = models.OneToOneField(
         "self",
         null=True,

@@ -13,6 +13,7 @@ import {
   bucketOfMeta,
   isScratchBucket,
   useActiveSession,
+  useResumableTerminalSessions,
   useTaskSessions,
   useTerminalStore,
   usePersistedTerminalSessions,
@@ -28,7 +29,14 @@ import {
 import { closeTerminalTab } from "./internal/closeTerminalTab";
 import { terminalLabel } from "./internal/terminalLabel";
 import type { LifecycleState } from "../../../../features/agents/terminal";
-import type { Profile } from "../../../../features/agents/types";
+import type {
+  Profile,
+  ResumableTerminalSession,
+} from "../../../../features/agents/types";
+import {
+  ApiError as AgentApiError,
+  resumeTerminal,
+} from "../../../../features/agents/api/agentApi";
 import { LifecycleBadge } from "../../../../features/agents/terminal";
 import {
   useTaskWorkspaceTabNavigation,
@@ -42,7 +50,7 @@ import {
   isSidebarEnabled,
   useConfig,
 } from "../../../../features/studio/stores/configStore";
-import { useClientStore } from "../../../../state/clientStore";
+import { toast, useClientStore } from "../../../../state/clientStore";
 import { formatChordSymbols } from "../../../navigation/chordLabel";
 import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../navigation/three-zone/threeZoneNavigation";
 import { selectScratchRunIds, useAgentStatusStore } from "../../../../features/agents/status";
@@ -124,6 +132,22 @@ function rememberStudioWorkspaceTarget(
       ),
     );
   } catch {}
+}
+
+function resumeErrorMessage(error: unknown): string {
+  const body = error instanceof AgentApiError ? error.body : null;
+  const detail = body && typeof body === "object"
+    ? (body as { detail?: unknown }).detail
+    : null;
+  const code = detail && typeof detail === "object" && "error" in detail
+    ? String((detail as { error?: unknown }).error)
+    : body && typeof body === "object" && "error" in body
+      ? String((body as { error?: unknown }).error)
+      : "";
+  if (code === "cwd_missing") return "Working directory no longer exists";
+  if (code === "run_still_active") return "Session is still running - attach instead";
+  if (code === "resume_unsupported") return "This agent cannot resume sessions";
+  return "Could not resume session";
 }
 
 // Stable loader shared by the lazy boundary and the launcher's intent
@@ -279,6 +303,11 @@ export function SelectedTicketContent({
   const terminalSessionsFetched = scratch
     ? scratchTerminalQuery.isFetched
     : persistedTerminalQuery.isFetched;
+  const resumableSessions = useResumableTerminalSessions(
+    bucket && !scratch ? bucket : null,
+    scratch ? projectId : null,
+    scratch ? moduleId : null,
+  );
   const focusSession = useTerminalStore((s) => s.focusSession);
   const openSession = useTerminalStore((s) => s.openSession);
   const mountedTaskRunIds = useAgentStatusStore((s) =>
@@ -302,6 +331,7 @@ export function SelectedTicketContent({
   const closeDoc = useTicketWorkspaceStore((s) => s.closeDoc);
   const reopenDoc = useTicketWorkspaceStore((s) => s.reopenDoc);
   const [launchOpen, setLaunchOpen] = useState(false);
+  const [resumingRunId, setResumingRunId] = useState<string | null>(null);
   const launchCommittedRef = useRef(false);
   const launchTriggerRef = useRef<HTMLButtonElement>(null);
   const launchMenuRef = useRef<HTMLDivElement>(null);
@@ -572,13 +602,20 @@ export function SelectedTicketContent({
   const closedDocIds = new Set(ws.closedDocIds);
   const openDocs = documentQuery.documents.filter((doc) => !closedDocIds.has(doc.id));
   const closedDocs = documentQuery.documents.filter((doc) => closedDocIds.has(doc.id));
+  // The API already caps this history, but retain the presentation bound at
+  // the UI seam so a malformed response cannot grow the dormant chip row.
+  const resumable = resumableSessions.slice(0, 10);
+  const resumableRunIds = new Set(
+    resumable.map((session) => session.agent_run_id),
+  );
   const visibleHistory = useAgentStatusStore((state) => {
     if (!bucket) return [];
     return Object.values(state.runs).filter((run) =>
       (isScratchBucket(bucket)
         ? run.task_id === null && run.project_id === projectId && run.module_id === moduleId
         : run.task_id === bucket) &&
-      (run.state === "exited" || run.state === "lost" || run.state === "error"),
+      (run.state === "exited" || run.state === "lost" || run.state === "error") &&
+      !resumableRunIds.has(run.agent_run_id),
     );
   });
   const activeDoc =
@@ -749,6 +786,53 @@ export function SelectedTicketContent({
       );
     }
     void closeTerminalTab(sessionId, bucket, ticketKey);
+  }
+
+  async function resumeWorkspaceTerminal(
+    resumableSession: ResumableTerminalSession,
+  ): Promise<void> {
+    if (!bucket || !projectId || resumingRunId) return;
+    setResumingRunId(resumableSession.agent_run_id);
+    try {
+      const resumed = await resumeTerminal(resumableSession.agent_run_id);
+      const queryKey = queryKeys.terminalSessions.resumable(
+        scratch ? null : bucket,
+        scratch ? projectId : null,
+        scratch ? moduleId : null,
+      );
+      queryClient.setQueryData<ResumableTerminalSession[]>(queryKey, (current) =>
+        (current ?? []).filter(
+          (candidate) =>
+            candidate.agent_run_id !== resumableSession.agent_run_id,
+        ));
+      openSession({
+        taskId: scratch ? null : bucket,
+        projectId,
+        moduleId: moduleId ?? undefined,
+        agent: resumableSession.agent,
+        ticketSeq: null,
+        agentRunId: resumed.agent_run_id,
+        isPlanning: resumableSession.scope === "plan",
+        isInstant: resumableSession.scope === "instant",
+      });
+      setActive(bucket, "terminal");
+      if (owner === "studio") {
+        rememberStudioWorkspaceTarget(bucket, {
+          kind: "terminal",
+          agentRunId: resumed.agent_run_id,
+        });
+      }
+      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({
+        queryKey: scratch
+          ? queryKeys.terminalSessions.scratch(projectId, moduleId)
+          : queryKeys.terminalSessions.persisted(bucket),
+      });
+    } catch (error) {
+      toast.error(resumeErrorMessage(error));
+    } finally {
+      setResumingRunId(null);
+    }
   }
 
   useTaskWorkspaceTabNavigation({
@@ -998,8 +1082,8 @@ export function SelectedTicketContent({
         )}
       </div>
 
-      {/* Dormant chips: reopen closed docs or show inert terminated runs. */}
-      {(closedDocs.length > 0 || visibleHistory.length > 0) && (
+      {/* Dormant chips: reopen closed docs, resume runs, or show inert history. */}
+      {(closedDocs.length > 0 || resumable.length > 0 || visibleHistory.length > 0) && (
         <div className="mb-1 flex shrink-0 flex-wrap gap-1">
           {closedDocs.map((d) => (
             <button
@@ -1010,6 +1094,19 @@ export function SelectedTicketContent({
               className="shrink-0 border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary"
             >
               + {d.label}
+            </button>
+          ))}
+          {resumable.map((session) => (
+            <button
+              key={session.agent_run_id}
+              type="button"
+              aria-label={`Resume ${session.agent} terminal`}
+              title={`Resume · ${session.started_at}`}
+              disabled={resumingRunId !== null}
+              onClick={() => void resumeWorkspaceTerminal(session)}
+              className="shrink-0 border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-50"
+            >
+              {resumingRunId === session.agent_run_id ? "Resuming…" : `↻ ${session.agent}`}
             </button>
           ))}
           {visibleHistory.map((chip, i) => (

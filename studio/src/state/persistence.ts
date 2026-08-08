@@ -4,6 +4,7 @@ export const SIDEBAR_KEY = "studio.sidebarVisible:v1";
 export const PANEL_LAYOUT_KEY = "studio.panelLayout:v1";
 export const EXPANDED_IDS_KEY = "studio.expandedSubtasks:v1";
 export const COLLAPSED_STATE_IDS_KEY = "studio.collapsedStates:v2";
+export const TASK_SELECTIONS_KEY = "studio.selectedTaskByModule:v1";
 
 const LEGACY_SIDEBAR_KEYS = ["plane-tui:sidebar-visible"];
 const LEGACY_PANEL_LAYOUT_KEYS = ["plane-tui:panel-layout"];
@@ -11,6 +12,12 @@ const LEGACY_COLLAPSED_STATE_KEYS = [
   "studio.collapsedStates:v1",
   "plane-tui:collapsed-states",
 ] as const;
+const LEGACY_TASK_SELECTIONS_KEYS = [
+  "studio.studio.selectedTaskByModule",
+  "studio.coding.selectedTaskByModule",
+] as const;
+
+const MAX_TASK_SELECTION_ENTRIES = 100;
 
 export const PANEL_LAYOUT_SAVE_DELAY_MS = 400;
 
@@ -89,6 +96,43 @@ export function writeExpandedIdsByModule(
     localStorage.setItem(EXPANDED_IDS_KEY, JSON.stringify(expandedIdsByModule));
   } catch {
     /* unavailable storage leaves the in-memory preference intact */
+  }
+}
+
+export function readTaskSelections(): Record<string, string> {
+  try {
+    const raw = readVersionedItem(
+      TASK_SELECTIONS_KEY,
+      LEGACY_TASK_SELECTIONS_KEYS,
+    );
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function rememberTaskSelection(moduleId: string, taskId: string): void {
+  try {
+    const current = readTaskSelections();
+    // Object insertion order records recency: touch this module at the end,
+    // then discard the oldest entries so local storage cannot grow forever.
+    delete current[moduleId];
+    const entries = [...Object.entries(current), [moduleId, taskId] as const];
+    localStorage.setItem(
+      TASK_SELECTIONS_KEY,
+      JSON.stringify(
+        Object.fromEntries(entries.slice(-MAX_TASK_SELECTION_ENTRIES)),
+      ),
+    );
+  } catch {
+    /* unavailable storage leaves the in-memory selection intact */
   }
 }
 

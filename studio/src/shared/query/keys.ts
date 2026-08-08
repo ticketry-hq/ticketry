@@ -51,8 +51,6 @@ export const queryKeys = {
       ["workflows", "project", projectId] as const,
     byIssueType: (issueTypeId: string) =>
       ["workflows", "issue-type", issueTypeId] as const,
-    stateImpact: (stateId: string) =>
-      ["workflows", "state-impact", stateId] as const,
     stateCounts: (projectId: string) =>
       ["workflows", "state-counts", projectId] as const,
   },
@@ -87,5 +85,18 @@ export const queryKeys = {
       ["terminal-sessions", "persisted", taskId] as const,
     scratch: (projectId: string, moduleId?: string | null) =>
       ["terminal-sessions", "scratch", projectId, moduleId ?? null] as const,
+    resumable: (
+      taskId?: string | null,
+      projectId?: string | null,
+      moduleId?: string | null,
+    ) => [
+      "terminal-sessions",
+      "resumable",
+      {
+        taskId: taskId ?? null,
+        projectId: projectId ?? null,
+        moduleId: moduleId ?? null,
+      },
+    ] as const,
   },
 } as const;

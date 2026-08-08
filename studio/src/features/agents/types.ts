@@ -24,6 +24,17 @@ export interface PersistedTerminalSession {
   created_at: string;
 }
 
+export interface ResumableTerminalSession {
+  agent_run_id: string;
+  agent: AgentName;
+  status: string;
+  started_at: string;
+  ended_at?: string | null;
+  provider_session_id: string | null;
+  resumed_from: string | null;
+  scope?: "task" | "plan" | "instant";
+}
+
 export const TEMP_TASK_ID = "__scratch__";
 export const SCRATCH_RUN_TASK_ID = "00000000-0000-0000-0000-000000000000";
 

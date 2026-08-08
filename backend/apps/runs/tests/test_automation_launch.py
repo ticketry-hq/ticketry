@@ -537,7 +537,7 @@ def test_failed_attempt_retry_is_user_initiated_and_idempotent(monkeypatch):
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_required_skill_collision_is_actionable_and_not_retryable(monkeypatch):
+def test_required_skill_failure_is_actionable_and_retryable(monkeypatch):
     issue, after = _automation_policy()
 
     async def rejected_spawn(**kwargs):
@@ -557,7 +557,7 @@ def test_required_skill_collision_is_actionable_and_not_retryable(monkeypatch):
 
     failed = AutomationAttempt.objects.get(issue=issue)
     assert failed.status == AutomationAttempt.Status.FAILED
-    assert failed.retryable is False
+    assert failed.retryable is True
     assert failed.error_details == {
         "code": "required_skill_unavailable",
         "provider": "codex",
@@ -568,14 +568,11 @@ def test_required_skill_collision_is_actionable_and_not_retryable(monkeypatch):
             "Rename the provider-visible skill or change its declared name, then "
             "retry. Ticketry will not modify user-installed skills."
         ),
-        "retryable": False,
+        "retryable": True,
     }
 
     response = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
-    assert response.status_code == 409
-    assert response.json() == {
-        "detail": "automation_attempt_not_retryable",
-        "code": "automation_attempt_not_retryable",
-        "failure": failed.error_details,
-    }
-    assert AutomationAttempt.objects.filter(issue=issue).count() == 1
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert response.json()["retryable"] is True
+    assert AutomationAttempt.objects.filter(issue=issue).count() == 2

@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from threading import Lock
+from weakref import WeakValueDictionary
 
 from asgiref.sync import async_to_sync
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
@@ -23,6 +25,14 @@ logger = logging.getLogger(__name__)
 
 SpawnRun = Callable[..., Awaitable[str]]
 REVIEW_STATE_NAME = "Review"
+
+# The desktop application owns one supervised backend process. Serialize
+# execute/revive requests per root in that process so the liveness check,
+# inactive-ledger reset, and replacement launches form one operation without
+# holding a database transaction open while the terminal worker writes through
+# its own connection.
+_GRAPH_EXECUTION_LOCKS: WeakValueDictionary[str, Lock] = WeakValueDictionary()
+_GRAPH_EXECUTION_LOCKS_GUARD = Lock()
 
 
 async def spawn_run(**kwargs) -> str:
@@ -191,10 +201,8 @@ def execute_graph(
         raise ValueError("graph_empty")
 
     try:
-        with transaction.atomic():
-            header = (
-                GraphRun.objects.select_for_update().filter(pk=root.id).first()
-            )
+        with _graph_execution_lock(str(root.id)):
+            header = GraphRun.objects.filter(pk=root.id).first()
             if header is None:
                 GraphRun.objects.create(
                     root_id=root.id,
@@ -220,6 +228,11 @@ def execute_graph(
     except IntegrityError as exc:
         # Preserve the resource-level conflict when concurrent creates race.
         raise ValueError("graph_run_exists") from exc
+
+
+def _graph_execution_lock(root_id: str) -> Lock:
+    with _GRAPH_EXECUTION_LOCKS_GUARD:
+        return _GRAPH_EXECUTION_LOCKS.setdefault(root_id, Lock())
 
 
 def _has_active_subtree_launch(root_id: str) -> bool:

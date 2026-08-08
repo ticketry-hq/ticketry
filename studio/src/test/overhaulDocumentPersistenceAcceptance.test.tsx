@@ -96,7 +96,7 @@ describe("overhaul acceptance — documents and persisted layout", () => {
     expect(screen.getByText("Unsaved changes")).toBeVisible();
   });
 
-  it("[overhaul-12] restores sidebar, panel layout, expansion, and collapsed sections after reload", async () => {
+  it("[overhaul-12] restores layout preferences and the remembered task after reload", async () => {
     vi.useFakeTimers();
     vi.resetModules();
     const first = await import("../state/clientStore");
@@ -105,15 +105,21 @@ describe("overhaul acceptance — documents and persisted layout", () => {
     first.useClientStore.getState().setPanelLayout([18, 32, 50]);
     first.useClientStore.getState().toggleExpanded("module-1", "story-1");
     first.useClientStore.getState().toggleStateCollapsed("review");
+    first.useClientStore.setState({ selectedModuleId: "module-1" });
+    first.useClientStore.getState().selectTask("story-1");
     vi.advanceTimersByTime(400);
 
     vi.resetModules();
     const reloaded = await import("../state/clientStore");
+    const persistence = await import("../state/persistence");
     const state = reloaded.useClientStore.getState();
 
     expect(state.sidebarVisible).toBe(false);
     expect(state.panelLayout).toEqual([18, 32, 50]);
     expect(state.expandedIdsByModule).toEqual({ "module-1": ["story-1"] });
     expect(state.collapsedStateIds).toEqual(new Set(["review"]));
+    expect(persistence.readTaskSelections()).toEqual({
+      "module-1": "story-1",
+    });
   });
 });

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
 
 describe("overhaul acceptance — subtree execution", () => {
-  it("[overhaul-16] repeats Run subtree to revive an inactive campaign", async () => {
+  it("[overhaul-21] repeats Run subtree to revive an inactive campaign", async () => {
     const http = fixture();
     http.tree("module-1", {
       rootIds: ["story-1"],

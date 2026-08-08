@@ -242,7 +242,7 @@ def test_scratch_launch_required_skill_collision_returns_structured_409(
     assert response.json()["reason"] == "collision"
     assert "Next action" not in response.json()["detail"]
     assert response.json()["remediation"]
-    assert response.json()["retryable"] is False
+    assert response.json()["retryable"] is True
     assert AgentRun.objects.count() == 0
     assert AgentTerminalSession.objects.count() == 0
 
@@ -1047,11 +1047,7 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(client, monkeypatch
     import types
     from pathlib import Path
 
-    agent_root = (
-        Path(__file__).resolve().parents[4]
-        / "surfaces"
-        / "worktracker-agent"
-    )
+    agent_root = Path(__file__).resolve().parents[4] / "surfaces" / "worktracker-agent"
     agent_package = types.ModuleType("worktracker_agent")
     agent_package.__path__ = [str(agent_root)]
     monkeypatch.setitem(sys.modules, "worktracker_agent", agent_package)

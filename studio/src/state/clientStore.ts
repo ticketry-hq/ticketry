@@ -11,6 +11,7 @@ import type {
   TabKind,
   SessionId,
 } from "../features/agents/types";
+import { TEMP_TASK_ID } from "../features/agents/types";
 import { focusTerminal } from "../features/agents/terminal";
 import {
   finishCollapsedStateMigration,
@@ -20,6 +21,8 @@ import {
   readExpandedIdsByModule,
   readPanelLayout,
   readSidebarVisible,
+  readTaskSelections,
+  rememberTaskSelection,
   writeCollapsedStateIds,
   writeExpandedIdsByModule,
   writeSidebarVisible,
@@ -342,8 +345,26 @@ export const useClientStore = create<ClientState>((set, get) => ({
             console.warn("[clientStore] persist recent module failed", error);
           })
         : Promise.resolve();
-    await Promise.all([loadModuleTree(projectId, id), persistRecentModule]);
-    if (get().selectedModuleId !== id) return;
+    const [tree] = await Promise.all([
+      loadModuleTree(projectId, id),
+      persistRecentModule,
+    ]);
+    if (
+      useStudioStore.getState().selectedProjectId !== projectId ||
+      get().selectedModuleId !== id
+    ) return;
+    const rememberedTaskId = readTaskSelections()[id];
+    const loadedTaskIds = new Set(tree.order);
+    const isSelectableTaskId = (taskId: string) =>
+      taskId === TEMP_TASK_ID || loadedTaskIds.has(taskId);
+    set((state) => ({
+      selectedTaskId:
+        state.selectedTaskId && isSelectableTaskId(state.selectedTaskId)
+          ? state.selectedTaskId
+          : rememberedTaskId && isSelectableTaskId(rememberedTaskId)
+            ? rememberedTaskId
+            : null,
+    }));
     get().setSidebarVisible(false);
     get().setFocusedPane("tasks");
   },
@@ -773,6 +794,18 @@ export const useClientStore = create<ClientState>((set, get) => ({
     });
   },
 }));
+
+useClientStore.subscribe((state, previous) => {
+  if (
+    !state.selectedModuleId ||
+    !state.selectedTaskId ||
+    (state.selectedModuleId === previous.selectedModuleId &&
+      state.selectedTaskId === previous.selectedTaskId)
+  ) {
+    return;
+  }
+  rememberTaskSelection(state.selectedModuleId, state.selectedTaskId);
+});
 
 export const dialog = {
   confirm: (options: ConfirmOptions) => useClientStore.getState().confirm(options),

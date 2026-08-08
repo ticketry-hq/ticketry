@@ -121,6 +121,60 @@ describe("studioStore", () => {
     expect(getTasks).toHaveBeenCalledWith("p1", "m1");
   });
 
+  it("restores the remembered task after its module tree loads", async () => {
+    listModules.mockResolvedValue([
+      { id: "m1", name: "Studio", project_id: "p1" },
+    ]);
+    getTasks.mockResolvedValue({
+      rootIds: ["story-1"],
+      children: { "story-1": [] },
+      order: ["story-1"],
+      states: [],
+      workItems: [],
+    });
+    localStorage.setItem(
+      "studio.selectedTaskByModule:v1",
+      JSON.stringify({ m1: "story-1" }),
+    );
+    seedConfig({
+      recentProfileIndex: 0,
+      profiles: [
+        {
+          name: "Local",
+          workspace_slug: "meml",
+          agent_prompt: null,
+          agent_prompts: {},
+          module_links: [],
+          recent_project_id: "p1",
+          recent_module_ids: { p1: "m1" },
+        },
+      ],
+    });
+
+    await useStudioStore.getState().selectProject("p1");
+
+    expect(useClientStore.getState().selectedTaskId).toBe("story-1");
+  });
+
+  it("does not restore a remembered task missing from the loaded module", async () => {
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    getTasks.mockResolvedValue({
+      rootIds: [],
+      children: {},
+      order: [],
+      states: [],
+      workItems: [],
+    });
+    localStorage.setItem(
+      "studio.selectedTaskByModule:v1",
+      JSON.stringify({ m1: "deleted-story" }),
+    );
+
+    await useClientStore.getState().selectModule("m1");
+
+    expect(useClientStore.getState().selectedTaskId).toBeNull();
+  });
+
   it("persists a module selection in the active profile", async () => {
     const profile = {
       name: "Local",

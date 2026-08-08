@@ -62,6 +62,7 @@ export type Module = GeneratedModule;
 export type IssueLevel = "module" | "task";
 export interface IssueType {
   id: string;
+  project?: string;
   name: string;
   level: IssueLevel;
   color: string | null;

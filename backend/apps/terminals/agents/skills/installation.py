@@ -1,4 +1,4 @@
-"""Install and verify Ticketry's pinned workflow skills for every provider."""
+"""Install bundled workflow skills only when a provider-visible name is absent."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Iterable, Mapping
 
 from studio_server.atomic_files import atomic_write_json
 
-from .catalog import CatalogValidationError, catalog_root, tree_digest, verify_catalog
+from .catalog import catalog_root, verify_catalog
 
 
 MANIFEST_NAME = ".ticketry-managed-skills.json"
@@ -20,7 +20,7 @@ SUPPORTED_PROVIDERS = ("claude", "codex", "agy", "gemini")
 
 
 class SkillInstallationError(RuntimeError):
-    """Ticketry cannot safely provide its required, pinned workflow skills."""
+    """Ticketry cannot safely provide a missing required workflow skill."""
 
     def __init__(
         self,
@@ -83,14 +83,14 @@ def _load_manifest(root: Path) -> dict:
     return manifest
 
 
-def _write_manifest(root: Path, *, provider: str, lock: dict) -> None:
+def _write_manifest(
+    root: Path, *, provider: str, lock: dict, managed_packages: Mapping[str, str]
+) -> None:
     payload = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "provider": provider,
         "upstream_commit": lock["upstream"]["commit"],
-        "packages": {
-            package["name"]: package["digest"] for package in lock["packages"]
-        },
+        "packages": dict(managed_packages),
     }
     atomic_write_json(
         root / MANIFEST_NAME,
@@ -114,23 +114,79 @@ def _canonical_name(skill_dir: Path) -> str | None:
     return None
 
 
-def _assert_no_alias_collision(
-    root: Path, *, provider: str, package_names: set[str]
-) -> None:
-    if not root.is_dir():
-        return
-    for candidate in root.iterdir():
-        if not candidate.is_dir() or candidate.name in package_names:
+def _global_skill_roots(
+    provider: str,
+    *,
+    home: Path,
+    environ: Mapping[str, str],
+) -> tuple[Path, ...]:
+    """Return user-visible roots checked before installing a fallback copy."""
+
+    if provider == "claude":
+        claude_home = Path(environ.get("CLAUDE_CONFIG_DIR", home / ".claude"))
+        plugin_root = home / ".claude/plugins"
+        plugin_skills = (
+            tuple(plugin_root.rglob("skills")) if plugin_root.is_dir() else ()
+        )
+        return (claude_home / "skills", *plugin_skills)
+    if provider == "codex":
+        codex_home = Path(environ.get("CODEX_HOME", home / ".codex"))
+        return (home / ".agents/skills", codex_home / "skills")
+    if provider == "agy":
+        extension_root = home / ".gemini/extensions"
+        extension_skills = (
+            tuple(extension_root.glob("*/skills")) if extension_root.is_dir() else ()
+        )
+        return (home / ".agents/skills", home / ".agy/skills", *extension_skills)
+    if provider == "gemini":
+        gemini_home = Path(environ.get("GEMINI_CLI_HOME", home))
+        extension_root = gemini_home / ".gemini/extensions"
+        extension_skills = (
+            tuple(extension_root.glob("*/skills")) if extension_root.is_dir() else ()
+        )
+        return (gemini_home / ".gemini/skills", *extension_skills)
+    return ()
+
+
+def visible_skill_candidates(
+    provider: str,
+    *,
+    names: Iterable[str],
+    cwd: Path | None = None,
+    home: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, list[Path]]:
+    """Return valid provider-visible skills grouped by canonical name."""
+
+    environment = os.environ if environ is None else environ
+    user_home = Path.home() if home is None else Path(home)
+    roots: list[Path] = []
+    if cwd is not None:
+        resolved_cwd = cwd.resolve()
+        if provider == "claude":
+            roots.append(resolved_cwd / ".claude/skills")
+        elif provider in {"codex", "agy"}:
+            roots.append(resolved_cwd / ".agents/skills")
+            roots.append(resolved_cwd / f".{provider}/skills")
+        elif provider == "gemini":
+            roots.append(resolved_cwd / ".gemini/skills")
+    roots.extend(_global_skill_roots(provider, home=user_home, environ=environment))
+
+    requested = set(names)
+    found: dict[str, list[Path]] = {name: [] for name in requested}
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.is_dir():
             continue
-        canonical = _canonical_name(candidate)
-        if canonical in package_names:
-            raise SkillInstallationError(
-                provider=provider,
-                skill=canonical,
-                reason="collision",
-                path=candidate,
-                message="Another installed directory already advertises this skill name.",
-            )
+        for candidate in root.iterdir():
+            if not candidate.is_dir():
+                continue
+            canonical = _canonical_name(candidate)
+            if canonical not in requested or candidate in seen:
+                continue
+            found[canonical].append(candidate)
+            seen.add(candidate)
+    return found
 
 
 def _replace_managed_package(
@@ -173,24 +229,29 @@ def install_packaged_skills(
     home: Path | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, Path]:
-    """Idempotently install or safely upgrade the complete pinned catalog."""
+    """Idempotently fill missing skills from the bundled offline catalog."""
 
     lock = verify_catalog()
     package_names = {package["name"] for package in lock["packages"]}
     providers = tuple(providers)
+    environment = os.environ if environ is None else environ
+    user_home = Path.home() if home is None else Path(home)
 
-    # Detect every user-owned collision before creating a provider root or
-    # replacing any managed package. Otherwise a collision in a later provider
-    # could leave earlier providers upgraded even though the catalog operation
-    # as a whole was rejected.
+    # A valid existing skill satisfies the requirement regardless of its bytes.
+    # Preflight only rejects paths that prevent installation while failing to
+    # provide a readable skill with the expected canonical name.
     for provider in providers:
         root = provider_skill_root(provider, home=home, environ=environ)
-        _assert_no_alias_collision(
-            root, provider=provider, package_names=package_names
+        available = visible_skill_candidates(
+            provider,
+            names=package_names,
+            home=user_home,
+            environ=environment,
         )
-        previous = _load_manifest(root).get("packages", {})
         for package in lock["packages"]:
             name = package["name"]
+            if available[name]:
+                continue
             destination = root / name
             if destination.is_symlink() or (
                 destination.exists() and not destination.is_dir()
@@ -202,26 +263,14 @@ def install_packaged_skills(
                     path=destination,
                     message="Refusing to overwrite a user-owned skill path.",
                 )
-            try:
-                actual = tree_digest(destination) if destination.is_dir() else None
-            except (OSError, CatalogValidationError) as exc:
+            if destination.is_dir():
                 raise SkillInstallationError(
                     provider=provider,
                     skill=name,
                     reason="invalid",
                     path=destination,
-                    message=f"The installed skill cannot be verified: {exc}",
-                ) from exc
-            if actual is not None and actual != package["digest"]:
-                previously_managed = previous.get(name)
-                if actual != previously_managed:
-                    raise SkillInstallationError(
-                        provider=provider,
-                        skill=name,
-                        reason="collision",
-                        path=destination,
-                        message="Refusing to overwrite a user-owned or modified skill.",
-                    )
+                    message="The existing path does not contain the expected skill.",
+                )
 
     installed: dict[str, Path] = {}
     for provider in providers:
@@ -236,12 +285,20 @@ def install_packaged_skills(
                 path=root,
                 message=f"The provider skill directory cannot be created: {exc}",
             ) from exc
-        _assert_no_alias_collision(
-            root, provider=provider, package_names=package_names
+        available = visible_skill_candidates(
+            provider,
+            names=package_names,
+            home=user_home,
+            environ=environment,
         )
         previous = _load_manifest(root).get("packages", {})
+        managed = {
+            name: digest for name, digest in previous.items() if (root / name).is_dir()
+        }
         for package in lock["packages"]:
             name = package["name"]
+            if available[name]:
+                continue
             source = (catalog_root() / package["path"]).resolve()
             destination = root / name
             if destination.is_symlink() or (
@@ -253,27 +310,6 @@ def install_packaged_skills(
                     reason="collision",
                     path=destination,
                     message="Refusing to overwrite a user-owned skill path.",
-                )
-            try:
-                actual = tree_digest(destination) if destination.is_dir() else None
-            except (OSError, CatalogValidationError) as exc:
-                raise SkillInstallationError(
-                    provider=provider,
-                    skill=name,
-                    reason="invalid",
-                    path=destination,
-                    message=f"The installed skill cannot be verified: {exc}",
-                ) from exc
-            if actual == package["digest"]:
-                continue
-            previously_managed = previous.get(name)
-            if actual is not None and actual != previously_managed:
-                raise SkillInstallationError(
-                    provider=provider,
-                    skill=name,
-                    reason="collision",
-                    path=destination,
-                    message="Refusing to overwrite a user-owned or modified skill.",
                 )
             try:
                 _replace_managed_package(
@@ -291,10 +327,16 @@ def install_packaged_skills(
                     skill=name,
                     reason="unwritable",
                     path=destination,
-                    message=f"The pinned skill could not be installed: {exc}",
+                    message=f"The fallback skill could not be installed: {exc}",
                 ) from exc
+            managed[name] = package["digest"]
         try:
-            _write_manifest(root, provider=provider, lock=lock)
+            _write_manifest(
+                root,
+                provider=provider,
+                lock=lock,
+                managed_packages=managed,
+            )
         except OSError as exc:
             raise SkillInstallationError(
                 provider=provider,
@@ -314,12 +356,18 @@ def verify_provider_installation(
     home: Path | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> Path:
-    """Fail unless the provider can discover exact pinned package bytes."""
+    """Fail unless the provider can discover every requested skill name."""
 
     lock = verify_catalog()
     packages = {package["name"]: package for package in lock["packages"]}
     required = tuple(packages) if names is None else tuple(names)
     root = provider_skill_root(provider, home=home, environ=environ)
+    available = visible_skill_candidates(
+        provider,
+        names=required,
+        home=home,
+        environ=environ,
+    )
     for name in required:
         if name not in packages:
             raise SkillInstallationError(
@@ -329,24 +377,13 @@ def verify_provider_installation(
                 path=root / name,
                 message="The requested skill is absent from the packaged catalog.",
             )
-        destination = root / name
-        try:
-            actual = tree_digest(destination) if destination.is_dir() else None
-        except (OSError, CatalogValidationError) as exc:
+        if not available[name]:
             raise SkillInstallationError(
                 provider=provider,
                 skill=name,
-                reason="invalid",
-                path=destination,
-                message=f"The installed skill cannot be verified: {exc}",
-            ) from exc
-        if actual != packages[name]["digest"]:
-            raise SkillInstallationError(
-                provider=provider,
-                skill=name,
-                reason="missing" if actual is None else "modified",
-                path=destination,
-                message="The pinned skill installation is missing or does not match.",
+                reason="missing",
+                path=root / name,
+                message="The required skill is not installed.",
             )
     return root
 
@@ -360,8 +397,6 @@ def verify_all_installations(
     """Verify every provider's persistent installation."""
 
     return {
-        provider: verify_provider_installation(
-            provider, home=home, environ=environ
-        )
+        provider: verify_provider_installation(provider, home=home, environ=environ)
         for provider in providers
     }

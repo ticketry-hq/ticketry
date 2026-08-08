@@ -1,6 +1,8 @@
-import { act, render } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
+import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type { WorkItemRow } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status";
@@ -16,6 +18,27 @@ import { queryKeys } from "../shared/query/keys";
 import { setStatesSorted } from "../shared/query/stateCatalog";
 import { useClientStore } from "../state/clientStore";
 import { workItem } from "./seam";
+
+const terminalApi = vi.hoisted(() => ({
+  getDocuments: vi.fn(),
+  getTerminals: vi.fn(),
+  listResumableTerminals: vi.fn(),
+  resumeTerminal: vi.fn(),
+}));
+
+vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
+  ...terminalApi,
+}));
+
+vi.mock(
+  "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
+  () => ({
+    SelectedTicketTerminal: ({ bucket }: { bucket: string }) => (
+      <div data-testid="selected-ticket-terminal">{bucket}</div>
+    ),
+  }),
+);
 
 const TODO = {
   id: "todo",
@@ -47,7 +70,11 @@ function session(
   };
 }
 
-function run(agentRunId: string, taskId: string, state = "working" as const) {
+function run(
+  agentRunId: string,
+  taskId: string,
+  state: "working" | "exited" = "working",
+) {
   return {
     agent_run_id: agentRunId,
     task_id: taskId,
@@ -66,6 +93,7 @@ function KeymapHarness({ rows }: { rows: WorkItemRow[] }) {
 
 describe("overhaul acceptance — terminals", () => {
   beforeEach(() => {
+    vi.resetAllMocks();
     localStorage.clear();
     queryClient.clear();
     seedConfig({ features: { sidebar: true, projects: true } });
@@ -88,6 +116,9 @@ describe("overhaul acceptance — terminals", () => {
       automationAttempts: {},
       automationByTask: {},
     });
+    terminalApi.getDocuments.mockResolvedValue({ documents: [] });
+    terminalApi.getTerminals.mockResolvedValue([]);
+    terminalApi.listResumableTerminals.mockResolvedValue([]);
   });
 
   it("[overhaul-08] cycles live terminals by keyboard into a collapsed branch", () => {
@@ -219,5 +250,59 @@ describe("overhaul acceptance — terminals", () => {
       new Set(),
     );
     expect(tabs[0]).toMatchObject({ id: "session-1", lifecycle: "working" });
+  });
+
+  it("[overhaul-16] resumes a dormant run into a selected terminal tab", async () => {
+    terminalApi.listResumableTerminals.mockResolvedValue([{
+      agent_run_id: "run-old",
+      agent: "codex",
+      status: "exited",
+      started_at: "2026-08-07T12:00:00Z",
+      ended_at: "2026-08-07T12:30:00Z",
+      provider_session_id: "provider-session",
+      resumed_from: null,
+      scope: "task",
+    }]);
+    terminalApi.resumeTerminal.mockResolvedValue({
+      agent_run_id: "run-new",
+      resumed_from: "run-old",
+    });
+    useAgentStatusStore.setState({
+      runs: {
+        "run-old": run("run-old", "story-1", "exited"),
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          ticketKey="MEML-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+
+    const resume = await screen.findByRole("button", {
+      name: "Resume codex terminal",
+    });
+    expect(screen.queryByText("codex ✕")).not.toBeInTheDocument();
+
+    fireEvent.click(resume);
+
+    await waitFor(() => {
+      expect(terminalApi.resumeTerminal).toHaveBeenCalledWith("run-old");
+      expect(Object.values(useTerminalStore.getState().sessions)).toContainEqual(
+        expect.objectContaining({ agentRunId: "run-new" }),
+      );
+    });
+    expect(useClientStore.getState().workspaces["story-1"]?.active).toBe(
+      "terminal",
+    );
+    expect(screen.getByRole("tab", { name: "MEML-1 · codex" }))
+      .toHaveAttribute("aria-selected", "true");
   });
 });

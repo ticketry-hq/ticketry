@@ -46,7 +46,7 @@ def run_automation_attempt(
         attempt.error = str(exc) or exc.__class__.__name__
         if isinstance(exc, RequiredSkillUnavailable):
             attempt.error_details = exc.as_payload()
-            attempt.retryable = False
+            attempt.retryable = True
         else:
             attempt.error_details = None
             attempt.retryable = True

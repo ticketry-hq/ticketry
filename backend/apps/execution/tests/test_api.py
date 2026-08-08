@@ -737,7 +737,7 @@ def test_launch_agent_required_skill_collision_returns_structured_409(
             "Rename the provider-visible skill or change its declared name, then "
             "retry. Ticketry will not modify user-installed skills."
         ),
-        "retryable": False,
+        "retryable": True,
     }
     assert not GraphRun.objects.exists()
     assert not LaunchedTask.objects.exists()

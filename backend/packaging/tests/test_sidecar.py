@@ -788,7 +788,7 @@ def test_sidecar_startup_installs_skills_before_readiness(tmp_path):
         assert {path.name for path in root.iterdir() if path.is_dir()} == expected
 
 
-def test_sidecar_startup_reports_a_user_owned_skill_collision_without_blocking(tmp_path):
+def test_sidecar_startup_uses_an_existing_user_skill_without_warning(tmp_path):
     home = tmp_path / "home"
     conflict = home / ".codex/skills/to-spec"
     conflict.mkdir(parents=True)
@@ -815,19 +815,7 @@ def test_sidecar_startup_reports_a_user_owned_skill_collision_without_blocking(t
             process.terminate()
             process.wait(timeout=10)
 
-    diagnostic = next(
-        json.loads(line)
-        for line in stderr.splitlines()
-        if '"event":"provider_skill_preparation_failed"' in line
-    )
-    assert diagnostic == {
-        "event": "provider_skill_preparation_failed",
-        "reason": "collision",
-        "message": "Refusing to overwrite a user-owned or modified skill.",
-        "provider": "codex",
-        "skill": "to-spec",
-        "path": str(conflict),
-    }
+    assert '"event":"provider_skill_preparation_failed"' not in stderr
     assert (conflict / "SKILL.md").read_text().endswith("user-owned\n")
 
 

@@ -1,6 +1,6 @@
 # Studio overhaul acceptance gate
 
-The sixteen checks that were once a manual pre-merge walk are automated by
+The twenty-two checks that were once a manual pre-merge walk are automated by
 `npm run test:overhaul --workspace @worktracker/studio`. Desktop CI runs that
 named gate before the full Studio suite, typecheck, and build.
 
@@ -21,7 +21,13 @@ named gate before the full Studio suite, typecheck, and build.
 | 13 | A module scratch workspace launches and displays its run summary. |
 | 14 | Reconnect replay closes a missed-membership gap without duplication. |
 | 15 | Switching projects cannot let a stale status snapshot mark a connected run exited. |
-| 16 | Repeating Run subtree revives an inactive campaign from the same action. |
+| 16 | A dormant provider session resumes into a newly selected terminal tab. |
+| 17 | Fresh provider onboarding saves an activated provider and global launch default. |
+| 18 | The work-item pane boundary exposes an accessible draggable separator. |
+| 19 | Workflow settings derive state-delete blockers from canonical resources. |
+| 20 | The dialog bus renders confirmation requests and resolves both user choices. |
+| 21 | Repeating Run subtree revives an inactive campaign from the same action. |
+| 22 | Settings cold-opens from the footer and loads the selected project catalog. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

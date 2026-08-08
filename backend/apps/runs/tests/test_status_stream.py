@@ -22,6 +22,7 @@ from apps.terminals.models import AgentTerminalSession
 from studio_server.asgi import application
 from studio_server.contracts import AutomationAttemptRecord, LifecycleEvent
 from django.db import OperationalError, close_old_connections, transaction
+from django.utils import timezone
 from worktracker.models import Issue, IssueType, Project, State, Workspace
 from worktracker.services import workflow_config
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
@@ -30,12 +31,8 @@ from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 pytestmark = pytest.mark.django_db(transaction=True)
 PROJECT_1_ID = fixture_uuid("proj-1")
 PROJECT_2_ID = fixture_uuid("proj-2")
-MODULE_1_ID = fixture_issue_id(
-    project_id="proj-1", module_id="mod-1", task_id=None
-)
-TASK_1_ID = fixture_issue_id(
-    project_id="proj-1", module_id="mod-1", task_id="task-1"
-)
+MODULE_1_ID = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None)
+TASK_1_ID = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1")
 
 
 async def _issue_type(project: Project, *, level: str = "task") -> IssueType:
@@ -189,7 +186,9 @@ async def _catalog_project(slug: str) -> Project:
     )
 
 
-async def test_state_rename_and_recolor_are_published_to_active_project_client() -> None:
+async def test_state_rename_and_recolor_are_published_to_active_project_client() -> (
+    None
+):
     """A same-group edit still has to reach peers (#1462).
 
     Rename and recolor leave ``group`` untouched, so the old group-only
@@ -334,6 +333,41 @@ async def test_connect_reconciles_unresolved_automation_attempts() -> None:
             "updated_at": attempt.updated_at.isoformat(),
         }
     ]
+    await socket.disconnect()
+
+
+async def test_connect_omits_dismissed_automation_attempts() -> None:
+    workspace = await sync_to_async(Workspace.objects.create)(
+        id=uuid.uuid4(), slug="dismissed-attempt", name="dismissed-attempt"
+    )
+    project = await sync_to_async(Project.objects.create)(
+        id=uuid.uuid4(), workspace=workspace, name="Dismissed attempt", slug="DISMISS"
+    )
+    issue_type = await _issue_type(project)
+    issue = await sync_to_async(Issue.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="Dismissed automation",
+        sequence_id=1,
+    )
+    await sync_to_async(AutomationAttempt.objects.create)(
+        transition_id=uuid.uuid4(),
+        issue=issue,
+        from_state_id=uuid.uuid4(),
+        to_state_id=uuid.uuid4(),
+        workflow_revision=3,
+        status=AutomationAttempt.Status.FAILED,
+        error="historical failure",
+        dismissed_at=timezone.now(),
+    )
+
+    socket = await _connect(str(project.id))
+    assert (await socket.connect())[0]
+    frame = await socket.receive_json_from()
+
+    assert frame["automation_attempts"] == []
     await socket.disconnect()
 
 
@@ -537,9 +571,7 @@ async def test_create_and_field_edit_publish_distinct_change_revisions() -> None
 
     issue.name = "Edited externally"
     issue.description = "Fresh description"
-    await sync_to_async(issue.save)(
-        update_fields=["name", "description", "updated_at"]
-    )
+    await sync_to_async(issue.save)(update_fields=["name", "description", "updated_at"])
     edited = await socket.receive_json_from()
     assert (edited["work_item_id"], edited["revision"]) == (str(issue.id), 2)
     assert edited["membership_changed"] is False
@@ -580,12 +612,20 @@ async def test_cursor_reconnect_replays_latest_project_projections_in_order() ->
     issue_type = await _issue_type(project)
     other_issue_type = await _issue_type(other_project)
     first = await sync_to_async(Issue.objects.create)(
-        id=uuid.uuid4(), project=project, type="task", issue_type=issue_type,
-        name="First", sequence_id=1
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="First",
+        sequence_id=1,
     )
     second = await sync_to_async(Issue.objects.create)(
-        id=uuid.uuid4(), project=project, type="task", issue_type=issue_type,
-        name="Second", sequence_id=2
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="Second",
+        sequence_id=2,
     )
     foreign = await sync_to_async(Issue.objects.create)(
         id=uuid.uuid4(),

@@ -36,12 +36,19 @@ async def _run(callables):
 
 django_asgi_app = get_asgi_application()
 
-from studio_server.routing import websocket_urlpatterns
+from studio_server.routing import websocket_urlpatterns  # noqa: E402
 
-from apps.documents import watch as documents_watch
-from apps.runs import hook_spool
-from apps.terminals.session import session as terminal_session
-from apps.worktrees import service as worktrees_service
+from apps.documents import watch as documents_watch  # noqa: E402
+from apps.runs import hook_spool  # noqa: E402
+from apps.runs.chat.runtime_supervisor import (  # noqa: E402
+    runtime_supervisor as chat_runtime_supervisor,
+)
+from apps.runs.chat.supervision import (  # noqa: E402
+    reconcile_orphaned_commands,
+    reconcile_orphaned_sessions,
+)
+from apps.terminals.session import session as terminal_session  # noqa: E402
+from apps.worktrees import service as worktrees_service  # noqa: E402
 
 
 # Stop every design-directory watcher on shutdown; rescan re-discovers (#521).
@@ -49,6 +56,21 @@ from apps.worktrees import service as worktrees_service
 register_shutdown(documents_watch.stop_all)
 register_startup(hook_spool.start)
 register_shutdown(hook_spool.stop)
+
+
+async def _reconcile_chat_sessions() -> None:
+    """Expose backend-restart interruption instead of stale live Chat state."""
+
+    try:
+        await asyncio.to_thread(reconcile_orphaned_commands)
+        await asyncio.to_thread(reconcile_orphaned_sessions)
+    except Exception as exc:
+        logger.warning("startup Chat session reconcile failed: %s", exc)
+
+
+register_startup(_reconcile_chat_sessions)
+register_startup(chat_runtime_supervisor.start)
+register_shutdown(chat_runtime_supervisor.stop)
 
 
 async def _reconcile_worktrees() -> None:

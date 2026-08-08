@@ -15,6 +15,7 @@ describe("browser runtime contract", () => {
         statusApi: "/api",
         statusWebSocket: "/ws/status",
         terminalWebSocket: "/ws/terminal",
+        chatWebSocket: "/ws/chat",
       },
       values: { workTrackerApiKey: "" },
       serviceHealth: {
@@ -59,6 +60,7 @@ describe("browser runtime contract", () => {
         statusApi: "https://runtime.example.test/api",
         statusWebSocket: "wss://runtime.example.test/ws/status",
         terminalWebSocket: "wss://runtime.example.test/ws/terminal",
+        chatWebSocket: "wss://runtime.example.test/ws/chat",
       },
       values: { workTrackerApiKey: "browser-token" },
       serviceHealth: {

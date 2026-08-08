@@ -17,6 +17,7 @@ export interface RuntimeEndpoints {
   readonly statusApi: string;
   readonly statusWebSocket: string;
   readonly terminalWebSocket: string;
+  readonly chatWebSocket: string;
 }
 
 export interface RuntimeValues {

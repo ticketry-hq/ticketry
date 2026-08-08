@@ -1,5 +1,6 @@
 import type {
   AgentRunScope,
+  AgentRunKind,
   AutomationAttemptRecord,
   AgentStatusScope,
   RawLifecycleState,
@@ -8,6 +9,7 @@ import type {
 
 export type {
   AgentRunScope,
+  AgentRunKind,
   AgentStatusScope,
   AutomationAttemptRecord,
   RawLifecycleState,

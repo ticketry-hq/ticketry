@@ -61,6 +61,649 @@
                 }
             }
         },
+        "/chats": {
+            "get": {
+                "operationId": "chats_list",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ChatListRow"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "chats_create",
+                "tags": [
+                    "chats"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateChat"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateChat"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateChat"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentRunId"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/chats/{agent_run_id}": {
+            "get": {
+                "operationId": "chats_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "after",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "through",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChatSnapshot"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "chats_destroy",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChatStopResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/chats/{agent_run_id}/approvals": {
+            "post": {
+                "operationId": "chats_approvals_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatApproval"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatApproval"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatApproval"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Accepted"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/chats/{agent_run_id}/interrupt": {
+            "post": {
+                "operationId": "chats_interrupt_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChatInterruptResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/chats/{agent_run_id}/read": {
+            "post": {
+                "operationId": "chats_read_create",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "after",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChatSnapshot"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/chats/{agent_run_id}/resume": {
+            "post": {
+                "operationId": "chats_resume_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChatResumeResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/chats/{agent_run_id}/turns": {
+            "post": {
+                "operationId": "chats_turns_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatTurn"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatTurn"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatTurn"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChatTurnResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/chats/{agent_run_id}/user-input": {
+            "post": {
+                "operationId": "chats_user_input_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "agent_run_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatUserInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatUserInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ChatUserInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Accepted"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/config": {
             "get": {
                 "operationId": "config_retrieve",
@@ -3858,6 +4501,17 @@
     },
     "components": {
         "schemas": {
+            "Accepted": {
+                "type": "object",
+                "properties": {
+                    "accepted": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "accepted"
+                ]
+            },
             "AgentEnum": {
                 "enum": [
                     "claude",
@@ -3935,6 +4589,14 @@
                     },
                     "agent": {
                         "type": "string"
+                    },
+                    "run_kind": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RunKindEnum"
+                            }
+                        ],
+                        "default": "terminal"
                     },
                     "scope": {
                         "$ref": "#/components/schemas/ScopeEnum"
@@ -4070,7 +4732,7 @@
                         "type": "string"
                     },
                     "status": {
-                        "$ref": "#/components/schemas/StatusEnum"
+                        "$ref": "#/components/schemas/AutomationAttemptStatusEnum"
                     },
                     "error": {
                         "type": "string",
@@ -4101,6 +4763,369 @@
                     "status",
                     "updated_at",
                     "work_item_id"
+                ]
+            },
+            "AutomationAttemptStatusEnum": {
+                "enum": [
+                    "pending",
+                    "succeeded",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `pending` - pending\n* `succeeded` - succeeded\n* `failed` - failed"
+            },
+            "ChatApproval": {
+                "type": "object",
+                "properties": {
+                    "request_id": {
+                        "type": "string"
+                    },
+                    "decision": {
+                        "$ref": "#/components/schemas/DecisionEnum"
+                    }
+                },
+                "required": [
+                    "decision",
+                    "request_id"
+                ]
+            },
+            "ChatEvent": {
+                "type": "object",
+                "properties": {
+                    "sequence": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "event_type": {
+                        "type": "string"
+                    },
+                    "payload": {},
+                    "created_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "event_type",
+                    "payload",
+                    "sequence"
+                ]
+            },
+            "ChatInterruptResult": {
+                "type": "object",
+                "properties": {
+                    "interrupted": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "interrupted"
+                ]
+            },
+            "ChatListRow": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "project_id": {
+                        "type": "string"
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "agent": {
+                        "type": "string"
+                    },
+                    "run_kind": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "state": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "started_at": {
+                        "type": "string"
+                    },
+                    "ended_at": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "run_status": {
+                        "type": "string"
+                    },
+                    "active_turn_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "last_error": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    },
+                    "last_sequence": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "active_turn_id",
+                    "agent",
+                    "agent_run_id",
+                    "cwd",
+                    "ended_at",
+                    "last_error",
+                    "last_sequence",
+                    "module_id",
+                    "project_id",
+                    "run_kind",
+                    "run_status",
+                    "scope",
+                    "started_at",
+                    "state",
+                    "status",
+                    "task_id",
+                    "updated_at"
+                ]
+            },
+            "ChatResumeResult": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "resumed": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "resumed"
+                ]
+            },
+            "ChatRun": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "project_id": {
+                        "type": "string"
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "agent": {
+                        "type": "string"
+                    },
+                    "run_kind": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "state": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "started_at": {
+                        "type": "string"
+                    },
+                    "ended_at": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cwd": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "agent",
+                    "agent_run_id",
+                    "cwd",
+                    "ended_at",
+                    "module_id",
+                    "project_id",
+                    "run_kind",
+                    "scope",
+                    "started_at",
+                    "state",
+                    "status",
+                    "task_id"
+                ]
+            },
+            "ChatSession": {
+                "type": "object",
+                "properties": {
+                    "provider_thread_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/ChatSessionStatusEnum"
+                    },
+                    "active_turn_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "last_error": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "next_sequence": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "last_sequence": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "active_turn_id",
+                    "created_at",
+                    "last_error",
+                    "last_sequence",
+                    "next_sequence",
+                    "provider_thread_id",
+                    "status",
+                    "updated_at"
+                ]
+            },
+            "ChatSessionStatusEnum": {
+                "enum": [
+                    "starting",
+                    "ready",
+                    "running",
+                    "interrupted",
+                    "stopped",
+                    "error"
+                ],
+                "type": "string",
+                "description": "* `starting` - starting\n* `ready` - ready\n* `running` - running\n* `interrupted` - interrupted\n* `stopped` - stopped\n* `error` - error"
+            },
+            "ChatSnapshot": {
+                "type": "object",
+                "properties": {
+                    "run": {
+                        "$ref": "#/components/schemas/ChatRun"
+                    },
+                    "session": {
+                        "$ref": "#/components/schemas/ChatSession"
+                    },
+                    "events": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ChatEvent"
+                        }
+                    },
+                    "cursor": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "cursor",
+                    "events",
+                    "run",
+                    "session"
+                ]
+            },
+            "ChatStopResult": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "stopped": {
+                        "type": "boolean"
+                    },
+                    "stopped_live_process": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "stopped",
+                    "stopped_live_process"
+                ]
+            },
+            "ChatTurn": {
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string"
+                    },
+                    "command_id": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128,
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "prompt"
+                ]
+            },
+            "ChatTurnResult": {
+                "type": "object",
+                "properties": {
+                    "turn_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "turn_id"
+                ]
+            },
+            "ChatUserInput": {
+                "type": "object",
+                "properties": {
+                    "request_id": {
+                        "type": "string"
+                    },
+                    "answers": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "request_id"
                 ]
             },
             "Config": {
@@ -4140,6 +5165,49 @@
                 },
                 "required": [
                     "ordered_ids"
+                ]
+            },
+            "CreateChat": {
+                "type": "object",
+                "properties": {
+                    "agent": {
+                        "type": "string",
+                        "default": "codex"
+                    },
+                    "project_id": {
+                        "type": "string"
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "initial_prompt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "is_planning": {
+                        "type": "boolean"
+                    },
+                    "is_instant": {
+                        "type": "boolean"
+                    },
+                    "instant_prompt": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "command_id": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128,
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "module_id",
+                    "project_id"
                 ]
             },
             "CreateTerminal": {
@@ -4214,6 +5282,16 @@
                         "nullable": true
                     }
                 }
+            },
+            "DecisionEnum": {
+                "enum": [
+                    "accept",
+                    "acceptForSession",
+                    "decline",
+                    "cancel"
+                ],
+                "type": "string",
+                "description": "* `accept` - accept\n* `acceptForSession` - acceptForSession\n* `decline` - decline\n* `cancel` - cancel"
             },
             "Digest": {
                 "type": "object",
@@ -5287,6 +6365,14 @@
                     "resumed_from"
                 ]
             },
+            "RunKindEnum": {
+                "enum": [
+                    "terminal",
+                    "chat"
+                ],
+                "type": "string",
+                "description": "* `terminal` - terminal\n* `chat` - chat"
+            },
             "SaveDocument": {
                 "type": "object",
                 "properties": {
@@ -5409,15 +6495,6 @@
                     "sort_order",
                     "updated_at"
                 ]
-            },
-            "StatusEnum": {
-                "enum": [
-                    "pending",
-                    "succeeded",
-                    "failed"
-                ],
-                "type": "string",
-                "description": "* `pending` - pending\n* `succeeded` - succeeded\n* `failed` - failed"
             },
             "TerminalRun": {
                 "type": "object",

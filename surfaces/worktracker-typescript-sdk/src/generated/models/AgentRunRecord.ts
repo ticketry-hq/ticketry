@@ -22,6 +22,13 @@ import {
     ScopeEnumToJSON,
     ScopeEnumToJSONTyped,
 } from './ScopeEnum.js';
+import type { RunKindEnum } from './RunKindEnum.js';
+import {
+    RunKindEnumFromJSON,
+    RunKindEnumFromJSONTyped,
+    RunKindEnumToJSON,
+    RunKindEnumToJSONTyped,
+} from './RunKindEnum.js';
 
 /**
  *
@@ -59,6 +66,12 @@ export interface AgentRunRecord {
      * @memberof AgentRunRecord
      */
     agent: string;
+    /**
+     *
+     * @type {RunKindEnum}
+     * @memberof AgentRunRecord
+     */
+    run_kind?: RunKindEnum;
     /**
      *
      * @type {ScopeEnum}
@@ -118,6 +131,7 @@ export function AgentRunRecordFromJSONTyped(json: any, ignoreDiscriminator: bool
         'task_id': json['task_id'],
         'module_id': json['module_id'],
         'agent': json['agent'],
+        'run_kind': json['run_kind'] == null ? undefined : RunKindEnumFromJSON(json['run_kind']),
         'scope': ScopeEnumFromJSON(json['scope']),
         'started_at': json['started_at'],
         'state': json['state'],
@@ -141,6 +155,7 @@ export function AgentRunRecordToJSONTyped(value?: AgentRunRecord | null, ignoreD
         'task_id': value['task_id'],
         'module_id': value['module_id'],
         'agent': value['agent'],
+        'run_kind': RunKindEnumToJSON(value['run_kind']),
         'scope': ScopeEnumToJSON(value['scope']),
         'started_at': value['started_at'],
         'state': value['state'],

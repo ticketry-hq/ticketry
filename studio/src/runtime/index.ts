@@ -74,3 +74,7 @@ export function statusWebSocketUrl(): string {
 export function terminalWebSocketUrl(): string {
   return runtimeConfiguration().endpoints.terminalWebSocket;
 }
+
+export function chatWebSocketUrl(): string {
+  return runtimeConfiguration().endpoints.chatWebSocket;
+}

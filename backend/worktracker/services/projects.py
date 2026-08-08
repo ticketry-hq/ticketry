@@ -95,6 +95,21 @@ def delete_project(project_id):
             project = Project.objects.select_for_update().get(pk=project_id)
         except Project.DoesNotExist:
             raise NotFoundError("Project not found.")
+        # Lock every launch anchor before checking. Chat persistence takes the
+        # same Issue row lock, closing the query/delete race that could
+        # otherwise cascade away a just-created process owner.
+        issues = list(project.issues.select_for_update())
+        if any(
+            issue.agent_runs.filter(
+                run_kind="chat",
+                status="running",
+                ended_at__isnull=True,
+            ).exists()
+            for issue in issues
+        ):
+            raise ConflictError(
+                "Stop active Chat agents before deleting this project."
+            )
         # IssueType is intentionally PROTECTed while any work item selects it.
         # Whole-project deletion is the explicit aggregate teardown: remove the
         # issues first, then let the project cascade its now-unreferenced types.

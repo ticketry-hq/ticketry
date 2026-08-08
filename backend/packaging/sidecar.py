@@ -10,13 +10,23 @@ import io
 import json
 import os
 import secrets
+import selectors
 import shutil
 import signal
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import traceback
 from pathlib import Path
+
+if not getattr(sys, "frozen", False):
+    # Multi-call watchdog mode is invoked through this absolute source path
+    # while its cwd is the agent project, not ``backend/``.
+    backend_root = str(Path(__file__).resolve().parents[1])
+    if backend_root not in sys.path:
+        sys.path.insert(0, backend_root)
 
 from studio_server.atomic_files import atomic_write_bytes
 
@@ -30,6 +40,8 @@ STARTUP_FAILURE_LINE = "MUXED_FAILURE crash sidecar could not start"
 SKILL_PREPARATION_EVENT = "provider_skill_preparation_failed"
 SNAPSHOT_RETENTION = 3
 POSTGRES_MIGRATION_LOCK_ID = 0x5449434B45545259
+CHAT_WATCHDOG_DEFAULT_GRACE_SECONDS = 0.5
+CHAT_WATCHDOG_CONTAINMENT_FAILURE_EXIT = 70
 
 HOOK_MODULES = {
     "agy": "apps.terminals.agents.hooks.agy_hook",
@@ -291,6 +303,164 @@ def run_mcp() -> int:
     return 0
 
 
+def _watchdog_group_exists(process_group_id: int) -> bool:
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _watchdog_signal_group(process_group_id: int, sig: signal.Signals) -> None:
+    try:
+        os.killpg(process_group_id, sig)
+    except ProcessLookupError:
+        pass
+    except PermissionError as exc:
+        raise RuntimeError(
+            f"Chat watchdog lost permission for process group {process_group_id}"
+        ) from exc
+
+
+def _watchdog_contain_process_group(
+    child: subprocess.Popen,
+    *,
+    grace_seconds: float,
+) -> None:
+    """TERM→KILL the validated app-server group and reap its leader."""
+
+    process_group_id = child.pid
+    _watchdog_signal_group(process_group_id, signal.SIGTERM)
+    deadline = time.monotonic() + grace_seconds
+    while time.monotonic() < deadline:
+        # Reap the direct leader as soon as it exits. On macOS an unreaped
+        # zombie keeps the PGID visible and a later killpg(SIGKILL) can return
+        # EPERM even though no runnable process remains.
+        child.poll()
+        if not _watchdog_group_exists(process_group_id):
+            break
+        time.sleep(0.025)
+    child.poll()
+    if _watchdog_group_exists(process_group_id):
+        _watchdog_signal_group(process_group_id, signal.SIGKILL)
+    try:
+        child.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait()
+    deadline = time.monotonic() + 1
+    while _watchdog_group_exists(process_group_id) and time.monotonic() < deadline:
+        time.sleep(0.025)
+    if _watchdog_group_exists(process_group_id):
+        raise RuntimeError(
+            f"Chat watchdog could not confirm process group {process_group_id} exit"
+        )
+
+
+def run_chat_watchdog(argv: list[str]) -> int:
+    """Own one app-server group until backend death or natural child exit.
+
+    The backend retains only the write end of ``death-fd``. Abrupt backend
+    death closes it, while this external wrapper remains alive long enough to
+    contain the full app-server/tool process group. The app-server receives the
+    wrapper's protocol stdio directly; neither it nor its descendants inherit
+    the private watchdog descriptors.
+    """
+
+    if os.name != "posix":
+        print("Chat watchdog requires POSIX process groups", file=sys.stderr)
+        return 2
+    parser = argparse.ArgumentParser(description="Ticketry Chat process watchdog")
+    parser.add_argument("--death-fd", required=True, type=int)
+    parser.add_argument("--status-fd", required=True, type=int)
+    parser.add_argument("--cleanup-fd", required=True, type=int)
+    parser.add_argument(
+        "--grace-seconds",
+        type=float,
+        default=CHAT_WATCHDOG_DEFAULT_GRACE_SECONDS,
+    )
+    parser.add_argument("command", nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+    command = list(args.command)
+    if command[:1] == ["--"]:
+        command = command[1:]
+    if not command:
+        print("Chat watchdog requires an app-server command", file=sys.stderr)
+        return 2
+    if args.grace_seconds <= 0:
+        print("Chat watchdog grace must be positive", file=sys.stderr)
+        return 2
+
+    child: subprocess.Popen | None = None
+    status_fd = args.status_fd
+    cleanup_fd = args.cleanup_fd
+    death_fd = args.death_fd
+    try:
+        child = subprocess.Popen(
+            command,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            close_fds=True,
+            start_new_session=True,
+        )
+        if os.getpgid(child.pid) != child.pid:
+            raise RuntimeError("app-server did not enter its dedicated process group")
+        os.write(
+            status_fd,
+            json.dumps({"pid": child.pid}, separators=(",", ":")).encode()
+            + b"\n",
+        )
+        os.close(status_fd)
+        status_fd = -1
+
+        with selectors.DefaultSelector() as selector:
+            selector.register(death_fd, selectors.EVENT_READ)
+            while child.poll() is None:
+                if selector.select(timeout=0.05):
+                    # Data and EOF both request containment. The backend never
+                    # writes during normal operation, and the app-server child
+                    # cannot retain either end of this pipe.
+                    os.read(death_fd, 4096)
+                    break
+        returncode = child.poll()
+    except BaseException:
+        traceback.print_exc()
+        returncode = 1
+    finally:
+        if status_fd >= 0:
+            os.close(status_fd)
+        try:
+            os.close(death_fd)
+        except OSError:
+            pass
+        if child is not None:
+            try:
+                _watchdog_contain_process_group(
+                    child,
+                    grace_seconds=args.grace_seconds,
+                )
+            except BaseException:
+                traceback.print_exc()
+                returncode = CHAT_WATCHDOG_CONTAINMENT_FAILURE_EXIT
+            else:
+                try:
+                    os.write(cleanup_fd, b"contained\n")
+                except BrokenPipeError:
+                    # Expected after abrupt backend death: no parent remains to
+                    # consume confirmation, but containment is already done.
+                    pass
+                if returncode is None:
+                    returncode = child.returncode
+        try:
+            os.close(cleanup_fd)
+        except OSError:
+            pass
+    return int(returncode or 0)
+
+
 def verify_skill_catalog() -> int:
     """Verify resources through the same import path used by the frozen app."""
 
@@ -488,6 +658,8 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["hook"]:
         return run_hook(argv[1:])
+    if argv[:1] == ["chat-watchdog"]:
+        return run_chat_watchdog(argv[1:])
     if argv == ["mcp"]:
         return run_mcp()
     if argv == ["skills", "verify"]:

@@ -11,12 +11,13 @@ const tempSchema = resolve(temp, "openapi.json");
 const tempTypescriptGenerated = resolve(temp, "typescript-generated");
 const tempPythonGenerated = resolve(temp, "python-generated");
 const tempWireSchema = resolve(temp, "wire-frames.schema.json");
+const tempChatWireSchema = resolve(temp, "chat-wire-frames.schema.json");
 const serverDir = resolve(root, "backend");
 
-// The terminal WS frames are declared in ticketry's Django backend, not in the
-// worktracker package. Its
-// committed JSON-Schema artifact (#692) is re-exported and diffed below, the
-// same way the OpenAPI/SDK pair is — when the backend checkout is present.
+// Terminal and Chat WS frames are declared in Ticketry's Django backend, not in
+// the worktracker package. Their committed JSON-Schema artifacts are
+// re-exported and diffed below, the same way as the OpenAPI/SDK pair, whenever
+// the backend checkout is present.
 const localServerPython = resolve(serverDir, ".venv", "bin", "python");
 const serverPython =
   process.env.MUXED_SERVER_PYTHON ||
@@ -29,6 +30,15 @@ const committedWireSchema = resolve(
     "api",
     "transport",
   "wire-frames.schema.json",
+);
+const committedChatWireSchema = resolve(
+  root,
+  "studio",
+  "src",
+  "features",
+  "agents",
+  "chat",
+  "chat-wire-frames.schema.json",
 );
 
 const run = (command, args, options = {}) => {
@@ -50,6 +60,7 @@ run(process.execPath, [resolve(root, "scripts/export-openapi.mjs")], {
 run(process.execPath, [resolve(root, "scripts/generate-typescript-sdk.mjs")], {
   env: {
     ...process.env,
+    WORKTRACKER_OPENAPI_SCHEMA: tempSchema,
     WORKTRACKER_GENERATED_DIR: tempTypescriptGenerated,
   },
 });
@@ -63,6 +74,13 @@ run(process.execPath, [resolve(root, "scripts/generate-python-sdk.mjs")], {
 
 if (serverPython) {
   run(serverPython, ["manage.py", "export_wire_frames", tempWireSchema], {
+    cwd: serverDir,
+    env: {
+      ...process.env,
+      MUXED_STATE_DB: resolve(temp, "state.db"),
+    },
+  });
+  run(serverPython, ["manage.py", "export_chat_wire_frames", tempChatWireSchema], {
     cwd: serverDir,
     env: {
       ...process.env,
@@ -103,6 +121,14 @@ if (serverPython) {
   });
   if (wireDiff.status !== 0) {
     stale.push("studio/src/shared/api/transport/wire-frames.schema.json");
+  }
+  const chatWireDiff = spawnSync(
+    "diff",
+    ["-u", committedChatWireSchema, tempChatWireSchema],
+    { encoding: "utf8" },
+  );
+  if (chatWireDiff.status !== 0) {
+    stale.push("studio/src/features/agents/chat/chat-wire-frames.schema.json");
   }
 }
 

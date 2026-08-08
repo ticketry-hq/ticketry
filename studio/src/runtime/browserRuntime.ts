@@ -18,6 +18,7 @@ const DEFAULT_WORKTRACKER_API = "/api/work-tracker";
 const DEFAULT_AGENT_API = "/api";
 const DEFAULT_STATUS_WEBSOCKET = "/ws/status";
 const DEFAULT_TERMINAL_WEBSOCKET = "/ws/terminal";
+const DEFAULT_CHAT_WEBSOCKET = "/ws/chat";
 
 function invalid(field: string, expectation: string): never {
   throw new Error(
@@ -65,6 +66,7 @@ export function createBrowserRuntime({
       statusApi: agentApi,
       statusWebSocket: websocketEndpoint(agentApi, DEFAULT_STATUS_WEBSOCKET),
       terminalWebSocket: websocketEndpoint(agentApi, DEFAULT_TERMINAL_WEBSOCKET),
+      chatWebSocket: websocketEndpoint(agentApi, DEFAULT_CHAT_WEBSOCKET),
     }),
     values: Object.freeze({
       workTrackerApiKey: environment.VITE_WT_API_KEY || "",

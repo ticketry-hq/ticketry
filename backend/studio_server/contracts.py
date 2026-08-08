@@ -140,6 +140,7 @@ class RunRecord(BaseModel):
     task_id: Optional[str]
     module_id: str
     agent: str
+    run_kind: Literal["terminal", "chat"] = "terminal"
     scope: Literal["task", "plan", "instant", "docchat"]
     started_at: str
     state: LifecycleState

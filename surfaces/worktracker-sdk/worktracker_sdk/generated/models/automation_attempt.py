@@ -20,7 +20,7 @@ import json
 
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from worktracker_sdk.generated.models.status_enum import StatusEnum
+from worktracker_sdk.generated.models.automation_attempt_status_enum import AutomationAttemptStatusEnum
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -33,7 +33,7 @@ class AutomationAttempt(BaseModel):
     root_attempt_id: StrictStr
     retry_of_attempt_id: Optional[StrictStr]
     work_item_id: StrictStr
-    status: StatusEnum
+    status: AutomationAttemptStatusEnum
     error: Optional[StrictStr]
     failure: Optional[Any]
     retryable: StrictBool

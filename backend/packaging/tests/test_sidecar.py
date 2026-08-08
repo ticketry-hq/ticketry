@@ -365,7 +365,7 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
             json={"name": "Packaged hook", "slug": "PKG"},
             timeout=5,
         )
-        assert project_response.status_code == 200
+        assert project_response.status_code == 201
         project_id = project_response.json()["id"]
 
         issue_types_response = httpx.get(
@@ -392,7 +392,7 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
             json={"name": "Packaged hook", "issue_type_id": module_type_id},
             timeout=5,
         )
-        assert module_response.status_code == 200
+        assert module_response.status_code == 201
         module_id = module_response.json()["id"]
         task_response = httpx.post(
             f"{base_url}/projects/{project_id}/work-items",
@@ -404,16 +404,17 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
             },
             timeout=5,
         )
-        assert task_response.status_code == 200
+        assert task_response.status_code == 201
         task_id = task_response.json()["id"]
 
         with sqlite3.connect(tmp_path / "state.db") as database:
             database.execute(
                 """
-                INSERT INTO agent_runs (
-                    id, issue_id, agent, status,
-                    started_at, lifecycle_state, lifecycle_updated_at, scope
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO agent_runs (
+                        id, issue_id, agent, status,
+                        started_at, lifecycle_state, lifecycle_updated_at, scope,
+                        run_kind
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -422,9 +423,10 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
                     "running",
                     "2020-01-01T00:00:00+00:00",
                     "unknown",
-                    "2020-01-01T00:00:00+00:00",
-                    "task",
-                ),
+                        "2020-01-01T00:00:00+00:00",
+                        "task",
+                        "terminal",
+                    ),
             )
             database.execute(
                 """

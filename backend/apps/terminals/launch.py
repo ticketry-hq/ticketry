@@ -283,6 +283,7 @@ async def _launch(
                 task_id=task_id,
                 module_id=module_id,
                 agent=agent,
+                run_kind="terminal",
                 scope=scope,
                 started_at=started_at,
                 state="starting",

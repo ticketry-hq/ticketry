@@ -9,6 +9,7 @@ function startupConfiguration() {
       statusApi: "http://127.0.0.1:8787/api",
       statusWebSocket: "ws://127.0.0.1:8787/ws/status",
       terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
+      chatWebSocket: "ws://127.0.0.1:8787/ws/chat",
     },
     values: { workTrackerApiKey: "" },
     serviceHealth: {
@@ -50,6 +51,7 @@ describe("desktop runtime contract", () => {
         statusApi: "http://127.0.0.1:8787/api",
         statusWebSocket: "ws://127.0.0.1:8787/ws/status",
         terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
+        chatWebSocket: "ws://127.0.0.1:8787/ws/chat",
       },
       values: { workTrackerApiKey: "ephemeral-key" },
       serviceHealth: {

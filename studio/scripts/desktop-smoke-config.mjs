@@ -4,6 +4,7 @@ const runtimeEndpointProtocols = {
   MUXED_DESKTOP_STATUS_API: "http:",
   MUXED_DESKTOP_STATUS_WEBSOCKET: "ws:",
   MUXED_DESKTOP_TERMINAL_WEBSOCKET: "ws:",
+  MUXED_DESKTOP_CHAT_WEBSOCKET: "ws:",
 };
 
 export function buildDevelopmentSmokeConfiguration(port) {
@@ -23,6 +24,7 @@ export function buildDevelopmentSmokeConfiguration(port) {
       MUXED_DESKTOP_STATUS_API: `${webviewUrl}/api`,
       MUXED_DESKTOP_STATUS_WEBSOCKET: `${webSocketOrigin}/ws/status`,
       MUXED_DESKTOP_TERMINAL_WEBSOCKET: `${webSocketOrigin}/ws/terminal`,
+      MUXED_DESKTOP_CHAT_WEBSOCKET: `${webSocketOrigin}/ws/chat`,
     },
   };
 }

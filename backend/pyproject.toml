@@ -44,6 +44,7 @@ include = [
 ]
 
 [tool.setuptools.package-data]
+"apps.runs.chat" = ["schema/*.json", "schema/*.md"]
 
 [tool.uv.sources]
 worktracker-sdk = { path = "../surfaces/worktracker-sdk", editable = true }

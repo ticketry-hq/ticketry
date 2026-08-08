@@ -269,6 +269,7 @@ async def test_spawn_publishes_a_starting_lifecycle_delta(
             project_id=PROJECT_ID, module_id=MODULE_ID, task_id=None
         ),
         "agent": "claude",
+        "run_kind": "terminal",
         "scope": "task",
         "started_at": frame["at"],
         "state": "starting",

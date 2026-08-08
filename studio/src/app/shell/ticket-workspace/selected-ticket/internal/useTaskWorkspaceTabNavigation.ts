@@ -5,7 +5,8 @@ import { useClientStore } from "../../../../../state/clientStore";
 export type TaskWorkspaceTabIdentity =
   | { kind: "details" }
   | { kind: "doc"; id: string }
-  | { kind: "terminal"; id: string };
+  | { kind: "terminal"; id: string }
+  | { kind: "chat"; id: string };
 
 function sameTab(
   left: TaskWorkspaceTabIdentity,

@@ -115,6 +115,12 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
     ["ws:", "wss:"],
     "must be a loopback WebSocket URL",
   );
+  const chatWebSocket = endpoint(
+    endpoints,
+    "chatWebSocket",
+    ["ws:", "wss:"],
+    "must be a loopback WebSocket URL",
+  );
   const workTrackerApiKey = values.workTrackerApiKey;
   if (typeof workTrackerApiKey !== "string") {
     return initializationError("workTrackerApiKey", "must be a string");
@@ -143,6 +149,7 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
       statusApi,
       statusWebSocket,
       terminalWebSocket,
+      chatWebSocket,
     }),
     values: Object.freeze({ workTrackerApiKey }),
     serviceHealth: Object.freeze({
@@ -166,6 +173,7 @@ function serviceHealth(value: unknown): ServiceHealth | null {
         statusApi: "http://127.0.0.1:1/api",
         statusWebSocket: "ws://127.0.0.1:1/ws/status",
         terminalWebSocket: "ws://127.0.0.1:1/ws/terminal",
+        chatWebSocket: "ws://127.0.0.1:1/ws/chat",
       },
       values: { workTrackerApiKey: "" },
       serviceHealth: recordValue,

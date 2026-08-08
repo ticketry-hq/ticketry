@@ -30,6 +30,7 @@ function folderPickerRuntime(
         statusApi: "/api",
         statusWebSocket: "/ws/status",
         terminalWebSocket: "/ws/terminal",
+        chatWebSocket: "/ws/chat",
       },
       values: { workTrackerApiKey: "" },
       serviceHealth: {

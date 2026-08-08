@@ -31,6 +31,7 @@ __all__ = [
     "WorkItemsApi",
     "WorkflowsApi",
     "WorkspaceApi",
+    "ChatsApi",
     "ConfigurationApi",
     "DocumentsApi",
     "ExecutionApi",
@@ -48,6 +49,7 @@ __all__ = [
     "ApiKeyError",
     "ApiAttributeError",
     "ApiException",
+    "Accepted",
     "AgentEnum",
     "AgentModel",
     "AgentOverride",
@@ -57,10 +59,27 @@ __all__ = [
     "AgentStatusScopeResponse",
     "Attachment",
     "AutomationAttempt",
+    "AutomationAttemptStatusEnum",
+    "StatusEnum",
+    "ChatApproval",
+    "ChatEvent",
+    "ChatInterruptResult",
+    "ChatListRow",
+    "ChatResumeResult",
+    "ChatRun",
+    "ChatSession",
+    "ChatSessionStatusEnum",
+    "ChatSnapshot",
+    "ChatStopResult",
+    "ChatTurn",
+    "ChatTurnResult",
+    "ChatUserInput",
     "Config",
     "ConfigurationReorder",
+    "CreateChat",
     "CreateTerminal",
     "CreateWorktree",
+    "DecisionEnum",
     "Digest",
     "Discard",
     "Document",
@@ -108,13 +127,13 @@ __all__ = [
     "ReplacedViewer",
     "ResumableTerminal",
     "ResumeResult",
+    "RunKindEnum",
     "SaveDocument",
     "ScopeEnum",
     "SelfTerminateResult",
     "SettingValue",
     "SourceEnum",
     "State",
-    "StatusEnum",
     "TerminalRun",
     "TerminateResult",
     "TransportEnum",
@@ -142,6 +161,7 @@ from worktracker_sdk.generated.api.states_api import StatesApi as StatesApi
 from worktracker_sdk.generated.api.work_items_api import WorkItemsApi as WorkItemsApi
 from worktracker_sdk.generated.api.workflows_api import WorkflowsApi as WorkflowsApi
 from worktracker_sdk.generated.api.workspace_api import WorkspaceApi as WorkspaceApi
+from worktracker_sdk.generated.api.chats_api import ChatsApi as ChatsApi
 from worktracker_sdk.generated.api.configuration_api import ConfigurationApi as ConfigurationApi
 from worktracker_sdk.generated.api.documents_api import DocumentsApi as DocumentsApi
 from worktracker_sdk.generated.api.execution_api import ExecutionApi as ExecutionApi
@@ -163,6 +183,7 @@ from worktracker_sdk.generated.exceptions import ApiAttributeError as ApiAttribu
 from worktracker_sdk.generated.exceptions import ApiException as ApiException
 
 # import models into sdk package
+from worktracker_sdk.generated.models.accepted import Accepted as Accepted
 from worktracker_sdk.generated.models.agent_enum import AgentEnum as AgentEnum
 from worktracker_sdk.generated.models.agent_model import AgentModel as AgentModel
 from worktracker_sdk.generated.models.agent_override import AgentOverride as AgentOverride
@@ -172,10 +193,26 @@ from worktracker_sdk.generated.models.agent_status_response import AgentStatusRe
 from worktracker_sdk.generated.models.agent_status_scope_response import AgentStatusScopeResponse as AgentStatusScopeResponse
 from worktracker_sdk.generated.models.attachment import Attachment as Attachment
 from worktracker_sdk.generated.models.automation_attempt import AutomationAttempt as AutomationAttempt
+from worktracker_sdk.generated.models.automation_attempt_status_enum import AutomationAttemptStatusEnum as AutomationAttemptStatusEnum
+from worktracker_sdk.generated.models.chat_approval import ChatApproval as ChatApproval
+from worktracker_sdk.generated.models.chat_event import ChatEvent as ChatEvent
+from worktracker_sdk.generated.models.chat_interrupt_result import ChatInterruptResult as ChatInterruptResult
+from worktracker_sdk.generated.models.chat_list_row import ChatListRow as ChatListRow
+from worktracker_sdk.generated.models.chat_resume_result import ChatResumeResult as ChatResumeResult
+from worktracker_sdk.generated.models.chat_run import ChatRun as ChatRun
+from worktracker_sdk.generated.models.chat_session import ChatSession as ChatSession
+from worktracker_sdk.generated.models.chat_session_status_enum import ChatSessionStatusEnum as ChatSessionStatusEnum
+from worktracker_sdk.generated.models.chat_snapshot import ChatSnapshot as ChatSnapshot
+from worktracker_sdk.generated.models.chat_stop_result import ChatStopResult as ChatStopResult
+from worktracker_sdk.generated.models.chat_turn import ChatTurn as ChatTurn
+from worktracker_sdk.generated.models.chat_turn_result import ChatTurnResult as ChatTurnResult
+from worktracker_sdk.generated.models.chat_user_input import ChatUserInput as ChatUserInput
 from worktracker_sdk.generated.models.config import Config as Config
 from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder as ConfigurationReorder
+from worktracker_sdk.generated.models.create_chat import CreateChat as CreateChat
 from worktracker_sdk.generated.models.create_terminal import CreateTerminal as CreateTerminal
 from worktracker_sdk.generated.models.create_worktree import CreateWorktree as CreateWorktree
+from worktracker_sdk.generated.models.decision_enum import DecisionEnum as DecisionEnum
 from worktracker_sdk.generated.models.digest import Digest as Digest
 from worktracker_sdk.generated.models.discard import Discard as Discard
 from worktracker_sdk.generated.models.document import Document as Document
@@ -223,13 +260,13 @@ from worktracker_sdk.generated.models.release_result import ReleaseResult as Rel
 from worktracker_sdk.generated.models.replaced_viewer import ReplacedViewer as ReplacedViewer
 from worktracker_sdk.generated.models.resumable_terminal import ResumableTerminal as ResumableTerminal
 from worktracker_sdk.generated.models.resume_result import ResumeResult as ResumeResult
+from worktracker_sdk.generated.models.run_kind_enum import RunKindEnum as RunKindEnum
 from worktracker_sdk.generated.models.save_document import SaveDocument as SaveDocument
 from worktracker_sdk.generated.models.scope_enum import ScopeEnum as ScopeEnum
 from worktracker_sdk.generated.models.self_terminate_result import SelfTerminateResult as SelfTerminateResult
 from worktracker_sdk.generated.models.setting_value import SettingValue as SettingValue
 from worktracker_sdk.generated.models.source_enum import SourceEnum as SourceEnum
 from worktracker_sdk.generated.models.state import State as State
-from worktracker_sdk.generated.models.status_enum import StatusEnum as StatusEnum
 from worktracker_sdk.generated.models.terminal_run import TerminalRun as TerminalRun
 from worktracker_sdk.generated.models.terminate_result import TerminateResult as TerminateResult
 from worktracker_sdk.generated.models.transport_enum import TransportEnum as TransportEnum
@@ -242,3 +279,4 @@ from worktracker_sdk.generated.models.work_item_create import WorkItemCreate as 
 from worktracker_sdk.generated.models.work_item_reorder import WorkItemReorder as WorkItemReorder
 from worktracker_sdk.generated.models.workspace import Workspace as Workspace
 from worktracker_sdk.generated.models.worktree_status import WorktreeStatus as WorktreeStatus
+from worktracker_sdk.generated.models.status_enum import StatusEnum as StatusEnum

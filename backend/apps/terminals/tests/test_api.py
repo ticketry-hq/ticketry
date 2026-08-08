@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import uuid
 
 import pytest
@@ -14,11 +16,13 @@ import apps.terminals.api as terminals_api
 import apps.terminals.launch as launch
 from apps.terminals import dao, tmux
 import apps.terminals.session as session_module
+from apps.runs.chat.codex_runtime import CodexChatRuntime, runtime_registry
+from apps.runs.chat.runtime_supervisor import runtime_supervisor
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.validation import SpawnRequest
-from apps.runs.models import AgentRun
+from apps.runs.models import AgentChatSession, AgentRun
 from worktracker.models import Issue, IssueType, Project, Workspace
 from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_uuid
 
@@ -26,6 +30,59 @@ from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_
 pytestmark = pytest.mark.django_db(transaction=True)
 
 SCRATCH_TASK_ID = dao.SCRATCH_TASK_ID
+
+CHAT_SELF_TERMINATE_PEER = r"""
+import json
+import sys
+
+for line in sys.stdin:
+    frame = json.loads(line)
+    method = frame.get("method")
+    if "id" not in frame:
+        continue
+    if method == "initialize":
+        print(json.dumps({"id": frame["id"], "result": {}}), flush=True)
+    elif method == "thread/start":
+        print(
+            json.dumps(
+                {
+                    "id": frame["id"],
+                    "result": {"thread": {"id": "self-terminate-thread"}},
+                }
+            ),
+            flush=True,
+        )
+"""
+
+
+def _start_live_chat_runtime(tmp_path, run_id: str):
+    issue = ensure_issue(
+        project_id=f"{run_id}-project",
+        module_id=f"{run_id}-module",
+        task_id=f"{run_id}-task",
+    )
+    run = AgentRun.objects.create(
+        id=run_id,
+        issue=issue,
+        agent="codex",
+        status="running",
+        started_at="2026-08-08T00:00:00+00:00",
+        cwd=str(tmp_path),
+        lifecycle_state="working",
+        lifecycle_updated_at="2026-08-08T00:00:00+00:00",
+        scope="task",
+        run_kind=AgentRun.Kind.CHAT,
+    )
+    AgentChatSession.objects.create(run=run)
+    runtime = CodexChatRuntime(
+        agent_run_id=run.id,
+        argv=[sys.executable, "-u", "-c", CHAT_SELF_TERMINATE_PEER],
+        cwd=str(tmp_path),
+        version="test",
+    )
+    runtime_supervisor.call_sync(lambda: runtime_registry.add(runtime))
+    assert runtime._client is not None
+    return run, runtime, runtime._client.pid
 
 
 def _create_module_issue() -> Issue:
@@ -60,6 +117,7 @@ def _insert_run(
     provider_session_id=None,
     resumed_from=None,
     status=None,
+    run_kind=AgentRun.Kind.TERMINAL,
 ):
     """Insert a parent agent_run for terminal-session rows."""
 
@@ -81,6 +139,7 @@ def _insert_run(
         lifecycle_state=lifecycle_state,
         resumed_from=resumed_from,
         scope="plan" if task_id == SCRATCH_TASK_ID else "task",
+        run_kind=run_kind,
     )
 
 
@@ -541,6 +600,13 @@ def test_list_resumable_terminals_filters_collapses_and_excludes_live(client):
         ended_at="2026-05-29T09:00:00",
         provider_session_id=None,
     )
+    _insert_run(
+        "chat-provider-history",
+        task_id="task-1",
+        ended_at="2026-05-29T14:00:00",
+        provider_session_id="chat-provider-session",
+        run_kind=AgentRun.Kind.CHAT,
+    )
 
     response = client.get(
         "/api/terminals/resumable",
@@ -945,6 +1011,105 @@ def test_self_terminate_is_idempotent_for_an_inactive_run(client, monkeypatch):
         "already_terminated": True,
         "agent_run_id": "run-ended",
     }
+
+
+def test_chat_self_terminate_contains_runtime_and_is_idempotent(client, tmp_path):
+    run, _runtime, provider_pid = _start_live_chat_runtime(
+        tmp_path,
+        "chat-self-terminate",
+    )
+    try:
+        first = client.post(
+            "/api/terminals/self-terminate",
+            HTTP_AUTHORIZATION=issue_run_authorization(run.id),
+        )
+
+        assert first.status_code == 200
+        assert first.json() == {
+            "ok": True,
+            "terminated": True,
+            "already_terminated": False,
+            "agent_run_id": run.id,
+        }
+        run.refresh_from_db()
+        session = AgentChatSession.objects.get(run=run)
+        assert run.status == "terminated"
+        assert run.ended_at is not None
+        assert session.status == AgentChatSession.Status.STOPPED
+        with pytest.raises(KeyError):
+            runtime_registry.get(run.id)
+        if provider_pid is not None:
+            with pytest.raises(ProcessLookupError):
+                os.kill(provider_pid, 0)
+
+        second = client.post(
+            "/api/terminals/self-terminate",
+            HTTP_AUTHORIZATION=issue_run_authorization(run.id),
+        )
+        assert second.status_code == 200
+        assert second.json()["already_terminated"] is True
+    finally:
+        runtime_supervisor.call_sync(lambda: runtime_registry.remove(run.id))
+
+
+def test_chat_self_terminate_contains_registry_owner_after_row_cascade(
+    client,
+    tmp_path,
+):
+    run, _runtime, provider_pid = _start_live_chat_runtime(
+        tmp_path,
+        "chat-self-terminate-orphan",
+    )
+    authorization = issue_run_authorization(run.id)
+    run.delete()
+
+    try:
+        response = client.post(
+            "/api/terminals/self-terminate",
+            HTTP_AUTHORIZATION=authorization,
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "ok": True,
+            "terminated": True,
+            "already_terminated": False,
+            "agent_run_id": "chat-self-terminate-orphan",
+        }
+        with pytest.raises(KeyError):
+            runtime_registry.get("chat-self-terminate-orphan")
+        if provider_pid is not None:
+            with pytest.raises(ProcessLookupError):
+                os.kill(provider_pid, 0)
+    finally:
+        runtime_supervisor.call_sync(
+            lambda: runtime_registry.remove("chat-self-terminate-orphan")
+        )
+
+
+def test_terminal_delete_rejects_chat_without_mutating_shared_run(client, monkeypatch):
+    _insert_run(
+        "chat-terminal-delete",
+        run_kind=AgentRun.Kind.CHAT,
+    )
+    monkeypatch.setattr(
+        terminals_api.terminal_session,
+        "terminate",
+        lambda run_id: pytest.fail(f"Chat run reached terminal service: {run_id}"),
+    )
+
+    response = client.delete(
+        "/api/terminals?agent_run_id=chat-terminal-delete"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "session_not_found",
+        "code": "session_not_found",
+    }
+    run = AgentRun.objects.get(id="chat-terminal-delete")
+    assert run.status == "running"
+    assert run.ended_at is None
 
 
 @pytest.mark.parametrize(

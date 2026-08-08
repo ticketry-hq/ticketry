@@ -416,10 +416,22 @@ def reorder_work_item(issue_id: uuid.UUID, before_id=None, after_id=None):
 def delete_work_item(issue_id: uuid.UUID):
     """Delete an empty issue and reject issues with children."""
 
-    issue = get_issue(issue_id)
-    if issue.children.exists():
-        raise ConflictError("Issue has children; empty or re-parent them first.")
-    issue.delete()
+    with transaction.atomic():
+        try:
+            issue = Issue.objects.select_for_update().get(pk=issue_id)
+        except Issue.DoesNotExist:
+            raise NotFoundError("Work item not found.") from None
+        if issue.children.exists():
+            raise ConflictError("Issue has children; empty or re-parent them first.")
+        if issue.agent_runs.filter(
+            run_kind="chat",
+            status="running",
+            ended_at__isnull=True,
+        ).exists():
+            raise ConflictError(
+                "Stop active Chat agents before deleting this work item."
+            )
+        issue.delete()
 
 
 def _reorder_neighbor(issue, neighbor_id):

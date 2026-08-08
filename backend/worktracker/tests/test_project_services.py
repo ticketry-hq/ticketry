@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 
+from apps.runs.models import AgentChatSession, AgentRun
 from worktracker.models import (
     IssueType,
     IssueTypeTransition,
@@ -106,6 +107,45 @@ def test_delete_project_cascades_owned_rows(project):
     assert State.objects.filter(project_id=project.id).count() == 0
     assert IssueType.objects.filter(project_id=project.id).count() == 0
     assert Issue.objects.filter(project_id=project.id).count() == 0
+
+
+@pytest.mark.django_db
+def test_delete_project_blocks_active_chat_owner(project):
+    from worktracker.models import Issue
+
+    issue_type = IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Task", level="task"
+    )
+    issue = Issue.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="Chat-owned",
+        sequence_id=1,
+    )
+    run = AgentRun.objects.create(
+        id="chat-delete-project",
+        issue=issue,
+        agent="codex",
+        status="running",
+        started_at="2026-08-08T00:00:00+00:00",
+        scope="task",
+        run_kind=AgentRun.Kind.CHAT,
+    )
+    AgentChatSession.objects.create(
+        run=run,
+        provider_thread_id="provider-delete-project",
+        status=AgentChatSession.Status.READY,
+    )
+
+    with pytest.raises(ConflictError):
+        delete_project(project.id)
+
+    assert Project.objects.filter(pk=project.id).exists()
+    assert Issue.objects.filter(pk=issue.id).exists()
+    assert AgentRun.objects.filter(pk=run.id).exists()
+    assert AgentChatSession.objects.filter(pk=run.id).exists()
 
 
 @pytest.mark.django_db

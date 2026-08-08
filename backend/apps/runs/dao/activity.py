@@ -107,6 +107,7 @@ async def agent_status_records(
                 task_id=str(run.issue_id) if run.issue.type == "task" else None,
                 module_id=str(run.run_module_id),
                 agent=run.agent,
+                run_kind=run.run_kind,
                 scope=run.scope,
                 started_at=run.started_at,
                 state=state,

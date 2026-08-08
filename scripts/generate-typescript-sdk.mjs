@@ -12,7 +12,10 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const root = resolve(import.meta.dirname, "..");
-const schema = resolve(root, "openapi.json");
+const schema = resolve(
+  root,
+  process.env.WORKTRACKER_OPENAPI_SCHEMA || "openapi.json",
+);
 const config = resolve(
   root,
   "surfaces",
@@ -104,4 +107,31 @@ const stamp = (directory) => {
   }
 };
 stamp(destination);
+
+// OpenAPI Generator names an inline enum `StatusEnum` while it is unique, but
+// prefixes both enums once ChatSession introduces a second `status` field.
+// Preserve the already-published import without forking the generated model:
+// the legacy name remains an exact alias of AutomationAttemptStatusEnum.
+const generatedModels = resolve(destination, "models");
+writeFileSync(
+  resolve(generatedModels, "StatusEnum.ts"),
+  notice
+    + "export {\n"
+    + "  AutomationAttemptStatusEnum as StatusEnum,\n"
+    + "  instanceOfAutomationAttemptStatusEnum as instanceOfStatusEnum,\n"
+    + "  AutomationAttemptStatusEnumFromJSON as StatusEnumFromJSON,\n"
+    + "  AutomationAttemptStatusEnumFromJSONTyped as StatusEnumFromJSONTyped,\n"
+    + "  AutomationAttemptStatusEnumToJSON as StatusEnumToJSON,\n"
+    + "  AutomationAttemptStatusEnumToJSONTyped as StatusEnumToJSONTyped,\n"
+    + "} from './AutomationAttemptStatusEnum.js';\n",
+);
+const generatedModelsIndex = resolve(generatedModels, "index.ts");
+const generatedModelsIndexContents = readFileSync(generatedModelsIndex, "utf8");
+if (!generatedModelsIndexContents.includes("'./StatusEnum.js'")) {
+  writeFileSync(
+    generatedModelsIndex,
+    generatedModelsIndexContents.replace(/\n*$/, "\n")
+      + "export * from './StatusEnum.js';\n",
+  );
+}
 rmSync(tempRoot, { recursive: true, force: true });

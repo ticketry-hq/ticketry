@@ -396,6 +396,7 @@ async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
             "task_id": TASK_1_ID,
             "module_id": MODULE_1_ID,
             "agent": "codex",
+            "run_kind": "terminal",
             "scope": "task",
             "started_at": "2026-07-12T10:00:00+00:00",
             "state": "working",

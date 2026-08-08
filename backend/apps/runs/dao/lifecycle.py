@@ -106,7 +106,7 @@ async def get_run_routing(run_id: str) -> Optional[tuple[Optional[str], str]]:
 
 async def get_status_routing(
     run_id: str,
-) -> Optional[tuple[str, Optional[str], str, str, str, str]]:
+) -> Optional[tuple[str, Optional[str], str, str, str, str, str]]:
     """Return the immutable identity and routing fields owned by a run."""
 
     routing = (
@@ -119,19 +119,30 @@ async def get_status_routing(
             "run_module_id",
             "scope",
             "agent",
+            "run_kind",
             "started_at",
         )
         .afirst()
     )
     if routing is None:
         return None
-    project_id, issue_id, issue_type, module_id, scope, agent, started_at = routing
+    (
+        project_id,
+        issue_id,
+        issue_type,
+        module_id,
+        scope,
+        agent,
+        run_kind,
+        started_at,
+    ) = routing
     return (
         str(project_id),
         str(issue_id) if issue_type == "task" else None,
         str(module_id),
         scope,
         agent,
+        run_kind,
         started_at,
     )
 

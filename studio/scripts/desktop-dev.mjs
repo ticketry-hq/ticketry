@@ -264,6 +264,7 @@ export function buildConnectLaunch({ environment = process.env } = {}) {
       MUXED_DESKTOP_STATUS_API: `${frontendOrigin}/api`,
       MUXED_DESKTOP_STATUS_WEBSOCKET: `${frontendWebSocketOrigin}/ws/status`,
       MUXED_DESKTOP_TERMINAL_WEBSOCKET: `${frontendWebSocketOrigin}/ws/terminal`,
+      MUXED_DESKTOP_CHAT_WEBSOCKET: `${frontendWebSocketOrigin}/ws/chat`,
     },
   };
 }

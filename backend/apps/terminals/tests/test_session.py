@@ -12,7 +12,7 @@ import apps.terminals.agents.registry as agent_registry
 from apps.runs.models import AgentRun
 from apps.terminals.tests.fakes import InMemorySessionService
 from apps.terminals.models import AgentTerminalSession
-from apps.terminals.session import LaunchIntent, TerminalSessionService
+from apps.terminals.session import LaunchIntent, SessionNotFound, TerminalSessionService
 from apps.terminals.session_registry import SESSIONS, TMUX_VIEWERS
 from apps.terminals.tmux.metadata import TmuxSession
 from apps.terminals.tmux.sessions import ReconcileResult
@@ -22,7 +22,12 @@ from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-def _insert_run(run_id: str, *, task_id: str = "task-1") -> None:
+def _insert_run(
+    run_id: str,
+    *,
+    task_id: str = "task-1",
+    run_kind: str = AgentRun.Kind.TERMINAL,
+) -> None:
     AgentRun.objects.create(
         id=run_id,
         issue_id=fixture_issue_id(
@@ -33,6 +38,7 @@ def _insert_run(run_id: str, *, task_id: str = "task-1") -> None:
         started_at="2026-07-05T10:00:00+00:00",
         cwd="/tmp",
         scope="task",
+        run_kind=run_kind,
     )
 
 
@@ -229,6 +235,27 @@ def test_live_run_for_returns_running_run_then_none_after_terminate(monkeypatch)
 
     service.terminate("run-live")
 
+    assert service.live_run_for(task_id) is None
+
+
+def test_terminal_service_never_terminates_or_lists_chat_run(monkeypatch):
+    service = TerminalSessionService()
+    _insert_run("chat-owned", run_kind=AgentRun.Kind.CHAT)
+    task_id = fixture_issue_id(
+        project_id="proj-1", module_id="mod-1", task_id="task-1"
+    )
+    monkeypatch.setattr(
+        session_module.tmux_sessions,
+        "terminate_session",
+        lambda run_id: pytest.fail(f"Chat run reached tmux: {run_id}"),
+    )
+
+    with pytest.raises(SessionNotFound):
+        service.terminate("chat-owned")
+
+    run = AgentRun.objects.get(id="chat-owned")
+    assert run.status == "running"
+    assert run.ended_at is None
     assert service.live_run_for(task_id) is None
 
 

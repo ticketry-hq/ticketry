@@ -226,6 +226,7 @@ struct RuntimeEndpoints {
     status_api: String,
     status_web_socket: String,
     terminal_web_socket: String,
+    chat_web_socket: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -445,6 +446,7 @@ fn default_runtime_endpoints() -> RuntimeEndpoints {
         status_api: format!("{http_origin}/api"),
         status_web_socket: format!("{web_socket_origin}/ws/status"),
         terminal_web_socket: format!("{web_socket_origin}/ws/terminal"),
+        chat_web_socket: format!("{web_socket_origin}/ws/chat"),
     }
 }
 
@@ -467,6 +469,7 @@ fn development_runtime_configuration() -> Result<RuntimeStartupConfiguration, St
                 "MUXED_DESKTOP_TERMINAL_WEBSOCKET",
                 &defaults.terminal_web_socket,
             )?,
+            chat_web_socket: endpoint("MUXED_DESKTOP_CHAT_WEBSOCKET", &defaults.chat_web_socket)?,
         },
         values: RuntimeValues {
             work_tracker_api_key: optional_value("MUXED_DESKTOP_WORKTRACKER_API_KEY")?,
@@ -486,6 +489,7 @@ fn sidecar_runtime_configuration(port: u16, credential: &str) -> RuntimeStartupC
             status_api: format!("{http_origin}/api"),
             status_web_socket: format!("{web_socket_origin}/ws/status"),
             terminal_web_socket: format!("{web_socket_origin}/ws/terminal"),
+            chat_web_socket: format!("{web_socket_origin}/ws/chat"),
         },
         values: RuntimeValues {
             work_tracker_api_key: credential.to_owned(),
@@ -1466,6 +1470,7 @@ mod tests {
             endpoints.terminal_web_socket,
             "ws://127.0.0.1:5174/ws/terminal"
         );
+        assert_eq!(endpoints.chat_web_socket, "ws://127.0.0.1:5174/ws/chat");
     }
 
     #[test]
@@ -1479,6 +1484,10 @@ mod tests {
         assert_eq!(
             configuration.endpoints.status_web_socket,
             "ws://127.0.0.1:43219/ws/status"
+        );
+        assert_eq!(
+            configuration.endpoints.chat_web_socket,
+            "ws://127.0.0.1:43219/ws/chat"
         );
         assert_eq!(
             configuration.values.work_tracker_api_key,

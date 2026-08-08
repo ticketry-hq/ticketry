@@ -58,6 +58,15 @@ def test_generated_model_round_trips() -> None:
     assert Project.model_validate_json(project.model_dump_json()) == project
 
 
+def test_legacy_status_enum_remains_an_exact_generated_alias() -> None:
+    """Adding Chat's status enum must not break the published SDK import."""
+
+    from worktracker_sdk.generated import AutomationAttemptStatusEnum, StatusEnum
+
+    assert StatusEnum is AutomationAttemptStatusEnum
+    assert StatusEnum.PENDING.value == "pending"
+
+
 class _StubHttpResponse:
     def __init__(self, status: int, body: bytes, reason: str) -> None:
         self.status = status

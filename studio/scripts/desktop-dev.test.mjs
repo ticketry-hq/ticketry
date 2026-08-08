@@ -264,6 +264,10 @@ test("connect mode reuses the established pnpm dev stack without a sidecar comma
     launch.environment.MUXED_DESKTOP_STATUS_WEBSOCKET,
     "ws://127.0.0.1:5174/ws/status",
   );
+  assert.equal(
+    launch.environment.MUXED_DESKTOP_CHAT_WEBSOCKET,
+    "ws://127.0.0.1:5174/ws/chat",
+  );
 });
 
 test("connect mode pins canonical stack ports while honoring its explicit data directory", () => {

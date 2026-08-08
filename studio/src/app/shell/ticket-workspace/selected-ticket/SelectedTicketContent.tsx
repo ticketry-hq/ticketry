@@ -56,12 +56,24 @@ import { EDIT_VIEW_BODY_DISENGAGE_CHORD } from "../../../navigation/three-zone/t
 import { selectScratchRunIds, useAgentStatusStore } from "../../../../features/agents/status";
 import { queryClient } from "../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../shared/query/keys";
+import {
+  closeChatTab,
+  launchChatSession,
+  reopenChatTab,
+  selectChatSession,
+  useActiveChatSession,
+  useChatStore,
+  usePersistedChatSessions,
+  useTaskChatSessions,
+  type ChatSessionSummary,
+} from "../../../../features/agents/chat";
 
 const AVAILABLE_AGENTS: SessionMeta["agent"][] = ["claude", "agy", "codex", "gemini"];
 // Versioned key (client-localstorage-schema): bump the suffix on shape
 // changes and migrate in readStudioWorkspacesValue.
-const STUDIO_WORKSPACES_KEY = "studio.activeWorkspaceByBucket:v1";
+const STUDIO_WORKSPACES_KEY = "studio.activeWorkspaceByBucket:v2";
 const LEGACY_STUDIO_WORKSPACES_KEYS = [
+  "studio.activeWorkspaceByBucket:v1",
   "studio.studio.activeWorkspaceByBucket",
   "studio.coding.activeWorkspaceByBucket",
 ];
@@ -73,7 +85,8 @@ const EMPTY_RUN_IDS: string[] = [];
 type StudioWorkspaceTarget =
   | { kind: "details" }
   | { kind: "doc"; relPath: string }
-  | { kind: "terminal"; agentRunId: string };
+  | { kind: "terminal"; agentRunId: string }
+  | { kind: "chat"; agentRunId: string };
 
 function parseStudioWorkspaceTarget(value: unknown): StudioWorkspaceTarget | null {
   if (!value || typeof value !== "object") return null;
@@ -84,6 +97,9 @@ function parseStudioWorkspaceTarget(value: unknown): StudioWorkspaceTarget | nul
   }
   if (target.kind === "terminal" && typeof target.agentRunId === "string") {
     return { kind: "terminal", agentRunId: target.agentRunId };
+  }
+  if (target.kind === "chat" && typeof target.agentRunId === "string") {
+    return { kind: "chat", agentRunId: target.agentRunId };
   }
   return null;
 }
@@ -158,6 +174,11 @@ const loadSelectedTicketTerminal = () =>
 const SelectedTicketTerminal = lazy(async () => ({
   default: (await loadSelectedTicketTerminal()).SelectedTicketTerminal,
 }));
+const loadSelectedTicketChat = () =>
+  import("../../../../features/agents/chat/ChatHost");
+const SelectedTicketChat = lazy(async () => ({
+  default: (await loadSelectedTicketChat()).ChatHost,
+}));
 const WorkspaceDocument = lazy(async () => ({
   default: (await import("./documents/WorkspaceDocument")).WorkspaceDocument,
 }));
@@ -192,6 +213,8 @@ export type WorkspaceLauncherContext =
     };
 
 function Tab({
+  id,
+  controls,
   label,
   active,
   highlighted,
@@ -201,7 +224,10 @@ function Tab({
   onClick,
   onClose,
   closeLabel,
+  closeDisabled,
 }: {
+  id: string;
+  controls: string;
   label: string;
   active: boolean;
   highlighted?: boolean;
@@ -211,15 +237,33 @@ function Tab({
   onClick: () => void;
   onClose?: () => void;
   closeLabel?: string;
+  closeDisabled?: boolean;
 }) {
+  function onTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>): void {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+    const tabs = Array.from(
+      event.currentTarget
+        .closest<HTMLElement>("[role=tablist]")
+        ?.querySelectorAll<HTMLButtonElement>("[role=tab]") ?? [],
+    );
+    const current = tabs.indexOf(event.currentTarget);
+    if (current < 0 || tabs.length === 0) return;
+    event.preventDefault();
+    const next = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next].click();
+    tabs[next].focus({ preventScroll: true });
+  }
+
   return (
     <div
-      role="tab"
-      aria-selected={active}
-      aria-label={label}
       data-highlighted={highlighted || undefined}
-      onClick={onClick}
-      className={`flex shrink-0 cursor-pointer items-center gap-2 border px-2 py-0.5 text-xs ${
+      className={`flex shrink-0 items-center border text-xs ${
         active
           ? "border-focus-accent bg-pane-title text-text-primary"
           : `border-pane-border bg-pane-bg text-text-muted ${
@@ -229,17 +273,30 @@ function Tab({
         dim ? "opacity-60" : ""
       }`}
     >
-      <span>{label}</span>
-      {/* Attention axis — distinct from the tab's selected/dim transport cues. */}
-      {lifecycle && <LifecycleBadge state={lifecycle} />}
+      <button
+        id={id}
+        type="button"
+        role="tab"
+        aria-label={label}
+        aria-selected={active}
+        aria-controls={controls}
+        tabIndex={active ? 0 : -1}
+        onClick={onClick}
+        onKeyDown={onTabKeyDown}
+        className={`flex items-center gap-2 px-2 py-0.5 outline-none ${
+          allowHoverEmphasis ? "hover:bg-pane-title" : ""
+        }`}
+      >
+        <span>{label}</span>
+        {/* Attention axis — distinct from the tab's selected/dim transport cues. */}
+        {lifecycle && <LifecycleBadge state={lifecycle} />}
+      </button>
       {onClose && (
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          className="text-text-muted hover:text-text-primary"
+          disabled={closeDisabled}
+          onClick={onClose}
+          className="pr-2 text-text-muted hover:text-text-primary disabled:cursor-wait disabled:opacity-40"
           aria-label={closeLabel ?? `Close ${label}`}
         >
           ×
@@ -249,12 +306,25 @@ function Tab({
   );
 }
 
+function workspaceElementId(
+  bucket: string,
+  part: "tab" | "panel",
+  kind: TaskWorkspaceTabIdentity["kind"],
+  id?: string,
+): string {
+  return ["workspace", part, bucket, kind, id]
+    .filter((value): value is string => Boolean(value))
+    .join("-")
+    .replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
 /**
- * The per-ticket right pane: a tab strip (pinned Details, closable Doc, N
- * closable terminal tabs) plus a chip row (reopen-doc chip when the doc is
+ * The per-ticket right pane: a tab strip (pinned Details, closable Doc, Chat,
+ * and terminal tabs) plus a chip row (reopen-doc chip when the doc is
  * closed, inert history chips for terminated runs) over a content region.
- * TerminalHost and DocTab are rendered unconditionally so xterm instances and
- * the doc iframe persist across ticket switches; only visibility is toggled.
+ * TerminalHost and DocTab stay mounted so xterm instances and document
+ * iframes persist across tab switches. Only the selected Chat mounts its
+ * replay socket; ended or dismissed Chats remain lightweight reopen chips.
  */
 export function SelectedTicketContent({
   bucket,
@@ -290,6 +360,14 @@ export function SelectedTicketContent({
   const tabs = useTaskSessions(bucket);
   const activeTermIdOrNull = useActiveSession(bucket);
   const scratch = isScratchBucket(bucket);
+  const chatTabs = useTaskChatSessions(bucket && !scratch ? bucket : null);
+  const activeChatIdOrNull = useActiveChatSession(
+    bucket && !scratch ? bucket : null,
+  );
+  const chatSessions = useChatStore((state) => state.sessions);
+  const persistedChatQuery = usePersistedChatSessions(
+    bucket && !scratch ? bucket : null,
+  );
   const persistedTerminalQuery = usePersistedTerminalSessions(
     bucket && !scratch ? bucket : null,
   );
@@ -313,7 +391,14 @@ export function SelectedTicketContent({
   const mountedTaskRunIds = useAgentStatusStore((s) =>
     bucket && !isScratchBucket(bucket)
       ? Object.values(s.runs)
-          .filter((run) => run.task_id === bucket)
+          .filter((run) => run.task_id === bucket && run.run_kind !== "chat")
+          .map((run) => run.agent_run_id)
+      : EMPTY_RUN_IDS,
+  );
+  const mountedTaskChatRunIds = useAgentStatusStore((s) =>
+    bucket && !isScratchBucket(bucket)
+      ? Object.values(s.runs)
+          .filter((run) => run.task_id === bucket && run.run_kind === "chat")
           .map((run) => run.agent_run_id)
       : EMPTY_RUN_IDS,
   );
@@ -333,6 +418,7 @@ export function SelectedTicketContent({
   const [launchOpen, setLaunchOpen] = useState(false);
   const [resumingRunId, setResumingRunId] = useState<string | null>(null);
   const launchCommittedRef = useRef(false);
+  const chatLaunchPendingRef = useRef(false);
   const launchTriggerRef = useRef<HTMLButtonElement>(null);
   const launchMenuRef = useRef<HTMLDivElement>(null);
   const paneRef = useRef<HTMLDivElement>(null);
@@ -352,7 +438,15 @@ export function SelectedTicketContent({
     bucket: string | null;
     ids: Set<string>;
   }>({ bucket: null, ids: new Set() });
+  const observedChatRunsRef = useRef<{
+    bucket: string | null;
+    ids: Set<string>;
+  }>({ bucket: null, ids: new Set() });
   const [surfaceFocusSignal, setSurfaceFocusSignal] = useState(0);
+  const [chatLaunchPending, setChatLaunchPending] = useState(false);
+  const [closingChatIds, setClosingChatIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [terminalFocusSignal, setTerminalFocusSignal] = useState(0);
   const [highlightedTab, setHighlightedTab] =
     useState<TaskWorkspaceTabIdentity>({ kind: "details" });
@@ -370,6 +464,7 @@ export function SelectedTicketContent({
   const setEditViewBodyEngaged = useClientStore(
     (state) => state.setEditViewBodyEngaged,
   );
+  const pushToast = useClientStore((state) => state.pushToast);
   const isEditView =
     owner === "studio" && (!sidebarEnabled || !sidebarVisible);
 
@@ -446,6 +541,36 @@ export function SelectedTicketContent({
     },
     [owner, setActive],
   );
+
+  useEffect(() => {
+    if (!bucket || !persistedChatQuery.isFetched) return;
+    const request = restoreRequestRef.current;
+    if (
+      owner !== "studio" ||
+      request?.bucket !== bucket ||
+      request.generation !== restoreGenerationRef.current ||
+      request.target.kind !== "chat"
+    ) {
+      return;
+    }
+    const session = chatSessions[request.target.agentRunId];
+    if (session?.task_id === bucket) {
+      restoreRequestRef.current = null;
+      selectChatSession(bucket, request.target.agentRunId);
+      setActive(bucket, "chat");
+      return;
+    }
+    // The durable list has completed and the remembered run is absent.
+    restoreRequestRef.current = null;
+    setActive(bucket, "details");
+    rememberStudioWorkspaceTarget(bucket, { kind: "details" });
+  }, [
+    bucket,
+    chatSessions,
+    owner,
+    persistedChatQuery.isFetched,
+    setActive,
+  ]);
 
   useEffect(() => {
     if (!bucket || entrySignal === 0) return;
@@ -566,6 +691,27 @@ export function SelectedTicketContent({
     mountedBucketRunIds,
   ]);
 
+  // Chat runs have their own durable index and must never flow through the
+  // terminal reattachment path. A status-bus addition only invalidates that
+  // Chat index; its query hydrates the structured-session store.
+  useEffect(() => {
+    if (!bucket || isScratchBucket(bucket)) {
+      observedChatRunsRef.current = { bucket, ids: new Set() };
+      return;
+    }
+    const previous = observedChatRunsRef.current;
+    const runAdded = previous.bucket === bucket &&
+      mountedTaskChatRunIds.some((runId) => !previous.ids.has(runId));
+    observedChatRunsRef.current = {
+      bucket,
+      ids: new Set(mountedTaskChatRunIds),
+    };
+    if (!runAdded) return;
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.chatSessions.persisted(bucket),
+    });
+  }, [bucket, mountedTaskChatRunIds]);
+
   const sessionByRun = useTerminalStore((s) => s.sessionByRun);
 
   useEffect(() => {
@@ -589,6 +735,8 @@ export function SelectedTicketContent({
     : DEFAULT_WORKSPACE;
   const termIds = tabs.map((t) => t.id);
   const activeTermId = activeTermIdOrNull;
+  const chatIds = chatTabs.map((tab) => tab.id);
+  const activeChatId = activeChatIdOrNull;
   useEffect(() => {
     const requestedId = requestedTerminalRef.current;
     if (!activeTermId || !requestedId?.startsWith("tmp_") || sessions[requestedId]) {
@@ -614,17 +762,25 @@ export function SelectedTicketContent({
       (isScratchBucket(bucket)
         ? run.task_id === null && run.project_id === projectId && run.module_id === moduleId
         : run.task_id === bucket) &&
+      run.run_kind !== "chat" &&
       (run.state === "exited" || run.state === "lost" || run.state === "error") &&
       !resumableRunIds.has(run.agent_run_id),
     );
   });
   const activeDoc =
     openDocs.find((d) => d.id === ws.activeDocId) ?? openDocs[0] ?? null;
+  const visibleChatHistory = persistedChatQuery.sessions.filter(
+    (summary) =>
+      summary.task_id === bucket && !chatIds.includes(summary.agent_run_id),
+  );
 
-  // Active-tab fallback: a terminal/doc selection with nothing to show falls
+  // Active-tab fallback: a terminal/chat/doc selection with nothing to show falls
   // back to Details (the pinned tab is always renderable).
   let effActive = ws.active;
   if (effActive === "terminal" && (termIds.length === 0 || !activeTermId)) {
+    effActive = "details";
+  }
+  if (effActive === "chat" && (chatIds.length === 0 || !activeChatId)) {
     effActive = "details";
   }
   if (effActive === "doc" && !activeDoc) effActive = "details";
@@ -632,6 +788,7 @@ export function SelectedTicketContent({
   const navigableTabs: TaskWorkspaceTabIdentity[] = [
     { kind: "details" },
     ...openDocs.map((doc) => ({ kind: "doc" as const, id: doc.id })),
+    ...chatIds.map((id) => ({ kind: "chat" as const, id })),
     ...termIds.map((id) => ({ kind: "terminal" as const, id })),
   ];
   const activeTab: TaskWorkspaceTabIdentity =
@@ -639,6 +796,8 @@ export function SelectedTicketContent({
       ? { kind: "doc", id: activeDoc.id }
       : effActive === "terminal" && activeTermId
         ? { kind: "terminal", id: activeTermId }
+        : effActive === "chat" && activeChatId
+          ? { kind: "chat", id: activeChatId }
         : { kind: "details" };
 
   useEffect(() => {
@@ -684,6 +843,7 @@ export function SelectedTicketContent({
     setHighlightedTab(activeTab);
   }, [
     activeDoc?.id,
+    activeChatId,
     activeTermId,
     bucket,
     editViewZone,
@@ -723,6 +883,15 @@ export function SelectedTicketContent({
       if (owner === "studio" && relPath) {
         rememberStudioWorkspaceTarget(bucket, { kind: "doc", relPath });
       }
+    } else if (tab.kind === "chat") {
+      selectChatSession(bucket, tab.id);
+      setActive(bucket, "chat");
+      if (owner === "studio") {
+        rememberStudioWorkspaceTarget(bucket, {
+          kind: "chat",
+          agentRunId: tab.id,
+        });
+      }
     } else {
       focusSession(tab.id);
       setActive(bucket, "terminal");
@@ -733,7 +902,8 @@ export function SelectedTicketContent({
         rememberPendingTerminalRef.current = true;
       }
     }
-    if (!isEditView) engageWorkspaceTab(tab);
+    // Selecting a tab keeps DOM focus in the ARIA tablist. Entering/focusing
+    // the selected surface is a separate workspace-navigation action.
   }
 
   function diveWorkspaceTab(
@@ -835,6 +1005,50 @@ export function SelectedTicketContent({
     }
   }
 
+  async function closeWorkspaceChat(agentRunId: string): Promise<void> {
+    if (!bucket) return;
+    const taskBucket = bucket;
+    if (closingChatIds.has(agentRunId)) return;
+    setClosingChatIds((current) => new Set(current).add(agentRunId));
+    try {
+      await closeChatTab(taskBucket, agentRunId);
+      const workspace = useTicketWorkspaceStore.getState().workspaces[taskBucket];
+      const selectedChat = useChatStore.getState().activeByTask[taskBucket];
+      if (workspace?.active === "chat" && !selectedChat) {
+        setActive(taskBucket, "details");
+        if (owner === "studio") {
+          rememberStudioWorkspaceTarget(taskBucket, { kind: "details" });
+        }
+      }
+    } catch (error) {
+      pushToast(
+        "error",
+        error instanceof Error
+          ? `Could not close Codex Chat: ${error.message}`
+          : "Could not close Codex Chat",
+      );
+    } finally {
+      setClosingChatIds((current) => {
+        const next = new Set(current);
+        next.delete(agentRunId);
+        return next;
+      });
+    }
+  }
+
+  function reopenWorkspaceChat(summary: ChatSessionSummary): void {
+    if (!bucket) return;
+    reopenChatTab(summary);
+    selectChatSession(bucket, summary.agent_run_id);
+    setActive(bucket, "chat");
+    if (owner === "studio") {
+      rememberStudioWorkspaceTarget(bucket, {
+        kind: "chat",
+        agentRunId: summary.agent_run_id,
+      });
+    }
+  }
+
   useTaskWorkspaceTabNavigation({
     tabs: bucket ? navigableTabs : [],
     activeTab,
@@ -885,14 +1099,35 @@ export function SelectedTicketContent({
   // a task workspace, Plan/Instant for a scratch workspace. The provider
   // grammar is filtered by host activation (ADR-0015) so a deactivated
   // provider is never offered here either.
-  const launcherItems: { id: string; label: string }[] =
+  const launcherItems: Array<{
+    id: string;
+    label: string;
+    kind: "scratch" | "terminal" | "chat";
+    agent?: SessionMeta["agent"];
+  }> =
     launchContext?.kind === "scratch"
       ? [
-          { id: "plan", label: "Plan" },
-          { id: "instant", label: "Instant" },
+          { id: "plan", label: "Plan", kind: "scratch" },
+          { id: "instant", label: "Instant", kind: "scratch" },
         ]
       : AVAILABLE_AGENTS.filter((agent) => activatedProviders.has(agent))
-          .map((agent) => ({ id: agent, label: agent }));
+          .flatMap((agent) => {
+            const provider = `${agent[0].toUpperCase()}${agent.slice(1)}`;
+            const terminal = {
+              id: `terminal:${agent}`,
+              label: `${provider} · Terminal`,
+              kind: "terminal" as const,
+              agent,
+            };
+            return agent === "codex"
+              ? [{
+                  id: "chat:codex",
+                  label: "Codex · Chat",
+                  kind: "chat" as const,
+                  agent,
+                }, terminal]
+              : [terminal];
+          });
   // An empty provider list is ambiguous — not loaded yet, a dead fetch, and
   // "nothing activated" all look the same. Say which, rather than opening a
   // menu with nothing in it and no explanation.
@@ -904,20 +1139,57 @@ export function SelectedTicketContent({
           failed: providersFailed,
         });
 
-  function activateLauncherItem(id: string) {
+  function activateLauncherItem(item: (typeof launcherItems)[number]) {
+    if (item.kind === "chat" && chatLaunchPendingRef.current) return;
     if (launchCommittedRef.current) return;
     launchCommittedRef.current = true;
     setLaunchOpen(false);
     if (!launchContext || !bucket) return;
     if (launchContext.kind === "scratch") {
-      launchContext.onChooseMode(id as ScratchLaunchMode);
+      launchContext.onChooseMode(item.id as ScratchLaunchMode);
+      return;
+    }
+    if (item.kind === "chat") {
+      if (!launchContext.moduleId) {
+        pushToast("error", "This issue needs a module before Chat can start.");
+        return;
+      }
+      chatLaunchPendingRef.current = true;
+      setChatLaunchPending(true);
+      void launchChatSession({
+        agent: "codex",
+        project_id: launchContext.projectId,
+        module_id: launchContext.moduleId,
+        task_id: launchContext.taskId,
+        initial_prompt: null,
+        is_planning: false,
+        is_instant: false,
+        instant_prompt: null,
+      }).then((agentRunId) => {
+        selectChatSession(bucket, agentRunId);
+        setActive(bucket, "chat");
+        if (owner === "studio") {
+          rememberStudioWorkspaceTarget(bucket, {
+            kind: "chat",
+            agentRunId,
+          });
+        }
+      }).catch((error: unknown) => {
+        pushToast(
+          "error",
+          error instanceof Error ? error.message : "Could not start Codex Chat",
+        );
+      }).finally(() => {
+        chatLaunchPendingRef.current = false;
+        setChatLaunchPending(false);
+      });
       return;
     }
     openSession({
       taskId: launchContext.taskId,
       projectId: launchContext.projectId,
       moduleId: launchContext.moduleId ?? undefined,
-      agent: id as SessionMeta["agent"],
+      agent: item.agent ?? "codex",
       ticketSeq: launchContext.ticketSeq,
     });
     setActive(bucket, "terminal");
@@ -985,6 +1257,8 @@ export function SelectedTicketContent({
       >
         {/* Pinned, non-closable Details tab. */}
         <Tab
+          id={workspaceElementId(bucket, "tab", "details")}
+          controls={workspaceElementId(bucket, "panel", "details")}
           label="Details"
           active={effActive === "details"}
           highlighted={showTabHighlight && highlightedTab.kind === "details"}
@@ -994,6 +1268,8 @@ export function SelectedTicketContent({
         {openDocs.map((d) => (
           <Tab
             key={d.id}
+            id={workspaceElementId(bucket, "tab", "doc", d.id)}
+            controls={workspaceElementId(bucket, "panel", "doc", d.id)}
             label={d.label}
             active={effActive === "doc" && activeDoc?.id === d.id}
             highlighted={
@@ -1006,9 +1282,37 @@ export function SelectedTicketContent({
             onClose={() => closeWorkspaceDocument(d.id)}
           />
         ))}
+        {chatTabs.map(({ id, lifecycle }, index) => {
+          const label = chatTabs.length === 1
+            ? "Codex Chat"
+            : `Codex Chat ${index + 1}`;
+          return (
+            <Tab
+              key={id}
+              id={workspaceElementId(bucket, "tab", "chat", id)}
+              controls={workspaceElementId(bucket, "panel", "chat", id)}
+              label={label}
+              active={effActive === "chat" && activeChatId === id}
+              highlighted={
+                showTabHighlight &&
+                highlightedTab.kind === "chat" &&
+                highlightedTab.id === id
+              }
+              allowHoverEmphasis={allowTabHoverEmphasis}
+              dim={lifecycle === "exited" || lifecycle === "error"}
+              lifecycle={lifecycle}
+              onClick={() => selectWorkspaceTab({ kind: "chat", id })}
+              onClose={() => void closeWorkspaceChat(id)}
+              closeLabel={`Close ${label}`}
+              closeDisabled={closingChatIds.has(id)}
+            />
+          );
+        })}
         {tabs.map(({ id, meta, lifecycle }) => (
           <Tab
             key={id}
+            id={workspaceElementId(bucket, "tab", "terminal", id)}
+            controls={workspaceElementId(bucket, "panel", "terminal")}
             label={terminalLabel(meta, ticketKey)}
             active={effActive === "terminal" && activeTermId === id}
             highlighted={
@@ -1035,8 +1339,14 @@ export function SelectedTicketContent({
                   return !open;
                 })
               }
-              onPointerEnter={() => void loadSelectedTicketTerminal()}
-              onFocus={() => void loadSelectedTicketTerminal()}
+              onPointerEnter={() => {
+                void loadSelectedTicketTerminal();
+                void loadSelectedTicketChat();
+              }}
+              onFocus={() => {
+                void loadSelectedTicketTerminal();
+                void loadSelectedTicketChat();
+              }}
               disabled={!canLaunch}
               aria-haspopup="menu"
               aria-expanded={launchOpen}
@@ -1044,7 +1354,7 @@ export function SelectedTicketContent({
                 canLaunch
                   ? launchContext.kind === "scratch"
                     ? "Start a new Plan or Instant run"
-                    : "Start a new agent run for this issue"
+                    : "Start a Chat or Terminal agent run for this issue"
                   : "A ready Studio profile is required to launch a run"
               }
               className="flex shrink-0 items-center border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-focus-accent hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-pane-border disabled:hover:text-text-muted"
@@ -1069,10 +1379,13 @@ export function SelectedTicketContent({
                       key={item.id}
                       type="button"
                       role="menuitem"
-                      onClick={() => activateLauncherItem(item.id)}
-                      className="px-3 py-1 text-left text-xs font-medium text-text-muted hover:bg-pane-title hover:text-text-primary"
+                      disabled={item.kind === "chat" && chatLaunchPending}
+                      onClick={() => activateLauncherItem(item)}
+                      className="px-3 py-1 text-left text-xs font-medium text-text-muted hover:bg-pane-title hover:text-text-primary disabled:cursor-wait disabled:opacity-50"
                     >
-                      {item.label}
+                      {item.kind === "chat" && chatLaunchPending
+                        ? "Codex · Chat (starting…)"
+                        : item.label}
                     </button>
                   ))
                 )}
@@ -1082,8 +1395,11 @@ export function SelectedTicketContent({
         )}
       </div>
 
-      {/* Dormant chips: reopen closed docs, resume runs, or show inert history. */}
-      {(closedDocs.length > 0 || resumable.length > 0 || visibleHistory.length > 0) && (
+      {/* Dormant chips: reopen docs/Chats, resume terminals, or show inert history. */}
+      {(closedDocs.length > 0 ||
+        resumable.length > 0 ||
+        visibleChatHistory.length > 0 ||
+        visibleHistory.length > 0) && (
         <div className="mb-1 flex shrink-0 flex-wrap gap-1">
           {closedDocs.map((d) => (
             <button
@@ -1109,6 +1425,23 @@ export function SelectedTicketContent({
               {resumingRunId === session.agent_run_id ? "Resuming…" : `↻ ${session.agent}`}
             </button>
           ))}
+          {visibleChatHistory.map((summary, index) => {
+            const label =
+              visibleChatHistory.length === 1
+                ? "Codex Chat"
+                : `Codex Chat ${index + 1}`;
+            return (
+              <button
+                key={summary.agent_run_id}
+                type="button"
+                aria-label={`Reopen ${label}`}
+                onClick={() => reopenWorkspaceChat(summary)}
+                className="shrink-0 border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary"
+              >
+                + {label}
+              </button>
+            );
+          })}
           {visibleHistory.map((chip, i) => (
             <span
               key={`${chip.agent_run_id}-${i}`}
@@ -1159,6 +1492,9 @@ export function SelectedTicketContent({
       >
         <div
           ref={detailsSurfaceRef}
+          id={workspaceElementId(bucket, "panel", "details")}
+          role="tabpanel"
+          aria-labelledby={workspaceElementId(bucket, "tab", "details")}
           tabIndex={-1}
           data-testid="workspace-details-surface"
           className={
@@ -1174,6 +1510,9 @@ export function SelectedTicketContent({
         {openDocs.map((d) => (
           <div
             key={d.id}
+            id={workspaceElementId(bucket, "panel", "doc", d.id)}
+            role="tabpanel"
+            aria-labelledby={workspaceElementId(bucket, "tab", "doc", d.id)}
             className={
               effActive === "doc" && activeDoc?.id === d.id
                 ? "absolute inset-0"
@@ -1193,10 +1532,47 @@ export function SelectedTicketContent({
             </Suspense>
           </div>
         ))}
+        {/* Keep lightweight tabpanels for ARIA association, but mount exactly
+            one ChatHost/socket: the selected structured Chat. */}
+        {chatIds.map((agentRunId) => (
+          <div
+            key={agentRunId}
+            id={workspaceElementId(bucket, "panel", "chat", agentRunId)}
+            role="tabpanel"
+            aria-labelledby={workspaceElementId(bucket, "tab", "chat", agentRunId)}
+            data-testid={`chat-host-wrapper-${agentRunId}`}
+            className={
+              effActive === "chat" && activeChatId === agentRunId
+                ? "absolute inset-0"
+                : "hidden"
+            }
+          >
+            {activeChatId === agentRunId ? (
+              <Suspense fallback={null}>
+                <SelectedTicketChat
+                  agentRunId={agentRunId}
+                  focusSignal={
+                    requestedSurfaceRef.current?.kind === "chat" &&
+                    requestedSurfaceRef.current.id === agentRunId
+                      ? surfaceFocusSignal
+                      : 0
+                  }
+                />
+              </Suspense>
+            ) : null}
+          </div>
+        ))}
         {/* The single terminal host stays mounted across tab changes. Hidden
             with `invisible` (visibility:hidden) rather than `hidden`
             (display:none) so fit() never measures a zero-size container. */}
         <div
+          id={workspaceElementId(bucket, "panel", "terminal")}
+          role="tabpanel"
+          aria-labelledby={
+            activeTermId
+              ? workspaceElementId(bucket, "tab", "terminal", activeTermId)
+              : undefined
+          }
           data-testid="terminal-host-wrapper"
           className={
             effActive === "terminal"

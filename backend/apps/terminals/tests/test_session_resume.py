@@ -146,6 +146,32 @@ async def test_resume_active_run_raises_resume_unavailable(tmp_path, monkeypatch
     assert excinfo.value.reason == "run_still_active"
 
 
+async def test_resume_rejects_chat_run_even_with_terminal_provider_fields(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    cwd = tmp_path / "repo"
+    cwd.mkdir()
+    await _seed_run_and_session(
+        cwd=str(cwd),
+        provider_session_id=PROVIDER_SESSION_ID,
+    )
+    await AgentRun.objects.filter(id=OLD_RUN_ID).aupdate(
+        run_kind=AgentRun.Kind.CHAT
+    )
+    _patch_resume_adapter(
+        monkeypatch,
+        resume_fn=lambda sid: pytest.fail(f"Chat id reached adapter: {sid}"),
+    )
+    captured = _capture_launch(monkeypatch)
+
+    with pytest.raises(session_module.ResumeUnavailable) as excinfo:
+        await session_module.session.resume(OLD_RUN_ID)
+
+    assert excinfo.value.reason == "not_terminal_run"
+    assert captured == {}
+
+
 async def test_resume_without_provider_session_id_raises_resume_unavailable(
     tmp_path, monkeypatch
 ) -> None:

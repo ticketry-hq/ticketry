@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export * from './AttachmentsApi.js';
+export * from './ChatsApi.js';
 export * from './ConfigurationApi.js';
 export * from './DocumentsApi.js';
 export * from './ExecutionApi.js';

@@ -1,5 +1,11 @@
 # T62 — Research Codex Chat Architecture
 
+> **Direction update (2026-08-08):** The "patterns only" constraint in this
+> research brief is superseded. The active implementation intentionally copies,
+> adapts, and translates as much MIT-licensed T3 Code implementation as is
+> practical, with attribution. Chat is a first-class run type beside Terminal,
+> not a new provider slug. See [T3_TRANSPLANT_PLAN.md](./T3_TRANSPLANT_PLAN.md).
+
 Status: Refined
 Story: WorkTracker #62 (`8171a229-1e20-4fb4-ae07-34b64ecdb2f0`)
 Module: coding (`173b3d9e-3790-4d52-989f-202634e54ccf`)

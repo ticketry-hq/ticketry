@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  AutomationAttemptStatusEnum,
+  StatusEnum,
   WorkTrackerApiError,
   createAgentStatusClient,
   createWorkTrackerClient,
 } from "../src/index.js";
+
+it("keeps the pre-Chat StatusEnum export as an exact compatibility alias", () => {
+  expect(StatusEnum).toBe(AutomationAttemptStatusEnum);
+  expect(StatusEnum.pending).toBe("pending");
+});
 
 function response(body: unknown, status = 200): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {

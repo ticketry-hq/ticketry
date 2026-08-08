@@ -1,0 +1,668 @@
+{
+  "$defs": {
+    "ChatApprovalResponseCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "accept",
+            "acceptForSession",
+            "decline",
+            "cancel"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "request_id": {
+          "minLength": 1,
+          "title": "Request Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "respond_approval",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "type",
+        "request_id",
+        "decision"
+      ],
+      "title": "ChatApprovalResponseCommand",
+      "type": "object"
+    },
+    "ChatCommandAckFrame": {
+      "additionalProperties": false,
+      "description": "Correlates successful command submission with the initiating client.",
+      "properties": {
+        "agent_run_id": {
+          "title": "Agent Run Id",
+          "type": "string"
+        },
+        "command": {
+          "enum": [
+            "start_turn",
+            "interrupt",
+            "respond_approval",
+            "respond_user_input",
+            "stop"
+          ],
+          "title": "Command",
+          "type": "string"
+        },
+        "command_id": {
+          "title": "Command Id",
+          "type": "string"
+        },
+        "result": {
+          "additionalProperties": true,
+          "title": "Result",
+          "type": "object"
+        },
+        "type": {
+          "const": "ack",
+          "default": "ack",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent_run_id",
+        "command_id",
+        "command"
+      ],
+      "title": "ChatCommandAckFrame",
+      "type": "object"
+    },
+    "ChatErrorFrame": {
+      "additionalProperties": false,
+      "description": "Checked transport or command failure visible to Studio.",
+      "properties": {
+        "agent_run_id": {
+          "title": "Agent Run Id",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "command_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command Id"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "default": false,
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "error",
+          "default": "error",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent_run_id",
+        "code",
+        "message"
+      ],
+      "title": "ChatErrorFrame",
+      "type": "object"
+    },
+    "ChatEventFrame": {
+      "additionalProperties": false,
+      "description": "One ordered live transcript delta.",
+      "properties": {
+        "agent_run_id": {
+          "title": "Agent Run Id",
+          "type": "string"
+        },
+        "event": {
+          "$ref": "#/$defs/ChatEventRecord"
+        },
+        "type": {
+          "const": "event",
+          "default": "event",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent_run_id",
+        "event"
+      ],
+      "title": "ChatEventFrame",
+      "type": "object"
+    },
+    "ChatEventRecord": {
+      "additionalProperties": false,
+      "description": "One normalized durable event and its run-local reconnect cursor.",
+      "properties": {
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "event_type": {
+          "minLength": 1,
+          "title": "Event Type",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sequence",
+        "event_type",
+        "payload",
+        "created_at"
+      ],
+      "title": "ChatEventRecord",
+      "type": "object"
+    },
+    "ChatInterruptCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "interrupt",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "type"
+      ],
+      "title": "ChatInterruptCommand",
+      "type": "object"
+    },
+    "ChatReadyFrame": {
+      "additionalProperties": false,
+      "description": "Marks the point after which frames are live deltas.",
+      "properties": {
+        "agent_run_id": {
+          "title": "Agent Run Id",
+          "type": "string"
+        },
+        "cursor": {
+          "minimum": 0,
+          "title": "Cursor",
+          "type": "integer"
+        },
+        "type": {
+          "const": "ready",
+          "default": "ready",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent_run_id",
+        "cursor"
+      ],
+      "title": "ChatReadyFrame",
+      "type": "object"
+    },
+    "ChatRunSnapshot": {
+      "additionalProperties": false,
+      "description": "Stable run identity and outcome fields needed by the Chat surface.",
+      "properties": {
+        "agent": {
+          "title": "Agent",
+          "type": "string"
+        },
+        "agent_run_id": {
+          "title": "Agent Run Id",
+          "type": "string"
+        },
+        "cwd": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cwd"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "module_id": {
+          "title": "Module Id",
+          "type": "string"
+        },
+        "project_id": {
+          "title": "Project Id",
+          "type": "string"
+        },
+        "run_kind": {
+          "const": "chat",
+          "default": "chat",
+          "title": "Run Kind",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "task",
+            "plan",
+            "instant"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "started_at": {
+          "title": "Started At",
+          "type": "string"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Task Id"
+        }
+      },
+      "required": [
+        "agent_run_id",
+        "project_id",
+        "module_id",
+        "task_id",
+        "agent",
+        "scope",
+        "status",
+        "started_at"
+      ],
+      "title": "ChatRunSnapshot",
+      "type": "object"
+    },
+    "ChatSessionSnapshot": {
+      "additionalProperties": false,
+      "description": "Current provider-thread state paired with the durable transcript.",
+      "properties": {
+        "active_turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Turn Id"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Error"
+        },
+        "last_sequence": {
+          "minimum": 0,
+          "title": "Last Sequence",
+          "type": "integer"
+        },
+        "next_sequence": {
+          "minimum": 1,
+          "title": "Next Sequence",
+          "type": "integer"
+        },
+        "provider_thread_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Thread Id"
+        },
+        "status": {
+          "enum": [
+            "starting",
+            "ready",
+            "running",
+            "interrupted",
+            "stopped",
+            "error"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "next_sequence",
+        "last_sequence",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "ChatSessionSnapshot",
+      "type": "object"
+    },
+    "ChatSnapshotFrame": {
+      "additionalProperties": false,
+      "description": "Authoritative session state plus an ordered transcript tail.",
+      "properties": {
+        "agent_run_id": {
+          "title": "Agent Run Id",
+          "type": "string"
+        },
+        "cursor": {
+          "minimum": 0,
+          "title": "Cursor",
+          "type": "integer"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/ChatEventRecord"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "run": {
+          "$ref": "#/$defs/ChatRunSnapshot"
+        },
+        "session": {
+          "$ref": "#/$defs/ChatSessionSnapshot"
+        },
+        "type": {
+          "const": "snapshot",
+          "default": "snapshot",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent_run_id",
+        "run",
+        "session",
+        "events",
+        "cursor"
+      ],
+      "title": "ChatSnapshotFrame",
+      "type": "object"
+    },
+    "ChatStartTurnCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "prompt": {
+          "minLength": 1,
+          "title": "Prompt",
+          "type": "string"
+        },
+        "type": {
+          "const": "start_turn",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "type",
+        "prompt"
+      ],
+      "title": "ChatStartTurnCommand",
+      "type": "object"
+    },
+    "ChatStopCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "stop",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "type"
+      ],
+      "title": "ChatStopCommand",
+      "type": "object"
+    },
+    "ChatUserInputResponseCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Answers",
+          "type": "object"
+        },
+        "command_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Command Id",
+          "type": "string"
+        },
+        "request_id": {
+          "minLength": 1,
+          "title": "Request Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "respond_user_input",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "type",
+        "request_id",
+        "answers"
+      ],
+      "title": "ChatUserInputResponseCommand",
+      "type": "object"
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Generated by `manage.py export_chat_wire_frames` from apps/runs/chat/contracts.py. Do not edit by hand.",
+  "discriminator": {
+    "mapping": {
+      "ack": "#/$defs/ChatCommandAckFrame",
+      "error": "#/$defs/ChatErrorFrame",
+      "event": "#/$defs/ChatEventFrame",
+      "interrupt": "#/$defs/ChatInterruptCommand",
+      "ready": "#/$defs/ChatReadyFrame",
+      "respond_approval": "#/$defs/ChatApprovalResponseCommand",
+      "respond_user_input": "#/$defs/ChatUserInputResponseCommand",
+      "snapshot": "#/$defs/ChatSnapshotFrame",
+      "start_turn": "#/$defs/ChatStartTurnCommand",
+      "stop": "#/$defs/ChatStopCommand"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ChatSnapshotFrame"
+    },
+    {
+      "$ref": "#/$defs/ChatReadyFrame"
+    },
+    {
+      "$ref": "#/$defs/ChatEventFrame"
+    },
+    {
+      "$ref": "#/$defs/ChatCommandAckFrame"
+    },
+    {
+      "$ref": "#/$defs/ChatErrorFrame"
+    },
+    {
+      "$ref": "#/$defs/ChatStartTurnCommand"
+    },
+    {
+      "$ref": "#/$defs/ChatInterruptCommand"
+    },
+    {
+      "$ref": "#/$defs/ChatApprovalResponseCommand"
+    },
+    {
+      "$ref": "#/$defs/ChatUserInputResponseCommand"
+    },
+    {
+      "$ref": "#/$defs/ChatStopCommand"
+    }
+  ],
+  "title": "Chat WebSocket wire frames"
+}

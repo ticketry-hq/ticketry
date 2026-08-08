@@ -402,6 +402,42 @@ HOST_ROUTES = (
         "/api/terminals/self-terminate",
         "Terminate the Studio-authorized current run.",
     ),
+    RouteDeclaration("GET", "/api/chats", "List structured Chat runs."),
+    RouteDeclaration(
+        "POST", "/api/chats", "Launch a managed Codex app-server Chat run."
+    ),
+    RouteDeclaration(
+        "GET", "/api/chats/{agent_run_id}", "Read a durable Chat snapshot."
+    ),
+    RouteDeclaration(
+        "DELETE", "/api/chats/{agent_run_id}", "Stop a managed Chat run."
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/chats/{agent_run_id}/read",
+        "Synchronize with the provider and read a durable Chat snapshot.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/chats/{agent_run_id}/resume",
+        "Resume a durable provider thread in a managed app-server process.",
+    ),
+    RouteDeclaration(
+        "POST", "/api/chats/{agent_run_id}/turns", "Start a Chat turn."
+    ),
+    RouteDeclaration(
+        "POST", "/api/chats/{agent_run_id}/interrupt", "Interrupt the active Chat turn."
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/chats/{agent_run_id}/approvals",
+        "Respond to a pending Chat approval request.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/chats/{agent_run_id}/user-input",
+        "Respond to a pending Chat user-input request.",
+    ),
     RouteDeclaration(
         "GET", "/api/documents", "List and rescan registered design documents."
     ),

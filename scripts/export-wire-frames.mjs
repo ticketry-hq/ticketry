@@ -2,10 +2,9 @@ import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
-// Regenerate the committed terminal WS wire-frame JSON Schema (#692). The frames
-// are declared in ticketry's Django backend, so this runs that project's
-// management command; its default
-// destination is the committed studio artifact.
+// Regenerate the committed terminal and Chat WS wire-frame JSON Schemas. The
+// frames are declared in Ticketry's Django backend, so these management
+// commands remain the structural source of truth for the Studio artifacts.
 const root = resolve(import.meta.dirname, "..");
 const serverDir = resolve(root, "backend");
 const localServerPython =
@@ -24,10 +23,11 @@ if (!python) {
   process.exit(1);
 }
 
-const result = spawnSync(python, ["manage.py", "export_wire_frames"], {
-  cwd: serverDir,
-  stdio: "inherit",
-});
-
-if (result.error) throw result.error;
-process.exit(result.status ?? 1);
+for (const command of ["export_wire_frames", "export_chat_wire_frames"]) {
+  const result = spawnSync(python, ["manage.py", command], {
+    cwd: serverDir,
+    stdio: "inherit",
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}

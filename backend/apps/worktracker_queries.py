@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from asgiref.sync import sync_to_async
@@ -12,6 +13,12 @@ from studio_server.contracts import (
     TaskDetails,
     TaskState,
     TaskSummary,
+)
+
+
+_QUERY_EXECUTOR = ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="ticketry-worktracker-query",
 )
 
 
@@ -43,7 +50,15 @@ def _task(item: dict) -> TaskSummary:
 
 
 async def get_modules(project_id: str) -> list[ModuleSummary]:
-    modules = await sync_to_async(queries.list_modules)(project_id)
+    # Chat runtimes execute on a dedicated event loop while their synchronous
+    # REST caller waits for completion.  The global thread-sensitive executor
+    # can therefore be occupied by that caller; isolated ORM queries must use
+    # the regular worker pool or launch deadlocks before the provider starts.
+    modules = await sync_to_async(
+        queries.list_modules,
+        thread_sensitive=False,
+        executor=_QUERY_EXECUTOR,
+    )(project_id)
     return [
         ModuleSummary(id=str(m["id"]), name=m["name"], project_id=str(m["project_id"]))
         for m in modules
@@ -53,9 +68,11 @@ async def get_modules(project_id: str) -> list[ModuleSummary]:
 async def get_tasks_and_states(
     project_id: str, module_id: str
 ) -> tuple[list[TaskSummary], list[TaskState]]:
-    items, states = await sync_to_async(queries.list_module_tasks_and_states)(
-        project_id, module_id
-    )
+    items, states = await sync_to_async(
+        queries.list_module_tasks_and_states,
+        thread_sensitive=False,
+        executor=_QUERY_EXECUTOR,
+    )(project_id, module_id)
     tasks = [
         _task(item)
         for item in items
@@ -66,5 +83,9 @@ async def get_tasks_and_states(
 
 async def get_task_details(project_id: str, task_id: str) -> TaskDetails:
     del project_id
-    item = await sync_to_async(queries.retrieve_work_item)(task_id)
+    item = await sync_to_async(
+        queries.retrieve_work_item,
+        thread_sensitive=False,
+        executor=_QUERY_EXECUTOR,
+    )(task_id)
     return TaskDetails(task=_task(item))

@@ -1,6 +1,6 @@
 # Studio overhaul acceptance gate
 
-The twenty-two checks that were once a manual pre-merge walk are automated by
+The twenty-three checks that were once a manual pre-merge walk are automated by
 `npm run test:overhaul --workspace @worktracker/studio`. Desktop CI runs that
 named gate before the full Studio suite, typecheck, and build.
 
@@ -28,6 +28,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 20 | The dialog bus renders confirmation requests and resolves both user choices. |
 | 21 | Repeating Run subtree revives an inactive campaign from the same action. |
 | 22 | Settings cold-opens from the footer and loads the selected project catalog. |
+| 23 | A task launches Codex Chat beside Terminal; renders Markdown, reasoning, MCP arguments/results, token usage, plans, patches, and durable delivery states; retries transport-uncertain delivery with the same command identity while failing closed on a restart-ambiguous delivery until the resumed thread is reviewed; answers only provider-advertised structured choices; distinguishes turn stop/failure from process Resume; and authoritatively stops through an independent REST path even while a live turn acknowledgement is pending before safely closing/reopening without creating a terminal session. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI
@@ -47,3 +48,8 @@ outside Studio, or repository-backed documents remain explicitly skipped in
 the web suite. They must not be counted as automated until the harness has safe
 fixture support for those boundaries; their existing Vitest cases are not a
 substitute for running-application verification.
+
+In particular, `[overhaul-web-23]` is an explicit skip: it requires launching a
+real full-access `codex app-server` process and exercising the browser-to-server
+WebSocket. The `[overhaul-23]` Vitest acceptance case validates the UI contract
+with a deterministic provider stream, but is not claimed as real-backend E2E.

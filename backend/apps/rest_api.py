@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 from apps.documents import api as documents
 from apps.execution import api as execution
 from apps.runs import api as runs
+from apps.runs.chat import api as chats
 from apps.settings_store import api as settings
 from apps.settings_store.schemas import ProfileBody
 from apps.terminals import api as terminals
@@ -113,6 +114,9 @@ class AgentRunRecordSerializer(serializers.Serializer):
     task_id = serializers.CharField(allow_null=True)
     module_id = serializers.CharField()
     agent = serializers.CharField()
+    run_kind = serializers.ChoiceField(
+        choices=("terminal", "chat"), required=False, default="terminal"
+    )
     scope = serializers.ChoiceField(choices=("task", "plan", "instant", "docchat"))
     started_at = serializers.CharField()
     state = serializers.CharField()
@@ -193,6 +197,124 @@ class CreateTerminalSerializer(serializers.Serializer):
     is_doc_chat = serializers.BooleanField(required=False)
     doc_rel_path = serializers.CharField(required=False, allow_null=True)
     doc_id = serializers.CharField(required=False, allow_null=True)
+
+
+class CreateChatSerializer(serializers.Serializer):
+    agent = serializers.CharField(required=False, default="codex")
+    project_id = serializers.CharField()
+    module_id = serializers.CharField()
+    task_id = serializers.CharField(required=False, allow_null=True)
+    initial_prompt = serializers.CharField(required=False, allow_null=True)
+    is_planning = serializers.BooleanField(required=False)
+    is_instant = serializers.BooleanField(required=False)
+    instant_prompt = serializers.CharField(required=False, allow_null=True)
+    command_id = serializers.CharField(
+        required=False,
+        allow_null=True,
+        min_length=1,
+        max_length=128,
+    )
+
+
+class ChatRunSerializer(serializers.Serializer):
+    agent_run_id = serializers.CharField()
+    project_id = serializers.CharField()
+    module_id = serializers.CharField()
+    task_id = serializers.CharField(allow_null=True)
+    agent = serializers.CharField()
+    run_kind = serializers.CharField()
+    scope = serializers.CharField()
+    status = serializers.CharField()
+    state = serializers.CharField(allow_null=True)
+    started_at = serializers.CharField()
+    ended_at = serializers.CharField(allow_null=True)
+    cwd = serializers.CharField(allow_null=True)
+
+
+class ChatListRowSerializer(ChatRunSerializer):
+    run_status = serializers.CharField()
+    active_turn_id = serializers.CharField(allow_null=True)
+    last_error = serializers.CharField(allow_null=True)
+    updated_at = serializers.CharField()
+    last_sequence = serializers.IntegerField(min_value=0)
+
+
+class ChatSessionSerializer(serializers.Serializer):
+    provider_thread_id = serializers.CharField(allow_null=True)
+    status = serializers.ChoiceField(
+        choices=("starting", "ready", "running", "interrupted", "stopped", "error")
+    )
+    active_turn_id = serializers.CharField(allow_null=True)
+    last_error = serializers.CharField(allow_null=True)
+    next_sequence = serializers.IntegerField(min_value=1)
+    last_sequence = serializers.IntegerField(min_value=0)
+    created_at = serializers.CharField()
+    updated_at = serializers.CharField()
+
+
+class ChatEventSerializer(serializers.Serializer):
+    sequence = serializers.IntegerField(min_value=1)
+    event_type = serializers.CharField()
+    payload = serializers.JSONField()
+    created_at = serializers.CharField()
+
+
+class ChatSnapshotSerializer(serializers.Serializer):
+    run = ChatRunSerializer()
+    session = ChatSessionSerializer()
+    events = ChatEventSerializer(many=True)
+    cursor = serializers.IntegerField(min_value=0)
+
+
+class ChatSnapshotQuerySerializer(serializers.Serializer):
+    after = serializers.IntegerField(min_value=0, required=False, default=0)
+    through = serializers.IntegerField(min_value=0, required=False, allow_null=True)
+
+
+class ChatTurnSerializer(serializers.Serializer):
+    prompt = serializers.CharField()
+    command_id = serializers.CharField(
+        required=False,
+        allow_null=True,
+        min_length=1,
+        max_length=128,
+    )
+
+
+class ChatTurnResultSerializer(serializers.Serializer):
+    turn_id = serializers.CharField()
+
+
+class ChatApprovalSerializer(serializers.Serializer):
+    request_id = serializers.CharField()
+    decision = serializers.ChoiceField(
+        choices=("accept", "acceptForSession", "decline", "cancel")
+    )
+
+
+class ChatUserInputSerializer(serializers.Serializer):
+    request_id = serializers.CharField()
+    answers = serializers.DictField(
+        child=serializers.ListField(child=serializers.CharField()),
+        required=False,
+    )
+
+
+class AcceptedSerializer(serializers.Serializer):
+    accepted = serializers.BooleanField()
+
+
+class ChatInterruptResultSerializer(serializers.Serializer):
+    interrupted = serializers.BooleanField()
+
+
+class ChatStopResultSerializer(AgentRunIdSerializer):
+    stopped = serializers.BooleanField()
+    stopped_live_process = serializers.BooleanField()
+
+
+class ChatResumeResultSerializer(AgentRunIdSerializer):
+    resumed = serializers.BooleanField()
 
 
 class TerminalRunSerializer(serializers.Serializer):
@@ -479,6 +601,158 @@ class ScratchTerminalsView(AuthenticatedAPIView):
         if not project_id:
             return Response({"detail": {"error": "project_id_required"}}, status=400)
         return _serialize_result(terminals.list_scratch_terminals(project_id, request.query_params.get("module_id")))
+
+
+class ChatCollectionView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["chats"],
+        parameters=[
+            OpenApiParameter("task_id", str),
+            OpenApiParameter("project_id", str),
+            OpenApiParameter("module_id", str),
+        ],
+        responses={200: ChatListRowSerializer(many=True), 400: ErrorEnvelopeSerializer},
+    )
+    def get(self, request):
+        return _serialize_result(
+            chats.list_chats(
+                task_id=request.query_params.get("task_id"),
+                project_id=request.query_params.get("project_id"),
+                module_id=request.query_params.get("module_id"),
+            )
+        )
+
+    @extend_schema(
+        tags=["chats"],
+        request=CreateChatSerializer,
+        responses={
+            201: AgentRunIdSerializer,
+            400: ErrorEnvelopeSerializer,
+            409: ErrorEnvelopeSerializer,
+            503: ErrorEnvelopeSerializer,
+        },
+    )
+    def post(self, request):
+        result = chats.create_chat(_pydantic(chats.CreateChatRunBody, request.data))
+        return _serialize_result((status.HTTP_201_CREATED, result))
+
+
+class ChatDetailView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["chats"],
+        parameters=[
+            OpenApiParameter("after", int),
+            OpenApiParameter("through", int),
+        ],
+        responses={
+            200: ChatSnapshotSerializer,
+            400: ErrorEnvelopeSerializer,
+            404: ErrorEnvelopeSerializer,
+            409: ErrorEnvelopeSerializer,
+        },
+    )
+    def get(self, request, agent_run_id):
+        query = ChatSnapshotQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        return _serialize_result(
+            chats.get_chat_snapshot(
+                agent_run_id,
+                after=query.validated_data["after"],
+                through=query.validated_data.get("through"),
+            )
+        )
+
+    @extend_schema(
+        tags=["chats"],
+        responses={200: ChatStopResultSerializer, 404: ErrorEnvelopeSerializer},
+    )
+    def delete(self, request, agent_run_id):
+        return _serialize_result(chats.stop_chat(agent_run_id))
+
+
+class ChatReadView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["chats"],
+        parameters=[OpenApiParameter("after", int)],
+        request=None,
+        responses={200: ChatSnapshotSerializer, 404: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer},
+    )
+    def post(self, request, agent_run_id):
+        query = ChatSnapshotQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        return _serialize_result(
+            chats.read_chat(agent_run_id, after=query.validated_data["after"])
+        )
+
+
+class ChatResumeView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["chats"],
+        request=None,
+        responses={
+            200: ChatResumeResultSerializer,
+            404: ErrorEnvelopeSerializer,
+            409: ErrorEnvelopeSerializer,
+            503: ErrorEnvelopeSerializer,
+        },
+    )
+    def post(self, request, agent_run_id):
+        return _serialize_result(chats.resume_chat(agent_run_id))
+
+
+class ChatTurnView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["chats"],
+        request=ChatTurnSerializer,
+        responses={200: ChatTurnResultSerializer, 400: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer},
+    )
+    def post(self, request, agent_run_id):
+        return _serialize_result(
+            chats.send_turn(
+                agent_run_id,
+                _pydantic(chats.SendTurnBody, request.data),
+            )
+        )
+
+
+class ChatInterruptView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["chats"],
+        request=None,
+        responses={200: ChatInterruptResultSerializer, 409: ErrorEnvelopeSerializer},
+    )
+    def post(self, request, agent_run_id):
+        return _serialize_result(chats.interrupt_chat(agent_run_id))
+
+
+class ChatApprovalView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["chats"],
+        request=ChatApprovalSerializer,
+        responses={200: AcceptedSerializer, 400: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer},
+    )
+    def post(self, request, agent_run_id):
+        return _serialize_result(
+            chats.respond_to_approval(
+                agent_run_id,
+                _pydantic(chats.ApprovalResponseBody, request.data),
+            )
+        )
+
+
+class ChatUserInputView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["chats"],
+        request=ChatUserInputSerializer,
+        responses={200: AcceptedSerializer, 409: ErrorEnvelopeSerializer},
+    )
+    def post(self, request, agent_run_id):
+        return _serialize_result(
+            chats.respond_to_user_input(
+                agent_run_id,
+                _pydantic(chats.UserInputResponseBody, request.data),
+            )
+        )
 
 
 class SelfTerminateView(PublicAPIView):

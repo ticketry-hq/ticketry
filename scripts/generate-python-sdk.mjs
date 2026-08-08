@@ -129,4 +129,37 @@ const relocateAndStamp = (directory) => {
   }
 };
 relocateAndStamp(destination);
+
+// Keep the pre-Chat generated SDK's public StatusEnum import source-compatible
+// after OpenAPI Generator disambiguates the two inline `status` enums.
+const generatedModels = resolve(destination, "models");
+writeFileSync(
+  resolve(generatedModels, "status_enum.py"),
+  notice
+    + "\"\"\"Backward-compatible alias for the automation attempt status enum.\"\"\"\n\n"
+    + "from worktracker_sdk.generated.models.automation_attempt_status_enum import (\n"
+    + "    AutomationAttemptStatusEnum,\n"
+    + ")\n\n"
+    + "StatusEnum = AutomationAttemptStatusEnum\n",
+);
+const generatedModelsInit = resolve(generatedModels, "__init__.py");
+let generatedModelsInitContents = readFileSync(generatedModelsInit, "utf8");
+if (!generatedModelsInitContents.includes("models.status_enum import StatusEnum")) {
+  generatedModelsInitContents = generatedModelsInitContents.replace(/\n*$/, "\n")
+    + "from worktracker_sdk.generated.models.status_enum import StatusEnum\n";
+  writeFileSync(generatedModelsInit, generatedModelsInitContents);
+}
+const generatedRootInit = resolve(destination, "__init__.py");
+let generatedRootInitContents = readFileSync(generatedRootInit, "utf8");
+if (!generatedRootInitContents.includes('    "StatusEnum",')) {
+  generatedRootInitContents = generatedRootInitContents.replace(
+    '    "AutomationAttemptStatusEnum",',
+    '    "AutomationAttemptStatusEnum",\n    "StatusEnum",',
+  );
+}
+if (!generatedRootInitContents.includes("models.status_enum import StatusEnum")) {
+  generatedRootInitContents = generatedRootInitContents.replace(/\n*$/, "\n")
+    + "from worktracker_sdk.generated.models.status_enum import StatusEnum as StatusEnum\n";
+}
+writeFileSync(generatedRootInit, generatedRootInitContents);
 rmSync(tempRoot, { recursive: true, force: true });

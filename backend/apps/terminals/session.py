@@ -303,6 +303,8 @@ class TerminalSessionService:
         except AgentRun.DoesNotExist:
             raise ResumeUnavailable("unknown_run") from None
 
+        if run.run_kind != AgentRun.Kind.TERMINAL:
+            raise ResumeUnavailable("not_terminal_run")
         if run.ended_at is None:
             raise ResumeUnavailable("run_still_active")
         if not run.provider_session_id:
@@ -336,6 +338,13 @@ class TerminalSessionService:
         )
 
     def terminate(self, agent_run_id: str) -> None:
+        run_kind = (
+            AgentRun.objects.filter(id=agent_run_id)
+            .values_list("run_kind", flat=True)
+            .first()
+        )
+        if run_kind is not None and run_kind != AgentRun.Kind.TERMINAL:
+            raise SessionNotFound(agent_run_id)
         ended_at = datetime.now(timezone.utc).isoformat()
         project_id = (
             AgentRun.objects.filter(id=agent_run_id)
@@ -385,7 +394,11 @@ class TerminalSessionService:
 
     def live_run_for(self, task_id: str) -> AgentRun | None:
         return (
-            AgentRun.objects.filter(issue_id=task_id, status="running")
+            AgentRun.objects.filter(
+                issue_id=task_id,
+                status="running",
+                run_kind=AgentRun.Kind.TERMINAL,
+            )
             .order_by("-started_at", "-id")
             .first()
         )

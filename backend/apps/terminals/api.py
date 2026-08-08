@@ -22,6 +22,7 @@ from apps.terminals.authorization import (
 )
 from apps.terminals.session import (
     ResumeUnavailable,
+    SessionNotFound,
     TerminalSessionError,
     session as terminal_session,
 )
@@ -269,7 +270,9 @@ def list_resumable_terminals(
             else:
                 return []
             terminated_query = AgentRun.objects.filter(
-                ended_at__isnull=False, **scope
+                ended_at__isnull=False,
+                run_kind=AgentRun.Kind.TERMINAL,
+                **scope,
             ).exclude(scope="docchat")
             # Scratch history is deliberately limited to the two launch modes
             # rendered in the Scratch workspace. A sentinel-task doc-chat (or
@@ -287,7 +290,9 @@ def list_resumable_terminals(
             live_provider_session_ids = {
                 provider_session_id
                 for provider_session_id in AgentRun.objects.filter(
-                    ended_at__isnull=True, **scope
+                    ended_at__isnull=True,
+                    run_kind=AgentRun.Kind.TERMINAL,
+                    **scope,
                 ).exclude(scope="docchat")
                 .exclude(provider_session_id__isnull=True)
                 .exclude(provider_session_id="")
@@ -296,7 +301,9 @@ def list_resumable_terminals(
             live_resumed_from_ids = {
                 resumed_from
                 for resumed_from in AgentRun.objects.filter(
-                    ended_at__isnull=True, **scope
+                    ended_at__isnull=True,
+                    run_kind=AgentRun.Kind.TERMINAL,
+                    **scope,
                 ).exclude(scope="docchat")
                 .exclude(resumed_from__isnull=True)
                 .exclude(resumed_from="")
@@ -351,9 +358,20 @@ def list_scratch_terminals(
 def terminate_terminal(agent_run_id: str):
     """Terminate a tmux session and soft-delete its metadata row."""
 
+    run_kind = (
+        AgentRun.objects.filter(id=agent_run_id)
+        .values_list("run_kind", flat=True)
+        .first()
+    )
+    if run_kind is not None and run_kind != AgentRun.Kind.TERMINAL:
+        raise ApplicationError(404, "session_not_found", code="session_not_found")
     try:
         known = AgentTerminalSession.objects.filter(agent_run_id=agent_run_id).exists()
         terminal_session.terminate(agent_run_id)
+    except SessionNotFound:
+        raise ApplicationError(
+            404, "session_not_found", code="session_not_found"
+        ) from None
     except TerminalSessionError as exc:
         raise ApplicationError(500, str(exc), code="terminate_failed") from exc
     if not known:
@@ -372,22 +390,92 @@ def self_terminate_terminal(authorization: str | None):
             401, str(exc), code="caller_run_unbound"
         ) from exc
 
-    def _run_state() -> tuple[bool, bool]:
-        known = AgentRun.objects.filter(id=agent_run_id).exists()
+    def _run_state() -> tuple[str | None, bool]:
+        row = (
+            AgentRun.objects.filter(id=agent_run_id)
+            .values("run_kind", "ended_at")
+            .first()
+        )
+        if row is None:
+            return None, False
         active = (
-            AgentRun.objects.filter(id=agent_run_id, ended_at__isnull=True).exists()
+            row["ended_at"] is None
             or AgentTerminalSession.objects.filter(
                 agent_run_id=agent_run_id,
                 terminated_at__isnull=True,
             ).exists()
         )
-        return known, active
+        return str(row["run_kind"]), active
 
-    known, active = _run_state()
-    if not known:
+    run_kind, active = _run_state()
+    if run_kind is None:
+        # A legacy/direct cascade may have removed the durable row before the
+        # process-local owner. The run-bound credential plus registry match is
+        # sufficient to contain that orphan; an unrelated/unknown id still
+        # receives the established 404.
+        from apps.runs.chat.codex_runtime import runtime_registry
+        from apps.runs.chat.runtime_supervisor import runtime_supervisor
+        from apps.runs.chat.service import ChatRunError, chat_session
+
+        async def stop_orphaned_chat() -> bool | None:
+            try:
+                runtime_registry.get(agent_run_id)
+            except KeyError:
+                return None
+            try:
+                return await chat_session.stop(agent_run_id)
+            except ChatRunError as exc:
+                if exc.code == "chat_not_found":
+                    return False
+                raise
+
+        try:
+            stopped_orphan = runtime_supervisor.call_sync(stop_orphaned_chat)
+        except (ChatRunError, RuntimeError, TimeoutError) as exc:
+            raise ApplicationError(
+                500, str(exc) or "terminate_failed", code="terminate_failed"
+            ) from exc
+        if stopped_orphan is not None:
+            return {
+                "ok": True,
+                "terminated": True,
+                "already_terminated": not stopped_orphan,
+                "agent_run_id": agent_run_id,
+            }
         raise ApplicationError(
             404, "caller_run_unknown", code="caller_run_unknown"
         )
+    if run_kind == AgentRun.Kind.CHAT:
+        # The same run-bound MCP capability is injected into terminal and Chat
+        # providers. Dispatch on durable ownership so a Chat agent can never
+        # mutate its row through tmux while leaving app-server alive.
+        from apps.runs.chat.runtime_supervisor import runtime_supervisor
+        from apps.runs.chat.service import ChatRunError, chat_session
+
+        try:
+            stopped_live_process = runtime_supervisor.call_sync(
+                lambda: chat_session.stop(agent_run_id)
+            )
+        except ChatRunError as exc:
+            if exc.code == "chat_not_found":
+                raise ApplicationError(
+                    404,
+                    "caller_run_unknown",
+                    code="caller_run_unknown",
+                ) from exc
+            raise ApplicationError(
+                500, exc.code, code="terminate_failed"
+            ) from exc
+        except (RuntimeError, TimeoutError) as exc:
+            raise ApplicationError(
+                500, str(exc) or "terminate_failed", code="terminate_failed"
+            ) from exc
+        return {
+            "ok": True,
+            "terminated": True,
+            "already_terminated": not active and not stopped_live_process,
+            "agent_run_id": agent_run_id,
+        }
     if not active:
         return {
             "ok": True,
@@ -398,6 +486,10 @@ def self_terminate_terminal(authorization: str | None):
 
     try:
         terminal_session.terminate(agent_run_id)
+    except SessionNotFound:
+        raise ApplicationError(
+            404, "caller_run_unknown", code="caller_run_unknown"
+        ) from None
     except TerminalSessionError as exc:
         raise ApplicationError(500, str(exc), code="terminate_failed") from exc
 

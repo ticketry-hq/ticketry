@@ -99,4 +99,9 @@ export const queryKeys = {
       },
     ] as const,
   },
+
+  chatSessions: {
+    persisted: (taskId: string) =>
+      ["chat-sessions", "persisted", taskId] as const,
+  },
 } as const;

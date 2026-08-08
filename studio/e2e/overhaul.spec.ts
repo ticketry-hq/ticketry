@@ -245,3 +245,17 @@ test("[overhaul-web-14] reconnect replay closes an offline edit gap", async ({ p
   await expect(page.getByRole("treeitem", { name: /E2E replayed/ })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: /E2E second/ })).toHaveCount(0);
 });
+
+test.skip("[overhaul-web-15] stale project status cannot exit a connected run", () => {
+  // Requires two project-scoped live status streams and a real provider run.
+});
+
+test.skip("[overhaul-web-16] repeating a subtree revives its inactive campaign", () => {
+  // Campaign setup is not exposed through the deterministic browser fixture API.
+});
+
+test.skip("[overhaul-web-23] Codex Chat runs through the real app-server", () => {
+  // Chat launches a full-access `codex app-server` process. The web harness has
+  // no safe fake-provider switch and must not count the Vitest socket fixture as
+  // running-application coverage.
+});

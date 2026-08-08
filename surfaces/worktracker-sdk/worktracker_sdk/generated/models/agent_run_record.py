@@ -20,6 +20,7 @@ import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
+from worktracker_sdk.generated.models.run_kind_enum import RunKindEnum
 from worktracker_sdk.generated.models.scope_enum import ScopeEnum
 from typing import Optional, Set
 from typing_extensions import Self
@@ -34,11 +35,12 @@ class AgentRunRecord(BaseModel):
     task_id: Optional[StrictStr]
     module_id: StrictStr
     agent: StrictStr
+    run_kind: Optional[RunKindEnum] = None
     scope: ScopeEnum
     started_at: StrictStr
     state: StrictStr
     updated_at: StrictStr
-    __properties: ClassVar[List[str]] = ["agent_run_id", "project_id", "task_id", "module_id", "agent", "scope", "started_at", "state", "updated_at"]
+    __properties: ClassVar[List[str]] = ["agent_run_id", "project_id", "task_id", "module_id", "agent", "run_kind", "scope", "started_at", "state", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -101,6 +103,7 @@ class AgentRunRecord(BaseModel):
             "task_id": obj.get("task_id"),
             "module_id": obj.get("module_id"),
             "agent": obj.get("agent"),
+            "run_kind": obj.get("run_kind"),
             "scope": obj.get("scope"),
             "started_at": obj.get("started_at"),
             "state": obj.get("state"),

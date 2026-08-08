@@ -15,13 +15,13 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { StatusEnum } from './StatusEnum.js';
+import type { AutomationAttemptStatusEnum } from './AutomationAttemptStatusEnum.js';
 import {
-    StatusEnumFromJSON,
-    StatusEnumFromJSONTyped,
-    StatusEnumToJSON,
-    StatusEnumToJSONTyped,
-} from './StatusEnum.js';
+    AutomationAttemptStatusEnumFromJSON,
+    AutomationAttemptStatusEnumFromJSONTyped,
+    AutomationAttemptStatusEnumToJSON,
+    AutomationAttemptStatusEnumToJSONTyped,
+} from './AutomationAttemptStatusEnum.js';
 
 /**
  *
@@ -55,10 +55,10 @@ export interface AutomationAttempt {
     work_item_id: string;
     /**
      *
-     * @type {StatusEnum}
+     * @type {AutomationAttemptStatusEnum}
      * @memberof AutomationAttempt
      */
-    status: StatusEnum;
+    status: AutomationAttemptStatusEnum;
     /**
      *
      * @type {string}
@@ -124,7 +124,7 @@ export function AutomationAttemptFromJSONTyped(json: any, ignoreDiscriminator: b
         'root_attempt_id': json['root_attempt_id'],
         'retry_of_attempt_id': json['retry_of_attempt_id'],
         'work_item_id': json['work_item_id'],
-        'status': StatusEnumFromJSON(json['status']),
+        'status': AutomationAttemptStatusEnumFromJSON(json['status']),
         'error': json['error'],
         'failure': json['failure'],
         'retryable': json['retryable'],
@@ -148,7 +148,7 @@ export function AutomationAttemptToJSONTyped(value?: AutomationAttempt | null, i
         'root_attempt_id': value['root_attempt_id'],
         'retry_of_attempt_id': value['retry_of_attempt_id'],
         'work_item_id': value['work_item_id'],
-        'status': StatusEnumToJSON(value['status']),
+        'status': AutomationAttemptStatusEnumToJSON(value['status']),
         'error': value['error'],
         'failure': value['failure'],
         'retryable': value['retryable'],

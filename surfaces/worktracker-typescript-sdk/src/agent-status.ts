@@ -16,6 +16,7 @@ export type RawLifecycleState =
   | "unknown";
 
 export type AgentRunScope = "task" | "plan" | "instant" | "docchat";
+export type AgentRunKind = "terminal" | "chat";
 
 export interface RunRecord {
   agent_run_id: string;
@@ -23,6 +24,8 @@ export interface RunRecord {
   task_id: string | null;
   module_id: string;
   agent?: string;
+  /** Missing on pre-Chat servers and therefore interpreted as terminal. */
+  run_kind?: AgentRunKind;
   scope: AgentRunScope;
   started_at?: string;
   state: RawLifecycleState;

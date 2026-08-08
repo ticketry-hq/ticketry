@@ -4,6 +4,7 @@ import uuid
 
 import pytest
 
+from apps.runs.models import AgentChatSession, AgentRun
 from worktracker.models import (
     Issue,
     IssueType,
@@ -415,6 +416,40 @@ def test_delete_work_item_deletes_empty_issue(project):
     delete_work_item(issue.id)
 
     assert not Issue.objects.filter(pk=issue.id).exists()
+
+
+@pytest.mark.django_db
+def test_delete_work_item_blocks_active_chat_owner(project):
+    issue = _issue(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        name="Chat-owned",
+        sequence_id=1,
+        rank="a",
+    )
+    run = AgentRun.objects.create(
+        id="chat-delete-work-item",
+        issue=issue,
+        agent="codex",
+        status="running",
+        started_at="2026-08-08T00:00:00+00:00",
+        scope="task",
+        run_kind=AgentRun.Kind.CHAT,
+    )
+    AgentChatSession.objects.create(
+        run=run,
+        provider_thread_id="provider-delete-work-item",
+        status=AgentChatSession.Status.READY,
+    )
+
+    with pytest.raises(ServiceError) as excinfo:
+        delete_work_item(issue.id)
+
+    assert excinfo.value.status_code == 409
+    assert Issue.objects.filter(pk=issue.id).exists()
+    assert AgentRun.objects.filter(pk=run.id).exists()
+    assert AgentChatSession.objects.filter(pk=run.id).exists()
 
 
 @pytest.mark.django_db

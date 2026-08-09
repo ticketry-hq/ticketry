@@ -59,8 +59,6 @@ export interface GetWorkItemRequest {
 }
 
 export interface ListWorkItemsRequest {
-    includeArchived?: boolean;
-    includePathfind?: boolean;
     module?: string;
     project?: string;
     state?: string;
@@ -175,8 +173,6 @@ export interface WorkItemsApiInterface {
 
     /**
      * Creates request options for listWorkItems without sending the request
-     * @param {boolean} [includeArchived]
-     * @param {boolean} [includePathfind]
      * @param {string} [module]
      * @param {string} [project]
      * @param {string} [state]
@@ -187,8 +183,6 @@ export interface WorkItemsApiInterface {
 
     /**
      * The only task collection read, narrowed by declared query parameters.
-     * @param {boolean} [includeArchived]
-     * @param {boolean} [includePathfind]
      * @param {string} [module]
      * @param {string} [project]
      * @param {string} [state]
@@ -470,14 +464,6 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
      */
     async listWorkItemsRequestOpts(requestParameters: ListWorkItemsRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
-
-        if (requestParameters['includeArchived'] != null) {
-            queryParameters['include_archived'] = requestParameters['includeArchived'];
-        }
-
-        if (requestParameters['includePathfind'] != null) {
-            queryParameters['include_pathfind'] = requestParameters['includePathfind'];
-        }
 
         if (requestParameters['module'] != null) {
             queryParameters['module'] = requestParameters['module'];

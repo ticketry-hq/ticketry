@@ -38,8 +38,19 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ("id", "name", "slug", "description", "workspace_slug")
-        read_only_fields = ("id",)
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "description",
+            "workspace_slug",
+            "manual_module_order",
+        )
+        # The ordering mode is a durable project fact clients read to decide
+        # whether module activity recency may reorder the list. It flips only
+        # through the module reorder domain operation, never through this
+        # general-purpose project update.
+        read_only_fields = ("id", "manual_module_order")
 
     def validate_slug(self, value):
         if self.instance is not None:
@@ -237,8 +248,19 @@ class AttachmentSerializer(serializers.ModelSerializer):
 
 
 class WorkItemReorderSerializer(serializers.Serializer):
+    """The moved work item's neighbors, plus a module's first-drag baseline.
+
+    ``initial_order_ids`` is the complete module order the user could see when
+    they started the very first drag in an automatic project. The server
+    freezes it into ranks before applying the move, so a client never has to
+    infer the durable ordering mode from its own history (#360).
+    """
+
     before_id = serializers.UUIDField(required=False, allow_null=True)
     after_id = serializers.UUIDField(required=False, allow_null=True)
+    initial_order_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, allow_null=True
+    )
 
 
 class ConfigurationReorderSerializer(serializers.Serializer):

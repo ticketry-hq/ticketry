@@ -244,7 +244,7 @@ def test_batch_read_rejects_invalid_or_oversized_bodies(client, auth, ids):
     assert response.status_code == 400
 
 
-def test_default_list_hides_the_stable_pathfind_role_and_its_descendants(
+def test_canonical_list_returns_archived_pathfind_and_ordinary_rows(
     client, project, module, task_type, auth
 ):
     pathfind_type = IssueType.objects.create(
@@ -278,21 +278,17 @@ def test_default_list_hides_the_stable_pathfind_role_and_its_descendants(
         name="Visible",
         parent_id=module["id"],
     )
+    Issue.objects.filter(pk=child["id"]).update(is_archived=True)
     pathfind_type.name = "Discovery"
     pathfind_type.save(update_fields=("name", "updated_at"))
 
-    default = client.get(
+    response = client.get(
         f"{BASE}/work-items?project={project.id}&module={module['id']}",
         headers=auth,
     )
-    included = client.get(
-        f"{BASE}/work-items?project={project.id}&module={module['id']}"
-        "&include_pathfind=true",
-        headers=auth,
-    )
 
-    assert [row["id"] for row in default.json()] == [visible["id"]]
-    assert {row["id"] for row in included.json()} == {
+    assert response.status_code == 200
+    assert {row["id"] for row in response.json()} == {
         root["id"],
         child["id"],
         visible["id"],

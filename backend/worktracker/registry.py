@@ -83,7 +83,7 @@ MODEL_ROUTES = {
             RouteDeclaration(
                 "GET",
                 "/api/work-tracker/projects/{project_id}/modules",
-                "List a project's module rows in explicit sequence order.",
+                "List a project's module rows in its Canonical module order.",
             ),
         ),
         "writes": (

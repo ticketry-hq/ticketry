@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { formatSequenceId } from "../../../../../features/studio/lib/planeUrl";
+import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
 import {
   type Row,
   type ScratchRow,
@@ -19,6 +19,7 @@ import {
   workItemQuery,
 } from "../../../../../features/work-items/queries";
 import { queryClient } from "../../../../../shared/query/queryClient";
+import { stateById, useCachedStates } from "../../../../../shared/query/stateCatalog";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";
 
 // Warm the description-editor chunk on first row hover so it is already
@@ -74,6 +75,7 @@ function WorkItemPlanningRow({
 }: Omit<TaskRowProps, "row"> & { row: WorkItemRow }) {
   const { data: task } = useQuery(workItemQuery(row.id), queryClient);
   const projectId = useStudioStore((state) => state.selectedProjectId);
+  const states = useCachedStates(projectId);
   const moduleId = useClientStore((state) => state.selectedModuleId);
   const tree = useModuleTree(projectId, moduleId);
   const descendantIds = useMemo(() => {
@@ -97,8 +99,8 @@ function WorkItemPlanningRow({
       depth={row.depth}
       expandable={row.expandable}
       expanded={row.expanded}
-      identifier={task.key ?? formatSequenceId(task.sequence_id)}
-      stateColor={task.state?.color ?? null}
+      identifier={formatWorkItemDisplayIdentifier(task.sequence_id)}
+      stateColor={stateById(states, task.state)?.color ?? null}
       name={task.name}
       isSelected={isSelected}
       onClick={onClick}
@@ -208,26 +210,7 @@ function PlanningRowView({
         </span>
       )}
 
-      {/* Task Label */}
-      <span className="min-w-0 truncate">
-        {identifier ? (
-          <>
-            <span
-              data-task-id-token
-              className={stateColor ? undefined : "text-text-muted"}
-              style={
-                stateColor
-                  ? { color: stateColor }
-                  : undefined
-              }
-            >
-              {identifier}
-            </span>
-            <span> · </span>
-          </>
-        ) : null}
-        <span>{name}</span>
-      </span>
+      <span className="min-w-0 flex-1 truncate">{name}</span>
 
       {isScratch ? (
         <ScratchTaskStateBadge moduleId={scratchModuleId} />
@@ -245,6 +228,16 @@ function PlanningRowView({
           />
         </>
       )}
+
+      {identifier ? (
+        <span
+          data-task-id-token
+          className={`ml-2 shrink-0 ${stateColor ? "" : "text-text-muted"}`}
+          style={stateColor ? { color: stateColor } : undefined}
+        >
+          {identifier}
+        </span>
+      ) : null}
     </li>
   );
 }

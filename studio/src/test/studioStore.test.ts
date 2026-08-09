@@ -36,7 +36,13 @@ const createProject = api.createProject as ReturnType<typeof vi.fn>;
 const updateProject = api.updateProject as ReturnType<typeof vi.fn>;
 const deleteProject = api.deleteProject as ReturnType<typeof vi.fn>;
 
-const P = (id: string): Project => ({ id, name: id, slug: id.toUpperCase(), description: "" });
+const P = (id: string): Project => ({
+  id,
+  name: id,
+  slug: id.toUpperCase(),
+  description: "",
+  manual_module_order: false,
+});
 
 beforeEach(() => {
   localStorage.clear();
@@ -108,7 +114,7 @@ describe("studioStore", () => {
           workspace_slug: "meml",
           agent_prompt: null,
           agent_prompts: {},
-          module_links: [],
+          module_links: [{ module_id: "m1", path: "/repos/m1" }],
           recent_project_id: "p1",
           recent_module_ids: { p1: "m1" },
         },
@@ -144,7 +150,7 @@ describe("studioStore", () => {
           workspace_slug: "meml",
           agent_prompt: null,
           agent_prompts: {},
-          module_links: [],
+          module_links: [{ module_id: "m1", path: "/repos/m1" }],
           recent_project_id: "p1",
           recent_module_ids: { p1: "m1" },
         },
@@ -158,6 +164,20 @@ describe("studioStore", () => {
 
   it("does not restore a remembered task missing from the loaded module", async () => {
     useStudioStore.setState({ selectedProjectId: "p1" });
+    seedConfig({
+      recentProfileIndex: 0,
+      profiles: [
+        {
+          name: "Local",
+          workspace_slug: "meml",
+          agent_prompt: null,
+          agent_prompts: {},
+          module_links: [{ module_id: "m1", path: "/repos/m1" }],
+          recent_project_id: "p1",
+          recent_module_ids: { p1: "m1" },
+        },
+      ],
+    });
     getTasks.mockResolvedValue({
       rootIds: [],
       children: {},
@@ -181,7 +201,7 @@ describe("studioStore", () => {
       workspace_slug: "meml",
       agent_prompt: null,
       agent_prompts: {},
-      module_links: [],
+      module_links: [{ module_id: "m1", path: "/repos/m1" }],
       recent_project_id: "p1",
       recent_module_ids: {},
     };

@@ -1,4 +1,7 @@
-import { useIssueTypesQuery } from "../../../../../../features/settings";
+import {
+  issueTypeById,
+  useIssueTypesQuery,
+} from "../../../../../../features/settings";
 import type { IssueType } from "../../../../../../shared/api/types";
 import { IssueTypeLabel } from "../../../../../../shared/ui/IssueTypeLabel";
 import Popover, { PopoverOption } from "./Popover";
@@ -9,7 +12,7 @@ const EMPTY_ISSUE_TYPES: IssueType[] = [];
 
 interface IssueTypePickerProps {
   projectId: string;
-  value: IssueType;
+  value: string;
   saving?: boolean;
   onChange: (issueType: IssueType) => void;
 }
@@ -25,6 +28,7 @@ export default function IssueTypePicker({
   const issueTypes = (issueTypesQuery.data ?? EMPTY_ISSUE_TYPES).filter(
     (issueType) => issueType.level === "task",
   );
+  const selected = issueTypeById(issueTypes, value);
 
   return (
     <Popover
@@ -36,7 +40,7 @@ export default function IssueTypePicker({
           onClick={onClick}
           disabled={disabled}
           saving={saving}
-          label={<IssueTypeLabel issueType={value} />}
+          label={selected ? <IssueTypeLabel issueType={selected} /> : "Unknown type"}
         />
       )}
     >
@@ -50,9 +54,9 @@ export default function IssueTypePicker({
             issueTypes.map((issueType) => (
               <PopoverOption
                 key={issueType.id}
-                selected={issueType.id === value.id}
+                selected={issueType.id === value}
                 onClick={() => {
-                  if (issueType.id !== value.id) onChange(issueType);
+                  if (issueType.id !== value) onChange(issueType);
                   close();
                 }}
               >

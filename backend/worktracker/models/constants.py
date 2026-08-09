@@ -42,7 +42,7 @@ CARBON_DARK_PALETTE = (
     "#D4BBFF",
 )
 
-# All seven canonical workflow states are protected (non-deletable). Matched by
+# All canonical workflow states are protected (non-deletable). Matched by
 # ``(name, group)`` in ``seed.ensure_protected_states``.
 PROTECTED_STATE_KEYS = {(name, group) for name, group, _ in DEFAULT_STATES}
 

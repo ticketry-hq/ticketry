@@ -31,6 +31,12 @@ import {
 export interface ProviderCatalog {
     /**
      *
+     * @type {Array<string>}
+     * @memberof ProviderCatalog
+     */
+    activated_providers: Array<string>;
+    /**
+     *
      * @type {GlobalLaunchDefault}
      * @memberof ProviderCatalog
      */
@@ -41,6 +47,7 @@ export interface ProviderCatalog {
  * Check if a given object implements the ProviderCatalog interface.
  */
 export function instanceOfProviderCatalog(value: object): value is ProviderCatalog {
+    if (!('activated_providers' in value) || value['activated_providers'] === undefined) return false;
     return true;
 }
 
@@ -54,6 +61,7 @@ export function ProviderCatalogFromJSONTyped(json: any, ignoreDiscriminator: boo
     }
     return {
 
+        'activated_providers': json['activated_providers'],
         'global_default': json['global_default'] == null ? undefined : GlobalLaunchDefaultFromJSON(json['global_default']),
     };
 }
@@ -69,6 +77,7 @@ export function ProviderCatalogToJSONTyped(value?: ProviderCatalog | null, ignor
 
     return {
 
+        'activated_providers': value['activated_providers'],
         'global_default': GlobalLaunchDefaultToJSON(value['global_default']),
     };
 }

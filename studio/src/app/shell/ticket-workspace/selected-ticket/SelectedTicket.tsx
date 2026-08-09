@@ -70,7 +70,7 @@ export function SelectedTicket() {
           bucket={bucket}
           projectId={selectedProjectId}
           moduleId={selectedModuleId}
-          ticketKey={task?.key}
+          ticketSeq={task?.sequence_id ?? null}
           owner="studio"
           details={<SelectedTicketDetails />}
           launchContext={launchContext}

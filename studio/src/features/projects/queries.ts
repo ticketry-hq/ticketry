@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import * as api from "../../shared/api/client";
 import {
-  fetchModuleActivity,
-  sortModulesByRecency,
-} from "./utilities/moduleRecency";
+  applyCanonicalModuleOrder,
+  usesManualModuleOrder,
+} from "./utilities/canonicalModuleOrder";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import type {
@@ -24,15 +24,37 @@ async function fetchProjects(): Promise<Project[]> {
   return api.listProjects();
 }
 
-// Modules are cached already recency-sorted: every consumer (module tabs,
-// Epic derive, backlog groups) reads the same newest-activity-first order
-// (#831). The activity fetch swallows its own failures → {} → API order.
+/**
+ * Resolve the project's durable module ordering mode (#359).
+ *
+ * The project list is the only project read, and it is always loaded before a
+ * project can be selected, so the cache normally answers this without a
+ * request. A cold cache falls back to loading it; a failed load leaves the
+ * project automatic, which is the mode every project starts in.
+ */
+async function fetchModuleOrderingMode(projectId: string): Promise<boolean> {
+  const cached = getProjectsSnapshot();
+  if (cached.some((project) => project.id === projectId)) {
+    return usesManualModuleOrder(cached, projectId);
+  }
+  try {
+    return usesManualModuleOrder(await loadProjects(), projectId);
+  } catch {
+    return false;
+  }
+}
+
+// Modules are cached already in the Canonical module order: every consumer
+// (sidebar, module tabs, Epic derive, backlog groups, position shortcuts)
+// reads that one array (#831, #359). Automatic projects get activity recency
+// layered over the server's newest-created-first fallback; manual projects
+// keep the server's persisted rank order untouched.
 async function fetchModules(projectId: string): Promise<Module[]> {
-  const [modules, activity] = await Promise.all([
+  const [modules, manualModuleOrder] = await Promise.all([
     api.listModules(projectId),
-    fetchModuleActivity(projectId),
+    fetchModuleOrderingMode(projectId),
   ]);
-  return sortModulesByRecency(modules, activity);
+  return applyCanonicalModuleOrder(projectId, modules, manualModuleOrder);
 }
 
 /** Cached projects, [] before the first load resolves. */

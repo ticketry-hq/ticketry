@@ -16,7 +16,12 @@
 
 import { mapValues } from '../runtime.js';
 /**
+ * The moved work item's neighbors, plus a module's first-drag baseline.
  *
+ * ``initial_order_ids`` is the complete module order the user could see when
+ * they started the very first drag in an automatic project. The server
+ * freezes it into ranks before applying the move, so a client never has to
+ * infer the durable ordering mode from its own history (#360).
  * @export
  * @interface WorkItemReorder
  */
@@ -33,6 +38,12 @@ export interface WorkItemReorder {
      * @memberof WorkItemReorder
      */
     after_id?: string | null;
+    /**
+     *
+     * @type {Array<string>}
+     * @memberof WorkItemReorder
+     */
+    initial_order_ids?: Array<string> | null;
 }
 
 /**
@@ -54,6 +65,7 @@ export function WorkItemReorderFromJSONTyped(json: any, ignoreDiscriminator: boo
 
         'before_id': json['before_id'] == null ? undefined : json['before_id'],
         'after_id': json['after_id'] == null ? undefined : json['after_id'],
+        'initial_order_ids': json['initial_order_ids'] == null ? undefined : json['initial_order_ids'],
     };
 }
 
@@ -70,5 +82,6 @@ export function WorkItemReorderToJSONTyped(value?: WorkItemReorder | null, ignor
 
         'before_id': value['before_id'],
         'after_id': value['after_id'],
+        'initial_order_ids': value['initial_order_ids'],
     };
 }

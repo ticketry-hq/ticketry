@@ -1,4 +1,7 @@
-import { type BlockerChip } from "../../../../../features/work-items";
+import {
+  type BlockerChip,
+  formatWorkItemDisplayIdentifier,
+} from "../../../../../features/work-items";
 import { IconAlertTriangle, IconX } from "../../../../../shared/ui/icons";
 import { quietChipRemoveClassName } from "./fields/QuietChipControls";
 import { useClientStore } from "../../../../../state/clientStore";
@@ -14,6 +17,10 @@ export default function BlockerChipView({
 }) {
   const selectTask = useClientStore((state) => state.selectTask);
   const warn = chip.unresolved;
+  // An unresolved reference keeps its existing neutral id stub rather than
+  // inventing a ticket identifier.
+  const identifier =
+    formatWorkItemDisplayIdentifier(chip.sequence_id) || chip.id.slice(0, 8);
   return (
     <span
       data-testid="blocker-chip"
@@ -31,7 +38,7 @@ export default function BlockerChipView({
         onClick={() => void selectTask(chip.id)}
         className="inline-flex items-center gap-1 font-mono hover:underline"
       >
-        {chip.key ?? chip.id.slice(0, 8)}
+        {identifier}
         {warn && <IconAlertTriangle size={12} />}
       </button>
       {onRemove && (

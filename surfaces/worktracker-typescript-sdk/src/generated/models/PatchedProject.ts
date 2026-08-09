@@ -51,6 +51,12 @@ export interface PatchedProject {
      * @memberof PatchedProject
      */
     workspace_slug?: string;
+    /**
+     *
+     * @type {boolean}
+     * @memberof PatchedProject
+     */
+    readonly manual_module_order?: boolean;
 }
 
 /**
@@ -75,6 +81,7 @@ export function PatchedProjectFromJSONTyped(json: any, ignoreDiscriminator: bool
         'slug': json['slug'] == null ? undefined : json['slug'],
         'description': json['description'] == null ? undefined : json['description'],
         'workspace_slug': json['workspace_slug'] == null ? undefined : json['workspace_slug'],
+        'manual_module_order': json['manual_module_order'] == null ? undefined : json['manual_module_order'],
     };
 }
 
@@ -82,7 +89,7 @@ export function PatchedProjectToJSON(json: any): PatchedProject {
     return PatchedProjectToJSONTyped(json, false);
 }
 
-export function PatchedProjectToJSONTyped(value?: Omit<PatchedProject, 'id'> | null, ignoreDiscriminator: boolean = false): any {
+export function PatchedProjectToJSONTyped(value?: Omit<PatchedProject, 'id'|'manual_module_order'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }

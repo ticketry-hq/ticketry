@@ -352,7 +352,7 @@ test("the release manifest declares the reviewed defaults artifact as a sidecar 
 test("missing, unparseable, and invalid defaults artifacts fail release-input validation", async () => {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "ticketry-release-defaults-"));
   const invalidDefaults = structuredClone(reviewedDefaults);
-  invalidDefaults.workflows.Story.transitions = [["Idea", "Unknown state"]];
+  invalidDefaults.workflows.Story.transitions = [["Ideas", "Unknown state"]];
   const cases = [
     {
       name: "missing",
@@ -369,7 +369,7 @@ test("missing, unparseable, and invalid defaults artifacts fail release-input va
       name: "invalid but parseable",
       path: path.join(temporaryRoot, "invalid.json"),
       contents: JSON.stringify(invalidDefaults),
-      message: /Issue type 'Story' edge 'Idea -> Unknown state'/,
+      message: /Issue type 'Story' edge 'Ideas -> Unknown state'/,
     },
   ];
 

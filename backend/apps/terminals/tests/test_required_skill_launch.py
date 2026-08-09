@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -9,6 +10,8 @@ import apps.terminals.launch as launch
 import apps.terminals.agents.registry as agent_registry
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
+from apps.terminals.reconciliation import TerminalReconciler
+from apps.terminals.runtime import TerminalRuntimeError
 from apps.terminals.tests.fakes import patch_terminal_runtime
 from apps.terminals.agents.registry import (
     cleanup_temporary_artifacts,
@@ -412,4 +415,49 @@ async def test_tmux_launch_failure_removes_run_session_and_overlay(
     assert await AgentRun.objects.acount() == 0
     assert await AgentTerminalSession.objects.acount() == 0
     assert runtime.terminated == [run_id]
+    assert not (tmp_path / "ticketry-agent-runs" / run_id).exists()
+
+
+async def test_tmux_launch_failure_retains_cleanup_handle_until_termination_succeeds(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(agent_registry.tempfile, "tempdir", str(tmp_path))
+    resolved = _resolved(monkeypatch, tmp_path, "codex")
+    adapter = get_adapter("codex")
+    runtime = patch_terminal_runtime(
+        monkeypatch, create_error=RuntimeError("tmux refused launch")
+    )
+    terminate = runtime.terminate
+
+    def unavailable_terminate(agent_run_id):
+        raise TerminalRuntimeError(f"tmux unavailable for {agent_run_id}")
+
+    monkeypatch.setattr(runtime, "terminate", unavailable_terminate)
+    run_id = "tmux-cleanup-pending-codex"
+
+    with pytest.raises(launch.LaunchUnavailable):
+        await launch._launch(
+            adapter=adapter,
+            issue_id=fixture_issue_id(project_id="p1", module_id="m1", task_id="t1"),
+            argv=["codex", "x" * 9_000],
+            cwd=str(tmp_path),
+            design_dir=None,
+            scope="task",
+            doc_rel_path=None,
+            agent_run_id=run_id,
+            resolved_skills=resolved,
+        )
+
+    run = await AgentRun.objects.aget(id=run_id)
+    assert run.status == "cleanup_pending"
+    assert await AgentTerminalSession.objects.filter(agent_run_id=run_id).aexists()
+    assert (tmp_path / "ticketry-agent-runs" / run_id).exists()
+
+    monkeypatch.setattr(runtime, "terminate", terminate)
+    await asyncio.to_thread(TerminalReconciler(runtime).reconcile)
+
+    assert not await AgentRun.objects.filter(id=run_id).aexists()
+    assert not await AgentTerminalSession.objects.filter(
+        agent_run_id=run_id
+    ).aexists()
     assert not (tmp_path / "ticketry-agent-runs" / run_id).exists()

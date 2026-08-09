@@ -6,6 +6,56 @@ export interface ViewerLeaseClient {
   release(agentRunId: string, viewerId: string): Promise<void>;
 }
 
+export interface ViewerLease {
+  acquire(): Promise<boolean>;
+  renew(): Promise<void>;
+  release(): Promise<void>;
+}
+
+export function createViewerLease(
+  client: ViewerLeaseClient,
+  agentRunId: string,
+): ViewerLease {
+  const viewerId = viewerLeaseId();
+  let acquirePromise: Promise<void> | null = null;
+  let acquired = false;
+  let releaseRequested = false;
+  let releasePromise: Promise<void> | null = null;
+
+  const releaseAcquiredLease = (): Promise<void> => {
+    if (releasePromise) return releasePromise;
+    if (!acquired) return Promise.resolve();
+    acquired = false;
+    releasePromise = client.release(agentRunId, viewerId);
+    return releasePromise;
+  };
+
+  return {
+    async acquire() {
+      acquirePromise ??= client.acquire(agentRunId, viewerId).then(async () => {
+        acquired = true;
+        if (releaseRequested) await releaseAcquiredLease();
+      });
+      await acquirePromise;
+      return !releaseRequested;
+    },
+    renew() {
+      if (!acquired || releaseRequested) return Promise.resolve();
+      return client.renew(agentRunId, viewerId);
+    },
+    async release() {
+      releaseRequested = true;
+      if (acquired) {
+        await releaseAcquiredLease();
+        return;
+      }
+      if (!acquirePromise) return;
+      await acquirePromise.catch(() => {});
+      await releaseAcquiredLease();
+    },
+  };
+}
+
 async function request(path: string, body: Record<string, string>): Promise<void> {
   const response = await fetch(agentApiUrl(path), {
     method: "POST",

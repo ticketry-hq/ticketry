@@ -1,5 +1,6 @@
 import {
   getStatesSnapshot,
+  stateById,
   useCachedStates,
 } from "../../../../../../shared/query/stateCatalog";
 import { compareStateOrder, stateColor, stateLabel } from "../../../../../../shared/utilities/display";
@@ -9,7 +10,7 @@ import PickerTrigger from "./PickerTrigger";
 
 interface Props {
   projectId: string;
-  value: State | null;
+  value: string | null;
   onChange: (state: State & { id: string }) => void;
   saving?: boolean;
   /** Neutral trigger text for the bulk bar ("Set state…") — overrides the label. */
@@ -28,6 +29,7 @@ function Dot({ color }: { color: string }) {
 // Status picker grouped by the five workflow groups.
 export default function StatePicker({ projectId, value, onChange, saving, triggerLabel }: Props) {
   const states = useCachedStates(projectId);
+  const selected = stateById(states, value);
   // Ordered by canonical workflow position (sort_order primary), so Refinement
   // precedes Ready and Implement precedes Review within their shared groups.
   const ordered = [...states].sort(compareStateOrder);
@@ -39,8 +41,8 @@ export default function StatePicker({ projectId, value, onChange, saving, trigge
         <PickerTrigger
           onClick={onClick}
           disabled={disabled}
-          label={triggerLabel ?? stateLabel(value)}
-          icon={<Dot color={stateColor(value)} />}
+          label={triggerLabel ?? stateLabel(selected)}
+          icon={<Dot color={stateColor(selected)} />}
           saving={saving}
         />
       )}
@@ -52,7 +54,7 @@ export default function StatePicker({ projectId, value, onChange, saving, trigge
           ordered.map((s) => (
             <PopoverOption
               key={s.id ?? s.name}
-              selected={s.id === value?.id}
+              selected={s.id === value}
               onClick={() => {
                 if (
                   s.id &&

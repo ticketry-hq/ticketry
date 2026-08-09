@@ -31,7 +31,7 @@ async function ensureWorkItem(
   body: Record<string, unknown> & { name: string },
 ) {
   const existing = await json<Row[]>(await request.get(
-    `/api/work-tracker/work-items?project=${projectId}&include_pathfind=true`,
+    `/api/work-tracker/work-items?project=${projectId}`,
   ));
   const laterNames: Record<string, string[]> = {
     "E2E parent": ["E2E parent renamed"],

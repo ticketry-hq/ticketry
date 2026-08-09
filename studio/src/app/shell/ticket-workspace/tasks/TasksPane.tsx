@@ -156,15 +156,15 @@ export function TasksPane() {
         : queryClient.getQueryData<WorkItem>(
             queryKeys.workItems.byId(resolved.targetId),
           );
-      const destinationState = headerStateId
-        ? states.find((state) => state.id === headerStateId)
-        : target?.state;
+      const destinationState = states.find(
+        (state) => state.id === (headerStateId ?? target?.state),
+      );
       if (!destinationState?.id) return;
 
       const sectionBlocks = visibleBlocks.filter((block) =>
         queryClient.getQueryData<WorkItem>(
           queryKeys.workItems.byId(block.rootId),
-        )?.state?.id === destinationState.id,
+        )?.state === destinationState.id,
       );
       // Collapsed headers have no visible blocks. Rebuild their root-only
       // section from the ranked task list so a head drop still uses the real
@@ -181,7 +181,7 @@ export function TasksPane() {
         resolved.intent,
       );
       if (!neighbors) return;
-      if (source.state?.id === destinationState.id) {
+      if (source.state === destinationState.id) {
         reorder.mutate({
           id: payload.taskId,
           beforeId: neighbors.beforeId,

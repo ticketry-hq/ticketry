@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import {
   getConfigSnapshot,
+  getModuleFolder,
   isSidebarEnabled,
   sidebarPaneComposition,
   updateProfile,
   type SidebarPaneComposition,
 } from "../features/studio/stores/configStore";
+import { useModalStore } from "../app/modal/modalStore";
 import { useStudioStore } from "../features/projects/store";
 import type {
   TabKind,
@@ -323,15 +325,22 @@ export const useClientStore = create<ClientState>((set, get) => ({
   async selectModule(id) {
     const projectId = useStudioStore.getState().selectedProjectId;
     if (!projectId) return;
+    const { recentProfileIndex, profiles } = getConfigSnapshot();
+    const profile =
+      recentProfileIndex === null ? undefined : profiles[recentProfileIndex];
+    if (!getModuleFolder(profile, id)) {
+      useModalStore.getState().pushModal({
+        type: "module-folder",
+        payload: { moduleId: id, resumeModuleSelection: true },
+      });
+      return;
+    }
     set({
       selectedModuleId: id,
       selectedTaskId: null,
       workspaceSelection: { kind: "task" },
     });
     const { loadModuleTree } = await import("../features/work-items/queries");
-    const { recentProfileIndex, profiles } = getConfigSnapshot();
-    const profile =
-      recentProfileIndex === null ? undefined : profiles[recentProfileIndex];
     const persistRecentModule =
       profile && profile.recent_module_ids?.[projectId] !== id
         ? updateProfile(recentProfileIndex!, {

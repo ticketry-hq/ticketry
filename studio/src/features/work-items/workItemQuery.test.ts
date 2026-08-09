@@ -2,12 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useQuery } from "@tanstack/react-query";
 import { getTasks } from "../../shared/api/client";
-import type { IssueType, State, WorkItem } from "../../shared/api/types";
+import type { State, WorkItem } from "../../shared/api/types";
 import { fetchWorkItem } from "../../shared/api/workItemBatcher";
 import { FIVE_MINUTES, queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import { seedStates } from "../../shared/query/stateCatalog";
-import { seedIssueTypes } from "../settings/queries";
 import { orderedTaskSections } from "../studio/lib/taskTree";
 import { loadModuleTree, workItemQuery } from "./queries";
 
@@ -38,37 +37,28 @@ describe("workItemQuery", () => {
     expect(fetchWorkItem).toHaveBeenCalledWith(record.id);
   });
 
-  it("keeps mounted refetches normalized after a state change", async () => {
+  it("preserves relation ids and derives renamed state sections from the catalog", async () => {
     const original = workItem();
-    const review = state("review", "Review");
-    seedStates(original.project_id, [original.state!, review]);
-    seedIssueTypes(original.project_id, [original.issue_type]);
-    vi.mocked(fetchWorkItem)
-      .mockResolvedValueOnce(original)
-      .mockResolvedValueOnce({
-        ...original,
-        state: review.id,
-        issue_type: original.issue_type.id,
-      } as unknown as WorkItem);
+    const todo = state("todo", "Todo");
+    seedStates(original.project_id, [todo]);
+    vi.mocked(fetchWorkItem).mockResolvedValue(original);
     const { result } = renderHook(() =>
       useQuery(workItemQuery(original.id), queryClient),
     );
-    await waitFor(() => expect(result.current.data?.state).toEqual(original.state));
+    await waitFor(() => expect(result.current.data).toEqual(original));
 
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.workItems.byId(original.id),
-      exact: true,
-    });
+    const renamed = state("todo", "Ready");
+    seedStates(original.project_id, [renamed]);
 
-    await waitFor(() => expect(result.current.data?.state).toEqual(review));
+    expect(result.current.data?.state).toBe("todo");
+    expect(result.current.data?.issue_type).toBe("story");
     expect(
       orderedTaskSections(
         [original.id],
         { [original.id]: result.current.data! },
-        [original.state!, review],
-      ).find((section) => section.state.id === review.id)?.ids,
+        [renamed],
+      ).find((section) => section.state.name === "Ready")?.ids,
     ).toEqual([original.id]);
-    expect(fetchWorkItem).toHaveBeenCalledTimes(2);
   });
 
   it("uses an ordinary global freshness policy without focus refetching", () => {
@@ -79,10 +69,10 @@ describe("workItemQuery", () => {
     expect(defaults?.refetchOnWindowFocus).toBe(false);
   });
 
-  it("seeds normalized module records under their id-owned keys", async () => {
+  it("seeds model-shaped module records under their id-owned keys", async () => {
     const record = {
       id: "item-1",
-      state: { id: "state-1", name: "Implement" },
+      state: "state-1",
     } as unknown as WorkItem;
     vi.mocked(getTasks).mockResolvedValue({
       rootIds: [record.id],
@@ -142,21 +132,13 @@ const state = (id: string, name: string): State => ({
   sort_order: 0,
 });
 
-const STORY: IssueType = {
-  id: "story",
-  name: "Story",
-  level: "task",
-  color: null,
-  sort_order: 0,
-};
-
 function workItem(): WorkItem {
   return {
     id: "item-1",
     name: "Story",
     project_id: "project-1",
     sequence_id: 1,
-    state: state("todo", "Todo"),
+    state: "todo",
     state_revision: 1,
     description: "",
     parent_id: "module-1",
@@ -166,7 +148,7 @@ function workItem(): WorkItem {
     created_at: "2026-08-07T00:00:00Z",
     updated_at: "2026-08-07T00:00:00Z",
     rank: "a",
-    issue_type: STORY,
+    issue_type: "story",
     blocked_by_ids: [],
     blocks_ids: [],
   };

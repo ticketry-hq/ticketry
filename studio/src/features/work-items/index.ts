@@ -21,20 +21,10 @@ export type {
   SetWorkItemStateArgs,
 } from "./mutations";
 export {
-  getWorkItemDetailSnapshot,
-  getWorkItemIndexSnapshot,
-  getChildWorkItemsSnapshot,
-  getProjectWorkItemsSnapshot,
   getModuleTreeSnapshot,
-  loadChildWorkItems,
-  loadProjectWorkItems,
   loadModuleTree,
-  loadWorkItemDetail,
-  setChildWorkItems,
-  setWorkItemDetail,
-  setWorkItemIndex,
-  setProjectWorkItems,
   useWorkItem,
+  useWorkItemAttachments,
   useModuleTree,
   useWorkItemsByIds,
 } from "./queries";
@@ -43,6 +33,7 @@ export {
   resolveBlockerChips,
 } from "./selectors";
 export type { BlockerChip } from "./selectors";
+export { formatWorkItemDisplayIdentifier } from "./displayIdentifier";
 export {
   groupBacklog,
   matchesQuery,

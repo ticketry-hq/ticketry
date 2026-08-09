@@ -23,9 +23,6 @@ import {
 import { getModulesSnapshot } from "../../features/projects";
 import { useStudioStore } from "../../features/projects/store";
 import { useClientStore } from "../../state/clientStore";
-import { queryClient } from "../../shared/query/queryClient";
-import { queryKeys } from "../../shared/query/keys";
-import type { WorkItem } from "../../shared/api/types";
 
 const MODULE_POSITION_ACTION_PREFIX = "modules.select-position-";
 
@@ -164,9 +161,6 @@ function closeActiveWorkspaceTab(ctx: NavigationContext): void {
 
   const sessionId = useWorkspaceTabsStore.getState().activeByTask[bucket];
   if (!sessionId) return;
-  const ticketKey = queryClient.getQueryData<WorkItem>(
-    queryKeys.workItems.byId(taskId),
-  )?.key;
-  void closeTerminalTab(sessionId, bucket, ticketKey);
+  void closeTerminalTab(sessionId, bucket);
   ctx.event.preventDefault();
 }

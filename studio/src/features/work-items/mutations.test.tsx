@@ -66,8 +66,8 @@ function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
     key: "MEML-1",
     project_id: "project",
     sequence_id: 1,
-    state: TODO,
-    issue_type: STORY,
+    state: TODO.id,
+    issue_type: STORY.id,
     description: "Old description",
     parent_id: "module",
     sub_issues_count: 0,
@@ -179,9 +179,9 @@ describe("work-item optimistic mutations", () => {
       expect(
         client.getQueryData<WorkItem>(queryKeys.workItems.byId(original.id))
           ?.issue_type,
-      ).toEqual(IMPLEMENTATION),
+      ).toEqual(IMPLEMENTATION.id),
     );
-    requests[1].resolve(workItem({ issue_type: IMPLEMENTATION }));
+    requests[1].resolve(workItem({ issue_type: IMPLEMENTATION.id }));
     await waitFor(() => expect(result.current.issueType.isSuccess).toBe(true));
 
     act(() =>
@@ -191,16 +191,14 @@ describe("work-item optimistic mutations", () => {
       expect(
         client.getQueryData<WorkItem>(queryKeys.workItems.byId(original.id))
           ?.state,
-      ).toEqual(REVIEW),
+      ).toEqual(REVIEW.id),
     );
-    requests[2].resolve(
-      workItem({ state: REVIEW.id as unknown as State }),
-    );
+    requests[2].resolve(workItem({ state: REVIEW.id }));
     await waitFor(() => expect(result.current.state.isSuccess).toBe(true));
     expect(
       client.getQueryData<WorkItem>(queryKeys.workItems.byId(original.id))
         ?.state,
-    ).toEqual(REVIEW);
+    ).toEqual(REVIEW.id);
 
     expect(vi.mocked(api.patchWorkItem).mock.calls).toEqual([
       [original.id, { description: "New description" }],

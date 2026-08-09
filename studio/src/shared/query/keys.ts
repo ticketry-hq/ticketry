@@ -37,6 +37,7 @@ export const queryKeys = {
 
   workItems: {
     byId: (id: string) => ["workItem", id] as const,
+    attachments: (id: string) => ["workItem", id, "attachments"] as const,
     index: ["work-items", "index"] as const,
     detail: (id: string) => ["work-items", "detail", id] as const,
     children: (parentId: string) => ["work-items", "children", parentId] as const,

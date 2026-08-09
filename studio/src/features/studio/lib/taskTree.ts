@@ -16,7 +16,7 @@ export interface TreeWorkItem {
   sequence_id: number | null;
   rank?: string;
   parent_id: string | null;
-  state: TaskState | null;
+  state: string | null;
 }
 
 export interface OrderedTaskSection {
@@ -68,8 +68,8 @@ export function orderedTaskSections(
 ): OrderedTaskSection[] {
   const groups: Record<string, TaskId[]> = {};
   for (const id of rootIds) {
-    const stateName = itemsById[id]?.state?.name;
-    if (stateName) (groups[stateName] ??= []).push(id);
+    const stateId = itemsById[id]?.state;
+    if (stateId) (groups[stateId] ??= []).push(id);
   }
   const orderedStates = [...states].sort((a, b) => {
     if (
@@ -86,7 +86,11 @@ export function orderedTaskSections(
   });
   return orderedStates.map((state) => ({
     state,
-    ids: orderIdsByRank(groups[state.name] ?? [], itemsById, canonicalOrder),
+    ids: orderIdsByRank(
+      state.id ? groups[state.id] ?? [] : [],
+      itemsById,
+      canonicalOrder,
+    ),
   }));
 }
 
@@ -212,11 +216,13 @@ export function taskRevealPath(
   taskId: TaskId,
   tree: ModuleTree,
   itemsById: Readonly<Record<TaskId, TreeWorkItem>>,
+  states: readonly TaskState[],
 ): TaskRevealPath;
 export function taskRevealPath(
   taskId: TaskId,
   tree: ModuleTree,
   itemsById: Readonly<Record<TaskId, TreeWorkItem>>,
+  states: readonly TaskState[],
 ): TaskRevealPath {
   const parentById = new Map<TaskId, TaskId>();
   for (const [parentId, children] of Object.entries(tree.children)) {
@@ -233,9 +239,10 @@ export function taskRevealPath(
     current = parent;
     parent = parentById.get(current);
   }
+  const stateId = itemsById[current]?.state ?? null;
   return {
     ancestorIds,
-    stateId: itemsById[current]?.state?.id ?? null,
-    stateName: itemsById[current]?.state?.name ?? null,
+    stateId,
+    stateName: states.find((state) => state.id === stateId)?.name ?? null,
   };
 }

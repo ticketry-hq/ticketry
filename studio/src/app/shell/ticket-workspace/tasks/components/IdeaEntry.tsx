@@ -78,8 +78,8 @@ export function IdeaEntry() {
       }
 
       const ui = useClientStore.getState();
-      if (created.state?.id && ui.collapsedStateIds.has(created.state.id)) {
-        ui.toggleStateCollapsed(created.state.id);
+      if (created.state && ui.collapsedStateIds.has(created.state)) {
+        ui.toggleStateCollapsed(created.state);
       }
       useOnboardingTourStore.getState().storyCreated(created.id);
       setDraft("");

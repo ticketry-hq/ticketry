@@ -282,7 +282,13 @@ class AgentAdapter:
 
 
 def _resume_claude(provider_session_id: str) -> list[str]:
-    return ["claude", "--allow-dangerously-skip-permissions", "--resume", provider_session_id]
+    return [
+        "claude",
+        "--permission-mode",
+        "auto",
+        "--resume",
+        provider_session_id,
+    ]
 
 
 def _resume_agy(provider_session_id: str) -> list[str]:
@@ -311,7 +317,7 @@ def _command_claude(
         options.extend(["--model", model])
     if reasoning is not None:
         options.extend(["--effort", reasoning])
-    return ["claude", "--allow-dangerously-skip-permissions", *options, prompt]
+    return ["claude", "--permission-mode", "auto", *options, prompt]
 
 
 def _command_agy(

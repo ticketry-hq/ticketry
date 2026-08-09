@@ -11,7 +11,13 @@ from typing import Any
 import ptyprocess
 
 from apps.terminals.tmux import client as tmux_client
-from apps.terminals.tmux._core import _server, _session_name, tmux_executable, tmux_socket
+from apps.terminals.tmux._core import (
+    _server,
+    _session_name,
+    tmux_executable,
+    tmux_runtime_namespace,
+    tmux_socket,
+)
 
 from ._contract import (
     CreateTerminal,
@@ -111,6 +117,18 @@ class TmuxTerminalRuntime:
 
     def __init__(self, *, _server_factory: Callable[[], Any] = _server) -> None:
         self._server_factory = _server_factory
+
+    @property
+    def namespace(self) -> str:
+        """Identify the effective tmux endpoint whose inventory is owned."""
+
+        return tmux_runtime_namespace()
+
+    @property
+    def legacy_namespaces(self) -> tuple[str, ...]:
+        """Recognize rows persisted before the socket-root identity fix."""
+
+        return (tmux_socket(),)
 
     def create(self, request: CreateTerminal) -> None:
         agent_run_id = request.agent_run_id

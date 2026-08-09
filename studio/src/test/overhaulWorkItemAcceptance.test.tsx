@@ -1,6 +1,7 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
+import { setStatesSorted } from "../shared/query/stateCatalog";
 
 function dataTransfer(): DataTransfer {
   const values = new Map<string, string>();
@@ -29,6 +30,72 @@ function drag(target: Element, type: string, transfer: DataTransfer, clientY = 0
 }
 
 describe("overhaul acceptance — Stories and details", () => {
+  it("[overhaul-25] keeps held work items in a state section after its catalog name changes", async () => {
+    const http = fixture();
+    http.tree("module-1", {
+      rootIds: ["story-1"],
+      children: { "story-1": [] },
+      order: ["story-1"],
+    });
+    http.workItems([workItem({ id: "story-1", name: "Catalog-shaped story" })]);
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    expect(within(stories).getByRole("button", { name: "Collapse Ideas" }))
+      .toHaveTextContent("Ideas1");
+
+    act(() => {
+      setStatesSorted("project-1", [
+        {
+          id: "state-1",
+          name: "Intake",
+          group: "backlog",
+          color: null,
+          sort_order: 0,
+        },
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(within(stories).getByRole("button", { name: "Collapse Intake" }))
+        .toHaveTextContent("Intake1");
+      expect(within(stories).getByRole("treeitem", { name: /Catalog-shaped story/ }))
+        .toBeVisible();
+    });
+    expect(within(stories).queryByRole("button", { name: "Collapse Ideas" }))
+      .toBeNull();
+  });
+
+  it("[overhaul-24] renders attachments from the work-item subcollection", async () => {
+    const http = fixture();
+    http.tree("module-1", {
+      rootIds: ["story-1"],
+      children: { "story-1": [] },
+      order: ["story-1"],
+    });
+    http.workItems([workItem({ id: "story-1", name: "Attached story" })]);
+    http.attachments("story-1", [
+      {
+        id: "attachment-1",
+        issue: "story-1",
+        filename: "implementation-notes.md",
+        mime_type: "text/markdown",
+        size: 2048,
+        url: "/media/implementation-notes.md",
+        created_at: "2026-08-09T12:00:00Z",
+      },
+    ]);
+    mountStudio({ http, selectedTaskId: "story-1" });
+
+    const details = screen.getByRole("region", { name: "Details" });
+    const attachment = await within(details).findByRole("link", {
+      name: /implementation-notes\.md/,
+    });
+
+    expect(attachment).toHaveAttribute("href", "/media/implementation-notes.md");
+    expect(within(details).getByTestId("attachments")).toHaveTextContent("2.0 KB");
+  });
+
   it("[overhaul-01] repaints every surface after fields, type, and parent change", async () => {
     const http = fixture();
     const implementation = {
@@ -130,39 +197,38 @@ describe("overhaul acceptance — Stories and details", () => {
     ).toBeVisible();
     expect(
       within(within(details).getByTestId("parent-picker")).getByRole("button", {
-        name: "MODULE-1",
+        name: "T-1",
       }),
     ).toBeVisible();
     expect(within(details).getByRole("button", { name: "Review" })).toBeVisible();
     expect(within(stories).queryByText("Before")).toBeNull();
   });
 
-  it("[overhaul-02] moves a Story to its new workflow section immediately", async () => {
+  it("[overhaul-02] moves a grilled Story back to Ideas immediately", async () => {
     const http = fixture();
-    const review = {
-      id: "review",
-      name: "Review",
-      group: "started",
+    const grill = {
+      id: "grill",
+      name: "Grill",
+      group: "backlog",
       color: null,
       sort_order: 2,
     };
     http.tree("module-1", {
-      rootIds: ["story-1", "review-seed"],
-      children: { "story-1": [], "review-seed": [] },
-      order: ["story-1", "review-seed"],
+      rootIds: ["story-1", "ideas-seed"],
+      children: { "story-1": [], "ideas-seed": [] },
+      order: ["story-1", "ideas-seed"],
     });
     http.workItems([
-      workItem({ id: "story-1", name: "Moving story", rank: "Z" }),
+      workItem({ id: "story-1", name: "Moving story", state: grill, rank: "Z" }),
       workItem({
-        id: "review-seed",
-        name: "Already reviewing",
+        id: "ideas-seed",
+        name: "Already an idea",
         key: "MEML-2",
-        state: review,
         rank: "A",
       }),
     ]);
     const patched = http.expectPatch("story-1", {
-      state_id: "review",
+      state_id: "state-1",
       origin: "human",
     });
     mountStudio({ http });
@@ -170,15 +236,15 @@ describe("overhaul acceptance — Stories and details", () => {
     fireEvent.click(within(stories).getByRole("treeitem", { name: /Moving story/ }));
     const details = screen.getByRole("region", { name: "Details" });
 
-    fireEvent.click(await within(details).findByRole("button", { name: "Idea" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+    fireEvent.click(await within(details).findByRole("button", { name: "Grill" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ideas" }));
 
     await patched;
     await waitFor(() => {
-      expect(within(stories).getByRole("button", { name: "Collapse Idea" }))
-        .toHaveTextContent("Idea0");
-      expect(within(stories).getByRole("button", { name: "Collapse Review" }))
-        .toHaveTextContent("Review2");
+      expect(within(stories).getByRole("button", { name: "Collapse Grill" }))
+        .toHaveTextContent("Grill0");
+      expect(within(stories).getByRole("button", { name: "Collapse Ideas" }))
+        .toHaveTextContent("Ideas2");
     });
   });
 

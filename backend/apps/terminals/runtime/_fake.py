@@ -27,6 +27,7 @@ class _FakeTerminal:
     observation_error: Exception | None = None
     dimensions: TerminalDimensions | None = None
     scrolls: list[tuple[str, int]] = field(default_factory=list)
+    attachments: list[_FakeAttachment] = field(default_factory=list)
     lock: Lock = field(default_factory=Lock)
 
 
@@ -84,9 +85,24 @@ class InMemoryTerminalRuntime:
     model facts normally supplied by tmux without executing a command.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        namespace: str = "memory",
+        legacy_namespaces: tuple[str, ...] = (),
+    ) -> None:
+        self._namespace = namespace
+        self._legacy_namespaces = legacy_namespaces
         self._terminals: dict[str, _FakeTerminal] = {}
         self._lock = Lock()
+
+    @property
+    def namespace(self) -> str:
+        return self._namespace
+
+    @property
+    def legacy_namespaces(self) -> tuple[str, ...]:
+        return self._legacy_namespaces
 
     def create(self, request: CreateTerminal) -> None:
         with self._lock:
@@ -98,10 +114,13 @@ class InMemoryTerminalRuntime:
             )
 
     def attach(self, agent_run_id: str) -> TerminalAttachment:
-        terminal = self._terminals.get(agent_run_id)
-        if terminal is None:
-            raise TerminalNotFound(agent_run_id)
-        return _FakeAttachment(terminal)
+        with self._lock:
+            terminal = self._terminals.get(agent_run_id)
+            if terminal is None:
+                raise TerminalNotFound(agent_run_id)
+            attachment = _FakeAttachment(terminal)
+            terminal.attachments.append(attachment)
+            return attachment
 
     def inspect(self, agent_run_id: str) -> TerminalObservation:
         terminal = self._terminals.get(agent_run_id)
@@ -117,8 +136,13 @@ class InMemoryTerminalRuntime:
 
     def terminate(self, agent_run_id: str) -> TerminationResult:
         with self._lock:
-            present = self._terminals.pop(agent_run_id, None) is not None
-        return TerminationResult(was_present=present)
+            terminal = self._terminals.pop(agent_run_id, None)
+            if terminal is None:
+                return TerminationResult(was_present=False)
+            attachments = tuple(terminal.attachments)
+        for attachment in attachments:
+            attachment.detach()
+        return TerminationResult(was_present=True)
 
     def finish(self, agent_run_id: str, exit_code: int | None = None) -> None:
         terminal = self._terminals.get(agent_run_id)

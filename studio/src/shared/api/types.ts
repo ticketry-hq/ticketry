@@ -3,13 +3,17 @@ import type {
   Module as GeneratedModule,
   Project as GeneratedProject,
   PatchedProject as GeneratedProjectPatch,
+  WorkItem as GeneratedWorkItem,
   WorkItemCreate as GeneratedWorkItemCreate,
   PatchedWorkItemPatch as GeneratedWorkItemPatch,
   Workspace as GeneratedWorkspace,
 } from "@worktracker/typescript-sdk";
 
 export type Project = GeneratedProject;
-export type ProjectCreate = Omit<GeneratedProject, "id">;
+// `manual_module_order` joins `id` as server-owned: a project's module
+// ordering mode is set by the module reorder domain operation, never by a
+// create or update body.
+export type ProjectCreate = Omit<GeneratedProject, "id" | "manual_module_order">;
 export type ProjectPatch = GeneratedProjectPatch;
 export type Workspace = GeneratedWorkspace;
 export interface LaunchBinding extends LaunchBindingInput {
@@ -81,25 +85,7 @@ export interface State {
   is_protected?: boolean;
 }
 
-export interface WorkItem {
-  id: string;
-  name: string;
-  project_id: string;
-  sequence_id: number;
-  state: State | null;
-  state_revision: number;
-  description: string;
-  parent_id: string | null;
-  sub_issues_count: number;
-  key: string;
-  is_archived: boolean;
-  created_at: string;
-  updated_at: string;
-  rank: string;
-  issue_type: IssueType;
-  blocked_by_ids: string[];
-  blocks_ids: string[];
-}
+export type WorkItem = GeneratedWorkItem;
 
 export interface ModuleTree {
   rootIds: string[];
@@ -242,7 +228,6 @@ export interface WorkflowDiagnostic {
 export interface WorkItemFilters {
   parent?: string;
   state?: string;
-  includePathfind?: boolean;
 }
 
 export type View = "backlog" | "settings";

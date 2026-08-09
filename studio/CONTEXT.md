@@ -79,10 +79,25 @@ _Avoid_: Repo path, module directory, worktree, project folder
 
 **Module tab strip**:
 The single module switcher row spanning the Stories and Workspace panes, listing
-every module of the active project in the recency order captured when the project
-loaded. Selecting a tab is the same act as selecting that module anywhere else,
-and the strip also hosts module creation.
+every module of the active project in the canonical module order, with module
+creation at its leftmost point. Selecting a tab is the same act as selecting
+that module anywhere else.
 _Avoid_: Pane header tabs, open-tab set, browser-style tabs
+
+**Canonical module order**:
+The one project-wide module order every module surface — sidebar, tab strip,
+backlog grouping, module pickers, keyboard position shortcuts — renders
+identically. It is the recency order until the project is first manually
+reordered, and the manually set order from then on; a newly created module
+always enters at the front.
+_Avoid_: Recency order, per-surface order, tab order
+
+**Manual module order**:
+The shared, user-arranged canonical module order a project acquires on its
+first module drag, seeded from the order visible at that moment. It belongs to
+the project, not the user, and once set it is never reshuffled by agent
+activity.
+_Avoid_: Pinned modules, per-user module order, sort preference
 
 **Module activity badge**:
 The per-module aggregate count of non-terminal agent runs — task-bound and

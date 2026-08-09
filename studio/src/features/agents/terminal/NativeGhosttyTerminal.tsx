@@ -16,8 +16,8 @@ import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
 import { registerTerminalFocus } from "./internal/terminalRegistry";
 import {
+  createViewerLease,
   desktopViewerLease,
-  viewerLeaseId,
 } from "./internal/viewerLease";
 
 type NativeTerminalStatus = {
@@ -31,6 +31,12 @@ type NativeTerminalFailure = {
   handle: string;
   runId: string;
   reason?: string;
+};
+
+type NativeTerminalCompletion = {
+  handle: string;
+  runId: string;
+  reason: "attachment_process_exited";
 };
 
 let availability: Promise<boolean> | null = null;
@@ -98,18 +104,16 @@ export function NativeGhosttyTerminal({
     if (!visible || !runId) return;
     let disposed = false;
     let observer: ResizeObserver | null = null;
-    let unlisten: UnlistenFn | null = null;
-    let leaseId: string | null = null;
+    let unlistenFailure: UnlistenFn | null = null;
+    let unlistenCompletion: UnlistenFn | null = null;
+    let completedHandle: string | null = null;
+    const viewerLease = createViewerLease(desktopViewerLease, runId);
     let leaseTimer: ReturnType<typeof setInterval> | null = null;
 
     const releaseLease = () => {
       if (leaseTimer) clearInterval(leaseTimer);
       leaseTimer = null;
-      const currentLease = leaseId;
-      leaseId = null;
-      if (currentLease) {
-        void desktopViewerLease.release(runId, currentLease).catch(() => {});
-      }
+      void viewerLease.release().catch(() => {});
     };
 
     const detachNativeViewer = () => {
@@ -118,6 +122,15 @@ export function NativeGhosttyTerminal({
       setNativeHandle(null);
       if (handle) void invoke("native_terminal_detach", { handle });
       releaseLease();
+    };
+
+    const closeCompletedNativeViewer = (completion: NativeTerminalCompletion) => {
+      completedHandle = completion.handle;
+      if (handleRef.current !== completion.handle) return;
+      handleRef.current = null;
+      setNativeHandle(null);
+      releaseLease();
+      onUnavailable?.("the native terminal attachment process exited");
     };
 
     const scheduleFrame = () => {
@@ -150,10 +163,13 @@ export function NativeGhosttyTerminal({
 
     const attach = async () => {
       try {
-        unlisten = await listen<NativeTerminalFailure>(
+        unlistenFailure = await listen<NativeTerminalFailure>(
           "native-terminal-failed",
           (event) => {
-            if (event.payload.runId === runId) {
+            if (
+              event.payload.runId === runId &&
+              event.payload.handle === handleRef.current
+            ) {
               detachNativeViewer();
               onUnavailable?.(
                 event.payload.reason ?? "the native terminal bridge disconnected",
@@ -161,15 +177,24 @@ export function NativeGhosttyTerminal({
             }
           },
         );
+        unlistenCompletion = await listen<NativeTerminalCompletion>(
+          "native-terminal-closed",
+          (event) => {
+            if (event.payload.runId === runId) {
+              closeCompletedNativeViewer(event.payload);
+            }
+          },
+        );
         if (disposed) {
-          unlisten();
-          unlisten = null;
+          unlistenFailure();
+          unlistenFailure = null;
+          unlistenCompletion();
+          unlistenCompletion = null;
           return;
         }
 
-        leaseId = viewerLeaseId();
-        await desktopViewerLease.acquire(runId, leaseId);
-        if (disposed) {
+        const acquired = await viewerLease.acquire();
+        if (!acquired || disposed) {
           releaseLease();
           return;
         }
@@ -178,6 +203,11 @@ export function NativeGhosttyTerminal({
           "native_terminal_attach",
           { runId },
         );
+        if (completedHandle === status.handle) {
+          releaseLease();
+          onUnavailable?.("the native terminal attachment process exited");
+          return;
+        }
         if (disposed) {
           void invoke("native_terminal_detach", { handle: status.handle });
           return;
@@ -220,9 +250,7 @@ export function NativeGhosttyTerminal({
         releasePooledTransport(sessionId);
         setNativeHandle(status.handle);
         leaseTimer = setInterval(() => {
-          const currentLease = leaseId;
-          if (!currentLease) return;
-          void desktopViewerLease.renew(runId, currentLease).catch((error) => {
+          void viewerLease.renew().catch((error) => {
             if (
               !disposed &&
               (error as { code?: string }).code === "replaced_by_another_viewer"
@@ -254,7 +282,8 @@ export function NativeGhosttyTerminal({
 
     return () => {
       disposed = true;
-      unlisten?.();
+      unlistenFailure?.();
+      unlistenCompletion?.();
       observer?.disconnect();
       window.removeEventListener("resize", scheduleFrame);
       window.removeEventListener("scroll", scheduleFrame, true);

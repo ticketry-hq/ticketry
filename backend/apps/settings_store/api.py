@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.db import transaction
 from pydantic import BaseModel
 
 from apps.errors import ApplicationError
@@ -27,8 +28,15 @@ class SettingValueBody(BaseModel):
     value: Any
 
 
+class ProviderCatalogWrite(ProviderCatalog):
+    activated_providers: list[str]
+
+
 class ProviderCatalogBody(BaseModel):
-    value: ProviderCatalog
+    value: ProviderCatalogWrite
+
+
+CONFIGURABLE_PROVIDER_SLUGS = ("claude", "codex", "gemini")
 
 
 class RecentIndexBody(BaseModel):
@@ -64,23 +72,59 @@ async def put_keybindings(body: SettingValueBody):
 
 
 async def get_provider_catalog():
+    from worktracker.models import Provider
+
     value = await dao.get_setting(PROVIDER_CATALOG_SCOPE, PROVIDER_CATALOG_KEY)
     catalog = ProviderCatalog() if value is None else parse_provider_catalog(value)
-    return {"value": catalog.model_dump(mode="json")}
+    activated = await sync_to_async(list)(
+        Provider.objects.filter(
+            slug__in=CONFIGURABLE_PROVIDER_SLUGS,
+            activated=True,
+        ).values_list("slug", flat=True)
+    )
+    return {
+        "value": {
+            "activated_providers": [
+                slug for slug in CONFIGURABLE_PROVIDER_SLUGS if slug in activated
+            ],
+            **catalog.model_dump(mode="json"),
+        }
+    }
+
+
+def _put_provider_catalog_atomically(value: ProviderCatalogWrite) -> dict:
+    from apps.settings_store.models import AppSetting
+    from worktracker.models import Provider
+
+    activated = set(value.activated_providers)
+    unknown = activated.difference(CONFIGURABLE_PROVIDER_SLUGS)
+    if unknown:
+        raise ValueError(
+            f"Provider '{sorted(unknown)[0]}' is not configurable in Settings."
+        )
+
+    validate_global_launch_default(value.global_default)
+    persisted = ProviderCatalog(global_default=value.global_default)
+    with transaction.atomic():
+        for slug in CONFIGURABLE_PROVIDER_SLUGS:
+            Provider.objects.filter(slug=slug).update(activated=slug in activated)
+        AppSetting.objects.update_or_create(
+            scope=PROVIDER_CATALOG_SCOPE,
+            key=PROVIDER_CATALOG_KEY,
+            defaults={
+                "value": persisted.model_dump_json(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    return value.model_dump(mode="json")
 
 
 async def put_provider_catalog(body: ProviderCatalogBody):
     try:
-        await sync_to_async(validate_global_launch_default)(body.value.global_default)
+        value = await sync_to_async(_put_provider_catalog_atomically)(body.value)
     except ValueError as exc:
         raise ApplicationError(422, str(exc)) from exc
-    await dao.upsert_setting(
-        scope=PROVIDER_CATALOG_SCOPE,
-        key=PROVIDER_CATALOG_KEY,
-        value=body.value.model_dump_json(),
-        updated_at=datetime.now(timezone.utc).isoformat(),
-    )
-    return {"value": body.value.model_dump(mode="json")}
+    return {"value": value}
 
 
 async def get_config():

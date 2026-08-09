@@ -60,6 +60,13 @@ export function getIssueTypesSnapshot(projectId: string | null): IssueType[] {
   return queryClient.getQueryData<IssueType[]>(issueTypesKey(projectId)) ?? [];
 }
 
+export function issueTypeById(
+  issueTypes: readonly IssueType[],
+  issueTypeId: string | null | undefined,
+): IssueType | null {
+  return issueTypes.find((issueType) => issueType.id === issueTypeId) ?? null;
+}
+
 export function getCapabilitiesSnapshot(
   projectId: string | null,
 ): SubtreeRunCapabilityMap {

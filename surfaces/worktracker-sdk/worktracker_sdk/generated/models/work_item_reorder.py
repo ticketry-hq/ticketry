@@ -27,11 +27,12 @@ from pydantic_core import to_jsonable_python
 
 class WorkItemReorder(BaseModel):
     """
-    WorkItemReorder
+    The moved work item's neighbors, plus a module's first-drag baseline.  ``initial_order_ids`` is the complete module order the user could see when they started the very first drag in an automatic project. The server freezes it into ranks before applying the move, so a client never has to infer the durable ordering mode from its own history (#360).
     """ # noqa: E501
     before_id: Optional[UUID] = None
     after_id: Optional[UUID] = None
-    __properties: ClassVar[List[str]] = ["before_id", "after_id"]
+    initial_order_ids: Optional[List[UUID]] = None
+    __properties: ClassVar[List[str]] = ["before_id", "after_id", "initial_order_ids"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -82,6 +83,11 @@ class WorkItemReorder(BaseModel):
         if self.after_id is None and "after_id" in self.model_fields_set:
             _dict['after_id'] = None
 
+        # set to None if initial_order_ids (nullable) is None
+        # and model_fields_set contains the field
+        if self.initial_order_ids is None and "initial_order_ids" in self.model_fields_set:
+            _dict['initial_order_ids'] = None
+
         return _dict
 
     @classmethod
@@ -95,6 +101,7 @@ class WorkItemReorder(BaseModel):
 
         _obj = cls.model_validate({
             "before_id": obj.get("before_id"),
-            "after_id": obj.get("after_id")
+            "after_id": obj.get("after_id"),
+            "initial_order_ids": obj.get("initial_order_ids")
         })
         return _obj

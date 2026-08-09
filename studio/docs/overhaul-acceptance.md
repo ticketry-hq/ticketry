@@ -1,13 +1,13 @@
 # Studio overhaul acceptance gate
 
-The twenty-three checks that were once a manual pre-merge walk are automated by
+The thirty-six checks that were once a manual pre-merge walk are automated by
 `npm run test:overhaul --workspace @worktracker/studio`. Desktop CI runs that
 named gate before the full Studio suite, typecheck, and build.
 
 | Case | Automated behavior |
 | --- | --- |
 | 01 | Field, type, and parent changes repaint the Stories and Details surfaces. |
-| 02 | A workflow-state change moves the Story to the new section. |
+| 02 | A Story in Grill can move back to Ideas and immediately appears in that section. |
 | 03 | A dragged Story keeps its authoritative post-reply position. |
 | 04 | A refused write visibly rolls back. |
 | 05 | An external/agent edit repaints the open UI without reload. |
@@ -27,8 +27,32 @@ named gate before the full Studio suite, typecheck, and build.
 | 19 | Workflow settings derive state-delete blockers from canonical resources. |
 | 20 | The dialog bus renders confirmation requests and resolves both user choices. |
 | 21 | Repeating Run subtree revives an inactive campaign from the same action. |
-| 22 | Settings cold-opens from the footer and loads the selected project catalog. |
+| 22 | Settings cold-opens from the footer onto Models without loading workflow catalogs. |
 | 23 | A native terminal acquires outside viewer ownership before attachment and releases it on detach. |
+| 24 | Work-item details render attachments read from the attachment subcollection. |
+| 25 | A workflow-state catalog rename relabels its section without losing held work items. |
+| 26 | First-project onboarding selects the created project before starting its guided tour. |
+| 27 | A delayed native failure from a replaced attachment cannot detach the replacement viewer. |
+| 28 | Disabled-Projects onboarding resolves a valid default project and keeps failures retryable on the composed welcome screen. |
+| 29 | Guided module creation retries a failed folder link against the already-created module. |
+| 30 | Ordinary module creation stays open through folder-link failure and closes only after a successful retry. |
+| 31 | Pathless module selection preserves the prior selection on cancel or save failure and resumes after a valid link. |
+| 32 | A native attachment-process exit closes its viewer and releases outside viewer ownership without ending the durable terminal. |
+| 33 | Story-tree rows keep flexible titles first and state-colored compact ticket identifiers at the trailing edge while canonical-key, sequence, and title search remain available. |
+| 34 | The Task workspace names child issues, review findings and their cancel labels, dependency chips and blocker candidates, the parent picker and Module link, and deletion confirmation copy as compact ticket identifiers without leaking canonical keys. |
+| 35 | Live and restored task-bound terminal tabs and their close affordances read as the compact ticket identifier, while scratch and taskless sessions keep identifier-free labels. |
+| 36 | A live terminal falsely tombstoned by legacy runtime reconciliation returns to its active lifecycle when the repaired status snapshot arrives. |
+| 37 | The sidebar, Module tab strip, keyboard position shortcuts, and backlog grouping all render the one Canonical module order. |
+| 38 | Agent activity reorders an automatic project's modules but leaves a project in Manual module order on its persisted order. |
+| 39 | An agent-activity lookup failure leaves an automatic project on the server's fallback module order. |
+| 40 | A module list loaded before the project cache is warm still reads the project's durable ordering mode. |
+| 41 | A project whose ordering mode cannot be read is treated as automatic. |
+| 42 | The first sidebar module drag sends the exact visible order as its baseline and shows the move in the sidebar and Module tab strip at once. |
+| 43 | A pending module reorder disables further drag sources and converges on authoritative project and module data once it settles. |
+| 44 | A refused module reorder restores the previous order, reports the failure, and a retry succeeds. |
+| 45 | Cancelled and no-op module drops write nothing, and a drop does not select the module it landed on. |
+| 46 | A module created in an automatic project leads every module surface, and selection, its folder link, and the sidebar add control are unchanged. |
+| 47 | A module created in a project with Manual module order leads every module surface without leaving that mode, and agent activity cannot demote it. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

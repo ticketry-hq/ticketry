@@ -10,6 +10,7 @@ import {
 import { queryClient } from "../../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../../shared/query/keys";
 import type { WorkItem } from "../../../../../shared/api/types";
+import { stateById, useCachedStates } from "../../../../../shared/query/stateCatalog";
 
 interface RunSubtreeActionProps {
   task: WorkItem;
@@ -18,14 +19,8 @@ interface RunSubtreeActionProps {
 
 /** Starts an eligible top-level work item's existing dependency-subtree campaign. */
 export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
-  const item = task as unknown as {
-    id: string;
-    project_id: string;
-    parent_id: string | null;
-    sub_issues_count: number;
-    state?: { id: string | null; name?: string | null } | null;
-    issue_type: { id: string; name: string };
-  };
+  const item = task;
+  const states = useCachedStates(item.project_id);
   const [pending, setPending] = useState(false);
   const inFlightRef = useRef(false);
   // One row per work item mounts this; the query dedups so they share a single
@@ -33,15 +28,14 @@ export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
   const { data: capabilityMap } = useSubtreeRunCapabilitiesQuery(
     item.project_id,
   );
-  const enabledStates = capabilityMap?.[item.issue_type.id];
+  const enabledStates = capabilityMap?.[item.issue_type];
   const eligible =
     item.id !== TEMP_TASK_ID &&
     moduleId !== null &&
     item.parent_id === moduleId &&
     item.sub_issues_count > 0 &&
-    item.state?.id !== null &&
-    item.state?.id !== undefined &&
-    enabledStates?.includes(item.state.id) === true;
+    item.state !== null &&
+    enabledStates?.includes(item.state) === true;
 
   if (!eligible) return null;
 
@@ -67,9 +61,10 @@ export function RunSubtreeAction({ task, moduleId }: RunSubtreeActionProps) {
             exact: true,
           }),
         ]);
-        const stateName = queryClient.getQueryData<WorkItem>(
+        const stateId = queryClient.getQueryData<WorkItem>(
           queryKeys.workItems.byId(item.id),
-        )?.state?.name ?? item.state?.name;
+        )?.state ?? item.state;
+        const stateName = stateById(states, stateId)?.name;
         toast.error(
           stateName
             ? `Run subtree is no longer available while this item is in ${stateName}.`

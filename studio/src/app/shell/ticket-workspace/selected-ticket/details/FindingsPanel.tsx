@@ -1,6 +1,9 @@
 import { type WorkItem } from "../../../../../shared/api/types";
 import { stateColor, stateLabel } from "../../../../../shared/utilities/display";
 import { useClientStore } from "../../../../../state/clientStore";
+import { useCachedStates, stateById } from "../../../../../shared/query/stateCatalog";
+import { useIssueTypesQuery } from "../../../../../features/settings";
+import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
 import {
   findings as selectFindings,
   queuedFindingCount,
@@ -10,6 +13,7 @@ import {
 
 interface FindingsPanelProps {
   children: WorkItem[];
+  projectId: string;
   onCancel: (childId: string) => void;
 }
 
@@ -19,10 +23,14 @@ interface FindingsPanelProps {
 // "N fixes queued" count of the ones at the Implementation start stage.
 // Open/edit selects the child in the Studio task store; cancel reuses the child
 // state-move mutation, after which the parent detail reconciles.
-export default function FindingsPanel({ children, onCancel }: FindingsPanelProps) {
+export default function FindingsPanel({ children, projectId, onCancel }: FindingsPanelProps) {
   const selectTask = useClientStore((state) => state.selectTask);
-  const items = selectFindings(children);
-  const queued = queuedFindingCount(children);
+  const states = useCachedStates(projectId);
+  const issueTypes = useIssueTypesQuery(projectId).data ?? [];
+  const implementationTypeId = issueTypes.find((type) => type.name === "Implementation")?.id ?? null;
+  const implementStateId = states.find((state) => state.name === "Implement")?.id ?? null;
+  const items = selectFindings(children, implementationTypeId);
+  const queued = queuedFindingCount(children, implementationTypeId, implementStateId);
 
   if (items.length === 0) return null;
 
@@ -42,6 +50,8 @@ export default function FindingsPanel({ children, onCancel }: FindingsPanelProps
       <div className="overflow-hidden rounded-lg border border-pane-border" data-testid="findings-list">
         {items.map((f) => {
           const location = formatFindingLocation(f.description);
+          const state = stateById(states, f.state);
+          const identifier = formatWorkItemDisplayIdentifier(f.sequence_id);
           return (
             <div
               key={f.id}
@@ -53,7 +63,9 @@ export default function FindingsPanel({ children, onCancel }: FindingsPanelProps
                 onClick={() => void selectTask(f.id)}
                 className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
               >
-                <span className="w-20 flex-none font-mono text-xs text-text-muted">{f.key}</span>
+                <span className="w-20 flex-none font-mono text-xs text-text-muted">
+                  {identifier}
+                </span>
                 <span className="min-w-0 flex-1 truncate text-base text-text-primary">{f.name}</span>
                 {location && (
                   <span
@@ -68,16 +80,16 @@ export default function FindingsPanel({ children, onCancel }: FindingsPanelProps
               <span
                 className="flex-none rounded px-1.5 py-0.5 text-xs"
                 data-testid="finding-state"
-                style={{ color: stateColor(f.state), backgroundColor: `${stateColor(f.state)}22` }}
+                style={{ color: stateColor(state), backgroundColor: `${stateColor(state)}22` }}
               >
-                {stateLabel(f.state)}
+                {stateLabel(state)}
               </span>
-              {isCancellable(f) && (
+              {isCancellable(f, states) && (
                 <button
                   type="button"
                   onClick={() => onCancel(f.id)}
                   data-testid="finding-cancel"
-                  aria-label={`Cancel ${f.key}`}
+                  aria-label={identifier ? `Cancel ${identifier}` : "Cancel finding"}
                   title="Cancel finding"
                   className="flex-none rounded px-1.5 py-0.5 text-xs text-text-muted hover:bg-pane-bg hover:text-lifecycle-danger"
                 >

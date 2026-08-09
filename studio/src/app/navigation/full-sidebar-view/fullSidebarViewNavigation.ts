@@ -143,6 +143,7 @@ function cycleLiveTerminal(
       next.taskId,
       tree,
       itemsById,
+      getStatesSnapshot(projectId),
     );
     if (reveal.stateId && ui.collapsedStateIds.has(reveal.stateId)) {
       ui.toggleStateCollapsed(reveal.stateId);

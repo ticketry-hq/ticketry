@@ -92,6 +92,16 @@ class TerminalAttachment(Protocol):
 class TerminalRuntime(Protocol):
     """The only application-facing seam for terminal mechanics."""
 
+    @property
+    def namespace(self) -> str:
+        """Stable identity of the runtime inventory owned by this instance."""
+        ...
+
+    @property
+    def legacy_namespaces(self) -> tuple[str, ...]:
+        """Former identities that this runtime may safely prove and adopt."""
+        ...
+
     def create(self, request: CreateTerminal) -> None: ...
 
     def attach(self, agent_run_id: str) -> TerminalAttachment: ...

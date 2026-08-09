@@ -11,7 +11,6 @@ import type { SessionId } from "../../../../../features/agents/types";
 export async function closeTerminalTab(
   sessionId: SessionId,
   bucket: string,
-  _ticketKey?: string,
 ): Promise<void> {
   const term = useTerminalStore.getState();
   const meta = term.sessions[sessionId];

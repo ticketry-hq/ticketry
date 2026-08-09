@@ -60,12 +60,12 @@ export function useStoriesTree() {
   const expandedIds = useMemo(() => {
     const visible = new Set(rememberedExpandedIds);
     if (selectedModuleId && selectedTaskId) {
-      for (const id of taskRevealPath(selectedTaskId, tree, itemsById).ancestorIds) {
+      for (const id of taskRevealPath(selectedTaskId, tree, itemsById, states).ancestorIds) {
         visible.add(id);
       }
     }
     return visible;
-  }, [itemsById, rememberedExpandedIds, selectedModuleId, selectedTaskId, tree]);
+  }, [itemsById, rememberedExpandedIds, selectedModuleId, selectedTaskId, states, tree]);
 
   useLayoutEffect(() => {
     migrateCollapsedStateNames(states);

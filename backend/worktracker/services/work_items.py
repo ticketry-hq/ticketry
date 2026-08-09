@@ -9,6 +9,7 @@ from worktracker.models import Issue, IssueType, Project
 from worktracker.ranking import key_between
 from worktracker.sequences import allocate_sequence_id
 from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
+from worktracker.services.module_reorder import reorder_module
 from worktracker.work_items import (
     append_rank,
     blocker_would_cycle,
@@ -394,10 +395,25 @@ def update_work_item(issue_id: uuid.UUID, **data):
     return issue
 
 
-def reorder_work_item(issue_id: uuid.UUID, before_id=None, after_id=None):
-    """Move an issue between same-project neighbors and persist the new rank."""
+def reorder_work_item(
+    issue_id: uuid.UUID, before_id=None, after_id=None, initial_order_ids=None
+):
+    """Move an issue between same-project neighbors and persist the new rank.
+
+    Module work items carry a second order — the project's Manual module order
+    — whose first drag has to freeze a baseline and flip the project's ordering
+    mode atomically. That belongs to ``module_reorder``; the task path below is
+    the plain fractional-rank move it has always been (#360).
+    """
 
     issue = get_issue(issue_id)
+    if issue.type == "module":
+        return reorder_module(issue, before_id, after_id, initial_order_ids)
+    if initial_order_ids:
+        raise ValidationError(
+            "initial_order_ids applies only to module work items."
+        )
+
     before = _reorder_neighbor(issue, before_id)
     after = _reorder_neighbor(issue, after_id)
 
@@ -428,4 +444,6 @@ def _reorder_neighbor(issue, neighbor_id):
     neighbor = get_issue(neighbor_id, message="Neighbor not found.")
     if neighbor.project_id != issue.project_id:
         raise ValidationError("Neighbor belongs to another project.")
+    if neighbor.type == "module":
+        raise ValidationError("A task may not be ranked against a module.")
     return neighbor

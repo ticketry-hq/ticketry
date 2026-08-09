@@ -128,6 +128,15 @@ def test_work_item_batch_read_is_a_bounded_post_body():
     }
 
 
+def test_work_item_collection_has_no_response_hiding_parameters():
+    schema = _schema()
+    operation = schema["paths"]["/work-tracker/work-items"]["get"]
+    parameter_names = {parameter["name"] for parameter in operation["parameters"]}
+
+    assert "include_archived" not in parameter_names
+    assert "include_pathfind" not in parameter_names
+
+
 def test_module_archived_filter_and_issue_type_reassignment_body_are_declared():
     schema = _schema()
     module_list = schema["paths"]["/work-tracker/projects/{project_id}/modules"]["get"]
@@ -142,6 +151,31 @@ def test_module_archived_filter_and_issue_type_reassignment_body_are_declared():
         parameter["name"] == "reassign_to"
         for parameter in issue_type_delete.get("parameters", [])
     )
+
+
+def test_project_contract_exposes_a_read_only_module_ordering_mode():
+    schemas = _schema()["components"]["schemas"]
+    project = schemas["Project"]
+
+    assert project["properties"]["manual_module_order"]["type"] == "boolean"
+    assert project["properties"]["manual_module_order"]["readOnly"] is True
+    assert "manual_module_order" in project["required"]
+    # A project's ordering mode flips through the module reorder domain
+    # operation, so the general project update must not accept it as input —
+    # the patch shape carries it read-only, exactly as it carries ``id``.
+    patched = schemas["PatchedProject"]["properties"]["manual_module_order"]
+    assert patched["readOnly"] is True
+
+
+def test_reorder_contract_exposes_the_optional_first_drag_baseline():
+    reorder = _schema()["components"]["schemas"]["WorkItemReorder"]
+    baseline = reorder["properties"]["initial_order_ids"]
+
+    assert baseline["type"] == "array"
+    assert baseline["items"]["format"] == "uuid"
+    # Only a module's very first drag sends it, so it must stay optional for
+    # every ordinary within-column task reorder.
+    assert "initial_order_ids" not in reorder.get("required", [])
 
 
 def test_deleted_composite_routes_are_absent():

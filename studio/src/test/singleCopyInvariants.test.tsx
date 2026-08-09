@@ -5,9 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkItem } from "../shared/api/types";
 import * as api from "../shared/api/client";
 import { queryKeys } from "../shared/query/keys";
+import { queryClient as productionQueryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 import { useAgentStatusStore } from "../features/agents/status/store";
 import { useRenameWorkItem } from "../features/work-items/mutations";
+import { loadModuleTree } from "../features/work-items/queries";
+import { loadWorkflowProjectItems } from "../features/workflows/queries";
 import NameEditor from "../app/shell/ticket-workspace/selected-ticket/details/NameEditor";
 import {
   findDuplicateWorkItemHoldings,
@@ -36,13 +39,7 @@ function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
     created_at: "2026-08-06T12:00:00Z",
     updated_at: "2026-08-06T12:00:00Z",
     rank: "a",
-    issue_type: {
-      id: "story",
-      name: "Story",
-      level: "task",
-      color: null,
-      sort_order: 1,
-    },
+    issue_type: "story",
     blocked_by_ids: [],
     blocks_ids: [],
     ...overrides,
@@ -76,6 +73,7 @@ function Wrapper({ client, children }: PropsWithChildren<{ client: QueryClient }
 }
 
 beforeEach(() => {
+  productionQueryClient.clear();
   useClientStore.setState({
     storySearchQuery: "",
     modalStack: [],
@@ -142,6 +140,49 @@ describe("deliberate architectural exception: single-copy invariants", () => {
     });
 
     expect(findDuplicateWorkItemHoldings(client.getQueryCache().getAll())).toEqual([]);
+  });
+
+  it("rejects a sole noncanonical holding and repeated records within one entry", () => {
+    const client = testClient();
+    const item = workItem();
+    client.setQueryData(queryKeys.workItems.byProject(item.project_id), [
+      item,
+      { ...item },
+    ]);
+
+    expect(findDuplicateWorkItemHoldings(client.getQueryCache().getAll())).toEqual([{
+      id: item.id,
+      queryKeys: [
+        serializeWithCollections(queryKeys.workItems.byProject(item.project_id)),
+        serializeWithCollections(queryKeys.workItems.byProject(item.project_id)),
+      ],
+    }]);
+
+    client.clear();
+    client.setQueryData(queryKeys.workItems.byProject(item.project_id), item);
+    expect(findDuplicateWorkItemHoldings(client.getQueryCache().getAll())).toEqual([{
+      id: item.id,
+      queryKeys: [serializeWithCollections(queryKeys.workItems.byProject(item.project_id))],
+    }]);
+  });
+
+  it("keeps production module and workflow loads at the canonical per-id holding", async () => {
+    const item = workItem();
+    vi.spyOn(api, "getTasks").mockResolvedValue({
+      rootIds: [item.id],
+      children: { [item.id]: [] },
+      order: [item.id],
+      states: [],
+      workItems: [item],
+    });
+    vi.spyOn(api, "getProjectWorkItems").mockResolvedValue([item]);
+
+    await loadModuleTree(item.project_id, "module-1");
+    await loadWorkflowProjectItems(item.project_id);
+
+    expect(
+      findDuplicateWorkItemHoldings(productionQueryClient.getQueryCache().getAll()),
+    ).toEqual([]);
   });
 
   it("holds no non-identity run field in both a cache entry and the run projection", () => {

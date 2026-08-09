@@ -13,18 +13,18 @@ describe("overhaul acceptance — destructive confirmations", () => {
 
     const cancelled = useClientStore.getState().confirm({
       title: "Delete issue",
-      body: "TST-1 'Disposable story' will be permanently deleted.",
+      body: "T-1 'Disposable story' will be permanently deleted.",
       confirmLabel: "Delete",
       danger: true,
     });
     expect(await screen.findByRole("dialog", { name: "Delete issue" }))
-      .toHaveTextContent("TST-1 'Disposable story'");
+      .toHaveTextContent("T-1 'Disposable story'");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await expect(cancelled).resolves.toBe(false);
 
     const confirmed = useClientStore.getState().confirm({
       title: "Delete issue",
-      body: "TST-1 'Disposable story' will be permanently deleted.",
+      body: "T-1 'Disposable story' will be permanently deleted.",
       confirmLabel: "Delete",
       danger: true,
     });

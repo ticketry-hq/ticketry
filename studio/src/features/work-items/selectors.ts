@@ -26,6 +26,8 @@ export function deriveEpic(
 export interface BlockerChip {
   id: string;
   key: string | null;
+  /** Carried explicitly so presentation never parses a number out of `key`. */
+  sequence_id: number | null;
   name: string | null;
   state: State | null;
   unresolved: boolean;
@@ -36,18 +38,21 @@ export function resolveBlockerChips(
   ids: string[],
   items: WorkItem[],
   modules: Module[],
+  states: State[],
 ): BlockerChip[] {
   const itemById = new Map(items.map((item) => [item.id, item]));
   const moduleById = new Map(modules.map((module) => [module.id, module]));
   return ids.map((id) => {
     const item = itemById.get(id);
     if (item) {
+      const state = states.find((candidate) => candidate.id === item.state) ?? null;
       return {
         id,
         key: item.key,
+        sequence_id: item.sequence_id ?? null,
         name: item.name,
-        state: item.state,
-        unresolved: !RESOLVED_GROUPS.has(item.state?.group ?? ""),
+        state,
+        unresolved: !RESOLVED_GROUPS.has(state?.group ?? ""),
       };
     }
     const module = moduleById.get(id);
@@ -55,11 +60,19 @@ export function resolveBlockerChips(
       return {
         id,
         key: module.key,
+        sequence_id: module.sequence_id ?? null,
         name: module.name,
         state: null,
         unresolved: false,
       };
     }
-    return { id, key: null, name: null, state: null, unresolved: false };
+    return {
+      id,
+      key: null,
+      sequence_id: null,
+      name: null,
+      state: null,
+      unresolved: false,
+    };
   });
 }

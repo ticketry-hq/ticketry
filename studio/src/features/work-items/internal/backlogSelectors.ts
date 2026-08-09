@@ -77,11 +77,12 @@ export function buildCardMeta(
 // --- Story-only card predicate (#906) ---------------------------------------
 // The shared type-based rule planning surfaces use to decide what becomes a
 // card. Story is a *type name* at the `task` level — there is no "story"
-// IssueLevel — so we key on `issue_type.name`, not on hierarchy. This replaced
+// IssueLevel — so callers resolve the Story type in the catalog and we compare
+// its id, rather than inferring type from hierarchy. This replaced
 // the old parent-resolves-to-a-loaded-item ("sub-task") visibility test: typed
 // children remain hidden as top-level rows on every planning surface.
-export function isStory(item: WorkItem): boolean {
-  return item.issue_type.name === "Story";
+export function isStory(item: WorkItem, storyTypeId: string | null): boolean {
+  return item.issue_type === storyTypeId;
 }
 
 // Sentinel epic-filter value selecting the trailing "No Epic" group (tasks
@@ -139,11 +140,15 @@ export interface EpicGroup {
 // that have a matching descendant (scaffolding); the epic filter restricts to
 // one group. Progress counts span each epic's *full* subtree, unfiltered.
 
-function matches(item: WorkItem, filters: BacklogFilters): boolean {
+function matches(
+  item: WorkItem,
+  filters: BacklogFilters,
+  storyTypeId: string | null,
+): boolean {
   if (!matchesNonTypeFilters(item, filters)) return false;
   // Story-only visibility (#906): shared here so every surface applies the
   // identical rule while expanded parents can still render their children.
-  if (!isStory(item)) return false;
+  if (!isStory(item, storyTypeId)) return false;
   return true;
 }
 
@@ -195,6 +200,8 @@ function buildChildrenIndex(items: WorkItem[]): Map<string | null, WorkItem[]> {
 export function groupBacklog(
   items: WorkItem[],
   modules: Module[],
+  states: State[],
+  storyTypeId: string | null,
   filters: BacklogFilters,
   planning: PlanningAxes = EMPTY_PLANNING,
 ): EpicGroup[] {
@@ -209,9 +216,9 @@ export function groupBacklog(
   // axis applies as a row-level prune (ancestors of a match are kept).
   const passesState = (item: WorkItem): boolean =>
     !planning.stateIds.length ||
-    planning.stateIds.includes(item.state?.id ?? "");
+    planning.stateIds.includes(item.state ?? "");
   const rowMatches = (item: WorkItem): boolean =>
-    matches(item, filters) && passesState(item);
+    matches(item, filters, storyTypeId) && passesState(item);
   // Story-only visibility (#906) is applied by `matches()` inside `rowMatches`:
   // non-Story descendants fail the match and `prune` drops them, so the tree
   // stops at Story rows. The tree is always built in full — prune
@@ -245,7 +252,7 @@ export function groupBacklog(
     let total = 0;
     const walk = (item: WorkItem) => {
       total += 1;
-      if (item.state?.group === "completed") done += 1;
+      if (states.find((state) => state.id === item.state)?.group === "completed") done += 1;
       childrenOf(item.id).forEach(walk);
     };
     roots.forEach(walk);
@@ -317,6 +324,7 @@ export function groupBacklogByState(
   items: WorkItem[],
   states: State[],
   modules: Module[],
+  storyTypeId: string | null,
   filters: BacklogFilters,
   planning: PlanningAxes = EMPTY_PLANNING,
 ): StateGroup[] {
@@ -334,7 +342,7 @@ export function groupBacklogByState(
     (i) =>
       passesEpic(i) &&
       matchesNonTypeFilters(i, filters) &&
-      isStory(i) &&
+      isStory(i, storyTypeId) &&
       !cardMeta[i.id].isSubtask,
   );
 
@@ -358,7 +366,7 @@ export function groupBacklogByState(
   const groups: StateGroup[] = [];
   // Leading "No State" section: shown only when non-empty and no state
   // selection is active — the board's No State lane rules.
-  const orphaned = visible.filter((i) => !i.state?.id || !knownStateIds.has(i.state.id));
+  const orphaned = visible.filter((i) => !i.state || !knownStateIds.has(i.state));
   if (orphaned.length && !stateActive) {
     const rows = toRows(orphaned);
     groups.push({ state: null, rows, total: rows.length, cardMeta });
@@ -372,7 +380,7 @@ export function groupBacklogByState(
     // one, every section renders — empty ones included, with a zero count.
     if (stateActive && !(st.id != null && stateSet.has(st.id))) continue;
     const rows = toRows(
-      visible.filter((i) => i.state?.id != null && i.state.id === st.id),
+      visible.filter((i) => i.state != null && i.state === st.id),
     );
     groups.push({ state: st, rows, total: rows.length, cardMeta });
   }

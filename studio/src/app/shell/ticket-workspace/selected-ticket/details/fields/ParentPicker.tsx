@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useStudioStore } from "../../../../../../features/projects/store";
 import { useModulesQuery } from "../../../../../../features/projects";
+import { formatWorkItemDisplayIdentifier } from "../../../../../../features/work-items";
 
 const EMPTY_MODULES: Module[] = [];
 import type { Module, WorkItem } from "../../../../../../shared/api/types";
@@ -63,11 +64,12 @@ export default function ParentPicker({ value, currentId, items, onChange, saving
 
   const currentModule = modules.find((m) => m.id === value);
   const currentTask = items.find((i) => i.id === value);
-  const label = currentModule
-    ? currentModule.key
-    : currentTask
-      ? currentTask.key
-      : "No parent";
+  // A resolved parent with no sequence identifier falls back to the same
+  // neutral trigger text rather than showing a malformed identifier.
+  const label =
+    formatWorkItemDisplayIdentifier(
+      (currentModule ?? currentTask)?.sequence_id,
+    ) || "No parent";
 
   return (
     <Popover
@@ -148,7 +150,9 @@ function PickerBody({ modules, taskOptions, value, onChange, close }: BodyProps)
               close();
             }}
           >
-            <span className="w-20 flex-none text-xs text-text-muted">{m.key}</span>
+            <span className="w-20 flex-none text-xs text-text-muted">
+              {formatWorkItemDisplayIdentifier(m.sequence_id)}
+            </span>
             <span className="truncate">{m.name}</span>
           </PopoverOption>
         ))}
@@ -166,7 +170,9 @@ function PickerBody({ modules, taskOptions, value, onChange, close }: BodyProps)
               close();
             }}
           >
-            <span className="w-20 flex-none text-xs text-text-muted">{t.key}</span>
+            <span className="w-20 flex-none text-xs text-text-muted">
+              {formatWorkItemDisplayIdentifier(t.sequence_id)}
+            </span>
             <span className="truncate">{t.name}</span>
           </PopoverOption>
         ))}

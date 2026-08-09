@@ -47,6 +47,7 @@ def _runtime(
         runtime: Any = TmuxTerminalRuntime()
     else:
         runtime = InMemoryTerminalRuntime()
+    assert runtime.namespace
     runtime.create(
         CreateTerminal(
             agent_run_id=agent_run_id,
@@ -132,6 +133,24 @@ def test_runtime_contract_missing_and_absent_termination_are_distinct(
 
 
 @pytest.mark.parametrize("runtime_kind", ["memory", "tmux"])
+def test_runtime_contract_termination_completes_live_attachments(
+    runtime_kind: str,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    with _runtime(runtime_kind, monkeypatch) as (runtime, run_id):
+        attachment = runtime.attach(run_id)
+        assert attachment.completed is False
+
+        assert runtime.terminate(run_id).was_present is True
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline and not attachment.completed:
+            time.sleep(0.02)
+
+        assert attachment.completed is True
+        attachment.wait()
+
+
+@pytest.mark.parametrize("runtime_kind", ["memory", "tmux"])
 def test_runtime_contract_reports_observation_failure(
     runtime_kind: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -195,3 +214,19 @@ def test_tmux_runtime_logs_use_agent_run_id_not_internal_session_name(
         messages = [record.getMessage() for record in caplog.records]
         assert any(run_id in message for message in messages)
         assert all(f"pt-{run_id}" not in message for message in messages)
+
+
+def test_tmux_runtime_namespace_distinguishes_socket_roots(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("MUXED_TMUX_SOCKET", "shared-name")
+    monkeypatch.setenv("TMUX_TMPDIR", "/tmp/ticketry-runtime-a")
+    first = TmuxTerminalRuntime()
+    first_namespace = first.namespace
+
+    monkeypatch.setenv("TMUX_TMPDIR", "/tmp/ticketry-runtime-b")
+    second = TmuxTerminalRuntime()
+
+    assert first_namespace != second.namespace
+    assert first.legacy_namespaces == ("shared-name",)
+    assert second.legacy_namespaces == ("shared-name",)

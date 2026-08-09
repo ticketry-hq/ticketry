@@ -19,6 +19,8 @@ from apps.terminals.runtime import (
 class RecordingTerminalRuntime:
     """Small application-test fake for launch and cleanup orchestration."""
 
+    namespace: str = "test"
+    legacy_namespaces: tuple[str, ...] = ()
     create_error: Exception | None = None
     requests: list[CreateTerminal] = field(default_factory=list)
     terminated: list[str] = field(default_factory=list)

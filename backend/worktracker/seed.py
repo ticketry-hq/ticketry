@@ -102,7 +102,9 @@ def ensure_launch_bindings(
             if supports_agent:
                 defaults["agent"] = None
             if supports_subtree_run:
-                defaults["subtree_run_enabled"] = issue_type.name == "Story"
+                defaults["subtree_run_enabled"] = (
+                    issue_type.name == "Story" and state.name != "Ideas"
+                )
             if supports_required_skills:
                 defaults["required_skills"] = list(
                     DEFAULT_REQUIRED_SKILLS.get(state.name, ())

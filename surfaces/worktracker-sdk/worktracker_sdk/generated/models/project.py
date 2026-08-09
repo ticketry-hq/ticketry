@@ -18,7 +18,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from uuid import UUID
@@ -35,7 +35,8 @@ class Project(BaseModel):
     slug: Annotated[str, Field(strict=True, max_length=64)]
     description: Optional[StrictStr] = None
     workspace_slug: Optional[Annotated[str, Field(strict=True, max_length=64)]] = None
-    __properties: ClassVar[List[str]] = ["id", "name", "slug", "description", "workspace_slug"]
+    manual_module_order: StrictBool
+    __properties: ClassVar[List[str]] = ["id", "name", "slug", "description", "workspace_slug", "manual_module_order"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -68,9 +69,11 @@ class Project(BaseModel):
           were set at model initialization. Other fields with value `None`
           are ignored.
         * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
             "id",
+            "manual_module_order",
         ])
 
         _dict = self.model_dump(
@@ -94,6 +97,7 @@ class Project(BaseModel):
             "name": obj.get("name"),
             "slug": obj.get("slug"),
             "description": obj.get("description"),
-            "workspace_slug": obj.get("workspace_slug")
+            "workspace_slug": obj.get("workspace_slug"),
+            "manual_module_order": obj.get("manual_module_order")
         })
         return _obj

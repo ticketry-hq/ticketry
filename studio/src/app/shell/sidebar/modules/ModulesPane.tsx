@@ -1,12 +1,27 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useModalStore } from "../../../modal/modalStore";
-import { useModulesQuery } from "../../../../features/projects";
+import {
+  moduleDragCodec,
+  useModulesQuery,
+  useReorderModule,
+  type ModuleDragPayload,
+} from "../../../../features/projects";
 import { useStudioStore } from "../../../../features/projects/store";
 import {
   resolveCursorId,
   useClientStore,
 } from "../../../../state/clientStore";
+import { useAxisDragAndDrop } from "../../../../shared/dragDrop/useAxisDragAndDrop";
 import { PaneShell } from "../../PaneShell";
+import { ModuleRow } from "./ModuleRow";
+
+/**
+ * A browser may emit a click on the row a drag finished over. Selecting a
+ * Module because it was dropped on would be a surprise, so a click arriving
+ * this soon after a drop is ignored — long enough to cover the synthetic
+ * click, far short of a deliberate second gesture.
+ */
+const POST_DROP_CLICK_WINDOW_MS = 300;
 
 export function ModulesPane() {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
@@ -20,7 +35,43 @@ export function ModulesPane() {
   const setCursor = useClientStore((s) => s.setModulesCursor);
   const pushModal = useModalStore((s) => s.pushModal);
 
-  // Centered "+ Add Module" trigger, always rendered after the list.
+  const { reorder, isPending } = useReorderModule(selectedProjectId);
+  const droppedAt = useRef(0);
+
+  const handleDrop = useCallback(
+    (
+      payload: ModuleDragPayload,
+      resolved: { targetId: string; intent: "near" | "far" },
+    ) => {
+      droppedAt.current = Date.now();
+      reorder(payload.moduleId, resolved.targetId, resolved.intent);
+    },
+    [reorder],
+  );
+
+  const dragDrop = useAxisDragAndDrop<ModuleDragPayload, string>({
+    axis: "vertical",
+    codec: moduleDragCodec,
+    // One gesture at a time: a second drag cannot start against an order the
+    // server has not yet agreed to.
+    disabled: isPending || selectedProjectId === null,
+    onDrop: handleDrop,
+  });
+
+  const handleSelect = useCallback(
+    (moduleId: string) => {
+      if (Date.now() - droppedAt.current < POST_DROP_CLICK_WINDOW_MS) {
+        droppedAt.current = 0;
+        return;
+      }
+      setCursor(moduleId);
+      void selectModule(moduleId);
+    },
+    [selectModule, setCursor],
+  );
+
+  // Centered "+ Add Module" trigger, always rendered after the list. It is
+  // neither a drag source nor a drop target.
   const addButton = (
     <button
       type="button"
@@ -55,29 +106,24 @@ export function ModulesPane() {
         </>
       ) : (
         <ul>
-          {modules.map((m) => {
-            const isSelected = m.id === selectedModuleId;
-            const isFocused = m.id === visibleCursorId;
-            return (
-              <li
-                key={m.id}
-                onClick={() => {
-                  setCursor(m.id);
-                  void selectModule(m.id);
-                }}
-                className={`cursor-pointer truncate px-1 py-0.5 ${
-                  isSelected
-                    ? "bg-selection-bg text-text-primary"
-                    : isFocused
-                      ? "bg-pane-title text-text-primary"
-                      : "text-text-primary hover:bg-pane-title"
-                }`}
-              >
-                {"📦 "}
-                {m.name}
-              </li>
-            );
-          })}
+          {modules.map((m) => (
+            <ModuleRow
+              key={m.id}
+              module={m}
+              isSelected={m.id === selectedModuleId}
+              isFocused={m.id === visibleCursorId}
+              dropIntent={
+                dragDrop.targetId === m.id &&
+                dragDrop.payload !== null &&
+                dragDrop.payload.moduleId !== m.id
+                  ? dragDrop.intent
+                  : null
+              }
+              onSelect={handleSelect}
+              dragSourceProps={dragDrop.getDragSourceProps({ moduleId: m.id })}
+              dropTargetProps={dragDrop.getDropTargetProps(m.id)}
+            />
+          ))}
           <li>{addButton}</li>
         </ul>
       )}

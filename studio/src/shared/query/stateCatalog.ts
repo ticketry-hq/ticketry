@@ -26,6 +26,13 @@ export function getStatesSnapshot(projectId: string | null): State[] {
   );
 }
 
+export function stateById(
+  states: readonly State[],
+  stateId: string | null | undefined,
+): State | null {
+  return states.find((state) => state.id === stateId) ?? null;
+}
+
 /** Fetch (deduped) and cache a project's states. */
 export function loadStates(projectId: string): Promise<State[]> {
   return queryClient.fetchQuery({

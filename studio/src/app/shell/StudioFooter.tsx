@@ -9,12 +9,10 @@ import {
 } from "../../state/clientStore";
 import { IconSettings } from "../../shared/ui/icons";
 
-// Settings sits behind two sequential lazy boundaries (SettingsModal, then
-// WorkflowSettingsPanel); warming both on hover/focus removes the double
-// chunk wait when the modal opens.
+// Warm the model-only Settings composition before the modal opens.
 const preloadSettings = () => {
   void import("../../features/studio/modals/SettingsModal");
-  void import("../../features/workflows/WorkflowSettingsPanel");
+  void import("../../features/workflows/ModelConfigurationPanel");
 };
 
 const preloadKeyboardShortcuts = () => {

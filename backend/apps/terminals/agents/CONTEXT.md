@@ -44,6 +44,10 @@ _Avoid_: global state prompt, coding-stage prompt, state description
 One application-owned pre-prompt and post-prompt that surround every agent launch prompt. The envelope is changed only in the app, augments an already-valid launch, and never changes a running session or makes a promptless workflow binding launchable.
 _Avoid_: user-configurable prompt, project prompt, profile prompt, fallback workflow prompt
 
+**Bounded launch context**:
+The size-limited factual context supplied when an agent session starts. It carries enough identity and routing information to retrieve the authoritative work item when needed, rather than embedding the work item's full description.
+_Avoid_: embedded work-item snapshot, truncated description
+
 **Workflow launch configuration**:
 The independently inheritable prompt and launch catalog references selected by
 a work item's type and current workflow state. A binding stores foreign keys to

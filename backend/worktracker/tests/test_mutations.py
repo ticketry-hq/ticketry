@@ -69,9 +69,9 @@ def test_create_project_seeds_states(client, project, auth):
 
     created = Project.objects.get(id=body["id"])
     assert created.seq_counter == 0
-    # The 7 canonical states are seeded so the project is board-ready
-    # (CODIN-859); all seven carry the protected flag.
-    assert State.objects.filter(project=created).count() == 7
+    # The canonical states are seeded so the project is board-ready
+    # (CODIN-859); every reviewed state carries the protected flag.
+    assert State.objects.filter(project=created).count() == 8
     assert set(State.objects.filter(project=created).values_list("group", flat=True)) == {
         "backlog",
         "unstarted",
@@ -85,6 +85,7 @@ def test_create_project_seeds_states(client, project, auth):
         )
     )
     assert protected == {
+        "Ideas",
         "Grill",
         "Spec",
         "Tickets",

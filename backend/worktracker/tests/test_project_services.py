@@ -15,6 +15,7 @@ from worktracker.services.projects import (
     delete_project,
     update_project,
 )
+from worktracker.services.work_items import create_project_work_item
 
 
 @pytest.mark.django_db
@@ -29,7 +30,7 @@ def test_create_project_seeds_defaults_and_persists_description(project):
     assert created.slug == "SEC"
     assert created.description == "# Goals\n\nShip it."
     assert created.seq_counter == 0
-    assert State.objects.filter(project=created).count() == 7
+    assert State.objects.filter(project=created).count() == 8
     assert set(State.objects.filter(project=created).values_list("group", flat=True)) == {
         "backlog",
         "unstarted",
@@ -42,6 +43,7 @@ def test_create_project_seeds_defaults_and_persists_description(project):
             "name", flat=True
         )
     ) == {
+        "Ideas",
         "Grill",
         "Spec",
         "Tickets",
@@ -55,6 +57,14 @@ def test_create_project_seeds_defaults_and_persists_description(project):
             project=created, start_state__isnull=False
         ).values_list("name", flat=True)
     ) == {"Story", "Implementation", "PathFind"}
+    story_type = IssueType.objects.get(project=created, name="Story")
+    assert story_type.start_state.name == "Ideas"
+    story = create_project_work_item(
+        created.id,
+        name="New story",
+        issue_type_id=story_type.id,
+    )
+    assert story.state.name == "Ideas"
     assert all(
         issue_type.workflow_revision == 1
         and IssueTypeTransition.objects.filter(issue_type=issue_type).exists()

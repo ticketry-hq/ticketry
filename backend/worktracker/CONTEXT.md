@@ -160,6 +160,16 @@ project rows continue to exist and remain reachable over the API; they are
 simply not what the surface resolves to.
 _Avoid_: current selection, implicit workspace, hidden project, fallback project
 
+**Module ordering mode**:
+The durable, project-owned fact that decides how a module collection read is
+ordered. Every project begins and migrates into *automatic*, where the read is
+newest-created-first and clients may layer agent-activity recency on top. A
+project acquires *Manual module order* on its first module drag, after which
+the read is the module work items' ascending fractional rank and no activity
+may rearrange it. It is a one-way decision in this version, and it belongs to
+the project rather than to a user, device, or module surface.
+_Avoid_: sort preference, per-user order, recency toggle, pinned modules
+
 **Work-item change revision**:
 The project-monotonic counter stamped on a work item whenever a committed change
 to it must reach live clients — a field edit, a relationship change, a reorder,

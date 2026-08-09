@@ -15,6 +15,7 @@ import {
   listModules,
   listProjectWorkItems,
   listProjects,
+  getWorkItem,
   getProviderCatalog,
   getWorkspace,
   patchIssueType,
@@ -114,34 +115,13 @@ describe("api client", () => {
     expect(fetchMock.mock.calls[1][1].method).toBe("POST");
   });
 
-  it("composes provider activation with the global launch default", async () => {
+  it("reads provider activation with the global launch default", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith("/work-tracker/providers")) {
-        return Promise.resolve(jsonResponse([
-          {
-            id: "provider-claude",
-            slug: "claude",
-            activated: false,
-            supports_unattended: true,
-          },
-          {
-            id: "provider-codex",
-            slug: "codex",
-            activated: true,
-            supports_unattended: true,
-          },
-          {
-            id: "provider-agy",
-            slug: "agy",
-            activated: true,
-            supports_unattended: true,
-          },
-        ]));
-      }
       if (url.endsWith("/settings/provider-catalog")) {
         return Promise.resolve(jsonResponse({
           value: {
+            activated_providers: ["codex"],
             global_default: {
               provider: "codex",
               model: "gpt-5.6-luna",
@@ -165,42 +145,11 @@ describe("api client", () => {
     });
   });
 
-  it("persists provider activation separately from the global launch default", async () => {
+  it("persists provider activation atomically with the global launch default", async () => {
     fetchMock.mockImplementation(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         const method = init?.method ?? "GET";
-        if (method === "GET" && url.endsWith("/work-tracker/providers")) {
-          return jsonResponse([
-            {
-              id: "provider-claude",
-              slug: "claude",
-              activated: true,
-              supports_unattended: true,
-            },
-            {
-              id: "provider-codex",
-              slug: "codex",
-              activated: true,
-              supports_unattended: true,
-            },
-            {
-              id: "provider-gemini",
-              slug: "gemini",
-              activated: true,
-              supports_unattended: true,
-            },
-          ]);
-        }
-        if (method === "PATCH" && url.includes("/work-tracker/providers/")) {
-          const slug = url.endsWith("provider-claude") ? "claude" : "gemini";
-          return jsonResponse({
-            id: url.split("/").at(-1),
-            slug,
-            activated: JSON.parse(String(init?.body)).activated,
-            supports_unattended: true,
-          });
-        }
         if (method === "PUT" && url.endsWith("/settings/provider-catalog")) {
           return jsonResponse({ value: JSON.parse(String(init?.body)).value });
         }
@@ -226,16 +175,8 @@ describe("api client", () => {
       JSON.parse(String(init?.body)),
     ])).toEqual([
       [
-        "/api/work-tracker/providers/provider-claude",
-        { activated: false },
-      ],
-      [
-        "/api/work-tracker/providers/provider-gemini",
-        { activated: false },
-      ],
-      [
         "/api/settings/provider-catalog",
-        { value: { global_default: catalog.global_default } },
+        { value: catalog },
       ],
     ]);
   });
@@ -270,6 +211,35 @@ describe("api client", () => {
 });
 
 describe("S2 fetchers", () => {
+  it("reads a work item and its attachment subcollection", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/work-items/w1/attachments")) {
+        return Promise.resolve(jsonResponse([
+          {
+            id: "attachment-1",
+            issue: "w1",
+            filename: "notes.md",
+            mime_type: "text/markdown",
+            size: 12,
+            url: "/media/notes.md",
+            created_at: "2026-08-09T12:00:00Z",
+          },
+        ]));
+      }
+      return Promise.resolve(jsonResponse({ id: "w1", name: "Story" }));
+    });
+
+    await expect(getWorkItem("w1")).resolves.toMatchObject({
+      task: { id: "w1", name: "Story" },
+      attachments: [{ id: "attachment-1", filename: "notes.md" }],
+    });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/work-tracker/work-items/w1",
+      "/api/work-tracker/work-items/w1/attachments",
+    ]);
+  });
+
   it("builds the work-items list path with a state filter", async () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await listProjectWorkItems("p1", { state: "s1" });
@@ -282,14 +252,6 @@ describe("S2 fetchers", () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await listProjectWorkItems("p1");
     expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/work-items?project=p1");
-  });
-
-  it("forwards PathFind inclusion only when explicitly requested", async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]));
-    await listProjectWorkItems("p1", { includePathfind: true });
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/work-tracker/work-items?include_pathfind=true&project=p1",
-    );
   });
 
   it("POSTs a create body to the project work-items path", async () => {

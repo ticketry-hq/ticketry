@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
+import { terminalLabel } from "../app/shell/ticket-workspace/selected-ticket/internal/terminalLabel";
 import type { WorkItemRow } from "../app/shell/ticket-workspace/tasks/TasksPane";
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status";
@@ -125,7 +126,7 @@ describe("overhaul acceptance — terminals", () => {
     const parent = workItem({
       id: "story-1",
       name: "Parent",
-      state: TODO,
+      state: TODO.id,
       rank: "Z",
       sub_issues_count: 1,
     });
@@ -133,7 +134,7 @@ describe("overhaul acceptance — terminals", () => {
       id: "child-1",
       name: "Child",
       key: "MEML-2",
-      state: TODO,
+      state: TODO.id,
       parent_id: "story-1",
       rank: "A",
     });
@@ -251,6 +252,45 @@ describe("overhaul acceptance — terminals", () => {
     expect(tabs[0]).toMatchObject({ id: "session-1", lifecycle: "working" });
   });
 
+  it("[overhaul-36] clears a false exited badge when reconciliation recovers the live run", () => {
+    const meta = session("session-1", "story-1", "run-1");
+    const exitedRun = {
+      ...run("run-1", "story-1", "exited"),
+      project_id: "project-1",
+      agent: "codex" as const,
+      updated_at: "2026-08-07T12:05:00Z",
+    };
+    useTerminalStore.setState({
+      sessions: { "session-1": meta },
+      sessionByRun: { "run-1": "session-1" },
+    });
+    useAgentStatusStore.setState({ runs: { "run-1": exitedRun } });
+
+    dispatchStatusFrame({
+      v: 1,
+      type: "snapshot",
+      scope: { project_id: "project-1", task_id: null },
+      runs: [{
+        ...exitedRun,
+        state: "working",
+        updated_at: "2026-08-07T12:06:00Z",
+      }],
+      automation_attempts: [],
+      at: "2026-08-07T12:06:00Z",
+    });
+
+    const tabs = deriveTaskSessions(
+      "story-1",
+      useTerminalStore.getState().sessions,
+      useAgentStatusStore.getState().runs,
+      new Set(),
+    );
+    expect(tabs[0]).toMatchObject({ id: "session-1", lifecycle: "working" });
+    expect(useTerminalStore.getState().sessions["session-1"]?.status).toBe(
+      "ready",
+    );
+  });
+
   it("[overhaul-16] resumes a dormant run into a selected terminal tab", async () => {
     terminalApi.listResumableTerminals.mockResolvedValue([{
       agent_run_id: "run-old",
@@ -278,7 +318,7 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketKey="MEML-1"
+          ticketSeq={350}
           owner="studio"
           details={<div>Issue details</div>}
         />
@@ -301,7 +341,75 @@ describe("overhaul acceptance — terminals", () => {
     expect(useClientStore.getState().workspaces["story-1"]?.active).toBe(
       "terminal",
     );
-    expect(screen.getByRole("tab", { name: "MEML-1 · codex" }))
+    expect(screen.getByRole("tab", { name: "T-350 · codex" }))
       .toHaveAttribute("aria-selected", "true");
+  });
+
+  it("[overhaul-35] labels task-bound terminal tabs with the compact ticket identifier", async () => {
+    // A live spawn carries its own sequence; a restored attach carries none and
+    // must read the workspace's sequence instead. Both land in the same strip.
+    useTerminalStore.setState({
+      sessions: { "session-live": session("session-live", "story-1", "run-live") },
+      sessionByRun: { "run-live": "session-live" },
+    });
+    useAgentStatusStore.setState({
+      runs: {
+        "run-live": run("run-live", "story-1"),
+        "run-restored": run("run-restored", "story-1"),
+      },
+    });
+    act(() => {
+      useTerminalStore.getState().attachPersisted({
+        agent_run_id: "run-restored",
+        created_at: "2026-08-07T12:00:00Z",
+      });
+    });
+    const restored = Object.values(useTerminalStore.getState().sessions).find(
+      (meta) => meta.agentRunId === "run-restored",
+    );
+    expect(restored?.ticketSeq).toBeNull();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          ticketSeq={350}
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab", { name: "T-350 · codex" })).toHaveLength(2);
+    });
+    expect(
+      screen.getAllByRole("button", { name: "Close terminal T-350 · codex" }),
+    ).toHaveLength(2);
+
+    // Identity, persistence, and run ownership stay on the opaque identifiers.
+    expect(useTerminalStore.getState().sessionByRun["run-live"]).toBe("session-live");
+
+    const scratchPlan = {
+      ...session("session-plan", "story-1", "run-plan"),
+      taskId: null,
+      ticketSeq: null,
+      isPlanning: true,
+    };
+    // Scratch, taskless, and sequence-less sessions keep identifier-free labels,
+    // and no candidate sequence can compose a `T-null`/`T-undefined` label.
+    expect(terminalLabel(scratchPlan)).toBe("plan");
+    expect(terminalLabel({ ...scratchPlan, isPlanning: false, isInstant: true }))
+      .toBe("instant");
+    expect(terminalLabel({ ...scratchPlan, isPlanning: false })).toBe("codex");
+    expect(terminalLabel({ ...scratchPlan, isPlanning: false }, null)).toBe("codex");
+    expect(terminalLabel({ ...scratchPlan, isPlanning: false }, undefined))
+      .toBe("codex");
+    expect(terminalLabel({ ...scratchPlan, isPlanning: false }, Number.NaN))
+      .toBe("codex");
+    expect(terminalLabel(session("session-x", "story-1", "run-x"), 350))
+      .toBe("T-350 · codex");
   });
 });

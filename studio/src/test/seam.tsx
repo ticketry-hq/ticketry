@@ -10,7 +10,10 @@ import type { DesignDoc } from "../features/agents/types";
 import { useStudioStore } from "../features/projects/store";
 import { loadModuleTree } from "../features/work-items/queries";
 import type {
+  Attachment,
+  IssueType,
   ModuleTree,
+  State,
   WorkItem,
 } from "../shared/api/types";
 import { queryClient } from "../shared/query/queryClient";
@@ -23,6 +26,7 @@ export interface HttpFixture {
   workItems(items: WorkItem[]): void;
   runs(issueId: string, runs: RunRecord[]): void;
   documents(issueId: string, docs: DesignDoc[]): void;
+  attachments(issueId: string, attachments: Attachment[]): void;
   expectPatch(id: string, body: unknown): Promise<void>;
   expectReorder(
     id: string,
@@ -62,8 +66,11 @@ const json = (body: unknown, status = 200) =>
 class BoundaryFixture implements StudioFixture {
   readonly trees = new Map<string, ModuleTree>();
   readonly items = new Map<string, WorkItem>();
+  readonly states = new Map<string, State>();
+  readonly issueTypes = new Map<string, IssueType>();
   readonly runRows = new Map<string, RunRecord[]>();
   readonly documentRows = new Map<string, DesignDoc[]>();
+  readonly attachmentRows = new Map<string, Attachment[]>();
   readonly patches: PatchCall[] = [];
   readonly reorders: ReorderCall[] = [];
   readonly graphRuns: string[] = [];
@@ -137,7 +144,12 @@ class BoundaryFixture implements StudioFixture {
   }
 
   workItems(items: WorkItem[]): void {
-    for (const item of items) this.items.set(item.id, item);
+    for (const item of items as FixtureWorkItem[]) {
+      if (item.__state?.id) this.states.set(item.__state.id, item.__state);
+      if (item.__issueType) this.issueTypes.set(item.__issueType.id, item.__issueType);
+      const { __state: _state, __issueType: _issueType, ...record } = item;
+      this.items.set(item.id, record);
+    }
   }
 
   runs(issueId: string, runs: RunRecord[]): void {
@@ -146,6 +158,10 @@ class BoundaryFixture implements StudioFixture {
 
   documents(issueId: string, docs: DesignDoc[]): void {
     this.documentRows.set(issueId, docs);
+  }
+
+  attachments(issueId: string, attachments: Attachment[]): void {
+    this.attachmentRows.set(issueId, attachments);
   }
 
   expectPatch(id: string, body: unknown): Promise<void> {
@@ -192,7 +208,14 @@ class BoundaryFixture implements StudioFixture {
     const path = url.pathname.replace(/\/$/, "");
 
     if (method === "GET" && path.endsWith("/work-tracker/projects")) {
-      return json([{ id: this.projectId(), name: "Project", slug: "project" }]);
+      return json([
+        {
+          id: this.projectId(),
+          name: "Project",
+          slug: "project",
+          manual_module_order: false,
+        },
+      ]);
     }
     if (method === "GET" && /\/work-tracker\/projects\/[^/]+\/modules$/.test(path)) {
       return json([...this.trees.keys()].map((id, index) => ({
@@ -206,23 +229,13 @@ class BoundaryFixture implements StudioFixture {
       })));
     }
     if (method === "GET" && /\/work-tracker\/projects\/[^/]+\/states$/.test(path)) {
-      const states = new Map<string, WorkItem["state"]>();
-      for (const item of this.items.values()) {
-        if (item.state?.id) states.set(item.state.id, item.state);
-      }
-      return json([...states.values()]);
+      return json([...this.states.values()]);
     }
     if (
       method === "GET" &&
       /\/work-tracker\/projects\/[^/]+\/issue-types$/.test(path)
     ) {
-      const issueTypes = new Map<string, WorkItem["issue_type"]>();
-      for (const item of this.items.values()) {
-        if (item.issue_type?.id) {
-          issueTypes.set(item.issue_type.id, item.issue_type);
-        }
-      }
-      return json([...issueTypes.values()]);
+      return json([...this.issueTypes.values()]);
     }
     if (
       method === "GET" &&
@@ -230,12 +243,12 @@ class BoundaryFixture implements StudioFixture {
     ) {
       const bindings = new Map<string, unknown>();
       for (const item of this.items.values()) {
-        if (!item.issue_type?.id || !item.state?.id) continue;
-        const key = `${item.issue_type.id}:${item.state.id}`;
+        if (!item.issue_type || !item.state) continue;
+        const key = `${item.issue_type}:${item.state}`;
         bindings.set(key, {
           id: bindings.size + 1,
-          issue_type: item.issue_type.id,
-          state: item.state.id,
+          issue_type: item.issue_type,
+          state: item.state,
           subtree_run_enabled: true,
           workflow_revision: 1,
           created_at: "2026-08-08T10:00:00Z",
@@ -267,6 +280,13 @@ class BoundaryFixture implements StudioFixture {
       this.graphRuns.push(id);
       return json({ root_id: id, launched: [] }, 201);
     }
+    const attachmentMatch = path.match(
+      /\/work-tracker\/work-items\/([^/]+)\/attachments$/,
+    );
+    if (method === "GET" && attachmentMatch) {
+      const id = decodeURIComponent(attachmentMatch[1]);
+      return json(this.attachmentRows.get(id) ?? []);
+    }
     const itemMatch = path.match(/\/work-tracker\/work-items\/([^/]+)$/);
     if (method === "PATCH" && itemMatch) {
       const id = decodeURIComponent(itemMatch[1]);
@@ -276,16 +296,8 @@ class BoundaryFixture implements StudioFixture {
       };
       const current = this.items.get(id);
       if (!current) return json({ detail: "Not found" }, 404);
-      const state = body.state_id
-        ? [...this.items.values()]
-            .map((item) => item.state)
-            .find((candidate) => candidate?.id === body.state_id) ?? current.state
-        : current.state;
-      const issueType = body.issue_type_id
-        ? [...this.items.values()]
-            .map((item) => item.issue_type)
-            .find((candidate) => candidate?.id === body.issue_type_id) ?? current.issue_type
-        : current.issue_type;
+      const state = body.state_id ?? current.state;
+      const issueType = body.issue_type_id ?? current.issue_type;
       const updated = {
         ...current,
         ...body,
@@ -344,13 +356,40 @@ export function fixture(): StudioFixture {
   return new BoundaryFixture();
 }
 
-export function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
+type FixtureWorkItem = WorkItem & {
+  __state?: State;
+  __issueType?: IssueType;
+};
+
+type WorkItemOverrides = Partial<Omit<WorkItem, "state" | "issue_type">> & {
+  state?: string | null | State;
+  issue_type?: string | IssueType;
+};
+
+export function workItem(overrides: WorkItemOverrides = {}): FixtureWorkItem {
+  const defaultState: State = {
+    id: "state-1",
+    name: "Ideas",
+    group: "backlog",
+    color: null,
+  };
+  const defaultIssueType: IssueType = {
+    id: "story",
+    name: "Story",
+    level: "task",
+    color: null,
+    sort_order: 1,
+  };
+  const state = overrides.state === undefined ? defaultState : overrides.state;
+  const issueType = overrides.issue_type === undefined
+    ? defaultIssueType
+    : overrides.issue_type;
   return {
     id: "story-1",
     name: "Story",
     project_id: "project-1",
     sequence_id: 1,
-    state: { id: "state-1", name: "Idea", group: "backlog", color: null },
+    state: typeof state === "string" || state === null ? state : state.id,
     state_revision: 1,
     description: "",
     parent_id: "module-1",
@@ -360,16 +399,14 @@ export function workItem(overrides: Partial<WorkItem> = {}): WorkItem {
     created_at: "2026-08-06T12:00:00Z",
     updated_at: "2026-08-06T12:00:00Z",
     rank: "a",
-    issue_type: {
-      id: "story",
-      name: "Story",
-      level: "task",
-      color: null,
-      sort_order: 1,
-    },
+    issue_type: typeof issueType === "string" ? issueType : issueType.id,
     blocked_by_ids: [],
     blocks_ids: [],
-    ...overrides,
+    ...Object.fromEntries(
+      Object.entries(overrides).filter(([key]) => key !== "state" && key !== "issue_type"),
+    ),
+    __state: typeof state === "object" && state !== null ? state : undefined,
+    __issueType: typeof issueType === "object" ? issueType : undefined,
   };
 }
 
@@ -389,7 +426,14 @@ function StudioBehaviourSurface({ children }: { children?: ReactNode }) {
   );
 }
 
-export function mountStudio({ http }: { http: HttpFixture; route?: string }): RenderResult {
+export function mountStudio({
+  http,
+  selectedTaskId = null,
+}: {
+  http: HttpFixture;
+  route?: string;
+  selectedTaskId?: string | null;
+}): RenderResult {
   if (!(http instanceof BoundaryFixture)) {
     throw new Error("mountStudio requires the HTTP fixture returned by fixture().");
   }
@@ -407,7 +451,7 @@ export function mountStudio({ http }: { http: HttpFixture; route?: string }): Re
   });
   useClientStore.setState({
     selectedModuleId: http.firstModuleId(),
-    selectedTaskId: null,
+    selectedTaskId,
     workspaceSelection: { kind: "task" },
     storySearchQuery: "",
     expandedIdsByModule: {},

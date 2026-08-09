@@ -2363,7 +2363,7 @@
         "/work-tracker/projects/{project_id}/modules": {
             "get": {
                 "operationId": "listModules",
-                "description": "Project-scoped module collection with explicit stable ordering.",
+                "description": "Project-scoped module collection in the Canonical module order.",
                 "parameters": [
                     {
                         "in": "query",
@@ -2409,7 +2409,7 @@
             },
             "post": {
                 "operationId": "createModule",
-                "description": "Project-scoped module collection with explicit stable ordering.",
+                "description": "Project-scoped module collection in the Canonical module order.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3006,22 +3006,6 @@
                 "operationId": "listWorkItems",
                 "description": "The only task collection read, narrowed by declared query parameters.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "include_archived",
-                        "schema": {
-                            "type": "boolean",
-                            "default": false
-                        }
-                    },
-                    {
-                        "in": "query",
-                        "name": "include_pathfind",
-                        "schema": {
-                            "type": "boolean",
-                            "default": false
-                        }
-                    },
                     {
                         "in": "query",
                         "name": "module",
@@ -4947,6 +4931,10 @@
                         "type": "string",
                         "writeOnly": true,
                         "maxLength": 64
+                    },
+                    "manual_module_order": {
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 }
             },
@@ -5138,10 +5126,15 @@
                         "type": "string",
                         "writeOnly": true,
                         "maxLength": 64
+                    },
+                    "manual_module_order": {
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "id",
+                    "manual_module_order",
                     "name",
                     "slug"
                 ]
@@ -5175,6 +5168,12 @@
             "ProviderCatalog": {
                 "type": "object",
                 "properties": {
+                    "activated_providers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
                     "global_default": {
                         "allOf": [
                             {
@@ -5183,7 +5182,10 @@
                         ],
                         "nullable": true
                     }
-                }
+                },
+                "required": [
+                    "activated_providers"
+                ]
             },
             "ProviderCatalogEnvelope": {
                 "type": "object",
@@ -5688,6 +5690,7 @@
             },
             "WorkItemReorder": {
                 "type": "object",
+                "description": "The moved work item's neighbors, plus a module's first-drag baseline.\n\n``initial_order_ids`` is the complete module order the user could see when\nthey started the very first drag in an automatic project. The server\nfreezes it into ranks before applying the move, so a client never has to\ninfer the durable ordering mode from its own history (#360).",
                 "properties": {
                     "before_id": {
                         "type": "string",
@@ -5697,6 +5700,14 @@
                     "after_id": {
                         "type": "string",
                         "format": "uuid",
+                        "nullable": true
+                    },
+                    "initial_order_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
                         "nullable": true
                     }
                 }

@@ -6,8 +6,9 @@ the human WebSocket flow and programmatic launches share one path. :func:`_launc
 injects per-agent lifecycle
 hooks, asks the persistence service to record the launch, creates the detached
 terminal through the public runtime, and starts the design-dir document watcher — then
-returns the run id. On a persistence/runtime failure it deletes the inserted row
-and raises :class:`LaunchUnavailable`, so no caller can leak an orphan run.
+returns the run id. On a persistence/runtime failure it compensates the launch
+and raises :class:`LaunchUnavailable`. If runtime cleanup is temporarily
+unavailable, it retains a cleanup-pending run so reconciliation can retry.
 
 Viewer attachment is owned separately by :mod:`apps.terminals.viewer_attachments`;
 :func:`_launch` never handles transport or viewer policy.
@@ -62,6 +63,7 @@ from apps.terminals.persistence import (
     LaunchRecords,
     compensate_launch,
     load_resume_launch,
+    mark_launch_cleanup_pending,
     persist_launch,
     persist_termination,
     termination_context,
@@ -218,7 +220,8 @@ class LaunchUnavailable(Exception):
 
     Raised when persistence or runtime creation fails. :func:`_launch`
     terminates any partial runtime and deletes orphan application rows before
-    raising, so callers receive one application-level launch failure.
+    raising. If termination cannot be confirmed, it preserves a cleanup-pending
+    application handle for reconciliation.
     """
 
 
@@ -262,8 +265,8 @@ async def _launch(
     :param issue_id: the task or module Issue anchoring the run.
     :param agent_run_id: pre-minted, non-null run id (callers mint it upstream).
     :return: ``agent_run_id`` — the persisted, live run.
-    :raises LaunchUnavailable: on persistence/runtime failure; the orphan row is
-        deleted before the raise so no run leaks.
+    :raises LaunchUnavailable: on persistence/runtime failure; launch records
+        are deleted after runtime cleanup is confirmed or retained for retry.
     """
 
     started_at = datetime.now(timezone.utc).isoformat()
@@ -318,6 +321,7 @@ async def _launch(
         *command_artifacts,
     )
 
+    launch_persisted = False
     try:
         routing = await asyncio.to_thread(
             persist_launch,
@@ -331,9 +335,11 @@ async def _launch(
                 resumed_from=resumed_from,
                 scope=scope,
                 doc_rel_path=doc_rel_path,
+                runtime_namespace=terminal_runtime.namespace,
                 provider_session_id=provider_session_id,
             ),
         )
+        launch_persisted = True
         await asyncio.to_thread(
             terminal_runtime.create,
             CreateTerminal(
@@ -348,19 +354,30 @@ async def _launch(
         # Runtime creation can fail after making a partial terminal. Explicitly
         # compensate both sides; terminate is idempotent when nothing exists.
         logger.exception("terminal launch failed run=%s", agent_run_id)
-        try:
-            await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
-        except Exception:
-            logger.warning(
-                "terminal launch compensation failed run=%s",
-                agent_run_id,
-                exc_info=True,
-            )
-        try:
-            await asyncio.to_thread(compensate_launch, agent_run_id)
-        except Exception:
-            pass
-        cleanup_temporary_artifacts(temporary_artifacts)
+        cleanup_confirmed = not launch_persisted
+        if launch_persisted:
+            try:
+                await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
+                cleanup_confirmed = True
+            except Exception:
+                logger.warning(
+                    "terminal launch compensation failed run=%s",
+                    agent_run_id,
+                    exc_info=True,
+                )
+                try:
+                    await asyncio.to_thread(mark_launch_cleanup_pending, agent_run_id)
+                except Exception:
+                    logger.exception(
+                        "could not mark terminal launch cleanup pending run=%s",
+                        agent_run_id,
+                    )
+        if cleanup_confirmed:
+            try:
+                await asyncio.to_thread(compensate_launch, agent_run_id)
+            except Exception:
+                pass
+            cleanup_temporary_artifacts(temporary_artifacts)
         raise LaunchUnavailable(str(exc)) from exc
 
     # The run row exists and the agent is live inside tmux: tell connected

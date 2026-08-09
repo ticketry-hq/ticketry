@@ -15,15 +15,15 @@ discoverable by reading 44 hand-authored endpoint functions.
 Because every endpoint is a free-form choice, the same model is described by
 seven hand-written schemas, and the surface drifted in ways nobody decided:
 
-- Four work-item list reads return nested subsets of the same rows. A client
+* Four work-item list reads return nested subsets of the same rows. A client
   that caches by request shape holds the same row several times. This caused
   the Studio bug where a renamed Story kept its old name in the list.
-- Attachments have a write route and no read route.
-- No read paginates, and two reads return rows in unspecified database order.
-- Launch configurations validate their provider, model, and reasoning values
+* Attachments have a write route and no read route.
+* No read paginates, and two reads return rows in unspecified database order.
+* Launch configurations validate their provider, model, and reasoning values
   against a hardcoded code registry. Adding a model requires a code change and
   a sidecar rebuild. Users cannot add models themselves.
-- The quarantine idea existed, but several honestly-CRUD operations sat inside
+* The quarantine idea existed, but several honestly-CRUD operations sat inside
   it, and several composite reads duplicated rows that model reads also serve.
 
 ## Solution
@@ -89,7 +89,7 @@ worktracker router and its standalone OpenAPI builder are deleted;
 consumers are untouched.
 
 **The provider/model/reasoning catalog (new tables).** Three tables: Provider
-(slug, activated, supports_unattended), Model (foreign key to Provider),
+(slug, activated, supports\_unattended), Model (foreign key to Provider),
 Reasoning level (linked to models through a link table). A startup guard checks
 Provider slugs against the code-owned adapter set — rows describe providers;
 adapters implement them. Provider activation moves from the settings JSON into
@@ -207,17 +207,17 @@ encode overlap. The five quarantined operations keep hand-written tests.
 
 ## Out of Scope
 
-- Bulk operations (including bulk state reassignment) — backlogged; they are
+* Bulk operations (including bulk state reassignment) — backlogged; they are
   the future answer for emptying an occupied state.
-- MCP surface redesign — tools keep their shapes; only mechanical internal
+* MCP surface redesign — tools keep their shapes; only mechanical internal
   updates.
-- Any domain-service change beyond the two named: the state-delete
+* Any domain-service change beyond the two named: the state-delete
   simplification and the graph-run route reshape.
-- The async apps' handler logic, WebSocket consumers, and the status-feed
+* The async apps' handler logic, WebSocket consumers, and the status-feed
   protocol.
-- Pagination — revisit with the deferred per-section list read if a size
+* Pagination — revisit with the deferred per-section list read if a size
   problem appears.
-- GraphQL (rejected in the recorded ADR) and the Rust rewrite (re-opened as a
+* GraphQL (rejected in the recorded ADR) and the Rust rewrite (re-opened as a
   question, not decided here).
 
 ## Further Notes
@@ -237,4 +237,4 @@ Records: the model-shaped-CRUD ADR (0005), the GraphQL rejection ADR (0006),
 the frontend state and API contract decision record, and `lld.md` in this
 directory.
 
-_Triage: ready-for-agent_
+*Triage: ready-for-agent*

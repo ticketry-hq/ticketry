@@ -20,6 +20,7 @@ import {
   parseDesktopDevMode,
   removeTemporarySqliteProfile,
   resolveDevelopmentDataDirectory,
+  resolveDevelopmentLogPath,
   resolveDevelopmentTmuxSocket,
   resolveTauriCliPath,
   selectDevelopmentServicePorts,
@@ -74,6 +75,13 @@ test("development tmux sockets are stable per isolated data directory", () => {
   assert.equal(first, repeated);
   assert.notEqual(first, second);
   assert.match(first, /^muxed-dev-[0-9a-f]{16}$/);
+});
+
+test("development logs use one stable workspace-local location", () => {
+  assert.equal(
+    resolveDevelopmentLogPath({ root: "/repository" }),
+    "/repository/.ticketry-dev/logs/ticketry.log",
+  );
 });
 
 test("resolution outside a Git worktree fails closed with the launch directory", () => {

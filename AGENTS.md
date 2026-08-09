@@ -17,6 +17,11 @@ Development data must remain isolated from live application data. Generated
 databases, caches, sidecars, native libraries, and build output must not be
 committed.
 
+Development frontend, backend, and MCP output is persisted at
+`.ticketry-dev/logs/ticketry.log`. Use `npm run logs` to inspect recent output,
+`npm run logs:follow` while reproducing a problem, and `npm run logs:clear` to
+start a clean capture. This directory is generated and must not be committed.
+
 Every user-visible Studio UI behavior change must add or update an automated
 acceptance case in `studio/src/test/*Acceptance.test.tsx`. Keep the numbered
 overhaul gate current and run `npm run test:overhaul --workspace

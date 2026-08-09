@@ -19,7 +19,6 @@ export type SessionId = string;
 
 export interface PersistedTerminalSession {
   agent_run_id: string;
-  tmux_session_name: string;
   doc_rel_path?: string | null;
   created_at: string;
 }

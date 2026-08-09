@@ -1,6 +1,13 @@
 # ADR-0004 (T800): Wire the real Session adapter via a neutral AppConfig registry
 
-Date: 2026-07-05 · Status: Accepted (grill session, CODIN-800 refinement)
+Date: 2026-07-05 · Status: Superseded by CODING-294 / CODING-302 (2026-08-09)
+
+## Supersession
+
+The Session adapter and neutral Session registry are removed. Application
+services depend directly on the public `TerminalRuntime` protocol and own their
+composition/test seams without exposing provider, persistence, or lifecycle
+policy to the terminal runtime.
 
 Resolves the wiring mechanism left open by ADR-0001 ("who instantiates the real
 adapter and hands it to the orchestrator driver — mechanism decided separately").

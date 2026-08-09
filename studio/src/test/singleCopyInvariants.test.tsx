@@ -160,7 +160,6 @@ describe("deliberate architectural exception: single-copy invariants", () => {
     useAgentStatusStore.getState().upsertRun(run);
     client.setQueryData(queryKeys.terminalSessions.persisted("story-1"), [{
       agent_run_id: run.agent_run_id,
-      tmux_session_name: `pt-${run.agent_run_id}`,
       created_at: "2026-08-06T12:00:00Z",
     }]);
 

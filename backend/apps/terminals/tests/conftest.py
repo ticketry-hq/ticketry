@@ -3,7 +3,7 @@ import json
 import pytest
 from django.test import Client
 
-import apps.terminals.session as session_module
+import apps.terminals.launch as session_module
 from apps.terminals.launch_configuration import ResolvedLaunchConfiguration
 from worktracker.tests.factories import ensure_issue
 

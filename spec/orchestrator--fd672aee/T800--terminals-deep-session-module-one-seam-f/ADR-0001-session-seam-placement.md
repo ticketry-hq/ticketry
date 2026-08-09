@@ -1,6 +1,13 @@
 # ADR-0001 (T800): Orchestrator reaches Session by injection, not import
 
-Date: 2026-07-05 · Status: Accepted (grill session, CODIN-800 refinement)
+Date: 2026-07-05 · Status: Superseded by CODING-294 / CODING-302 (2026-08-09)
+
+## Supersession
+
+The legacy `Session` port and adapter are retired. Application launch services
+own launch policy and consume the public `apps.terminals.runtime` contract for
+terminal mechanics. The orchestrator's zero-import boundary remains in force;
+it does not require a terminal-owned Session abstraction.
 
 ## Decision
 

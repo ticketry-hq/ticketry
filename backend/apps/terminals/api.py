@@ -15,16 +15,18 @@ from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals import dao
 from apps.terminals.control_plane import create_terminal_run
 from apps.terminals.models import AgentTerminalSession
-from apps.terminals.launch import LaunchUnavailable
+from apps.terminals.launch import (
+    LaunchUnavailable,
+    ResumeUnavailable,
+    resume_provider_conversation,
+    terminate_agent_run,
+)
 from apps.terminals.authorization import (
     RunAuthorizationError,
     verify_run_authorization,
 )
-from apps.terminals.session import (
-    ResumeUnavailable,
-    TerminalSessionError,
-    session as terminal_session,
-)
+from apps.terminals.reconciliation import reconcile_terminals
+from apps.terminals.runtime import TerminalRuntimeError
 from apps.terminals.validation import SpawnRequest, _validate_init
 from apps.terminals import viewer_leases
 from apps.settings_store.config import NoConfigurationSelected
@@ -142,14 +144,13 @@ def _terminal_session_payload(session) -> dict[str, Any]:
 
     return {
         "agent_run_id": session.agent_run_id,
-        "tmux_session_name": session.tmux_session_name,
         "doc_rel_path": session.doc_rel_path,
         "created_at": session.created_at,
     }
 
 
 def create_terminal(body: CreateTerminalRunBody):
-    """Create a durable run and tmux session before a terminal attaches."""
+    """Create a durable run and terminal runtime before a viewer attaches."""
 
     init, error = _create_request_as_spawn_init(body)
     if error is not None:
@@ -210,18 +211,18 @@ def _select_resumable_runs(
 def list_terminals(task_id: str) -> list[dict[str, Any]]:
     """List active persisted terminal sessions for a work item."""
 
-    # Reap dead/orphaned tmux sessions first so the UI is never offered a
+    # Reconcile dead/missing runtimes first so the UI is never offered a
     # session it can't attach to. Best-effort: a reaper failure degrades to
     # returning the unreconciled list rather than failing the request.
 
     try:
-        terminal_session.reconcile()
+        reconcile_terminals()
     except Exception as exc:
         logger.warning("terminal reconcile before list failed: %s", exc)
 
     sessions = [
         session
-        for session in terminal_session.sessions_for(task_id)
+        for session in async_to_sync(dao.list_terminal_sessions_for_task)(task_id)
         if session.scope != "docchat"
     ]
     return [_terminal_session_payload(s) for s in sessions]
@@ -231,7 +232,7 @@ def resume_terminal(agent_run_id: str):
     """Resume a terminated provider conversation in a fresh tmux run."""
 
     try:
-        new_agent_run_id = async_to_sync(terminal_session.resume)(agent_run_id)
+        new_agent_run_id = async_to_sync(resume_provider_conversation)(agent_run_id)
     except ResumeUnavailable as exc:
         status = 404 if exc.reason == "unknown_run" else 409
         raise ApplicationError(status, exc.reason, code=exc.reason) from exc
@@ -330,14 +331,16 @@ def list_scratch_terminals(
 ) -> list[dict[str, Any]]:
     """List active persisted no-task sessions for a project, optionally by module."""
 
-    # Reap dead/orphaned tmux sessions first, mirroring the task-bound list.
+    # Reconcile dead/missing runtimes first, mirroring the task-bound list.
 
     try:
-        terminal_session.reconcile()
+        reconcile_terminals()
     except Exception as exc:
         logger.warning("terminal reconcile before scratch list failed: %s", exc)
 
-    scratch_sessions = terminal_session.sessions_for(dao.SCRATCH_TASK_ID)
+    scratch_sessions = async_to_sync(dao.list_terminal_sessions_for_task)(
+        dao.SCRATCH_TASK_ID
+    )
     sessions = [
         session
         for session in scratch_sessions
@@ -349,12 +352,12 @@ def list_scratch_terminals(
 
 
 def terminate_terminal(agent_run_id: str):
-    """Terminate a tmux session and soft-delete its metadata row."""
+    """Explicitly terminate a runtime and soft-delete its metadata row."""
 
     try:
         known = AgentTerminalSession.objects.filter(agent_run_id=agent_run_id).exists()
-        terminal_session.terminate(agent_run_id)
-    except TerminalSessionError as exc:
+        terminate_agent_run(agent_run_id)
+    except TerminalRuntimeError as exc:
         raise ApplicationError(500, str(exc), code="terminate_failed") from exc
     if not known:
         raise ApplicationError(404, "session_not_found", code="session_not_found")
@@ -388,22 +391,14 @@ def self_terminate_terminal(authorization: str | None):
         raise ApplicationError(
             404, "caller_run_unknown", code="caller_run_unknown"
         )
-    if not active:
-        return {
-            "ok": True,
-            "terminated": True,
-            "already_terminated": True,
-            "agent_run_id": agent_run_id,
-        }
-
     try:
-        terminal_session.terminate(agent_run_id)
-    except TerminalSessionError as exc:
+        terminate_agent_run(agent_run_id)
+    except TerminalRuntimeError as exc:
         raise ApplicationError(500, str(exc), code="terminate_failed") from exc
 
     return {
         "ok": True,
         "terminated": True,
-        "already_terminated": False,
+        "already_terminated": not active,
         "agent_run_id": agent_run_id,
     }

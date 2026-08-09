@@ -197,7 +197,6 @@ class CreateTerminalSerializer(serializers.Serializer):
 
 class TerminalRunSerializer(serializers.Serializer):
     agent_run_id = serializers.CharField()
-    tmux_session_name = serializers.CharField(required=False)
     doc_rel_path = serializers.CharField(required=False, allow_null=True)
     created_at = serializers.CharField(required=False)
 

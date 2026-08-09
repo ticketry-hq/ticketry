@@ -4,7 +4,7 @@ from apps.runs.models import AgentRun
 
 
 class AgentTerminalSession(models.Model):
-    """Persist one tmux-backed terminal session."""
+    """Persist the application mirror for one durable terminal runtime."""
 
     agent_run = models.OneToOneField(
         AgentRun,

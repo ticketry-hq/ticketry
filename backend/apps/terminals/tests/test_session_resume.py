@@ -1,15 +1,16 @@
-"""Tests for the Session seam's ``resume`` primitive."""
+"""Tests for the agent-launch application's provider-resume operation."""
 
 from __future__ import annotations
 
 import pytest
+from asgiref.sync import async_to_sync
 
 import apps.runs.dao as runs_dao
 import apps.terminals.dao as terminals_dao
-import apps.terminals.session as session_module
+import apps.terminals.launch as launch_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
-from apps.terminals.tests.fakes import FakeAdapter
+from apps.terminals.tests.fakes import FakeAdapter, patch_terminal_runtime
 from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id
 
@@ -90,11 +91,11 @@ def _capture_launch(monkeypatch) -> dict:
         captured.update(kwargs)
         return kwargs["agent_run_id"]
 
-    monkeypatch.setattr(session_module, "_launch", fake_launch)
+    monkeypatch.setattr(launch_module, "_launch", fake_launch)
     return captured
 
 
-async def test_resume_happy_path_uses_resume_argv_and_copies_session_fields(
+async def test_resume_happy_path_prepares_provider_command_without_old_terminal(
     tmp_path, monkeypatch
 ):
     cwd = tmp_path / "repo"
@@ -109,7 +110,7 @@ async def test_resume_happy_path_uses_resume_argv_and_copies_session_fields(
     _patch_resume_adapter(monkeypatch, resume_fn=resume_fn)
     captured = _capture_launch(monkeypatch)
 
-    new_run_id = await session_module.session.resume(OLD_RUN_ID)
+    new_run_id = await launch_module.resume_provider_conversation(OLD_RUN_ID)
 
     assert new_run_id == captured["agent_run_id"]
     assert new_run_id != OLD_RUN_ID
@@ -118,16 +119,72 @@ async def test_resume_happy_path_uses_resume_argv_and_copies_session_fields(
     assert captured["argv"] == ["claude", "--resume", PROVIDER_SESSION_ID]
     assert captured["cwd"] == str(cwd)
     assert captured["scope"] == "docchat"
-    assert captured["doc_rel_path"] == "specs/notes.md"
-    assert captured["resumed_from"] == OLD_RUN_ID
+    assert captured["doc_rel_path"] is None
+    assert captured["provider_session_id"] == PROVIDER_SESSION_ID
+    assert "resumed_from" not in captured
     assert captured["issue_id"] == fixture_issue_id(
         project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
     )
 
 
+def test_resume_persists_fresh_run_and_terminal_with_provider_continuity(
+    tmp_path, monkeypatch
+):
+    cwd = tmp_path / "repo"
+    cwd.mkdir()
+    old_run = _run(
+        cwd=str(cwd),
+        provider_session_id=PROVIDER_SESSION_ID,
+        ended_at="2026-05-29T10:05:00",
+    )
+    old_run.save(force_insert=True)
+    old_session = _session()
+    old_session.save(force_insert=True)
+    _patch_resume_adapter(
+        monkeypatch,
+        resume_fn=lambda sid: ["claude", "--resume", sid],
+    )
+    runtime = patch_terminal_runtime(monkeypatch)
+
+    async def ignore_status(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(launch_module, "publish_status", ignore_status)
+    monkeypatch.setattr(
+        launch_module.documents_watch,
+        "start_watch",
+        lambda **kwargs: None,
+    )
+
+    new_run_id = async_to_sync(launch_module.resume_provider_conversation)(
+        OLD_RUN_ID
+    )
+
+    historical = AgentRun.objects.get(id=OLD_RUN_ID)
+    resumed = AgentRun.objects.get(id=new_run_id)
+    new_session = AgentTerminalSession.objects.get(agent_run_id=new_run_id)
+    assert historical.ended_at == "2026-05-29T10:05:00"
+    assert historical.provider_session_id == PROVIDER_SESSION_ID
+    assert AgentTerminalSession.objects.get(
+        agent_run_id=OLD_RUN_ID
+    ).terminated_at == old_session.terminated_at
+    assert resumed.id != historical.id
+    assert resumed.ended_at is None
+    assert resumed.lifecycle_state == "starting"
+    assert resumed.provider_session_id == PROVIDER_SESSION_ID
+    assert resumed.resumed_from is None
+    assert new_session.agent_run_id == new_run_id
+    assert new_session.tmux_session_name != old_session.tmux_session_name
+    assert len(runtime.requests) == 1
+    request = runtime.requests[0]
+    assert request.agent_run_id == new_run_id
+    assert OLD_RUN_ID not in request.command
+    assert PROVIDER_SESSION_ID in request.command
+
+
 async def test_resume_unknown_run_raises_resume_unavailable() -> None:
-    with pytest.raises(session_module.ResumeUnavailable) as excinfo:
-        await session_module.session.resume("missing")
+    with pytest.raises(launch_module.ResumeUnavailable) as excinfo:
+        await launch_module.resume_provider_conversation("missing")
 
     assert excinfo.value.reason == "unknown_run"
 
@@ -140,8 +197,8 @@ async def test_resume_active_run_raises_resume_unavailable(tmp_path, monkeypatch
     )
     _patch_resume_adapter(monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid])
 
-    with pytest.raises(session_module.ResumeUnavailable) as excinfo:
-        await session_module.session.resume(OLD_RUN_ID)
+    with pytest.raises(launch_module.ResumeUnavailable) as excinfo:
+        await launch_module.resume_provider_conversation(OLD_RUN_ID)
 
     assert excinfo.value.reason == "run_still_active"
 
@@ -154,8 +211,8 @@ async def test_resume_without_provider_session_id_raises_resume_unavailable(
     await _seed_run_and_session(cwd=str(cwd), provider_session_id=None)
     _patch_resume_adapter(monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid])
 
-    with pytest.raises(session_module.ResumeUnavailable) as excinfo:
-        await session_module.session.resume(OLD_RUN_ID)
+    with pytest.raises(launch_module.ResumeUnavailable) as excinfo:
+        await launch_module.resume_provider_conversation(OLD_RUN_ID)
 
     assert excinfo.value.reason == "no_provider_session_id"
 
@@ -165,8 +222,8 @@ async def test_resume_with_missing_cwd_raises_resume_unavailable(tmp_path, monke
     await _seed_run_and_session(cwd=str(cwd), provider_session_id=PROVIDER_SESSION_ID)
     _patch_resume_adapter(monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid])
 
-    with pytest.raises(session_module.ResumeUnavailable) as excinfo:
-        await session_module.session.resume(OLD_RUN_ID)
+    with pytest.raises(launch_module.ResumeUnavailable) as excinfo:
+        await launch_module.resume_provider_conversation(OLD_RUN_ID)
 
     assert excinfo.value.reason == "cwd_missing"
 
@@ -179,6 +236,6 @@ async def test_resume_unsupported_propagates(tmp_path, monkeypatch) -> None:
     captured = _capture_launch(monkeypatch)
 
     with pytest.raises(registry.ResumeUnsupported):
-        await session_module.session.resume(OLD_RUN_ID)
+        await launch_module.resume_provider_conversation(OLD_RUN_ID)
 
     assert captured == {}

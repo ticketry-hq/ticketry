@@ -1,11 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "studio-main",
-  "description": "Allows bundled Studio code in the local main window to load runtime configuration, retry the fixed supervised pair, pick one native directory, request a fixed preflight report, approve a validated path for a named supported tool, listen for backend lifecycle events, use the narrow opaque-handle terminal viewer and native libghostty commands, and use native zoom hotkeys.",
+  "description": "Allows bundled Studio code in the local main window to load runtime configuration, append bounded development frontend logs, retry the fixed supervised pair, pick one native directory, request a fixed preflight report, approve a validated path for a named supported tool, listen for backend lifecycle events, use the narrow opaque-handle terminal viewer and native libghostty commands, and use native zoom hotkeys.",
   "local": true,
   "windows": ["main"],
   "permissions": [
     "allow-desktop-runtime-configuration",
+    "allow-desktop-append-frontend-log",
     "allow-desktop-retry-services",
     "allow-desktop-pick-folder",
     "allow-desktop-preflight-report",

@@ -8,12 +8,12 @@ import studio_server.asgi as asgi
 
 
 @pytest.mark.asyncio
-async def test_startup_terminal_reconcile_uses_terminal_session_service(monkeypatch):
+async def test_startup_terminal_reconcile_uses_application_service(monkeypatch):
     reconciled = []
 
     monkeypatch.setattr(
-        asgi.terminal_session,
-        "reconcile",
+        asgi,
+        "reconcile_terminals",
         lambda: reconciled.append(True),
     )
 

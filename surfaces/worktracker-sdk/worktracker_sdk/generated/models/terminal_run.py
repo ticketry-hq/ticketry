@@ -29,10 +29,9 @@ class TerminalRun(BaseModel):
     TerminalRun
     """ # noqa: E501
     agent_run_id: StrictStr
-    tmux_session_name: Optional[StrictStr] = None
     doc_rel_path: Optional[StrictStr] = None
     created_at: Optional[StrictStr] = None
-    __properties: ClassVar[List[str]] = ["agent_run_id", "tmux_session_name", "doc_rel_path", "created_at"]
+    __properties: ClassVar[List[str]] = ["agent_run_id", "doc_rel_path", "created_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -91,7 +90,6 @@ class TerminalRun(BaseModel):
 
         _obj = cls.model_validate({
             "agent_run_id": obj.get("agent_run_id"),
-            "tmux_session_name": obj.get("tmux_session_name"),
             "doc_rel_path": obj.get("doc_rel_path"),
             "created_at": obj.get("created_at")
         })

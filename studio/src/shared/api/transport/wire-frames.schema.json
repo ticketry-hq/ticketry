@@ -130,7 +130,7 @@
       "type": "object"
     },
     {
-      "description": "Client → server: reattach to a persisted tmux session (``mode:\"attach\"``).",
+      "description": "Client → server: attach to a durable terminal (``mode:\"attach\"``).",
       "properties": {
         "agent_run_id": {
           "title": "Agent Run Id",

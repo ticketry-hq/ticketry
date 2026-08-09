@@ -15,6 +15,10 @@ import {
 import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
 import { registerTerminalFocus } from "./internal/terminalRegistry";
+import {
+  desktopViewerLease,
+  viewerLeaseId,
+} from "./internal/viewerLease";
 
 type NativeTerminalStatus = {
   handle: string;
@@ -95,6 +99,26 @@ export function NativeGhosttyTerminal({
     let disposed = false;
     let observer: ResizeObserver | null = null;
     let unlisten: UnlistenFn | null = null;
+    let leaseId: string | null = null;
+    let leaseTimer: ReturnType<typeof setInterval> | null = null;
+
+    const releaseLease = () => {
+      if (leaseTimer) clearInterval(leaseTimer);
+      leaseTimer = null;
+      const currentLease = leaseId;
+      leaseId = null;
+      if (currentLease) {
+        void desktopViewerLease.release(runId, currentLease).catch(() => {});
+      }
+    };
+
+    const detachNativeViewer = () => {
+      const handle = handleRef.current;
+      handleRef.current = null;
+      setNativeHandle(null);
+      if (handle) void invoke("native_terminal_detach", { handle });
+      releaseLease();
+    };
 
     const scheduleFrame = () => {
       if (resizeFrameRef.current) return;
@@ -130,6 +154,7 @@ export function NativeGhosttyTerminal({
           "native-terminal-failed",
           (event) => {
             if (event.payload.runId === runId) {
+              detachNativeViewer();
               onUnavailable?.(
                 event.payload.reason ?? "the native terminal bridge disconnected",
               );
@@ -139,6 +164,13 @@ export function NativeGhosttyTerminal({
         if (disposed) {
           unlisten();
           unlisten = null;
+          return;
+        }
+
+        leaseId = viewerLeaseId();
+        await desktopViewerLease.acquire(runId, leaseId);
+        if (disposed) {
+          releaseLease();
           return;
         }
 
@@ -187,6 +219,19 @@ export function NativeGhosttyTerminal({
         // have both attached and accepted a visible frame.
         releasePooledTransport(sessionId);
         setNativeHandle(status.handle);
+        leaseTimer = setInterval(() => {
+          const currentLease = leaseId;
+          if (!currentLease) return;
+          void desktopViewerLease.renew(runId, currentLease).catch((error) => {
+            if (
+              !disposed &&
+              (error as { code?: string }).code === "replaced_by_another_viewer"
+            ) {
+              detachNativeViewer();
+              onUnavailable?.("replaced_by_another_viewer");
+            }
+          });
+        }, 10_000);
         onReady?.();
         observer = new ResizeObserver(scheduleFrame);
         if (hostRef.current) observer.observe(hostRef.current);
@@ -201,6 +246,7 @@ export function NativeGhosttyTerminal({
         const handle = handleRef.current;
         handleRef.current = null;
         if (handle) void invoke("native_terminal_detach", { handle });
+        releaseLease();
         if (!disposed) onUnavailable?.(nativeFailureMessage(error));
       }
     };
@@ -214,10 +260,7 @@ export function NativeGhosttyTerminal({
       window.removeEventListener("scroll", scheduleFrame, true);
       if (resizeFrameRef.current) cancelAnimationFrame(resizeFrameRef.current);
       resizeFrameRef.current = 0;
-      const handle = handleRef.current;
-      handleRef.current = null;
-      setNativeHandle(null);
-      if (handle) void invoke("native_terminal_detach", { handle });
+      detachNativeViewer();
     };
   }, [onReady, onUnavailable, runId, sessionId, visible]);
 

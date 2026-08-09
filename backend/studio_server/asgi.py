@@ -40,7 +40,7 @@ from studio_server.routing import websocket_urlpatterns
 
 from apps.documents import watch as documents_watch
 from apps.runs import hook_spool
-from apps.terminals.session import session as terminal_session
+from apps.terminals.reconciliation import reconcile_terminals
 from apps.worktrees import service as worktrees_service
 
 
@@ -81,13 +81,13 @@ register_startup(_validate_provider_catalog)
 
 
 async def _reap_dead_terminal_sessions() -> None:
-    """Soft-delete terminal rows whose tmux session died while we were down.
+    """Reconcile terminal records with runtime observations after downtime.
 
     Best-effort: a reaper failure is logged but never blocks startup.
     """
 
     try:
-        await asyncio.to_thread(terminal_session.reconcile)
+        await asyncio.to_thread(reconcile_terminals)
     except Exception as exc:
         logger.warning("startup terminal reconcile failed: %s", exc)
 
@@ -113,7 +113,7 @@ async def _idle_terminal_sweep_loop(interval_seconds: float) -> None:
     while True:
         await asyncio.sleep(interval_seconds)
         try:
-            await asyncio.to_thread(terminal_session.reconcile)
+            await asyncio.to_thread(reconcile_terminals)
         except asyncio.CancelledError:
             raise
         except Exception as exc:

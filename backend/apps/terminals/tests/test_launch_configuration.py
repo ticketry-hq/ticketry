@@ -8,13 +8,13 @@ import pytest
 
 from apps import worktracker_queries
 import apps.terminals.launch as launch
-import apps.terminals.session as session_module
+import apps.terminals.launch as session_module
 from apps.terminals.agents.skills.preflight import ResolvedSkills
 from apps.terminals.launch_configuration import (
     resolve_task_launch_configuration as real_resolve_task_launch_configuration,
 )
-from apps.terminals.session import LaunchIntent
-from apps.terminals.tmux import sessions as tmux_sessions
+from apps.terminals.launch import LaunchIntent
+from apps.terminals.tests.fakes import patch_terminal_runtime
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
 from worktracker.models import (
     AgentModel,
@@ -29,8 +29,6 @@ from worktracker.models import (
 )
 
 from .conftest import write_profiles
-from .test_consumers import _fake_tmux_session
-
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -340,13 +338,7 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         "resolve_task_launch_configuration",
         unexpected_reresolution,
     )
-    captured = {}
-
-    def create_session(**kwargs):
-        captured.update(kwargs)
-        return _fake_tmux_session(kwargs["agent_run_id"])
-
-    monkeypatch.setattr(tmux_sessions, "create_session", create_session)
+    runtime = patch_terminal_runtime(monkeypatch)
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kwargs: None)
     monkeypatch.setattr(
         session_module,
@@ -356,7 +348,7 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         ),
     )
 
-    await session_module.session.spawn(
+    await session_module.launch_agent_run(
         LaunchIntent(
             agent="claude",
             project_id=str(issue.project_id),
@@ -366,9 +358,9 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         )
     )
 
-    command = captured["command"]
+    command = runtime.requests[0].command
     assert "Configured workflow prompt" in command
-    assert "Required skills supplied for this invocation: to-spec" in command
+    assert "Required skills available for this invocation: to-spec" in command
     assert "--plugin-dir" not in command
     assert "LEGACY PROFILE PROMPT" not in command
     assert "--model sonnet" in command

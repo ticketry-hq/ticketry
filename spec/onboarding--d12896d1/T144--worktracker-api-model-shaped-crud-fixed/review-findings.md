@@ -3,20 +3,20 @@
 Backend/API-only review of CODING-144 and its children (CODING-153, 154, 155,
 156, 157, 158, 159, 160, 161, 165, 166) plus CODING-168.
 
-**Reviewed and repaired on:** 2026-08-06  
+**Reviewed and repaired on:** 2026-08-06
 **Scope:** Django/DRF, sidecar host routes, persistence, OpenAPI, the Python SDK,
 MCP-facing API behavior, packaging, migrations, and backend documentation.
 
 ## Verification
 
-| Check | Result |
-|---|---|
-| Full backend suite | **1177 passed, 3 skipped** |
-| Route and OpenAPI contract tests | **90 passed** |
-| Python SDK and generated-boundary tests | **12 passed** |
-| Contract drift | **current** |
-| Migration model drift | **none** |
-| Targeted Ruff check over repaired backend files | **passes** |
+| Check                                           | Result                     |
+| ----------------------------------------------- | -------------------------- |
+| Full backend suite                              | **1177 passed, 3 skipped** |
+| Route and OpenAPI contract tests                | **90 passed**              |
+| Python SDK and generated-boundary tests         | **12 passed**              |
+| Contract drift                                  | **current**                |
+| Migration model drift                           | **none**                   |
+| Targeted Ruff check over repaired backend files | **passes**                 |
 
 The remaining warnings are existing deprecations around `jsonschema.RefResolver`
 and `forkpty`, plus a test-database teardown warning. None is a failed finding
@@ -53,10 +53,10 @@ models and reasoning levels return a conflict.
 Host routes are authenticated by default. The four routes that cannot use the
 desktop API key have explicit, reviewed reasons in the route registry:
 
-- supervisor health probe;
-- provider lifecycle hook intake;
-- run-scoped terminal self-termination;
-- document assets loaded as webview subresources.
+* supervisor health probe;
+* provider lifecycle hook intake;
+* run-scoped terminal self-termination;
+* document assets loaded as webview subresources.
 
 Tests cover every declared route and assert the exact public operation set in
 OpenAPI; changing a route's security posture requires an intentional registry
@@ -135,14 +135,14 @@ is landed; they are not runtime acceptance failures.
 
 ## Confirmed delivered behavior
 
-- The route registry and live route table conform in both directions.
-- The quarantine remains exactly five reasoned domain operations.
-- Transition rejection retains its required HTTP 422 contract.
-- State deletion guards, transition CRUD, scoped reads, and finding-absorbing
+* The route registry and live route table conform in both directions.
+* The quarantine remains exactly five reasoned domain operations.
+* Transition rejection retains its required HTTP 422 contract.
+* State deletion guards, transition CRUD, scoped reads, and finding-absorbing
   creation remain service-owned and covered.
-- Packaging contains DRF and the OpenAPI generator and does not depend on the
+* Packaging contains DRF and the OpenAPI generator and does not depend on the
   retired HTTP framework.
-- Generated contract artifacts match the live schema.
+* Generated contract artifacts match the live schema.
 
 ## Outstanding backend findings
 

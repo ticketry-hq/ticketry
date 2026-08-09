@@ -1,6 +1,14 @@
 # ADR-0002 (T800): Session is the single door — lifecycle + attach handle
 
-Date: 2026-07-05 · Status: Accepted (grill session, CODIN-800 refinement)
+Date: 2026-07-05 · Status: Superseded by CODING-294 / CODING-302 (2026-08-09)
+
+## Supersession
+
+The single door is now the narrow public terminal-runtime contract: `create`,
+`attach`, `inspect`, and `terminate`. Launch preparation, persistence,
+liveness queries, reconciliation, and viewer ownership are application
+services outside that boundary. The compatible part of this ADR is retained:
+tmux commands, private names, libtmux, and PTY attachment details remain hidden.
 
 ## Decision
 

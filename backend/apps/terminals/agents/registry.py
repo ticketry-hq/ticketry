@@ -83,7 +83,9 @@ class LaunchAugmentation:
     temporary_artifacts: tuple[Path, ...] = ()
 
 
-def _artifact_root(agent_run_id: str) -> Path:
+def create_temporary_artifact_root(agent_run_id: str) -> Path:
+    """Create a private invocation directory owned by one agent run."""
+
     if not re.fullmatch(r"[A-Za-z0-9_-]+", agent_run_id):
         raise ValueError("agent_run_id is unsafe for a temporary artifact path")
     parent = Path(tempfile.gettempdir()) / "ticketry-agent-runs"
@@ -170,7 +172,7 @@ class AgentAdapter:
         catalog, so a deactivated provider is refused here even if a caller
         forgot to check. Command construction can run on the async launch path,
         where that sync ORM read is illegal — such a caller passes the set it
-        already loaded off-thread (see ``TerminalSessionService.spawn``) rather
+        already loaded off-thread (see ``launch_agent_run``) rather
         than opting out of the gate.
         """
 
@@ -244,7 +246,7 @@ class AgentAdapter:
                 )
             )
 
-        root = _artifact_root(agent_run_id)
+        root = create_temporary_artifact_root(agent_run_id)
         try:
             result = self._inject_with_settings_file(
                 argv,

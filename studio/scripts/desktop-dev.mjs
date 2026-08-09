@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -17,6 +17,7 @@ const servicePortCandidates = 10;
 const connectMode = "connect";
 const isolatedMode = "isolated";
 const temporarySqlitePrefix = "ticketry-temp-sqlite-";
+const workspaceRoot = path.resolve(studioRoot, "..");
 
 function sanitizedBasename(worktreeRoot) {
   return path.basename(worktreeRoot)
@@ -64,6 +65,16 @@ export function resolveDevelopmentTmuxSocket(dataDirectory) {
     .digest("hex")
     .slice(0, 16);
   return `muxed-dev-${identity}`;
+}
+
+export function resolveDevelopmentLogPath({ root = workspaceRoot } = {}) {
+  return path.join(path.resolve(root), ".ticketry-dev", "logs", "ticketry.log");
+}
+
+export function prepareDevelopmentLog({ root = workspaceRoot } = {}) {
+  const logPath = resolveDevelopmentLogPath({ root });
+  mkdirSync(path.dirname(logPath), { recursive: true });
+  return logPath;
 }
 
 function parseFrontendPort(value) {
@@ -387,10 +398,12 @@ export async function main() {
     ? createTemporarySqliteProfile()
     : resolveDevelopmentDataDirectory();
   const tmuxSocket = resolveDevelopmentTmuxSocket(dataDirectory);
+  const logPath = prepareDevelopmentLog();
   const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
   const environment = {
     ...process.env,
     MUXED_DATA_DIR: dataDirectory,
+    MUXED_DEVELOPMENT_LOG_PATH: logPath,
     MUXED_ENABLE_LOCAL_POSTGRES: "true",
     MUXED_TMUX_SOCKET: tmuxSocket,
     MUXED_DESKTOP_ORIGIN: frontendOrigin,
@@ -415,6 +428,7 @@ export async function main() {
       dataDirectory,
       tmuxSocket,
     }));
+    console.log(`Ticketry development logs: ${logPath}`);
     await run(process.execPath, [
       resolveTauriCliPath(),
       "dev",

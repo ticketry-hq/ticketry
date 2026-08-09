@@ -12,10 +12,12 @@ from django.test import override_settings
 import apps.terminals.agents.registry as registry
 import apps.terminals.api as terminals_api
 import apps.terminals.launch as launch
-from apps.terminals import dao, tmux
-import apps.terminals.session as session_module
+from apps.terminals import dao
+import apps.terminals.launch as launch_module
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.models import AgentTerminalSession
+from apps.terminals.reconciliation import ReconcileResult
+from apps.terminals.tests.fakes import patch_terminal_runtime
 from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.validation import SpawnRequest
 from apps.runs.models import AgentRun
@@ -26,6 +28,11 @@ from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_
 pytestmark = pytest.mark.django_db(transaction=True)
 
 SCRATCH_TASK_ID = dao.SCRATCH_TASK_ID
+
+
+@pytest.fixture(autouse=True)
+def terminal_runtime(monkeypatch):
+    return patch_terminal_runtime(monkeypatch)
 
 
 def _create_module_issue() -> Issue:
@@ -115,9 +122,9 @@ def _no_reconcile(monkeypatch):
     """Stub reconcile so test rows are not soft-deleted for lacking tmux."""
 
     monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "reconcile_sessions",
-        lambda: tmux.ReconcileResult([], []),
+        terminals_api,
+        "reconcile_terminals",
+        lambda: None,
     )
 
 
@@ -302,6 +309,7 @@ def test_list_terminals_serializes_only_immutable_session_fields(client, monkeyp
     assert [item["agent_run_id"] for item in rows] == ["task-run"]
     row = rows[0]
     assert row["doc_rel_path"] == "spec/x/LLD.html"
+    assert "tmux_session_name" not in row
     assert "scope" not in row
     assert "task_id" not in row
     assert "module_id" not in row
@@ -330,10 +338,12 @@ def test_list_terminals_reconciles_dead_session_before_responding(client, monkey
     def fake_reconcile():
         reconcile_calls.append(1)
         dao_soft_delete("run-dead", "2026-05-29T12:00:00")
-        return tmux.ReconcileResult(soft_deleted=["run-dead"])
+        return ReconcileResult(soft_deleted=["run-dead"])
 
     monkeypatch.setattr(
-        session_module.tmux_sessions, "reconcile_sessions", fake_reconcile
+        terminals_api,
+        "reconcile_terminals",
+        fake_reconcile,
     )
 
     response = client.get("/api/terminals", {"task_id": "task-1"})
@@ -357,7 +367,11 @@ def test_list_terminals_survives_reconcile_failure(client, monkeypatch):
     def boom():
         raise RuntimeError("tmux exploded")
 
-    monkeypatch.setattr(session_module.tmux_sessions, "reconcile_sessions", boom)
+    monkeypatch.setattr(
+        terminals_api,
+        "reconcile_terminals",
+        boom,
+    )
 
     response = client.get("/api/terminals", {"task_id": "task-1"})
 
@@ -431,12 +445,13 @@ def test_list_scratch_terminals_can_hydrate_all_project_modules(client, monkeypa
     assert all("module_id" not in row for row in response.json())
 
 
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_resume_terminal_returns_new_and_old_ids(client, monkeypatch):
     async def fake_resume(agent_run_id: str) -> str:
         assert agent_run_id == "run-old"
         return "run-new"
 
-    monkeypatch.setattr(terminals_api.terminal_session, "resume", fake_resume)
+    monkeypatch.setattr(terminals_api, "resume_provider_conversation", fake_resume)
 
     response = client.post("/api/terminals/resume?agent_run_id=run-old")
 
@@ -451,22 +466,22 @@ def test_resume_terminal_returns_new_and_old_ids(client, monkeypatch):
     ("exc", "status_code", "payload"),
     [
         (
-            session_module.ResumeUnavailable("unknown_run"),
+            launch.ResumeUnavailable("unknown_run"),
             404,
             {"detail": "unknown_run", "code": "unknown_run"},
         ),
         (
-            session_module.ResumeUnavailable("run_still_active"),
+            launch.ResumeUnavailable("run_still_active"),
             409,
             {"detail": "run_still_active", "code": "run_still_active"},
         ),
         (
-            session_module.ResumeUnavailable("no_provider_session_id"),
+            launch.ResumeUnavailable("no_provider_session_id"),
             409,
             {"detail": "no_provider_session_id", "code": "no_provider_session_id"},
         ),
         (
-            session_module.ResumeUnavailable("cwd_missing"),
+            launch.ResumeUnavailable("cwd_missing"),
             409,
             {"detail": "cwd_missing", "code": "cwd_missing"},
         ),
@@ -487,11 +502,12 @@ def test_resume_terminal_returns_new_and_old_ids(client, monkeypatch):
         ),
     ],
 )
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_resume_terminal_maps_errors(client, monkeypatch, exc, status_code, payload):
     async def fake_resume(agent_run_id: str) -> str:
         raise exc
 
-    monkeypatch.setattr(terminals_api.terminal_session, "resume", fake_resume)
+    monkeypatch.setattr(terminals_api, "resume_provider_conversation", fake_resume)
 
     response = client.post("/api/terminals/resume?agent_run_id=run-old")
 
@@ -852,7 +868,9 @@ def test_list_resumable_scratch_runs_filters_scopes_and_caps_newest_ten(client):
     ]
 
 
-def test_delete_terminal_terminates_and_soft_deletes(client, monkeypatch):
+def test_delete_terminal_terminates_and_soft_deletes(
+    client, monkeypatch, terminal_runtime
+):
     _insert_run("run-delete")
     _insert_session(
         "run-delete",
@@ -861,23 +879,20 @@ def test_delete_terminal_terminates_and_soft_deletes(client, monkeypatch):
         agent="claude-code",
     )
 
-    def fake_terminate(agent_run_id):
-        dao_soft_delete(agent_run_id, "2026-05-29T10:30:00")
-        return True
-
-    monkeypatch.setattr(
-        session_module.tmux_sessions, "terminate_session", fake_terminate
-    )
+    terminal_runtime.present.add("run-delete")
 
     response = client.delete("/api/terminals?agent_run_id=run-delete")
 
     assert response.status_code == 200
     assert response.json() == {"agent_run_id": "run-delete", "terminated": True}
     row = AgentTerminalSession.objects.get(agent_run_id="run-delete")
-    assert row.terminated_at == "2026-05-29T10:30:00"
+    assert row.terminated_at is not None
+    assert terminal_runtime.terminated == ["run-delete"]
 
 
-def test_self_terminate_ends_only_the_authorized_active_run(client, monkeypatch):
+def test_self_terminate_ends_only_the_authorized_active_run(
+    client, monkeypatch, terminal_runtime
+):
     _insert_run("run-caller")
     _insert_run("run-other")
     _insert_session(
@@ -893,11 +908,7 @@ def test_self_terminate_ends_only_the_authorized_active_run(client, monkeypatch)
         agent="claude",
     )
 
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: dao_soft_delete(run_id, "2026-05-29T10:30:00"),
-    )
+    terminal_runtime.present.update(("run-caller", "run-other"))
 
     response = client.post(
         "/api/terminals/self-terminate",
@@ -913,12 +924,15 @@ def test_self_terminate_ends_only_the_authorized_active_run(client, monkeypatch)
     }
     assert AgentRun.objects.get(id="run-caller").status == "terminated"
     assert AgentRun.objects.get(id="run-other").status == "running"
+    assert terminal_runtime.terminated == ["run-caller"]
     assert (
         AgentTerminalSession.objects.get(agent_run_id="run-other").terminated_at is None
     )
 
 
-def test_self_terminate_is_idempotent_for_an_inactive_run(client, monkeypatch):
+def test_self_terminate_is_idempotent_for_an_inactive_run(
+    client, monkeypatch, terminal_runtime
+):
     _insert_run("run-ended", ended_at="2026-05-29T10:30:00")
     _insert_session(
         "run-ended",
@@ -926,11 +940,6 @@ def test_self_terminate_is_idempotent_for_an_inactive_run(client, monkeypatch):
         created_at="2026-05-29T10:00:00",
         agent="claude",
         terminated_at="2026-05-29T10:30:00",
-    )
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: pytest.fail("inactive run must not reach tmux"),
     )
 
     response = client.post(
@@ -945,6 +954,7 @@ def test_self_terminate_is_idempotent_for_an_inactive_run(client, monkeypatch):
         "already_terminated": True,
         "agent_run_id": "run-ended",
     }
+    assert terminal_runtime.terminated == ["run-ended"]
 
 
 @pytest.mark.parametrize(
@@ -966,8 +976,8 @@ def test_self_terminate_rejects_unbound_callers(
         agent="claude",
     )
     monkeypatch.setattr(
-        terminals_api.terminal_session,
-        "terminate",
+        terminals_api,
+        "terminate_agent_run",
         lambda run_id: pytest.fail("unbound caller must not terminate a run"),
     )
     headers = {"HTTP_AUTHORIZATION": authorization} if authorization else {}
@@ -986,8 +996,8 @@ def test_self_terminate_rejects_a_valid_identity_for_an_unknown_run(
     client, monkeypatch
 ):
     monkeypatch.setattr(
-        terminals_api.terminal_session,
-        "terminate",
+        terminals_api,
+        "terminate_agent_run",
         lambda run_id: pytest.fail("unknown run must not reach termination"),
     )
 
@@ -1019,11 +1029,8 @@ def test_predecessor_identity_cannot_terminate_its_resumed_run(client, monkeypat
         created_at="2026-05-29T10:31:00",
         agent="claude",
     )
-    monkeypatch.setattr(
-        terminals_api.terminal_session,
-        "terminate",
-        lambda run_id: pytest.fail("predecessor identity must stay on predecessor"),
-    )
+    terminated: list[str] = []
+    monkeypatch.setattr(terminals_api, "terminate_agent_run", terminated.append)
 
     response = client.post(
         "/api/terminals/self-terminate",
@@ -1032,6 +1039,7 @@ def test_predecessor_identity_cannot_terminate_its_resumed_run(client, monkeypat
 
     assert response.status_code == 200
     assert response.json()["already_terminated"] is True
+    assert terminated == ["run-old"]
     assert AgentRun.objects.get(id="run-resumed").status == "running"
     assert (
         AgentTerminalSession.objects.get(agent_run_id="run-resumed").terminated_at
@@ -1039,7 +1047,9 @@ def test_predecessor_identity_cannot_terminate_its_resumed_run(client, monkeypat
     )
 
 
-def test_mcp_tool_crosses_studio_and_uses_terminal_authority(client, monkeypatch):
+def test_mcp_tool_crosses_studio_and_uses_terminal_authority(
+    client, monkeypatch, terminal_runtime
+):
     """The zero-arg MCP function reaches Studio and preserves termination effects."""
 
     import httpx
@@ -1062,18 +1072,14 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(client, monkeypatch
         created_at="2026-05-29T10:00:00",
         agent="claude",
     )
-    monkeypatch.setattr(
-        session_module.tmux_sessions,
-        "terminate_session",
-        lambda run_id: dao_soft_delete(run_id, "2026-05-29T10:30:00"),
-    )
+    terminal_runtime.present.add("run-e2e")
     stopped_watches = []
     published = []
     monkeypatch.setattr(
-        session_module.documents_watch, "stop_watch", stopped_watches.append
+        launch_module.documents_watch, "stop_watch", stopped_watches.append
     )
     monkeypatch.setattr(
-        session_module,
+        launch_module,
         "publish_backend_session_sync",
         lambda *args, **kwargs: published.append((args, kwargs)),
     )

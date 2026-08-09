@@ -1,6 +1,13 @@
 # ADR-0005 (T800): Drop the WS direct-PTY fallback
 
-Date: 2026-07-05 · Status: Accepted (grill session, CODIN-800 refinement)
+Date: 2026-07-05 · Status: Accepted; amended by CODING-294 / CODING-302 (2026-08-09)
+
+## Amendment
+
+The tmux-mandatory decision remains accepted. The retired Session facade no
+longer owns launch policy: the application launch service prepares and records
+the run, then calls the public terminal runtime. The WebSocket adapter attaches
+through that runtime and still has no direct-PTY fallback.
 
 Closes the open question flagged against review Candidate 2 ("does the WS
 bare-PTY fallback survive, and on which side of the seam?").

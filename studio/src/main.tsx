@@ -8,6 +8,7 @@ import { ModalHost } from "./app/modal/ModalHost";
 import { DialogHost } from "./app/shell/DialogHost";
 import ToastHost from "./app/shell/ToastHost";
 import { queryClient } from "./shared/query/queryClient";
+import { installFrontendLogBridge } from "./shared/logging/frontendLogBridge";
 
 // Self-hosted fonts (Fontsource, upright variable axes only — no external
 // request). Hanken Grotesk = UI/body; JetBrains Mono = KEY-N / code.
@@ -25,6 +26,10 @@ import {
   initializeBrowserRuntime,
   initializeStudioRuntime,
 } from "./runtime";
+
+if (import.meta.env.DEV && isTauri()) {
+  installFrontendLogBridge({ invoke });
+}
 
 // Studio uses the dark theme from boot.
 document.documentElement.classList.add("dark");
@@ -63,6 +68,7 @@ async function startStudio(): Promise<void> {
       </React.StrictMode>,
     );
   } catch (error) {
+    console.error("[startup] Studio could not start", error);
     const message = error instanceof Error ? error.message : String(error);
     root.render(
       <div className="flex h-screen w-screen items-center justify-center bg-pane-bg p-8 text-text-primary">

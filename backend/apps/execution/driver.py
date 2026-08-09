@@ -15,7 +15,7 @@ from worktracker.models import Issue, LaunchBinding
 from worktracker.state import state_group
 
 from apps.execution.models import GraphRun, LaunchedTask
-from apps.terminals.session import LaunchIntent, session as terminal_session
+from apps.terminals.launch import LaunchIntent, launch_agent_run
 from apps.terminals.launch_configuration import (
     ResolvedLaunchConfiguration,
     resolve_task_launch_configuration,
@@ -36,7 +36,7 @@ _GRAPH_EXECUTION_LOCKS_GUARD = Lock()
 
 
 async def spawn_run(**kwargs) -> str:
-    return await terminal_session.spawn(LaunchIntent(**kwargs))
+    return await launch_agent_run(LaunchIntent(**kwargs))
 
 
 @dataclass(frozen=True)

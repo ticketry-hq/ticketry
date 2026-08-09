@@ -206,7 +206,6 @@ describe("overhaul acceptance — terminals", () => {
     const meta = session("session-1", "story-1", "run-1");
     const persisted = {
       agent_run_id: "run-1",
-      tmux_session_name: "ticketry-run-1",
       created_at: "2026-08-07T12:00:00Z",
     };
     useTerminalStore.setState({

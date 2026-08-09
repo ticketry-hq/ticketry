@@ -32,12 +32,6 @@ export interface TerminalRun {
      * @type {string}
      * @memberof TerminalRun
      */
-    tmux_session_name?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof TerminalRun
-     */
     doc_rel_path?: string | null;
     /**
      *
@@ -66,7 +60,6 @@ export function TerminalRunFromJSONTyped(json: any, ignoreDiscriminator: boolean
     return {
 
         'agent_run_id': json['agent_run_id'],
-        'tmux_session_name': json['tmux_session_name'] == null ? undefined : json['tmux_session_name'],
         'doc_rel_path': json['doc_rel_path'] == null ? undefined : json['doc_rel_path'],
         'created_at': json['created_at'] == null ? undefined : json['created_at'],
     };
@@ -84,7 +77,6 @@ export function TerminalRunToJSONTyped(value?: TerminalRun | null, ignoreDiscrim
     return {
 
         'agent_run_id': value['agent_run_id'],
-        'tmux_session_name': value['tmux_session_name'],
         'doc_rel_path': value['doc_rel_path'],
         'created_at': value['created_at'],
     };

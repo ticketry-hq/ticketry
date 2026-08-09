@@ -1,6 +1,14 @@
 # ADR-0003 (T800): Session owns AgentRun status truth
 
-Date: 2026-07-05 · Status: Accepted (grill session, CODIN-800 refinement)
+Date: 2026-07-05 · Status: Superseded by CODING-294 / CODING-302 (2026-08-09)
+
+## Supersession
+
+The terminal runtime reports only mechanical observations: running, hosted
+command exited, missing, or observation unavailable. Application-owned
+reconciliation persists AgentRun lifecycle decisions before explicitly
+cleaning retained terminal resources. Terminal mechanics never load or mutate
+AgentRun or terminal persistence records.
 
 ## Decision
 

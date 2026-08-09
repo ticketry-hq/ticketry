@@ -40,6 +40,7 @@ const HEALTH_EVENT: &str = "desktop-service-health";
 const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 const DEVELOPMENT_WEBVIEW_ORIGIN: &str = "http://127.0.0.1:5174";
 const PACKAGED_WEBVIEW_ORIGIN: &str = "tauri://localhost";
+const FRONTEND_LOG_MAX_BYTES: usize = 16 * 1024;
 
 /// Kept in Tauri managed state for the entire lifetime of any backend that
 /// the desktop may start.  `None` is the deliberate `pnpm dev` connect mode.
@@ -837,6 +838,48 @@ fn desktop_runtime_configuration(
     state.configuration()
 }
 
+fn frontend_log_line(level: &str, message: &str) -> Result<String, String> {
+    if !matches!(level, "debug" | "info" | "warn" | "error") {
+        return Err("frontend log level must be debug, info, warn, or error".to_owned());
+    }
+    let flattened = message.replace('\r', "\\r").replace('\n', "\\n");
+    let mut end = flattened.len().min(FRONTEND_LOG_MAX_BYTES);
+    while !flattened.is_char_boundary(end) {
+        end = end.saturating_sub(1);
+    }
+    let suffix = if end < flattened.len() {
+        " [truncated]"
+    } else {
+        ""
+    };
+    Ok(format!("[frontend][{level}] {}{suffix}", &flattened[..end]))
+}
+
+/// Development-only bridge from the local main webview to the fixed
+/// supervisor-owned log. The webview cannot select a path or bypass the
+/// supervisor's redaction and rotation policy.
+#[tauri::command]
+fn desktop_append_frontend_log(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, DesktopServiceState>,
+    level: String,
+    message: String,
+) -> Result<(), String> {
+    if !cfg!(debug_assertions) {
+        return Err("frontend log persistence is available only in development".to_owned());
+    }
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("frontend logs are restricted to the local main window".to_owned());
+    }
+    let line = frontend_log_line(&level, &message)?;
+    let supervisor = state.supervisor.lock().expect("supervisor lock poisoned");
+    let supervisor = supervisor
+        .as_ref()
+        .ok_or_else(|| "desktop service supervision is unavailable".to_owned())?;
+    supervisor.append_log_line(&line);
+    Ok(())
+}
+
 /// Rearm and relaunch the fixed supervised pair. The webview supplies no
 /// program, path, argument, port, or environment value.
 #[tauri::command]
@@ -943,6 +986,7 @@ pub fn run() {
         .manage(native_terminal::NativeTerminalState::new())
         .invoke_handler(tauri::generate_handler![
             desktop_runtime_configuration,
+            desktop_append_frontend_log,
             desktop_retry_services,
             desktop_pick_folder,
             desktop_preflight_report,
@@ -1152,6 +1196,20 @@ mod tests {
             "http://127.0.0.1:1/api/work-tracker"
         );
         assert!(configuration.values.work_tracker_api_key.is_empty());
+    }
+
+    #[test]
+    fn frontend_log_records_are_bounded_single_lines_with_fixed_levels() {
+        assert_eq!(
+            frontend_log_line("warn", "first\nsecond\rthird"),
+            Ok("[frontend][warn] first\\nsecond\\rthird".to_owned())
+        );
+        assert!(frontend_log_line("warning", "nope").is_err());
+
+        let oversized = "é".repeat(FRONTEND_LOG_MAX_BYTES);
+        let line = frontend_log_line("error", &oversized).expect("bounded frontend log");
+        assert!(line.ends_with(" [truncated]"));
+        assert!(line.is_char_boundary(line.len()));
     }
 
     #[test]

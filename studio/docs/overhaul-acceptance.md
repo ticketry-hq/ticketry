@@ -1,6 +1,6 @@
 # Studio overhaul acceptance gate
 
-The twenty-two checks that were once a manual pre-merge walk are automated by
+The twenty-three checks that were once a manual pre-merge walk are automated by
 `npm run test:overhaul --workspace @worktracker/studio`. Desktop CI runs that
 named gate before the full Studio suite, typecheck, and build.
 
@@ -28,6 +28,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 20 | The dialog bus renders confirmation requests and resolves both user choices. |
 | 21 | Repeating Run subtree revives an inactive campaign from the same action. |
 | 22 | Settings cold-opens from the footer and loads the selected project catalog. |
+| 23 | A native terminal acquires outside viewer ownership before attachment and releases it on detach. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

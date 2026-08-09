@@ -28,6 +28,7 @@ const MCP_URL_ENV: &str = "WORKTRACKER_MCP_URL";
 const READINESS_PREFIX: &str = "MUXED_READY service=backend port=";
 const FAILURE_PREFIX: &str = "MUXED_FAILURE ";
 const SIDECAR_LOG_FILE_NAME: &str = "sidecar.log";
+const DEVELOPMENT_LOG_PATH_ENV: &str = "MUXED_DEVELOPMENT_LOG_PATH";
 const MCP_PORT_FILE_NAME: &str = "mcp-port";
 const MCP_RESPONSE_LIMIT_BYTES: usize = 64 * 1024;
 const READINESS_TERMINAL_DRAIN: Duration = Duration::from_millis(50);
@@ -44,6 +45,13 @@ fn sanitize_packaged_process_environment(command: &mut Command) {
 }
 
 pub fn sidecar_log_path(data_directory: impl AsRef<Path>) -> PathBuf {
+    #[cfg(debug_assertions)]
+    if let Some(configured) = std::env::var_os(DEVELOPMENT_LOG_PATH_ENV) {
+        let configured = PathBuf::from(configured);
+        if configured.is_absolute() {
+            return configured;
+        }
+    }
     data_directory.as_ref().join(SIDECAR_LOG_FILE_NAME)
 }
 
@@ -902,6 +910,14 @@ impl Supervisor {
 
     pub fn logs(&self) -> Vec<String> {
         self.logs.lock().expect("logs lock poisoned").snapshot()
+    }
+
+    /// Append one already-labelled desktop record through the same redaction,
+    /// rotation, and error-reporting path used for supervised child output.
+    pub fn append_log_line(&self, line: &str) {
+        let mut logs = self.logs.lock().expect("logs lock poisoned");
+        let redacted = logs.redact(line);
+        logs.push_redacted(redacted);
     }
 
     pub fn log_path(&self) -> &Path {
@@ -2851,6 +2867,27 @@ mod tests {
         );
 
         fs::remove_dir_all(data_directory).expect("remove data directory");
+    }
+
+    #[test]
+    fn external_desktop_records_share_sidecar_redaction_and_persistence() {
+        let log_path = unique_temp_path("frontend-sidecar.log");
+        let mut supervisor = Supervisor::new(
+            stub_table_at("ready", vec![], log_path.clone()),
+            fast_options(),
+        );
+        let credential = supervisor.credential().to_owned();
+
+        supervisor.append_log_line(&format!(
+            "[frontend][warn] request failed credential={credential}"
+        ));
+
+        let persisted = fs::read_to_string(&log_path).expect("read frontend record");
+        assert!(persisted.contains("[frontend][warn] request failed"));
+        assert!(persisted.contains("credential=[REDACTED]"));
+        assert!(!persisted.contains(&credential));
+        supervisor.shutdown().expect("stop unused supervisor");
+        fs::remove_file(log_path).expect("remove frontend sidecar log");
     }
 
     #[test]

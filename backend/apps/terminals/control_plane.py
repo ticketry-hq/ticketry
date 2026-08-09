@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from apps.terminals.dao import SCRATCH_TASK_ID
-from apps.terminals.session import LaunchIntent, session as terminal_session
+from apps.terminals.launch import LaunchIntent, launch_agent_run
 from apps.terminals.validation import SpawnRequest
 
 
@@ -47,11 +47,11 @@ def launch_intent_from_spawn(request: SpawnRequest) -> LaunchIntent:
 
 
 async def create_terminal_run(request: SpawnRequest) -> str:
-    """Create the AgentRun and detached tmux session before transport attach.
+    """Create the AgentRun and durable runtime before transport attach.
 
-    ``TerminalSessionService.spawn`` is the one launcher responsible for
-    persisting the run and deleting it if tmux setup fails. ``request`` must
-    have passed terminal spawn validation before reaching this operation.
+    The application launch service persists the run and compensates both
+    persistence and runtime creation on failure. ``request`` must have passed
+    terminal spawn validation before reaching this operation.
     """
 
-    return await terminal_session.spawn(launch_intent_from_spawn(request))
+    return await launch_agent_run(launch_intent_from_spawn(request))

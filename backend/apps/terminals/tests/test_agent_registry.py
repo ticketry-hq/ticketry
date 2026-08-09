@@ -23,7 +23,7 @@ import apps.terminals.launch as launch
 import apps.terminals.validation as validation
 from apps.terminals.agents.injectors.agy import _AGY_SYSTEM_SETTINGS_ENV
 from apps.terminals.authorization import verify_run_authorization
-from apps.terminals.tmux import sessions as tmux_sessions
+from apps.terminals.tests.fakes import patch_terminal_runtime
 from apps.terminals.agents.registry import (
     AgentAdapter,
     LaunchAugmentation,
@@ -34,8 +34,6 @@ from apps.terminals.agents.registry import (
 )
 from worktracker.models import AgentModel, Provider, ReasoningLevel
 from worktracker.tests.factories import fixture_issue_id
-
-from .test_consumers import _fake_tmux_session
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -199,20 +197,14 @@ async def _command(slug: str, prompt: str = "hello") -> list[str]:
     return await asyncio.to_thread(get_adapter(slug).command, prompt)
 
 
-async def _launch_and_capture(monkeypatch, slug, argv) -> str:
-    """Drive the real launch path and return the shlex-joined tmux command.
+async def _launch_and_capture(monkeypatch, slug, argv):
+    """Drive the real launch path and return its prepared runtime request.
 
     Mirrors the ``test_session_spawn`` harness: capture ``create_session``'s
     command and no-op the design-dir watcher, so the only thing exercised is
     the registry-routed injection ``_launch`` runs.
     """
-    captured: dict = {}
-
-    def fake_create_session(**kwargs):
-        captured.update(kwargs)
-        return _fake_tmux_session(kwargs["agent_run_id"])
-
-    monkeypatch.setattr(tmux_sessions, "create_session", fake_create_session)
+    runtime = patch_terminal_runtime(monkeypatch)
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
 
     await launch._launch(
@@ -225,7 +217,7 @@ async def _launch_and_capture(monkeypatch, slug, argv) -> str:
         doc_rel_path=None,
         agent_run_id="deadbeef",
     )
-    return captured["command"]
+    return runtime.requests[0]
 
 
 async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment(monkeypatch):
@@ -240,11 +232,7 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
             captured["injection"] = (agent_run_id, lifecycle_url, mcp_url)
             return LaunchAugmentation(tuple(argv))
 
-    monkeypatch.setattr(
-        tmux_sessions,
-        "create_session",
-        lambda **kwargs: _fake_tmux_session(kwargs["agent_run_id"]),
-    )
+    patch_terminal_runtime(monkeypatch)
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kwargs: None)
     monkeypatch.setenv(
         "MUXED_LIFECYCLE_URL",
@@ -307,8 +295,8 @@ async def test_packaged_absolute_agent_path_keeps_hook_injection(
         if resume
         else await _command(slug)
     )
-    command = await _launch_and_capture(monkeypatch, slug, argv)
-    launched = shlex.split(command)
+    request = await _launch_and_capture(monkeypatch, slug, argv)
+    launched = shlex.split(request.command)
     settings_path = _wrapped_settings_path(launched)
 
     try:
@@ -326,9 +314,10 @@ async def test_packaged_absolute_agent_path_keeps_hook_injection(
             hook_command = hooks["SessionStart"][0]["hooks"][0]["command"]
             assert lifecycle_url in hook_command
         else:
-            assert launched[:3] == ["env", "-u", "NO_COLOR"]
-            assert launched[4] == approved
-            assert settings_path is not None
+            assert launched[:4] == ["env", "-u", "NO_COLOR", approved]
+            settings_path = pathlib.Path(
+                request.environment[_AGY_SYSTEM_SETTINGS_ENV]
+            )
             settings = json.loads(settings_path.read_text())
             hook_command = settings["hooks"]["SessionStart"][0]["hooks"][0][
                 "command"
@@ -344,9 +333,10 @@ async def test_packaged_absolute_agent_path_keeps_hook_injection(
 
 
 async def test_claude_real_injection(monkeypatch):
-    command = await _launch_and_capture(
+    request = await _launch_and_capture(
         monkeypatch, "claude", await _command("claude")
     )
+    command = request.command
     assert "--settings" in command
     assert "--mcp-config" in command
     argv = shlex.split(command)
@@ -399,9 +389,10 @@ def test_mcp_enabled_adapter_resume_receives_a_fresh_run_authorization(slug):
 
 
 async def test_codex_real_injection(monkeypatch):
-    command = await _launch_and_capture(
+    request = await _launch_and_capture(
         monkeypatch, "codex", await _command("codex")
     )
+    command = request.command
     # shlex.join quotes each -c value, so the markers appear as `-c 'hooks=…'`.
     assert "-c" in shlex.split(command)
     assert "hooks=" in command
@@ -410,13 +401,13 @@ async def test_codex_real_injection(monkeypatch):
 
 
 async def test_gemini_real_injection_has_authenticated_mcp(monkeypatch):
-    command = await _launch_and_capture(
+    request = await _launch_and_capture(
         monkeypatch, "gemini", await _command("gemini")
     )
-    assert command.startswith("env -u NO_COLOR GEMINI_CLI_SYSTEM_SETTINGS_PATH=")
+    command = request.command
+    assert _AGY_SYSTEM_SETTINGS_ENV in request.environment
     assert "--skip-trust" in command
-    launched = shlex.split(command)
-    settings_path = pathlib.Path(launched[3].split("=", 1)[1])
+    settings_path = pathlib.Path(request.environment[_AGY_SYSTEM_SETTINGS_ENV])
     settings = json.loads(settings_path.read_text())
     server = settings["mcpServers"]["worktracker-agent"]
     assert server["httpUrl"].endswith("/mcp")
@@ -425,10 +416,10 @@ async def test_gemini_real_injection_has_authenticated_mcp(monkeypatch):
 
 
 async def test_agy_real_injection(monkeypatch):
-    command = await _launch_and_capture(
+    request = await _launch_and_capture(
         monkeypatch, "agy", await _command("agy")
     )
-    assert command.startswith(f"env -u NO_COLOR {_AGY_SYSTEM_SETTINGS_ENV}=")
+    assert _AGY_SYSTEM_SETTINGS_ENV in request.environment
 
 
 @pytest.mark.parametrize(

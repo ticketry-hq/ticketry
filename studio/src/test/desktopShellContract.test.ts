@@ -56,6 +56,7 @@ describe("desktop shell security contract", () => {
       windows: ["main"],
       permissions: [
         "allow-desktop-runtime-configuration",
+        "allow-desktop-append-frontend-log",
         "allow-desktop-retry-services",
         "allow-desktop-pick-folder",
         "allow-desktop-preflight-report",

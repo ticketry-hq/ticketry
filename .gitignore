@@ -34,6 +34,7 @@ studio/src-tauri/binaries/
 .env
 .env.*
 !.env.example
+/.ticketry-dev/
 
 # Editor / OS
 .DS_Store

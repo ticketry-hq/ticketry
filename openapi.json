@@ -5425,9 +5425,6 @@
                     "agent_run_id": {
                         "type": "string"
                     },
-                    "tmux_session_name": {
-                        "type": "string"
-                    },
                     "doc_rel_path": {
                         "type": "string",
                         "nullable": true

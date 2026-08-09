@@ -1,6 +1,6 @@
 # Studio overhaul acceptance gate
 
-The thirty-six checks that were once a manual pre-merge walk are automated by
+The fifty checks that were once a manual pre-merge walk are automated by
 `npm run test:overhaul --workspace @worktracker/studio`. Desktop CI runs that
 named gate before the full Studio suite, typecheck, and build.
 
@@ -53,6 +53,9 @@ named gate before the full Studio suite, typecheck, and build.
 | 45 | Cancelled and no-op module drops write nothing, and a drop does not select the module it landed on. |
 | 46 | A module created in an automatic project leads every module surface, and selection, its folder link, and the sidebar add control are unchanged. |
 | 47 | A module created in a project with Manual module order leads every module surface without leaving that mode, and agent activity cannot demote it. |
+| 48 | A live desktop run prefers the available native libghostty renderer and retains xterm as its fallback. |
+| 49 | A persisted terminal appears when its run projection arrives after the workspace first mounts. |
+| 50 | Selecting Details detaches the native terminal surface while keeping the pooled terminal session available. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

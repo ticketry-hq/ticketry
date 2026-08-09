@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "xterm/css/xterm.css";
 
 import {
@@ -15,6 +15,10 @@ import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
 import { useTerminalPresentation } from "./internal/useTerminalPresentation";
 import { registerTerminalFocus } from "./internal/terminalRegistry";
+import {
+  NativeGhosttyTerminal,
+  nativeGhosttyAvailable,
+} from "./NativeGhosttyTerminal";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -30,6 +34,42 @@ type TerminalProps = {
 
 /** Presents a pooled terminal session on one foreground surface. */
 export function Terminal({ sessionId, owner = "studio", focusSignal }: TerminalProps) {
+  const session = useTerminalStore((state) =>
+    sessionId ? state.sessions[sessionId] ?? null : null,
+  );
+  const [nativeAvailable, setNativeAvailable] = useState(false);
+  const [nativeFailedSessionId, setNativeFailedSessionId] = useState<string | null>(
+    null,
+  );
+  const markNativeUnavailable = useCallback(() => {
+    setNativeFailedSessionId(sessionId);
+  }, [sessionId]);
+
+  useEffect(() => {
+    let active = true;
+    void nativeGhosttyAvailable().then((available) => {
+      if (active) setNativeAvailable(available);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (
+    nativeAvailable &&
+    sessionId &&
+    session?.agentRunId &&
+    nativeFailedSessionId !== sessionId
+  ) {
+    return (
+      <NativeGhosttyTerminal
+        sessionId={sessionId}
+        owner={owner}
+        focusSignal={focusSignal}
+        onUnavailable={markNativeUnavailable}
+      />
+    );
+  }
   return <XtermTerminal sessionId={sessionId} owner={owner} focusSignal={focusSignal} />;
 }
 

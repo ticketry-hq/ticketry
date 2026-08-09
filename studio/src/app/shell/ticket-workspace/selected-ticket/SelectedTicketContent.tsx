@@ -198,7 +198,13 @@ export function SelectedTicketContent({
     if (!bucket || !terminalSessionsFetched) return;
     useTerminalStore.getState().restoreLiveSessions(bucket, persistedSessions);
     restoreTerminalTarget(bucket, restoreGenerationRef.current, true);
-  }, [bucket, persistedSessions, restoreTerminalTarget, terminalSessionsFetched]);
+  }, [
+    bucket,
+    mountedBucketRunIds,
+    persistedSessions,
+    restoreTerminalTarget,
+    terminalSessionsFetched,
+  ]);
 
   useRefreshWorkspaceTerminalSessionsForRuns({
     bucket,

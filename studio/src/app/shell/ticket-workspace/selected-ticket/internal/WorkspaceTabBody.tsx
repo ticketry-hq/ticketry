@@ -163,6 +163,7 @@ export function WorkspaceTabBody({
               <LazySelectedTicketTerminal
                 bucket={bucket}
                 owner={owner}
+                active={activeKind === "terminal"}
                 focusSignal={
                   requestedTerminalId === activeTerminalId
                     ? terminalFocusSignal

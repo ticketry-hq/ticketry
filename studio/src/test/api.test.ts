@@ -64,6 +64,7 @@ describe("api client", () => {
   });
 
   it("terminates a run on the canonical terminal collection route", async () => {
+    vi.stubEnv("VITE_WT_API_KEY", "terminal-secret");
     fetchMock.mockResolvedValue(jsonResponse({
       agent_run_id: "run/1",
       terminated: true,
@@ -74,6 +75,7 @@ describe("api client", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/terminals?agent_run_id=run%2F1");
     expect(init.method).toBe("DELETE");
+    expect(new Headers(init.headers).get("x-api-key")).toBe("terminal-secret");
   });
 
   it("sends x-api-key on every request and hits the projects path", async () => {

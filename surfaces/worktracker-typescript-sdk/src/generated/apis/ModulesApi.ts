@@ -53,7 +53,7 @@ export interface ModulesApiInterface {
     createModuleRequestOpts(requestParameters: CreateModuleRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Project-scoped module collection with explicit stable ordering.
+     * Project-scoped module collection in the Canonical module order.
      * @param {string} projectId
      * @param {ModuleCreate} moduleCreate
      * @param {*} [options] Override http request option.
@@ -63,7 +63,7 @@ export interface ModulesApiInterface {
     createModuleRaw(requestParameters: CreateModuleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Module>>;
 
     /**
-     * Project-scoped module collection with explicit stable ordering.
+     * Project-scoped module collection in the Canonical module order.
      */
     createModule(requestParameters: CreateModuleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Module>;
 
@@ -77,7 +77,7 @@ export interface ModulesApiInterface {
     listModulesRequestOpts(requestParameters: ListModulesRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Project-scoped module collection with explicit stable ordering.
+     * Project-scoped module collection in the Canonical module order.
      * @param {string} projectId
      * @param {boolean} [includeArchived]
      * @param {*} [options] Override http request option.
@@ -87,7 +87,7 @@ export interface ModulesApiInterface {
     listModulesRaw(requestParameters: ListModulesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<Module>>>;
 
     /**
-     * Project-scoped module collection with explicit stable ordering.
+     * Project-scoped module collection in the Canonical module order.
      */
     listModules(requestParameters: ListModulesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<Module>>;
 
@@ -140,7 +140,7 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
     }
 
     /**
-     * Project-scoped module collection with explicit stable ordering.
+     * Project-scoped module collection in the Canonical module order.
      */
     async createModuleRaw(requestParameters: CreateModuleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Module>> {
         const requestOptions = await this.createModuleRequestOpts(requestParameters);
@@ -150,7 +150,7 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
     }
 
     /**
-     * Project-scoped module collection with explicit stable ordering.
+     * Project-scoped module collection in the Canonical module order.
      */
     async createModule(requestParameters: CreateModuleRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Module> {
         const response = await this.createModuleRaw(requestParameters, initOverrides);
@@ -193,7 +193,7 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
     }
 
     /**
-     * Project-scoped module collection with explicit stable ordering.
+     * Project-scoped module collection in the Canonical module order.
      */
     async listModulesRaw(requestParameters: ListModulesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<Module>>> {
         const requestOptions = await this.listModulesRequestOpts(requestParameters);
@@ -203,7 +203,7 @@ export class ModulesApi extends runtime.BaseAPI implements ModulesApiInterface {
     }
 
     /**
-     * Project-scoped module collection with explicit stable ordering.
+     * Project-scoped module collection in the Canonical module order.
      */
     async listModules(requestParameters: ListModulesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<Module>> {
         const response = await this.listModulesRaw(requestParameters, initOverrides);

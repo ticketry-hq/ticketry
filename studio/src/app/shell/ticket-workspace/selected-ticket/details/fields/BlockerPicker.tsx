@@ -1,4 +1,5 @@
 import {
+  formatWorkItemDisplayIdentifier,
   reachable,
 } from "../../../../../../features/work-items";
 import type { WorkItem } from "../../../../../../shared/api/types";
@@ -6,10 +7,12 @@ import { stateColor } from "../../../../../../shared/utilities/display";
 import Popover, { PopoverOption } from "./Popover";
 import PopoverContent from "./PopoverContent";
 import { GhostChipAdd } from "./QuietChipControls";
+import { stateById, useCachedStates } from "../../../../../../shared/query/stateCatalog";
 
 interface Props {
   /** The issue being edited. */
   issueId: string;
+  projectId: string;
   items: WorkItem[];
   /** Its current blocker ids — already-added candidates are hidden. */
   currentIds: string[];
@@ -21,7 +24,8 @@ interface Props {
 // Blocker picker: project work-items minus self, current blockers, and any
 // candidate that would create a cycle. Mirrors the ParentPicker
 // idiom; selecting one folds it into the open issue's blocked_by replace-set.
-export default function BlockerPicker({ issueId, items, currentIds, onPick, saving }: Props) {
+export default function BlockerPicker({ issueId, projectId, items, currentIds, onPick, saving }: Props) {
+  const states = useCachedStates(projectId);
   const current = new Set(currentIds);
   // Ids this issue blocks (transitively) would close a cycle if added as a
   // blocker — hide them up front; the server's BFS guard is the backstop.
@@ -58,10 +62,10 @@ export default function BlockerPicker({ issueId, items, currentIds, onPick, savi
               >
                 <span
                   className="h-2 w-2 flex-none rounded-full"
-                  style={{ backgroundColor: stateColor(c.state) }}
+                  style={{ backgroundColor: stateColor(stateById(states, c.state)) }}
                 />
                 <span className="w-20 flex-none font-mono text-xs text-text-muted">
-                  {c.key}
+                  {formatWorkItemDisplayIdentifier(c.sequence_id)}
                 </span>
                 <span className="flex-1 truncate">{c.name}</span>
               </PopoverOption>

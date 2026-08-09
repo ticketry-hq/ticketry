@@ -52,7 +52,7 @@ class ViewerAttachment:
 
 _runtime: TerminalRuntime = TmuxTerminalRuntime()
 _active: dict[str, ViewerAttachment] = {}
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 
 def configure_runtime(runtime: TerminalRuntime) -> None:
@@ -85,27 +85,31 @@ def acquire(
     attachment = _runtime.attach(agent_run_id)
     try:
         attachment.resize(dimensions)
-        viewer_leases.acquire(
-            agent_run_id=agent_run_id,
-            viewer_id=viewer_id,
-            transport=transport,
-        )
     except Exception:
         attachment.detach()
         raise
 
     viewer = ViewerAttachment(agent_run_id, viewer_id, attachment)
-    with _lock:
-        displaced = _active.get(agent_run_id)
-        _active[agent_run_id] = viewer
-    if displaced is not None:
-        if displaced.viewer_id == viewer_id:
-            # A retried acquisition with the same policy identity already owns
-            # the renewed lease. Detach only its superseded mechanics so the
-            # release cannot delete the lease just acquired above.
-            displaced.detach_replaced_mechanics()
-        else:
-            displaced.release()
+    try:
+        with _lock:
+            viewer_leases.acquire(
+                agent_run_id=agent_run_id,
+                viewer_id=viewer_id,
+                transport=transport,
+            )
+            displaced = _active.get(agent_run_id)
+            _active[agent_run_id] = viewer
+            if displaced is not None:
+                if displaced.viewer_id == viewer_id:
+                    # A retried acquisition with the same policy identity already
+                    # owns the renewed lease. Detach only its superseded mechanics
+                    # so the release cannot delete the lease just acquired above.
+                    displaced.detach_replaced_mechanics()
+                else:
+                    displaced.release()
+    except Exception:
+        attachment.detach()
+        raise
     return viewer
 
 

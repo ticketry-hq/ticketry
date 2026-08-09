@@ -45,6 +45,7 @@ class GlobalLaunchDefaultSerializer(serializers.Serializer):
 
 
 class ProviderCatalogSerializer(serializers.Serializer):
+    activated_providers = serializers.ListField(child=serializers.CharField())
     global_default = GlobalLaunchDefaultSerializer(required=False, allow_null=True)
 
 

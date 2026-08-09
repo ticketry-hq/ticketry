@@ -36,18 +36,6 @@ def _uuid_query(request, name):
         raise DRFValidationError({name: "Must be a valid UUID."})
 
 
-def _bool_query(request, name, default=False):
-    value = request.query_params.get(name)
-    if value is None:
-        return default
-    normalized = value.casefold()
-    if normalized in {"true", "1"}:
-        return True
-    if normalized in {"false", "0"}:
-        return False
-    raise DRFValidationError({name: "Must be true or false."})
-
-
 class WorkItemListView(APIView):
     """The only task collection read, narrowed by declared query parameters."""
 
@@ -58,8 +46,6 @@ class WorkItemListView(APIView):
             OpenApiParameter("project", uuid.UUID, required=False),
             OpenApiParameter("module", uuid.UUID, required=False),
             OpenApiParameter("state", uuid.UUID, required=False),
-            OpenApiParameter("include_archived", bool, required=False, default=False),
-            OpenApiParameter("include_pathfind", bool, required=False, default=False),
         ],
         responses=WorkItemSerializer(many=True),
     )
@@ -71,8 +57,8 @@ class WorkItemListView(APIView):
             project_id=project_id,
             module_id=module_id,
             state_id=state_id,
-            include_archived=_bool_query(request, "include_archived"),
-            include_pathfind=_bool_query(request, "include_pathfind"),
+            include_archived=True,
+            include_pathfind=True,
         )
         return Response(WorkItemSerializer(items, many=True).data)
 

@@ -83,6 +83,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         (state["name"], state["group"])
         for state in REVIEWED_DEFAULTS["states"]
     ] == [
+        ("Ideas", "backlog"),
         ("Grill", "backlog"),
         ("Spec", "unstarted"),
         ("Tickets", "unstarted"),
@@ -95,6 +96,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         state["name"]: state["autoStart"]
         for state in REVIEWED_DEFAULTS["states"]
     } == {
+        "Ideas": True,
         "Grill": False,
         "Spec": True,
         "Tickets": True,
@@ -104,6 +106,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         "Cancelled": False,
     }
     assert REVIEWED_DEFAULTS["requiredSkills"] == {
+        "Ideas": [],
         "Grill": ["grill-with-docs"],
         "Spec": ["to-spec"],
         "Tickets": ["to-tickets"],
@@ -115,8 +118,9 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
 
     expected_workflows = {
         "Story": {
-            "start": "Grill",
+            "start": "Ideas",
             "states": {
+                "Ideas",
                 "Grill",
                 "Spec",
                 "Tickets",
@@ -126,6 +130,9 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
                 "Cancelled",
             },
             "edges": {
+                ("Ideas", "Grill", True),
+                ("Ideas", "Spec", True),
+                ("Grill", "Ideas", True),
                 ("Grill", "Spec", True),
                 ("Grill", "Cancelled", True),
                 ("Spec", "Tickets", True),
@@ -173,6 +180,10 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         } == expected["edges"]
 
     story_prompts = REVIEWED_DEFAULTS["prompts"]["Story"]
+    assert "interactive grill session" in story_prompts["Ideas"]
+    assert "`Grill`" in story_prompts["Ideas"]
+    assert "`Spec`" in story_prompts["Ideas"]
+    assert "Do not implement" in story_prompts["Ideas"]
     assert "$grill-with-docs" in story_prompts["Grill"]
     assert "`Spec`" in story_prompts["Grill"]
     assert "`Tickets`" not in story_prompts["Grill"]
@@ -271,8 +282,14 @@ def test_fresh_project_materializes_the_reviewed_artifact():
             for state_name, binding in bindings.items()
         } == REVIEWED_DEFAULTS["requiredSkills"]
         assert {
-            binding.subtree_run_enabled for binding in bindings.values()
-        } == {issue_type.name == "Story"}
+            state_name: binding.subtree_run_enabled
+            for state_name, binding in bindings.items()
+        } == {
+            state["name"]: (
+                issue_type.name == "Story" and state["name"] != "Ideas"
+            )
+            for state in REVIEWED_DEFAULTS["states"]
+        }
         assert {
             state_name: binding.auto_start
             for state_name, binding in bindings.items()

@@ -133,14 +133,7 @@ export function getWorkflowProviderCapabilitiesSnapshot(): WorkflowEditorResourc
 export async function loadWorkflowProjectItems(
   projectId: string,
 ): Promise<WorkItem[]> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.workItems.byProject(projectId, {
-      includeArchived: true,
-      includePathfind: true,
-    }),
-    queryFn: () => api.getProjectWorkItems(projectId),
-    staleTime: 0,
-  });
+  return api.getProjectWorkItems(projectId);
 }
 
 export async function loadWorkflowEditorResources(

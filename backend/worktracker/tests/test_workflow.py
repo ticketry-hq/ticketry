@@ -29,7 +29,7 @@ from worktracker.workflow import (
 
 @pytest.fixture
 def sdlc(project):
-    """Seed the seven canonical states + SDLC issue types for ``project``.
+    """Seed the canonical states + SDLC issue types for ``project``.
 
     Returns ``(states_by_name, types_by_name)`` — every canonical state and
     SDLC :class:`IssueType`.
@@ -68,6 +68,9 @@ def _issue(project, states, issue_type, *, state, parent=None):
 
 LEGAL_BY_TYPE = {
     "Story": [
+        ("Ideas", "Grill"),
+        ("Ideas", "Spec"),
+        ("Grill", "Ideas"),
         ("Grill", "Spec"),
         ("Spec", "Tickets"),
         ("Tickets", "Implement"),
@@ -95,6 +98,9 @@ LEGAL_BY_TYPE = {
 
 ILLEGAL_BY_TYPE = {
     "Story": [
+        ("Ideas", "Tickets"),
+        ("Ideas", "Implement"),
+        ("Ideas", "Done"),
         ("Grill", "Tickets"),
         ("Grill", "Implement"),
         ("Grill", "Done"),

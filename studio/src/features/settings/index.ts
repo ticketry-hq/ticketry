@@ -2,6 +2,7 @@ export {
   ensureSettings,
   getCapabilitiesSnapshot,
   getIssueTypesSnapshot,
+  issueTypeById,
   loadSettings,
   loadIssueTypes,
   refreshSubtreeRunCapabilities,

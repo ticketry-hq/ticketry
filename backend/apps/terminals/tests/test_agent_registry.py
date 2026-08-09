@@ -39,14 +39,20 @@ pytestmark = pytest.mark.django_db(transaction=True)
 
 
 _EXPECTED_COMMAND = {
-    "claude": ["claude", "--allow-dangerously-skip-permissions", "hello"],
+    "claude": ["claude", "--permission-mode", "auto", "hello"],
     "agy": ["agy", "--dangerously-skip-permissions", "-i", "hello"],
     "codex": ["codex", "hello"],
     "gemini": ["gemini", "--approval-mode", "yolo", "hello"],
 }
 
 _EXPECTED_RESUME_COMMAND = {
-    "claude": ["claude", "--allow-dangerously-skip-permissions", "--resume", "sid-123"],
+    "claude": [
+        "claude",
+        "--permission-mode",
+        "auto",
+        "--resume",
+        "sid-123",
+    ],
     "agy": ["agy", "--dangerously-skip-permissions", "--conversation", "sid-123"],
     "codex": ["codex", "resume", "sid-123"],
     "gemini": ["gemini", "--approval-mode", "yolo", "--resume", "sid-123"],
@@ -98,7 +104,8 @@ def test_command_matches_table(slug):
             "high",
             [
                 "claude",
-                "--allow-dangerously-skip-permissions",
+                "--permission-mode",
+                "auto",
                 "--model",
                 "sonnet",
                 "--effort",

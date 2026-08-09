@@ -10,13 +10,13 @@ from rest_framework.views import APIView
 
 from worktracker.models import (
     AgentModel,
-    Issue,
     IssueType,
     Project,
     Provider,
     ReasoningLevel,
     State,
 )
+from worktracker.module_order import canonical_module_queryset
 from worktracker.rest.serializers import (
     AgentModelSerializer,
     IssueTypeSerializer,
@@ -98,7 +98,7 @@ class ModuleViewSet(
     mixins.CreateModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Project-scoped module collection with explicit stable ordering."""
+    """Project-scoped module collection in the Canonical module order."""
 
     serializer_class = ModuleSerializer
 
@@ -121,15 +121,11 @@ class ModuleViewSet(
         )
 
     def get_queryset(self):
-        queryset = (
-            Issue.objects.filter(project_id=self.kwargs["project_id"], type="module")
-            .select_related("project", "issue_type")
-            .order_by("sequence_id", "id")
-        )
         include_archived = self.request.query_params.get("include_archived", "false")
-        if include_archived.casefold() not in {"true", "1"}:
-            queryset = queryset.exclude(is_archived=True)
-        return queryset
+        return canonical_module_queryset(
+            self.kwargs["project_id"],
+            include_archived=include_archived.casefold() in {"true", "1"},
+        ).select_related("project", "issue_type")
 
     def perform_create(self, serializer):
         serializer.instance = create_module(

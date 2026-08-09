@@ -22,7 +22,7 @@ from worktracker.workflow import InvalidTransition
 
 @pytest.fixture
 def sdlc(project):
-    """Seed the seven canonical states + Story/Implementation types."""
+    """Seed the canonical states + Story/Implementation types."""
 
     states = {
         name: State.objects.create(

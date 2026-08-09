@@ -73,17 +73,17 @@ export function findDuplicateWorkItemHoldings(
 ): DuplicateWorkItemHolding[] {
   const keysById = new Map<string, string[]>();
   for (const entry of entries) {
-    const idsInEntry = new Set<string>();
-    visitObjects(entry.state.data, (record) => {
-      if (isWorkItemRecord(record)) idsInEntry.add(record.id);
-    });
     const queryKey = serializeWithCollections(entry.queryKey);
-    for (const id of idsInEntry) {
-      keysById.set(id, [...(keysById.get(id) ?? []), queryKey]);
-    }
+    visitObjects(entry.state.data, (record) => {
+      if (!isWorkItemRecord(record)) return;
+      keysById.set(record.id, [...(keysById.get(record.id) ?? []), queryKey]);
+    });
   }
   return [...keysById.entries()]
-    .filter(([, queryKeys]) => queryKeys.length > 1)
+    .filter(([id, queryKeys]) => (
+      queryKeys.length !== 1
+      || queryKeys[0] !== serializeWithCollections(["workItem", id])
+    ))
     .map(([id, queryKeys]) => ({ id, queryKeys }));
 }
 

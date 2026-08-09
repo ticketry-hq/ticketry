@@ -4,7 +4,10 @@ import {
   type Module,
   type WorkItem,
 } from "../../../../../shared/api/types";
-import { type BlockerChip } from "../../../../../features/work-items";
+import {
+  type BlockerChip,
+  formatWorkItemDisplayIdentifier,
+} from "../../../../../features/work-items";
 import ParentPicker from "./fields/ParentPicker";
 import BlockerPicker from "./fields/BlockerPicker";
 import { formatDate } from "../../../../../shared/utilities/display";
@@ -84,7 +87,7 @@ export default function IssueSidebar({
               data-testid="epic-link"
               className="font-mono text-sm text-focus-accent hover:underline"
             >
-              {epic.key}
+              {formatWorkItemDisplayIdentifier(epic.sequence_id)}
             </button>
           ) : (
             <span className="text-sm text-text-muted">—</span>
@@ -107,6 +110,7 @@ export default function IssueSidebar({
             ))}
             <BlockerPicker
               issueId={task.id}
+              projectId={task.project_id}
               items={items}
               currentIds={task.blocked_by_ids}
               onPick={addBlocker}

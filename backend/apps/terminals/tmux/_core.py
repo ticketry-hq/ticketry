@@ -6,6 +6,7 @@ type every other tmux submodule builds on.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
@@ -65,6 +66,23 @@ def tmux_socket() -> str:
     ):
         raise TmuxSessionError("desktop supplied an invalid tmux socket name")
     return socket
+
+
+def tmux_runtime_namespace() -> str:
+    """Return an opaque identity for the effective tmux socket endpoint.
+
+    ``tmux -L`` resolves a socket name underneath ``TMUX_TMPDIR`` (or
+    ``/tmp``).  Persisting only the name lets two processes with different
+    socket roots claim the same runtime inventory and reconcile each other's
+    live sessions as missing.  Hash the complete endpoint identity so the
+    application can compare ownership without persisting private paths.
+    """
+
+    socket_root = Path(os.environ.get("TMUX_TMPDIR") or "/tmp")
+    normalized_root = socket_root.expanduser().resolve(strict=False)
+    endpoint = f"{normalized_root}\0{os.getuid()}\0{tmux_socket()}"
+    digest = hashlib.sha256(endpoint.encode("utf-8")).hexdigest()[:32]
+    return f"tmux-{digest}"
 
 
 def _server() -> libtmux.Server:

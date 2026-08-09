@@ -27,7 +27,7 @@ import {
 } from '../models/Project.js';
 
 export interface CreateProjectRequest {
-    project: Omit<Project, 'id'>;
+    project: Omit<Project, 'id'|'manual_module_order'>;
 }
 
 export interface DeleteProjectRequest {
@@ -36,7 +36,7 @@ export interface DeleteProjectRequest {
 
 export interface UpdateProjectRequest {
     projectId: string;
-    patchedProject?: Omit<PatchedProject, 'id'>;
+    patchedProject?: Omit<PatchedProject, 'id'|'manual_module_order'>;
 }
 
 /**

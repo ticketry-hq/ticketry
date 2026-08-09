@@ -49,6 +49,15 @@ from worktracker_agent.api.schemas import (
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8787/api"
 RESOLVED_STATE_GROUPS = frozenset({"completed", "cancelled"})
+REVIEW_STATE_NAME = "Review"
+
+
+def _dependency_state_resolved(state: Any | None) -> bool:
+    """Match graph scheduling: Review releases dependents before completion."""
+
+    return state is not None and (
+        state.group in RESOLVED_STATE_GROUPS or state.name == REVIEW_STATE_NAME
+    )
 
 
 @dataclass(frozen=True)
@@ -1060,10 +1069,7 @@ class WorktrackerService:
             str(item)
             for item in (*list(task.blocked_by_ids or []), *list(task.blocks_ids or []))
         }
-        listed = self.sdk.work_items.list_work_items(
-            include_archived=True,
-            include_pathfind=True,
-        )
+        listed = self.sdk.work_items.list_work_items()
         neighbors = {
             str(item.id): item for item in listed if str(item.id) in neighbor_ids
         }
@@ -1079,21 +1085,22 @@ class WorktrackerService:
         project_ids = {
             item.project_id for item in referenced if getattr(item, "state", None)
         }
-        state_groups = {
-            str(state.id): state.group
+        states = {
+            str(state.id): state
             for project_id in project_ids
             for state in self.sdk.states.list_states(project_id)
         }
 
         def scope_ref(item):
             state_id = getattr(item, "state", None)
-            group = state_groups.get(str(state_id)) if state_id else None
+            state = states.get(str(state_id)) if state_id else None
+            group = state.group if state is not None else None
             return {
                 "id": item.id,
                 "key": item.key,
                 "name": item.name,
                 "state_group": group,
-                "resolved": group in RESOLVED_STATE_GROUPS,
+                "resolved": _dependency_state_resolved(state),
             }
 
         depends_on_refs = [

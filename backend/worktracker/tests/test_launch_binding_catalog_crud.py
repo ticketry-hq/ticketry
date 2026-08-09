@@ -175,6 +175,7 @@ def test_global_default_write_validates_the_catalog_triple(client, auth):
         data=json.dumps(
             {
                 "value": {
+                    "activated_providers": ["claude", "codex", "gemini"],
                     "global_default": {
                         "provider": "codex",
                         "model": model.name,
@@ -193,6 +194,7 @@ def test_global_default_write_validates_the_catalog_triple(client, auth):
         data=json.dumps(
             {
                 "value": {
+                    "activated_providers": ["claude", "codex", "gemini"],
                     "global_default": {
                         "provider": "codex",
                         "model": model.name,

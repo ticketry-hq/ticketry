@@ -70,12 +70,15 @@ class Issue(models.Model):
     name = models.CharField(max_length=512)
     sequence_id = models.PositiveIntegerField()
     is_archived = models.BooleanField(default=False)
-    # Fractional-index sort key for manual within-column reorder (#626). A
-    # single global key per issue (Jira/LexoRank model); each board / story-map
-    # column sorts only its own members by it, so two issues in different
-    # columns are never compared. Reorder is the sole write path
+    # Fractional-index sort key for manual reorder (#626). A single global key
+    # per issue (Jira/LexoRank model); each sibling group sorts only its own
+    # members by it, so two issues in different groups are never compared. It
+    # carries two orders: a task's position within its planning-context column,
+    # and — for module work items — the module's position within its project's
+    # Manual module order. Reorder is the sole write path
     # (worktracker.ranking.key_between); the migration backfills it in
-    # ``sequence_id`` order so nothing moves on first load.
+    # ``sequence_id`` order so nothing moves on first load. Module ranks are
+    # ignored entirely until ``Project.manual_module_order`` is true.
     rank = models.CharField(max_length=64, blank=True, default="", db_index=True)
     description = models.TextField(blank=True, default="")
     # A directed Issue↔Issue blocker relation (#624), orthogonal to the parent

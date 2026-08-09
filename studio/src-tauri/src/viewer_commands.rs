@@ -1,10 +1,12 @@
 //! The webview-facing terminal command boundary.
 //!
 //! JavaScript supplies only a run id, an opaque handle, terminal geometry,
-//! bounded raw input, and validated scroll direction/count. The executable, tmux
-//! socket, session name, and process arguments remain inside `tmux_viewer`.
+//! bounded raw input, and validated scroll direction/count. Runtime mechanics
+//! remain behind the transport-independent attachment boundary.
 
-use crate::tmux_viewer::{TmuxScrollDirection, TmuxViewer, TmuxViewerError, ViewerOutcome};
+use crate::terminal_runtime::{
+    AttachmentOutcome, TerminalAttachment, TerminalAttachmentError, TerminalScrollDirection,
+};
 use rand::Rng;
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
@@ -88,7 +90,7 @@ pub enum ViewerScrollDirection {
     Down,
 }
 
-impl From<ViewerScrollDirection> for TmuxScrollDirection {
+impl From<ViewerScrollDirection> for TerminalScrollDirection {
     fn from(direction: ViewerScrollDirection) -> Self {
         match direction {
             ViewerScrollDirection::Up => Self::Up,
@@ -226,25 +228,29 @@ impl Serialize for ViewerCommandError {
     }
 }
 
-impl From<TmuxViewerError> for ViewerCommandError {
-    fn from(error: TmuxViewerError) -> Self {
+impl From<TerminalAttachmentError> for ViewerCommandError {
+    fn from(error: TerminalAttachmentError) -> Self {
         match error {
-            TmuxViewerError::InvalidRunId => Self::InvalidRunId,
-            TmuxViewerError::InvalidSize { columns, rows } => Self::InvalidSize { columns, rows },
-            TmuxViewerError::InvalidScrollLines { lines } => Self::InvalidScrollLines { lines },
-            TmuxViewerError::SessionNotFound { .. } => Self::TmuxAttach {
+            TerminalAttachmentError::InvalidRunId => Self::InvalidRunId,
+            TerminalAttachmentError::InvalidSize { columns, rows } => {
+                Self::InvalidSize { columns, rows }
+            }
+            TerminalAttachmentError::InvalidScrollLines { lines } => {
+                Self::InvalidScrollLines { lines }
+            }
+            TerminalAttachmentError::SessionNotFound { .. } => Self::TmuxAttach {
                 code: TmuxAttachFailureCode::SessionNotFound,
                 message: error.to_string(),
             },
-            TmuxViewerError::SessionEnded { .. } => Self::TmuxAttach {
+            TerminalAttachmentError::SessionEnded { .. } => Self::TmuxAttach {
                 code: TmuxAttachFailureCode::SessionEnded,
                 message: error.to_string(),
             },
-            TmuxViewerError::TmuxUnavailable(_) => Self::TmuxAttach {
+            TerminalAttachmentError::RuntimeUnavailable(_) => Self::TmuxAttach {
                 code: TmuxAttachFailureCode::TmuxUnavailable,
                 message: error.to_string(),
             },
-            TmuxViewerError::Pty(_) => Self::Pty {
+            TerminalAttachmentError::Pty(_) => Self::Pty {
                 message: error.to_string(),
             },
         }
@@ -313,7 +319,7 @@ pub fn viewer_attach(
         }
     }
 
-    let viewer = TmuxViewer::attach(&run_id, columns, rows)?;
+    let viewer = TerminalAttachment::attach(&run_id, columns, rows)?;
     let handle = new_handle();
     let status = ViewerStatus {
         viewer_handle: handle.clone(),
@@ -520,7 +526,7 @@ fn request<T>(
 fn spawn_viewer_worker(
     runtime: Arc<ViewerRuntime>,
     handle: String,
-    viewer: TmuxViewer,
+    viewer: TerminalAttachment,
     output: Channel<ViewerChannelEvent>,
     command_sender: mpsc::Sender<WorkerCommand>,
     command_receiver: Receiver<WorkerCommand>,
@@ -596,9 +602,9 @@ fn spawn_viewer_worker(
                         .expect("attached viewer has control")
                         .detach()
                     {
-                        Ok(ViewerOutcome::Detached) => ViewerCloseReason::Detached,
-                        Ok(ViewerOutcome::PtyEof) => ViewerCloseReason::PtyEof,
-                        Ok(ViewerOutcome::TmuxClientExited { exit_code }) => {
+                        Ok(AttachmentOutcome::Detached) => ViewerCloseReason::Detached,
+                        Ok(AttachmentOutcome::PtyEof) => ViewerCloseReason::PtyEof,
+                        Ok(AttachmentOutcome::ClientExited { exit_code }) => {
                             ViewerCloseReason::TmuxClientExited { exit_code }
                         }
                         Err(error) => {
@@ -630,9 +636,9 @@ fn spawn_viewer_worker(
                 Err(RecvTimeoutError::Timeout) => match control
                     .as_mut()
                     .expect("attached viewer has control")
-                    .poll_client_exit()
+                    .poll_exit()
                 {
-                    Ok(Some(ViewerOutcome::TmuxClientExited { exit_code })) => {
+                    Ok(Some(AttachmentOutcome::ClientExited { exit_code })) => {
                         let reason = ViewerCloseReason::TmuxClientExited { exit_code };
                         close_viewer(&runtime, &handle, reason);
                         let _ = output_sender.send(ViewerChannelEvent::Closed { reason });

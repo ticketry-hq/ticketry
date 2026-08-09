@@ -12,7 +12,6 @@ import type {
 } from "../../shared/api/types";
 import { queryKeys } from "../../shared/query/keys";
 import { rankBetween } from "./utilities/rank";
-import { normalizeWorkItemRelations } from "./queries";
 
 export interface ModuleMembership {
   projectId: string;
@@ -103,12 +102,9 @@ function useOptimisticWorkItemMutation<TVariables>({
       // A response may reconcile only the entry that was mutated. Creation has
       // no such entry yet and is discovered through the refreshed membership.
       if (context.id && authoritative.id === context.id) {
-        const optimistic = queryClient.getQueryData<WorkItem>(
-          queryKeys.workItems.byId(context.id),
-        );
         queryClient.setQueryData(
           queryKeys.workItems.byId(context.id),
-          normalizeWorkItemRelations(authoritative, [], [], optimistic),
+          authoritative,
         );
       }
     },
@@ -190,7 +186,7 @@ export function useChangeWorkItemType() {
       api.patchWorkItem(id, { issue_type_id: issueType.id }),
     update: (current, { issueType }) => ({
       ...current,
-      issue_type: issueType,
+      issue_type: issueType.id,
     }),
   });
 }
@@ -205,7 +201,7 @@ export function useSetWorkItemState() {
     id: ({ id }) => id,
     mutationFn: ({ id, state }) =>
       api.patchWorkItem(id, { state_id: state.id }),
-    update: (current, { state }) => ({ ...current, state }),
+    update: (current, { state }) => ({ ...current, state: state.id }),
   });
 }
 

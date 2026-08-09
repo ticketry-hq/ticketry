@@ -110,7 +110,7 @@ async function seedProject(request: APIRequestContext): Promise<void> {
     `/api/work-tracker/projects/${fixture.project.id}/states`,
   ));
   const existingItems = await responseJson<WorkItemRow[]>(await request.get(
-    `/api/work-tracker/work-items?project=${fixture.project.id}&include_pathfind=true`,
+    `/api/work-tracker/work-items?project=${fixture.project.id}`,
   ));
   const ensureItem = async (
     name: string,

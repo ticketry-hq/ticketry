@@ -229,10 +229,7 @@ def test_get_scope_context_assembles_unresolved_edges_and_advisory():
         "get_work_item",
         "list_work_items",
     ]
-    assert client.work_items.calls[1][2] == {
-        "include_archived": True,
-        "include_pathfind": True,
-    }
+    assert client.work_items.calls[1][2] == {}
 
 
 def test_get_scope_context_marks_resolved_blocker_and_keeps_advisory_shape():
@@ -259,6 +256,35 @@ def test_get_scope_context_marks_resolved_blocker_and_keeps_advisory_shape():
 
     assert ctx.depends_on[0].resolved is True
     assert ctx.depends_on[0].state_group == "completed"
+    assert ctx.advisory == (
+        "No unresolved blockers - deliver only this task and nothing beyond its scope."
+    )
+
+
+def test_get_scope_context_marks_review_blocker_resolved():
+    client = FakeGeneratedSdk()
+    client.work_items.returns["get_work_item"] = make_flat_work_item(
+        id=TASK,
+        key="CODIN-1",
+        blocked_by_ids=[BLOCKER],
+    )
+    client.work_items.returns["list_work_items"] = [
+        make_flat_work_item(
+            id=BLOCKER,
+            key="CODIN-2",
+            name="blocker",
+            state=BLOCKER,
+        )
+    ]
+    client.states.returns["list_states"] = [
+        make_state(id=BLOCKER, name="Review", group="started")
+    ]
+    service = WorktrackerService(base_url="http://example.test", sdk=client)
+
+    ctx = service.get_scope_context("CODIN-1")
+
+    assert ctx.depends_on[0].resolved is True
+    assert ctx.depends_on[0].state_group == "started"
     assert ctx.advisory == (
         "No unresolved blockers - deliver only this task and nothing beyond its scope."
     )

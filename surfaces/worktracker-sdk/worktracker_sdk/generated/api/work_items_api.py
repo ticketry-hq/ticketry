@@ -16,7 +16,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import StrictBool, StrictStr
+from pydantic import StrictStr
 from typing import List, Optional
 from uuid import UUID
 from worktracker_sdk.generated.models.patched_work_item_patch import PatchedWorkItemPatch
@@ -1128,8 +1128,6 @@ class WorkItemsApi:
     @validate_call
     def list_work_items(
         self,
-        include_archived: Optional[StrictBool] = None,
-        include_pathfind: Optional[StrictBool] = None,
         module: Optional[UUID] = None,
         project: Optional[UUID] = None,
         state: Optional[UUID] = None,
@@ -1150,10 +1148,6 @@ class WorkItemsApi:
 
         The only task collection read, narrowed by declared query parameters.
 
-        :param include_archived:
-        :type include_archived: bool
-        :param include_pathfind:
-        :type include_pathfind: bool
         :param module:
         :type module: UUID
         :param project:
@@ -1183,8 +1177,6 @@ class WorkItemsApi:
         """ # noqa: E501
 
         _param = self._list_work_items_serialize(
-            include_archived=include_archived,
-            include_pathfind=include_pathfind,
             module=module,
             project=project,
             state=state,
@@ -1211,8 +1203,6 @@ class WorkItemsApi:
     @validate_call
     def list_work_items_with_http_info(
         self,
-        include_archived: Optional[StrictBool] = None,
-        include_pathfind: Optional[StrictBool] = None,
         module: Optional[UUID] = None,
         project: Optional[UUID] = None,
         state: Optional[UUID] = None,
@@ -1233,10 +1223,6 @@ class WorkItemsApi:
 
         The only task collection read, narrowed by declared query parameters.
 
-        :param include_archived:
-        :type include_archived: bool
-        :param include_pathfind:
-        :type include_pathfind: bool
         :param module:
         :type module: UUID
         :param project:
@@ -1266,8 +1252,6 @@ class WorkItemsApi:
         """ # noqa: E501
 
         _param = self._list_work_items_serialize(
-            include_archived=include_archived,
-            include_pathfind=include_pathfind,
             module=module,
             project=project,
             state=state,
@@ -1294,8 +1278,6 @@ class WorkItemsApi:
     @validate_call
     def list_work_items_without_preload_content(
         self,
-        include_archived: Optional[StrictBool] = None,
-        include_pathfind: Optional[StrictBool] = None,
         module: Optional[UUID] = None,
         project: Optional[UUID] = None,
         state: Optional[UUID] = None,
@@ -1316,10 +1298,6 @@ class WorkItemsApi:
 
         The only task collection read, narrowed by declared query parameters.
 
-        :param include_archived:
-        :type include_archived: bool
-        :param include_pathfind:
-        :type include_pathfind: bool
         :param module:
         :type module: UUID
         :param project:
@@ -1349,8 +1327,6 @@ class WorkItemsApi:
         """ # noqa: E501
 
         _param = self._list_work_items_serialize(
-            include_archived=include_archived,
-            include_pathfind=include_pathfind,
             module=module,
             project=project,
             state=state,
@@ -1372,8 +1348,6 @@ class WorkItemsApi:
 
     def _list_work_items_serialize(
         self,
-        include_archived,
-        include_pathfind,
         module,
         project,
         state,
@@ -1399,14 +1373,6 @@ class WorkItemsApi:
 
         # process the path parameters
         # process the query parameters
-        if include_archived is not None:
-
-            _query_params.append(('include_archived', include_archived))
-
-        if include_pathfind is not None:
-
-            _query_params.append(('include_pathfind', include_pathfind))
-
         if module is not None:
 
             _query_params.append(('module', module))

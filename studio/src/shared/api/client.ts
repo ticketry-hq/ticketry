@@ -19,6 +19,7 @@ import type {
   ScopedWorkflowSettings,
   SubtreeRunCapabilityMap,
   WorkItem,
+  Attachment,
   WorkItemCreate,
   WorkItemDetail,
   WorkItemFilters,
@@ -109,7 +110,7 @@ async function request<T>(
 // answers a rejected state move with a structured body — a human `detail` plus a
 // machine `code` and the offending `from`/`to`. Prefer that `detail` so a
 // refused board drag / status change / bulk action tells the user *why*
-// ("A Story cannot move 'Idea' → 'Done'."), not a bare "422". Falls back to the
+// ("A Story cannot move 'Ideas' → 'Done'."), not a bare "422". Falls back to the
 // status line for other API errors, and to the raw message otherwise.
 export function apiErrorMessage(e: unknown): string {
   if (e instanceof ApiError) {
@@ -283,7 +284,6 @@ export const listProjectWorkItems = (
     ((await sdk().workItems.listWorkItems({
       project: projectId,
       state: filters?.state,
-      includePathfind: filters?.includePathfind,
     })) as unknown as WorkItem[]).filter(
       (item) => filters?.parent === undefined || item.parent_id === filters.parent,
     )
@@ -299,12 +299,28 @@ export const listWorkItemsByIds = (ids: readonly string[]) =>
 
 export const getWorkItem = (keyOrId: string, signal?: AbortSignal) =>
   call<WorkItemDetail>(async () => {
-    const task = (await sdk().workItems.getWorkItem(
+    const client = sdk();
+    const options = signal ? { signal } : undefined;
+    const [task, attachments] = await Promise.all([
+      client.workItems.getWorkItem({ issueId: keyOrId }, options),
+      client.attachments.listWorkItemAttachments({ issueId: keyOrId }, options),
+    ]);
+    return {
+      task: task as unknown as WorkItem,
+      attachments: attachments as unknown as Attachment[],
+    };
+  });
+
+export const getWorkItemAttachments = (
+  keyOrId: string,
+  signal?: AbortSignal,
+) =>
+  call<Attachment[]>(async () =>
+    (await sdk().attachments.listWorkItemAttachments(
       { issueId: keyOrId },
       signal ? { signal } : undefined,
-    )) as unknown as WorkItem;
-    return { task, attachments: [] };
-  });
+    )) as unknown as Attachment[],
+  );
 
 export const createWorkItem = (projectId: string, body: WorkItemCreate) =>
   call<WorkItem>(async () =>
@@ -331,7 +347,13 @@ export const deleteWorkItem = (id: string) =>
 
 export const reorderWorkItem = (
   id: string,
-  neighbors: { before_id: string | null; after_id: string | null },
+  neighbors: {
+    before_id: string | null;
+    after_id: string | null;
+    // A module's first drag only: the complete order the user could see, which
+    // the server freezes into ranks before applying the move (#360).
+    initial_order_ids?: string[] | null;
+  },
 ) =>
   call<WorkItem>(async () =>
     (await sdk().workItems.reorderWorkItem({
@@ -347,40 +369,13 @@ export const getTasks = async (projectId: string, moduleId: string) => {
     ),
     getStates(projectId),
   ]);
-  const needsIssueTypes = tasks.some(
-    (task) => typeof (task as unknown as { issue_type?: unknown }).issue_type === "string",
-  );
-  const issueTypes = needsIssueTypes ? await getIssueTypes(projectId) : [];
-
-  const stateById = new Map(states.map((state) => [state.id, state]));
-  const issueTypeById = new Map(issueTypes.map((issueType) => [issueType.id, issueType]));
-  const workItems = tasks.map((task) => {
-    const raw = task as unknown as WorkItem & {
-      state: string | State | null;
-      issue_type: string | IssueType;
-    };
-    return {
-      ...task,
-      state:
-        typeof raw.state === "string"
-          ? stateById.get(raw.state) ?? null
-          : raw.state,
-      issue_type:
-        typeof raw.issue_type === "string"
-          ? issueTypeById.get(raw.issue_type)
-          : raw.issue_type,
-    } as unknown as WorkItem;
-  });
-
-  return { ...moduleTreeFromWorkItems(moduleId, workItems), states, workItems };
+  return { ...moduleTreeFromWorkItems(moduleId, tasks), states, workItems: tasks };
 };
 
 export const getProjectWorkItems = (projectId: string): Promise<WorkItem[]> =>
   call(async () =>
     (await sdk().workItems.listWorkItems({
       project: projectId,
-      includeArchived: true,
-      includePathfind: true,
     })) as unknown as WorkItem[]);
 
 export const createTask = (
@@ -944,15 +939,8 @@ const CONFIGURABLE_PROVIDER_SLUGS: readonly ConfigurableProvider[] = [
 
 export const getProviderCatalog = () =>
   call(async () => {
-    const [providers, response] = await Promise.all([
-      sdk().providers.listProviders(),
-      sdk().settings.settingsProviderCatalogRetrieve(),
-    ]);
-    const activated = new Set(
-      providers
-        .filter((provider) => provider.activated)
-        .map((provider) => provider.slug),
-    );
+    const response = await sdk().settings.settingsProviderCatalogRetrieve();
+    const activated = new Set(response.value.activated_providers ?? []);
     const globalDefault = response.value.global_default;
     return {
       value: {
@@ -971,31 +959,12 @@ export const getProviderCatalog = () =>
 
 export const putProviderCatalog = (value: ProviderCatalog) =>
   call(async () => {
-    const providers = await sdk().providers.listProviders();
-    const activated = new Set(value.activated_providers);
-
-    for (const provider of providers) {
-      if (!CONFIGURABLE_PROVIDER_SLUGS.includes(
-        provider.slug as ConfigurableProvider,
-      )) {
-        continue;
-      }
-      const shouldActivate = activated.has(
-        provider.slug as ConfigurableProvider,
-      );
-      if (provider.activated !== shouldActivate) {
-        await sdk().providers.updateProvider({
-          id: provider.id,
-          patchedProvider: { activated: shouldActivate },
-        });
-      }
-    }
-
     const response = await sdk().settings.settingsProviderCatalogUpdate({
       providerCatalogEnvelope: {
-        value: { global_default: value.global_default },
-      } as never,
+        value,
+      },
     });
+    const activated = new Set(response.value.activated_providers ?? []);
     const globalDefault = response.value.global_default;
     return {
       value: {

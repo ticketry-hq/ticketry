@@ -11,6 +11,7 @@ APPS_ROOT = BACKEND_ROOT / "apps"
 TERMINALS_ROOT = APPS_ROOT / "terminals"
 RUNTIME_ROOT = TERMINALS_ROOT / "runtime"
 TMUX_ROOT = TERMINALS_ROOT / "tmux"
+RUST_ROOT = BACKEND_ROOT.parent / "studio" / "src-tauri" / "src"
 
 
 def _production_sources(root: Path):
@@ -84,6 +85,17 @@ def test_application_callers_cannot_reach_private_terminal_implementation():
         if not any(path == root or root in path.parents for root in allowed_roots)
         for name, line in _imports(path)
         if _matches(name, forbidden)
+    ]
+    assert offenders == []
+
+
+def test_native_callers_cannot_reach_private_terminal_implementation():
+    allowed = {"terminal_runtime.rs", "tmux_viewer.rs"}
+    offenders = [
+        str(path.relative_to(BACKEND_ROOT.parent))
+        for path in RUST_ROOT.glob("*.rs")
+        if path.name not in allowed
+        and "crate::tmux_viewer" in path.read_text(encoding="utf-8")
     ]
     assert offenders == []
 

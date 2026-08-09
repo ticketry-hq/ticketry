@@ -1,9 +1,9 @@
 //! macOS libghostty surface hosted above the Tauri webview.
 //!
 //! libghostty still owns the renderer-facing PTY. A tiny child mode in this
-//! executable bridges that PTY byte-for-byte to the existing `TmuxViewer`, so
-//! tmux remains the durable session owner and the established Rust boundary
-//! remains the only code allowed to derive tmux executable/socket/session data.
+//! executable bridges that PTY byte-for-byte to a transport-independent
+//! terminal attachment, so tmux remains the durable session owner while its
+//! executable, socket, session naming, and PTY mechanics stay private.
 
 use serde::Deserialize;
 
@@ -25,7 +25,7 @@ pub struct NativeTerminalFrame {
 #[cfg(all(target_os = "macos", feature = "native-libghostty"))]
 mod imp {
     use super::NativeTerminalFrame;
-    use crate::tmux_viewer::TmuxViewer;
+    use crate::terminal_runtime::TerminalAttachment;
     use rand::Rng;
     use serde::Serialize;
     use std::collections::HashMap;
@@ -90,6 +90,14 @@ mod imp {
         reason: String,
     }
 
+    #[derive(Clone, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct NativeTerminalCompletion {
+        handle: String,
+        run_id: String,
+        reason: String,
+    }
+
     pub struct NativeTerminalState {
         runtime: Mutex<Option<usize>>,
         entries: Arc<Mutex<HashMap<String, NativeEntry>>>,
@@ -110,13 +118,14 @@ mod imp {
     }
 
     struct WorkerSetup {
-        viewer: TmuxViewer,
+        attachment: TerminalAttachment,
         bridge: UnixStream,
         output: UnixStream,
         command_sender: mpsc::Sender<WorkerCommand>,
         commands: Receiver<WorkerCommand>,
         socket_path: PathBuf,
         window: tauri::WebviewWindow,
+        entries: Arc<Mutex<HashMap<String, NativeEntry>>>,
         handle: String,
         run_id: String,
     }
@@ -188,10 +197,10 @@ mod imp {
             return Err("a native viewer is already attached to this run".to_owned());
         }
 
-        let viewer = match TmuxViewer::attach(&run_id, INITIAL_COLUMNS, INITIAL_ROWS) {
-            Ok(viewer) => viewer,
+        let attachment = match TerminalAttachment::attach(&run_id, INITIAL_COLUMNS, INITIAL_ROWS) {
+            Ok(attachment) => attachment,
             Err(error) => {
-                eprintln!("native libghostty tmux attach failed for run {run_id}: {error}");
+                eprintln!("native libghostty terminal attach failed for run {run_id}: {error}");
                 return Err(error.to_string());
             }
         };
@@ -254,22 +263,11 @@ mod imp {
                     });
                 }
                 let _ = fs::remove_file(&socket_path);
-                let _ = viewer.detach();
+                let _ = attachment.detach();
                 return Err(error);
             }
         };
         let (worker, commands) = mpsc::channel();
-        spawn_worker(WorkerSetup {
-            viewer,
-            bridge,
-            output,
-            command_sender: worker.clone(),
-            commands,
-            socket_path: socket_path.clone(),
-            window: window.clone(),
-            handle: handle.clone(),
-            run_id: run_id.clone(),
-        });
         state
             .entries
             .lock()
@@ -279,10 +277,22 @@ mod imp {
                 NativeEntry {
                     run_id: run_id.clone(),
                     view,
-                    worker,
-                    socket_path,
+                    worker: worker.clone(),
+                    socket_path: socket_path.clone(),
                 },
             );
+        spawn_worker(WorkerSetup {
+            attachment,
+            bridge,
+            output,
+            command_sender: worker,
+            commands,
+            socket_path,
+            window: window.clone(),
+            entries: Arc::clone(&state.entries),
+            handle: handle.clone(),
+            run_id: run_id.clone(),
+        });
 
         Ok(NativeTerminalStatus {
             handle,
@@ -447,17 +457,18 @@ mod imp {
 
     fn spawn_worker(setup: WorkerSetup) {
         let WorkerSetup {
-            viewer,
+            attachment,
             bridge,
             output,
             command_sender,
             commands,
             socket_path,
             window,
+            entries,
             handle,
             run_id,
         } = setup;
-        let (control, reader) = viewer.into_control_and_reader();
+        let (control, reader) = attachment.into_control_and_reader();
         start_bridge_pumps(bridge, output, reader, command_sender);
         thread::spawn(move || {
             let mut control = Some(control);
@@ -501,7 +512,17 @@ mod imp {
                     }
                     Err(RecvTimeoutError::Timeout) => {
                         if let Some(viewer) = control.as_mut() {
-                            if viewer.poll_client_exit().ok().flatten().is_some() {
+                            if viewer.poll_exit().ok().flatten().is_some() {
+                                control.take();
+                                close_worker_entry(&entries, &window, &handle);
+                                let _ = window.emit(
+                                    "native-terminal-closed",
+                                    NativeTerminalCompletion {
+                                        handle: handle.clone(),
+                                        run_id: run_id.clone(),
+                                        reason: "attachment_process_exited".to_owned(),
+                                    },
+                                );
                                 break;
                             }
                         }
@@ -511,6 +532,31 @@ mod imp {
             }
             let _ = fs::remove_file(socket_path);
         });
+    }
+
+    fn take_native_entry(
+        entries: &Arc<Mutex<HashMap<String, NativeEntry>>>,
+        handle: &str,
+    ) -> Option<NativeEntry> {
+        entries
+            .lock()
+            .expect("native terminal registry poisoned")
+            .remove(handle)
+    }
+
+    fn close_worker_entry(
+        entries: &Arc<Mutex<HashMap<String, NativeEntry>>>,
+        window: &tauri::WebviewWindow,
+        handle: &str,
+    ) {
+        let Some(entry) = take_native_entry(entries, handle) else {
+            return;
+        };
+        let view = entry.view;
+        let _ = window.run_on_main_thread(move || unsafe {
+            muxed_ghostty_view_free(view as *mut c_void);
+        });
+        let _ = fs::remove_file(entry.socket_path);
     }
 
     fn start_bridge_pumps(
@@ -646,6 +692,38 @@ mod imp {
             assert_ne!(flags, -1);
             assert_eq!(flags & libc::O_NONBLOCK, 0);
             fs::remove_file(path).unwrap();
+        }
+
+        #[test]
+        fn attachment_completion_removes_only_its_handle_from_the_registry() {
+            let entries = Arc::new(Mutex::new(HashMap::new()));
+            let (first_worker, _first_commands) = mpsc::channel();
+            let (second_worker, _second_commands) = mpsc::channel();
+            entries.lock().expect("registry").insert(
+                "native-first".to_owned(),
+                NativeEntry {
+                    run_id: "run-first".to_owned(),
+                    view: 1,
+                    worker: first_worker,
+                    socket_path: PathBuf::from("/tmp/native-first.sock"),
+                },
+            );
+            entries.lock().expect("registry").insert(
+                "native-second".to_owned(),
+                NativeEntry {
+                    run_id: "run-second".to_owned(),
+                    view: 2,
+                    worker: second_worker,
+                    socket_path: PathBuf::from("/tmp/native-second.sock"),
+                },
+            );
+
+            let completed = take_native_entry(&entries, "native-first").expect("entry");
+
+            assert_eq!(completed.run_id, "run-first");
+            let registry = entries.lock().expect("registry");
+            assert!(!registry.contains_key("native-first"));
+            assert!(registry.contains_key("native-second"));
         }
     }
 }

@@ -47,7 +47,7 @@ def test_packaged_hook_runner_replaces_the_frozen_python_executable(monkeypatch)
 
 def test_inject_settings_for_claude():
     injector = claude_injector
-    argv = ["claude", "--allow-dangerously-skip-permissions", "do it"]
+    argv = ["claude", "--permission-mode", "auto", "do it"]
     out = injector.inject_claude_lifecycle_settings(argv, "run-xyz", "http://h/api")
 
     assert out[0] == "claude"
@@ -70,7 +70,7 @@ def test_inject_settings_for_claude():
 
     # Claude's own flags are preserved after the injected setting.
 
-    assert out[5:] == ["--allow-dangerously-skip-permissions", "do it"]
+    assert out[5:] == ["--permission-mode", "auto", "do it"]
 
 
 # --- Codex ----------------------------------------------------------------

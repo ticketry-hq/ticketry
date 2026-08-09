@@ -1,6 +1,6 @@
 use muxed_studio_lib::discovery::{preflight_report, SupportedTool, ToolHealth};
-use muxed_studio_lib::tmux_viewer::{
-    TmuxScrollDirection, TmuxViewer, TmuxViewerError, ViewerOutcome,
+use muxed_studio_lib::terminal_runtime::{
+    AttachmentOutcome, TerminalAttachment, TerminalAttachmentError, TerminalScrollDirection,
 };
 use std::env;
 use std::fs;
@@ -249,19 +249,14 @@ fn attaches_exchanges_input_resizes_and_detaches_without_killing_the_session() {
     let server = IsolatedTmux::start();
     let _environment = TmuxEnvironmentOverride::set(&server.socket_dir);
 
-    let mut viewer = TmuxViewer::attach(RUN_ID, 91, 27).expect("attach viewer PTY");
+    let viewer = TerminalAttachment::attach(RUN_ID, 91, 27).expect("attach terminal");
+    let (mut viewer, mut reader) = viewer.into_control_and_reader();
     assert_eq!(server.window_size(), "91x27");
-    assert_eq!(
-        viewer.poll_client_exit().expect("poll attached client"),
-        None
-    );
+    assert_eq!(viewer.poll_exit().expect("poll attached client"), None);
 
     viewer.resize(120, 40).expect("resize viewer PTY");
     assert_eq!(server.window_size(), "120x40");
-    assert_eq!(
-        viewer.poll_client_exit().expect("poll resized client"),
-        None
-    );
+    assert_eq!(viewer.poll_exit().expect("poll resized client"), None);
 
     viewer
         .write_all(b"printf 'MUXED_PTY_OK\\n'\\r")
@@ -269,11 +264,11 @@ fn attaches_exchanges_input_resizes_and_detaches_without_killing_the_session() {
 
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
-        let mut viewer = viewer;
+        let viewer = viewer;
         let mut output = Vec::new();
         let mut buffer = [0_u8; 1024];
         loop {
-            match viewer.read(&mut buffer) {
+            match reader.read(&mut buffer) {
                 Ok(read) => {
                     output.extend_from_slice(&buffer[..read]);
                     if output
@@ -300,7 +295,7 @@ fn attaches_exchanges_input_resizes_and_detaches_without_killing_the_session() {
     assert!(String::from_utf8_lossy(&output).contains("MUXED_PTY_OK"));
     assert_eq!(
         viewer.detach().expect("detach viewer"),
-        ViewerOutcome::Detached
+        AttachmentOutcome::Detached
     );
     assert!(
         server.has_session(),
@@ -314,11 +309,14 @@ fn reports_a_missing_session_as_a_typed_error() {
     let server = IsolatedTmux::start();
     let _environment = TmuxEnvironmentOverride::set(&server.socket_dir);
 
-    let error = match TmuxViewer::attach("missing-run", 80, 24) {
+    let error = match TerminalAttachment::attach("missing-run", 80, 24) {
         Err(error) => error,
         Ok(_) => panic!("missing session must fail"),
     };
-    assert!(matches!(error, TmuxViewerError::SessionNotFound { .. }));
+    assert!(matches!(
+        error,
+        TerminalAttachmentError::SessionNotFound { .. }
+    ));
 }
 
 #[test]
@@ -326,7 +324,7 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
     let _environment_lock = TMUX_ENV_LOCK.lock().expect("lock TMUX_TMPDIR");
     let server = IsolatedTmux::start();
     let _environment = TmuxEnvironmentOverride::set(&server.socket_dir);
-    let viewer = TmuxViewer::attach(RUN_ID, 80, 12).expect("attach viewer PTY");
+    let viewer = TerminalAttachment::attach(RUN_ID, 80, 12).expect("attach terminal");
     let (mut viewer, mut reader) = viewer.into_control_and_reader();
     let (output_sender, output_receiver) = mpsc::channel();
     let reader_thread = thread::spawn(move || {
@@ -370,7 +368,7 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
     while output_receiver.try_recv().is_ok() {}
 
     viewer
-        .scroll(TmuxScrollDirection::Up, 6)
+        .scroll(TerminalScrollDirection::Up, 6)
         .expect("scroll upward");
     assert_eq!(server.pane_value("#{pane_in_mode}"), "1");
     assert!(
@@ -402,7 +400,7 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
     );
 
     viewer
-        .scroll(TmuxScrollDirection::Down, 500)
+        .scroll(TerminalScrollDirection::Down, 500)
         .expect("scroll to live prompt");
     assert_eq!(server.pane_value("#{pane_in_mode}"), "0");
     assert_eq!(server.global_option("mouse"), "off");
@@ -413,7 +411,7 @@ fn scrolls_copy_mode_history_back_to_the_live_prompt_without_ending_the_session(
 
     assert_eq!(
         viewer.detach().expect("detach scrolled viewer"),
-        ViewerOutcome::Detached
+        AttachmentOutcome::Detached
     );
     reader_thread.join().expect("join viewer output reader");
     assert!(

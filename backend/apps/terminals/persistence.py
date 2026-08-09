@@ -29,6 +29,7 @@ class LaunchRecords:
     resumed_from: str | None
     scope: str
     doc_rel_path: str | None
+    runtime_namespace: str
     provider_session_id: str | None = None
 
 
@@ -64,6 +65,14 @@ class ReconciliationOutcome:
 
     project_id: str | None
     was_active: bool
+
+
+@dataclass(frozen=True)
+class RuntimeRecoveryOutcome:
+    """Application facts restored for a terminal proven to still be live."""
+
+    project_id: str | None
+    recovered: bool
 
 
 def persist_launch(records: LaunchRecords) -> LaunchRouting:
@@ -106,6 +115,7 @@ def persist_launch(records: LaunchRecords) -> LaunchRouting:
                 project_id=project_id,
                 agent=records.agent,
                 created_at=records.started_at,
+                runtime_namespace=records.runtime_namespace,
                 scope=records.scope,
                 doc_rel_path=records.doc_rel_path,
             )
@@ -151,6 +161,15 @@ def compensate_launch(agent_run_id: str) -> None:
 
     try:
         AgentRun.objects.filter(id=agent_run_id).delete()
+    finally:
+        close_old_connections()
+
+
+def mark_launch_cleanup_pending(agent_run_id: str) -> None:
+    """Retain a failed launch as a durable handle for runtime cleanup."""
+
+    try:
+        AgentRun.objects.filter(id=agent_run_id).update(status="cleanup_pending")
     finally:
         close_old_connections()
 
@@ -207,6 +226,8 @@ def persist_reconciliation_outcome(
     *,
     ended_at: str,
     exit_code: int | None,
+    runtime_namespace: str,
+    runtime_cleanup_pending: bool = False,
 ) -> ReconciliationOutcome:
     """Durably classify a runtime observation before runtime cleanup.
 
@@ -229,9 +250,13 @@ def persist_reconciliation_outcome(
             terminal_updated = AgentTerminalSession.objects.filter(
                 agent_run_id=agent_run_id,
                 terminated_at__isnull=True,
-            ).update(terminated_at=ended_at)
+                runtime_namespace=runtime_namespace,
+            ).update(
+                terminated_at=ended_at,
+                runtime_cleanup_pending=runtime_cleanup_pending,
+            )
             run_updated = 0
-            if run.ended_at is None:
+            if terminal_updated and run.ended_at is None:
                 updates = {
                     "status": "exited",
                     "ended_at": ended_at,
@@ -247,6 +272,67 @@ def persist_reconciliation_outcome(
             return ReconciliationOutcome(
                 project_id=str(run.issue.project_id),
                 was_active=bool(terminal_updated or run_updated),
+            )
+    finally:
+        close_old_connections()
+
+
+def persist_runtime_recovery(
+    agent_run_id: str,
+    *,
+    recovered_at: str,
+    runtime_namespace: str,
+    owned_namespaces: tuple[str, ...],
+) -> RuntimeRecoveryOutcome:
+    """Repair a tombstone after its owning runtime is observed live.
+
+    Recovery requires both a matching runtime identity and a live mechanical
+    observation. Explicit termination and hosted-command exit remove or retain
+    only a dead runtime, so neither can be mistaken for this repair case.
+    Accepting the current identity as well as former identities also heals rows
+    tombstoned by an older, unscoped reconciler sharing the database.
+    """
+
+    try:
+        if not owned_namespaces:
+            return RuntimeRecoveryOutcome(project_id=None, recovered=False)
+        with transaction.atomic():
+            run = (
+                AgentRun.objects.select_for_update()
+                .select_related("issue")
+                .filter(id=agent_run_id, ended_at__isnull=False)
+                .first()
+            )
+            if run is None:
+                return RuntimeRecoveryOutcome(project_id=None, recovered=False)
+            terminal_updated = AgentTerminalSession.objects.filter(
+                agent_run_id=agent_run_id,
+                terminated_at__isnull=False,
+                runtime_cleanup_pending=False,
+                runtime_namespace__in=owned_namespaces,
+            ).update(
+                terminated_at=None,
+                runtime_namespace=runtime_namespace,
+            )
+            if not terminal_updated:
+                return RuntimeRecoveryOutcome(
+                    project_id=str(run.issue.project_id),
+                    recovered=False,
+                )
+            AgentRun.objects.filter(
+                id=agent_run_id,
+                ended_at__isnull=False,
+            ).update(
+                status="running",
+                ended_at=None,
+                exit_code=None,
+                error=None,
+                lifecycle_state="unknown",
+                lifecycle_updated_at=recovered_at,
+            )
+            return RuntimeRecoveryOutcome(
+                project_id=str(run.issue.project_id),
+                recovered=True,
             )
     finally:
         close_old_connections()

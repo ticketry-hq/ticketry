@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { type WorkItem } from "../../../../../shared/api/types";
 import { stateColor } from "../../../../../shared/utilities/display";
 import { useIssueTypesQuery } from "../../../../../features/settings";
+import { formatWorkItemDisplayIdentifier } from "../../../../../features/work-items";
 import { useClientStore } from "../../../../../state/clientStore";
+import { stateById, useCachedStates } from "../../../../../shared/query/stateCatalog";
 
 interface ChildIssuesProps {
   children: WorkItem[];
@@ -20,6 +22,7 @@ export default function ChildIssues({
   const [issueTypeId, setIssueTypeId] = useState("");
   const { data: allIssueTypes = [] } = useIssueTypesQuery(projectId);
   const issueTypes = allIssueTypes.filter((type) => type.level === "task");
+  const states = useCachedStates(projectId);
 
   useEffect(() => {
     setIssueTypeId("");
@@ -46,9 +49,11 @@ export default function ChildIssues({
             >
               <span
                 className="h-2 w-2 flex-none rounded-full"
-                style={{ backgroundColor: stateColor(c.state) }}
+                style={{ backgroundColor: stateColor(stateById(states, c.state)) }}
               />
-              <span className="w-20 flex-none font-mono text-xs text-text-muted">{c.key}</span>
+              <span className="w-20 flex-none font-mono text-xs text-text-muted">
+                {formatWorkItemDisplayIdentifier(c.sequence_id)}
+              </span>
               <span className="flex-1 truncate text-base text-text-primary">{c.name}</span>
             </button>
           ))

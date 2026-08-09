@@ -1,5 +1,10 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { desktopViewerLease, type ViewerLeaseClient, viewerLeaseId } from "./viewerLease";
+import {
+  createViewerLease,
+  desktopViewerLease,
+  type ViewerLease,
+  type ViewerLeaseClient,
+} from "./viewerLease";
 
 import type {
   TerminalClient,
@@ -82,15 +87,15 @@ export function openTauriTerminalClient(
   let detached = false;
   let suspended = false;
   let attachGeneration = 0;
-  let leaseId: string | null = null;
+  let viewerLease: ViewerLease | null = null;
   let leaseTimer: ReturnType<typeof setInterval> | null = null;
 
   function releaseLease(): void {
     if (leaseTimer) clearInterval(leaseTimer);
     leaseTimer = null;
-    const id = leaseId;
-    leaseId = null;
-    if (id && leaseClient) void leaseClient.release(params.agentRunId, id).catch(() => {});
+    const lease = viewerLease;
+    viewerLease = null;
+    if (lease) void lease.release().catch(() => {});
   }
 
   function replacedByAnotherViewer(): void {
@@ -98,18 +103,18 @@ export function openTauriTerminalClient(
     const handle = viewerHandle;
     viewerHandle = null;
     state = "reattachment_required";
-    releaseLease();
     if (handle) void bridge.detach(handle).catch(() => {});
+    releaseLease();
     onEvent({ type: "error", layer: "control_plane", message: "replaced_by_another_viewer" });
     onEvent({ type: "reattachment_required", reason: "replaced_by_another_viewer" });
   }
 
   function startLeaseRenewal(): void {
-    if (!leaseClient || !leaseId) return;
+    if (!viewerLease) return;
     leaseTimer = setInterval(() => {
-      const id = leaseId;
-      if (!id) return;
-      void leaseClient.renew(params.agentRunId, id).catch((error) => {
+      const lease = viewerLease;
+      if (!lease) return;
+      void lease.renew().catch((error) => {
         if ((error as { code?: string }).code === "replaced_by_another_viewer") {
           replacedByAnotherViewer();
         }
@@ -161,8 +166,10 @@ export function openTauriTerminalClient(
     const generation = ++attachGeneration;
     state = "connecting";
     onEvent({ type: "connecting", attempt: 0 });
-    const nextLeaseId = leaseClient ? viewerLeaseId() : null;
-    if (nextLeaseId) leaseId = nextLeaseId;
+    const nextLease = leaseClient
+      ? createViewerLease(leaseClient, params.agentRunId)
+      : null;
+    viewerLease = nextLease;
     const attachViewer = () => bridge.attach(params, (event) => {
         if (generation !== attachGeneration || detached) return;
         if (event.type === "output") {
@@ -173,11 +180,12 @@ export function openTauriTerminalClient(
           closeFromViewer(event);
         }
       });
-    const attach = nextLeaseId
-      ? leaseClient!.acquire(params.agentRunId, nextLeaseId).then(attachViewer)
+    const attachment = nextLease
+      ? nextLease.acquire().then((acquired) => acquired ? attachViewer() : null)
       : attachViewer();
-    void attach
+    void attachment
       .then((viewer) => {
+        if (!viewer) return;
         if (generation !== attachGeneration || detached || suspended) {
           void bridge.detach(viewer.viewerHandle);
           releaseLease();
@@ -217,8 +225,8 @@ export function openTauriTerminalClient(
       state = "closed";
       const handle = viewerHandle;
       viewerHandle = null;
-      releaseLease();
       if (handle) void bridge.detach(handle).catch(() => {});
+      releaseLease();
       onEvent({ type: "closed", reason: "client_detach", code: 0, detail: "client_detach" });
     },
     suspend() {
@@ -228,8 +236,8 @@ export function openTauriTerminalClient(
       state = "suspended";
       const handle = viewerHandle;
       viewerHandle = null;
-      releaseLease();
       void bridge.detach(handle).catch(() => {});
+      releaseLease();
       onEvent({ type: "suspended" });
       return true;
     },

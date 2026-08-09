@@ -24,7 +24,8 @@ pub mod native_terminal;
 pub mod ownership;
 mod release_manifest;
 pub mod supervisor;
-pub mod tmux_viewer;
+pub mod terminal_runtime;
+mod tmux_viewer;
 pub mod viewer_commands;
 
 const MAIN_WINDOW_LABEL: &str = "main";

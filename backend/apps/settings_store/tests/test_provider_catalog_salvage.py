@@ -11,6 +11,13 @@ from apps.settings_store.provider_catalog import (
 )
 
 
+@pytest.fixture
+def auth(settings):
+    settings.WORKTRACKER_API_TOKEN = "test-token"
+    settings.WORKTRACKER_DISABLE_AUTH = False
+    return {"x-api-key": "test-token"}
+
+
 def test_legacy_activation_and_unknown_fields_do_not_reenter_the_settings_shape():
     catalog = parse_provider_catalog(
         json.dumps(
@@ -54,7 +61,7 @@ def test_unrecoverable_data_falls_back_to_no_default_loudly(caplog):
 
 
 @pytest.mark.django_db
-def test_settings_view_and_launch_accessor_salvage_the_same_default(client):
+def test_settings_view_and_launch_accessor_salvage_the_same_default(client, auth):
     AppSetting.objects.create(
         scope=PROVIDER_CATALOG_SCOPE,
         key=PROVIDER_CATALOG_KEY,
@@ -76,4 +83,9 @@ def test_settings_view_and_launch_accessor_salvage_the_same_default(client):
         }
     }
     assert load_provider_catalog().model_dump(mode="json") == expected
-    assert client.get("/api/settings/provider-catalog").json() == {"value": expected}
+    assert client.get("/api/settings/provider-catalog", headers=auth).json() == {
+        "value": {
+            "activated_providers": ["claude", "codex", "gemini"],
+            **expected,
+        }
+    }

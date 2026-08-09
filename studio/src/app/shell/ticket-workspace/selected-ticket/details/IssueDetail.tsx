@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import {
   deriveEpic,
+  formatWorkItemDisplayIdentifier,
   useChangeWorkItemType,
   resolveBlockerChips,
   useCreateWorkItem,
@@ -11,6 +12,7 @@ import {
   useSetWorkItemState,
   usePlanningFilterStore,
   useWorkItem,
+  useWorkItemAttachments,
   useWorkItemsByIds,
 } from "../../../../../features/work-items";
 import { dialog, toast, useClientStore } from "../../../../../state/clientStore";
@@ -24,6 +26,7 @@ import { queryKeys } from "../../../../../shared/query/keys";
 import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher";
 import { useCachedStates } from "../../../../../shared/query/stateCatalog";
 import { useModuleTree } from "../../../../../features/work-items/queries";
+import { useIssueTypesQuery } from "../../../../../features/settings";
 
 const EMPTY_MODULES: Module[] = [];
 const EMPTY_PROJECTS: Project[] = [];
@@ -58,6 +61,7 @@ function readSidebarVisible(): boolean {
 export default function IssueDetail({ issueId }: { issueId: string }) {
   const taskQuery = useWorkItem(issueId);
   const task = taskQuery.data ?? null;
+  const attachments = useWorkItemAttachments(task?.id ?? null).data ?? [];
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const membership = useModuleTree(selectedProjectId, selectedModuleId);
@@ -69,6 +73,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   const modules = useModulesQuery(projectContextId).data ?? EMPTY_MODULES;
   const projects = useProjectsQuery().data ?? EMPTY_PROJECTS;
   const states = useCachedStates(task?.project_id ?? null);
+  const issueTypes = useIssueTypesQuery(task?.project_id ?? null).data ?? [];
   const epic = deriveEpic(task, modules, items);
   const moduleMembership =
     task && (epic?.id ?? selectedModuleId)
@@ -139,8 +144,8 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   const descriptionValue = task.description?.trim() ? task.description : null;
 
   // Resolve blocker/blocks ids → navigable chips from the loaded project tree.
-  const blockedByChips = resolveBlockerChips(task.blocked_by_ids, items, modules);
-  const blocksChips = resolveBlockerChips(task.blocks_ids, items, modules);
+  const blockedByChips = resolveBlockerChips(task.blocked_by_ids, items, modules, states);
+  const blocksChips = resolveBlockerChips(task.blocks_ids, items, modules, states);
 
   const replaceBlockers = (blockedByIds: string[]) =>
     setBlockers.mutate(
@@ -190,9 +195,10 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
   const onDelete = async () => {
     if (task.sub_issues_count > 0) return;
     // G01: a destructive action asks first. Cancel aborts with no mutation.
+    const identifier = formatWorkItemDisplayIdentifier(task.sequence_id);
     const ok = await dialog.confirm({
       title: "Delete issue",
-      body: `${task.key} '${task.name}' will be permanently deleted.`,
+      body: `${identifier ? `${identifier} ` : ""}'${task.name}' will be permanently deleted.`,
       confirmLabel: "Delete",
       danger: true,
     });
@@ -279,11 +285,12 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
           </Suspense>
         </div>
 
-        <Attachments attachments={[]} />
+        <Attachments attachments={attachments} />
 
-        {hasFindingsPanel(task) && (
+        {hasFindingsPanel(task, states, issueTypes) && (
           <FindingsPanel
             children={displayedChildren}
+            projectId={task.project_id}
             onCancel={cancelChild}
           />
         )}

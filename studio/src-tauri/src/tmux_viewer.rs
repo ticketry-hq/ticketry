@@ -163,16 +163,6 @@ impl TmuxViewer {
         })
     }
 
-    /// Read raw bytes from tmux. PTY EOF is distinct from a client exit or
-    /// explicit detach.
-    pub fn read(&mut self, buffer: &mut [u8]) -> Result<usize, ViewerReadError> {
-        match self.reader.read(buffer) {
-            Ok(0) => Err(ViewerReadError::Outcome(ViewerOutcome::PtyEof)),
-            Ok(read) => Ok(read),
-            Err(error) => Err(ViewerReadError::Pty(error)),
-        }
-    }
-
     /// Split the blocking output reader from the operations that must remain
     /// responsive while a webview is slow to consume output.
     pub fn into_control_and_reader(self) -> (TmuxViewerControl, Box<dyn Read + Send>) {
@@ -186,39 +176,6 @@ impl TmuxViewer {
             },
             self.reader,
         )
-    }
-
-    /// Send raw renderer input to the attached tmux client.
-    pub fn write_all(&mut self, input: &[u8]) -> Result<(), TmuxViewerError> {
-        self.writer.write_all(input).map_err(io_error)?;
-        self.writer.flush().map_err(io_error)?;
-        Ok(())
-    }
-
-    /// Resize both the viewer PTY and its application-derived tmux window.
-    pub fn resize(&self, columns: u16, rows: u16) -> Result<(), TmuxViewerError> {
-        let size = pty_size(columns, rows)?;
-        self.master.resize(size).map_err(pty_error)?;
-        resize_tmux_window(&self.tmux, &self.session, columns, rows)
-    }
-
-    /// Move this viewer through tmux copy-mode history without exposing a
-    /// command, executable, socket, or session target to the caller.
-    pub fn scroll(
-        &self,
-        direction: TmuxScrollDirection,
-        lines: u16,
-    ) -> Result<(), TmuxViewerError> {
-        scroll_tmux(&self.tmux, &self.session, direction, lines)
-    }
-
-    /// Report a spontaneous tmux client exit separately from PTY EOF.
-    pub fn poll_client_exit(&mut self) -> Result<Option<ViewerOutcome>, TmuxViewerError> {
-        Ok(self.client.try_wait().map_err(io_error)?.map(|status| {
-            ViewerOutcome::TmuxClientExited {
-                exit_code: status.exit_code(),
-            }
-        }))
     }
 
     /// End only this viewer's tmux client and PTY; it never kills the session.
@@ -272,31 +229,6 @@ impl TmuxViewerControl {
         self.client.kill().map_err(io_error)?;
         let _ = self.client.wait().map_err(io_error)?;
         Ok(ViewerOutcome::Detached)
-    }
-}
-
-/// A raw read can produce bytes, a terminal outcome, or an I/O failure.
-#[derive(Debug)]
-pub enum ViewerReadError {
-    Outcome(ViewerOutcome),
-    Pty(io::Error),
-}
-
-impl fmt::Display for ViewerReadError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Outcome(outcome) => write!(formatter, "viewer ended: {outcome:?}"),
-            Self::Pty(error) => write!(formatter, "PTY read failed: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for ViewerReadError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Pty(error) => Some(error),
-            Self::Outcome(_) => None,
-        }
     }
 }
 

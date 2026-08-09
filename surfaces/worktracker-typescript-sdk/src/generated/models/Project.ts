@@ -51,6 +51,12 @@ export interface Project {
      * @memberof Project
      */
     workspace_slug?: string;
+    /**
+     *
+     * @type {boolean}
+     * @memberof Project
+     */
+    readonly manual_module_order: boolean;
 }
 
 /**
@@ -60,6 +66,7 @@ export function instanceOfProject(value: object): value is Project {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if (!('slug' in value) || value['slug'] === undefined) return false;
+    if (!('manual_module_order' in value) || value['manual_module_order'] === undefined) return false;
     return true;
 }
 
@@ -78,6 +85,7 @@ export function ProjectFromJSONTyped(json: any, ignoreDiscriminator: boolean): P
         'slug': json['slug'],
         'description': json['description'] == null ? undefined : json['description'],
         'workspace_slug': json['workspace_slug'] == null ? undefined : json['workspace_slug'],
+        'manual_module_order': json['manual_module_order'],
     };
 }
 
@@ -85,7 +93,7 @@ export function ProjectToJSON(json: any): Project {
     return ProjectToJSONTyped(json, false);
 }
 
-export function ProjectToJSONTyped(value?: Omit<Project, 'id'> | null, ignoreDiscriminator: boolean = false): any {
+export function ProjectToJSONTyped(value?: Omit<Project, 'id'|'manual_module_order'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }

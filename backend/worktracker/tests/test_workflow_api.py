@@ -25,7 +25,7 @@ from worktracker.tests.conftest import BASE, patch_json
 
 @pytest.fixture
 def sdlc(project):
-    """Seed the seven canonical states + Story type; return ``(states, story)``."""
+    """Seed the canonical states + Story type; return ``(states, story)``."""
 
     states = {
         name: State.objects.create(

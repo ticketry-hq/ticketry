@@ -160,6 +160,39 @@ describe("Tauri terminal client adapter", () => {
     expect(events).toContainEqual({ type: "ready", sessionId: "viewer-1", agentRunId: "run-1" });
   });
 
+  it("releases an in-flight lease only after acquisition commits", async () => {
+    const bridge = new FakeTauriViewerBridge();
+    const attach = vi.spyOn(bridge, "attach");
+    let commitAcquire!: () => void;
+    const acquireCommitted = new Promise<void>((resolve) => {
+      commitAcquire = resolve;
+    });
+    const calls: string[] = [];
+    const lease: ViewerLeaseClient = {
+      acquire: async () => {
+        calls.push("acquire");
+        await acquireCommitted;
+      },
+      renew: async () => {},
+      release: async () => { calls.push("release"); },
+    };
+    const client = openTauriTerminalClient(
+      { agentRunId: "run-race", cols: 80, rows: 24 },
+      () => {},
+      bridge,
+      lease,
+    );
+    await Promise.resolve();
+
+    client.detach();
+    expect(calls).toEqual(["acquire"]);
+
+    commitAcquire();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual(["acquire", "release"]);
+    expect(attach).not.toHaveBeenCalled();
+  });
+
   it("surfaces replacement by another viewer from the durable lease", async () => {
     vi.useFakeTimers();
     try {

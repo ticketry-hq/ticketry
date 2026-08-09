@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import net from "node:net";
 import path from "node:path";
 
+import { createDevelopmentLogCapture } from "./dev-log-capture.mjs";
 import {
   createTemporarySqliteProfile,
   removeTemporarySqliteProfile,
@@ -22,6 +23,27 @@ let stopping = false;
 let exitCode = 0;
 let forceStopTimer;
 let shutdownCleanup;
+let developmentLogs;
+
+function writeWebLine(channel, message) {
+  if (developmentLogs) {
+    developmentLogs.write("web", channel, `${message}\n`);
+    return;
+  }
+  const output = channel === "stderr" ? console.error : console.log;
+  output(message);
+}
+
+function captureChildOutput(child, source) {
+  child.stdout?.on("data", (chunk) => {
+    developmentLogs?.write(source, "stdout", chunk);
+  });
+  child.stderr?.on("data", (chunk) => {
+    developmentLogs?.write(source, "stderr", chunk);
+  });
+  child.stdout?.once("end", () => developmentLogs?.flush(source, "stdout"));
+  child.stderr?.once("end", () => developmentLogs?.flush(source, "stderr"));
+}
 
 export function parseWebDevOptions(args = []) {
   const normalized = args[0] === "--" ? args.slice(1) : args;
@@ -146,15 +168,17 @@ function start(name, command, environment, { optional = false } = {}) {
     detached: useProcessGroups,
     env: environment,
     shell: true,
-    stdio: "inherit",
+    stdio: ["inherit", "pipe", "pipe"],
   });
+  captureChildOutput(child, name);
 
   let failedToSpawn = false;
   children.add(child);
   child.once("error", (error) => {
     failedToSpawn = true;
     children.delete(child);
-    console.error(
+    writeWebLine(
+      "stderr",
       `[web] Could not start ${optional ? `optional ${name}; continuing without it` : name}: ${error.message}`,
     );
     if (!optional && !stopping) {
@@ -173,7 +197,8 @@ function start(name, command, environment, { optional = false } = {}) {
     }
 
     if (optional && !stopping) {
-      console.warn(
+      writeWebLine(
+        "stderr",
         `[web] Optional ${name} stopped${signal ? ` (${signal})` : ` with exit code ${code ?? 1}`}; continuing without it.`,
       );
       return;
@@ -182,7 +207,8 @@ function start(name, command, environment, { optional = false } = {}) {
     if (!stopping) {
       stopping = true;
       exitCode = code ?? (signal ? 1 : 0);
-      console.error(
+      writeWebLine(
+        "stderr",
         `[web] ${name} stopped${signal ? ` (${signal})` : ` with exit code ${exitCode}`}; shutting down.`,
       );
       stopChildren("SIGTERM");
@@ -194,15 +220,16 @@ function start(name, command, environment, { optional = false } = {}) {
 }
 
 function runDjangoCommand(args, environment, label) {
-  console.log(`[web] ${label}`);
+  writeWebLine("stdout", `[web] ${label}`);
 
   return new Promise((resolve, reject) => {
     const child = spawn("uv", ["run", "python", "manage.py", ...args], {
       cwd: path.join(root, "backend"),
       detached: useProcessGroups,
       env: environment,
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
     });
+    captureChildOutput(child, `django-${args[0]}`);
 
     children.add(child);
     child.once("error", (error) => {
@@ -324,7 +351,10 @@ function stopChildren(signal) {
       }
     } catch (error) {
       if (error?.code !== "ESRCH") {
-        console.error(`[web] Could not stop process ${child.pid}: ${error.message}`);
+        writeWebLine(
+          "stderr",
+          `[web] Could not stop process ${child.pid}: ${error.message}`,
+        );
       }
     }
   }
@@ -352,9 +382,14 @@ function finishIfStopped() {
       cleanup();
     } catch (error) {
       exitCode ||= 1;
-      console.error(`[web] Temporary SQLite cleanup failed: ${error.message}`);
+      writeWebLine(
+        "stderr",
+        `[web] Temporary SQLite cleanup failed: ${error.message}`,
+      );
     }
   }
+  developmentLogs?.close();
+  developmentLogs = undefined;
   process.exitCode = exitCode;
 }
 
@@ -372,6 +407,7 @@ function handleSignal(signal, code) {
 }
 
 export async function main() {
+  developmentLogs = createDevelopmentLogCapture();
   process.on("SIGINT", () => handleSignal("SIGINT", 130));
   process.on("SIGTERM", () => handleSignal("SIGTERM", 143));
 
@@ -384,8 +420,9 @@ export async function main() {
   }
   mkdirSync(launch.dataDirectory, { recursive: true });
 
-  console.log(`[web] Development data: ${launch.dataDirectory}`);
-  console.log("[web] Press Ctrl+C to stop both services.");
+  writeWebLine("stdout", `[web] Development data: ${launch.dataDirectory}`);
+  writeWebLine("stdout", `[web] Development logs: ${developmentLogs.logPath}`);
+  writeWebLine("stdout", "[web] Press Ctrl+C to stop both services.");
 
   try {
     await prepareDjango(launch.environment);
@@ -413,12 +450,18 @@ export async function main() {
         mcpPort,
       });
 
-      console.log(`[web] Starting backend at ${backendOrigin}`);
-      console.log(`[web] Starting Ticketry at ${frontendOrigin}`);
+      writeWebLine("stdout", `[web] Starting backend at ${backendOrigin}`);
+      writeWebLine("stdout", `[web] Starting Ticketry at ${frontendOrigin}`);
       if (mcpPort === null) {
-        console.log("[web] MCP port 8123 is unavailable; continuing without MCP.");
+        writeWebLine(
+          "stdout",
+          "[web] MCP port 8123 is unavailable; continuing without MCP.",
+        );
       } else {
-        console.log(`[web] Starting WorkTracker MCP at http://127.0.0.1:${mcpPort}/mcp`);
+        writeWebLine(
+          "stdout",
+          `[web] Starting WorkTracker MCP at http://127.0.0.1:${mcpPort}/mcp`,
+        );
       }
       start("backend", "./scripts/dev.sh backend", runtimeEnvironment);
       if (mcpPort !== null) {
@@ -436,7 +479,10 @@ export async function main() {
     if (!stopping) {
       stopping = true;
       exitCode = 1;
-      console.error(`[web] Could not start web development: ${error.message}`);
+      writeWebLine(
+        "stderr",
+        `[web] Could not start web development: ${error.message}`,
+      );
     }
     finishIfStopped();
   }
@@ -444,7 +490,9 @@ export async function main() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
-    console.error(`[web] Launch failed: ${error.message}`);
+    writeWebLine("stderr", `[web] Launch failed: ${error.message}`);
+    developmentLogs?.close();
+    developmentLogs = undefined;
     process.exitCode = 1;
   });
 }

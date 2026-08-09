@@ -59,13 +59,13 @@ describe("provider settings acceptance", () => {
           return jsonResponse([{ id: "reason-medium", name: "medium" }]);
         }
         if (method === "GET" && url.endsWith("/settings/provider-catalog")) {
-          return jsonResponse({ value: { global_default: null } });
-        }
-        if (method === "PATCH" && url.includes("/work-tracker/providers/")) {
-          const provider = providers.find(({ id }) => url.endsWith(id));
           return jsonResponse({
-            ...provider,
-            activated: JSON.parse(String(init?.body)).activated,
+            value: {
+              activated_providers: providers
+                .filter(({ activated }) => activated)
+                .map(({ slug }) => slug),
+              global_default: null,
+            },
           });
         }
         if (method === "PUT" && url.endsWith("/settings/provider-catalog")) {
@@ -115,6 +115,7 @@ describe("provider settings acceptance", () => {
     );
     expect(JSON.parse(String(settingsWrite?.[1]?.body))).toEqual({
       value: {
+        activated_providers: ["claude", "codex"],
         global_default: {
           provider: "codex",
           model: "gpt-5.6-luna",
@@ -122,6 +123,10 @@ describe("provider settings acceptance", () => {
         },
       },
     });
+    expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).includes("/work-tracker/providers/")
+      && init?.method === "PATCH"
+    )).toBe(false);
     expect(screen.getByRole("heading", { name: "Your agents" })).toBeVisible();
   });
 });

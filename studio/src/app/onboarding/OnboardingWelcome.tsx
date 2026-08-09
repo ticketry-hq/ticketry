@@ -59,6 +59,7 @@ export default function OnboardingWelcome() {
         description: "",
       });
       if (!project.id) throw new Error("The created project has no id.");
+      await useStudioStore.getState().selectProject(project.id);
       startTour(project.id);
     } catch (cause) {
       setCreateError(apiErrorMessage(cause));

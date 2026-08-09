@@ -18,7 +18,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from worktracker_sdk.generated.models.global_launch_default import GlobalLaunchDefault
 from typing import Optional, Set
@@ -29,8 +29,9 @@ class ProviderCatalog(BaseModel):
     """
     ProviderCatalog
     """ # noqa: E501
+    activated_providers: List[StrictStr]
     global_default: Optional[GlobalLaunchDefault] = None
-    __properties: ClassVar[List[str]] = ["global_default"]
+    __properties: ClassVar[List[str]] = ["activated_providers", "global_default"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -91,6 +92,7 @@ class ProviderCatalog(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
+            "activated_providers": obj.get("activated_providers"),
             "global_default": GlobalLaunchDefault.from_dict(obj["global_default"]) if obj.get("global_default") is not None else None
         })
         return _obj

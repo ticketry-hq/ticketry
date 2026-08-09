@@ -20,6 +20,8 @@ class AgentTerminalSession(models.Model):
     agent = models.CharField()
     created_at = models.CharField()
     terminated_at = models.CharField(null=True)
+    runtime_namespace = models.CharField(max_length=64, null=True, db_index=True)
+    runtime_cleanup_pending = models.BooleanField(default=False)
     scope = models.CharField(db_default="task")
     # #625: the repo design-dir-relative .html a doc-chat run is scoped to.
     # Null for every non-doc-chat row; lets a reload re-associate the restored

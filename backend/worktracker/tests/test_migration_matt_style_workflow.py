@@ -263,10 +263,9 @@ def test_migration_upgrades_existing_projects_in_place_and_preserves_customizati
         project_id=project.id,
         name="Ready",
     ).exists()
-    assert canonical_states[0].id == old_state_rows["Idea"].id
-    assert canonical_states[1].id == old_state_rows["Refinement"].id
-
     states = {state.name: state for state in canonical_states}
+    assert states["Grill"].id == old_state_rows["Idea"].id
+    assert states["Spec"].id == old_state_rows["Refinement"].id
     assert MigratedIssue.objects.get(pk=idea_issue.id).state_id == states["Grill"].id
     assert (
         MigratedIssue.objects.get(pk=refinement_issue.id).state_id

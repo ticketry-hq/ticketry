@@ -49,9 +49,11 @@ export function ModuleFolder({
     initialValue: initial,
     runtime,
   });
+  const trimmedValue = selection.value.trim();
 
   async function save(): Promise<void> {
     if (saveInFlight.current) return;
+    if (!trimmedValue) return;
     if (!moduleId) {
       popModal();
       return;
@@ -61,7 +63,7 @@ export function ModuleFolder({
     setError(null);
     try {
       try {
-        await setModuleFolder(moduleId, selection.value);
+        await setModuleFolder(moduleId, trimmedValue);
       } catch {
         setError("Could not save the module folder. Retry to continue.");
         return;
@@ -94,6 +96,7 @@ export function ModuleFolder({
         // First Enter on highlight: commit highlight to input, no save.
         return;
       }
+      if (!trimmedValue) return;
       // Enter on unchanged value (or no highlight) → save.
       if (selection.value === savedValue && selection.value === initial) {
         // unchanged from initial; still allow saving (commits same value).
@@ -133,7 +136,7 @@ export function ModuleFolder({
         </button>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !trimmedValue}
           onClick={() => void save()}
           className="rounded border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent"
         >

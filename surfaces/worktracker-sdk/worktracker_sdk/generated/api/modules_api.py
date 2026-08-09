@@ -60,7 +60,7 @@ class ModulesApi:
     ) -> Module:
         """create_module
 
-        Project-scoped module collection with explicit stable ordering.
+        Project-scoped module collection in the Canonical module order.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -131,7 +131,7 @@ class ModulesApi:
     ) -> ApiResponse[Module]:
         """create_module
 
-        Project-scoped module collection with explicit stable ordering.
+        Project-scoped module collection in the Canonical module order.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -202,7 +202,7 @@ class ModulesApi:
     ) -> RESTResponseType:
         """create_module
 
-        Project-scoped module collection with explicit stable ordering.
+        Project-scoped module collection in the Canonical module order.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -351,7 +351,7 @@ class ModulesApi:
     ) -> List[Module]:
         """list_modules
 
-        Project-scoped module collection with explicit stable ordering.
+        Project-scoped module collection in the Canonical module order.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -422,7 +422,7 @@ class ModulesApi:
     ) -> ApiResponse[List[Module]]:
         """list_modules
 
-        Project-scoped module collection with explicit stable ordering.
+        Project-scoped module collection in the Canonical module order.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -493,7 +493,7 @@ class ModulesApi:
     ) -> RESTResponseType:
         """list_modules
 
-        Project-scoped module collection with explicit stable ordering.
+        Project-scoped module collection in the Canonical module order.
 
         :param project_id: (required)
         :type project_id: UUID

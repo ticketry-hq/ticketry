@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { createDevelopmentLogCapture } from "./dev-log-capture.mjs";
 import {
   buildWebFrontendCommand,
   buildWebMcpCommand,
@@ -19,6 +20,61 @@ import {
 import { removeTemporarySqliteProfile } from "../studio/scripts/desktop-dev.mjs";
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
+
+test("web development preserves terminal output and persists labeled service logs", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-logs-"));
+  const logPath = path.join(directory, "ticketry.log");
+  const terminal = { stdout: [], stderr: [] };
+  const capture = createDevelopmentLogCapture({
+    logPath,
+    stdout: { write: (chunk) => terminal.stdout.push(String(chunk)) },
+    stderr: { write: (chunk) => terminal.stderr.push(String(chunk)) },
+    now: () => new Date("2026-08-10T00:00:00.000Z"),
+  });
+
+  capture.write("backend", "stdout", "ready\npartial");
+  capture.write("backend", "stdout", " response\n");
+  capture.write("MCP", "stderr", "fatal error\n");
+  capture.close();
+
+  assert.deepEqual(terminal, {
+    stdout: ["ready\npartial", " response\n"],
+    stderr: ["fatal error\n"],
+  });
+  assert.equal(
+    readFileSync(logPath, "utf8"),
+    [
+      "2026-08-10T00:00:00.000Z [backend:stdout] ready",
+      "2026-08-10T00:00:00.000Z [backend:stdout] partial response",
+      "2026-08-10T00:00:00.000Z [MCP:stderr] fatal error",
+      "",
+    ].join("\n"),
+  );
+  rmSync(directory, { recursive: true });
+});
+
+test("web development logs rotate through the shared retained generations", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-logs-"));
+  const logPath = path.join(directory, "ticketry.log");
+  const discard = { write() {} };
+  const capture = createDevelopmentLogCapture({
+    logPath,
+    stdout: discard,
+    stderr: discard,
+    now: () => new Date("2026-08-10T00:00:00.000Z"),
+    limitBytes: 80,
+  });
+
+  capture.write("backend", "stderr", "first failure\n");
+  capture.write("backend", "stderr", "second failure\n");
+  capture.write("backend", "stderr", "third failure\n");
+  capture.close();
+
+  assert.equal(existsSync(`${logPath}.1`), true);
+  assert.match(readFileSync(`${logPath}.1`, "utf8"), /second failure/);
+  assert.match(readFileSync(logPath, "utf8"), /third failure/);
+  rmSync(directory, { recursive: true });
+});
 
 test("web development uses an isolated explicit data directory", () => {
   const launch = buildWebDevelopmentEnvironment({

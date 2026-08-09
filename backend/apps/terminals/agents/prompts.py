@@ -97,8 +97,8 @@ def build_context_prompt(
     if additional_prompt:
         final_prompt += f"Additional user instructions:\n{additional_prompt}\n\n"
 
-    # Idea-stage launches produce no design documents, so withhold this block (#943).
-    if design_dir and state_name.lower() != "idea":
+    # Ideas-stage launches produce no design documents, so withhold this block (#943).
+    if design_dir and state_name.lower() != "ideas":
         final_prompt += _design_dir_block(design_dir)
 
     final_prompt += "Available tools: WorkTracker MCP server; coding agent status tool."

@@ -2,6 +2,7 @@ import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhosttyTerminal";
+import { Terminal } from "../features/agents/terminal/Terminal";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 
@@ -20,6 +21,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("../features/agents/terminal/internal/entryPool", () => ({
+  getEntry: () => null,
   registerPoolDriver: () => () => {},
   releasePooledTransport: vi.fn(),
   syncEntries: vi.fn(),
@@ -69,6 +71,9 @@ describe("native viewer attachment acceptance", () => {
     });
     tauri.listen.mockResolvedValue(() => {});
     tauri.invoke.mockImplementation((command: string) => {
+      if (command === "native_terminal_available") {
+        return Promise.resolve(true);
+      }
       if (command === "native_terminal_attach") {
         return Promise.resolve({
           handle: "native-1",
@@ -90,13 +95,19 @@ describe("native viewer attachment acceptance", () => {
   });
 
   it("[overhaul-23] acquires outside viewer ownership before native attach and releases it on detach", async () => {
-    const requests: Array<{ url: string; body: Record<string, string> }> = [];
+    vi.stubEnv("VITE_WT_API_KEY", "native-terminal-secret");
+    const requests: Array<{
+      url: string;
+      body: Record<string, string>;
+      headers: Headers;
+    }> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({
           url: String(input),
           body: JSON.parse(String(init?.body)) as Record<string, string>,
+          headers: new Headers(init?.headers),
         });
         return new Response("{}", {
           status: 200,
@@ -120,6 +131,7 @@ describe("native viewer attachment acceptance", () => {
       agent_run_id: "run-1",
       transport: "desktop",
     });
+    expect(requests[0].headers.get("x-api-key")).toBe("native-terminal-secret");
     expect(tauri.invoke.mock.calls.findIndex(([name]) => name === "native_terminal_attach"))
       .toBeGreaterThanOrEqual(0);
 
@@ -133,5 +145,32 @@ describe("native viewer attachment acceptance", () => {
     expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_detach", {
       handle: "native-1",
     });
+  });
+
+  it("[overhaul-24] presents an available native Ghostty renderer for a live run", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })),
+    );
+
+    const view = render(<Terminal sessionId="session-1" />);
+
+    await waitFor(() => {
+      expect(view.getByTestId("native-terminal-host")).toHaveAttribute(
+        "data-terminal-renderer",
+        "libghostty",
+      );
+    });
+    expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_available");
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_attach", {
+        runId: "run-1",
+      });
+    });
+
+    view.unmount();
   });
 });

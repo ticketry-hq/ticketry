@@ -310,12 +310,14 @@ export function SelectedTicketContent({
   );
   const focusSession = useTerminalStore((s) => s.focusSession);
   const openSession = useTerminalStore((s) => s.openSession);
-  const mountedTaskRunIds = useAgentStatusStore((s) =>
-    bucket && !isScratchBucket(bucket)
-      ? Object.values(s.runs)
-          .filter((run) => run.task_id === bucket)
-          .map((run) => run.agent_run_id)
-      : EMPTY_RUN_IDS,
+  const mountedTaskRunIds = useAgentStatusStore(
+    useShallow((s) =>
+      bucket && !isScratchBucket(bucket)
+        ? Object.values(s.runs)
+            .filter((run) => run.task_id === bucket)
+            .map((run) => run.agent_run_id)
+        : EMPTY_RUN_IDS,
+    ),
   );
   const mountedScratchRunIds = useAgentStatusStore(
     useShallow((s) =>
@@ -324,6 +326,9 @@ export function SelectedTicketContent({
         : EMPTY_RUN_IDS,
     ),
   );
+  const mountedBucketRunIds = isScratchBucket(bucket)
+    ? mountedScratchRunIds
+    : mountedTaskRunIds;
   const workspaces = useTicketWorkspaceStore((s) => s.workspaces);
   const ensureWorkspace = useTicketWorkspaceStore((s) => s.ensureWorkspace);
   const setActive = useTicketWorkspaceStore((s) => s.setActive);
@@ -526,16 +531,19 @@ export function SelectedTicketContent({
     if (!bucket || !terminalSessionsFetched) return;
     useTerminalStore.getState().restoreLiveSessions(bucket, persistedSessions);
     restoreTerminalTarget(bucket, restoreGenerationRef.current, true);
-  }, [bucket, persistedSessions, restoreTerminalTarget, terminalSessionsFetched]);
+  }, [
+    bucket,
+    mountedBucketRunIds,
+    persistedSessions,
+    restoreTerminalTarget,
+    terminalSessionsFetched,
+  ]);
 
   // A run appearing for the mounted bucket is the one trigger to reconcile its
   // terminal tabs, so a spawn surfaces its tab without navigating away. The
   // re-fetch is the same one the mount effect above performs — task buckets by
   // task id, scratch buckets by project/module — and the restore path attaches
   // without selecting, so an arriving tab never steals the active one.
-  const mountedBucketRunIds = isScratchBucket(bucket)
-    ? mountedScratchRunIds
-    : mountedTaskRunIds;
   useEffect(() => {
     const scratchTarget =
       isScratchBucket(bucket) && projectId && moduleId
@@ -1210,6 +1218,7 @@ export function SelectedTicketContent({
                 <SelectedTicketTerminal
                   bucket={bucket}
                   owner={owner}
+                  active={effActive === "terminal"}
                   focusSignal={
                     requestedTerminalRef.current === activeTermId
                       ? terminalFocusSignal

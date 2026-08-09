@@ -4,6 +4,7 @@ import type {
   ResumableTerminalSession,
 } from "../types";
 import { agentApiUrl } from "../../../runtime";
+import { apiKey } from "../../../shared/api/client";
 export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
 
 export class ApiError extends Error {
@@ -18,10 +19,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const key = apiKey();
   const response = await fetch(agentApiUrl(path), {
     ...init,
     headers: {
       Accept: "application/json",
+      ...(key ? { "x-api-key": key } : {}),
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },

@@ -188,8 +188,13 @@ mod imp {
             return Err("a native viewer is already attached to this run".to_owned());
         }
 
-        let viewer = TmuxViewer::attach(&run_id, INITIAL_COLUMNS, INITIAL_ROWS)
-            .map_err(|error| error.to_string())?;
+        let viewer = match TmuxViewer::attach(&run_id, INITIAL_COLUMNS, INITIAL_ROWS) {
+            Ok(viewer) => viewer,
+            Err(error) => {
+                eprintln!("native libghostty tmux attach failed for run {run_id}: {error}");
+                return Err(error.to_string());
+            }
+        };
         let handle = new_handle();
         let socket_path = socket_path(&handle);
         let mut created_view = None;
@@ -242,6 +247,7 @@ mod imp {
         let (view, bridge, output) = match setup {
             Ok(setup) => setup,
             Err(error) => {
+                eprintln!("native libghostty attach failed for run {run_id}: {error}");
                 if let Some(view) = created_view {
                     let _ = window.run_on_main_thread(move || unsafe {
                         muxed_ghostty_view_free(view as *mut c_void);
@@ -420,7 +426,12 @@ mod imp {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             match listener.accept() {
-                Ok((bridge, _)) => return Ok(bridge),
+                Ok((bridge, _)) => {
+                    bridge.set_nonblocking(false).map_err(|error| {
+                        format!("could not configure the accepted libghostty bridge: {error}")
+                    })?;
+                    return Ok(bridge);
+                }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                     if Instant::now() >= deadline {
                         return Err("timed out connecting the libghostty bridge".to_owned());
@@ -601,6 +612,7 @@ mod imp {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use std::os::fd::AsRawFd;
 
         #[test]
         fn quotes_bridge_paths_for_the_surface_command() {
@@ -616,6 +628,24 @@ mod imp {
             assert!(validate_frame(f64::NAN, 0.0, 1.0, 1.0, 10.0, 10.0).is_err());
             assert!(validate_frame(8.0, 8.0, 20.0, 20.0, 16.0, 16.0).is_err());
             assert!(validate_frame(0.0, 0.0, 0.0, 1.0, 10.0, 10.0).is_err());
+        }
+
+        #[test]
+        fn accepted_bridge_is_restored_to_blocking_mode() {
+            let path = socket_path(&new_handle());
+            let listener = UnixListener::bind(&path).unwrap();
+            let address = listener.local_addr().unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let connector =
+                thread::spawn(move || UnixStream::connect(address.as_pathname().unwrap()));
+
+            let accepted = accept_bridge(&listener).unwrap();
+            connector.join().unwrap().unwrap();
+            let flags = unsafe { libc::fcntl(accepted.as_raw_fd(), libc::F_GETFL) };
+
+            assert_ne!(flags, -1);
+            assert_eq!(flags & libc::O_NONBLOCK, 0);
+            fs::remove_file(path).unwrap();
         }
     }
 }

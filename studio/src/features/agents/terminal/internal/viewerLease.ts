@@ -1,4 +1,5 @@
 import { agentApiUrl } from "../../../../runtime";
+import { apiKey } from "../../../../shared/api/client";
 
 export interface ViewerLeaseClient {
   acquire(agentRunId: string, viewerId: string): Promise<void>;
@@ -7,9 +8,14 @@ export interface ViewerLeaseClient {
 }
 
 async function request(path: string, body: Record<string, string>): Promise<void> {
+  const key = apiKey();
   const response = await fetch(agentApiUrl(path), {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(key ? { "x-api-key": key } : {}),
+    },
     body: JSON.stringify(body),
   });
   if (response.ok) return;

@@ -34,8 +34,8 @@ vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
 vi.mock(
   "../app/shell/ticket-workspace/selected-ticket/terminals/SelectedTicketTerminal",
   () => ({
-    SelectedTicketTerminal: ({ bucket }: { bucket: string }) => (
-      <div data-testid="selected-ticket-terminal">{bucket}</div>
+    SelectedTicketTerminal: ({ bucket, active }: { bucket: string; active: boolean }) => (
+      <div data-testid="selected-ticket-terminal" data-active={String(active)}>{bucket}</div>
     ),
   }),
 );
@@ -303,5 +303,73 @@ describe("overhaul acceptance — terminals", () => {
     );
     expect(screen.getByRole("tab", { name: "MEML-1 · codex" }))
       .toHaveAttribute("aria-selected", "true");
+  });
+
+  it("[overhaul-25] restores a persisted terminal when its run projection arrives later", async () => {
+    terminalApi.getTerminals.mockResolvedValue([{
+      agent_run_id: "run-late",
+      created_at: "2026-08-07T12:00:00Z",
+    }]);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          ticketKey="MEML-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(terminalApi.getTerminals).toHaveBeenCalled());
+    expect(useTerminalStore.getState().sessions).toEqual({});
+
+    act(() => {
+      useAgentStatusStore.setState({
+        runs: { "run-late": run("run-late", "story-1") },
+      });
+    });
+
+    await waitFor(() => {
+      expect(Object.values(useTerminalStore.getState().sessions)).toContainEqual(
+        expect.objectContaining({ agentRunId: "run-late" }),
+      );
+    });
+    expect(screen.getByRole("tab", { name: "MEML-1 · codex" }))
+      .toBeInTheDocument();
+  });
+
+  it("[overhaul-26] detaches the native terminal surface while Details is active", async () => {
+    useTerminalStore.setState({
+      sessions: { "session-1": session("session-1", "story-1", "run-1") },
+      sessionByRun: { "run-1": "session-1" },
+    });
+    useAgentStatusStore.setState({ runs: { "run-1": run("run-1", "story-1") } });
+    useClientStore.setState({ activeByTask: { "story-1": "session-1" } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          ticketKey="MEML-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+
+    const terminal = await screen.findByTestId("selected-ticket-terminal");
+    expect(terminal).toHaveAttribute("data-active", "false");
+
+    fireEvent.click(screen.getByRole("tab", { name: "MEML-1 · codex" }));
+    expect(terminal).toHaveAttribute("data-active", "true");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Details" }));
+    expect(terminal).toHaveAttribute("data-active", "false");
   });
 });

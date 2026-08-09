@@ -18,15 +18,17 @@ export function SelectedTicketTerminal({
   bucket,
   owner = "studio",
   focusSignal = 0,
+  active = true,
 }: {
   bucket: string | null;
   owner?: ForegroundOwner;
   focusSignal?: number;
+  active?: boolean;
 }) {
   const activeByTask = useWorkspaceTabsStore((s) => s.activeByTask);
   const sessions = useTerminalStore((s) => s.sessions);
   const activeId = bucket ? activeByTask[bucket] : undefined;
-  const visibleId = activeId && sessions[activeId] ? activeId : null;
+  const visibleId = active && activeId && sessions[activeId] ? activeId : null;
 
   return <Terminal sessionId={visibleId} owner={owner} focusSignal={focusSignal} />;
 }

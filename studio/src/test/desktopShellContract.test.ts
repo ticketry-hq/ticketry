@@ -97,14 +97,15 @@ describe("desktop shell security contract", () => {
     ]);
   });
 
-  it("uses the pooled WebSocket terminal while native Ghostty is disabled", async () => {
+  it("prefers native Ghostty when available and preserves the pooled fallback", async () => {
     const presenter = await text(
       "../../src/features/agents/terminal/Terminal.tsx",
     );
 
+    expect(presenter).toContain("nativeGhosttyAvailable");
+    expect(presenter).toContain("<NativeGhosttyTerminal");
     expect(presenter).toContain("return <XtermTerminal");
-    expect(presenter).not.toContain("NativeGhosttyTerminal");
-    expect(presenter).not.toContain("nativeGhosttyAvailable");
+    expect(presenter).toContain("onUnavailable={markNativeUnavailable}");
   });
 
   it("initializes packaged libghostty from Ticketry's bundled resources", async () => {

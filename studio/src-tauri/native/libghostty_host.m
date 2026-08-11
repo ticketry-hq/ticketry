@@ -320,12 +320,22 @@ muxed_ghostty_view_set_frame(void *opaque, double x, double y, double width,
     return (muxed_ghostty_grid_size_s){0, 0};
 
   NSView *parent = view.superview;
-  double scale_x = parent.bounds.size.width / viewport_width;
-  double scale_y = parent.bounds.size.height / viewport_height;
-  NSRect frame = NSMakeRect(x * scale_x, y * scale_y, width * scale_x,
-                            height * scale_y);
-  if (!parent.isFlipped)
-    frame.origin.y = parent.bounds.size.height - NSMaxY(frame);
+  // getBoundingClientRect is relative to WebKit's safe content viewport. On a
+  // notched display AppKit can move that viewport between the menu/titlebar
+  // area and the fullscreen safe area without changing the WKWebView bounds'
+  // origin. Map into safeAreaRect so the missing top translation is not baked
+  // into the scale or retained from the previous window mode.
+  NSRect viewport = parent.safeAreaRect;
+  if (viewport.size.width <= 0 || viewport.size.height <= 0)
+    viewport = parent.bounds;
+  double scale_x = viewport.size.width / viewport_width;
+  double scale_y = viewport.size.height / viewport_height;
+  NSRect frame = NSMakeRect(NSMinX(viewport) + x * scale_x, 0,
+                            width * scale_x, height * scale_y);
+  if (parent.isFlipped)
+    frame.origin.y = NSMinY(viewport) + y * scale_y;
+  else
+    frame.origin.y = NSMaxY(viewport) - (y + height) * scale_y;
   view.frame = frame;
   [view updateGhosttySize];
 

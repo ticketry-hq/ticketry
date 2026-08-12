@@ -20,6 +20,7 @@ use ownership::{
 use supervisor::{CommandTable, Supervisor, SupervisorError, SupervisorEvent, SupervisorOptions};
 
 pub mod discovery;
+pub mod graphql_foundation;
 pub mod native_terminal;
 pub mod native_terminal_frames;
 mod native_terminal_preparation;
@@ -998,37 +999,58 @@ pub fn run() {
     if let Some(error) = ownership.startup_error.as_deref() {
         eprintln!("Ticketry could not acquire data-directory ownership: {error}");
     }
+    let graphql_api = graphql_foundation::transport_api();
+    let setup_graphql_api = graphql_api.clone();
     let application = match tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(ownership)
         .manage(DesktopServiceState::new())
         .manage(viewer_commands::ViewerCommandState::new())
         .manage(native_terminal::NativeTerminalState::new())
-        .invoke_handler(tauri::generate_handler![
-            desktop_runtime_configuration,
-            desktop_append_frontend_log,
-            desktop_retry_services,
-            desktop_pick_folder,
-            desktop_preflight_report,
-            desktop_approve_executable_path,
-            viewer_commands::viewer_attach,
-            viewer_commands::viewer_input,
-            viewer_commands::viewer_resize,
-            viewer_commands::viewer_scroll,
-            viewer_commands::viewer_detach,
-            viewer_commands::viewer_status,
-            native_terminal::native_terminal_available,
-            native_terminal::native_terminal_attach,
-            native_terminal::native_terminal_reconcile_frame,
-            native_terminal::native_terminal_set_frame,
-            native_terminal::native_terminal_hide,
-            native_terminal::native_terminal_show,
-            native_terminal::native_terminal_focus,
-            native_terminal::native_terminal_detach
-        ])
-        .setup(|application| {
+        .invoke_handler(graphql_foundation::combine_with_native_handler(
+            tauri::generate_handler![
+                desktop_runtime_configuration,
+                desktop_append_frontend_log,
+                desktop_retry_services,
+                desktop_pick_folder,
+                desktop_preflight_report,
+                desktop_approve_executable_path,
+                viewer_commands::viewer_attach,
+                viewer_commands::viewer_input,
+                viewer_commands::viewer_resize,
+                viewer_commands::viewer_scroll,
+                viewer_commands::viewer_detach,
+                viewer_commands::viewer_status,
+                native_terminal::native_terminal_available,
+                native_terminal::native_terminal_attach,
+                native_terminal::native_terminal_reconcile_frame,
+                native_terminal::native_terminal_set_frame,
+                native_terminal::native_terminal_hide,
+                native_terminal::native_terminal_show,
+                native_terminal::native_terminal_focus,
+                native_terminal::native_terminal_detach
+            ],
+            graphql_api,
+        ))
+        .setup(move |application| {
             let ownership = application.state::<DesktopDataDirectoryOwnership>();
             let startup_error = ownership.startup_error.clone();
+            if startup_error.is_none() {
+                let foundation_database = ownership.data_directory.join("rust-core.sqlite3");
+                if let Err(error) =
+                    tauri::async_runtime::block_on(graphql_foundation::initialize_and_install(
+                        &foundation_database,
+                        &setup_graphql_api,
+                    ))
+                {
+                    eprintln!(
+                        "Ticketry GraphQL foundation is unavailable ({}): {}",
+                        serde_json::to_value(error.code)
+                            .unwrap_or(serde_json::Value::String("unknown".to_owned())),
+                        error.message
+                    );
+                }
+            }
             let owns_data_directory = ownership
                 .guard
                 .lock()

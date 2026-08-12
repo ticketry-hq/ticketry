@@ -15,6 +15,25 @@ async function text(relativePath: string): Promise<string> {
   return readFile(new URL(relativePath, import.meta.url), "utf8");
 }
 
+async function texts(...relativePaths: string[]): Promise<string> {
+  return (await Promise.all(relativePaths.map(text))).join("\n");
+}
+
+const nativeTerminalSource = () => texts(
+  "../../src-tauri/src/native_terminal.rs",
+  "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
+  "../../src-tauri/src/native_terminal/macos/lifecycle.rs",
+  "../../src-tauri/src/native_terminal/macos/platform_bridge.rs",
+  "../../src-tauri/src/native_terminal/macos/presentation_commands.rs",
+);
+
+const libghosttyHostSource = () => texts(
+  "../../src-tauri/native/libghostty_host.m",
+  "../../src-tauri/native/libghostty_runtime.m",
+  "../../src-tauri/native/libghostty_view.m",
+  "../../src-tauri/native/libghostty_view_bridge.m",
+);
+
 function snakeCase(value: string): string {
   return value.replace(/[A-Z]/g, (character, index) =>
     `${index === 0 ? "" : "_"}${character.toLowerCase()}`
@@ -61,6 +80,9 @@ describe("desktop shell security contract", () => {
         "allow-desktop-pick-folder",
         "allow-desktop-preflight-report",
         "allow-desktop-approve-executable-path",
+        "allow-TauRPC--graphql-execute",
+        "allow-TauRPC--graphql-subscribe",
+        "allow-TauRPC--graphql-unsubscribe",
         "allow-viewer-attach",
         "allow-viewer-input",
         "allow-viewer-resize",
@@ -112,17 +134,17 @@ describe("desktop shell security contract", () => {
   });
 
   it("initializes packaged libghostty from Ticketry's bundled resources", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const host = await libghosttyHostSource();
 
     expect(host).toContain('setenv("GHOSTTY_RESOURCES_DIR"');
     expect(host).toContain('setenv("TERMINFO"');
     expect(host.indexOf("configure_bundled_ghostty_environment();")).toBeLessThan(
-      host.indexOf("ghostty_init(2, argv)"),
+      host.indexOf("ghostty_init(1, argv)"),
     );
   });
 
   it("launches tmux directly in libghostty without a Ticketry byte bridge", async () => {
-    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+    const nativeTerminal = await nativeTerminalSource();
     const tmuxViewer = await text("../../src-tauri/src/tmux_viewer.rs");
     const main = await text("../../src-tauri/src/main.rs");
 
@@ -135,7 +157,7 @@ describe("desktop shell security contract", () => {
   });
 
   it("positions the native terminal in the webview coordinate space", async () => {
-    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+    const nativeTerminal = await nativeTerminalSource();
 
     expect(nativeTerminal).toContain("webview_ns_view(&window)");
     expect(nativeTerminal).toContain("webview.inner() as usize");
@@ -143,7 +165,7 @@ describe("desktop shell security contract", () => {
   });
 
   it("prepares libghostty hidden at the target window's Retina scale and keeps later scale updates", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const host = await libghosttyHostSource();
 
     expect(host).not.toContain("NSScreen.mainScreen.backingScaleFactor");
     expect(host).toContain("self.window.backingScaleFactor ?: 1.0");
@@ -160,8 +182,11 @@ describe("desktop shell security contract", () => {
   });
 
   it("keeps native viewer visibility reversible and hidden viewers non-interactive", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
-    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+    const host = await libghosttyHostSource();
+    const nativeTerminal = await nativeTerminalSource();
+    const attachCommands = await text(
+      "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
+    );
     const desktop = await text("../../src-tauri/src/lib.rs");
     const build = await text("../../src-tauri/build.rs");
 
@@ -178,7 +203,7 @@ describe("desktop shell security contract", () => {
     expect(host.indexOf("muxed_ghostty_view_set_frame(")).toBeLessThan(
       host.indexOf("muxed_ghostty_view_present(opaque)"),
     );
-    const attach = nativeTerminal.match(
+    const attach = attachCommands.match(
       /pub fn native_terminal_attach[\s\S]*?pub fn native_terminal_reconcile_frame/,
     )?.[0];
     expect(attach).toContain("visibility: NativeTerminalVisibility::Hidden");
@@ -186,7 +211,7 @@ describe("desktop shell security contract", () => {
   });
 
   it("keeps steady-state libghostty render actions off AppKit's input path", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const host = await text("../../src-tauri/native/libghostty_runtime.m");
     const runtimeAction = host.match(
       /static bool runtime_action[\s\S]*?\n}/,
     )?.[0];
@@ -196,7 +221,7 @@ describe("desktop shell security contract", () => {
   });
 
   it("forces and acknowledges the hidden Metal frame before presenting libghostty", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const host = await text("../../src-tauri/native/libghostty_view_bridge.m");
     const armRedraw = host.match(
       /uint64_t muxed_ghostty_view_arm_redraw[\s\S]*?\n}/,
     )?.[0];
@@ -256,6 +281,7 @@ describe("desktop shell security contract", () => {
       targets: ["app", "dmg"],
       icon: ["icons/icon.icns", "icons/icon.png"],
       resources: {
+        "native/ticketry-ghostty.conf": "ticketry-ghostty.conf",
         "vendor/libghostty/resources/": "",
       },
       externalBin: ["binaries/muxed-backend", "binaries/ticketry-hook"],

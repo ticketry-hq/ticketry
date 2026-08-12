@@ -1,0 +1,188 @@
+input BooleanFilterInput {
+	eq: Boolean
+	ne: Boolean
+	gt: Boolean
+	gte: Boolean
+	lt: Boolean
+	lte: Boolean
+	is_in: [Boolean!]
+	is_not_in: [Boolean!]
+	is_null: Boolean
+}
+
+input CursorInput {
+	cursor: String
+	limit: Int!
+}
+
+input FloatFilterInput {
+	eq: Float
+	ne: Float
+	gt: Float
+	gte: Float
+	lt: Float
+	lte: Float
+	is_in: [Float!]
+	is_not_in: [Float!]
+	is_null: Boolean
+	between: [Float!]
+	not_between: [Float!]
+}
+
+input IdentityFilterInput {
+	eq: String
+	ne: String
+	gt: String
+	gte: String
+	lt: String
+	lte: String
+	is_in: [String!]
+	is_not_in: [String!]
+	is_null: Boolean
+	between: [String!]
+	not_between: [String!]
+}
+
+input IntegerFilterInput {
+	eq: Int
+	ne: Int
+	gt: Int
+	gte: Int
+	lt: Int
+	lte: Int
+	is_in: [Int!]
+	is_not_in: [Int!]
+	is_null: Boolean
+	between: [Int!]
+	not_between: [Int!]
+}
+
+scalar Json
+
+type MigrationProbes {
+	id: Int!
+	value: String!
+}
+
+type MigrationProbesConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [MigrationProbes!]!
+	edges: [MigrationProbesEdge!]!
+}
+
+type MigrationProbesEdge {
+	cursor: String!
+	node: MigrationProbes!
+}
+
+input MigrationProbesFilterInput {
+	id: IntegerFilterInput
+	value: StringFilterInput
+	and: [MigrationProbesFilterInput!]
+	or: [MigrationProbesFilterInput!]
+	not: MigrationProbesFilterInput
+}
+
+input MigrationProbesHavingInput {
+	_: Boolean
+}
+
+input MigrationProbesOrderInput {
+	id: OrderByEnum
+	value: OrderByEnum
+}
+
+type Mutation {
+	setMigrationProbe(value: String!): Boolean!
+}
+
+input OffsetInput {
+	limit: Int!
+	offset: Int!
+}
+
+enum OrderByEnum {
+	ASC
+	DESC
+}
+
+type PageInfo {
+	hasPreviousPage: Boolean!
+	hasNextPage: Boolean!
+	startCursor: String
+	endCursor: String
+}
+
+input PageInput {
+	limit: Int!
+	page: Int!
+}
+
+type PaginationInfo {
+	pages: Int!
+	current: Int!
+	offset: Int!
+	total: Int!
+}
+
+input PaginationInput @oneOf {
+	cursor: CursorInput
+	page: PageInput
+	offset: OffsetInput
+}
+
+type Query {
+	migrationProbes(filters: MigrationProbesFilterInput, having: MigrationProbesHavingInput, orderBy: MigrationProbesOrderInput, pagination: PaginationInput): MigrationProbesConnection!
+}
+
+input StringFilterInput {
+	eq: String
+	ne: String
+	gt: String
+	gte: String
+	lt: String
+	lte: String
+	ci_eq: String
+	is_in: [String!]
+	is_not_in: [String!]
+	is_null: Boolean
+	contains: String
+	starts_with: String
+	ends_with: String
+	like: String
+	not_like: String
+	between: [String!]
+	not_between: [String!]
+}
+
+input TextFilterInput {
+	eq: String
+	ne: String
+	gt: String
+	gte: String
+	lt: String
+	lte: String
+	is_in: [String!]
+	is_not_in: [String!]
+	is_null: Boolean
+	between: [String!]
+	not_between: [String!]
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)
+"""
+directive @oneOf on INPUT_OBJECT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+	mutation: Mutation
+}

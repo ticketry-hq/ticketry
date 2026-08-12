@@ -1,0 +1,12 @@
+query FoundationProbe {
+  migrationProbes {
+    nodes {
+      id
+      value
+    }
+  }
+}
+
+mutation SetMigrationProbe($value: String!) {
+  setMigrationProbe(value: $value)
+}

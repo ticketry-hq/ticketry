@@ -28,6 +28,9 @@ fn main() {
             "native_terminal_show",
             "native_terminal_focus",
             "native_terminal_detach",
+            "TauRPC__graphql_execute",
+            "TauRPC__graphql_subscribe",
+            "TauRPC__graphql_unsubscribe",
         ]),
     ))
     .expect("failed to build the Ticketry Tauri application");

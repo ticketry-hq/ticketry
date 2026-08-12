@@ -10,17 +10,41 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 cc = "1"
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "=2.6.3", features = [] }
 
 [features]
 default = []
 native-libghostty = []
 
 [dependencies]
+async-graphql.workspace = true
 libc = "0.2"
 portable-pty = "0.9"
 rand = "0.8"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tauri = { version = "2", features = [] }
+sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-sqlite"] }
+sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
+seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros"] }
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-graphql = { path = "crates/tauri-graphql" }
 tauri-plugin-dialog = "2.6"
+taurpc.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.23.0"
+
+[workspace]
+members = [".", "crates/tauri-graphql"]
+resolver = "2"
+
+[workspace.dependencies]
+async-graphql = { version = "=7.0.19", features = ["dynamic-schema"] }
+futures-util = "=0.3.32"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+tauri = "=2.11.5"
+taurpc = "=0.8.2"
+tokio = { version = "=1.53.1", features = ["macros", "rt-multi-thread", "sync", "time"] }

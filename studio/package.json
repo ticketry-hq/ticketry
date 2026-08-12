@@ -29,6 +29,8 @@
     "test:e2e:overhaul": "playwright test e2e/overhaul.spec.ts",
     "test:overhaul": "vitest run src/test/overhaul*Acceptance.test.tsx src/test/studioRenameBehaviour.test.tsx",
     "test:watch": "vitest",
+    "graphql:generate": "node scripts/generate-graphql-foundation.mjs",
+    "graphql:drift": "node scripts/verify-generated.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

@@ -1,6 +1,9 @@
 import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
 import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
-import { OriginEnum } from "@worktracker/typescript-sdk/models";
+import {
+  GraphRunExecutionModeEnum,
+  OriginEnum,
+} from "@worktracker/typescript-sdk/models";
 import type {
   IssueType,
   IssueTypeCreate,
@@ -10,6 +13,7 @@ import type {
   ProjectCreate,
   ProjectPatch,
   ConfigurableProvider,
+  GraphRunExecutionMode,
   State,
   StateCreate,
   StatePatch,
@@ -26,7 +30,8 @@ import type {
   WorkItemPatch,
   Workspace,
 } from "./types";
-import { agentApiUrl, runtimeConfiguration } from "../../runtime";
+import { runtimeConfiguration } from "../../runtime";
+import { authenticatedHostFetch } from "./authenticatedHostFetch";
 
 export { documentUrl as docUrl } from "./documentUrl";
 
@@ -77,16 +82,7 @@ async function request<T>(
   path: string,
   init?: RequestInit & { signal?: AbortSignal },
 ): Promise<T> {
-  const key = apiKey();
-  const response = await fetch(agentApiUrl(path), {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      ...(key ? { "x-api-key": key } : {}),
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+  const response = await authenticatedHostFetch(path, init);
   let body: unknown = null;
   const text = await response.text();
   if (text) {
@@ -395,10 +391,15 @@ export const createTask = (
       })) as unknown as WorkItem,
   );
 
-export const executeTaskSubtree = (taskId: string) =>
+// Omitting `mode` keeps the historical parallel campaign for existing callers.
+export const executeTaskSubtree = (
+  taskId: string,
+  mode?: GraphRunExecutionMode,
+) =>
   call(() => sdk().execution.workItemsGraphRunCreate({
     issueId: taskId,
-    agentOverride: {},
+    graphRunRequest:
+      mode === undefined ? {} : { mode: GraphRunExecutionModeEnum[mode] },
   }));
 
 export const listIssueTypes = (projectId: string) =>

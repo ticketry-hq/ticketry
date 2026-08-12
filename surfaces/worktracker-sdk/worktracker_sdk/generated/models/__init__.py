@@ -38,6 +38,8 @@ from worktracker_sdk.generated.models.global_launch_default import GlobalLaunchD
 from worktracker_sdk.generated.models.graph import Graph
 from worktracker_sdk.generated.models.graph_node import GraphNode
 from worktracker_sdk.generated.models.graph_reset_result import GraphResetResult
+from worktracker_sdk.generated.models.graph_run_execution_mode_enum import GraphRunExecutionModeEnum
+from worktracker_sdk.generated.models.graph_run_request import GraphRunRequest
 from worktracker_sdk.generated.models.graph_run_result import GraphRunResult
 from worktracker_sdk.generated.models.group_enum import GroupEnum
 from worktracker_sdk.generated.models.health import Health

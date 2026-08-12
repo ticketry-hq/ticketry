@@ -113,6 +113,22 @@ def test_execute_dependency_graph_routes_through_sdk():
     assert result == {"root_id": ROOT, "launched": [A]}
 
 
+def test_execute_dependency_graph_omits_the_execution_mode():
+    """The MCP caller stays parallel by omitting the mode entirely."""
+
+    client = FakeGeneratedSdk()
+    client.execution.returns["execute_graph"] = ExecuteGraphOut(
+        root_id=ROOT, launched=[]
+    )
+    service = _service(client)
+
+    service.execute_dependency_graph(ROOT)
+
+    _name, args, kwargs = client.execution.calls[0]
+    assert len(args) == 2
+    assert "mode" not in kwargs
+
+
 def test_execute_dependency_graph_passes_agent():
     client = FakeGeneratedSdk()
     client.execution.returns["execute_graph"] = ExecuteGraphOut(

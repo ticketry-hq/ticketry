@@ -11,7 +11,7 @@ export interface ReorderNeighbors {
 }
 
 /**
- * Convert a visible, rank-descending root-block hover into the API's
+ * Convert a visible, rank-ascending root-block hover into the API's matching
  * rank-ascending neighbor pair. Descendant row ids deliberately resolve to
  * their owning root block, so no result can describe a seam within a subtree.
  */
@@ -32,8 +32,8 @@ export function resolveTicketReorderNeighbors(
   if (hoveredRowId === null) {
     if (draggedIndex === 0) return null;
     return {
-      beforeId: remaining[0]?.rootId ?? null,
-      afterId: null,
+      beforeId: null,
+      afterId: remaining[0]?.rootId ?? null,
     };
   }
 
@@ -52,10 +52,10 @@ export function resolveTicketReorderNeighbors(
   // within-section no-op position to reject.
   if (draggedIndex >= 0 && insertionIndex === draggedIndex) return null;
 
-  // Visible order is descending rank. Therefore the visible block below the
-  // seam is the canonical "before" neighbor and the block above is "after".
+  // Visible order matches canonical ascending rank: the block above the seam
+  // is the "before" neighbor and the block below it is "after".
   return {
-    beforeId: remaining[insertionIndex]?.rootId ?? null,
-    afterId: remaining[insertionIndex - 1]?.rootId ?? null,
+    beforeId: remaining[insertionIndex - 1]?.rootId ?? null,
+    afterId: remaining[insertionIndex]?.rootId ?? null,
   };
 }

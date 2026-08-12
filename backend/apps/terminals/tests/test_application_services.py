@@ -252,12 +252,14 @@ def test_reconciliation_recovers_live_tombstone_from_legacy_runtime_identity():
     assert run.status == "running"
     assert run.ended_at is None
     assert run.exit_code is None
-    assert run.lifecycle_state == "unknown"
+    assert run.lifecycle_state == "working"
     assert terminal.terminated_at is None
     assert terminal.runtime_namespace == "tmux-endpoint-hash"
 
 
-def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity():
+def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity(
+    monkeypatch,
+):
     _persist_active_run("run-current-tombstone", runtime_namespace="profile-a")
     AgentRun.objects.filter(id="run-current-tombstone").update(
         status="exited",
@@ -278,6 +280,15 @@ def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity():
             dimensions=TerminalDimensions(columns=80, rows=24),
         )
     )
+    published = []
+
+    async def capture_status(project_id: str, frame: dict) -> None:
+        published.append((project_id, frame))
+
+    monkeypatch.setattr(
+        "apps.terminals.recovery_status.publish_status",
+        capture_status,
+    )
 
     result = TerminalReconciler(runtime).reconcile()
 
@@ -287,9 +298,30 @@ def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity():
     assert result.running == ["run-current-tombstone"]
     assert run.status == "running"
     assert run.ended_at is None
-    assert run.lifecycle_state == "unknown"
+    assert run.lifecycle_state == "working"
     assert terminal.terminated_at is None
     assert terminal.runtime_namespace == "profile-a"
+    assert published == [
+        (
+            str(run.issue.project_id),
+            {
+                "v": 1,
+                "type": "agent_lifecycle",
+                "at": run.lifecycle_updated_at,
+                "run": {
+                    "agent_run_id": "run-current-tombstone",
+                    "project_id": str(run.issue.project_id),
+                    "task_id": str(run.issue_id),
+                    "module_id": str(run.issue.module_id),
+                    "agent": "codex",
+                    "scope": "task",
+                    "started_at": "2026-08-09T12:00:00+00:00",
+                    "state": "working",
+                    "updated_at": run.lifecycle_updated_at,
+                },
+            },
+        )
+    ]
 
 
 def test_reconciliation_persists_exit_code_before_retained_runtime_cleanup():

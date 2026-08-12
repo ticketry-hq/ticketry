@@ -30,6 +30,13 @@ the agent run, and callers cannot depend on it to resolve or persist application
 facts. Internal identities such as the derived tmux session name remain hidden.
 _Avoid_: Tmux session name, terminal-owned agent run
 
+**Scroll bridge**:
+The single mechanism by which any terminal viewer moves a durable terminal
+session's scrollback: the viewer reports scroll intent, and the session's
+scrollback is moved on its behalf. Wheel gestures never become input to the
+hosted command.
+_Avoid_: Mouse mode, arrow-key scrolling, renderer scrollback
+
 **Viewer detachment**:
 The end of a terminal viewer's temporary attachment. It says nothing about the
 durable terminal session or the liveness of any associated run.
@@ -52,12 +59,29 @@ durable terminal session is missing. Failure to inspect the terminal runtime is
 an observation error, not a missing-session observation.
 _Avoid_: Run status, persisted terminal state, lifecycle event
 
+**Terminal control failure**:
+The failure of a viewer control operation — resize or scroll — on an attached
+terminal. It is reported as a terminal runtime error correlated only by AgentRun
+ID; the tmux session target and other implementation detail stay inside the
+runtime and are recorded in its logs, never in the error that transports render.
+_Avoid_: tmux session error, copy-mode failure, `pt-` session name
+
 **Terminal reconciliation**:
 An outside process that compares recorded application state with terminal
 runtime observations. It interprets hosted-command exit and missing-session
 facts, updates persistence or run lifecycle, and requests terminal cleanup when
 policy requires it. It is not part of the terminal module.
 _Avoid_: Terminal inspection, viewer detachment, tmux cleanup
+
+**Run completion seam**:
+The post-commit announcement that one agent run and/or its terminal session has
+durably been recorded as ended. Every durable termination write — explicit
+termination and terminal reconciliation alike — publishes it exactly once per
+write that actually ended something. It carries only the AgentRun ID and no
+judgement: subscribers such as subtree execution decide what the ending means
+for the work scheduled on it, and a failing subscriber never fails the
+termination write.
+_Avoid_: Completion callback, scheduler hook, advancing a campaign here
 
 **Agent resume**:
 An application/provider operation that creates a new agent run and a new

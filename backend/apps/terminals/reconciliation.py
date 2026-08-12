@@ -21,6 +21,7 @@ from apps.terminals.persistence import (
     persist_reconciliation_outcome,
     persist_runtime_recovery,
 )
+from apps.terminals.recovery_status import publish_runtime_recovery
 from apps.terminals.runtime import (
     TerminalObservationError,
     TerminalRuntime,
@@ -288,6 +289,10 @@ class TerminalReconciler:
                 continue
             if recovery.recovered:
                 result.recovered.append(agent_run_id)
+                publish_runtime_recovery(
+                    agent_run_id,
+                    recovered_at=recovered_at,
+                )
 
     def _cleanup_retained_runtime(self, agent_run_id: str) -> None:
         """Retry idempotent runtime cleanup until its durable marker clears."""

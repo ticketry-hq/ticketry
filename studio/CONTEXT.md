@@ -89,7 +89,9 @@ The one project-wide module order every module surface — sidebar, tab strip,
 backlog grouping, module pickers, keyboard position shortcuts — renders
 identically. It is the recency order until the project is first manually
 reordered, and the manually set order from then on; a newly created module
-always enters at the front.
+always enters at the front. In recency mode that front placement is held
+explicitly until the new module has agent activity of its own, since it would
+otherwise sort behind every module that has ever been worked in.
 _Avoid_: Recency order, per-surface order, tab order
 
 **Manual module order**:

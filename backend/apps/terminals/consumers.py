@@ -25,6 +25,9 @@ from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.launch import LaunchUnavailable
 from apps.terminals.prompt_builder import _build_prompt  # noqa: F401 - test seam
 from apps.terminals import viewer_attachments
+from apps.terminals.reconciliation_scheduler import (
+    schedule_terminal_reconciliation,
+)
 from apps.terminals.runtime import (
     TerminalDimensions,
     TerminalNotFound,
@@ -183,6 +186,12 @@ class TerminalConsumer(AsyncWebsocketConsumer):
                 dimensions=TerminalDimensions(cols, rows),
             )
         except TerminalNotFound:
+            # The runtime no longer has this session while its records may
+            # still say it is running. Reconciling now lets the status feed
+            # converge on "lost" within seconds instead of waiting for the
+            # next idle sweep — the tab presents the pushed run projection,
+            # so that projection must catch up with the observation quickly.
+            schedule_terminal_reconciliation()
             await self._send_error("session_not_found", close_code=1008)
             return
         except Exception as e:

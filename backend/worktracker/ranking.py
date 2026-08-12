@@ -49,6 +49,25 @@ def _from_digits(digits):
     return "".join(DIGITS[d] for d in stripped) if stripped else _MID
 
 
+def _shortest_prefix_between(key, lower, upper):
+    """Discard midpoint precision that is irrelevant to lexical ordering.
+
+    Arithmetic midpoints inherit the full precision of their bounds.  That is
+    unnecessary when an earlier digit already places a prefix strictly between
+    them, and retaining it makes persisted keys grow on every insertion near a
+    long bound.  Keep the first canonical prefix that still satisfies both
+    bounds; the full midpoint remains the fallback.
+    """
+
+    for length in range(1, len(key)):
+        prefix = key[:length]
+        if prefix.endswith(DIGITS[0]):
+            continue
+        if (lower is None or lower < prefix) and (upper is None or prefix < upper):
+            return prefix
+    return key
+
+
 def _half(int_part, frac):
     """Halve the fraction ``int_part.frac`` (base-62), returning frac digits.
 
@@ -103,7 +122,8 @@ def key_between(a, b):
         frac[i] = total % BASE
         carry = total // BASE
 
-    return _from_digits(_half(hi_int + carry, frac))
+    midpoint = _from_digits(_half(hi_int + carry, frac))
+    return _shortest_prefix_between(midpoint, a, b)
 
 
 def _fraction_to_key(num, den, max_len=20):

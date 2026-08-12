@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import type { DragEvent as ReactDragEvent } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   useAxisDragAndDrop,
   type AxisDragAndDropController,
@@ -100,7 +100,54 @@ function renderController(
   );
 }
 
+const TARGET_LENGTH = 100;
+const mountedTargets: HTMLElement[] = [];
+
+/**
+ * Lay three drop targets out along the axis and register them, so placement can
+ * be resolved for pointers that never enter a target's cross-axis bounds.
+ */
+function mountTargets(
+  result: { current: AxisDragAndDropController<Payload, string> },
+  axis: DragAxis,
+  ids: string[],
+): void {
+  ids.forEach((id, index) => {
+    const element = document.createElement("div");
+    const offset = index * TARGET_LENGTH;
+    element.getBoundingClientRect = () =>
+      (axis === "vertical"
+        ? { top: offset, left: 0, width: 200, height: TARGET_LENGTH }
+        : { top: 0, left: offset, width: TARGET_LENGTH, height: 40 }) as DOMRect;
+    document.body.append(element);
+    mountedTargets.push(element);
+    act(() => result.current.getDropTargetProps(id).ref(element));
+  });
+}
+
+/** A drag event dispatched away from every target, as the document sees it. */
+function dispatchDocumentDrag(
+  type: "dragover" | "drop",
+  dataTransfer: DataTransferStub,
+  point: { clientX: number; clientY: number },
+): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    dataTransfer: { value: dataTransfer },
+    clientX: { value: point.clientX },
+    clientY: { value: point.clientY },
+  });
+  act(() => {
+    document.body.dispatchEvent(event);
+  });
+  return event;
+}
+
 describe("useAxisDragAndDrop", () => {
+  afterEach(() => {
+    mountedTargets.splice(0).forEach((element) => element.remove());
+  });
+
   it.each([
     {
       axis: "vertical" as const,
@@ -143,6 +190,73 @@ describe("useAxisDragAndDrop", () => {
     expect(result.current).toMatchObject({
       targetId: "target",
       intent: "far",
+    });
+  });
+
+  it.each([
+    {
+      axis: "vertical" as const,
+      // Beside the list, level with the second row's top half.
+      outside: { clientX: 900, clientY: 120 },
+      beyond: { clientX: 900, clientY: 900 },
+    },
+    {
+      axis: "horizontal" as const,
+      // Above the strip, level with the second tab's left half.
+      outside: { clientX: 120, clientY: -80 },
+      beyond: { clientX: 900, clientY: -80 },
+    },
+  ])(
+    "keeps targeting on the $axis axis outside the target's cross-axis bounds",
+    ({ axis, outside, beyond }) => {
+      const onDrop = vi.fn();
+      const { result } = renderController(axis, { onDrop });
+      mountTargets(result, axis, ["first", "second", "third"]);
+      const transfer = startDrag(result);
+
+      const over = dispatchDocumentDrag("dragover", transfer, outside);
+
+      // The seam is promised, and the browser is told the release is allowed.
+      expect(result.current).toMatchObject({
+        targetId: "second",
+        intent: "near",
+      });
+      expect(over.defaultPrevented).toBe(true);
+
+      // Past every target along the axis is genuinely away from the surface.
+      dispatchDocumentDrag("dragover", transfer, beyond);
+      expect(result.current).toMatchObject({ targetId: null, intent: null });
+
+      dispatchDocumentDrag("dragover", transfer, outside);
+      dispatchDocumentDrag("drop", transfer, outside);
+
+      expect(onDrop).toHaveBeenCalledWith(
+        { id: "source" },
+        { targetId: "second", intent: "near" },
+        expect.anything(),
+      );
+      expect(result.current).toMatchObject({
+        payload: null,
+        targetId: null,
+        intent: null,
+      });
+    },
+  );
+
+  it("leaves a release beyond every target unwritten", () => {
+    const onDrop = vi.fn();
+    const { result } = renderController("horizontal", { onDrop });
+    mountTargets(result, "horizontal", ["first", "second"]);
+    const transfer = startDrag(result);
+
+    dispatchDocumentDrag("dragover", transfer, { clientX: 900, clientY: -80 });
+    dispatchDocumentDrag("drop", transfer, { clientX: 900, clientY: -80 });
+
+    expect(onDrop).not.toHaveBeenCalled();
+    expect(result.current).toMatchObject({
+      payload: null,
+      targetId: null,
+      intent: null,
     });
   });
 

@@ -100,13 +100,23 @@ class ExecutionApi(_RootApi):
         return DependencyGraphOut.model_validate(data)
 
     def execute_graph(
-        self, root_id: str | UUID, agent: str | None = None
+        self,
+        root_id: str | UUID,
+        agent: str | None = None,
+        mode: str | None = None,
     ) -> ExecuteGraphOut:
+        """Arm a graph run; an omitted ``mode`` stays parallel on the wire."""
+
+        body: dict[str, Any] = {}
+        if agent is not None:
+            body["agent"] = agent
+        if mode is not None:
+            body["mode"] = mode
         data = self._request(
             "POST",
             "/work-tracker/work-items/{root_id}/graph-run",
             path_params={"root_id": root_id},
-            body={} if agent is None else {"agent": agent},
+            body=body,
             success_status=201,
         )
         return ExecuteGraphOut.model_validate(data)

@@ -1,12 +1,17 @@
 from django.db import models
 from worktracker.models import Issue, Project
 
+from apps.execution.execution_mode import (
+    DEFAULT_EXECUTION_MODE,
+    EXECUTION_MODE_CHOICES,
+)
+
 
 class GraphRun(models.Model):
     """Durable header for a graph run (CODIN-777).
 
-    One row per root task. Records only the run *context* (optional provider
-    override, project,
+    One row per root task. Records only the run *context* (execution mode,
+    optional provider override, project,
     module) needed to rebuild the graph after an ASGI restart. Graph **edges
     are never stored** — they stay derived from ``Issue.blocked_by`` on read.
     Per-task launch facts are stored separately. A missing header means no
@@ -36,6 +41,13 @@ class GraphRun(models.Model):
     # Kept as ``agent`` for wire/storage compatibility; null delegates provider
     # selection to each node's current-state launch binding.
     agent = models.CharField(max_length=255, null=True, blank=True)
+    # Durable scheduling mode of this campaign; survives backend restarts so
+    # later state or agent-lifecycle observations advance it consistently.
+    execution_mode = models.CharField(
+        max_length=16,
+        choices=EXECUTION_MODE_CHOICES,
+        default=DEFAULT_EXECUTION_MODE,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

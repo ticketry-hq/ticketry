@@ -16,7 +16,6 @@ from apps.terminals import dao
 import apps.terminals.launch as launch_module
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.models import AgentTerminalSession
-from apps.terminals.reconciliation import ReconcileResult
 from apps.terminals.tests.fakes import patch_terminal_runtime
 from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.validation import SpawnRequest
@@ -102,6 +101,7 @@ def _insert_session(
     scope="task",
     terminated_at=None,
     doc_rel_path=None,
+    runtime_namespace="test",
 ):
     AgentTerminalSession.objects.create(
         agent_run_id=run_id,
@@ -114,17 +114,18 @@ def _insert_session(
         scope=scope,
         terminated_at=terminated_at,
         doc_rel_path=doc_rel_path,
+        runtime_namespace=runtime_namespace,
     )
     AgentRun.objects.filter(id=run_id).update(scope=scope)
 
 
-def _no_reconcile(monkeypatch):
-    """Stub reconcile so test rows are not soft-deleted for lacking tmux."""
+def _no_background_reconcile(monkeypatch):
+    """Keep list tests from starting a real background reconciliation."""
 
     monkeypatch.setattr(
         terminals_api,
-        "reconcile_terminals",
-        lambda: None,
+        "schedule_terminal_reconciliation",
+        lambda: False,
     )
 
 
@@ -255,7 +256,7 @@ def test_scratch_launch_required_skill_collision_returns_structured_409(
 
 
 def test_list_terminals_returns_active_sessions(client, monkeypatch):
-    _no_reconcile(monkeypatch)
+    _no_background_reconcile(monkeypatch)
 
     _insert_run("run-old")
     _insert_run("run-new")
@@ -283,8 +284,33 @@ def test_list_terminals_returns_active_sessions(client, monkeypatch):
     assert [row["agent_run_id"] for row in response.json()] == ["run-new", "run-old"]
 
 
+def test_list_terminals_excludes_sessions_owned_by_another_runtime(client, monkeypatch):
+    _no_background_reconcile(monkeypatch)
+
+    _insert_run("run-local")
+    _insert_run("run-foreign")
+    _insert_session(
+        "run-local",
+        task_id="task-1",
+        created_at="2026-05-29T09:00:00",
+        agent="codex",
+    )
+    _insert_session(
+        "run-foreign",
+        task_id="task-1",
+        created_at="2026-05-29T10:00:00",
+        agent="codex",
+        runtime_namespace="packaged-runtime",
+    )
+
+    response = client.get("/api/terminals", {"task_id": "task-1"})
+
+    assert response.status_code == 200
+    assert [row["agent_run_id"] for row in response.json()] == ["run-local"]
+
+
 def test_list_terminals_serializes_only_immutable_session_fields(client, monkeypatch):
-    _no_reconcile(monkeypatch)
+    _no_background_reconcile(monkeypatch)
 
     _insert_run("task-run")
     _insert_run("hidden-doc-run")
@@ -316,73 +342,10 @@ def test_list_terminals_serializes_only_immutable_session_fields(client, monkeyp
     assert "terminated_at" not in row
 
 
-def test_list_terminals_reconciles_dead_session_before_responding(client, monkeypatch):
-    """GET /api/terminals reaps a dead session so it is not offered."""
-
-    _insert_run("run-live")
-    _insert_run("run-dead")
-    _insert_session(
-        "run-live",
-        task_id="task-1",
-        created_at="2026-05-29T10:00:00",
-        agent="claude-code",
-    )
-    _insert_session(
-        "run-dead", task_id="task-1", created_at="2026-05-29T11:00:00", agent="codex"
-    )
-
-    # Fake reconcile soft-deletes the dead row, mirroring real reaper behavior
-    # without needing a tmux binary; the route must call it before listing.
-    reconcile_calls: list[int] = []
-
-    def fake_reconcile():
-        reconcile_calls.append(1)
-        dao_soft_delete("run-dead", "2026-05-29T12:00:00")
-        return ReconcileResult(soft_deleted=["run-dead"])
-
-    monkeypatch.setattr(
-        terminals_api,
-        "reconcile_terminals",
-        fake_reconcile,
-    )
-
-    response = client.get("/api/terminals", {"task_id": "task-1"})
-
-    assert response.status_code == 200
-    assert reconcile_calls == [1]
-    assert [row["agent_run_id"] for row in response.json()] == ["run-live"]
-
-
-def test_list_terminals_survives_reconcile_failure(client, monkeypatch):
-    """A reaper error degrades to returning the unreconciled list, not a 500."""
-
-    _insert_run("run-live")
-    _insert_session(
-        "run-live",
-        task_id="task-1",
-        created_at="2026-05-29T10:00:00",
-        agent="claude-code",
-    )
-
-    def boom():
-        raise RuntimeError("tmux exploded")
-
-    monkeypatch.setattr(
-        terminals_api,
-        "reconcile_terminals",
-        boom,
-    )
-
-    response = client.get("/api/terminals", {"task_id": "task-1"})
-
-    assert response.status_code == 200
-    assert [row["agent_run_id"] for row in response.json()] == ["run-live"]
-
-
 def test_list_scratch_terminals_returns_active_no_task_sessions(client, monkeypatch):
     """GET /api/terminals/scratch lists active sentinel-task sessions by module."""
 
-    _no_reconcile(monkeypatch)
+    _no_background_reconcile(monkeypatch)
 
     # A scratch run and a task-bound run share one module.
     _insert_run("scratch-run", task_id=SCRATCH_TASK_ID)
@@ -415,7 +378,7 @@ def test_list_scratch_terminals_returns_active_no_task_sessions(client, monkeypa
 
 
 def test_list_scratch_terminals_can_hydrate_all_project_modules(client, monkeypatch):
-    _no_reconcile(monkeypatch)
+    _no_background_reconcile(monkeypatch)
     _insert_run("scratch-one", task_id=SCRATCH_TASK_ID)
     _insert_run("scratch-two", task_id=SCRATCH_TASK_ID)
     _insert_session(
@@ -1119,12 +1082,3 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(
         "run-e2e",
         "exited",
     )
-
-
-def dao_soft_delete(agent_run_id, terminated_at):
-    """Soft-delete a row synchronously for fake reaper/terminate stubs."""
-
-    AgentTerminalSession.objects.filter(
-        agent_run_id=agent_run_id,
-        terminated_at__isnull=True,
-    ).update(terminated_at=terminated_at)

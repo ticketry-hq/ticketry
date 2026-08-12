@@ -97,6 +97,38 @@ def test_execute_graph_uses_generated_transport_at_api_root() -> None:
     assert json.loads(calls[0][2]["body"]) == {"agent": "codex"}
 
 
+@pytest.mark.parametrize(
+    "mode,expected_body",
+    [
+        (None, {"agent": "codex"}),
+        ("parallel", {"agent": "codex", "mode": "parallel"}),
+        ("serial", {"agent": "codex", "mode": "serial"}),
+    ],
+    ids=["omitted", "parallel", "serial"],
+)
+def test_execute_graph_serializes_the_requested_execution_mode(
+    mode, expected_body
+) -> None:
+    from worktracker_sdk import ApiClient, Configuration, ExecutionApi
+
+    calls = []
+
+    def request(method, url, **kwargs):
+        calls.append((method, url, kwargs))
+        return _StubHttpResponse(
+            201,
+            json.dumps({"root_id": ROOT, "launched": []}).encode(),
+            "Created",
+        )
+
+    client = ApiClient(Configuration(host="https://worktracker.test/api"))
+    client.rest_client.pool_manager.request = request
+
+    ExecutionApi(client).execute_graph(ROOT, agent="codex", mode=mode)
+
+    assert json.loads(calls[0][2]["body"]) == expected_body
+
+
 def test_reset_graph_uses_delete_at_api_root() -> None:
     from worktracker_sdk import ApiClient, Configuration, ExecutionApi, ResetGraphOut
 

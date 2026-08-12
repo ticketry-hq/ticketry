@@ -1,5 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../shared/api/client", async () => {
@@ -14,185 +13,29 @@ vi.mock("../shared/api/client", async () => {
   };
 });
 
-import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
-import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
-import { registerModuleRecencyProvider } from "../features/projects";
-import { useStudioStore } from "../features/projects/store";
-import * as api from "../shared/api/client";
-import { queryClient } from "../shared/query/queryClient";
-import type { Module, Project, WorkItem } from "../shared/api/types";
+import { loadModules, loadProjects } from "../features/projects";
+import type { WorkItem } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
+import { dragModule } from "./moduleDragGestures";
+import {
+  PROJECT_ID,
+  deferred,
+  listModules,
+  listProjects,
+  modules,
+  moved,
+  project,
+  renderAutomaticProject,
+  reorderWorkItem,
+  resetModuleReorderHarness,
+  rowFor,
+  rows,
+  sidebarOrder,
+  tabStripOrder,
+} from "./moduleReorderHarness";
 
-const listModules = api.listModules as ReturnType<typeof vi.fn>;
-const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
-const reorderWorkItem = api.reorderWorkItem as ReturnType<typeof vi.fn>;
-
-const PROJECT_ID = "project-1";
-
-function modules(...ids: string[]): Module[] {
-  return ids.map((id, index) => ({
-    id,
-    name: id.replace("module-", "").toUpperCase(),
-    project_id: PROJECT_ID,
-    key: id.toUpperCase(),
-    sequence_id: ids.length - index,
-    is_archived: false,
-    issue_type: "module",
-  })) as unknown as Module[];
-}
-
-function project(manual_module_order: boolean): Project {
-  return {
-    id: PROJECT_ID,
-    name: "Project",
-    slug: "PRJ",
-    description: "",
-    manual_module_order,
-  } as Project;
-}
-
-/** Both reorder-visible surfaces at once: they read one cached order. */
-function ModuleSurfaces() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ModulesPane />
-      <ModuleTabStrip />
-    </QueryClientProvider>
-  );
-}
-
-function rows(): HTMLElement[] {
-  return Array.from(
-    document.querySelectorAll<HTMLElement>("li[data-module-id]"),
-  );
-}
-
-function sidebarOrder(): string[] {
-  return rows().map((row) => row.dataset.moduleId ?? "");
-}
-
-function rowFor(moduleId: string): HTMLElement {
-  return rows().find((row) => row.dataset.moduleId === moduleId)!;
-}
-
-function tabStripOrder(): string[] {
-  return screen.getAllByRole("tab").map((tab) => tab.getAttribute("aria-label") ?? "");
-}
-
-function dataTransfer(): DataTransfer {
-  const values = new Map<string, string>();
-  return {
-    dropEffect: "none",
-    effectAllowed: "none",
-    files: [] as unknown as FileList,
-    items: [] as unknown as DataTransferItemList,
-    get types() {
-      return [...values.keys()];
-    },
-    clearData: (type?: string) => (type ? values.delete(type) : values.clear()),
-    getData: (type: string) => values.get(type) ?? "",
-    setData: (type: string, value: string) => values.set(type, value),
-  } as unknown as DataTransfer;
-}
-
-function dragEvent(
-  target: Element,
-  type: string,
-  transfer: DataTransfer,
-  clientY = 0,
-) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
-    dataTransfer: { value: transfer },
-    clientY: { value: clientY },
-  });
-  fireEvent(target, event);
-}
-
-const ROW_HEIGHT = 20;
-
-/** Give the rendered rows a real vertical layout so midpoints can resolve. */
-function layoutRows(): Map<string, HTMLElement> {
-  const byId = new Map<string, HTMLElement>();
-  rows().forEach((row, index) => {
-    const top = index * ROW_HEIGHT;
-    Object.defineProperty(row, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({
-        top,
-        bottom: top + ROW_HEIGHT,
-        height: ROW_HEIGHT,
-        left: 0,
-        right: 200,
-        width: 200,
-      }),
-    });
-    byId.set(row.dataset.moduleId ?? "", row);
-  });
-  return byId;
-}
-
-/** Drag one sidebar module onto the near (top) or far (bottom) half of another. */
-function dragModule(
-  sourceId: string,
-  targetId: string,
-  edge: "near" | "far",
-  { drop = true }: { drop?: boolean } = {},
-) {
-  const laidOut = layoutRows();
-  const source = laidOut.get(sourceId)!;
-  const target = laidOut.get(targetId)!;
-  const rect = target.getBoundingClientRect();
-  const clientY = edge === "near" ? rect.top + 2 : rect.bottom - 2;
-  const transfer = dataTransfer();
-
-  dragEvent(source, "dragstart", transfer);
-  dragEvent(target, "dragover", transfer, clientY);
-  if (drop) dragEvent(target, "drop", transfer, clientY);
-  return { source, target, transfer };
-}
-
-function moved(id: string): WorkItem {
-  return { id, rank: "V" } as unknown as WorkItem;
-}
-
-function deferred<T>() {
-  let settle!: { resolve: (value: T) => void; reject: (error: Error) => void };
-  const promise = new Promise<T>((resolve, reject) => {
-    settle = { resolve, reject };
-  });
-  return { promise, ...settle };
-}
-
-/** The recency-sorted order an automatic project actually shows: a, b, c. */
-async function renderAutomaticProject(): Promise<void> {
-  listModules.mockResolvedValue(modules("module-c", "module-b", "module-a"));
-  listProjects.mockResolvedValue([project(false)]);
-  registerModuleRecencyProvider(async () => ({
-    "module-a": "2026-08-09T12:00:00Z",
-    "module-b": "2026-08-09T09:00:00Z",
-  }));
-
-  render(<ModuleSurfaces />);
-  await waitFor(() =>
-    expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
-  );
-}
-
-describe("module reorder acceptance", () => {
-  beforeEach(() => {
-    queryClient.clear();
-    listModules.mockReset();
-    listProjects.mockReset();
-    reorderWorkItem.mockReset().mockResolvedValue(moved("module-c"));
-    registerModuleRecencyProvider(async () => ({}));
-    useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
-    useClientStore.setState({
-      selectedModuleId: null,
-      modulesCursorId: null,
-      toasts: [],
-    });
-  });
+describe("module sidebar reorder acceptance", () => {
+  beforeEach(resetModuleReorderHarness);
 
   it("[overhaul-42] freezes the visible module order on the first sidebar drag", async () => {
     await renderAutomaticProject();
@@ -245,6 +88,73 @@ describe("module reorder acceptance", () => {
     );
     expect(tabStripOrder()).toEqual(["C", "A", "B"]);
     expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true);
+  });
+
+  it("keeps an accepted first drag when the project refresh fails", async () => {
+    await renderAutomaticProject();
+
+    // The write is accepted — which is what takes the project manual — and the
+    // server now returns its persisted rank order. Only the project read fails,
+    // so the sole thing left claiming "automatic" is the stale cached project.
+    const settle = deferred<WorkItem>();
+    reorderWorkItem.mockReturnValue(settle.promise);
+    listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
+    listProjects.mockRejectedValue(new Error("offline"));
+
+    dragModule("module-c", "module-a", "near");
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
+    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
+
+    settle.resolve(moved("module-c"));
+
+    // Recency still names a the most recent module. Layering it back on would
+    // restore a, b, c and visually undo the drag the server just accepted.
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true),
+    );
+    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
+    expect(tabStripOrder()).toEqual(["C", "A", "B"]);
+
+    // Once the project list is readable again it is authoritative, and the
+    // remembered reorder steps aside for it.
+    listProjects.mockResolvedValue([project(false)]);
+    listModules.mockResolvedValue(modules("module-c", "module-b", "module-a"));
+    await loadModules(PROJECT_ID);
+
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
+    );
+  });
+
+  it("[overhaul-59] ignores a projects read that predates an accepted first drag", async () => {
+    await renderAutomaticProject();
+
+    // Another consumer starts refreshing projects while the project is still
+    // automatic. Keep that old answer in flight across the accepted reorder.
+    const staleProjects = deferred<ReturnType<typeof project>[]>();
+    listProjects.mockReturnValueOnce(staleProjects.promise);
+    const staleLoad = loadProjects().catch(() => undefined);
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+
+    const settle = deferred<WorkItem>();
+    reorderWorkItem.mockReturnValue(settle.promise);
+    listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
+    listProjects.mockResolvedValue([project(true)]);
+
+    dragModule("module-c", "module-a", "near");
+    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
+    settle.resolve(moved("module-c"));
+
+    // Settlement must retire the pre-reorder request and start a new mode read.
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(3));
+    staleProjects.resolve([project(false)]);
+    await staleLoad;
+
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
+    );
+    expect(tabStripOrder()).toEqual(["C", "A", "B"]);
   });
 
   it("[overhaul-44] restores the previous order when a reorder is refused, and retries", async () => {

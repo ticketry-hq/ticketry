@@ -85,23 +85,6 @@ impl Drop for TemporarySqliteProfile {
 
 fn main() {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
-    if arguments
-        .first()
-        .is_some_and(|argument| argument == "--muxed-ghostty-bridge")
-    {
-        let Some(path) = arguments.get(1) else {
-            eprintln!("missing native terminal bridge socket path");
-            std::process::exit(2);
-        };
-        if let Err(error) =
-            muxed_studio_lib::native_terminal::run_bridge(std::path::Path::new(&path))
-        {
-            eprintln!("native terminal bridge failed: {error}");
-            std::process::exit(1);
-        }
-        return;
-    }
-
     let temporary_profile = if arguments
         .iter()
         .any(|argument| argument == TEMP_SQLITE_FLAG)

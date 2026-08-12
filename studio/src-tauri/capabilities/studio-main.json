@@ -20,6 +20,8 @@
     "allow-native-terminal-available",
     "allow-native-terminal-attach",
     "allow-native-terminal-set-frame",
+    "allow-native-terminal-hide",
+    "allow-native-terminal-show",
     "allow-native-terminal-focus",
     "allow-native-terminal-detach",
     "core:event:allow-listen",

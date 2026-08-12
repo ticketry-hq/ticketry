@@ -24,6 +24,8 @@ fn main() {
             "native_terminal_available",
             "native_terminal_attach",
             "native_terminal_set_frame",
+            "native_terminal_hide",
+            "native_terminal_show",
             "native_terminal_focus",
             "native_terminal_detach",
         ]),
@@ -92,6 +94,13 @@ fn build_native_libghostty() {
         "cargo:rerun-if-changed={}",
         manifest.join("native/libghostty_host.m").display()
     );
+    for source in [
+        "native/libghostty_runtime.m",
+        "native/libghostty_view.m",
+        "native/libghostty_view_bridge.m",
+    ] {
+        println!("cargo:rerun-if-changed={}", manifest.join(source).display());
+    }
     println!(
         "cargo:rerun-if-changed={}",
         vendor.join("REVISION").display()

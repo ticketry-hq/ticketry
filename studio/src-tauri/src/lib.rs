@@ -21,6 +21,12 @@ use supervisor::{CommandTable, Supervisor, SupervisorError, SupervisorEvent, Sup
 
 pub mod discovery;
 pub mod native_terminal;
+pub mod native_terminal_frames;
+mod native_terminal_preparation;
+pub mod native_terminal_scroll;
+#[cfg(any(test, all(target_os = "macos", feature = "native-libghostty")))]
+mod native_terminal_visibility;
+pub mod native_terminal_worker;
 pub mod ownership;
 mod release_manifest;
 pub mod supervisor;
@@ -103,6 +109,19 @@ fn release_data_directory_ownership(application: &tauri::AppHandle) {
             );
         }
     }
+}
+
+fn detach_transient_viewers(application: &tauri::AppHandle) {
+    // These views live outside the WebView. Detaching them on both page reload
+    // and application exit prevents a stale native surface from covering the
+    // freshly loaded Studio layout without signalling or killing durable tmux
+    // sessions.
+    application
+        .state::<viewer_commands::ViewerCommandState>()
+        .detach_all();
+    application
+        .state::<native_terminal::NativeTerminalState>()
+        .detach_all();
 }
 
 fn shutdown_packaged_backend(application: &tauri::AppHandle) {
@@ -1000,7 +1019,10 @@ pub fn run() {
             viewer_commands::viewer_status,
             native_terminal::native_terminal_available,
             native_terminal::native_terminal_attach,
+            native_terminal::native_terminal_reconcile_frame,
             native_terminal::native_terminal_set_frame,
+            native_terminal::native_terminal_hide,
+            native_terminal::native_terminal_show,
             native_terminal::native_terminal_focus,
             native_terminal::native_terminal_detach
         ])
@@ -1075,6 +1097,11 @@ pub fn run() {
         })
         .on_page_load(|webview, payload| {
             if webview.label() == MAIN_WINDOW_LABEL
+                && payload.event() == tauri::webview::PageLoadEvent::Started
+            {
+                detach_transient_viewers(webview.app_handle());
+            }
+            if webview.label() == MAIN_WINDOW_LABEL
                 && payload.event() == tauri::webview::PageLoadEvent::Finished
                 && env::var(SMOKE_EXIT_AFTER_STARTUP).as_deref() == Ok("1")
             {
@@ -1107,15 +1134,7 @@ pub fn run() {
                 Some(DesktopLifecycleEvent::MainWindowCloseRequested)
             }
             tauri::RunEvent::Exit => {
-                // Detach transient PTY viewers before stopping desktop
-                // services. This intentionally does not signal or kill tmux,
-                // whose sessions remain the durable owner of agent runs.
-                application
-                    .state::<viewer_commands::ViewerCommandState>()
-                    .detach_all();
-                application
-                    .state::<native_terminal::NativeTerminalState>()
-                    .detach_all();
+                detach_transient_viewers(application);
                 shutdown_packaged_backend(application);
                 release_data_directory_ownership(application);
                 Some(DesktopLifecycleEvent::ApplicationShutdown)

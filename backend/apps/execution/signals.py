@@ -13,6 +13,7 @@ from apps.runs.models import AutomationAttempt
 from apps.runs.projections import automation_attempt_record
 from apps.terminals.launch_configuration import resolve_task_launch_configuration
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
+from apps.terminals.termination_seam import agent_run_terminated
 from worktracker.models import Issue
 
 logger = logging.getLogger(__name__)
@@ -144,3 +145,29 @@ def observe_completion(
         )
     except Exception:
         logger.exception("execution observer failed issue=%s", issue_id)
+
+
+@receiver(
+    agent_run_terminated,
+    dispatch_uid="execution_observe_agent_run_terminated",
+)
+def observe_agent_run_completion(
+    sender,
+    agent_run_id,
+    **kwargs,
+) -> None:
+    """Observe durable agent/terminal termination best-effort.
+
+    The scheduling decision stays in the driver; this receiver only carries the
+    lifecycle fact across the app boundary and must never let a scheduling
+    failure propagate back into terminal reconciliation.
+    """
+
+    try:
+        driver.observe_agent_run_terminated(
+            agent_run_id=str(agent_run_id),
+        )
+    except Exception:
+        logger.exception(
+            "execution observer failed agent_run=%s", agent_run_id
+        )

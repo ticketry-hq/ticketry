@@ -1,11 +1,7 @@
 import {
-  Terminal,
+  RetainedTerminalViewers,
   type ForegroundOwner,
 } from "../../../../../features/agents/terminal";
-import {
-  useTerminalStore,
-  useWorkspaceTabsStore,
-} from "../../../../../features/agents/terminal/appNavigation";
 
 /**
  * The Studio terminal host: derives WHICH session the workspace shows —
@@ -19,16 +15,21 @@ export function SelectedTicketTerminal({
   owner = "studio",
   focusSignal = 0,
   active = true,
+  onNativeVisibilityPendingChange,
 }: {
   bucket: string | null;
   owner?: ForegroundOwner;
   focusSignal?: number;
   active?: boolean;
+  onNativeVisibilityPendingChange?: (runId: string, pending: boolean) => void;
 }) {
-  const activeByTask = useWorkspaceTabsStore((s) => s.activeByTask);
-  const sessions = useTerminalStore((s) => s.sessions);
-  const activeId = bucket ? activeByTask[bucket] : undefined;
-  const visibleId = active && activeId && sessions[activeId] ? activeId : null;
-
-  return <Terminal sessionId={visibleId} owner={owner} focusSignal={focusSignal} />;
+  return (
+    <RetainedTerminalViewers
+      bucket={bucket}
+      owner={owner}
+      focusSignal={focusSignal}
+      active={active}
+      onNativeVisibilityPendingChange={onNativeVisibilityPendingChange}
+    />
+  );
 }

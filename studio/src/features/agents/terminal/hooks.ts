@@ -7,7 +7,11 @@ import {
 import { launchAgent } from "./internal/actions";
 import type { SessionId, TaskId } from "../types";
 import type { LifecycleState } from "./lifecycle";
-import { selectRunState, useAgentStatusStore } from "../status";
+import {
+  isLiveAgentRunState,
+  selectRunState,
+  useAgentStatusStore,
+} from "../status";
 import type { RunRecord } from "../status";
 import { bucketOfMeta, dismissedRunsFor } from "./internal/sessionStore";
 import { useClientStore as useWorkspaceTabsStore } from "../../../state/clientStore";
@@ -56,20 +60,26 @@ export function deriveTaskSessions(
         left.sessionId.localeCompare(right.sessionId);
     })
     .map((meta) => {
+      const runState = selectRunState(
+        {
+          projectId: null,
+          runs,
+          automationAttempts: {},
+          automationByTask: {},
+        },
+        meta.agentRunId ?? "",
+      );
+      // `session_lost` is a transport verdict about one viewer attach; the
+      // pushed run projection is authoritative for the run itself. A run the
+      // projection reports alive must not be presented as lost just because
+      // an earlier viewer failed to attach (the backend may have healed the
+      // session since).
       const lifecycle: LifecycleState =
         meta.status === "reconnecting"
           ? "reconnecting"
-          : meta.status === "session_lost"
+          : meta.status === "session_lost" && !isLiveAgentRunState(runState)
             ? "lost"
-          : (selectRunState(
-              {
-                projectId: null,
-                runs,
-                automationAttempts: {},
-                automationByTask: {},
-              },
-              meta.agentRunId ?? "",
-            ) ?? "unknown");
+            : (runState ?? "unknown");
       return { id: meta.sessionId, meta, lifecycle };
     });
 }

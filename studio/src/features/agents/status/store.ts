@@ -45,6 +45,29 @@ function putRun(data: AgentStatusData, incoming: RunRecord): void {
   data.runs[incoming.agent_run_id] = incoming;
 }
 
+/**
+ * Snapshot write rule. A snapshot is the first frame on its socket and every
+ * backend ending is published only after its transaction commits, so a
+ * snapshot that lists a run as alive is authoritative: a terminal state held
+ * locally that the snapshot contradicts was either fabricated here (a run a
+ * previous snapshot raced past) or has since been repaired server-side. A
+ * quiet run's authoritative record keeps its last hook timestamp — often
+ * hours old — so waiting for a strictly newer frame would leave the wrong
+ * "terminated" pinned until the agent happens to emit again.
+ */
+function putSnapshotRun(data: AgentStatusData, incoming: RunRecord): void {
+  const current = data.runs[incoming.agent_run_id];
+  if (
+    current &&
+    TERMINAL_STATES.has(current.state) &&
+    !TERMINAL_STATES.has(incoming.state)
+  ) {
+    data.runs[incoming.agent_run_id] = incoming;
+    return;
+  }
+  putRun(data, incoming);
+}
+
 function mutableCopy(state: AgentStatusData): AgentStatusData {
   return {
     projectId: state.projectId,
@@ -126,15 +149,19 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
     set((state) => {
       const next = mutableCopy(state);
       const listed = new Set(records.map((record) => record.agent_run_id));
-      for (const record of records) putRun(next, record);
+      for (const record of records) putSnapshotRun(next, record);
 
       for (const run of Object.values(next.runs)) {
         const inScope = scope.task_id === null || run.task_id === scope.task_id;
+        // Only a run strictly older than the snapshot stamp may be reconciled
+        // as absent: the stamp is taken before the backend reads its rows, so
+        // a run spawned while they were read is newer than ``at`` and must
+        // not be declared exited by the snapshot that raced past it.
         if (
           inScope &&
           !listed.has(run.agent_run_id) &&
           run.state !== "exited" &&
-          !isOlder(at, run.updated_at)
+          isOlder(run.updated_at, at)
         ) {
           next.runs[run.agent_run_id] = { ...run, state: "exited", updated_at: at };
         }

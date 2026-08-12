@@ -27,12 +27,19 @@ export interface HttpFixture {
   runs(issueId: string, runs: RunRecord[]): void;
   documents(issueId: string, docs: DesignDoc[]): void;
   attachments(issueId: string, attachments: Attachment[]): void;
+  transitionRank(id: string, rank: string): void;
   expectPatch(id: string, body: unknown): Promise<void>;
   expectReorder(
     id: string,
     body: { before_id: string | null; after_id: string | null },
   ): Promise<void>;
   graphRunCount(id: string): number;
+  graphRunModes(id: string): Array<string | null>;
+  /** Fails the next graph-run POST only, leaving other requests untouched. */
+  failNextGraphRun(status: number, body?: unknown): void;
+  /** Holds graph-run responses until the returned release is called. */
+  holdGraphRuns(): () => void;
+  setSubtreeRunEnabled(enabled: boolean): void;
   failNext(status: number, body?: unknown): void;
 }
 
@@ -57,6 +64,12 @@ interface ReorderCall {
   body: { before_id: string | null; after_id: string | null };
 }
 
+interface GraphRunCall {
+  id: string;
+  /** The requested execution mode, or null when the caller omitted it. */
+  mode: string | null;
+}
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -73,7 +86,11 @@ class BoundaryFixture implements StudioFixture {
   readonly attachmentRows = new Map<string, Attachment[]>();
   readonly patches: PatchCall[] = [];
   readonly reorders: ReorderCall[] = [];
-  readonly graphRuns: string[] = [];
+  readonly graphRuns: GraphRunCall[] = [];
+  private graphRunFailures: Array<{ status: number; body: unknown }> = [];
+  private graphRunGate: Promise<void> | null = null;
+  private subtreeRunEnabled = true;
+  private readonly transitionRanks = new Map<string, string>();
   private nextFailure: { status: number; body: unknown } | null = null;
   private patchWaiters: Array<{
     id: string;
@@ -164,6 +181,10 @@ class BoundaryFixture implements StudioFixture {
     this.attachmentRows.set(issueId, attachments);
   }
 
+  transitionRank(id: string, rank: string): void {
+    this.transitionRanks.set(id, rank);
+  }
+
   expectPatch(id: string, body: unknown): Promise<void> {
     if (this.patches.some((call) => call.id === id && deepEqual(call.body, body))) {
       return Promise.resolve();
@@ -179,7 +200,32 @@ class BoundaryFixture implements StudioFixture {
   }
 
   graphRunCount(id: string): number {
-    return this.graphRuns.filter((candidate) => candidate === id).length;
+    return this.graphRuns.filter((candidate) => candidate.id === id).length;
+  }
+
+  graphRunModes(id: string): Array<string | null> {
+    return this.graphRuns
+      .filter((candidate) => candidate.id === id)
+      .map((candidate) => candidate.mode);
+  }
+
+  failNextGraphRun(status: number, body: unknown = null): void {
+    this.graphRunFailures.push({ status, body });
+  }
+
+  holdGraphRuns(): () => void {
+    let release = (): void => {};
+    this.graphRunGate = new Promise<void>((resolve) => {
+      release = () => {
+        this.graphRunGate = null;
+        resolve();
+      };
+    });
+    return release;
+  }
+
+  setSubtreeRunEnabled(enabled: boolean): void {
+    this.subtreeRunEnabled = enabled;
   }
 
   failNext(status: number, body: unknown = null): void {
@@ -249,7 +295,7 @@ class BoundaryFixture implements StudioFixture {
           id: bindings.size + 1,
           issue_type: item.issue_type,
           state: item.state,
-          subtree_run_enabled: true,
+          subtree_run_enabled: this.subtreeRunEnabled,
           workflow_revision: 1,
           created_at: "2026-08-08T10:00:00Z",
           updated_at: "2026-08-08T10:00:00Z",
@@ -277,7 +323,11 @@ class BoundaryFixture implements StudioFixture {
     );
     if (method === "POST" && graphRunMatch) {
       const id = decodeURIComponent(graphRunMatch[1]);
-      this.graphRuns.push(id);
+      const body = await requestBody(request, init) as { mode?: string };
+      this.graphRuns.push({ id, mode: body.mode ?? null });
+      const failure = this.graphRunFailures.shift();
+      if (this.graphRunGate) await this.graphRunGate;
+      if (failure) return json(failure.body, failure.status);
       return json({ root_id: id, launched: [] }, 201);
     }
     const attachmentMatch = path.match(
@@ -303,6 +353,9 @@ class BoundaryFixture implements StudioFixture {
         ...body,
         state,
         issue_type: issueType,
+        rank: body.state_id === undefined
+          ? current.rank
+          : this.transitionRanks.get(id) ?? current.rank,
         parent_id: body.parent_id === undefined ? current.parent_id : body.parent_id,
       };
       this.items.set(id, updated);
@@ -429,10 +482,12 @@ function StudioBehaviourSurface({ children }: { children?: ReactNode }) {
 export function mountStudio({
   http,
   selectedTaskId = null,
+  children,
 }: {
   http: HttpFixture;
   route?: string;
   selectedTaskId?: string | null;
+  children?: ReactNode;
 }): RenderResult {
   if (!(http instanceof BoundaryFixture)) {
     throw new Error("mountStudio requires the HTTP fixture returned by fixture().");
@@ -467,7 +522,7 @@ export function mountStudio({
   });
   void loadModuleTree(http.projectId(), http.firstModuleId());
 
-  return render(<StudioBehaviourSurface />);
+  return render(<StudioBehaviourSurface>{children}</StudioBehaviourSurface>);
 }
 
 afterEach(() => {

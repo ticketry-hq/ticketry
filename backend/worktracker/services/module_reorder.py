@@ -31,6 +31,16 @@ from worktracker.services.errors import NotFoundError, ValidationError
 def reorder_module(issue, before_id=None, after_id=None, initial_order_ids=None):
     """Place one module between its neighbors, seeding manual mode if needed."""
 
+    if before_id is None and after_id is None:
+        raise ValidationError("A module reorder requires at least one neighbor.")
+
+    # An archived module is not in the order anyone can see, so it has nothing
+    # to be dragged within. Rejecting it here — before the project row is even
+    # locked — keeps an invisible module from seeding the active baseline into
+    # ranks and flipping the project into manual mode on its way through.
+    if issue.is_archived:
+        raise ValidationError("An archived module cannot be reordered.")
+
     with transaction.atomic():
         project = (
             Project.objects.select_for_update().filter(pk=issue.project_id).first()
@@ -111,4 +121,9 @@ def _module_neighbor(issue, neighbor_id):
         raise ValidationError("Neighbor belongs to another project.")
     if neighbor.type != "module":
         raise ValidationError("A module may only be ranked against modules.")
+    if neighbor.is_archived:
+        # The canonical collection never shows an archived module, so it is
+        # never a gap the user could drop into: honoring it would rank the
+        # moved module against a position nobody can see.
+        raise ValidationError("An archived module is not a drop neighbor.")
     return neighbor

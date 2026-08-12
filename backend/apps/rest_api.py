@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 
 from apps.documents import api as documents
 from apps.execution import api as execution
+from apps.execution.execution_mode import EXECUTION_MODE_CHOICES
 from apps.runs import api as runs
 from apps.settings_store import api as settings
 from apps.settings_store.schemas import ProfileBody
@@ -272,6 +273,13 @@ class DiscardSerializer(serializers.Serializer):
 
 class AgentOverrideSerializer(serializers.Serializer):
     agent = serializers.CharField(required=False)
+
+
+class GraphRunRequestSerializer(serializers.Serializer):
+    """Graph-run create body: provider override plus execution mode."""
+
+    agent = serializers.CharField(required=False)
+    mode = serializers.ChoiceField(choices=EXECUTION_MODE_CHOICES, required=False)
 
 
 class GraphNodeSerializer(serializers.Serializer):
@@ -564,7 +572,7 @@ class GraphRunView(AuthenticatedAPIView):
     def get(self, request, issue_id):
         return _serialize_result(execution.get_dependency_graph(issue_id))
 
-    @extend_schema(operation_id="workItemsGraphRunCreate", tags=["execution"], request=AgentOverrideSerializer, responses={201: GraphRunResultSerializer, 404: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer, 422: ErrorEnvelopeSerializer})
+    @extend_schema(operation_id="workItemsGraphRunCreate", tags=["execution"], request=GraphRunRequestSerializer, responses={201: GraphRunResultSerializer, 404: ErrorEnvelopeSerializer, 409: ErrorEnvelopeSerializer, 422: ErrorEnvelopeSerializer})
     def post(self, request, issue_id):
         return _serialize_result(execution.create_execute_graph(issue_id, _pydantic(execution.ExecuteGraphIn, request.data)))
 

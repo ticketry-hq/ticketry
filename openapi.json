@@ -3329,17 +3329,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/AgentOverride"
+                                "$ref": "#/components/schemas/GraphRunRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/AgentOverride"
+                                "$ref": "#/components/schemas/GraphRunRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/AgentOverride"
+                                "$ref": "#/components/schemas/GraphRunRequest"
                             }
                         }
                     }
@@ -4395,6 +4395,26 @@
                     "cleared",
                     "root_id"
                 ]
+            },
+            "GraphRunExecutionModeEnum": {
+                "enum": [
+                    "parallel",
+                    "serial"
+                ],
+                "type": "string",
+                "description": "* `parallel` - Parallel\n* `serial` - Serial"
+            },
+            "GraphRunRequest": {
+                "type": "object",
+                "description": "Graph-run create body: provider override plus execution mode.",
+                "properties": {
+                    "agent": {
+                        "type": "string"
+                    },
+                    "mode": {
+                        "$ref": "#/components/schemas/GraphRunExecutionModeEnum"
+                    }
+                }
             },
             "GraphRunResult": {
                 "type": "object",

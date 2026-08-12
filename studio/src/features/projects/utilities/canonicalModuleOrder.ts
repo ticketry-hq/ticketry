@@ -1,4 +1,8 @@
 import { fetchModuleActivity, sortModulesByRecency } from "./moduleRecency";
+import {
+  forgetNewlyCreatedModules,
+  newlyCreatedModulesAwaitingActivity,
+} from "../internal/newlyCreatedModules";
 import type { Module, Project } from "../../../shared/api/types";
 
 /**
@@ -11,7 +15,8 @@ import type { Module, Project } from "../../../shared/api/types";
  * top of that server order:
  *
  * - **Automatic**: agent-activity recency, newest activity first, over the
- *   server order. An activity lookup failure is already swallowed by
+ *   server order, with modules this client has just created still leading it
+ *   (#366). An activity lookup failure is already swallowed by
  *   `fetchModuleActivity` into an empty map, which leaves the server's
  *   fallback order exactly as it arrived.
  * - **Manual module order**: nothing. The server order *is* the arrangement a
@@ -36,6 +41,24 @@ export async function applyCanonicalModuleOrder(
   serverOrder: Module[],
   manualModuleOrder: boolean,
 ): Promise<Module[]> {
-  if (manualModuleOrder) return serverOrder;
-  return sortModulesByRecency(serverOrder, await fetchModuleActivity(projectId));
+  if (manualModuleOrder) {
+    // Manual order already gives newly created modules their front placement
+    // through persisted rank. Retire any local create pins on this read so a
+    // future return to automatic mode cannot resurrect stale front placement.
+    forgetNewlyCreatedModules(projectId);
+    return serverOrder;
+  }
+  const activity = await fetchModuleActivity(projectId);
+  const byRecency = sortModulesByRecency(serverOrder, activity);
+  // A module just created here has no activity, so recency alone would file it
+  // behind every module that has ever been worked in and undo the front
+  // placement the server's fallback order gave it (Decision 4 / Story 17). Lift
+  // those modules back to the front; recency owns the arrangement of the rest,
+  // and of these too once they earn activity of their own.
+  const leading = newlyCreatedModulesAwaitingActivity(projectId, byRecency, activity);
+  if (leading.size === 0) return byRecency;
+  return [
+    ...byRecency.filter((module) => leading.has(module.id)),
+    ...byRecency.filter((module) => !leading.has(module.id)),
+  ];
 }

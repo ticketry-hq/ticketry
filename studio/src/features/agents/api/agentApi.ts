@@ -3,8 +3,7 @@ import type {
   PersistedTerminalSession,
   ResumableTerminalSession,
 } from "../types";
-import { agentApiUrl } from "../../../runtime";
-import { apiKey } from "../../../shared/api/client";
+import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
 export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
 
 export class ApiError extends Error {
@@ -19,16 +18,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const key = apiKey();
-  const response = await fetch(agentApiUrl(path), {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      ...(key ? { "x-api-key": key } : {}),
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+  const response = await authenticatedHostFetch(path, init);
   const text = await response.text();
   let body: unknown = null;
   if (text) {

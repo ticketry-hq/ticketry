@@ -5,7 +5,8 @@
 //! mechanics remain private to the implementation behind it.
 
 use crate::tmux_viewer::{
-    TmuxScrollDirection, TmuxViewer, TmuxViewerControl, TmuxViewerError, ViewerOutcome,
+    TmuxCommandViewer, TmuxCommandViewerControl, TmuxScrollDirection, TmuxViewer,
+    TmuxViewerControl, TmuxViewerError, ViewerOutcome,
 };
 use std::fmt;
 use std::io::Read;
@@ -100,6 +101,11 @@ pub struct TerminalAttachment(TmuxViewer);
 
 pub struct TerminalAttachmentControl(TmuxViewerControl);
 
+/// A direct command attachment for terminal emulators that own their PTY.
+pub struct TerminalCommandAttachment(TmuxCommandViewer);
+
+pub struct TerminalCommandAttachmentControl(TmuxCommandViewerControl);
+
 impl TerminalAttachment {
     pub fn attach(
         agent_run_id: &str,
@@ -143,6 +149,40 @@ impl TerminalAttachmentControl {
             .poll_client_exit()
             .map(|outcome| outcome.map(Into::into))
             .map_err(Into::into)
+    }
+
+    pub fn detach(self) -> Result<AttachmentOutcome, TerminalAttachmentError> {
+        self.0.detach().map(Into::into).map_err(Into::into)
+    }
+}
+
+impl TerminalCommandAttachment {
+    pub fn prepare(agent_run_id: &str) -> Result<Self, TerminalAttachmentError> {
+        TmuxCommandViewer::prepare(agent_run_id)
+            .map(Self)
+            .map_err(Into::into)
+    }
+
+    pub fn command(&self) -> &str {
+        self.0.command()
+    }
+
+    pub fn into_control(self) -> TerminalCommandAttachmentControl {
+        TerminalCommandAttachmentControl(self.0.into_control())
+    }
+}
+
+impl TerminalCommandAttachmentControl {
+    pub fn resize(&self, columns: u16, rows: u16) -> Result<(), TerminalAttachmentError> {
+        self.0.resize(columns, rows).map_err(Into::into)
+    }
+
+    pub fn scroll(
+        &self,
+        direction: TerminalScrollDirection,
+        lines: u16,
+    ) -> Result<(), TerminalAttachmentError> {
+        self.0.scroll(direction.into(), lines).map_err(Into::into)
     }
 
     pub fn detach(self) -> Result<AttachmentOutcome, TerminalAttachmentError> {

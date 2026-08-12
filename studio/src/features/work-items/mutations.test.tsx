@@ -193,12 +193,16 @@ describe("work-item optimistic mutations", () => {
           ?.state,
       ).toEqual(REVIEW.id),
     );
-    requests[2].resolve(workItem({ state: REVIEW.id }));
+    requests[2].resolve(workItem({ state: REVIEW.id, rank: "server-landing" }));
     await waitFor(() => expect(result.current.state.isSuccess).toBe(true));
     expect(
       client.getQueryData<WorkItem>(queryKeys.workItems.byId(original.id))
         ?.state,
     ).toEqual(REVIEW.id);
+    expect(
+      client.getQueryData<WorkItem>(queryKeys.workItems.byId(original.id))
+        ?.rank,
+    ).toBe("server-landing");
 
     expect(vi.mocked(api.patchWorkItem).mock.calls).toEqual([
       [original.id, { description: "New description" }],
@@ -279,6 +283,7 @@ describe("work-item optimistic mutations", () => {
 
   it("sends neighbor ids, paints a provisional rank, and reconciles the server rank", async () => {
     const client = testClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
     const moved = workItem({ id: "moved", rank: "z" });
     client.setQueryData(queryKeys.workItems.byId(moved.id), moved);
     client.setQueryData(
@@ -320,6 +325,10 @@ describe("work-item optimistic mutations", () => {
     expect(
       client.getQueryData<WorkItem>(queryKeys.workItems.byId(moved.id))?.rank,
     ).toBe("M");
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.workItems.byId(moved.id),
+      exact: true,
+    });
   });
 
   it("keeps creation pending without a temporary cache id and refreshes membership when it lands", async () => {

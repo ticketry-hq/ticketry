@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 describe("native Ghostty safe-area mapping acceptance", () => {
   it("maps browser viewport coordinates through the AppKit safe-area origin", async () => {
     const hostSource = await readFile(
-      `${process.cwd()}/src-tauri/native/libghostty_host.m`,
+      `${process.cwd()}/src-tauri/native/libghostty_view_bridge.m`,
       "utf8",
     );
 

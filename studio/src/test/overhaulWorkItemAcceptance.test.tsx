@@ -2,32 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { describe, expect, it } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
 import { setStatesSorted } from "../shared/query/stateCatalog";
-
-function dataTransfer(): DataTransfer {
-  const values = new Map<string, string>();
-  return {
-    dropEffect: "none",
-    effectAllowed: "none",
-    files: [] as unknown as FileList,
-    items: [] as unknown as DataTransferItemList,
-    get types() {
-      return [...values.keys()];
-    },
-    clearData: (type?: string) => (type ? values.delete(type) : values.clear()),
-    getData: (type: string) => values.get(type) ?? "",
-    setData: (type: string, value: string) => values.set(type, value),
-    setDragImage: () => undefined,
-  };
-}
-
-function drag(target: Element, type: string, transfer: DataTransfer, clientY = 0) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
-    dataTransfer: { value: transfer },
-    clientY: { value: clientY },
-  });
-  fireEvent(target, event);
-}
+import { dragWorkItem } from "./workItemDragGestures";
 
 describe("overhaul acceptance — Stories and details", () => {
   it("[overhaul-25] keeps held work items in a state section after its catalog name changes", async () => {
@@ -241,6 +216,13 @@ describe("overhaul acceptance — Stories and details", () => {
 
     await patched;
     await waitFor(() => {
+      const stateSections = within(stories).getAllByRole("button", {
+        name: /^Collapse (Ideas|Grill)$/,
+      });
+      expect(stateSections[0]).toHaveAccessibleName("Collapse Ideas");
+      expect(
+        within(stories).queryByRole("button", { name: "Collapse Idea" }),
+      ).toBeNull();
       expect(within(stories).getByRole("button", { name: "Collapse Grill" }))
         .toHaveTextContent("Grill0");
       expect(within(stories).getByRole("button", { name: "Collapse Ideas" }))
@@ -256,26 +238,18 @@ describe("overhaul acceptance — Stories and details", () => {
       order: ["top", "bottom"],
     });
     http.workItems([
-      workItem({ id: "top", name: "Top", rank: "Z" }),
-      workItem({ id: "bottom", name: "Bottom", key: "MEML-2", rank: "A" }),
+      workItem({ id: "top", name: "Top", rank: "A" }),
+      workItem({ id: "bottom", name: "Bottom", key: "MEML-2", rank: "Z" }),
     ]);
     const reordered = http.expectReorder("bottom", {
-      before_id: "top",
-      after_id: null,
+      before_id: null,
+      after_id: "top",
     });
     mountStudio({ http });
     const stories = await screen.findByRole("region", { name: "Stories" });
     const source = within(stories).getByRole("treeitem", { name: /Bottom/ });
     const target = within(stories).getByRole("treeitem", { name: /Top/ });
-    const targetBlock = target.closest("li[role='none']") as HTMLElement;
-    Object.defineProperty(targetBlock, "getBoundingClientRect", {
-      value: () => ({ top: 0, bottom: 100, height: 100, left: 0, right: 200, width: 200 }),
-    });
-    const transfer = dataTransfer();
-
-    drag(source, "dragstart", transfer);
-    drag(target, "dragover", transfer, 25);
-    drag(target, "drop", transfer, 25);
+    dragWorkItem(source, target, "before");
     await reordered;
 
     expect(within(stories).getAllByRole("treeitem").map((row) => row.getAttribute("data-task-id")))

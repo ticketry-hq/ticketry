@@ -12,11 +12,14 @@ async def insert_terminal_session(terminal_session: AgentTerminalSession) -> Non
 
 async def list_terminal_sessions_for_task(
     task_id: str,
+    *,
+    runtime_namespace: str,
 ) -> list[AgentTerminalSession]:
-    """Return active terminal sessions for a task, newest-first."""
+    """Return runtime-owned active terminal sessions for a task, newest-first."""
 
     rows = AgentTerminalSession.objects.filter(
         task_id=task_id,
+        runtime_namespace=runtime_namespace,
         terminated_at__isnull=True,
     ).order_by("-created_at")
     return [row async for row in rows]
@@ -25,6 +28,8 @@ async def list_terminal_sessions_for_task(
 async def list_scratch_terminal_sessions(
     project_id: str,
     module_id: str,
+    *,
+    runtime_namespace: str,
 ) -> list[AgentTerminalSession]:
     """Return active scratch sessions for one project and module."""
 
@@ -32,6 +37,7 @@ async def list_scratch_terminal_sessions(
         task_id=SCRATCH_TASK_ID,
         project_id=project_id,
         module_id=module_id,
+        runtime_namespace=runtime_namespace,
         terminated_at__isnull=True,
     ).order_by("-created_at")
     return [row async for row in rows]

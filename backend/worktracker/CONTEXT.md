@@ -42,6 +42,13 @@ _Avoid_: Publish error, blocking validation failure, legacy defect
 The user-controlled relative position of a work item within its planning context. It is the product's scheduling signal, not a categorical urgency classification.
 _Avoid_: Priority, urgency badge
 
+**Transition landing position**:
+Where a work item appears in its destination state's grouping after a
+non-positional state change: appended after that state's current last item.
+An explicit drop position from a cross-column drag overrides it, and items
+already in a state are never rearranged by someone else's arrival.
+_Avoid_: chronological column order, state-entry timestamp, auto-sort
+
 **Onboarding-required project**:
 A freshly provisioned default project whose installation-wide onboarding has
 not been completed, dismissed, or superseded by user-created planning data. It

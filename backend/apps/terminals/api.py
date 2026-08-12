@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Optional
 
 from asgiref.sync import async_to_sync
@@ -11,6 +10,7 @@ from pydantic import BaseModel
 
 from apps.errors import ApplicationError
 import apps.terminals.agents.registry as registry
+import apps.terminals.launch as terminal_launch
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals import dao
 from apps.terminals.control_plane import create_terminal_run
@@ -25,15 +25,14 @@ from apps.terminals.authorization import (
     RunAuthorizationError,
     verify_run_authorization,
 )
-from apps.terminals.reconciliation import reconcile_terminals
+from apps.terminals.reconciliation_scheduler import (
+    schedule_terminal_reconciliation,
+)
 from apps.terminals.runtime import TerminalRuntimeError
 from apps.terminals.validation import SpawnRequest, _validate_init
 from apps.terminals import viewer_leases
 from apps.settings_store.config import NoConfigurationSelected
 from apps.runs.models import AgentRun
-
-
-logger = logging.getLogger(__name__)
 
 
 class CreateTerminalRunBody(BaseModel):
@@ -161,13 +160,9 @@ def create_terminal(body: CreateTerminalRunBody):
     except RequiredSkillUnavailable as exc:
         raise ApplicationError(409, exc.message, body=exc.as_payload()) from exc
     except NoConfigurationSelected:
-        raise ApplicationError(
-            400, "no_profile_selected", code="no_profile_selected"
-        )
+        raise ApplicationError(400, "no_profile_selected", code="no_profile_selected")
     except LaunchUnavailable as exc:
-        raise ApplicationError(
-            500, str(exc), code="launch_unavailable"
-        ) from exc
+        raise ApplicationError(500, str(exc), code="launch_unavailable") from exc
     except ValueError as exc:
         error = str(exc) or exc.__class__.__name__
         raise ApplicationError(400, error, code=error) from exc
@@ -211,21 +206,17 @@ def _select_resumable_runs(
 def list_terminals(task_id: str) -> list[dict[str, Any]]:
     """List active persisted terminal sessions for a work item."""
 
-    # Reconcile dead/missing runtimes first so the UI is never offered a
-    # session it can't attach to. Best-effort: a reaper failure degrades to
-    # returning the unreconciled list rather than failing the request.
-
-    try:
-        reconcile_terminals()
-    except Exception as exc:
-        logger.warning("terminal reconcile before list failed: %s", exc)
-
     sessions = [
         session
-        for session in async_to_sync(dao.list_terminal_sessions_for_task)(task_id)
+        for session in async_to_sync(dao.list_terminal_sessions_for_task)(
+            task_id,
+            runtime_namespace=terminal_launch.terminal_runtime.namespace,
+        )
         if session.scope != "docchat"
     ]
-    return [_terminal_session_payload(s) for s in sessions]
+    payload = [_terminal_session_payload(s) for s in sessions]
+    schedule_terminal_reconciliation()
+    return payload
 
 
 def resume_terminal(agent_run_id: str):
@@ -239,9 +230,7 @@ def resume_terminal(agent_run_id: str):
     except registry.ResumeUnsupported:
         raise ApplicationError(409, "resume_unsupported", code="resume_unsupported")
     except LaunchUnavailable as exc:
-        raise ApplicationError(
-            500, str(exc), code="launch_unavailable"
-        ) from exc
+        raise ApplicationError(500, str(exc), code="launch_unavailable") from exc
     except registry.UnknownAgent:
         raise ApplicationError(409, "unknown_agent", code="unknown_agent")
 
@@ -289,7 +278,8 @@ def list_resumable_terminals(
                 provider_session_id
                 for provider_session_id in AgentRun.objects.filter(
                     ended_at__isnull=True, **scope
-                ).exclude(scope="docchat")
+                )
+                .exclude(scope="docchat")
                 .exclude(provider_session_id__isnull=True)
                 .exclude(provider_session_id="")
                 .values_list("provider_session_id", flat=True)
@@ -298,7 +288,8 @@ def list_resumable_terminals(
                 resumed_from
                 for resumed_from in AgentRun.objects.filter(
                     ended_at__isnull=True, **scope
-                ).exclude(scope="docchat")
+                )
+                .exclude(scope="docchat")
                 .exclude(resumed_from__isnull=True)
                 .exclude(resumed_from="")
                 .values_list("resumed_from", flat=True)
@@ -331,15 +322,9 @@ def list_scratch_terminals(
 ) -> list[dict[str, Any]]:
     """List active persisted no-task sessions for a project, optionally by module."""
 
-    # Reconcile dead/missing runtimes first, mirroring the task-bound list.
-
-    try:
-        reconcile_terminals()
-    except Exception as exc:
-        logger.warning("terminal reconcile before scratch list failed: %s", exc)
-
     scratch_sessions = async_to_sync(dao.list_terminal_sessions_for_task)(
-        dao.SCRATCH_TASK_ID
+        dao.SCRATCH_TASK_ID,
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
     )
     sessions = [
         session
@@ -348,7 +333,9 @@ def list_scratch_terminals(
         and session.scope != "docchat"
         and (module_id is None or session.module_id == module_id)
     ]
-    return [_terminal_session_payload(s) for s in sessions]
+    payload = [_terminal_session_payload(s) for s in sessions]
+    schedule_terminal_reconciliation()
+    return payload
 
 
 def terminate_terminal(agent_run_id: str):
@@ -371,9 +358,7 @@ def self_terminate_terminal(authorization: str | None):
     try:
         agent_run_id = verify_run_authorization(authorization)
     except RunAuthorizationError as exc:
-        raise ApplicationError(
-            401, str(exc), code="caller_run_unbound"
-        ) from exc
+        raise ApplicationError(401, str(exc), code="caller_run_unbound") from exc
 
     def _run_state() -> tuple[bool, bool]:
         known = AgentRun.objects.filter(id=agent_run_id).exists()
@@ -388,9 +373,7 @@ def self_terminate_terminal(authorization: str | None):
 
     known, active = _run_state()
     if not known:
-        raise ApplicationError(
-            404, "caller_run_unknown", code="caller_run_unknown"
-        )
+        raise ApplicationError(404, "caller_run_unknown", code="caller_run_unknown")
     try:
         terminate_agent_run(agent_run_id)
     except TerminalRuntimeError as exc:

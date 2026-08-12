@@ -109,9 +109,13 @@ function useOptimisticWorkItemMutation<TVariables>({
       }
     },
 
-    async onSettled(_data, _error, _variables, context) {
+    async onSettled(data, _error, _variables, context) {
       const invalidations: Promise<unknown>[] = [];
-      if (context?.id) {
+      // Successful writes return the complete authoritative work item. Keep
+      // that response in the canonical cache instead of starting a redundant
+      // read which can race a follow-up positional write (cross-state drag).
+      // A missing/mismatched response is still revalidated defensively.
+      if (context?.id && data?.id !== context.id) {
         invalidations.push(
           queryClient.invalidateQueries({
             queryKey: queryKeys.workItems.byId(context.id),

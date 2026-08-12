@@ -21,6 +21,7 @@ from typing import Optional
 from worktracker_sdk.generated.models.agent_override import AgentOverride
 from worktracker_sdk.generated.models.graph import Graph
 from worktracker_sdk.generated.models.graph_reset_result import GraphResetResult
+from worktracker_sdk.generated.models.graph_run_request import GraphRunRequest
 from worktracker_sdk.generated.models.graph_run_result import GraphRunResult
 from worktracker_sdk.generated.models.launched_agent_response import LaunchedAgentResponse
 
@@ -46,7 +47,7 @@ class ExecutionApi:
     def work_items_graph_run_create(
         self,
         issue_id: StrictStr,
-        agent_override: Optional[AgentOverride] = None,
+        graph_run_request: Optional[GraphRunRequest] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -65,8 +66,8 @@ class ExecutionApi:
 
         :param issue_id: (required)
         :type issue_id: str
-        :param agent_override:
-        :type agent_override: AgentOverride
+        :param graph_run_request:
+        :type graph_run_request: GraphRunRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -91,7 +92,7 @@ class ExecutionApi:
 
         _param = self._work_items_graph_run_create_serialize(
             issue_id=issue_id,
-            agent_override=agent_override,
+            graph_run_request=graph_run_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -119,7 +120,7 @@ class ExecutionApi:
     def work_items_graph_run_create_with_http_info(
         self,
         issue_id: StrictStr,
-        agent_override: Optional[AgentOverride] = None,
+        graph_run_request: Optional[GraphRunRequest] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -138,8 +139,8 @@ class ExecutionApi:
 
         :param issue_id: (required)
         :type issue_id: str
-        :param agent_override:
-        :type agent_override: AgentOverride
+        :param graph_run_request:
+        :type graph_run_request: GraphRunRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -164,7 +165,7 @@ class ExecutionApi:
 
         _param = self._work_items_graph_run_create_serialize(
             issue_id=issue_id,
-            agent_override=agent_override,
+            graph_run_request=graph_run_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -192,7 +193,7 @@ class ExecutionApi:
     def work_items_graph_run_create_without_preload_content(
         self,
         issue_id: StrictStr,
-        agent_override: Optional[AgentOverride] = None,
+        graph_run_request: Optional[GraphRunRequest] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -211,8 +212,8 @@ class ExecutionApi:
 
         :param issue_id: (required)
         :type issue_id: str
-        :param agent_override:
-        :type agent_override: AgentOverride
+        :param graph_run_request:
+        :type graph_run_request: GraphRunRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -237,7 +238,7 @@ class ExecutionApi:
 
         _param = self._work_items_graph_run_create_serialize(
             issue_id=issue_id,
-            agent_override=agent_override,
+            graph_run_request=graph_run_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -260,7 +261,7 @@ class ExecutionApi:
     def _work_items_graph_run_create_serialize(
         self,
         issue_id,
-        agent_override,
+        graph_run_request,
         _request_auth,
         _content_type,
         _headers,
@@ -288,8 +289,8 @@ class ExecutionApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if agent_override is not None:
-            _body_params = agent_override
+        if graph_run_request is not None:
+            _body_params = graph_run_request
 
 
         # set the HTTP header `Accept`

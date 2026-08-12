@@ -4,11 +4,13 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from worktracker.rest.serializers import (
+from worktracker.rest.reorder_serializers import (
     ConfigurationReorderSerializer,
+    WorkItemReorderSerializer,
+)
+from worktracker.rest.serializers import (
     IssueTypeSerializer,
     StateSerializer,
-    WorkItemReorderSerializer,
     WorkItemSerializer,
     WorkflowRevisionSerializer,
     WorkspaceSerializer,

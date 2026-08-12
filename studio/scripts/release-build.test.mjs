@@ -25,6 +25,7 @@ import {
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(path.join(studioRoot, "release", "manifest.v1.json"), "utf8"));
+const studioPackage = JSON.parse(await readFile(path.join(studioRoot, "package.json"), "utf8"));
 const reviewedDefaults = JSON.parse(
   await readFile(path.resolve(studioRoot, manifest.artifacts.sidecar.defaults_artifact), "utf8"),
 );
@@ -49,6 +50,14 @@ test("release builds compile the native libghostty terminal renderer", () => {
     () => validateManifest(withoutNativeTerminal),
     /must enable the native-libghostty feature/,
   );
+});
+
+test("release builds resolve the workspace-owned Tauri CLI", () => {
+  assert.deepEqual(
+    manifest.artifacts.tauri.command.slice(0, 4),
+    ["npm", "run", "tauri", "--"],
+  );
+  assert.equal(studioPackage.scripts.tauri, "tauri");
 });
 
 test("release bundles the pinned libghostty runtime resources", async () => {

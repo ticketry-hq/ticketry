@@ -15,10 +15,8 @@ import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
 import { useTerminalPresentation } from "./internal/useTerminalPresentation";
 import { registerTerminalFocus } from "./internal/terminalRegistry";
-import {
-  NativeGhosttyTerminal,
-  nativeGhosttyAvailable,
-} from "./NativeGhosttyTerminal";
+import { NativeGhosttyTerminal } from "./NativeGhosttyTerminal";
+import { nativeGhosttyAvailable } from "./internal/nativeGhosttyAvailability";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -28,22 +26,34 @@ const OWNER_LABEL: Record<ForegroundOwner, string> = {
 type TerminalProps = {
   sessionId: string | null;
   owner?: ForegroundOwner;
+  /** Whether this terminal is the workspace's currently presented surface. */
+  active?: boolean;
   /** A controlled request to focus the currently presented terminal. */
   focusSignal?: number;
+  onNativeVisibilityPendingChange?: (runId: string, pending: boolean) => void;
 };
 
 /** Presents a pooled terminal session on one foreground surface. */
-export function Terminal({ sessionId, owner = "studio", focusSignal }: TerminalProps) {
+export function Terminal({
+  sessionId,
+  owner = "studio",
+  focusSignal,
+  active = true,
+  onNativeVisibilityPendingChange,
+}: TerminalProps) {
   const session = useTerminalStore((state) =>
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
   const [nativeAvailable, setNativeAvailable] = useState(false);
-  const [nativeFailedSessionId, setNativeFailedSessionId] = useState<string | null>(
-    null,
-  );
-  const markNativeUnavailable = useCallback(() => {
-    setNativeFailedSessionId(sessionId);
+  const [nativeFailure, setNativeFailure] = useState<{
+    sessionId: string | null;
+    reason: string;
+  } | null>(null);
+  const markNativeUnavailable = useCallback((reason: string) => {
+    setNativeFailure({ sessionId, reason });
   }, [sessionId]);
+  const nativeFailureReason =
+    nativeFailure?.sessionId === sessionId ? nativeFailure.reason : null;
 
   useEffect(() => {
     let active = true;
@@ -59,18 +69,50 @@ export function Terminal({ sessionId, owner = "studio", focusSignal }: TerminalP
     nativeAvailable &&
     sessionId &&
     session?.agentRunId &&
-    nativeFailedSessionId !== sessionId
+    nativeViewerSessionIsLive(session.status) &&
+    !nativeFailureReason
   ) {
     return (
       <NativeGhosttyTerminal
         sessionId={sessionId}
         owner={owner}
         focusSignal={focusSignal}
+        active={active}
         onUnavailable={markNativeUnavailable}
+        onVisibilityPendingChange={onNativeVisibilityPendingChange}
       />
     );
   }
-  return <XtermTerminal sessionId={sessionId} owner={owner} focusSignal={focusSignal} />;
+  const fallback = (
+    <XtermTerminal
+      sessionId={active ? sessionId : null}
+      owner={owner}
+      focusSignal={focusSignal}
+    />
+  );
+  if (!nativeFailureReason) return fallback;
+  return (
+    <div className="relative h-full w-full">
+      {fallback}
+      <div
+        role="status"
+        data-testid="native-terminal-fallback-notice"
+        className="pointer-events-none absolute bottom-2 right-2 max-w-[min(32rem,calc(100%-1rem))] rounded border border-lifecycle-attention/40 bg-pane-bg/95 px-2 py-1 text-xs text-lifecycle-attention shadow"
+      >
+        Native terminal unavailable: {nativeFailureReason}. Using compatibility renderer.
+      </div>
+    </div>
+  );
+}
+
+function nativeViewerSessionIsLive(status: string): boolean {
+  return ![
+    "exited",
+    "error",
+    "viewer_closed",
+    "pty_eof",
+    "session_lost",
+  ].includes(status);
 }
 
 function XtermTerminal({

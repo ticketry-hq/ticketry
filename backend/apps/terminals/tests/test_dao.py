@@ -45,6 +45,7 @@ def _make_session(
     created_at: str,
     module_id: str = "mod-1",
     scope: str = "task",
+    runtime_namespace: str = "test",
 ) -> AgentTerminalSession:
     """Build a terminal-session row."""
 
@@ -57,6 +58,7 @@ def _make_session(
         agent="claude",
         created_at=created_at,
         scope=scope,
+        runtime_namespace=runtime_namespace,
     )
 
 
@@ -80,21 +82,27 @@ async def test_insert_list_and_soft_delete() -> None:
     await _insert("run-new", "task-1", "2026-05-29T11:00:00")
     await _insert("run-other", "task-2", "2026-05-29T12:00:00")
 
-    listed = await dao.list_terminal_sessions_for_task("task-1")
+    listed = await dao.list_terminal_sessions_for_task(
+        "task-1", runtime_namespace="test"
+    )
     deleted = await dao.soft_delete_terminal_session(
         "run-new", terminated_at="2026-05-29T11:30:00"
     )
-    listed_after = await dao.list_terminal_sessions_for_task("task-1")
+    listed_after = await dao.list_terminal_sessions_for_task(
+        "task-1", runtime_namespace="test"
+    )
 
     assert [row.agent_run_id for row in listed] == ["run-new", "run-old"]
     assert deleted is True
     assert [row.agent_run_id for row in listed_after] == ["run-old"]
-    assert await dao.soft_delete_terminal_session(
-        "run-new", terminated_at="later"
-    ) is False
-    assert await dao.soft_delete_terminal_session(
-        "missing", terminated_at="later"
-    ) is False
+    assert (
+        await dao.soft_delete_terminal_session("run-new", terminated_at="later")
+        is False
+    )
+    assert (
+        await dao.soft_delete_terminal_session("missing", terminated_at="later")
+        is False
+    )
 
 
 async def test_parent_delete_cascades_to_terminal_session() -> None:
@@ -127,7 +135,25 @@ async def test_list_scratch_sessions_scoped_by_project_and_module() -> None:
     )
     await _insert("task-run", "task-1", "2026-05-29T13:00:00")
 
-    listed = await dao.list_scratch_terminal_sessions("proj-1", "mod-1")
+    listed = await dao.list_scratch_terminal_sessions(
+        "proj-1", "mod-1", runtime_namespace="test"
+    )
 
     assert [row.agent_run_id for row in listed] == ["inst-1", "plan-1"]
     assert [row.scope for row in listed] == ["instant", "plan"]
+
+
+async def test_list_sessions_excludes_another_runtime_namespace() -> None:
+    await _insert("run-local", "task-1", "2026-05-29T09:00:00")
+    await _insert(
+        "run-foreign",
+        "task-1",
+        "2026-05-29T10:00:00",
+        runtime_namespace="other-runtime",
+    )
+
+    listed = await dao.list_terminal_sessions_for_task(
+        "task-1", runtime_namespace="test"
+    )
+
+    assert [row.agent_run_id for row in listed] == ["run-local"]

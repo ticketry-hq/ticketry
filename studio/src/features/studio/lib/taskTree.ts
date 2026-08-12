@@ -29,7 +29,7 @@ interface IndexedId {
   index: number;
 }
 
-function compareRankDescending(
+function compareRankAscending(
   itemsById: Readonly<Record<TaskId, TreeWorkItem>>,
   a: IndexedId,
   b: IndexedId,
@@ -40,7 +40,7 @@ function compareRankDescending(
   const bHasRank = typeof bRank === "string" && bRank.length > 0;
   if (aHasRank && bHasRank) {
     if (aRank === bRank) return b.index - a.index;
-    return aRank! > bRank! ? -1 : 1;
+    return aRank! < bRank! ? -1 : 1;
   }
   if (aHasRank) return -1;
   if (bHasRank) return 1;
@@ -56,7 +56,7 @@ export function orderIdsByRank(
   return ids
     .filter((id) => itemsById[id] !== undefined)
     .map((id, index) => ({ id, index: orderIndex.get(id) ?? index }))
-    .sort((a, b) => compareRankDescending(itemsById, a, b))
+    .sort((a, b) => compareRankAscending(itemsById, a, b))
     .map(({ id }) => id);
 }
 

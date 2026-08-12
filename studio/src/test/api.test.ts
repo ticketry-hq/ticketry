@@ -11,6 +11,7 @@ import {
   deleteIssueType,
   deleteState,
   deleteWorkItem,
+  executeTaskSubtree,
   listIssueTypes,
   listModules,
   listProjectWorkItems,
@@ -25,7 +26,10 @@ import {
   reorderIssueTypes,
   reorderStates,
 } from "../shared/api/client";
-import { terminateTerminal } from "../features/agents/api/agentApi";
+import {
+  getTerminals,
+  terminateTerminal,
+} from "../features/agents/api/agentApi";
 import type { ProviderCatalog } from "../shared/api/types";
 
 const fetchMock = vi.fn();
@@ -76,6 +80,28 @@ describe("api client", () => {
     expect(url).toBe("/api/terminals?agent_run_id=run%2F1");
     expect(init.method).toBe("DELETE");
     expect(new Headers(init.headers).get("x-api-key")).toBe("terminal-secret");
+  });
+
+  it("authenticates terminal discovery with the runtime API key", async () => {
+    vi.stubEnv("VITE_WT_API_KEY", "desktop-terminal-secret");
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await getTerminals("task/1");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/terminals?task_id=task%2F1");
+    expect(new Headers(init.headers).get("x-api-key")).toBe(
+      "desktop-terminal-secret",
+    );
+  });
+
+  it("omits authentication from terminal discovery when the runtime key is empty", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await getTerminals("task-1");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(new Headers(init.headers).has("x-api-key")).toBe(false);
   });
 
   it("sends x-api-key on every request and hits the projects path", async () => {
@@ -290,6 +316,22 @@ describe("S2 fetchers", () => {
       state_id: "review",
       origin: "human",
     });
+  });
+
+  it("omits the execution mode when arming a graph run without one", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ root_id: "w1", launched: [] }, 201));
+    await executeTaskSubtree("w1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/work-tracker/work-items/w1/graph-run");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({});
+  });
+
+  it("sends the requested execution mode when arming a graph run", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ root_id: "w1", launched: [] }, 201));
+    await executeTaskSubtree("w1", "serial");
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ mode: "serial" });
   });
 
   it("DELETEs a work item and resolves on an empty 204 body", async () => {

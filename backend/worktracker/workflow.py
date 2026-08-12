@@ -5,12 +5,43 @@ are intentionally ignored here: an administrator can experiment without
 changing creation or transition behaviour until publication succeeds.
 """
 
-from django.db import transaction
-from django.db.models import Q
+from contextlib import contextmanager
+from threading import RLock
 
-from worktracker.models import IssueType, IssueTypeTransition, State
+from django.db import connections, transaction
+from django.db.models import Q
+from django.db.models.functions import Collate
+
+from worktracker.models import Issue, IssueType, IssueTypeTransition, Project, State
+from worktracker.ranking import key_between
 from worktracker.services.errors import ValidationError
 from worktracker.work_items import cascade_archive, default_state_id
+
+
+_SQLITE_TRANSITION_LOCK = RLock()
+
+
+@contextmanager
+def _transition_transaction(using):
+    connection = connections[using]
+    if connection.vendor != "sqlite":
+        with transaction.atomic(using=using):
+            yield
+        return
+
+    # SQLite has no row-level lock, and a deferred transaction cannot safely
+    # upgrade after two arrivals have read the same destination tail. Serialize
+    # threads in this process and reserve the database writer before any reads;
+    # BEGIN IMMEDIATE also covers another process using the same database file.
+    with _SQLITE_TRANSITION_LOCK:
+        previous_mode = connection.transaction_mode
+        if not connection.in_atomic_block:
+            connection.transaction_mode = "IMMEDIATE"
+        try:
+            with transaction.atomic(using=using):
+                yield
+        finally:
+            connection.transaction_mode = previous_mode
 
 
 class InvalidTransition(ValidationError):
@@ -119,14 +150,50 @@ def transition_state(
             to_state=to_name,
         )
 
-    old_group, new_group = (issue.state.group if issue.state_id else None), (target.group if target else None)
-    issue.state = target
-    cascade = old_group != "cancelled" and new_group == "cancelled"
-    if cascade:
-        issue.is_archived = True
-    elif old_group == "cancelled" and new_group != "cancelled":
-        issue.is_archived = False
-    with transaction.atomic():
+    using = issue._state.db or "default"
+    with _transition_transaction(using):
+        Project.objects.select_for_update().only("id").get(pk=issue.project_id)
+        if issue.type == "task":
+            rank_collation = "BINARY" if connections[using].vendor == "sqlite" else "C"
+            destination_tail = (
+                Issue.objects.filter(
+                    project_id=issue.project_id,
+                    type="task",
+                    state_id=target.id,
+                    is_archived=False,
+                )
+                .exclude(pk=issue.pk)
+                .alias(_ascii_rank=Collate("rank", rank_collation))
+                .order_by("-_ascii_rank", "-sequence_id", "-id")
+                .first()
+            )
+            if destination_tail is not None:
+                successor_rank = (
+                    Issue.objects.filter(
+                        project_id=issue.project_id,
+                        type="task",
+                        is_archived=False,
+                    )
+                    .exclude(pk=issue.pk)
+                    .alias(_ascii_rank=Collate("rank", rank_collation))
+                    .filter(_ascii_rank__gt=destination_tail.rank)
+                    .order_by("_ascii_rank", "sequence_id", "id")
+                    .values_list("rank", flat=True)
+                    .first()
+                )
+                issue.rank = key_between(
+                    destination_tail.rank or None,
+                    successor_rank,
+                )
+
+        old_group = issue.state.group if issue.state_id else None
+        new_group = target.group
+        issue.state = target
+        cascade = old_group != "cancelled" and new_group == "cancelled"
+        if cascade:
+            issue.is_archived = True
+        elif old_group == "cancelled" and new_group != "cancelled":
+            issue.is_archived = False
         issue.save()
         if cascade:
             cascade_archive(issue)

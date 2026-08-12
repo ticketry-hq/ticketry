@@ -28,7 +28,8 @@
     "test:e2e": "playwright test",
     "test:e2e:overhaul": "playwright test e2e/overhaul.spec.ts",
     "test:overhaul": "vitest run src/test/overhaul*Acceptance.test.tsx src/test/studioRenameBehaviour.test.tsx",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@codemirror/language": "6.12.4",

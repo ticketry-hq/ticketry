@@ -1,7 +1,7 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
+import { useModalStore } from "../../../app/modal/modalStore";
 import {
   foregroundKey,
   useTerminalForegroundStore,
@@ -9,91 +9,189 @@ import {
 } from "./internal/foregroundStore";
 import {
   registerPoolDriver,
-  releasePooledTransport,
   syncEntries,
 } from "./internal/entryPool";
 import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
-import { registerTerminalFocus } from "./internal/terminalRegistry";
+import { clippedNativeTerminalFrame } from "./internal/nativeTerminalFrame";
 import {
-  createViewerLease,
-  desktopViewerLease,
-} from "./internal/viewerLease";
-
-type NativeTerminalStatus = {
-  handle: string;
-  runId: string;
-  columns: number;
-  rows: number;
-};
-
-type NativeTerminalFailure = {
-  handle: string;
-  runId: string;
-  reason?: string;
-};
-
-type NativeTerminalCompletion = {
-  handle: string;
-  runId: string;
-  reason: "attachment_process_exited";
-};
-
-let availability: Promise<boolean> | null = null;
-
-export function nativeGhosttyAvailable(): Promise<boolean> {
-  if (!isTauri()) return Promise.resolve(false);
-  availability ??= invoke<boolean>("native_terminal_available").catch(() => false);
-  return availability;
-}
+  hideNativeViewer,
+  showNativeViewer,
+} from "./internal/nativeViewerPresentation";
+import {
+  useNativeViewerFocusRegistration,
+  useNativeViewerFocusSignal,
+  useNativeViewerFrameSync,
+} from "./internal/useNativeViewerHostEffects";
+import {
+  nativeFailureMessage,
+  type NativeTerminalStatus,
+} from "./internal/nativeViewerFailure";
+import {
+  failNativeViewerMount,
+  markNativeViewerHidden,
+  markNativeViewerPresented,
+  useNativeViewerMount,
+} from "./internal/nativeViewerMountRegistry";
+import { ensureNativeViewerLifecycle } from "./internal/nativeViewerLifecycle";
 
 export function NativeGhosttyTerminal({
   sessionId,
   owner,
   focusSignal,
+  active = true,
   manageForegroundHost = true,
   onReady,
   onUnavailable,
+  onVisibilityPendingChange,
 }: {
   sessionId: string;
   owner: ForegroundOwner;
   focusSignal?: number;
+  active?: boolean;
   manageForegroundHost?: boolean;
   onReady?: () => void;
   onUnavailable?: (reason: string) => void;
+  onVisibilityPendingChange?: (runId: string, pending: boolean) => void;
 }) {
   const sessions = useTerminalStore((state) => state.sessions);
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
   const unregisterHost = useTerminalForegroundStore((state) => state.unregisterHost);
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const handleRef = useRef<string | null>(null);
-  const [nativeHandle, setNativeHandle] = useState<string | null>(null);
-  const focusOnAttachRef = useRef(focusSignal === undefined);
-  const resizeFrameRef = useRef(0);
-  const handledFocusSignalRef = useRef(0);
+  const modalOpen = useModalStore((state) => state.modalStack.length > 0);
+  const modalOpenRef = useRef(modalOpen);
+  const activeRef = useRef(active);
+  const visibleRef = useRef(false);
+  const openedRunRef = useRef<string | null>(null);
+  const blockingHideCountRef = useRef(0);
+  modalOpenRef.current = modalOpen;
+  activeRef.current = active;
 
   useEffect(() => syncEntries(sessions), [sessions]);
   const session = sessions[sessionId] ?? null;
   const runId = session?.agentRunId ?? null;
   const key = session ? foregroundKey(session) : null;
   const { acquire, resolvedOwner } = useTerminalOwnership(key, owner);
-  const visible = !!runId && resolvedOwner === owner;
+  if (active && runId) openedRunRef.current = runId;
+  const retained = !!runId && openedRunRef.current === runId;
+  const {
+    token,
+    mayOwnAttachment,
+    sharedHandle,
+    failureReason,
+    presentedHere,
+  } = useNativeViewerMount(runId, retained);
+  const visible = retained && active && resolvedOwner === owner;
+  visibleRef.current = visible;
+  const presentedHandleRef = useRef<string | null>(sharedHandle);
+  presentedHandleRef.current = sharedHandle;
 
   useEffect(() => {
-    if (!nativeHandle || !visible) return;
-    return registerTerminalFocus(sessionId, () => {
-      void invoke("native_terminal_focus", { handle: nativeHandle });
-    });
-  }, [nativeHandle, sessionId, visible]);
+    if (failureReason) onUnavailable?.(failureReason);
+  }, [failureReason, onUnavailable]);
 
   useEffect(() => {
-    if (manageForegroundHost) registerHost(owner, hostRef.current);
-    const releaseDriver = manageForegroundHost ? registerPoolDriver() : null;
+    if (sharedHandle) onReady?.();
+  }, [onReady, sharedHandle]);
+
+  useNativeViewerFocusRegistration({
+    sessionId,
+    handle: sharedHandle,
+    visible,
+    modalOpen,
+  });
+  useNativeViewerFrameSync({
+    handle: sharedHandle,
+    hostRef,
+    activeRef,
+    currentHandleRef: presentedHandleRef,
+    visible,
+    modalOpen,
+    onFailure: (error) => {
+      console.error("native libghostty frame update failed", error);
+      if (runId) failNativeViewerMount(runId, nativeFailureMessage(error));
+    },
+  });
+  useNativeViewerFocusSignal({
+    sessionId,
+    handle: sharedHandle,
+    focusSignal,
+    visible,
+    modalOpen,
+  });
+
+  useLayoutEffect(() => {
+    const handle = sharedHandle;
+    if (!retained || !runId) return;
+    const hidden = !visible || modalOpen;
+    if (!handle) return;
+    // The destination host moves the one shared view. The prior host must not
+    // race that move with a hide merely because foreground ownership changed.
+    if (hidden && resolvedOwner !== owner) return;
+    if (hidden && !presentedHere) return;
+    if (!hidden && presentedHere) return;
+    const blocksDestination = hidden && !active && !modalOpen;
+    if (blocksDestination) {
+      blockingHideCountRef.current += 1;
+      onVisibilityPendingChange?.(runId, true);
+    }
+    const command = hidden
+      ? hideNativeViewer(runId, handle).then(() => {
+          markNativeViewerHidden(runId, token);
+          return null;
+        })
+      : showNativeViewer(runId, handle, async () => {
+          const host = hostRef.current;
+          if (!host) return null;
+          const frame = clippedNativeTerminalFrame(host);
+          if (!frame) return null;
+          const status = await invoke<NativeTerminalStatus>(
+            "native_terminal_show",
+            { handle, frame },
+          );
+          if (status.columns <= 0 || status.rows <= 0) {
+            throw new Error("native terminal renderer returned an empty grid");
+          }
+          return status;
+        }).then((status) => {
+          if (status) markNativeViewerPresented(runId, token);
+          return status;
+        });
+    void command
+      .catch((error) => {
+        console.error("native libghostty visibility change failed", error);
+        failNativeViewerMount(runId, nativeFailureMessage(error));
+      })
+      .finally(() => {
+        if (!blocksDestination) return;
+        blockingHideCountRef.current -= 1;
+        if (blockingHideCountRef.current === 0) {
+          onVisibilityPendingChange?.(runId, false);
+        }
+      });
+  }, [
+    active,
+    modalOpen,
+    onVisibilityPendingChange,
+    owner,
+    presentedHere,
+    resolvedOwner,
+    retained,
+    runId,
+    sharedHandle,
+    token,
+    visible,
+  ]);
+
+  useEffect(() => {
+    if (manageForegroundHost && active) registerHost(owner, hostRef.current);
+    const releaseDriver = manageForegroundHost && active ? registerPoolDriver() : null;
     return () => {
-      if (manageForegroundHost) unregisterHost(owner);
+      if (manageForegroundHost && active) unregisterHost(owner);
       releaseDriver?.();
     };
   }, [
+    active,
     manageForegroundHost,
     owner,
     registerHost,
@@ -101,218 +199,22 @@ export function NativeGhosttyTerminal({
   ]);
 
   useEffect(() => {
-    if (!visible || !runId) return;
-    let disposed = false;
-    let observer: ResizeObserver | null = null;
-    let unlistenFailure: UnlistenFn | null = null;
-    let unlistenCompletion: UnlistenFn | null = null;
-    let completedHandle: string | null = null;
-    const viewerLease = createViewerLease(desktopViewerLease, runId);
-    let leaseTimer: ReturnType<typeof setInterval> | null = null;
-
-    const releaseLease = () => {
-      if (leaseTimer) clearInterval(leaseTimer);
-      leaseTimer = null;
-      void viewerLease.release().catch(() => {});
-    };
-
-    const detachNativeViewer = () => {
-      const handle = handleRef.current;
-      handleRef.current = null;
-      setNativeHandle(null);
-      if (handle) void invoke("native_terminal_detach", { handle });
-      releaseLease();
-    };
-
-    const closeCompletedNativeViewer = (completion: NativeTerminalCompletion) => {
-      completedHandle = completion.handle;
-      if (handleRef.current !== completion.handle) return;
-      handleRef.current = null;
-      setNativeHandle(null);
-      releaseLease();
-      onUnavailable?.("the native terminal attachment process exited");
-    };
-
-    const scheduleFrame = () => {
-      if (resizeFrameRef.current) return;
-      resizeFrameRef.current = requestAnimationFrame(() => {
-        resizeFrameRef.current = 0;
-        const host = hostRef.current;
-        const handle = handleRef.current;
-        if (!host || !handle) return;
-        const rect = host.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
-        const x = Math.max(0, rect.left);
-        const y = Math.max(0, rect.top);
-        const right = Math.min(window.innerWidth, rect.right);
-        const bottom = Math.min(window.innerHeight, rect.bottom);
-        if (right <= x || bottom <= y) return;
-        void invoke<NativeTerminalStatus>("native_terminal_set_frame", {
-          handle,
-          frame: {
-            x,
-            y,
-            width: right - x,
-            height: bottom - y,
-            viewportWidth: window.innerWidth,
-            viewportHeight: window.innerHeight,
-          },
-        });
-      });
-    };
-
-    const attach = async () => {
-      try {
-        unlistenFailure = await listen<NativeTerminalFailure>(
-          "native-terminal-failed",
-          (event) => {
-            if (
-              event.payload.runId === runId &&
-              event.payload.handle === handleRef.current
-            ) {
-              detachNativeViewer();
-              onUnavailable?.(
-                event.payload.reason ?? "the native terminal bridge disconnected",
-              );
-            }
-          },
-        );
-        unlistenCompletion = await listen<NativeTerminalCompletion>(
-          "native-terminal-closed",
-          (event) => {
-            if (event.payload.runId === runId) {
-              closeCompletedNativeViewer(event.payload);
-            }
-          },
-        );
-        if (disposed) {
-          unlistenFailure();
-          unlistenFailure = null;
-          unlistenCompletion();
-          unlistenCompletion = null;
-          return;
-        }
-
-        const acquired = await viewerLease.acquire();
-        if (!acquired || disposed) {
-          releaseLease();
-          return;
-        }
-
-        const status = await invoke<NativeTerminalStatus>(
-          "native_terminal_attach",
-          { runId },
-        );
-        if (completedHandle === status.handle) {
-          releaseLease();
-          onUnavailable?.("the native terminal attachment process exited");
-          return;
-        }
-        if (disposed) {
-          void invoke("native_terminal_detach", { handle: status.handle });
-          return;
-        }
-        handleRef.current = status.handle;
-        const host = hostRef.current;
-        if (!host) throw new Error("native terminal host was not mounted");
-        const rect = host.getBoundingClientRect();
-        const x = Math.max(0, rect.left);
-        const y = Math.max(0, rect.top);
-        const right = Math.min(window.innerWidth, rect.right);
-        const bottom = Math.min(window.innerHeight, rect.bottom);
-        if (right <= x || bottom <= y) {
-          throw new Error("native terminal host has no visible frame");
-        }
-        const framed = await invoke<NativeTerminalStatus>(
-          "native_terminal_set_frame",
-          {
-            handle: status.handle,
-            frame: {
-              x,
-              y,
-              width: right - x,
-              height: bottom - y,
-              viewportWidth: window.innerWidth,
-              viewportHeight: window.innerHeight,
-            },
-          },
-        );
-        if (framed.columns <= 0 || framed.rows <= 0) {
-          throw new Error("native terminal renderer returned an empty grid");
-        }
-        if (disposed) {
-          handleRef.current = null;
-          void invoke("native_terminal_detach", { handle: status.handle });
-          return;
-        }
-        // Keep xterm's transport alive until the native surface and its bridge
-        // have both attached and accepted a visible frame.
-        releasePooledTransport(sessionId);
-        setNativeHandle(status.handle);
-        leaseTimer = setInterval(() => {
-          void viewerLease.renew().catch((error) => {
-            if (
-              !disposed &&
-              (error as { code?: string }).code === "replaced_by_another_viewer"
-            ) {
-              detachNativeViewer();
-              onUnavailable?.("replaced_by_another_viewer");
-            }
-          });
-        }, 10_000);
-        onReady?.();
-        observer = new ResizeObserver(scheduleFrame);
-        if (hostRef.current) observer.observe(hostRef.current);
-        window.addEventListener("resize", scheduleFrame);
-        window.addEventListener("scroll", scheduleFrame, true);
-        scheduleFrame();
-        if (focusOnAttachRef.current) {
-          void invoke("native_terminal_focus", { handle: status.handle });
-        }
-      } catch (error) {
-        console.error("native libghostty attach failed", error);
-        const handle = handleRef.current;
-        handleRef.current = null;
-        if (handle) void invoke("native_terminal_detach", { handle });
-        releaseLease();
-        if (!disposed) onUnavailable?.(nativeFailureMessage(error));
-      }
-    };
-    void attach();
-
-    return () => {
-      disposed = true;
-      unlistenFailure?.();
-      unlistenCompletion?.();
-      observer?.disconnect();
-      window.removeEventListener("resize", scheduleFrame);
-      window.removeEventListener("scroll", scheduleFrame, true);
-      if (resizeFrameRef.current) cancelAnimationFrame(resizeFrameRef.current);
-      resizeFrameRef.current = 0;
-      detachNativeViewer();
-    };
-  }, [onReady, onUnavailable, runId, sessionId, visible]);
-
-  useEffect(() => {
-    const handle = nativeHandle;
-    if (!handle || !visible) return;
-    const pendingSignal =
-      focusSignal !== undefined &&
-      focusSignal !== 0 &&
-      focusSignal !== handledFocusSignalRef.current;
-    if (!pendingSignal) return;
-    if (pendingSignal && focusSignal !== undefined) {
-      handledFocusSignalRef.current = focusSignal;
-    }
-    void invoke("native_terminal_focus", { handle });
-  }, [focusSignal, nativeHandle, sessionId, visible]);
+    if (!retained || !runId || !mayOwnAttachment) return;
+    ensureNativeViewerLifecycle({
+      runId,
+      sessionId,
+      token,
+      host: () => hostRef.current,
+      shouldPresent: () => visibleRef.current && !modalOpenRef.current,
+    });
+  }, [mayOwnAttachment, retained, runId, sessionId, token]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
   return (
-    <div className="relative h-full w-full bg-pane-bg">
+    <div className="relative h-full w-full bg-pane-panel">
       <div
         ref={hostRef}
-        className="absolute inset-2 bg-black"
+        className="absolute bottom-2 left-2 right-2 top-[10px] bg-pane-panel"
         data-testid="native-terminal-host"
         data-terminal-renderer="libghostty"
       />
@@ -330,10 +232,4 @@ export function NativeGhosttyTerminal({
       ) : null}
     </div>
   );
-}
-
-function nativeFailureMessage(error: unknown): string {
-  if (typeof error === "string" && error.trim()) return error;
-  if (error instanceof Error && error.message.trim()) return error.message;
-  return "native terminal attachment failed";
 }

@@ -1,6 +1,8 @@
 import {
   lazy,
   Suspense,
+  useCallback,
+  useState,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -69,6 +71,22 @@ export function WorkspaceTabBody({
   onEngageTab: (tab: TaskWorkspaceTabIdentity) => void;
   onSetEditViewZone: (zone: "active-tab-body") => void;
 }) {
+  const [pendingNativeHides, setPendingNativeHides] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const handleNativeVisibilityPendingChange = useCallback(
+    (runId: string, pending: boolean) => {
+      setPendingNativeHides((current) => {
+        const next = new Set(current);
+        if (pending) next.add(runId);
+        else next.delete(runId);
+        return next.size === current.size && [...next].every((id) => current.has(id))
+          ? current
+          : next;
+      });
+    },
+    [],
+  );
   const terminalEngaged = bodyEngaged && activeKind === "terminal";
   const terminalRingBox =
     activeKind === "terminal" ? "top-0 -bottom-2 -left-2 -right-2" : "inset-0";
@@ -158,20 +176,21 @@ export function WorkspaceTabBody({
         }
       >
         <div className="relative min-h-0 flex-1">
-          {terminalIds.length > 0 && (
-            <Suspense fallback={null}>
-              <LazySelectedTicketTerminal
-                bucket={bucket}
-                owner={owner}
-                active={activeKind === "terminal"}
-                focusSignal={
-                  requestedTerminalId === activeTerminalId
-                    ? terminalFocusSignal
-                    : 0
-                }
-              />
-            </Suspense>
-          )}
+          <Suspense fallback={null}>
+            <LazySelectedTicketTerminal
+              bucket={bucket}
+              owner={owner}
+              active={terminalIds.length > 0 && activeKind === "terminal"}
+              focusSignal={
+                requestedTerminalId === activeTerminalId
+                  ? terminalFocusSignal
+                  : 0
+              }
+              onNativeVisibilityPendingChange={
+                handleNativeVisibilityPendingChange
+              }
+            />
+          </Suspense>
         </div>
         {showZoneChrome && (
           <div
@@ -197,6 +216,13 @@ export function WorkspaceTabBody({
           </div>
         )}
       </div>
+      {pendingNativeHides.size > 0 ? (
+        <div
+          aria-hidden="true"
+          data-testid="native-viewer-transition-shield"
+          className="absolute inset-0 z-[60] bg-pane-panel"
+        />
+      ) : null}
       {showZoneChrome && editViewZone === "active-tab-body" && !bodyEngaged && (
         <div
           aria-hidden="true"

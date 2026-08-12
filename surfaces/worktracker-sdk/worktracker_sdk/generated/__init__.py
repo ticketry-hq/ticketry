@@ -72,6 +72,8 @@ __all__ = [
     "Graph",
     "GraphNode",
     "GraphResetResult",
+    "GraphRunExecutionModeEnum",
+    "GraphRunRequest",
     "GraphRunResult",
     "GroupEnum",
     "Health",
@@ -187,6 +189,8 @@ from worktracker_sdk.generated.models.global_launch_default import GlobalLaunchD
 from worktracker_sdk.generated.models.graph import Graph as Graph
 from worktracker_sdk.generated.models.graph_node import GraphNode as GraphNode
 from worktracker_sdk.generated.models.graph_reset_result import GraphResetResult as GraphResetResult
+from worktracker_sdk.generated.models.graph_run_execution_mode_enum import GraphRunExecutionModeEnum as GraphRunExecutionModeEnum
+from worktracker_sdk.generated.models.graph_run_request import GraphRunRequest as GraphRunRequest
 from worktracker_sdk.generated.models.graph_run_result import GraphRunResult as GraphRunResult
 from worktracker_sdk.generated.models.group_enum import GroupEnum as GroupEnum
 from worktracker_sdk.generated.models.health import Health as Health

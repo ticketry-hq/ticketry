@@ -48,6 +48,16 @@ def test_repeated_midpoints_stay_strictly_ordered():
         prev = mid
 
 
+def test_midpoint_drops_irrelevant_precision_from_long_bounds():
+    lower = "zzzynoNMlYbiOCNF8jYorXc3owAX7DutCQaptXxnCZv2m1795l9EhjG2mg8iYsFV"
+    upper = "zzzynxLGYeaBuf77jouVQUABn1cBmQDVlZbbtYk8juW2Hi15ZMHR7kV"
+
+    midpoint = key_between(lower, upper)
+
+    assert lower < midpoint < upper
+    assert len(midpoint) < 64
+
+
 def test_top_then_bottom_inserts_keep_a_total_order():
     """Build a column by always inserting at the top, then at the bottom."""
 

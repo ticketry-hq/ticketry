@@ -26,6 +26,8 @@ export * from './GlobalLaunchDefault.js';
 export * from './Graph.js';
 export * from './GraphNode.js';
 export * from './GraphResetResult.js';
+export * from './GraphRunExecutionModeEnum.js';
+export * from './GraphRunRequest.js';
 export * from './GraphRunResult.js';
 export * from './GroupEnum.js';
 export * from './Health.js';

@@ -10,13 +10,27 @@ from apps.terminals.launch import LaunchUnavailable
 from apps.settings_store.config import NoConfigurationSelected
 from worktracker.services.errors import ServiceError
 class ExecuteGraphIn(BaseModel):
+    """Graph-run create request; an omitted ``mode`` means ``parallel``."""
+
     agent: str | None = None
+    mode: str | None = None
 
     @field_validator("agent", mode="before")
     @classmethod
     def normalize_agent(cls, value):
         if not isinstance(value, str):
             return value
+        return value.strip() or None
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def normalize_mode(cls, value):
+        # Non-text modes stay on the structured ``invalid_execution_mode`` path
+        # instead of becoming a shape-level validation error.
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return repr(value)
         return value.strip() or None
 
 
@@ -86,7 +100,9 @@ def create_execute_graph(issue_id: str, payload: ExecuteGraphIn):
     """Arm a root, or revive it when all prior launches are inactive."""
 
     try:
-        launched = driver.execute_graph(issue_id, agent=payload.agent)
+        launched = driver.execute_graph(
+            issue_id, agent=payload.agent, mode=payload.mode
+        )
     except ValueError as exc:
         error = str(exc)
         raise ExecutionHttpError(error, _value_error_status(error)) from exc

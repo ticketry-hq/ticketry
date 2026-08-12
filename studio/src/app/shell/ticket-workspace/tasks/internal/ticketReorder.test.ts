@@ -11,22 +11,22 @@ const blocks: VisibleRootBlock[] = [
 ];
 
 describe("resolveTicketReorderNeighbors", () => {
-  it("reaches the visible top and inverts it to canonical neighbors", () => {
+  it("reaches the visible top in canonical rank order", () => {
     expect(
       resolveTicketReorderNeighbors(blocks, "bottom", "top", "near"),
-    ).toEqual({ beforeId: "top", afterId: null });
+    ).toEqual({ beforeId: null, afterId: "top" });
   });
 
   it("resolves a middle seam in canonical rank order", () => {
     expect(
       resolveTicketReorderNeighbors(blocks, "bottom", "middle", "near"),
-    ).toEqual({ beforeId: "middle", afterId: "top" });
+    ).toEqual({ beforeId: "top", afterId: "middle" });
   });
 
-  it("reaches the visible bottom and inverts it to canonical neighbors", () => {
+  it("reaches the visible bottom in canonical rank order", () => {
     expect(
       resolveTicketReorderNeighbors(blocks, "top", "bottom", "far"),
-    ).toEqual({ beforeId: null, afterId: "bottom" });
+    ).toEqual({ beforeId: "bottom", afterId: null });
   });
 
   it("maps a hovered descendant to its entire root block", () => {
@@ -37,16 +37,16 @@ describe("resolveTicketReorderNeighbors", () => {
         "middle-child",
         "near",
       ),
-    ).toEqual({ beforeId: "middle", afterId: "top" });
+    ).toEqual({ beforeId: "top", afterId: "middle" });
   });
 
   it("resolves a source from another state and a header to destination-only neighbors", () => {
     expect(
       resolveTicketReorderNeighbors(blocks, "other-state", "middle", "far"),
-    ).toEqual({ beforeId: "bottom", afterId: "middle" });
+    ).toEqual({ beforeId: "middle", afterId: "bottom" });
     expect(
       resolveTicketReorderNeighbors(blocks, "other-state", null, "near"),
-    ).toEqual({ beforeId: "top", afterId: null });
+    ).toEqual({ beforeId: null, afterId: "top" });
     expect(
       resolveTicketReorderNeighbors([], "other-state", null, "near"),
     ).toEqual({ beforeId: null, afterId: null });

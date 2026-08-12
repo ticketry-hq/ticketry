@@ -1,16 +1,14 @@
 """Project status WebSocket consumer."""
 
-from datetime import datetime, timezone
 from urllib.parse import parse_qs
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from asgiref.sync import sync_to_async
 
-from apps.runs import dao
+from apps.runs.api import agent_status
 from apps.runs.bus import STATUS_GROUP_FMT
 from apps.runs.projections import project_work_item_replay, project_workflow_states
 from studio_server.contracts import (
-    AgentStatusScope,
     StatusCursorFrame,
     StatusSnapshotFrame,
 )
@@ -40,11 +38,16 @@ class StatusStreamConsumer(AsyncJsonWebsocketConsumer):
         upper, replay = await sync_to_async(
             project_work_item_replay, thread_sensitive=True
         )(project_id, cursor)
+        # The shared snapshot builder stamps ``at`` before it reads the run
+        # rows. Clients treat any known run the snapshot omits as exited
+        # unless the run is newer than ``at``, so a run inserted while the
+        # rows are being read must sort after the stamp, never before it.
+        snapshot = await agent_status(project_id)
         frame = StatusSnapshotFrame(
-            scope=AgentStatusScope(project_id=project_id),
-            runs=await dao.agent_status_records(project_id),
-            automation_attempts=await dao.automation_attempt_status_records(project_id),
-            at=datetime.now(timezone.utc).isoformat(),
+            scope=snapshot.scope,
+            runs=snapshot.runs,
+            automation_attempts=snapshot.automation_attempts,
+            at=snapshot.at,
             work_item_cursor=upper if cursor is None else cursor,
             workflow_states=await sync_to_async(
                 project_workflow_states, thread_sensitive=True

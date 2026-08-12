@@ -122,6 +122,37 @@ async def test_connect_sends_versioned_authoritative_snapshot() -> None:
     await socket.disconnect()
 
 
+async def test_snapshot_stamp_precedes_run_rows_read(monkeypatch) -> None:
+    """``at`` must be stamped before the run rows are read.
+
+    Clients reconcile any known run the snapshot omits as exited unless the
+    run is newer than ``at``. A stamp taken after the read would let a run
+    spawned mid-query sort before the stamp and be declared exited while its
+    terminal is perfectly healthy.
+    """
+
+    from datetime import datetime, timezone
+
+    await _seed_run("run-1")
+    observed: dict[str, str] = {}
+    real_records = dao.agent_status_records
+
+    async def recording_records(project_id, **kwargs):
+        observed["queried_at"] = datetime.now(timezone.utc).isoformat()
+        return await real_records(project_id, **kwargs)
+
+    monkeypatch.setattr(dao, "agent_status_records", recording_records)
+
+    socket = await _connect(PROJECT_1_ID)
+    connected, _ = await socket.connect()
+    assert connected
+    frame = await socket.receive_json_from()
+
+    assert frame["type"] == "snapshot"
+    assert frame["at"] <= observed["queried_at"]
+    await socket.disconnect()
+
+
 async def test_state_group_change_is_published_to_active_project_client() -> None:
     workspace = await sync_to_async(Workspace.objects.create)(
         id=uuid.uuid4(), slug="catalog-live", name="Catalog live"

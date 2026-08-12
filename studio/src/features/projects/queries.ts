@@ -4,6 +4,11 @@ import {
   applyCanonicalModuleOrder,
   usesManualModuleOrder,
 } from "./utilities/canonicalModuleOrder";
+import {
+  forgetAcceptedManualModuleOrder,
+  hasAcceptedManualModuleOrder,
+} from "./internal/acceptedManualModuleOrder";
+import { forgetNewlyCreatedModules } from "./internal/newlyCreatedModules";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import type {
@@ -25,22 +30,34 @@ async function fetchProjects(): Promise<Project[]> {
 }
 
 /**
- * Resolve the project's durable module ordering mode (#359).
+ * Resolve the project's durable module ordering mode (#359, #363).
  *
- * The project list is the only project read, and it is always loaded before a
- * project can be selected, so the cache normally answers this without a
- * request. A cold cache falls back to loading it; a failed load leaves the
- * project automatic, which is the mode every project starts in.
+ * The mode is revalidated on every module fetch rather than answered from the
+ * cached project list. Nothing else refreshes that list on a running client, so
+ * a teammate or another device flipping the project to Manual module order
+ * would otherwise stay invisible here indefinitely, and recency would keep
+ * layering itself back over the server's persisted rank order.
+ *
+ * The two reads are issued together by `fetchModules`, so neither can outrun
+ * the other. An authoritative read is final, and retires whatever the last
+ * accepted reorder implied about the mode (#367).
+ *
+ * A failed read falls back, in order, to a reorder this client has already had
+ * accepted — the server took the project manual to accept it, so recency must
+ * not be layered back over the rank order that drag produced — then to whatever
+ * the cache already knows. An empty cache leaves the project automatic, the
+ * mode every project starts in.
  */
 async function fetchModuleOrderingMode(projectId: string): Promise<boolean> {
-  const cached = getProjectsSnapshot();
-  if (cached.some((project) => project.id === projectId)) {
-    return usesManualModuleOrder(cached, projectId);
-  }
   try {
-    return usesManualModuleOrder(await loadProjects(), projectId);
+    const manualModuleOrder = usesManualModuleOrder(await loadProjects(), projectId);
+    forgetAcceptedManualModuleOrder(projectId);
+    return manualModuleOrder;
   } catch {
-    return false;
+    return (
+      hasAcceptedManualModuleOrder(projectId) ||
+      usesManualModuleOrder(getProjectsSnapshot(), projectId)
+    );
   }
 }
 
@@ -161,6 +178,8 @@ export async function deleteProjectRecord(id: string): Promise<void> {
     old?.filter((project) => project.id !== id),
   );
   queryClient.removeQueries({ queryKey: queryKeys.modules.byProject(id) });
+  forgetAcceptedManualModuleOrder(id);
+  forgetNewlyCreatedModules(id);
 }
 
 /** Test seam: seed the cached project list. */

@@ -13,6 +13,7 @@ import {
   loadProjects,
   updateProjectRecord,
 } from "./queries";
+import { markModuleCreated } from "./internal/newlyCreatedModules";
 import type {
   Module,
   Project,
@@ -150,6 +151,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     );
     if (!moduleType) throw new Error("The Module issue type is unavailable.");
     const created = await api.createModule(projectId, name, moduleType.id);
+    // Recorded before the reload so the canonical order that reload produces
+    // already leads with the new module, in either ordering mode (#366).
+    markModuleCreated(projectId, created.id);
     // Reload so both normal create and guided create preserve the same ordering.
     await loadModules(projectId).catch(() => {});
     return created;

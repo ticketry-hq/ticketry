@@ -42,7 +42,7 @@ import { hasFindingsPanel } from "./internal/findings";
 import IssueSidebar from "./IssueSidebar";
 import IssueActionsMenu from "./IssueActionsMenu";
 import { LaunchAgentAction } from "./LaunchAgentAction";
-import { RunSubtreeAction } from "./RunSubtreeAction";
+import { SubtreeRunActions } from "./SubtreeRunActions";
 import { readVersionedItem } from "../../../../../shared/storage/versioned";
 
 const DescriptionEditor = lazy(() => import("../documents/DescriptionEditor"));
@@ -267,7 +267,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
               )
             }
           />
-          <RunSubtreeAction task={task} moduleId={epic?.id ?? null} />
+          <SubtreeRunActions task={task} moduleId={epic?.id ?? null} />
         </div>
 
         <div className="mt-6">

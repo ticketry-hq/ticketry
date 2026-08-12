@@ -40,6 +40,7 @@
     "targets": ["app", "dmg"],
     "icon": ["icons/icon.icns", "icons/icon.png"],
     "resources": {
+      "native/ticketry-ghostty.conf": "ticketry-ghostty.conf",
       "vendor/libghostty/resources/": ""
     },
     "externalBin": ["binaries/muxed-backend", "binaries/ticketry-hook"],

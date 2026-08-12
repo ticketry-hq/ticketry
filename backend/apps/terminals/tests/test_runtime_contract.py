@@ -20,9 +20,12 @@ from apps.terminals.runtime import (
     InMemoryTerminalRuntime,
     TerminalDimensions,
     TerminalObservationError,
+    TerminalRuntimeError,
     TerminalState,
     TmuxTerminalRuntime,
 )
+from apps.terminals.runtime._tmux import _TmuxAttachment, tmux_client
+from apps.terminals.tmux._core import TmuxSessionError
 
 
 _TMUX_AVAILABLE = shutil.which("tmux") is not None
@@ -214,6 +217,109 @@ def test_tmux_runtime_logs_use_agent_run_id_not_internal_session_name(
         messages = [record.getMessage() for record in caplog.records]
         assert any(run_id in message for message in messages)
         assert all(f"pt-{run_id}" not in message for message in messages)
+
+
+class _StubViewerProcess:
+    """Minimal PtyProcess stand-in for attachment control-path tests."""
+
+    def __init__(self, *, winsize_error: Exception | None = None) -> None:
+        self._winsize_error = winsize_error
+
+    def setwinsize(self, rows: int, columns: int) -> None:
+        if self._winsize_error is not None:
+            raise self._winsize_error
+
+
+def _control_failure(run_id: str) -> TmuxSessionError:
+    """Build a tmux-layer error shaped like the ones client.py raises."""
+
+    return TmuxSessionError(
+        f"refresh-client failed for 'pt-{run_id}': can't find client pt-{run_id}"
+    )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        pytest.param(
+            lambda attachment: attachment.resize(
+                TerminalDimensions(columns=100, rows=32)
+            ),
+            id="resize",
+        ),
+        pytest.param(lambda attachment: attachment.scroll("up", 1), id="scroll"),
+    ],
+)
+def test_attachment_controls_translate_tmux_failures_without_private_names(
+    operation,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    run_id = str(uuid.uuid4())
+    attachment = _TmuxAttachment(
+        agent_run_id=run_id,
+        process=_StubViewerProcess(),
+    )
+
+    def fail(*args: Any, **kwargs: Any) -> None:
+        raise _control_failure(run_id)
+
+    monkeypatch.setattr(tmux_client, "refresh_client_size", fail)
+    monkeypatch.setattr(tmux_client, "scroll", fail)
+
+    with pytest.raises(TerminalRuntimeError) as raised:
+        operation(attachment)
+
+    assert not isinstance(raised.value, TmuxSessionError)
+    assert run_id in str(raised.value)
+    # Nothing derived from the private session target may cross the seam, and
+    # the chained cause must not smuggle it into transports that render it.
+    assert "pt-" not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
+def test_attachment_resize_translates_viewer_process_failures(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    run_id = str(uuid.uuid4())
+    attachment = _TmuxAttachment(
+        agent_run_id=run_id,
+        process=_StubViewerProcess(winsize_error=OSError("viewer pty gone")),
+    )
+    monkeypatch.setattr(
+        tmux_client,
+        "refresh_client_size",
+        lambda *args, **kwargs: pytest.fail("resize must stop at the failed pty"),
+    )
+
+    with pytest.raises(TerminalRuntimeError) as raised:
+        attachment.resize(TerminalDimensions(columns=100, rows=32))
+
+    assert str(raised.value) == f"could not resize terminal for AgentRun {run_id}"
+
+
+def test_attachment_control_failures_keep_detail_in_runtime_logs(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    run_id = str(uuid.uuid4())
+    attachment = _TmuxAttachment(
+        agent_run_id=run_id,
+        process=_StubViewerProcess(),
+    )
+
+    def fail(*args: Any, **kwargs: Any) -> None:
+        raise _control_failure(run_id)
+
+    monkeypatch.setattr(tmux_client, "scroll", fail)
+    caplog.set_level(logging.WARNING, logger="apps.terminals.runtime._tmux")
+
+    with pytest.raises(TerminalRuntimeError):
+        attachment.scroll("up", 1)
+
+    assert any(
+        run_id in record.getMessage() and record.exc_info is not None
+        for record in caplog.records
+    )
 
 
 def test_tmux_runtime_namespace_distinguishes_socket_roots(

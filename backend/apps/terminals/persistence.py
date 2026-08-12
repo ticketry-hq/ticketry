@@ -15,6 +15,7 @@ from django.db import close_old_connections, transaction
 from apps.runs.models import AgentRun
 from apps.terminals.dao.constants import SCRATCH_TASK_ID
 from apps.terminals.models import AgentTerminalSession
+from apps.terminals.termination_seam import publish_agent_run_terminated
 from worktracker.models import Issue
 
 
@@ -201,15 +202,20 @@ def termination_context(agent_run_id: str) -> TerminationContext:
 
 
 def persist_termination(agent_run_id: str, *, ended_at: str) -> None:
-    """Durably mark both existing application records as terminated."""
+    """Durably mark both existing application records as terminated.
+
+    Announces the completion seam once the write commits so campaigns scheduled
+    on this run can re-evaluate; this module records the ending and never
+    decides what follows from it.
+    """
 
     try:
         with transaction.atomic():
-            AgentTerminalSession.objects.filter(
+            terminal_updated = AgentTerminalSession.objects.filter(
                 agent_run_id=agent_run_id,
                 terminated_at__isnull=True,
             ).update(terminated_at=ended_at)
-            AgentRun.objects.filter(
+            run_updated = AgentRun.objects.filter(
                 id=agent_run_id, ended_at__isnull=True
             ).update(
                 status="terminated",
@@ -217,6 +223,8 @@ def persist_termination(agent_run_id: str, *, ended_at: str) -> None:
                 lifecycle_state="exited",
                 lifecycle_updated_at=ended_at,
             )
+            if terminal_updated or run_updated:
+                publish_agent_run_terminated(agent_run_id)
     finally:
         close_old_connections()
 
@@ -234,6 +242,10 @@ def persist_reconciliation_outcome(
     A missing runtime supplies ``exit_code=None`` and therefore does not
     overwrite any previously recorded process result. Hosted-command exit may
     supply the mechanical code reported by the terminal runtime.
+
+    A reconciliation that actually ends a run or its terminal announces the
+    completion seam after commit, leaving the meaning of that ending to its
+    subscribers.
     """
 
     try:
@@ -269,6 +281,8 @@ def persist_reconciliation_outcome(
                     id=agent_run_id,
                     ended_at__isnull=True,
                 ).update(**updates)
+            if terminal_updated or run_updated:
+                publish_agent_run_terminated(agent_run_id)
             return ReconciliationOutcome(
                 project_id=str(run.issue.project_id),
                 was_active=bool(terminal_updated or run_updated),
@@ -327,7 +341,7 @@ def persist_runtime_recovery(
                 ended_at=None,
                 exit_code=None,
                 error=None,
-                lifecycle_state="unknown",
+                lifecycle_state="working",
                 lifecycle_updated_at=recovered_at,
             )
             return RuntimeRecoveryOutcome(

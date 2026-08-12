@@ -71,15 +71,41 @@ class _TmuxAttachment(TerminalAttachment):
         self._process.write(data)
 
     def resize(self, dimensions: TerminalDimensions) -> None:
-        self._process.setwinsize(dimensions.rows, dimensions.columns)
-        tmux_client.refresh_client_size(
-            self._agent_run_id,
-            dimensions.columns,
-            dimensions.rows,
-        )
+        try:
+            self._process.setwinsize(dimensions.rows, dimensions.columns)
+            tmux_client.refresh_client_size(
+                self._agent_run_id,
+                dimensions.columns,
+                dimensions.rows,
+            )
+        except Exception as exc:
+            raise self._public_failure("resize", exc) from None
 
     def scroll(self, direction: str, lines: int = 3) -> None:
-        tmux_client.scroll(self._agent_run_id, direction, lines)
+        try:
+            tmux_client.scroll(self._agent_run_id, direction, lines)
+        except Exception as exc:
+            raise self._public_failure("scroll", exc) from None
+
+    def _public_failure(self, operation: str, exc: Exception) -> TerminalRuntimeError:
+        """Translate implementation failures into a run-correlated public error.
+
+        The tmux layer's messages embed the derived ``pt-`` session target, which
+        is private to this runtime and must not reach transports that surface the
+        error text (the WebSocket reports initial resize failures verbatim as
+        ``attachment_failed``). The detail is logged here instead, so operators
+        keep it while callers see only the AgentRun ID.
+        """
+
+        logger.warning(
+            "terminal viewer %s failed agent_run_id=%s",
+            operation,
+            self._agent_run_id,
+            exc_info=exc,
+        )
+        return TerminalRuntimeError(
+            f"could not {operation} terminal for AgentRun {self._agent_run_id}"
+        )
 
     @property
     def completed(self) -> bool:

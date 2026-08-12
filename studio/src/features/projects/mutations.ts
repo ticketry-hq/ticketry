@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useIsMutating, useMutation } from "@tanstack/react-query";
 import * as api from "../../shared/api/client";
 import { apiErrorMessage } from "../../shared/api/client";
 import { queryClient } from "../../shared/query/queryClient";
@@ -7,6 +7,7 @@ import { queryKeys } from "../../shared/query/keys";
 import { toast } from "../../state/clientStore";
 import { getModulesSnapshot } from "./queries";
 import { planModuleReorder, type ModuleReorderPlan } from "./internal/moduleReorder";
+import { markManualModuleOrderAccepted } from "./internal/acceptedManualModuleOrder";
 import type { Module, WorkItem } from "../../shared/api/types";
 
 interface ReorderModuleVariables {
@@ -27,6 +28,14 @@ export interface ModuleReorderControls {
 }
 
 /**
+ * One in-flight reorder at a time, across every Module surface. The pending
+ * flag is read from the mutation cache under this key rather than from one hook
+ * instance, so the sidebar and the Module tab strip disable together instead of
+ * each serializing only against its own gestures.
+ */
+const MODULE_REORDER_KEY = ["module-reorder"] as const;
+
+/**
  * The one project-scoped Module reorder write (#360).
  *
  * Every part of the write is derived from the single cached Canonical module
@@ -35,13 +44,14 @@ export interface ModuleReorderControls {
  * is retained for rollback *and* sent as the possible first-drag baseline, and
  * the two neighbor ids are the server's ranking input.
  *
- * After settlement the project list and then the module list are refetched, in
- * that order. The module query reads the project's durable ordering mode, so a
- * first drag has to see the flipped mode before it re-derives the list — reload
- * them the other way round and agent-activity recency would be layered back
- * over a project that is now manually ordered.
+ * After an accepted write, any projects request already in flight is cancelled
+ * before the module list is refetched. That refetch revalidates the project's
+ * durable ordering mode alongside the modules (#363, #479), and the mode read
+ * must start after the write so a pre-reorder response cannot layer recency
+ * back over the persisted Manual module order.
  */
 export function useReorderModule(projectId: string | null): ModuleReorderControls {
+  const isPending = useIsMutating({ mutationKey: MODULE_REORDER_KEY }, queryClient) > 0;
   const mutation = useMutation<
     WorkItem,
     Error,
@@ -49,6 +59,7 @@ export function useReorderModule(projectId: string | null): ModuleReorderControl
     ReorderModuleContext
   >(
     {
+      mutationKey: MODULE_REORDER_KEY,
       mutationFn: ({ moduleId, plan }) =>
         api.reorderWorkItem(moduleId, {
           before_id: plan.beforeId,
@@ -64,6 +75,22 @@ export function useReorderModule(projectId: string | null): ModuleReorderControl
         return { previous };
       },
 
+      async onSuccess(_data, { projectId: id }) {
+        // Accepting the write is what takes the project manual on the server.
+        // Record that before the refetch, so a project read that fails during
+        // it cannot answer "automatic" from the stale cache and drop recency
+        // back over the order this drag just persisted (#367).
+        markManualModuleOrderAccepted(id);
+
+        // A projects read that departed before this acceptance cannot confirm
+        // the mode it created. Retire it so the module refetch below starts a
+        // post-reorder mode read instead of deduping onto the stale request.
+        await queryClient.cancelQueries({
+          queryKey: queryKeys.projects.all,
+          exact: true,
+        });
+      },
+
       onError(error, { projectId: id }, context) {
         if (context?.previous !== undefined) {
           queryClient.setQueryData(queryKeys.modules.byProject(id), context.previous);
@@ -72,7 +99,6 @@ export function useReorderModule(projectId: string | null): ModuleReorderControl
       },
 
       async onSettled(_data, _error, { projectId: id }) {
-        await queryClient.refetchQueries({ queryKey: queryKeys.projects.all });
         await queryClient.refetchQueries({
           queryKey: queryKeys.modules.byProject(id),
           exact: true,
@@ -82,7 +108,7 @@ export function useReorderModule(projectId: string | null): ModuleReorderControl
     queryClient,
   );
 
-  const { isPending, mutate } = mutation;
+  const { mutate } = mutation;
   const reorder = useCallback(
     (moduleId: string, targetId: string, intent: "near" | "far") => {
       // A cancelled drag never reaches here, and a drop that changes nothing

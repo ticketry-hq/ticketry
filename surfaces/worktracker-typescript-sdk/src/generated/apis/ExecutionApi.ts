@@ -36,6 +36,11 @@ import {
     GraphResetResultToJSON,
 } from '../models/GraphResetResult.js';
 import {
+    type GraphRunRequest,
+    GraphRunRequestFromJSON,
+    GraphRunRequestToJSON,
+} from '../models/GraphRunRequest.js';
+import {
     type GraphRunResult,
     GraphRunResultFromJSON,
     GraphRunResultToJSON,
@@ -48,7 +53,7 @@ import {
 
 export interface WorkItemsGraphRunCreateRequest {
     issueId: string;
-    agentOverride?: AgentOverride;
+    graphRunRequest?: GraphRunRequest;
 }
 
 export interface WorkItemsGraphRunDestroyRequest {
@@ -74,7 +79,7 @@ export interface ExecutionApiInterface {
     /**
      * Creates request options for workItemsGraphRunCreate without sending the request
      * @param {string} issueId
-     * @param {AgentOverride} [agentOverride]
+     * @param {GraphRunRequest} [graphRunRequest]
      * @throws {RequiredError}
      * @memberof ExecutionApiInterface
      */
@@ -83,7 +88,7 @@ export interface ExecutionApiInterface {
     /**
      *
      * @param {string} issueId
-     * @param {AgentOverride} [agentOverride]
+     * @param {GraphRunRequest} [graphRunRequest]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof ExecutionApiInterface
@@ -196,7 +201,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: AgentOverrideToJSON(requestParameters['agentOverride']),
+            body: GraphRunRequestToJSON(requestParameters['graphRunRequest']),
         };
     }
 

@@ -1,5 +1,6 @@
 import type {
   Attachment as GeneratedAttachment,
+  GraphRunExecutionModeEnum as GeneratedGraphRunExecutionMode,
   Module as GeneratedModule,
   Project as GeneratedProject,
   PatchedProject as GeneratedProjectPatch,
@@ -60,6 +61,10 @@ export interface ProviderCatalog {
   global_default: GlobalLaunchDefault | null;
 }
 export type SubtreeRunCapabilityMap = Record<string, string[]>;
+
+// Scheduling mode of one graph-run campaign. Omitting it on the wire keeps the
+// historical parallel fan-out, so callers only pass it to opt into serial.
+export type GraphRunExecutionMode = `${GeneratedGraphRunExecutionMode}`;
 
 export type Module = GeneratedModule;
 

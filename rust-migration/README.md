@@ -12,10 +12,12 @@ The target is one Rust application core with three adapters:
 3. an in-process Rust MCP listener for external agents.
 
 This is a **vertical, in-process strangler**, not a rewrite deployed as another
-sidecar. Build and prove one feature-owned Rust slice at a time inside
-`studio/src-tauri`, compare it with Django using isolated databases, and give
-each table or capability exactly one production writer. Retire Python only when
-the final execution and MCP gates pass. Do not dual-write production data.
+sidecar. Work in a git worktree of this repository on branch `rust-migration`,
+build and dogfood one feature-owned Rust slice at a time inside
+`studio/src-tauri`, and give each table or capability exactly one production
+writer. A separate repository or fresh application is explicitly rejected;
+that integration-last shape is how the prior `ticketry-rust` attempt died.
+Retire Python only after every remaining Studio, MCP, and execution path moves.
 
 The current shell is already about 10,340 lines of Rust and owns data-directory
 locking, sidecar supervision, tmux viewing, and native libghostty rendering
@@ -71,39 +73,50 @@ repository. See [prior-attempts-postmortem.md](prior-attempts-postmortem.md).
   guide and failure analysis for both Rust repositories.
 - [data-migration.md](data-migration.md) specifies adoption, validation,
   PostgreSQL handling, cutover, and rollback.
-- [migration-strategy.md](migration-strategy.md) is the implementation sequence,
-  expressed as phases and ticket-sized outcomes.
+- [migration-strategy.md](migration-strategy.md) is the ratified vertical-slice
+  sequence, its WorkTracker go/no-go point, and the gates for each cutover.
 - [risks-open-questions.md](risks-open-questions.md) separates real risks from
   decisions that require product or compatibility policy.
 
 ## Governing principles
 
-1. **Migrate behavior, not routes.** The 81 current OpenAPI operations and 30
+1. **Port as is; optimize afterward.** Rust initially mirrors the Django
+   domains, GraphQL reproduces DRF serializer semantics, and current service
+   functions become authored commands. No domain, schema, or interaction
+   redesign happens during porting; GraphQL-native cleanup is a final phase.
+2. **Migrate behavior, not routes.** The 81 current OpenAPI operations and 30
    current MCP tools are evidence and compatibility inputs, not a mandate to
    reproduce HTTP internally ([`../openapi.json`](../openapi.json),
    [`../surfaces/worktracker-agent/api/tools.py`](../surfaces/worktracker-agent/api/tools.py),
    [`../surfaces/worktracker-agent/mcp/server.py`](../surfaces/worktracker-agent/mcp/server.py)).
-2. **One holding place and one write authority.** Preserve the existing
+3. **One holding place and one write authority.** Preserve the existing
    per-entity cache/revision model and never let Django and Rust concurrently
    own the same mutation path
    ([`../docs/decisions/2026-08-04-frontend-state-and-api-contract.md`](../docs/decisions/2026-08-04-frontend-state-and-api-contract.md),
    [`../docs/decisions/2026-08-06-one-holding-per-thing.md`](../docs/decisions/2026-08-06-one-holding-per-thing.md)).
-3. **Do not expose storage as the domain API.** Ranking, transition gates,
+4. **Do not expose storage as the domain API.** Ranking, transition gates,
    hierarchy, launch effects, and graph-run lifecycle require authored commands;
    generated CRUD mutators must not bypass them
    ([`../backend/worktracker/services/`](../backend/worktracker/services/),
    [`../backend/apps/execution/driver.py`](../backend/apps/execution/driver.py)).
-4. **Durability precedes realtime.** Persist the event/effect fact before
+5. **Durability precedes realtime.** Persist the event/effect fact before
    notifying GraphQL subscribers or launching local effects. Reconnect must be
    snapshot/replay/live, not best effort
    ([`../backend/apps/runs/consumers.py`](../backend/apps/runs/consumers.py),
    [`../backend/apps/runs/bus.py`](../backend/apps/runs/bus.py)).
-5. **Preserve IDs and live authorities.** Existing UUIDs, sequence IDs, ranks,
+6. **Preserve IDs and live authorities.** Existing UUIDs, sequence IDs, ranks,
    revisions, filesystem paths, tmux session names, and run relationships cross
    UI, database, filesystem, and process boundaries.
-6. **Integrate continuously.** Each feature lands in the real Tauri composition
-   with generated client operations and acceptance coverage; no external fork
-   waits for total parity before testing the destination seam.
+7. **Integrate continuously without moving the frontend.** Each existing
+   feature's query/mutation folder is re-pointed from REST to generated GraphQL
+   in the real Tauri composition, so both transports coexist during migration.
+8. **Freeze Django after the foundation.** Once slice 0 passes, Python accepts
+   critical fixes only, and each fix is flagged for re-porting.
+9. **Gate on adoption, acceptance, and dogfood.** Preserve the complete
+   [data-migration.md](data-migration.md) safety process, run the curated Studio
+   acceptance suite plus targeted cases, then daily-drive a snapshot/copy of the
+   real data directory for a couple of days before merge or release. There is
+   no post-write downgrade promise.
 
 ## Evidence and scope
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useStudioStore } from "../../../../../../features/projects/store";
+import { useStudioStore } from "../../../../../../features/projects";
 import { useModulesQuery } from "../../../../../../features/projects";
 import { formatWorkItemDisplayIdentifier } from "../../../../../../features/work-items";
 

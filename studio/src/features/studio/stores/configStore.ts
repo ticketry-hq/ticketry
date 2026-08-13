@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import * as api from "../../../shared/api/client";
+import * as api from "../../settings";
 import { type ConfigPayload, type Profile } from "../lib/types";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
@@ -110,11 +110,8 @@ export function seedConfig(
 }
 
 export async function selectProfile(index: number): Promise<void> {
-  await api.patchConfig({ recent_profile_index: index });
-  queryClient.setQueryData<ConfigSnapshot>(queryKeys.config, (old) =>
-    old ? { ...old, recentProfileIndex: index } : old,
-  );
-  const { loadProjects } = await import("../../projects/queries");
+  acceptConfig(await api.patchConfig({ recent_profile_index: index }));
+  const { loadProjects } = await import("../../projects");
   await loadProjects();
 }
 

@@ -33,7 +33,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/studio/lib/liveTerminalCycle",
   "features/studio/lib/defaultProject",
   "features/studio/lib/planeUrl",
-  "features/studio/lib/taskTree",
+  "features/work-items",
   "features/studio/lib/types",
   "features/studio/modals/AddModule",
   "features/studio/modals/AddProject",
@@ -45,22 +45,11 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/studio/stores/configStore",
   "state/clientStore",
   "features/projects",
-  "features/projects/queries",
-  "features/projects/store",
   "features/settings",
   "features/settings/changeLedger",
   "features/settings/store",
   "features/work-items",
-  "features/work-items/queries",
-  "state/clientStore",
-  "features/workflows/ModelConfigurationPanel",
-  "features/workflows/providerQueries",
-  "features/workflows/LaunchDefaultPicker",
-  "features/workflows/launchBindingValidation",
-  "features/workflows/launchProviderCatalog",
-  "features/workflows/StateConfigurationPanel",
-  "features/workflows/WorkflowSettingsPanel",
-  "features/workflows/workflowEditorStore",
+  "features/workflows",
 ]);
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -89,6 +78,54 @@ function productRoot(path: string): string | null {
 }
 
 describe("module boundaries", () => {
+  it("keeps headless WorkTracker features independent of app UI", () => {
+    const violations: string[] = [];
+    for (const root of ["projects", "work-items", "workflows"] as const) {
+      for (const file of walk(join(SRC, "features", root))) {
+        if (file.includes(".test.")) continue;
+        const importer = relative(SRC, file).replace(/\\/g, "/");
+        for (const specifier of importSpecifiers(readFileSync(file, "utf8"))) {
+          const target = relative(SRC, resolve(dirname(file), specifier)).replace(/\\/g, "/");
+          if (target.startsWith("app/")) violations.push(`${importer} imports app UI ${target}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("makes app consumers use WorkTracker feature indexes", () => {
+    const violations: string[] = [];
+    const workTrackerRoots = [
+      "features/projects",
+      "features/work-items",
+      "features/workflows",
+    ];
+    for (const file of walk(join(SRC, "app"))) {
+      if (file.includes("/__tests__/") || file.includes(".test.")) continue;
+      const importer = relative(SRC, file).replace(/\\/g, "/");
+      for (const specifier of importSpecifiers(readFileSync(file, "utf8"))) {
+        const target = relative(SRC, resolve(dirname(file), specifier))
+          .replace(/\\/g, "/")
+          .replace(/\.(?:ts|tsx)$/, "");
+        for (const root of workTrackerRoots) {
+          if (target.startsWith(`${root}/`)) {
+            violations.push(`${importer} reaches past ${root}/index.ts into ${target}`);
+          }
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps the WorkTracker data-layer shape explicit", () => {
+    for (const root of ["projects", "work-items", "workflows"] as const) {
+      for (const directory of ["operations", "generated", "queries", "selectors"] as const) {
+        expect(statSync(join(SRC, "features", root, directory)).isDirectory()).toBe(true);
+      }
+      expect(statSync(join(SRC, "features", root, "index.ts")).isFile()).toBe(true);
+    }
+  });
+
   it("makes the visible Studio composition readable from the app tree", () => {
     const expectedImports: Record<string, string[]> = {
       "app/StudioApp.tsx": ["./shell/StudioShell"],

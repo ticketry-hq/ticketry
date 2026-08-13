@@ -651,19 +651,12 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
         )
         assert config_response.status_code == 200
         assert config_response.json() == {
-            "recent_profile_index": 0,
+            # The supervised Python process is now read-only for profiles.
+            # Desktop Rust creates the implicit Local profile after adopting
+            # this freshly provisioned workspace.
+            "recent_profile_index": None,
             "features": {"sidebar": False, "projects": False},
-            "profiles": [
-                {
-                    "name": "Local",
-                    "workspace_slug": "meml",
-                    "agent_prompt": None,
-                    "agent_prompts": {},
-                    "module_links": [],
-                    "recent_project_id": None,
-                    "recent_module_ids": {},
-                }
-            ],
+            "profiles": [],
         }
         assert (
             httpx.get(url, headers={"x-api-key": "wrong"}, timeout=5).status_code == 401

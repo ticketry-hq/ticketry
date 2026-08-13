@@ -26,7 +26,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from apps.settings_store import config as cfgmod
+from apps.settings_store.compatibility import read_config
 from apps.settings_store.config import (
     NoConfigurationSelected,
     module_link_path,
@@ -83,7 +83,7 @@ class DiscardOut(BaseModel):
 def _current_profile():
     """The selected local profile, or ``None`` when none is configured."""
 
-    cfg = cfgmod.Config()
+    cfg = read_config()
     try:
         idx = resolve_profile_index(cfg, None)
     except NoConfigurationSelected:

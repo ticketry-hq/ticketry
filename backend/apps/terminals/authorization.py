@@ -6,6 +6,7 @@ from django.core import signing
 
 
 RUN_AUTHORIZATION_SALT = "muxed.terminals.current-run.v1"
+RUN_AUTHORIZATION_MAX_AGE_SECONDS = 24 * 60 * 60
 
 
 class RunAuthorizationError(ValueError):
@@ -23,7 +24,11 @@ def issue_run_authorization(agent_run_id: str) -> str:
     return f"Bearer {token}"
 
 
-def verify_run_authorization(authorization: str | None) -> str:
+def verify_run_authorization(
+    authorization: str | None,
+    *,
+    max_age: int | None = RUN_AUTHORIZATION_MAX_AGE_SECONDS,
+) -> str:
     """Verify a Studio-issued Bearer credential and return its run id."""
 
     if not authorization:
@@ -32,7 +37,13 @@ def verify_run_authorization(authorization: str | None) -> str:
     if scheme.lower() != "bearer" or not separator or not token or " " in token:
         raise RunAuthorizationError("authorization_malformed")
     try:
-        payload = signing.loads(token, salt=RUN_AUTHORIZATION_SALT)
+        payload = signing.loads(
+            token,
+            salt=RUN_AUTHORIZATION_SALT,
+            max_age=max_age,
+        )
+    except signing.SignatureExpired as exc:
+        raise RunAuthorizationError("authorization_expired") from exc
     except signing.BadSignature as exc:
         raise RunAuthorizationError("authorization_invalid") from exc
     if not isinstance(payload, dict) or set(payload) != {"agent_run_id"}:

@@ -8,7 +8,7 @@ import {
   type SidebarPaneComposition,
 } from "../features/studio/stores/configStore";
 import { useModalStore } from "../app/modal/modalStore";
-import { useStudioStore } from "../features/projects/store";
+import { useStudioStore } from "../features/projects";
 import type {
   TabKind,
   SessionId,
@@ -340,7 +340,7 @@ export const useClientStore = create<ClientState>((set, get) => ({
       selectedTaskId: null,
       workspaceSelection: { kind: "task" },
     });
-    const { loadModuleTree } = await import("../features/work-items/queries");
+    const { loadModuleTree } = await import("../features/work-items");
     const persistRecentModule =
       profile && profile.recent_module_ids?.[projectId] !== id
         ? updateProfile(recentProfileIndex!, {

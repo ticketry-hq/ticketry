@@ -608,7 +608,7 @@ const reachableStateIds = (
   return reachable;
 };
 
-function assembleScopedWorkflowSettings(
+export function assembleScopedWorkflowSettings(
   issueType: IssueType,
   states: State[],
   transitions: CanonicalWorkflowTransition[],

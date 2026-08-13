@@ -6,6 +6,11 @@ import type {
   UserNoticeListener,
 } from "./contract";
 import {
+  executeFoundationOperation,
+  type CreateGraphQlTransportProxy,
+} from "../graphql-foundation/foundationClient";
+import { createTauRPCProxy } from "../graphql-foundation/generated/taurpc";
+import {
   validateUserNotice,
   validateUserNotices,
 } from "./userNotice";
@@ -24,6 +29,7 @@ export type DesktopRuntimeListen = (
 export interface DesktopRuntimeOptions {
   readonly invoke: DesktopInvoke;
   readonly listen?: DesktopRuntimeListen;
+  readonly createGraphQlProxy?: CreateGraphQlTransportProxy;
 }
 
 function initializationError(field: string, expectation: string): never {
@@ -179,6 +185,7 @@ function serviceHealth(value: unknown): ServiceHealth | null {
 export async function createDesktopRuntime({
   invoke,
   listen,
+  createGraphQlProxy = createTauRPCProxy,
 }: DesktopRuntimeOptions): Promise<StudioRuntime> {
   const startup = validateConfiguration(
     await invoke<unknown>("desktop_runtime_configuration"),
@@ -186,6 +193,12 @@ export async function createDesktopRuntime({
   const deliveredNoticeIds = new Set(
     startup.initialNotices.map((notice) => notice.id),
   );
+  const readWorkTracker: StudioRuntime["readWorkTracker"] = (routes) =>
+    routes.graphQl((document, variables) => executeFoundationOperation(
+      document,
+      variables,
+      createGraphQlProxy,
+    ));
 
   return Object.freeze({
     platform: "desktop" as const,
@@ -197,6 +210,10 @@ export async function createDesktopRuntime({
       nativeTerminal: false,
       nativeFolderPicker: true,
     }),
+    readWorkTracker,
+    writeWorkTracker: readWorkTracker,
+    readSettings: readWorkTracker,
+    writeSettings: readWorkTracker,
     pickFolder: async () =>
       validatePickedFolder(await invoke<unknown>("desktop_pick_folder")),
     retryServices: async () => {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from threading import Lock, RLock
@@ -85,6 +86,7 @@ def launch_task_agent(
     task_id: str,
     *,
     agent: str | None,
+    agent_run_id: str | None = None,
     launch_configuration: ResolvedLaunchConfiguration | None = None,
     spawn: SpawnRun | None = None,
 ) -> LaunchResult:
@@ -131,6 +133,8 @@ def launch_task_agent(
     }
     if launch_configuration is not None:
         launch_kwargs["launch_configuration"] = launch_configuration
+    if agent_run_id is not None:
+        launch_kwargs["agent_run_id"] = agent_run_id
     run_id = async_to_sync(spawn or spawn_run)(
         **launch_kwargs,
     )
@@ -187,6 +191,7 @@ def execute_graph(
     agent: str | None,
     mode: str | None = None,
     spawn: SpawnRun | None = None,
+    launch_configuration: ResolvedLaunchConfiguration | None = None,
 ) -> list[str]:
     """Arm or manually revive a root and launch eligible direct children.
 
@@ -209,7 +214,7 @@ def execute_graph(
     )
     if root is None:
         raise ValueError("task_not_found")
-    if not LaunchBinding.objects.filter(
+    if launch_configuration is None and not LaunchBinding.objects.filter(
         issue_type_id=root.issue_type_id,
         state_id=root.state_id,
         subtree_run_enabled=True,
@@ -235,6 +240,11 @@ def execute_graph(
                     module_id=module_id,
                     agent=agent,
                     execution_mode=execution_mode,
+                    launch_configuration=(
+                        asdict(launch_configuration)
+                        if launch_configuration is not None
+                        else None
+                    ),
                 )
             else:
                 if _has_active_subtree_launch(str(root.id)):
@@ -247,12 +257,18 @@ def execute_graph(
                 header.module_id = module_id
                 header.agent = agent
                 header.execution_mode = execution_mode
+                header.launch_configuration = (
+                    asdict(launch_configuration)
+                    if launch_configuration is not None
+                    else None
+                )
                 header.save(
                     update_fields=[
                         "project",
                         "module",
                         "agent",
                         "execution_mode",
+                        "launch_configuration",
                         "updated_at",
                     ]
                 )
@@ -343,16 +359,24 @@ def _advance_locked(header: GraphRun, *, spawn: SpawnRun | None) -> list[str]:
     )
     launched: list[str] = []
     spawn_call = spawn or spawn_run
+    launch_configuration = (
+        ResolvedLaunchConfiguration(**header.launch_configuration)
+        if header.launch_configuration
+        else None
+    )
 
     for child in candidates:
         try:
-            run_id = async_to_sync(spawn_call)(
+            launch_kwargs = dict(
                 agent=header.agent,
                 project_id=str(header.project_id),
                 module_id=str(header.module_id),
                 task_id=str(child.id),
                 scope="task",
             )
+            if launch_configuration is not None:
+                launch_kwargs["launch_configuration"] = launch_configuration
+            run_id = async_to_sync(spawn_call)(**launch_kwargs)
         except Exception:
             # A serial advancement selected one candidate, so a failure here
             # records no launch fact and cannot fall through to a

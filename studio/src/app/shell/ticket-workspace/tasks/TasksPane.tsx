@@ -1,8 +1,14 @@
 import { useCallback, useMemo } from "react";
 import { useClientStore } from "../../../../state/clientStore";
-import { useStudioStore } from "../../../../features/projects/store";
+import { useStudioStore } from "../../../../features/projects";
 import { useCachedStates } from "../../../../shared/query/stateCatalog";
 import {
+  isPlanningRow,
+  LOADING_PLACEHOLDER as PLACEHOLDER,
+  STATE_HEADER as HEADER,
+  type PlanningRow as Row,
+  type PlanningTreeRow as TreeRow,
+  useStoriesTree,
   useReorderWorkItem,
   useSetWorkItemState,
 } from "../../../../features/work-items";
@@ -13,7 +19,6 @@ import { StateHeaderRow } from "./components/StateHeaderRow";
 import { LoadingPlaceholderRow } from "./components/LoadingPlaceholderRow";
 import { IdeaEntry } from "./components/IdeaEntry";
 import { StoriesSearchInput } from "./components/StoriesSearchInput";
-import { useStoriesTree } from "./useStoriesTree";
 import {
   useAxisDragAndDrop,
   type DragPayloadCodec,
@@ -22,38 +27,17 @@ import {
   resolveTicketReorderNeighbors,
   type VisibleRootBlock,
 } from "./internal/ticketReorder";
-import { type WorkItemRow } from "../../../../features/studio/lib/taskTree";
 import { queryClient } from "../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../shared/query/keys";
 import type { WorkItem } from "../../../../shared/api/types";
 
-export type { WorkItemRow } from "../../../../features/studio/lib/taskTree";
-
-export interface ScratchRow {
-  kind: "scratch";
-  moduleId: string;
-}
-
-export type Row = WorkItemRow | ScratchRow;
-
-export const PLACEHOLDER = Symbol("loading-placeholder");
-export const HEADER = Symbol("state-header");
-
-export type TreeRow =
-  | Row
-  | { kind: typeof PLACEHOLDER; key: string; depth: number }
-  | {
-      kind: typeof HEADER;
-      key: string;
-      stateId?: string | null;
-      stateName: string;
-      stateColor: string;
-      count: number;
-    };
-
-export function isPlanningRow(row: TreeRow): row is Row {
-  return row.kind === "work-item" || row.kind === "scratch";
-}
+export {
+  isPlanningRow,
+  type PlanningRow as Row,
+  type PlanningTreeRow as TreeRow,
+  type ScratchRow,
+  type WorkItemRow,
+} from "../../../../features/work-items";
 
 export function planningRowId(row: Row): string {
   return row.kind === "work-item" ? row.id : TEMP_TASK_ID;

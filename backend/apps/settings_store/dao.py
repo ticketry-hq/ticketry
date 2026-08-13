@@ -24,6 +24,12 @@ async def upsert_setting(
 ) -> None:
     """Insert or replace one scoped setting value."""
 
+    from apps.settings_store.write_ownership import (
+        assert_django_settings_write_allowed,
+    )
+
+    assert_django_settings_write_allowed()
+
     await AppSetting.objects.aupdate_or_create(
         scope=scope,
         key=key,

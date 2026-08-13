@@ -1,0 +1,29 @@
+query LoadProviderCatalog {
+  provider_catalog {
+    configurable_providers { id slug activated supports_unattended }
+    providers { id slug activated supports_unattended }
+    agent_models { id provider name permitted_reasoning_levels }
+    reasoning_levels { id name }
+    global_default { provider model reasoning }
+  }
+}
+
+mutation UpdateProviderCatalog(
+  $activatedProviders: [String!]!
+  $defaultProvider: String
+  $defaultModel: String
+  $defaultReasoning: String
+) {
+  update_provider_catalog(
+    activated_providers: $activatedProviders
+    default_provider: $defaultProvider
+    default_model: $defaultModel
+    default_reasoning: $defaultReasoning
+  ) {
+    configurable_providers { id slug activated supports_unattended }
+    providers { id slug activated supports_unattended }
+    agent_models { id provider name permitted_reasoning_levels }
+    reasoning_levels { id name }
+    global_default { provider model reasoning }
+  }
+}

@@ -2,7 +2,7 @@ import {
   createProjectRecord,
   getProjectsSnapshot,
   loadProjects,
-} from "../../projects/queries";
+} from "../../projects";
 import type { Project } from "../../../shared/api/types";
 
 export const DEFAULT_PROJECT_KEY = "CDN";

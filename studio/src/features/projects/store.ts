@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import * as api from "../../shared/api/client";
 import { ApiError } from "../../shared/api/client";
 import * as recentProjects from "./utilities/recentProjects";
 import { toast } from "../../state/clientStore";
@@ -14,6 +13,7 @@ import {
   updateProjectRecord,
 } from "./queries";
 import { markModuleCreated } from "./internal/newlyCreatedModules";
+import { createWorkItem } from "../work-items";
 import type {
   Module,
   Project,
@@ -38,7 +38,7 @@ function errMessage(e: unknown): string {
 
 // Client-only state: which project is open and which view is active. The
 // project and module lists themselves live in the TanStack Query cache
-// (features/projects/queries.ts); components subscribe with
+// (features/projects.ts); components subscribe with
 // useProjectsQuery/useModulesQuery.
 interface StudioState {
   selectedProjectId: string | null;
@@ -150,7 +150,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       (issueType) => issueType.level === "module" && issueType.name === "Module",
     );
     if (!moduleType) throw new Error("The Module issue type is unavailable.");
-    const created = await api.createModule(projectId, name, moduleType.id);
+    const created = await createWorkItem(projectId, {
+      name,
+      issue_type_id: moduleType.id,
+      parent_id: null,
+    });
     // Recorded before the reload so the canonical order that reload produces
     // already leads with the new module, in either ordering mode (#366).
     markModuleCreated(projectId, created.id);

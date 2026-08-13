@@ -2,8 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import * as api from "../../shared/api/client";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
-import { loadStates, reloadStates } from "../../shared/query/stateCatalog";
 import type { IssueType, SubtreeRunCapabilityMap } from "../../shared/api/types";
+import {
+  readSubtreeRunCapabilities,
+  readWorkflowIssueTypes,
+  readWorkflowStates,
+} from "../workflows";
 
 // Project settings server state: the issue-type catalog and the subtree-run
 // capability map. Workflow states are NOT duplicated here — they live in the
@@ -19,7 +23,9 @@ const capabilitiesKey = (projectId: string) =>
   ["settings", projectId, "subtree-run"] as const;
 
 async function fetchIssueTypes(projectId: string): Promise<IssueType[]> {
-  return bySortOrder(await api.listIssueTypes(projectId));
+  return bySortOrder(
+    await readWorkflowIssueTypes(projectId, api.listIssueTypes),
+  );
 }
 
 export function loadIssueTypes(
@@ -46,7 +52,7 @@ async function fetchCapabilities(
   projectId: string,
 ): Promise<SubtreeRunCapabilityMap> {
   const generation = capabilityGenerations.get(projectId) ?? 0;
-  const fetched = await api.listSubtreeRunCapabilities(projectId);
+  const fetched = await readSubtreeRunCapabilities(projectId);
   // A synchronize/refresh landed while this request was in flight; what the
   // server just told us is already stale, so keep the newer local map.
   if ((capabilityGenerations.get(projectId) ?? 0) !== generation) {
@@ -113,7 +119,12 @@ export async function loadSettings(projectId: string): Promise<void> {
       queryFn: () => fetchIssueTypes(projectId),
       staleTime: 0,
     }),
-    reloadStates(projectId),
+    queryClient.fetchQuery({
+      queryKey: queryKeys.states.byProject(projectId),
+      queryFn: () =>
+        readWorkflowStates(projectId, api.listStates).then(bySortOrder),
+      staleTime: 0,
+    }),
     queryClient.fetchQuery({
       queryKey: capabilitiesKey(projectId),
       queryFn: () => fetchCapabilities(projectId),
@@ -129,7 +140,11 @@ export async function ensureSettings(projectId: string): Promise<void> {
       queryKey: issueTypesKey(projectId),
       queryFn: () => fetchIssueTypes(projectId),
     }),
-    loadStates(projectId),
+    queryClient.ensureQueryData({
+      queryKey: queryKeys.states.byProject(projectId),
+      queryFn: () =>
+        readWorkflowStates(projectId, api.listStates).then(bySortOrder),
+    }),
     queryClient.ensureQueryData({
       queryKey: capabilitiesKey(projectId),
       queryFn: () => fetchCapabilities(projectId),

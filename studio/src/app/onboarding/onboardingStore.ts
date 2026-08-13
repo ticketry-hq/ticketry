@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import * as api from "../../shared/api/client";
+import { acknowledgeOnboarding as writeOnboardingAcknowledgement, readWorkspace } from "../../features/projects";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 
 async function fetchOnboardingRequired(): Promise<boolean> {
-  return (await api.getWorkspace()).onboarding_required;
+  return (await readWorkspace()).onboarding_required;
 }
 
 export async function loadWorkspaceState(): Promise<void> {
@@ -23,7 +23,7 @@ export async function loadWorkspaceState(): Promise<void> {
 }
 
 export async function acknowledgeOnboarding(): Promise<void> {
-  const workspace = await api.acknowledgeOnboarding();
+  const workspace = await writeOnboardingAcknowledgement();
   queryClient.setQueryData(
     queryKeys.workspace,
     workspace.onboarding_required,

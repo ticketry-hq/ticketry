@@ -41,6 +41,9 @@ class GraphRun(models.Model):
     # Kept as ``agent`` for wire/storage compatibility; null delegates provider
     # selection to each node's current-state launch binding.
     agent = models.CharField(max_length=255, null=True, blank=True)
+    # Immutable Rust-owned policy snapshot used for every node in this
+    # Django-owned campaign. Django stores and performs it; it never resolves it.
+    launch_configuration = models.JSONField(null=True, blank=True)
     # Durable scheduling mode of this campaign; survives backend restarts so
     # later state or agent-lifecycle observations advance it consistently.
     execution_mode = models.CharField(
@@ -82,3 +85,23 @@ class LaunchedTask(models.Model):
 
     class Meta:
         db_table = "launched_tasks"
+
+
+class LaunchPolicyEffect(models.Model):
+    """Django's idempotent receipt for one immutable Rust policy decision."""
+
+    decision_id = models.CharField(max_length=32, primary_key=True)
+    caller_scope = models.CharField(max_length=32)
+    idempotency_key = models.CharField(max_length=255)
+    result = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "launch_policy_effects"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["caller_scope", "idempotency_key"],
+                name="uniq_launch_policy_effect_identity",
+            )
+        ]

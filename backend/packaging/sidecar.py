@@ -209,7 +209,6 @@ def migrate_and_provision() -> None:
         provision_output = io.StringIO()
         call_command("provision", stdout=provision_output)
 
-        from apps.settings_store import service as settings_service
         from django.conf import settings
 
         provisioned = json.loads(provision_output.getvalue())
@@ -217,10 +216,6 @@ def migrate_and_provision() -> None:
         # loaded. Make that credential authoritative for the running process as
         # well as the persisted token file.
         settings.WORKTRACKER_API_TOKEN = provisioned["token"]
-        settings_service.ensure_local_profile(
-            name="Local",
-            workspace_slug=provisioned["workspace_slug"],
-        )
 
 
 def readiness_line(port: int) -> str:
@@ -284,6 +279,17 @@ def run_hook(argv: list[str]) -> int:
 
 def run_mcp() -> int:
     """Run the packaged WorkTracker MCP service from the same artifact."""
+
+    if os.environ.get("TICKETRY_RUST_WORKTRACKER_OWNER", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        print(
+            "Legacy Python WorkTracker MCP is disabled after Rust write ownership transfers.",
+            file=sys.stderr,
+        )
+        return 2
 
     from worktracker_agent.mcp.main import main as mcp_main
 

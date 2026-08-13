@@ -93,9 +93,13 @@ async def get_provider_catalog():
 
 
 def _put_provider_catalog_atomically(value: ProviderCatalogWrite) -> dict:
+    from apps.settings_store.write_ownership import (
+        assert_django_settings_write_allowed,
+    )
     from apps.settings_store.models import AppSetting
     from worktracker.models import Provider
 
+    assert_django_settings_write_allowed()
     activated = set(value.activated_providers)
     unknown = activated.difference(CONFIGURABLE_PROVIDER_SLUGS)
     if unknown:

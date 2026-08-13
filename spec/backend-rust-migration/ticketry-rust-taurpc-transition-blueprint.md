@@ -98,7 +98,7 @@ The kernel should be small, explicit, and reusable by both Tauri and MCP:
 3. **View-contract crate:** TauRPC IPC inputs, views, event payloads, transport errors, conversion functions, validation helpers, and checked integer/string boundary codecs.
 4. **Shared support modules:** transaction runner, application error taxonomy, field validation utilities, event publisher/outbox, clock/ID abstractions only where testing requires them, and local-effect/recovery interfaces.
 
-The kernel is not a generic internal framework. It exists to make Ticketry’s own rules, data, and adapters consistent. Avoid a “base controller,” generic CRUD engine, reflection-based model registry, or an abstract repository layer that hides SeaORM without adding a real Ticketry boundary.
+The kernel is not a generic internal framework. It exists to make Ticketry’s own rules, data, and adapters consistent. Use Seaography's generated model CRUD as the baseline contract instead of rebuilding it, but avoid a hand-built “base controller,” generic CRUD engine, reflection-based model registry, or abstract repository layer that hides SeaORM without adding a real Ticketry boundary. When unrestricted generated CRUD would expose protected fields or bypass an invariant, the smallest acceptable deviation is one restricted model-shaped create/update/delete seam with a written reason and a drift-prevention test.
 
 ## 3. Canonical vocabulary and boundaries
 
@@ -107,6 +107,7 @@ Use these terms consistently in code, tests, and handoffs.
 | Term | Meaning |
 | --- | --- |
 | **Canonical model** | A SeaORM persisted entity/relationship backed by the compatible SQLite schema. This is the trusted durable representation. |
+| **Model-shaped write** | A create, update, or delete of one canonical model, including its mutable relationships, through an explicit writable-field allowlist. Internal invariant work does not make it a separate public operation. |
 | **Model operation** | A transaction-safe function or method operating on canonical models that enforces an invariant or performs a meaningful mutation. |
 | **Controller** | An application operation that coordinates model operations, transaction scope, external-effect planning, result projection, and event publication. |
 | **View contract** | An IPC/MCP-facing input, output, event, or error type. It is transient and may not be used as a persistence entity. |
@@ -121,13 +122,15 @@ Use these terms consistently in code, tests, and handoffs.
 1. React imports generated TauRPC types/proxy and local UI adapters; it never imports Rust database concepts or makes a REST request in the desktop runtime.
 2. TauRPC input/view structs carry wire shapes only. They do not query SeaORM, mutate models, execute commands, or decide workflow policy.
 3. A resolver delegates to a named controller operation. It cannot contain a second implementation of workflow, hierarchy, rank, revision, or deletion rules.
-4. Controllers own use-case sequencing and transaction scope. They may call models and execution services; they may not encode a second schema or bypass model operations with ad hoc SQL.
-5. SeaORM entities are the canonical stored model. They may be used in model and controller layers, but never serialized directly to React or MCP clients.
-6. Persistence helpers own database opening, schema inspection, migrations/adoption checks, reusable query scopes, and transaction primitives. They do not own UI or TauRPC semantics.
-7. External local effects—tmux, PTY, Git, filesystem, agents, document watchers—never run while a SQLite write transaction is open.
-8. An event is published only after its associated durable transaction commits. A failed transaction publishes nothing.
-9. MCP and TauRPC both invoke controllers. Neither invokes the other.
-10. The Tauri composition root is the only module that constructs concrete database, event, terminal, worktree, filesystem, and MCP runtime dependencies.
+4. Public model writes are create/update/delete shaped and allowlist caller-writable fields. Parent, blocker, classification, archive, and state requests use the WorkItem update contract; focused hierarchy, dependency, transition, and cascade helpers remain internal.
+5. A custom public mutation is permitted only for behavior that cannot be represented as model CRUD. Its written exception names the missing generated/database behavior, the smallest custom seam, and its preventing test, and the mutation registry records the reason.
+6. Controllers own use-case sequencing and transaction scope. They may call models and execution services; they may not encode a second schema or bypass model operations with ad hoc SQL.
+7. SeaORM entities are the canonical stored model. They may be used in model and controller layers, but never serialized directly to React or MCP clients.
+8. Persistence helpers own database opening, schema inspection, migrations/adoption checks, reusable query scopes, and transaction primitives. They do not own UI or TauRPC semantics and do not form a repository layer that mirrors SeaORM.
+9. External local effects—tmux, PTY, Git, filesystem, agents, document watchers—never run while a SQLite write transaction is open.
+10. An event is published only after its associated durable transaction commits. A failed transaction publishes nothing.
+11. MCP and TauRPC both invoke controllers. Neither invokes the other.
+12. The Tauri composition root is the only module that constructs concrete database, event, terminal, worktree, filesystem, and MCP runtime dependencies.
 
 ## 4. Target workspace and dependency layout
 
@@ -841,4 +844,3 @@ The product decisions are locked. These are technical verifications to perform b
 6. Decide the checked wire representation for each current `u64`/SQLite integer field after measuring real ranges and frontend needs.
 
 These checks must result in documented implementation facts. They do not permit adding a Django fallback, HTTP adapter, GPUI port, or schema redesign.
-

@@ -3,45 +3,47 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { useQuery } from "@tanstack/react-query";
 import { getTasks } from "../../shared/api/client";
 import type { State, WorkItem } from "../../shared/api/types";
-import { fetchWorkItem } from "../../shared/api/workItemBatcher";
+import { readBatchedWorkItem } from "./queries/readTransport";
 import { FIVE_MINUTES, queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import { seedStates } from "../../shared/query/stateCatalog";
-import { orderedTaskSections } from "../studio/lib/taskTree";
+import { orderedTaskSections } from ".";
 import { loadModuleTree, workItemQuery } from "./queries";
 
-vi.mock("../../shared/api/client", () => ({
+vi.mock("../../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../shared/api/client")>()),
   getTasks: vi.fn(),
 }));
 
-vi.mock("../../shared/api/workItemBatcher", () => ({
-  fetchWorkItem: vi.fn(),
+vi.mock("./queries/readTransport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./queries/readTransport")>()),
+  readBatchedWorkItem: vi.fn(),
 }));
 
 describe("workItemQuery", () => {
   beforeEach(() => {
     queryClient.clear();
-    vi.mocked(fetchWorkItem).mockReset();
+    vi.mocked(readBatchedWorkItem).mockReset();
     vi.mocked(getTasks).mockReset();
   });
 
   it("reads its id through the batcher under the id-owned key", async () => {
     const record = workItem();
-    vi.mocked(fetchWorkItem).mockResolvedValue(record);
+    vi.mocked(readBatchedWorkItem).mockResolvedValue(record);
 
     const options = workItemQuery(record.id);
 
     expect(options.queryKey).toEqual(queryKeys.workItems.byId(record.id));
     expect(options.staleTime).toBe(FIVE_MINUTES);
     await expect(options.queryFn()).resolves.toEqual(record);
-    expect(fetchWorkItem).toHaveBeenCalledWith(record.id);
+    expect(readBatchedWorkItem).toHaveBeenCalledWith(record.id);
   });
 
   it("preserves relation ids and derives renamed state sections from the catalog", async () => {
     const original = workItem();
     const todo = state("todo", "Todo");
     seedStates(original.project_id, [todo]);
-    vi.mocked(fetchWorkItem).mockResolvedValue(original);
+    vi.mocked(readBatchedWorkItem).mockResolvedValue(original);
     const { result } = renderHook(() =>
       useQuery(workItemQuery(original.id), queryClient),
     );
@@ -87,7 +89,7 @@ describe("workItemQuery", () => {
     expect(queryClient.getQueryData(queryKeys.workItems.byId(record.id))).toBe(
       record,
     );
-    expect(fetchWorkItem).not.toHaveBeenCalled();
+    expect(readBatchedWorkItem).not.toHaveBeenCalled();
   });
 
   it("does not let a membership refresh replace a newer or optimistic entry", async () => {

@@ -17,6 +17,28 @@ When a file outgrows one concern, split it rather than extend it. The full
 rules live in [`CLAUDE.md`](CLAUDE.md) under "Code structure — governing
 rules"; keep the two documents consistent.
 
+Database-backed GraphQL Models are migration-first and generated-contract-first.
+Start with generated Seaography CRUD and caller-specific GraphQL operations.
+Each public write must bind a concrete identity and allowlist only the fields
+that the caller may change. If unrestricted generated CRUD would expose protected
+fields or bypass a Ticketry invariant, keep that mutator private and expose one
+restricted, model-shaped create/update/delete seam instead. Keep validation,
+locking, revisions, derived-field repair, cascades, and event planning behind
+that seam.
+
+Do not replace model CRUD with per-field or per-relationship RPCs. In
+particular, WorkItem parent, blocker, classification, archive, and state requests
+enter through the restricted WorkItem update contract; hierarchy, dependency,
+transition, and revision code remains internal and transactional. Only behavior
+that cannot be represented as model CRUD may become a named domain operation,
+and it must be recorded in the route/operation registry with the reason. The
+current exceptions are work-item reorder, state reorder, issue-type reorder,
+remove-state-from-workflow, and onboarding acknowledgement. Do not add
+replacement CRUD, DAO/repository layers that mirror SeaORM, mirrored DTOs,
+`mutation: false`, or generated-file patches without a written exception that
+identifies the missing behavior, rejected framework/database facilities, the
+smallest custom seam, and its drift-prevention test.
+
 Keep the Tauri/webview boundary narrow. The native terminal renderer consumes a
 pinned libghostty revision through its C API, while tmux remains responsible for
 durable sessions. Preserve the existing fallback unless a deliberate migration

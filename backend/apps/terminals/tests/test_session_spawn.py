@@ -202,6 +202,46 @@ async def test_spawn_happy_path_returns_id_and_persists(
     assert created["command"].startswith("env -u NO_COLOR ")
 
 
+async def test_spawn_recovers_same_run_after_crash_between_ledger_and_runtime(
+    tmp_config, tmp_path, monkeypatch
+):
+    module_folder = tmp_path / "repo"
+    module_folder.mkdir()
+    _profile(tmp_config, module_folder)
+    _patch_worktracker(monkeypatch)
+    _patch_argv(monkeypatch)
+    runtime = patch_terminal_runtime(monkeypatch)
+    monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
+    deterministic_id = "a" * 32
+    runtime.create_error = KeyboardInterrupt("simulated process crash")
+
+    with pytest.raises(KeyboardInterrupt, match="simulated process crash"):
+        await session_module.launch_agent_run(_intent(agent_run_id=deterministic_id))
+
+    assert await AgentRun.objects.filter(id=deterministic_id).acount() == 1
+    assert (
+        await AgentTerminalSession.objects.filter(
+            agent_run_id=deterministic_id
+        ).acount()
+        == 1
+    )
+    runtime.create_error = None
+
+    recovered = await session_module.launch_agent_run(
+        _intent(agent_run_id=deterministic_id)
+    )
+
+    assert recovered == deterministic_id
+    assert runtime.present == {deterministic_id}
+    assert await AgentRun.objects.filter(id=deterministic_id).acount() == 1
+    assert (
+        await AgentTerminalSession.objects.filter(
+            agent_run_id=deterministic_id
+        ).acount()
+        == 1
+    )
+
+
 async def test_spawn_materializes_an_oversized_tmux_command(
     tmp_config, tmp_path, monkeypatch
 ):

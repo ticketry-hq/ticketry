@@ -10,7 +10,8 @@ import re
 from typing import Optional
 
 from apps.documents.design_docs import module_dir_name
-from apps.settings_store.config import Profile, config, module_link_path
+from apps.settings_store.compatibility import read_profile
+from apps.settings_store.config import NoConfigurationSelected, Profile, module_link_path
 from studio_server.contracts import ModuleSummary, TaskSummary
 
 
@@ -65,7 +66,10 @@ def build_context_prompt(
     # A launch resolves its profile immediately before building the prompt.
     # Prefer that fresh profile over the process-start configuration snapshot,
     # whose prompt overrides may be stale after a Settings save.
-    active_profile = profile if profile is not None else config.current_profile
+    try:
+        active_profile = profile if profile is not None else read_profile()
+    except NoConfigurationSelected:
+        active_profile = None
     workspace_slug = getattr(active_profile, "workspace_slug", "")
     module_folder = ""
     if active_profile and module_id:
@@ -285,7 +289,10 @@ def build_doc_chat_prompt(
     :return: the doc-chat prompt string.
     """
 
-    active_profile = profile if profile is not None else config.current_profile
+    try:
+        active_profile = profile if profile is not None else read_profile()
+    except NoConfigurationSelected:
+        active_profile = None
     module_folder = module_link_path(active_profile, module_id) or ""
 
     prompt = (

@@ -27,6 +27,16 @@ revision-guarded issue-type update with the same prune. The former composite
 workflow-settings read is removed: issue-type, transition, and launch-binding
 reads provide its rows, and clients derive standing warnings from those rows.
 
+The Rust GraphQL port preserves this boundary. Generated Seaography CRUD is the
+starting capability, while the public contract uses restricted model-shaped
+inputs wherever an unrestricted entity mutator would expose protected fields or
+bypass an invariant. Such a restricted resolver is still CRUD, not a domain
+operation. WorkItem parent, blockers, classification, archive, and state enter
+through the one WorkItem update contract; hierarchy, dependency, transition,
+revision, and cascade helpers stay internal and transaction-safe. A custom
+public mutation or DAO-style persistence seam requires the same written,
+registry-declared exception as any other quarantined operation.
+
 Every Ticketry HTTP operation, including those five quarantined writes, is now
 a DRF view under ADR 0007. The old Ninja routers and bespoke schema builders
 are deleted; drf-spectacular is the sole source of `openapi.json`, both

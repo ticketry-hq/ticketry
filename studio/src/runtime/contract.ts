@@ -1,4 +1,5 @@
 import type { UserNotice } from "./userNotice";
+import type { TypedDocumentNode } from "../graphql-foundation/typedDocument";
 
 export type StudioPlatform = "browser" | "desktop";
 
@@ -40,6 +41,18 @@ export interface ServiceHealth {
 export type ServiceHealthListener = (health: ServiceHealth) => void;
 export type UserNoticeListener = (notice: UserNotice) => void;
 
+export type WorkTrackerGraphQlExecute = <TResult, TVariables>(
+  document: TypedDocumentNode<TResult, TVariables>,
+  variables: TVariables,
+) => Promise<TResult>;
+
+export interface WorkTrackerReadRoutes<TResult> {
+  readonly rest: () => Promise<TResult>;
+  readonly graphQl: (execute: WorkTrackerGraphQlExecute) => Promise<TResult>;
+}
+
+export type SettingsRoutes<TResult> = WorkTrackerReadRoutes<TResult>;
+
 export interface RuntimeStartupConfiguration {
   readonly endpoints: RuntimeEndpoints;
   readonly values: RuntimeValues;
@@ -51,6 +64,15 @@ export interface RuntimeStartupConfiguration {
 export interface StudioRuntime {
   readonly platform: StudioPlatform;
   readonly capabilities: RuntimeCapabilities;
+  readWorkTracker<TResult>(
+    routes: WorkTrackerReadRoutes<TResult>,
+  ): Promise<TResult>;
+  /** Route a WorkTracker command to the platform's sole configured writer. */
+  writeWorkTracker<TResult>(
+    routes: WorkTrackerReadRoutes<TResult>,
+  ): Promise<TResult>;
+  readSettings<TResult>(routes: SettingsRoutes<TResult>): Promise<TResult>;
+  writeSettings<TResult>(routes: SettingsRoutes<TResult>): Promise<TResult>;
   pickFolder(): Promise<string | null>;
   retryServices(): Promise<void>;
   startup(): RuntimeStartupConfiguration;

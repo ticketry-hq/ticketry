@@ -20,9 +20,9 @@ import type { TreeRow } from "../../shell/ticket-workspace/tasks/TasksPane";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
 import type { WorkItem } from "../../../shared/api/types";
-import { getModuleTreeSnapshot } from "../../../features/work-items/queries";
+import { getModuleTreeSnapshot } from "../../../features/work-items";
 import { getStatesSnapshot } from "../../../shared/query/stateCatalog";
-import { useStudioStore } from "../../../features/projects/store";
+import { useStudioStore } from "../../../features/projects";
 import {
   selectLiveTerminalStops,
   selectLiveTerminalStop,
@@ -32,7 +32,7 @@ import {
   selectModuleTaskOrder,
   taskRevealPath,
   type TreeWorkItem,
-} from "../../../features/studio/lib/taskTree";
+} from "../../../features/work-items";
 import {
   consume,
   createNavigationContext,

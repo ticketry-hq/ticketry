@@ -1,0 +1,140 @@
+query WorkTrackerWorkflowCatalog($projectId: String!) {
+  states(project_id: $projectId) {
+    id
+    project
+    name
+    group
+    color
+    sort_order
+    is_protected
+    created_at
+    updated_at
+  }
+  issue_types(project_id: $projectId) {
+    id
+    project
+    name
+    level
+    color
+    sort_order
+    start_state
+    workflow_revision
+    is_pathfind
+    created_at
+    updated_at
+  }
+  launch_bindings(project_id: $projectId) {
+    id
+    issue_type
+    state
+    prompt
+    required_skills
+    model
+    reasoning
+    auto_start
+    subtree_run_enabled
+    created_at
+    updated_at
+  }
+  providers {
+    id
+    slug
+    activated
+    supports_unattended
+  }
+  agent_models {
+    id
+    provider
+    name
+    permitted_reasoning_levels
+  }
+  reasoning_levels {
+    id
+    name
+  }
+}
+
+query WorkTrackerIssueTypeTransitions($issueTypeId: String!) {
+  issue_type_transitions(issue_type_id: $issueTypeId) {
+    id
+    issue_type
+    from_state
+    to_state
+    agent_allowed
+  }
+}
+
+mutation CreateWorkTrackerState($projectId: String!, $name: String!, $group: String!, $color: String) {
+  create_state(project_id: $projectId, name: $name, group: $group, color: $color) {
+    id project name group color sort_order is_protected created_at updated_at
+  }
+}
+
+mutation UpdateWorkTrackerState($id: String!, $name: String, $group: String, $color: String, $sortOrder: Int) {
+  update_state(id: $id, name: $name, group: $group, color: $color, sort_order: $sortOrder) {
+    id project name group color sort_order is_protected created_at updated_at
+  }
+}
+
+mutation DeleteWorkTrackerState($id: String!) { delete_state(state_id: $id) }
+mutation ReorderWorkTrackerStates($projectId: String!, $orderedIds: [String!]!) {
+  reorder_states(project_id: $projectId, ordered_ids: $orderedIds) {
+    id project name group color sort_order is_protected created_at updated_at
+  }
+}
+
+mutation CreateWorkTrackerIssueType($projectId: String!, $name: String!, $level: String!, $color: String) {
+  create_issue_type(project_id: $projectId, name: $name, level: $level, color: $color) {
+    id project name level color sort_order start_state workflow_revision is_pathfind created_at updated_at
+  }
+}
+
+mutation UpdateWorkTrackerIssueType($id: String!, $name: String, $color: String, $sortOrder: Int) {
+  update_issue_type(id: $id, name: $name, color: $color, sort_order: $sortOrder) {
+    id project name level color sort_order start_state workflow_revision is_pathfind created_at updated_at
+  }
+}
+
+mutation DeleteWorkTrackerIssueType($id: String!, $reassignTo: String) {
+  delete_issue_type(id: $id, reassign_to: $reassignTo)
+}
+
+mutation ReorderWorkTrackerIssueTypes($projectId: String!, $orderedIds: [String!]!) {
+  reorder_issue_types(project_id: $projectId, ordered_ids: $orderedIds) {
+    id project name level color sort_order start_state workflow_revision is_pathfind created_at updated_at
+  }
+}
+
+mutation SetWorkTrackerStartState($id: String!, $startStateId: String!, $workflowRevision: Int!) {
+  update_issue_type(id: $id, start_state_id: $startStateId, workflow_revision: $workflowRevision) {
+    id workflow_revision
+  }
+}
+
+mutation CreateWorkTrackerTransition($issueTypeId: String!, $fromStateId: String!, $toStateId: String!, $agentAllowed: Boolean!, $workflowRevision: Int!) {
+  create_issue_type_transition(issue_type_id: $issueTypeId, from_state_id: $fromStateId, to_state_id: $toStateId, agent_allowed: $agentAllowed, workflow_revision: $workflowRevision) { id }
+}
+
+mutation DeleteWorkTrackerTransition($issueTypeId: String!, $fromStateId: String!, $toStateId: String!, $workflowRevision: Int!) {
+  delete_issue_type_transition(issue_type_id: $issueTypeId, from_state_id: $fromStateId, to_state_id: $toStateId, workflow_revision: $workflowRevision)
+}
+
+mutation RemoveWorkTrackerWorkflowState($issueTypeId: String!, $stateId: String!, $workflowRevision: Int!) {
+  remove_state_from_issue_type_workflow(issue_type_id: $issueTypeId, state_id: $stateId, workflow_revision: $workflowRevision)
+}
+
+mutation UpdateWorkTrackerTransition($issueTypeId: String!, $fromStateId: String!, $toStateId: String!, $agentAllowed: Boolean!, $workflowRevision: Int!) {
+  update_issue_type_transition(issue_type_id: $issueTypeId, from_state_id: $fromStateId, to_state_id: $toStateId, agent_allowed: $agentAllowed, workflow_revision: $workflowRevision) { id }
+}
+
+mutation UpsertWorkTrackerLaunchBinding($issueTypeId: String!, $stateId: String!, $workflowRevision: Int!, $prompt: String, $requiredSkills: [String!], $modelId: String, $reasoningId: String, $autoStart: Boolean, $subtreeRunEnabled: Boolean) {
+  upsert_issue_type_launch_binding(issue_type_id: $issueTypeId, state_id: $stateId, workflow_revision: $workflowRevision, prompt: $prompt, required_skills: $requiredSkills, model_id: $modelId, reasoning_id: $reasoningId, auto_start: $autoStart, subtree_run_enabled: $subtreeRunEnabled) { id }
+}
+
+mutation SetWorkTrackerAutoStart($issueTypeId: String!, $stateId: String!, $workflowRevision: Int!, $autoStart: Boolean!) {
+  upsert_issue_type_launch_binding(issue_type_id: $issueTypeId, state_id: $stateId, workflow_revision: $workflowRevision, auto_start: $autoStart) { id }
+}
+
+mutation SetWorkTrackerSubtreeRun($issueTypeId: String!, $stateId: String!, $workflowRevision: Int!, $enabled: Boolean!) {
+  upsert_issue_type_launch_binding(issue_type_id: $issueTypeId, state_id: $stateId, workflow_revision: $workflowRevision, subtree_run_enabled: $enabled) { id }
+}

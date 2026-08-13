@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../../../../features/agents/types";
 import type { SessionMeta } from "../../../../../features/agents/terminal";
-import { providerListPlaceholder } from "../../../../../features/workflows/launchProviderCatalog";
+import { providerListPlaceholder } from "../../../../../features/workflows";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
 
 const AVAILABLE_AGENTS: SessionMeta["agent"][] = [

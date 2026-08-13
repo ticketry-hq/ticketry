@@ -4,7 +4,7 @@ import {
   useModuleReorderDrag,
   useModulesQuery,
 } from "../../../../features/projects";
-import { useStudioStore } from "../../../../features/projects/store";
+import { useStudioStore } from "../../../../features/projects";
 import {
   resolveCursorId,
   useClientStore,

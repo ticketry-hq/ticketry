@@ -1,6 +1,6 @@
 import { useModalStore } from "../../../modal/modalStore";
 import { useProjectsQuery } from "../../../../features/projects";
-import { useStudioStore } from "../../../../features/projects/store";
+import { useStudioStore } from "../../../../features/projects";
 import {
   resolveCursorId,
   useClientStore,

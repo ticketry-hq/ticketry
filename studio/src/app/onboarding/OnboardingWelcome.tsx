@@ -1,14 +1,13 @@
 import { type FormEvent, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
 import type { ProviderCatalog } from "../../shared/api/types";
-import * as api from "../../shared/api/client";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { getConfigSnapshot } from "../../features/studio/stores/configStore";
-import { useStudioStore } from "../../features/projects/store";
+import { useStudioStore } from "../../features/projects";
 import {
   setProviderCapabilities,
-  setProviderCatalog,
-} from "../../features/workflows/providerQueries";
+  updateProviderCatalog,
+} from "../../features/workflows";
 import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 import { OnboardingProviders } from "./OnboardingProviders";
@@ -72,8 +71,7 @@ export default function OnboardingWelcome() {
     setSkipping(true);
     setSkipError(null);
     try {
-      const { value } = await api.putProviderCatalog(EMPTY_CATALOG);
-      setProviderCatalog(value);
+      await updateProviderCatalog(EMPTY_CATALOG);
       setProviderCapabilities([]);
       await acknowledgeOnboarding();
     } catch (cause) {

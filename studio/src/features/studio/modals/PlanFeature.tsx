@@ -12,7 +12,7 @@ import type {
 import { useModalStore } from "../../../app/modal/modalStore";
 import { getConfigSnapshot, getModuleFolder } from "../stores/configStore";
 import { TEMP_TASK_ID } from "../../agents/types";
-import { useStudioStore } from "../../projects/store";
+import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";

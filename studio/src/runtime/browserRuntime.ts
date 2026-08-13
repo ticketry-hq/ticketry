@@ -77,6 +77,8 @@ export function createBrowserRuntime({
     }),
     initialNotices: Object.freeze([]),
   });
+  const readWorkTracker: StudioRuntime["readWorkTracker"] = (routes) =>
+    routes.rest();
 
   return Object.freeze({
     platform: "browser" as const,
@@ -88,6 +90,12 @@ export function createBrowserRuntime({
       nativeTerminal: false,
       nativeFolderPicker: false,
     }),
+    readWorkTracker,
+    // Browser-only development remains a supporting tool while the shipping
+    // desktop path uses in-process GraphQL as the single WorkTracker writer.
+    writeWorkTracker: readWorkTracker,
+    readSettings: readWorkTracker,
+    writeSettings: readWorkTracker,
     pickFolder: async () => null,
     retryServices: async () => {
       throw new Error("Service recovery is available only in desktop Studio");

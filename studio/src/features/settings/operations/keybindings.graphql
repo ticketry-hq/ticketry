@@ -1,0 +1,17 @@
+query LoadKeybindingSetting {
+  keybinding_setting {
+    scope
+    key
+    value
+    updated_at
+  }
+}
+
+mutation UpdateKeybindingSetting($value: Json!) {
+  update_keybinding_setting(value: $value) {
+    scope
+    key
+    value
+    updated_at
+  }
+}

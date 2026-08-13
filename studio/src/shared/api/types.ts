@@ -39,6 +39,8 @@ export interface ProviderCapabilities {
   model_aliases?: string[];
   model_prefixes?: string[];
   reasoning_levels?: string[];
+  /** Model-specific compatibility from the generated catalogue join rows. */
+  model_reasoning_levels?: Record<string, string[]>;
   supports_unattended?: boolean;
 }
 

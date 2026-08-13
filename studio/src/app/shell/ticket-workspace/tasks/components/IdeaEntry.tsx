@@ -8,8 +8,8 @@ import {
 import { toast } from "../../../../../state/clientStore";
 import { useOnboardingTourStore } from "../../../../onboarding/onboardingTourStore";
 import { apiErrorMessage } from "../../../../../shared/api/client";
-import * as api from "../../../../../shared/api/client";
-import { useStudioStore } from "../../../../../features/projects/store";
+import { createWorkItem } from "../../../../../features/work-items";
+import { useStudioStore } from "../../../../../features/projects";
 import { loadIssueTypes } from "../../../../../features/settings";
 import { queryClient } from "../../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../../shared/query/keys";
@@ -60,12 +60,11 @@ export function IdeaEntry() {
         (type) => type.level === "task" && type.name === "Story",
       );
       if (!storyType) throw new Error("The Story issue type is unavailable.");
-      const created = await api.createTask(
-        projectId,
+      const created = await createWorkItem(projectId, {
         name,
-        moduleId,
-        storyType.id,
-      );
+        parent_id: moduleId,
+        issue_type_id: storyType.id,
+      });
       await queryClient.invalidateQueries({
         queryKey: queryKeys.tasks.byModule(projectId, moduleId),
         exact: true,

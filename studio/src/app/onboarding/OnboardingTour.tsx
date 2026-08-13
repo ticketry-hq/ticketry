@@ -4,7 +4,7 @@ import {
   setModuleFolder,
   useConfig,
 } from "../../features/studio/stores/configStore";
-import { useStudioStore } from "../../features/projects/store";
+import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
 import {
   ModuleFolderSelection,

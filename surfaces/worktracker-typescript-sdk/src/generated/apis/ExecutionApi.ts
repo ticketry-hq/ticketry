@@ -50,6 +50,15 @@ import {
     LaunchedAgentResponseFromJSON,
     LaunchedAgentResponseToJSON,
 } from '../models/LaunchedAgentResponse.js';
+import {
+    type Open,
+    OpenFromJSON,
+    OpenToJSON,
+} from '../models/Open.js';
+
+export interface LaunchPolicyEffectCreateRequest {
+    open?: Open;
+}
 
 export interface WorkItemsGraphRunCreateRequest {
     issueId: string;
@@ -76,6 +85,46 @@ export interface WorkItemsLaunchAgentCreateRequest {
  * @interface ExecutionApiInterface
  */
 export interface ExecutionApiInterface {
+    /**
+     * Creates request options for launchPolicyEffectCreate without sending the request
+     * @param {Open} [open]
+     * @throws {RequiredError}
+     * @memberof ExecutionApiInterface
+     */
+    launchPolicyEffectCreateRequestOpts(requestParameters: LaunchPolicyEffectCreateRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     *
+     * @param {Open} [open]
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ExecutionApiInterface
+     */
+    launchPolicyEffectCreateRaw(requestParameters: LaunchPolicyEffectCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Open>>;
+
+    /**
+     */
+    launchPolicyEffectCreate(requestParameters: LaunchPolicyEffectCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Open>;
+
+    /**
+     * Creates request options for launchPolicyEffectReadiness without sending the request
+     * @throws {RequiredError}
+     * @memberof ExecutionApiInterface
+     */
+    launchPolicyEffectReadinessRequestOpts(): Promise<runtime.RequestOpts>;
+
+    /**
+     *
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ExecutionApiInterface
+     */
+    launchPolicyEffectReadinessRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Open>>;
+
+    /**
+     */
+    launchPolicyEffectReadiness(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Open>;
+
     /**
      * Creates request options for workItemsGraphRunCreate without sending the request
      * @param {string} issueId
@@ -170,6 +219,87 @@ export interface ExecutionApiInterface {
  *
  */
 export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterface {
+
+    /**
+     * Creates request options for launchPolicyEffectCreate without sending the request
+     */
+    async launchPolicyEffectCreateRequestOpts(requestParameters: LaunchPolicyEffectCreateRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/execution/launch-policy-effects`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: OpenToJSON(requestParameters['open']),
+        };
+    }
+
+    /**
+     */
+    async launchPolicyEffectCreateRaw(requestParameters: LaunchPolicyEffectCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Open>> {
+        const requestOptions = await this.launchPolicyEffectCreateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => OpenFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async launchPolicyEffectCreate(requestParameters: LaunchPolicyEffectCreateRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Open> {
+        const response = await this.launchPolicyEffectCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for launchPolicyEffectReadiness without sending the request
+     */
+    async launchPolicyEffectReadinessRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/execution/launch-policy-effects`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async launchPolicyEffectReadinessRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Open>> {
+        const requestOptions = await this.launchPolicyEffectReadinessRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => OpenFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async launchPolicyEffectReadiness(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Open> {
+        const response = await this.launchPolicyEffectReadinessRaw(initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for workItemsGraphRunCreate without sending the request

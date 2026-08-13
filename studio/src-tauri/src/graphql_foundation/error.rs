@@ -5,6 +5,8 @@ use serde::Serialize;
 pub enum FoundationInitializationErrorCode {
     DatabaseDirectory,
     DatabaseOpen,
+    WorktrackerDatabaseOpen,
+    SettingsDatabaseOpen,
     Migration,
     Schema,
     EndpointInstall,

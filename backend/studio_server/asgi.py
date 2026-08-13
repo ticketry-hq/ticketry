@@ -39,6 +39,7 @@ django_asgi_app = get_asgi_application()
 from studio_server.routing import websocket_urlpatterns
 
 from apps.documents import watch as documents_watch
+from apps.execution import transition_occurrence_scheduler
 from apps.runs import hook_spool
 from apps.terminals.reconciliation import reconcile_terminals
 from apps.worktrees import service as worktrees_service
@@ -49,6 +50,8 @@ from apps.worktrees import service as worktrees_service
 register_shutdown(documents_watch.stop_all)
 register_startup(hook_spool.start)
 register_shutdown(hook_spool.stop)
+register_startup(transition_occurrence_scheduler.start)
+register_shutdown(transition_occurrence_scheduler.stop)
 
 
 async def _reconcile_worktrees() -> None:

@@ -230,6 +230,12 @@ merges rows into the same normalized client store by id; filters describe
 membership, never a second record location.
 _Avoid_: list variant, nested work-item list, request-keyed record cache
 
+**Model-shaped write**:
+A create, update, or delete of one persisted model, including its mutable fields
+and relationships; enforcing hierarchy, dependency, revision, or workflow
+invariants does not turn it into a separate operation.
+_Avoid_: per-field command, relationship RPC, custom action
+
 **Domain operation**:
 A write that is not model CRUD — work-item, state, or issue-type reorder;
 remove-state-from-workflow (because no row records graph membership); or

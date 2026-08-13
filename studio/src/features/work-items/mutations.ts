@@ -3,7 +3,6 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import * as api from "../../shared/api/client";
 import type {
   IssueType,
   State,
@@ -12,6 +11,14 @@ import type {
 } from "../../shared/api/types";
 import { queryKeys } from "../../shared/query/keys";
 import { rankBetween } from "./utilities/rank";
+import {
+  createWorkItem,
+  reparentWorkItem,
+  reorderWorkItem,
+  setWorkItemBlockers,
+  transitionWorkItem,
+  updateWorkItem,
+} from "./mutationTransport";
 
 export interface ModuleMembership {
   projectId: string;
@@ -156,7 +163,7 @@ export interface RenameWorkItemArgs {
 export function useRenameWorkItem() {
   return useOptimisticWorkItemMutation<RenameWorkItemArgs>({
     id: ({ id }) => id,
-    mutationFn: ({ id, name }) => api.patchWorkItem(id, { name }),
+    mutationFn: ({ id, name }) => updateWorkItem(id, { name }),
     update: (current, { name }) => ({ ...current, name }),
   });
 }
@@ -170,7 +177,7 @@ export function useEditWorkItemDescription() {
   return useOptimisticWorkItemMutation<EditWorkItemDescriptionArgs>({
     id: ({ id }) => id,
     mutationFn: ({ id, description }) =>
-      api.patchWorkItem(id, { description }),
+      updateWorkItem(id, { description }),
     update: (current, { description }) => ({
       ...current,
       description: description ?? "",
@@ -187,7 +194,7 @@ export function useChangeWorkItemType() {
   return useOptimisticWorkItemMutation<ChangeWorkItemTypeArgs>({
     id: ({ id }) => id,
     mutationFn: ({ id, issueType }) =>
-      api.patchWorkItem(id, { issue_type_id: issueType.id }),
+      updateWorkItem(id, { issue_type_id: issueType.id }),
     update: (current, { issueType }) => ({
       ...current,
       issue_type: issueType.id,
@@ -204,7 +211,7 @@ export function useSetWorkItemState() {
   return useOptimisticWorkItemMutation<SetWorkItemStateArgs>({
     id: ({ id }) => id,
     mutationFn: ({ id, state }) =>
-      api.patchWorkItem(id, { state_id: state.id }),
+      transitionWorkItem(id, state.id),
     update: (current, { state }) => ({ ...current, state: state.id }),
   });
 }
@@ -220,7 +227,7 @@ export function useSetWorkItemParent(
   return useOptimisticWorkItemMutation<SetWorkItemParentArgs>({
     id: ({ id }) => id,
     mutationFn: ({ id, parentId }) =>
-      api.patchWorkItem(id, { parent_id: parentId }),
+      reparentWorkItem(id, parentId),
     update: (current, { parentId }) => ({
       ...current,
       parent_id: parentId,
@@ -238,7 +245,7 @@ export function useSetWorkItemBlockers() {
   return useOptimisticWorkItemMutation<SetWorkItemBlockersArgs>({
     id: ({ id }) => id,
     mutationFn: ({ id, blockedByIds }) =>
-      api.patchWorkItem(id, { blocked_by_ids: blockedByIds }),
+      setWorkItemBlockers(id, blockedByIds),
     update: (current, { blockedByIds }) => ({
       ...current,
       blocked_by_ids: blockedByIds,
@@ -276,7 +283,7 @@ export function useReorderWorkItem(
   return useOptimisticWorkItemMutation<ReorderWorkItemArgs>({
     id: ({ id }) => id,
     mutationFn: ({ id, beforeId, afterId }) =>
-      api.reorderWorkItem(id, {
+      reorderWorkItem(id, {
         before_id: beforeId,
         after_id: afterId,
       }),
@@ -296,7 +303,7 @@ export function useCreateWorkItem(
 ) {
   return useOptimisticWorkItemMutation<WorkItemCreate>({
     id: () => null,
-    mutationFn: (body) => api.createWorkItem(membership.projectId, body),
+    mutationFn: (body) => createWorkItem(membership.projectId, body),
     memberships: [membership],
   });
 }

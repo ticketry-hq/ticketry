@@ -1,4 +1,4 @@
-import { useStudioStore } from "../../../../../features/projects/store";
+import { useStudioStore } from "../../../../../features/projects";
 import { useClientStore } from "../../../../../state/clientStore";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import {

@@ -19,6 +19,24 @@ vi.mock("../shared/api/client", async () => {
   return { ...actual, ...api };
 });
 
+vi.mock("../features/work-items/mutationTransport", async () => {
+  const actual = await vi.importActual<
+    typeof import("../features/work-items/mutationTransport")
+  >("../features/work-items/mutationTransport");
+  return {
+    ...actual,
+    createWorkItem: (projectId: string, body: { name?: string; issue_type_id?: string }) =>
+      api.createModule(projectId, body.name, body.issue_type_id),
+  };
+});
+
+vi.mock("../features/projects/mutationTransport", async () => {
+  const actual = await vi.importActual<
+    typeof import("../features/projects/mutationTransport")
+  >("../features/projects/mutationTransport");
+  return { ...actual, updateProject: api.updateProject };
+});
+
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";

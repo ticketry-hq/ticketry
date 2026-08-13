@@ -14,3 +14,11 @@ export {
   useSubtreeRunCapabilitiesQuery,
 } from "./queries";
 export { useSettingsStore } from "./store";
+export {
+  deleteProfile,
+  getConfig,
+  patchConfig,
+  postProfile,
+  putProfile,
+  replaceFeatureFlags,
+} from "./profileTransport";

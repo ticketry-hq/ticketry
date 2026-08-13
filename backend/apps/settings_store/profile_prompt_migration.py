@@ -25,6 +25,15 @@ def migrate_profile_prompts(
     the profile document so they cannot remain a second source of authority.
     """
 
+    from django.apps import apps
+
+    if LaunchBinding._meta.apps is apps:
+        from apps.settings_store.write_ownership import (
+            assert_django_settings_write_allowed,
+        )
+
+        assert_django_settings_write_allowed()
+
     if not config_file.exists():
         return 0
     payload = json.loads(config_file.read_text())

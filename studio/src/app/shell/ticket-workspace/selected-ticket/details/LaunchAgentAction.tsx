@@ -1,8 +1,7 @@
 import { useRef, useState } from "react";
-import { createAgentStatusClient } from "@worktracker/typescript-sdk/agent-status";
 import { toast } from "../../../../../state/clientStore";
-import { agentApiBase, apiKey } from "../../../../../shared/api/client";
 import { launchFailureMessage } from "../../../../../features/agents/terminal";
+import { launchDefaultAgent } from "../../../../../features/agents/terminal/internal/launchDefaultAgent";
 import { IconPlay } from "../../../../../shared/ui/icons";
 
 /** Starts one task-scoped run using the work item's current-state binding. */
@@ -16,11 +15,7 @@ export function LaunchAgentAction({ issueId }: { issueId: string }) {
     inFlightRef.current = true;
     setPending(true);
     try {
-      const client = createAgentStatusClient({
-        baseUrl: agentApiBase(),
-        apiKey: apiKey(),
-      });
-      await client.launchAgent({ issueId });
+      await launchDefaultAgent(issueId);
       toast.success("Agent run started.");
     } catch (error) {
       toast.error(`Agent run could not be started: ${launchFailureMessage(error)}`);

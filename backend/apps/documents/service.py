@@ -25,7 +25,8 @@ from apps.documents.models import DesignDocument
 from apps.runs import dao as runs_dao
 from apps.terminals.dao import SCRATCH_TASK_ID
 from apps import worktracker_queries
-from apps.settings_store.config import module_link_path, resolve_profile
+from apps.settings_store.compatibility import read_profile
+from apps.settings_store.config import module_link_path
 from studio_server.atomic_files import atomic_write_bytes
 
 
@@ -163,7 +164,7 @@ async def list_task_documents(
     resolved_module_id = module_id
     if project_id and module_id:
         try:
-            prof = resolve_profile(profile)
+            prof = read_profile(profile)
             folder = module_link_path(prof, module_id)
             if folder and os.path.isdir(folder):
                 modules = await worktracker_queries.get_modules(project_id)

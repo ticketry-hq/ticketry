@@ -1,72 +1,193 @@
 import { useQuery } from "@tanstack/react-query";
+import { studioRuntime } from "../../runtime";
 import type {
+  ConfigurableProvider,
   ProviderCapabilities,
   ProviderCatalog,
 } from "../../shared/api/types";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
-import * as settingsApi from "../../shared/api/client";
+import * as rest from "../../shared/api/client";
+import {
+  LoadProviderCatalogDocument,
+  UpdateProviderCatalogDocument,
+  type ProviderCatalogPayload,
+} from "../settings/generated/providerCatalog";
 
-const fetchProviderCatalog = async (): Promise<ProviderCatalog> =>
-  (await settingsApi.getProviderCatalog()).value;
+interface ProviderHolding {
+  catalog: ProviderCatalog;
+  capabilities: ProviderCapabilities[];
+  configurableCapabilities: ProviderCapabilities[];
+}
 
-const fetchProviderCapabilities = (): Promise<ProviderCapabilities[]> =>
-  settingsApi.getLaunchProviderCapabilities();
+const isConfigurable = (slug: string): slug is ConfigurableProvider =>
+  slug === "claude" || slug === "codex" || slug === "gemini";
 
-export function loadProviderCatalog(): Promise<ProviderCatalog> {
+function holdingFromGraphQl(payload: ProviderCatalogPayload): ProviderHolding {
+  const reasoningNames = new Map(
+    payload.reasoning_levels.map((level) => [level.id, level.name]),
+  );
+  const capabilitiesFor = (
+    providers: ProviderCatalogPayload["providers"],
+  ): ProviderCapabilities[] => providers.map((provider) => {
+    const models = payload.agent_models.filter(
+      (model) => model.provider === provider.id,
+    );
+    const modelReasoningLevels = Object.fromEntries(models.map((model) => [
+      model.name,
+      model.permitted_reasoning_levels.map(
+        (level) => reasoningNames.get(level) ?? level,
+      ),
+    ]));
+    return {
+      agent: provider.slug,
+      accepts_model: true,
+      accepts_any_model: false,
+      model_aliases: models.map((model) => model.name),
+      model_prefixes: [],
+      reasoning_levels: [
+        ...new Set(Object.values(modelReasoningLevels).flat()),
+      ],
+      model_reasoning_levels: modelReasoningLevels,
+      supports_unattended: provider.supports_unattended,
+    };
+  });
+  return {
+    catalog: {
+      activated_providers: payload.configurable_providers
+        .filter((provider) => provider.activated && isConfigurable(provider.slug))
+        .map((provider) => provider.slug as ConfigurableProvider),
+      global_default: payload.global_default &&
+          isConfigurable(payload.global_default.provider)
+        ? {
+            provider: payload.global_default.provider,
+            model: payload.global_default.model,
+            reasoning: payload.global_default.reasoning,
+          }
+        : null,
+    },
+    capabilities: capabilitiesFor(payload.providers),
+    configurableCapabilities: capabilitiesFor(payload.configurable_providers),
+  };
+}
+
+async function fetchProviderHolding(): Promise<ProviderHolding> {
+  return studioRuntime().readSettings({
+    rest: async () => {
+      const [catalog, capabilities] = await Promise.all([
+        rest.getProviderCatalog(),
+        rest.getLaunchProviderCapabilities(),
+      ]);
+      return {
+        catalog: catalog.value,
+        capabilities,
+        configurableCapabilities: capabilities,
+      };
+    },
+    graphQl: async (execute) => holdingFromGraphQl(
+      (await execute(LoadProviderCatalogDocument, {})).provider_catalog,
+    ),
+  });
+}
+
+const fetchHolding = async (force = false): Promise<ProviderHolding> => {
+  if (force) {
+    await queryClient.cancelQueries({
+      queryKey: queryKeys.providers.catalog,
+      exact: true,
+    });
+  }
   return queryClient.fetchQuery({
     queryKey: queryKeys.providers.catalog,
-    queryFn: fetchProviderCatalog,
+    queryFn: fetchProviderHolding,
     staleTime: 0,
   });
+};
+
+export async function loadProviderCatalog(): Promise<ProviderCatalog> {
+  return (await fetchHolding()).catalog;
 }
 
-export function loadProviderCapabilities({ force = false } = {}): Promise<
+export async function loadProviderCapabilities(
+  { force = false } = {},
+): Promise<ProviderCapabilities[]> {
+  return (await fetchHolding(force)).capabilities;
+}
+
+export async function loadConfigurableProviderCapabilities(): Promise<
   ProviderCapabilities[]
 > {
-  if (force) return refreshProviderCapabilities();
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.providers.capabilities,
-    queryFn: fetchProviderCapabilities,
-    staleTime: 0,
-  });
+  return (await fetchHolding()).configurableCapabilities;
 }
 
-async function refreshProviderCapabilities(): Promise<ProviderCapabilities[]> {
-  await queryClient.cancelQueries({
-    queryKey: queryKeys.providers.capabilities,
-    exact: true,
+export async function updateProviderCatalog(
+  catalog: ProviderCatalog,
+): Promise<ProviderCatalog> {
+  const holding = await studioRuntime().writeSettings({
+    rest: async () => {
+      const value = (await rest.putProviderCatalog(catalog)).value;
+      const capabilities = await rest.getLaunchProviderCapabilities();
+      return {
+        catalog: value,
+        capabilities,
+        configurableCapabilities: capabilities,
+      };
+    },
+    graphQl: async (execute) => holdingFromGraphQl(
+      (await execute(UpdateProviderCatalogDocument, {
+        activatedProviders: catalog.activated_providers,
+        defaultProvider: catalog.global_default?.provider ?? null,
+        defaultModel: catalog.global_default?.model ?? null,
+        defaultReasoning: catalog.global_default?.reasoning ?? null,
+      })).update_provider_catalog,
+    ),
   });
-  const capabilities = await queryClient.fetchQuery({
-    queryKey: queryKeys.providers.capabilities,
-    queryFn: fetchProviderCapabilities,
-    staleTime: 0,
-  });
-  return capabilities;
+  queryClient.setQueryData(queryKeys.providers.catalog, holding);
+  return holding.catalog;
 }
 
 export function setProviderCatalog(catalog: ProviderCatalog): void {
-  queryClient.setQueryData(queryKeys.providers.catalog, catalog);
+  queryClient.setQueryData<ProviderHolding>(
+    queryKeys.providers.catalog,
+    (current) => ({
+      catalog,
+      capabilities: current?.capabilities ?? [],
+      configurableCapabilities: current?.configurableCapabilities ?? [],
+    }),
+  );
 }
 
-export function setProviderCapabilities(
-  capabilities: ProviderCapabilities[],
-): void {
-  queryClient.setQueryData(queryKeys.providers.capabilities, capabilities);
+export function setProviderCapabilities(capabilities: ProviderCapabilities[]): void {
+  queryClient.setQueryData<ProviderHolding>(
+    queryKeys.providers.catalog,
+    (current) => ({
+      catalog: current?.catalog ?? {
+        activated_providers: capabilities
+          .map((capability) => capability.agent)
+          .filter(isConfigurable),
+        global_default: null,
+      },
+      capabilities,
+      configurableCapabilities: current?.configurableCapabilities ?? capabilities,
+    }),
+  );
 }
 
 export function getProviderCapabilitiesSnapshot():
   | ProviderCapabilities[]
   | undefined {
-  return queryClient.getQueryData(queryKeys.providers.capabilities);
+  return queryClient.getQueryData<ProviderHolding>(
+    queryKeys.providers.catalog,
+  )?.capabilities;
 }
 
 export function useProviderCatalogQuery() {
   return useQuery(
     {
       queryKey: queryKeys.providers.catalog,
-      queryFn: fetchProviderCatalog,
+      queryFn: fetchProviderHolding,
       staleTime: 0,
+      select: (holding) => holding.catalog,
     },
     queryClient,
   );
@@ -75,9 +196,22 @@ export function useProviderCatalogQuery() {
 export function useProviderCapabilitiesQuery() {
   return useQuery(
     {
-      queryKey: queryKeys.providers.capabilities,
-      queryFn: fetchProviderCapabilities,
+      queryKey: queryKeys.providers.catalog,
+      queryFn: fetchProviderHolding,
       staleTime: 0,
+      select: (holding) => holding.capabilities,
+    },
+    queryClient,
+  );
+}
+
+export function useConfigurableProviderCapabilitiesQuery() {
+  return useQuery(
+    {
+      queryKey: queryKeys.providers.catalog,
+      queryFn: fetchProviderHolding,
+      staleTime: 0,
+      select: (holding) => holding.configurableCapabilities,
     },
     queryClient,
   );

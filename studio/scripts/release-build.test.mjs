@@ -60,6 +60,14 @@ test("release builds resolve the workspace-owned Tauri CLI", () => {
   assert.equal(studioPackage.scripts.tauri, "tauri");
 });
 
+test("release builds select the desktop binary when helper binaries are present", async () => {
+  const cargoManifest = await readFile(
+    path.join(studioRoot, "src-tauri", "Cargo.toml"),
+    "utf8",
+  );
+  assert.match(cargoManifest, /^default-run = "ticketry"$/m);
+});
+
 test("release bundles the pinned libghostty runtime resources", async () => {
   const [configuration, prepareScript, nativePatch] = await Promise.all([
     readFile(path.join(studioRoot, "src-tauri", "tauri.conf.json"), "utf8").then(JSON.parse),

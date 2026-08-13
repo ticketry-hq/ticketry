@@ -6,8 +6,8 @@ import {
   getModulesSnapshot,
   getProjectsSnapshot,
 } from "../../features/projects";
-import { useStudioStore } from "../../features/projects/store";
-import { getModuleTreeSnapshot } from "../../features/work-items/queries";
+import { useStudioStore } from "../../features/projects";
+import { getModuleTreeSnapshot } from "../../features/work-items";
 import { getStatesSnapshot } from "../../shared/query/stateCatalog";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";

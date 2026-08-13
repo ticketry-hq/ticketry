@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django.db import close_old_connections, transaction
+from django.db import IntegrityError, close_old_connections, transaction
 
 from apps.runs.models import AgentRun
 from apps.terminals.dao.constants import SCRATCH_TASK_ID
@@ -123,6 +123,43 @@ def persist_launch(records: LaunchRecords) -> LaunchRouting:
         return LaunchRouting(project_id, module_id, task_id)
     finally:
         close_old_connections()
+
+
+def persist_launch_once(records: LaunchRecords) -> tuple[LaunchRouting, bool]:
+    """Persist once, or adopt the exact durable identity after an interruption."""
+
+    try:
+        return persist_launch(records), True
+    except IntegrityError:
+        try:
+            run = (
+                AgentRun.objects.select_related("issue")
+                .filter(id=records.agent_run_id)
+                .first()
+            )
+            terminal = AgentTerminalSession.objects.filter(
+                agent_run_id=records.agent_run_id
+            ).first()
+            if (
+                run is None
+                or terminal is None
+                or str(run.issue_id) != str(records.issue_id)
+                or run.agent != records.agent
+                or run.scope != records.scope
+                or terminal.runtime_namespace != records.runtime_namespace
+            ):
+                raise ValueError("agent_run_id belongs to a different launch")
+            issue = run.issue
+            return (
+                LaunchRouting(
+                    project_id=str(issue.project_id),
+                    module_id=str(issue.module_id or issue.id),
+                    task_id=str(issue.id) if issue.module_id else None,
+                ),
+                False,
+            )
+        finally:
+            close_old_connections()
 
 
 def load_resume_launch(agent_run_id: str) -> ResumeLaunchFacts | None:

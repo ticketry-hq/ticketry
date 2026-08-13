@@ -12,7 +12,7 @@ import { IconSettings } from "../../shared/ui/icons";
 // Warm the model-only Settings composition before the modal opens.
 const preloadSettings = () => {
   void import("../../features/studio/modals/SettingsModal");
-  void import("../../features/workflows/ModelConfigurationPanel");
+  void import("../../features/workflows");
 };
 
 const preloadKeyboardShortcuts = () => {

@@ -3,17 +3,22 @@
 export { normalizeView, useStudioStore } from "./store";
 export type { DeleteProjectResult } from "./store";
 export {
+  createProjectRecord,
+  deleteProjectRecord,
   getModulesSnapshot,
   getProjectsSnapshot,
   loadModules,
   loadProjects,
+  readWorkspace,
   seedModules,
   seedProjects,
   useCachedModules,
   useCachedProjects,
   useModulesQuery,
   useProjectsQuery,
+  updateProjectRecord,
 } from "./queries";
+export { acknowledgeOnboarding } from "./mutationTransport";
 export { useReorderModule } from "./mutations";
 export type { ModuleReorderControls } from "./mutations";
 export { moduleDragCodec } from "./internal/moduleDrag";
@@ -34,3 +39,19 @@ export {
   sortModulesByRecency,
 } from "./utilities/moduleRecency";
 export { resolveStartProject } from "./utilities/recentProjects";
+export {
+  WorkTrackerModulesDocument,
+  WorkTrackerProjectsDocument,
+  WorkTrackerWorkspaceDocument,
+} from "./generated/operations";
+export type {
+  WorkTrackerModule,
+  WorkTrackerModulesQuery,
+  WorkTrackerModulesVariables,
+  WorkTrackerProject,
+  WorkTrackerProjectsQuery,
+  WorkTrackerProjectsVariables,
+  WorkTrackerWorkspace,
+  WorkTrackerWorkspaceQuery,
+  WorkTrackerWorkspaceVariables,
+} from "./generated/operations";

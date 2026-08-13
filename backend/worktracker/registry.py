@@ -403,6 +403,21 @@ HOST_ROUTES = (
         "Terminate the Studio-authorized current run.",
     ),
     RouteDeclaration(
+        "POST",
+        "/api/terminals/mcp-authorize",
+        "Resolve the authenticated MCP caller to its durable run scope.",
+    ),
+    RouteDeclaration(
+        "GET",
+        "/api/execution/launch-policy-effects",
+        "Publish the Django effect port's Slice 2 readiness contract.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/execution/launch-policy-effects",
+        "Perform one immutable Rust-authored launch decision idempotently.",
+    ),
+    RouteDeclaration(
         "GET", "/api/documents", "List and rescan registered design documents."
     ),
     RouteDeclaration(

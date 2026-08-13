@@ -29,17 +29,22 @@ def publish_automation_attempt_sync(attempt: AutomationAttempt) -> None:
 
 
 def run_automation_attempt(
-    attempt: AutomationAttempt, *, destination_state_id: str
+    attempt: AutomationAttempt,
+    *,
+    destination_state_id: str,
+    launch_configuration=None,
 ) -> AutomationAttempt:
     """Run one durable attempt and publish its isolated terminal outcome."""
 
     try:
-        launch_configuration = resolve_task_launch_configuration(
-            str(attempt.issue_id), destination_state_id=destination_state_id
-        )
+        if launch_configuration is None:
+            launch_configuration = resolve_task_launch_configuration(
+                str(attempt.issue_id), destination_state_id=destination_state_id
+            )
         result = driver.launch_task_agent(
             str(attempt.issue_id),
             agent=None,
+            agent_run_id=attempt.agent_run_id,
             launch_configuration=launch_configuration,
         )
     except Exception as exc:

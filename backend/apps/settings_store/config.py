@@ -134,6 +134,11 @@ class Config:
             self.profiles = []
 
     def save_profiles(self) -> None:
+        from apps.settings_store.write_ownership import (
+            assert_django_settings_write_allowed,
+        )
+
+        assert_django_settings_write_allowed()
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         data = {
             "recent_profile_index": self.recent_profile_index,

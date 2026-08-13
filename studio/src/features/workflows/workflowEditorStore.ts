@@ -11,7 +11,7 @@ import type {
   StatePatch,
   WorkItem,
 } from "../../shared/api/types";
-import * as api from "../../shared/api/client";
+import * as api from "./mutationTransport";
 import { loadProviderCapabilities } from "./providerQueries";
 import {
   advanceStateCatalogRevision,
@@ -38,7 +38,6 @@ import {
   loadWorkflowProjectItems,
   loadWorkflowSettings,
   loadWorkflowStates,
-  deriveWorkflowImpact,
   setWorkflowSettings,
   setProjectWorkflowSettings,
   setWorkflowIssueTypes,
@@ -46,6 +45,7 @@ import {
   setWorkflowStateCounts,
   setWorkflowStates,
 } from "./queries";
+import { deriveWorkflowImpact } from "./selectors";
 
 interface RemoveStateCommand {
   stateId: string;
@@ -335,6 +335,14 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       if (error instanceof ApiError && error.status === 409) {
         try {
           const latest = await loadWorkflowSettings(projectId, typeId);
+          setWorkflowSettings(latest);
+          synchronizeSubtreeRunCapabilities(
+            projectId,
+            latest.issue_type_id,
+            latest.launch_bindings
+              .filter((binding) => binding.subtree_run_enabled)
+              .map((binding) => binding.state_id),
+          );
           set((state) => ({
             workflows: { ...state.workflows, [typeId]: latest },
             action: null,
@@ -437,12 +445,24 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
   },
 
   async upsertLaunchBinding(typeId, stateId, binding, control) {
+    const projectId = get().projectId;
+    const current = get().workflows[typeId]?.launch_bindings.find(
+      (candidate) => candidate.state_id === stateId,
+    );
+    if (!projectId) return null;
     return get().applyScoped(control, typeId, (revision) =>
       api.upsertIssueTypeWorkflowLaunchBinding(
+        projectId,
         typeId,
         stateId,
-        binding,
+        {
+          ...binding,
+          required_skills:
+            binding.required_skills ?? current?.required_skills ?? [],
+        },
         revision,
+        current?.auto_start ?? false,
+        current?.subtree_run_enabled ?? false,
       ));
   },
 
@@ -553,7 +573,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     const orderedIds = next.flatMap((state) => state.id ? [state.id] : []);
     set({ states: next, action: "reorder", notice: null, error: null });
     try {
-      const reordered = await api.reorderWorkflowStates(projectId, orderedIds);
+      const reordered = await api.reorderStates(projectId, orderedIds);
       if (get().projectId !== projectId) return;
       advanceStateCatalogRevision(projectId, reordered);
       setStatesSorted(projectId, reordered);
@@ -579,7 +599,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     const orderedIds = next.flatMap((state) => state.id ? [state.id] : []);
     set({ states: next, action: "reorder", notice: null, error: null });
     try {
-      const reordered = await api.reorderWorkflowStates(projectId, orderedIds);
+      const reordered = await api.reorderStates(projectId, orderedIds);
       if (get().projectId !== projectId) return;
       advanceStateCatalogRevision(projectId, reordered);
       setStatesSorted(projectId, reordered);

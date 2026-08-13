@@ -16,16 +16,16 @@ import {
   useWorkItemsByIds,
 } from "../../../../../features/work-items";
 import { dialog, toast, useClientStore } from "../../../../../state/clientStore";
-import { useStudioStore } from "../../../../../features/projects/store";
+import { useStudioStore } from "../../../../../features/projects";
 import { useModulesQuery, useProjectsQuery } from "../../../../../features/projects";
 import type { Module, Project } from "../../../../../shared/api/types";
 import { apiErrorMessage, isNoOpTransition } from "../../../../../shared/api/client";
-import { deleteWorkItem } from "../../../../../shared/api/client";
+import { deleteWorkItem } from "../../../../../features/work-items";
 import { queryClient } from "../../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../../shared/query/keys";
 import { WorkItemNotFoundError } from "../../../../../shared/api/workItemBatcher";
 import { useCachedStates } from "../../../../../shared/query/stateCatalog";
-import { useModuleTree } from "../../../../../features/work-items/queries";
+import { useModuleTree } from "../../../../../features/work-items";
 import { useIssueTypesQuery } from "../../../../../features/settings";
 
 const EMPTY_MODULES: Module[] = [];

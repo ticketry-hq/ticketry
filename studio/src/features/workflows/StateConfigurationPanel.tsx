@@ -10,7 +10,7 @@ import {
 } from "../../shared/ui/SettingsPrimitives";
 import { LaunchConfigurationForm } from "./LaunchConfigurationForm";
 import { validateLaunchBindingOptions } from "./launchBindingValidation";
-import { useStudioStore } from "../projects/store";
+import { useStudioStore } from "../projects";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
 import { workflowMemberStateIds } from "./workflowMembership";
 

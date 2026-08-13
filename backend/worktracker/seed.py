@@ -68,6 +68,15 @@ def ensure_launch_bindings(
     and states are deliberately ignored, and existing rows are never replaced.
     """
 
+    from django.apps import apps
+
+    if LaunchBinding._meta.apps is apps:
+        from apps.settings_store.write_ownership import (
+            assert_django_settings_write_allowed,
+        )
+
+        assert_django_settings_write_allowed()
+
     task_type_names = [
         name for name, level in DEFAULT_ISSUE_TYPES if level == "task"
     ]

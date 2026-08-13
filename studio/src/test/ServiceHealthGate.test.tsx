@@ -29,6 +29,22 @@ function runtimeHealthHarness() {
       nativeTerminal: false,
       nativeFolderPicker: true,
     },
+    readWorkTracker: (routes: Parameters<StudioRuntime["readWorkTracker"]>[0]) =>
+      routes.graphQl(async () => {
+        throw new Error("GraphQL is not used by this test.");
+      }),
+    writeWorkTracker: (routes: Parameters<StudioRuntime["writeWorkTracker"]>[0]) =>
+      routes.graphQl(async () => {
+        throw new Error("GraphQL is not used by this test.");
+      }),
+    readSettings: (routes: Parameters<StudioRuntime["readSettings"]>[0]) =>
+      routes.graphQl(async () => {
+        throw new Error("GraphQL is not used by this test.");
+      }),
+    writeSettings: (routes: Parameters<StudioRuntime["writeSettings"]>[0]) =>
+      routes.graphQl(async () => {
+        throw new Error("GraphQL is not used by this test.");
+      }),
     pickFolder: async () => null,
     startup: () => ({
       endpoints: {

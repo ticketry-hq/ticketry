@@ -21,7 +21,7 @@ from django.db import close_old_connections
 from apps.documents import dao as documents_dao
 from apps.documents import design_docs
 from apps import worktracker_queries
-from apps.settings_store import config as cfgmod
+from apps.settings_store.compatibility import read_config
 from apps.settings_store.config import (
     NoConfigurationSelected,
     module_link_path,
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_profile_index() -> Optional[int]:
-    cfg = cfgmod.Config()
+    cfg = read_config()
     try:
         return resolve_profile_index(cfg, None)
     except NoConfigurationSelected:
@@ -126,7 +126,7 @@ async def _build_prompt(
     worktree (#587), else ``None`` so the caller keeps the module-folder cwd.
     On error, prompt is None and error is a code string.
     """
-    config = cfgmod.Config()
+    config = read_config()
     config.current_profile_index = profile_index
     profile = config.current_profile
     if profile is None:

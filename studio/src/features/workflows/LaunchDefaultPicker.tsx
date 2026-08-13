@@ -28,34 +28,28 @@ export function LaunchDefaultPicker({
   const selectedCapability = providerCapabilities.find((candidate) =>
     candidate.agent === value.provider);
   const modelAliases = selectedCapability?.model_aliases ?? [];
-  const reasoningLevels = selectedCapability?.reasoning_levels ?? [];
+  const reasoningLevels = value.model
+    ? selectedCapability?.model_reasoning_levels?.[value.model]
+      ?? selectedCapability?.reasoning_levels
+      ?? []
+    : [];
   const unsupportedCurrentReasoning = Boolean(
     value.reasoning && !reasoningLevels.includes(value.reasoning),
   );
-
-  const reasoningLevelsFor = (provider: string) =>
-    providerCapabilities.find((candidate) => candidate.agent === provider)
-      ?.reasoning_levels ?? [];
 
   const update = (
     field: keyof LaunchDefaultPickerValue,
     nextFieldValue: string,
     commit: boolean,
   ) => {
-    // A model belongs to exactly one provider, so switching provider clears it
-    // rather than carrying a name the new CLI would reject. Reasoning names do
-    // overlap, so one the new provider also offers is carried across — but one
-    // it does not is dropped rather than written back as an invalid pair. The
-    // `(unsupported)` option below still shows a level that arrived from the
-    // server; this only refuses to carry one forward across a user's change.
+    // A model belongs to exactly one provider, and reasoning compatibility is
+    // model-specific, so switching provider clears both dependent fields.
     const nextValue = field === "provider"
       ? {
           ...value,
           provider: nextFieldValue,
           model: "",
-          reasoning: reasoningLevelsFor(nextFieldValue).includes(value.reasoning)
-            ? value.reasoning
-            : "",
+          reasoning: "",
         }
       : { ...value, [field]: nextFieldValue };
     onChange(nextValue);

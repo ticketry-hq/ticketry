@@ -7,7 +7,7 @@ import { useClientStore as useTicketWorkspaceStore } from "../../../state/client
 import {
   providerListPlaceholder,
   useActivatedProviders,
-} from "../../workflows/launchProviderCatalog";
+} from "../../workflows";
 import { bucketFor } from "./internal/sessionStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 

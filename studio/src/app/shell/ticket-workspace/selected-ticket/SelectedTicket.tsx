@@ -2,7 +2,7 @@ import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import { scratchBucketId } from "../../../../features/agents/terminal";
 import { PaneShell } from "../../PaneShell";
 import { useConfig } from "../../../../features/studio/stores/configStore";
-import { useStudioStore } from "../../../../features/projects/store";
+import { useStudioStore } from "../../../../features/projects";
 import { useClientStore } from "../../../../state/clientStore";
 import { useCachedStates } from "../../../../shared/query/stateCatalog";
 import { useWorkItem } from "../../../../features/work-items";
@@ -13,7 +13,7 @@ import {
   startInstantChangeFlow,
   startPlanFlow,
 } from "../../../../features/studio/modals/PlanFeature";
-import { StateConfigurationPanel } from "../../../../features/workflows/StateConfigurationPanel";
+import { StateConfigurationPanel } from "../../../../features/workflows";
 
 /** Adapts Studio selection state to the selected-ticket workspace. */
 export function SelectedTicket() {

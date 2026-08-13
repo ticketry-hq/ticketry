@@ -2,6 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { generateWorkTrackerOperationManifests } from "./worktracker-operation-generation.mjs";
+import { generateSettingsOperations } from "./settings-operation-generation.mjs";
+import { generateAgentStatusOperations } from "./agent-status-operation-generation.mjs";
 
 export const studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -97,4 +100,19 @@ export async function generateFoundationArtifacts(outputRoot) {
     ],
     studioRoot,
   );
+  await generateWorkTrackerOperationManifests({
+    schemaPath,
+    sourceRoot: join(studioRoot, "src"),
+    outputRoot,
+  });
+  await generateSettingsOperations({
+    schemaPath,
+    sourceRoot: join(studioRoot, "src"),
+    outputRoot,
+  });
+  await generateAgentStatusOperations({
+    schemaPath,
+    sourceRoot: join(studioRoot, "src"),
+    outputRoot,
+  });
 }

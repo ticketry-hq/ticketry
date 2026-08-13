@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useIsMutating, useMutation } from "@tanstack/react-query";
-import * as api from "../../shared/api/client";
 import { apiErrorMessage } from "../../shared/api/client";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
@@ -9,6 +8,7 @@ import { getModulesSnapshot } from "./queries";
 import { planModuleReorder, type ModuleReorderPlan } from "./internal/moduleReorder";
 import { markManualModuleOrderAccepted } from "./internal/acceptedManualModuleOrder";
 import type { Module, WorkItem } from "../../shared/api/types";
+import { reorderWorkItem } from "../work-items";
 
 interface ReorderModuleVariables {
   projectId: string;
@@ -61,7 +61,7 @@ export function useReorderModule(projectId: string | null): ModuleReorderControl
     {
       mutationKey: MODULE_REORDER_KEY,
       mutationFn: ({ moduleId, plan }) =>
-        api.reorderWorkItem(moduleId, {
+        reorderWorkItem(moduleId, {
           before_id: plan.beforeId,
           after_id: plan.afterId,
           initial_order_ids: plan.initialOrderIds,

@@ -24,6 +24,7 @@ urlpatterns = [
     path("terminals/resumable", rest_api.ResumableTerminalsView.as_view(), name="terminal-resumable"),
     path("terminals/scratch", rest_api.ScratchTerminalsView.as_view(), name="terminal-scratch"),
     path("terminals/self-terminate", rest_api.SelfTerminateView.as_view(), name="terminal-self-terminate"),
+    path("terminals/mcp-authorize", rest_api.McpRunAuthorizationView.as_view(), name="terminal-mcp-authorize"),
     path("documents", rest_api.DocumentsView.as_view(), name="documents"),
     path("docs/<str:doc_id>", rest_api.DocumentSaveView.as_view(), name="document-save"),
     path("docs/<str:doc_id>/<path:asset_path>", rest_api.DocumentAssetView.as_view(), name="document-asset"),
@@ -33,4 +34,5 @@ urlpatterns = [
     path("worktrees/<str:task_id>/discard", rest_api.WorktreeDiscardView.as_view(), name="worktree-discard"),
     path("work-tracker/work-items/<str:issue_id>/graph-run", rest_api.GraphRunView.as_view(), name="graph-run"),
     path("work-tracker/work-items/<str:issue_id>/launch-agent", rest_api.LaunchAgentView.as_view(), name="launch-agent"),
+    path("execution/launch-policy-effects", rest_api.LaunchPolicyEffectView.as_view(), name="launch-policy-effect"),
 ]

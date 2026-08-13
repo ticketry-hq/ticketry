@@ -1,12 +1,12 @@
 import { useCallback, useEffect } from "react";
 import { statusFeed } from "../../features/agents/status/statusFeed";
-import { useStudioStore } from "../../features/projects/store";
+import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
 import OnboardingTour from "../onboarding/OnboardingTour";
 import { useGlobalKeymap } from "../navigation/useGlobalKeymap";
 import { StudioFooter } from "./StudioFooter";
 import { StudioLayout } from "./StudioLayout";
-import { useStoriesTree } from "./ticket-workspace/tasks/useStoriesTree";
+import { useStoriesTree } from "../../features/work-items";
 
 export function StudioShell() {
   const { rows } = useStoriesTree();

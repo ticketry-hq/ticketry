@@ -7,6 +7,7 @@ const workflowApi = vi.hoisted(() => ({
   getStates: vi.fn(),
   getProjectWorkItems: vi.fn(),
   getLaunchProviderCapabilities: vi.fn(),
+  getProviderCatalog: vi.fn(),
   getIssueTypeWorkflowSettings: vi.fn(),
   setIssueTypeWorkflowStartState: vi.fn(),
 }));
@@ -51,6 +52,9 @@ describe("workflow editor canonical resources", () => {
     ]);
     workflowApi.getProjectWorkItems.mockResolvedValue([]);
     workflowApi.getLaunchProviderCapabilities.mockResolvedValue([]);
+    workflowApi.getProviderCatalog.mockResolvedValue({
+      value: { activated_providers: [], global_default: null },
+    });
     workflowApi.getIssueTypeWorkflowSettings.mockResolvedValue(workflow);
     workflowApi.setIssueTypeWorkflowStartState.mockResolvedValue({});
     useWorkflowEditorStore.setState({

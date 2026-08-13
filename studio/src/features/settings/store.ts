@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import * as api from "../../shared/api/client";
+import * as api from "../workflows";
 import { ApiError } from "../../shared/api/client";
 import { toast } from "../../state/clientStore";
 import {
@@ -123,7 +123,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     );
     set({ error: null });
     try {
-      const updated = await api.patchIssueType(id, patch);
+      const updated = await api.updateIssueType(id, patch);
       setIssueTypesSorted(
         projectId,
         getIssueTypesSnapshot(projectId).map((t) => (t.id === id ? updated : t)),
@@ -198,7 +198,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     );
     set({ error: null });
     try {
-      const updated = await api.patchState(id, patch);
+      const updated = await api.updateState(id, patch);
       upsertState(projectId, updated);
     } catch (e) {
       setStates(projectId, snapshot);

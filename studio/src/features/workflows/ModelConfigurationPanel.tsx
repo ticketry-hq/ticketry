@@ -11,18 +11,22 @@ import {
 } from "./LaunchDefaultPicker";
 import {
   CONFIGURABLE_PROVIDERS,
-  PROVIDER_CAPABILITY_DEFAULTS,
   validateLaunchBindingOptions,
 } from "./launchBindingValidation";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
-import { loadProviderCatalog, setProviderCatalog } from "./providerQueries";
+import {
+  getProviderCapabilitiesSnapshot,
+  loadConfigurableProviderCapabilities,
+  loadProviderCapabilities,
+  loadProviderCatalog,
+  updateProviderCatalog,
+} from "./providerQueries";
 import { ApiError } from "../../shared/api/client";
 import type {
   ConfigurableProvider,
   ProviderCapabilities,
   ProviderCatalog,
 } from "../../shared/api/types";
-import * as api from "../../shared/api/client";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SettingsSubsection,
@@ -136,12 +140,8 @@ export const ModelConfigurationPanel = forwardRef<
   onChangesApplied,
   onStatusChange,
 }, ref) {
-  const providerCapabilities = useWorkflowEditorStore(
-    (state) => state.providerCapabilities,
-  );
-  const refreshProviderCapabilities = useWorkflowEditorStore(
-    (state) => state.refreshProviderCapabilities,
-  );
+  const [configurableCapabilities, setConfigurableCapabilities] =
+    useState<ProviderCapabilities[]>([]);
   const [saved, setSaved] = useState<ProviderCatalog | null>(null);
   const [activated, setActivated] = useState<ConfigurableProvider[]>([]);
   const [launchDefault, setLaunchDefault] =
@@ -156,11 +156,14 @@ export const ModelConfigurationPanel = forwardRef<
     let cancelled = false;
     void (async () => {
       try {
-        const [value] = await Promise.all([
+        const [value, capabilities, configurationCapabilities] = await Promise.all([
           loadProviderCatalog(),
-          refreshProviderCapabilities(),
+          loadProviderCapabilities(),
+          loadConfigurableProviderCapabilities(),
         ]);
         if (cancelled) return;
+        useWorkflowEditorStore.setState({ providerCapabilities: capabilities });
+        setConfigurableCapabilities(configurationCapabilities);
         setSaved(value);
         setActivated(value.activated_providers);
         setLaunchDefault(pickerValueFrom(value));
@@ -173,21 +176,17 @@ export const ModelConfigurationPanel = forwardRef<
     return () => {
       cancelled = true;
     };
-  }, [refreshProviderCapabilities]);
+  }, []);
 
-  // The capabilities payload only carries activated providers, so a provider
-  // switched on but not yet saved still needs an entry to be selectable. The
-  // placeholder comes from the client-side mirror of the server's catalog, so
-  // its models and reasoning levels are offered immediately instead of only
-  // after a save round-trip. The authoritative payload wins once it arrives.
   const pickerCapabilities = useMemo<ProviderCapabilities[]>(
     () =>
       CONFIGURABLE_PROVIDERS.filter((provider) => activated.includes(provider))
         .map((provider) =>
-          providerCapabilities.find(
+          configurableCapabilities.find(
             (capability) => capability.agent === provider,
-          ) ?? PROVIDER_CAPABILITY_DEFAULTS[provider]),
-    [activated, providerCapabilities],
+          ))
+        .filter((capability): capability is ProviderCapabilities => Boolean(capability)),
+    [activated, configurableCapabilities],
   );
 
   const draft = useMemo(
@@ -266,16 +265,15 @@ export const ModelConfigurationPanel = forwardRef<
     setNotice(null);
     setAttention(null);
     try {
-      const { value } = await api.putProviderCatalog(draft);
-      setProviderCatalog(value);
+      const value = await updateProviderCatalog(draft);
       const appliedChanges = describeModelConfigurationChanges(saved, value);
       onChangesApplied?.(appliedChanges);
       setSaved(value);
       setActivated(value.activated_providers);
       setLaunchDefault(pickerValueFrom(value));
-      // Activation and the default drive launch selectors elsewhere in the
-      // app, so the workflow editor has to see the change without a reload.
-      await refreshProviderCapabilities();
+      useWorkflowEditorStore.setState({
+        providerCapabilities: getProviderCapabilitiesSnapshot() ?? [],
+      });
       setNotice("Model configuration saved.");
     } catch (saveError) {
       setError(errorMessage(saveError));

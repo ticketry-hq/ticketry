@@ -18,7 +18,7 @@ import {
 import type {
   ModelConfigurationCommitState,
   ModelConfigurationPanelHandle,
-} from "../../workflows/ModelConfigurationPanel";
+} from "../../workflows";
 import {
   commitPendingSettingsChanges,
   createSettingsChangeLedger,
@@ -28,7 +28,7 @@ import {
 } from "../../settings/changeLedger";
 
 const ModelConfigurationPanel = lazy(async () => ({
-  default: (await import("../../workflows/ModelConfigurationPanel"))
+  default: (await import("../../workflows"))
     .ModelConfigurationPanel,
 }));
 

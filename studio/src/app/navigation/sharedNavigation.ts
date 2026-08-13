@@ -21,7 +21,7 @@ import {
   type NavigationContext,
 } from "./navigationContext";
 import { getModulesSnapshot } from "../../features/projects";
-import { useStudioStore } from "../../features/projects/store";
+import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
 
 const MODULE_POSITION_ACTION_PREFIX = "modules.select-position-";

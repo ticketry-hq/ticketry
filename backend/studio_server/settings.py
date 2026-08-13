@@ -47,6 +47,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "studio_server.origin.DesktopOriginMiddleware",
+    "worktracker.write_ownership.RustWorkTrackerWriteOwnershipMiddleware",
+    "apps.settings_store.write_ownership.RustSlice2WriteOwnershipMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",

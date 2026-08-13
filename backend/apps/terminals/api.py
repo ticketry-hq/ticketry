@@ -385,3 +385,24 @@ def self_terminate_terminal(authorization: str | None):
         "already_terminated": not active,
         "agent_run_id": agent_run_id,
     }
+
+
+def authorize_mcp_run(authorization: str | None):
+    """Resolve one signed MCP caller to its durable WorkTracker scope."""
+
+    try:
+        agent_run_id = verify_run_authorization(authorization)
+    except RunAuthorizationError as exc:
+        raise ApplicationError(401, str(exc), code="caller_run_unbound") from exc
+
+    run = AgentRun.objects.select_related("issue").filter(id=agent_run_id).first()
+    if run is None:
+        raise ApplicationError(404, "caller_run_unknown", code="caller_run_unknown")
+    if run.ended_at is not None:
+        raise ApplicationError(401, "caller_run_inactive", code="caller_run_unbound")
+    return {
+        "agent_run_id": run.id,
+        "issue_id": str(run.issue_id),
+        "project_id": str(run.issue.project_id),
+        "scope": run.scope,
+    }

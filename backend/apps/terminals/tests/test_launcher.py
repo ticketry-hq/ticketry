@@ -164,31 +164,21 @@ def test_type_is_always_visible_in_prompt(issue_type):
     assert f"Type: {issue_type}" in prompt
 
 
-def test_selected_workflow_prompt_is_opaque_over_neutral_framing(monkeypatch):
+def test_selected_workflow_prompt_is_opaque_over_neutral_framing():
     """Selected guidance is preserved without injected workflow policy."""
-    monkeypatch.setattr(
-        config,
-        "profiles",
-        [
-            SimpleNamespace(
-                agent_prompts={
-                    "Implement": "CUSTOM: use our support-playbook language."
-                },
-                agent_prompt=None,
-                workspace_slug="workspace",
-                module_links=[
-                    {"module_id": "module-1", "path": "/code/module"}
-                ],
-            )
-        ],
+    profile = SimpleNamespace(
+        agent_prompts={"Implement": "CUSTOM: use our support-playbook language."},
+        agent_prompt=None,
+        workspace_slug="workspace",
+        module_links=[{"module_id": "module-1", "path": "/code/module"}],
     )
-    monkeypatch.setattr(config, "current_profile_index", 0)
 
     prompt = build_context_prompt(
         _task("Implement", "Implementation", sequence_id=1115),
         module_id="module-1",
         additional_prompt="Keep the change local.",
         design_dir="spec/module/T1115--caller-neutral",
+        profile=profile,
         workflow_prompt="CUSTOM: use our support-playbook language.",
     )
 

@@ -11,13 +11,13 @@ import {
   ScratchStateBadge,
 } from "../../../../../features/agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
-import { useStudioStore } from "../../../../../features/projects/store";
+import { useStudioStore } from "../../../../../features/projects";
 import { useClientStore } from "../../../../../state/clientStore";
 import { useQuery } from "@tanstack/react-query";
 import {
   useModuleTree,
   workItemQuery,
-} from "../../../../../features/work-items/queries";
+} from "../../../../../features/work-items";
 import { queryClient } from "../../../../../shared/query/queryClient";
 import { stateById, useCachedStates } from "../../../../../shared/query/stateCatalog";
 import type { DragSourceProps } from "../../../../../shared/dragDrop/useAxisDragAndDrop";

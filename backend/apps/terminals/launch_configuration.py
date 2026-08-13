@@ -23,6 +23,11 @@ class ResolvedLaunchConfiguration:
     model: str | None
     reasoning: str | None
     required_skills: tuple[str, ...] = ()
+    selected_profile_index: int | None = None
+    module_id: str | None = None
+    module_link_path: str | None = None
+    policy_identity: str | None = None
+    policy_version: int | None = None
 
 
 class LaunchConfigurationError(ValueError):

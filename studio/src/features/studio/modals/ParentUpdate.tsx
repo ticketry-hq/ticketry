@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useModulesQuery } from "../../projects";
-import { useStudioStore } from "../../projects/store";
+import { useStudioStore } from "../../projects";
 import { useClientStore } from "../../../state/clientStore";
-import { useModuleTree } from "../../work-items/queries";
+import { useModuleTree } from "../../work-items";
 import {
   useSetWorkItemParent,
   useWorkItem,

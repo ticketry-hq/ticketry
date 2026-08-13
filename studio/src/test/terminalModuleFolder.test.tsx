@@ -21,6 +21,18 @@ function folderPickerRuntime(
       nativeTerminal: false,
       nativeFolderPicker: true,
     },
+    readWorkTracker: (routes) => routes.graphQl(async () => {
+      throw new Error("GraphQL is not used by this test.");
+    }),
+    writeWorkTracker: (routes) => routes.graphQl(async () => {
+      throw new Error("GraphQL is not used by this test.");
+    }),
+    readSettings: (routes) => routes.graphQl(async () => {
+      throw new Error("GraphQL is not used by this test.");
+    }),
+    writeSettings: (routes) => routes.graphQl(async () => {
+      throw new Error("GraphQL is not used by this test.");
+    }),
     pickFolder,
     retryServices: async () => {},
     startup: () => ({

@@ -2,24 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
 import type {
   ConfigurableProvider,
-  ProviderCapabilities,
   ProviderCatalog,
 } from "../../shared/api/types";
-import * as api from "../../shared/api/client";
 import {
   LaunchDefaultPicker,
   type LaunchDefaultPickerValue,
-} from "../../features/workflows/LaunchDefaultPicker";
+} from "../../features/workflows";
 import {
   CONFIGURABLE_PROVIDERS,
   validateLaunchBindingOptions,
-} from "../../features/workflows/launchBindingValidation";
+} from "../../features/workflows";
 import {
-  setProviderCatalog,
-  setProviderCapabilities,
-  useProviderCapabilitiesQuery,
+  useConfigurableProviderCapabilitiesQuery,
   useProviderCatalogQuery,
-} from "../../features/workflows/providerQueries";
+  updateProviderCatalog,
+} from "../../features/workflows";
 
 const EMPTY_DEFAULT: LaunchDefaultPickerValue = {
   provider: "",
@@ -38,17 +35,6 @@ function pickerValueFrom(catalog: ProviderCatalog): LaunchDefaultPickerValue {
     : EMPTY_DEFAULT;
 }
 
-function permissiveCapability(provider: ConfigurableProvider): ProviderCapabilities {
-  return {
-    agent: provider,
-    accepts_model: true,
-    accepts_any_model: true,
-    model_aliases: [],
-    model_prefixes: [],
-    reasoning_levels: [],
-  };
-}
-
 interface Props {
   continueLabel: string;
   onContinue: () => void | Promise<void>;
@@ -61,9 +47,11 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const catalogQuery = useProviderCatalogQuery();
-  const capabilitiesQuery = useProviderCapabilitiesQuery();
-  const capabilities = capabilitiesQuery.data ?? [];
-  const loading = catalogQuery.isPending || capabilitiesQuery.isPending;
+  const configurableCapabilitiesQuery =
+    useConfigurableProviderCapabilitiesQuery();
+  const capabilities = configurableCapabilitiesQuery.data ?? [];
+  const loading = catalogQuery.isPending
+    || configurableCapabilitiesQuery.isPending;
 
   useEffect(() => {
     const value = catalogQuery.data;
@@ -83,19 +71,20 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
   }, [catalogQuery.data]);
 
   useEffect(() => {
-    const cause = catalogQuery.error ?? capabilitiesQuery.error;
+    const cause = catalogQuery.error ?? configurableCapabilitiesQuery.error;
     if (cause) setError(apiErrorMessage(cause));
-  }, [capabilitiesQuery.error, catalogQuery.error]);
+  }, [
+    catalogQuery.error,
+    configurableCapabilitiesQuery.error,
+  ]);
 
   const pickerCapabilities = useMemo(
     () =>
       CONFIGURABLE_PROVIDERS.filter((provider) =>
         activated.includes(provider),
-      ).map(
-        (provider) =>
-          capabilities.find((candidate) => candidate.agent === provider)
-          ?? permissiveCapability(provider),
-      ),
+      ).map((provider) =>
+        capabilities.find((candidate) => candidate.agent === provider),
+      ).filter((capability) => capability !== undefined),
     [activated, capabilities],
   );
 
@@ -111,14 +100,24 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
         }
       : null,
   };
-  const validationError = validateLaunchBindingOptions(
-    {
-      agent: draft.global_default?.provider ?? null,
-      model: draft.global_default?.model ?? null,
-      reasoning: draft.global_default?.reasoning ?? null,
-    },
-    pickerCapabilities,
+  const providerOnlyDefault = Boolean(
+    draft.global_default?.provider
+      && !draft.global_default.model
+      && !draft.global_default.reasoning
+      && activated.includes(
+        draft.global_default.provider as ConfigurableProvider,
+      ),
   );
+  const validationError = providerOnlyDefault
+    ? null
+    : validateLaunchBindingOptions(
+      {
+        agent: draft.global_default?.provider ?? null,
+        model: draft.global_default?.model ?? null,
+        reasoning: draft.global_default?.reasoning ?? null,
+      },
+      pickerCapabilities,
+    );
   const needsExplicitDefault =
     activated.length >= 2 && !draft.global_default;
   const canContinue =
@@ -160,15 +159,8 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const { value } = await api.putProviderCatalog(draft);
-      setProviderCatalog(value);
-      setProviderCapabilities(
-        capabilities.filter((capability) =>
-          value.activated_providers.includes(
-            capability.agent as ConfigurableProvider,
-          ),
-        ),
-      );
+      const value = await updateProviderCatalog(draft);
+      setActivated(value.activated_providers);
       await onContinue();
     } catch (cause) {
       setError(apiErrorMessage(cause));

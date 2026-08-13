@@ -1,0 +1,186 @@
+//! In-process WorkTracker MCP transport owned by the desktop runtime.
+
+mod backend_port;
+mod dependency_tools;
+mod dispatch;
+mod projection;
+mod registry;
+mod scope;
+mod service;
+mod workflow_tools;
+
+use std::{io, net::SocketAddr, path::PathBuf};
+
+use axum::Router;
+use rmcp::transport::streamable_http_server::{
+    session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
+};
+use serde_json::{json, Value};
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+
+use crate::work_management::{commands::attachments::AttachmentStorage, open_for_commands};
+
+use backend_port::BackendPort;
+use service::WorktrackerMcpService;
+
+#[derive(Clone, Debug)]
+pub struct McpConfiguration {
+    pub address: SocketAddr,
+    pub database_path: PathBuf,
+    pub media_root: PathBuf,
+    pub backend_base_url: String,
+    pub backend_api_key: String,
+}
+
+pub struct McpRuntime {
+    address: SocketAddr,
+    cancellation: CancellationToken,
+    task: JoinHandle<()>,
+    reconciler: JoinHandle<()>,
+}
+
+impl McpRuntime {
+    pub async fn start(configuration: McpConfiguration) -> Result<Self, String> {
+        if !configuration.address.ip().is_loopback() {
+            return Err("WorkTracker MCP must bind to a loopback address.".to_owned());
+        }
+        let backend = BackendPort::new(
+            configuration.backend_base_url,
+            configuration.backend_api_key,
+        );
+        backend.verify_launch_policy_readiness().await?;
+        let database = open_for_commands(&configuration.database_path)
+            .await
+            .map_err(|error| format!("could not open WorkTracker commands for MCP: {error}"))?;
+        let listener = tokio::net::TcpListener::bind(configuration.address)
+            .await
+            .map_err(|error| format!("could not bind WorkTracker MCP listener: {error}"))?;
+        let address = listener
+            .local_addr()
+            .map_err(|error| format!("could not inspect WorkTracker MCP listener: {error}"))?;
+        let cancellation = CancellationToken::new();
+        let service_state = WorktrackerMcpService::new(
+            database.clone(),
+            AttachmentStorage::new(configuration.media_root),
+            backend,
+            crate::work_management::launch_policy::LaunchPolicyResolver::new(
+                database,
+                crate::settings_persistence::ProfileStore::new(
+                    configuration
+                        .database_path
+                        .parent()
+                        .unwrap_or_else(|| std::path::Path::new("."))
+                        .join("profiles.json"),
+                ),
+            ),
+        );
+        let reconciliation_state = service_state.clone();
+        let service: StreamableHttpService<WorktrackerMcpService, LocalSessionManager> =
+            StreamableHttpService::new(
+                move || Ok(service_state.clone()),
+                Default::default(),
+                StreamableHttpServerConfig::default()
+                    .with_legacy_session_mode(false)
+                    .with_json_response(true)
+                    .with_sse_keep_alive(None)
+                    .with_cancellation_token(cancellation.child_token()),
+            );
+        let router = Router::new().nest_service("/mcp", service);
+        let reconciliation_shutdown = cancellation.clone();
+        let reconciler = tokio::spawn(async move {
+            loop {
+                reconciliation_state.reconcile_launch_policy().await;
+                tokio::select! {
+                    _ = reconciliation_shutdown.cancelled() => break,
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
+                }
+            }
+        });
+        let shutdown = cancellation.clone();
+        let task = tokio::spawn(async move {
+            if let Err(error) = axum::serve(listener, router)
+                .with_graceful_shutdown(async move { shutdown.cancelled_owned().await })
+                .await
+            {
+                eprintln!("Ticketry WorkTracker MCP listener stopped unexpectedly: {error}");
+            }
+        });
+        let runtime = Self {
+            address,
+            cancellation,
+            task,
+            reconciler,
+        };
+        if let Err(error) = verify_tool_list(address).await {
+            runtime.shutdown().await;
+            return Err(error);
+        }
+        Ok(runtime)
+    }
+
+    pub fn address(&self) -> SocketAddr {
+        self.address
+    }
+
+    pub fn is_running(&self) -> bool {
+        !self.task.is_finished()
+    }
+
+    pub async fn shutdown(mut self) {
+        self.cancellation.cancel();
+        let _ = (&mut self.task).await;
+        let _ = (&mut self.reconciler).await;
+    }
+}
+
+async fn verify_tool_list(address: SocketAddr) -> Result<(), String> {
+    let response = reqwest::Client::new()
+        .post(format!("http://{address}/mcp"))
+        .header("content-type", "application/json")
+        .header("accept", "application/json, text/event-stream")
+        .header("mcp-protocol-version", "2025-03-26")
+        .json(&json!({
+            "jsonrpc": "2.0",
+            "id": "ticketry-readiness",
+            "method": "tools/list",
+            "params": {}
+        }))
+        .send()
+        .await
+        .map_err(|error| format!("could not probe WorkTracker MCP listener: {error}"))?;
+    let body = response
+        .json::<Value>()
+        .await
+        .map_err(|error| format!("could not decode WorkTracker MCP tool list: {error}"))?;
+    let count = body["result"]["tools"]
+        .as_array()
+        .map(Vec::len)
+        .unwrap_or_default();
+    if count != registry::tools().len() {
+        return Err(format!(
+            "WorkTracker MCP readiness listed {count} tools; expected {}.",
+            registry::tools().len()
+        ));
+    }
+    Ok(())
+}
+
+impl Drop for McpRuntime {
+    fn drop(&mut self) {
+        self.cancellation.cancel();
+        self.task.abort();
+        self.reconciler.abort();
+    }
+}
+
+pub fn loopback(port: u16) -> Result<SocketAddr, io::Error> {
+    format!("127.0.0.1:{port}")
+        .parse()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))
+}
+
+#[cfg(test)]
+mod acceptance_tests;
+#[cfg(test)]
+mod tests;

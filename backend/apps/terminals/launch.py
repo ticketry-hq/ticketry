@@ -52,7 +52,7 @@ from apps.terminals.agents.skills.preflight import (
 )
 from apps.documents import watch as documents_watch
 from apps.runs.bus import publish_backend_session_sync, publish_document, publish_status
-from apps.settings_store import config as cfgmod
+from apps.settings_store.compatibility import read_config
 from apps.settings_store.config import NoConfigurationSelected, module_link_path
 from apps.terminals.launch_configuration import (
     LaunchConfigurationError,
@@ -64,13 +64,14 @@ from apps.terminals.persistence import (
     compensate_launch,
     load_resume_launch,
     mark_launch_cleanup_pending,
-    persist_launch,
+    persist_launch_once,
     persist_termination,
     termination_context,
 )
 from apps.terminals.prompt_builder import _build_prompt, _resolve_profile_index
 from apps.terminals.runtime import (
     CreateTerminal,
+    TerminalAlreadyExists,
     TerminalDimensions,
     TerminalRuntime,
     TmuxTerminalRuntime,
@@ -112,6 +113,7 @@ class LaunchIntent:
     doc_rel_path: str | None = None
     doc_id: str | None = None
     launch_configuration: ResolvedLaunchConfiguration | None = None
+    agent_run_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.issue_id is None:
@@ -322,9 +324,10 @@ async def _launch(
     )
 
     launch_persisted = False
+    launch_created = False
     try:
-        routing = await asyncio.to_thread(
-            persist_launch,
+        routing, launch_created = await asyncio.to_thread(
+            persist_launch_once,
             LaunchRecords(
                 agent_run_id=agent_run_id,
                 issue_id=issue_id,
@@ -340,22 +343,29 @@ async def _launch(
             ),
         )
         launch_persisted = True
-        await asyncio.to_thread(
-            terminal_runtime.create,
-            CreateTerminal(
-                agent_run_id=agent_run_id,
-                command=command,
-                working_directory=cwd,
-                environment=dict(augmentation.environment),
-                dimensions=_INITIAL_TERMINAL_DIMENSIONS,
-            ),
-        )
+        try:
+            await asyncio.to_thread(
+                terminal_runtime.create,
+                CreateTerminal(
+                    agent_run_id=agent_run_id,
+                    command=command,
+                    working_directory=cwd,
+                    environment=dict(augmentation.environment),
+                    dimensions=_INITIAL_TERMINAL_DIMENSIONS,
+                ),
+            )
+        except TerminalAlreadyExists:
+            # Another consumer may have completed runtime creation for this
+            # same durable run identity after our persistence step. Adoption
+            # is the idempotent success path, regardless of which caller
+            # originally inserted the ledger row.
+            pass
     except Exception as exc:
         # Runtime creation can fail after making a partial terminal. Explicitly
         # compensate both sides; terminate is idempotent when nothing exists.
         logger.exception("terminal launch failed run=%s", agent_run_id)
         cleanup_confirmed = not launch_persisted
-        if launch_persisted:
+        if launch_persisted and launch_created:
             try:
                 await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
                 cleanup_confirmed = True
@@ -372,7 +382,7 @@ async def _launch(
                         "could not mark terminal launch cleanup pending run=%s",
                         agent_run_id,
                     )
-        if cleanup_confirmed:
+        if cleanup_confirmed and launch_created:
             try:
                 await asyncio.to_thread(compensate_launch, agent_run_id)
             except Exception:
@@ -435,19 +445,37 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         effective_agent = launch_configuration.agent
     if effective_agent is None:
         raise ValueError("unknown_agent")
-    activated_providers = await asyncio.to_thread(
-        _enforce_provider_activation, effective_agent
+    rust_policy_decision = bool(
+        launch_configuration is not None
+        and launch_configuration.policy_identity is not None
+    )
+    activated_providers = (
+        frozenset({effective_agent})
+        if rust_policy_decision
+        else await asyncio.to_thread(_enforce_provider_activation, effective_agent)
     )
 
-    profile_index = _resolve_profile_index()
+    profile_index = (
+        launch_configuration.selected_profile_index
+        if rust_policy_decision
+        else _resolve_profile_index()
+    )
     if profile_index is None:
         raise NoConfigurationSelected("No profile selected.")
-    profile = cfgmod.Config().profiles[profile_index]
-    module_folder: Optional[str] = module_link_path(profile, intent.module_id)
+    if rust_policy_decision:
+        if (
+            launch_configuration.module_id is not None
+            and launch_configuration.module_id != intent.module_id
+        ):
+            raise ValueError("launch_decision_module_mismatch")
+        module_folder = launch_configuration.module_link_path
+    else:
+        profile = read_config().profiles[profile_index]
+        module_folder = module_link_path(profile, intent.module_id)
     if module_folder and not os.path.isdir(module_folder):
         module_folder = None
     cwd = module_folder or os.path.expanduser("~")
-    agent_run_id = uuid.uuid4().hex
+    agent_run_id = intent.agent_run_id or uuid.uuid4().hex
 
     try:
         adapter = get_adapter(effective_agent)

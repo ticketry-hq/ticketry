@@ -1,0 +1,91 @@
+fragment WorkTrackerWorkItemFields on WorkItem {
+  id
+  name
+  project_id
+  sequence_id
+  state
+  state_revision
+  description
+  parent_id
+  sub_issues_count
+  key
+  is_archived
+  created_at
+  updated_at
+  rank
+  issue_type
+  blocked_by_ids
+  blocks_ids
+}
+
+query WorkTrackerWorkItems($projectId: String, $moduleId: String, $stateId: String) {
+  work_items(project_id: $projectId, module_id: $moduleId, state_id: $stateId) {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+query WorkTrackerModuleTree($projectId: String!, $moduleId: String!) {
+  work_items(module_id: $moduleId) {
+    ...WorkTrackerWorkItemFields
+  }
+  states(project_id: $projectId) {
+    id
+    name
+    group
+    color
+    sort_order
+    is_protected
+  }
+}
+
+query WorkTrackerWorkItemsByIds($ids: [String!]!) {
+  work_items_by_ids(ids: $ids) {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+query WorkTrackerWorkItem($id: String!) {
+  work_item(id: $id) {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+mutation CreateWorkTrackerWorkItem($projectId: String!, $name: String!, $issueTypeId: String!, $description: String, $stateId: String, $parentId: String) {
+  create_work_item(project_id: $projectId, name: $name, issue_type_id: $issueTypeId, description: $description, state_id: $stateId, parent_id: $parentId) {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+mutation UpdateWorkTrackerWorkItem($id: String!, $name: String, $description: String, $issueTypeId: String) {
+  update_work_item(id: $id, name: $name, description: $description, issue_type_id: $issueTypeId) {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+mutation TransitionWorkTrackerWorkItem($id: String!, $targetStateId: String!) {
+  transition_work_item(id: $id, target_state_id: $targetStateId, origin: "human") {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+mutation ReparentWorkTrackerWorkItem($id: String!, $parentId: String) {
+  reparent_work_item(id: $id, parent_id: $parentId) {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+mutation SetWorkTrackerBlockers($id: String!, $blockedByIds: [String!]!) {
+  set_work_item_blockers(id: $id, blocked_by_ids: $blockedByIds) {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+mutation ReorderWorkTrackerWorkItem($id: String!, $beforeId: String, $afterId: String, $initialOrderIds: [String!]) {
+  reorder_work_item(id: $id, before_id: $beforeId, after_id: $afterId, initial_order_ids: $initialOrderIds) {
+    ...WorkTrackerWorkItemFields
+  }
+}
+
+mutation DeleteWorkTrackerWorkItem($id: String!) {
+  delete_work_item(id: $id)
+}

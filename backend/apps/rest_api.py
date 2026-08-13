@@ -497,6 +497,14 @@ class SelfTerminateView(PublicAPIView):
         )
 
 
+class McpRunAuthorizationView(AuthenticatedAPIView):
+    @extend_schema(tags=["terminals"], request=None, responses={200: OpenSerializer, 401: OpenSerializer, 404: OpenSerializer})
+    def post(self, request):
+        return _serialize_result(
+            terminals.authorize_mcp_run(request.headers.get("Authorization"))
+        )
+
+
 class DocumentsView(AuthenticatedAPIView):
     @extend_schema(tags=["documents"], parameters=[OpenApiParameter("task_id", str), OpenApiParameter("scope", str), OpenApiParameter("project_id", str), OpenApiParameter("module_id", str), OpenApiParameter("profile", int)], responses={200: DocumentListSerializer, 400: ErrorEnvelopeSerializer})
     def get(self, request):
@@ -585,3 +593,48 @@ class LaunchAgentView(AuthenticatedAPIView):
     @extend_schema(operation_id="workItemsLaunchAgentCreate", tags=["execution"], request=AgentOverrideSerializer, responses={201: LaunchedAgentResponseSerializer, 400: ErrorEnvelopeSerializer, 404: ErrorEnvelopeSerializer, 422: ErrorEnvelopeSerializer, 503: ErrorEnvelopeSerializer})
     def post(self, request, issue_id):
         return _serialize_result(execution.create_launch_agent(issue_id, _pydantic(execution.LaunchAgentIn, request.data)))
+
+
+class LaunchPolicyEffectView(AuthenticatedAPIView):
+    @extend_schema(
+        operation_id="launchPolicyEffectReadiness",
+        tags=["execution"],
+        responses={200: OpenSerializer},
+    )
+    def get(self, request):
+        from apps.settings_store.write_ownership import rust_owns_slice2_writes
+
+        ready = rust_owns_slice2_writes()
+        return Response(
+            {
+                "version": 1,
+                "ready": ready,
+                "policy_owner": "rust",
+                "effect_owner": "django",
+                "django_write_fallback": False,
+            },
+            status=200 if ready else 503,
+        )
+
+    @extend_schema(
+        operation_id="launchPolicyEffectCreate",
+        tags=["execution"],
+        request=OpenSerializer,
+        responses={200: OpenSerializer, 201: OpenSerializer},
+    )
+    def post(self, request):
+        from apps.settings_store.write_ownership import (
+            rust_owns_slice2_writes,
+            slice2_commands_ready,
+        )
+
+        if rust_owns_slice2_writes() and not slice2_commands_ready():
+            return Response(
+                {
+                    "detail": "Slice 2 is not ready; launch commands are disabled",
+                    "code": "slice2_not_ready",
+                },
+                status=503,
+            )
+        decision = _pydantic(execution.LaunchPolicyDecisionIn, request.data)
+        return _serialize_result(execution.perform(decision))

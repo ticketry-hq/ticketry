@@ -11,7 +11,7 @@ import {
   type SidebarPaneComposition,
 } from "../../features/studio/stores/configStore";
 import { getProjectsSnapshot } from "../../features/projects";
-import { useStudioStore } from "../../features/projects/store";
+import { useStudioStore } from "../../features/projects";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { loadKeybindingOverrides } from "../navigation/keymapSettings";
 import {

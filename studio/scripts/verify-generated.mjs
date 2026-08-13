@@ -59,6 +59,28 @@ try {
       `${name} drift`,
     );
   }
+  for (const feature of ["projects", "work-items", "workflows"]) {
+    await assertSameFile(
+      join(first, "worktracker", feature, "manifest.ts"),
+      join(studioRoot, "src/features", feature, "generated/manifest.ts"),
+      `${feature} operation manifest drift`,
+    );
+  }
+  await assertSameFile(
+    join(first, "settings/keybindings.ts"),
+    join(studioRoot, "src/features/settings/generated/keybindings.ts"),
+    "settings keybinding operation drift",
+  );
+  await assertSameFile(
+    join(first, "settings/profileSettings.ts"),
+    join(studioRoot, "src/features/settings/generated/profileSettings.ts"),
+    "settings profile operation drift",
+  );
+  await assertSameFile(
+    join(first, "settings/providerCatalog.ts"),
+    join(studioRoot, "src/features/settings/generated/providerCatalog.ts"),
+    "settings provider catalogue operation drift",
+  );
   console.log("GraphQL foundation generation is deterministic and drift-free");
 } finally {
   await rm(scratch, { recursive: true, force: true });

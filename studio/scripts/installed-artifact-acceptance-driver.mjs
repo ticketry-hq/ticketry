@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   access,
   chmod,
@@ -381,6 +382,57 @@ function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
+async function durableFlowTargets(context, identifier, createdAt) {
+  const existingProjectId = await context.sqlite(
+    context.databasePath,
+    "SELECT id FROM worktracker_project ORDER BY created_at LIMIT 1;",
+  );
+  if (existingProjectId) {
+    const rows = (await context.sqlite(
+      context.databasePath,
+      `SELECT id,type FROM worktracker_issue WHERE project_id=${sqlLiteral(existingProjectId)} `
+        + "ORDER BY sequence_id;",
+    )).split(/\r?\n/).filter(Boolean).map((row) => row.split("|"));
+    const moduleId = rows.find(([, type]) => type === "module")?.[0];
+    const taskId = rows.find(([, type]) => type === "task")?.[0];
+    if (moduleId && taskId) return { projectId: existingProjectId, moduleId, taskId };
+  }
+
+  const workspaceId = await context.sqlite(
+    context.databasePath,
+    "SELECT id FROM worktracker_workspace ORDER BY created_at LIMIT 1;",
+  );
+  if (!workspaceId) {
+    throw new InstalledArtifactDriverError(
+      "durable terminal fixture requires a provisioned workspace",
+    );
+  }
+  const id = () => randomUUID().replaceAll("-", "");
+  const projectId = id();
+  const moduleTypeId = id();
+  const taskTypeId = id();
+  const moduleId = id();
+  const taskId = id();
+  const slug = `acceptance-${identifier}`.slice(0, 64);
+  await context.sqlite(
+    context.databasePath,
+    "INSERT INTO worktracker_project "
+      + "(id,name,slug,description,seq_counter,created_at,updated_at,workspace_id,state_revision,manual_module_order) VALUES ("
+      + [projectId, "Acceptance", slug, "", 2, createdAt, createdAt, workspaceId, 0, 0]
+        .map(sqlLiteral).join(",")
+      + ");"
+      + "INSERT INTO worktracker_issuetype "
+      + "(id,name,level,color,sort_order,created_at,updated_at,project_id,start_state_id,workflow_revision,is_pathfind) VALUES "
+      + `(${[moduleTypeId, "Module", "module", "", 0, createdAt, createdAt, projectId, null, 0, 0].map((value) => value === null ? "NULL" : sqlLiteral(value)).join(",")}),`
+      + `(${[taskTypeId, "Task", "task", "", 1, createdAt, createdAt, projectId, null, 0, 0].map((value) => value === null ? "NULL" : sqlLiteral(value)).join(",")});`
+      + "INSERT INTO worktracker_issue "
+      + "(id,type,name,sequence_id,description,created_at,updated_at,project_id,state_id,is_archived,rank,state_revision,issue_type_id,parent_id,module_id) VALUES "
+      + `(${[moduleId, "module", "Acceptance module", 1, "", createdAt, createdAt, projectId, null, 0, "a", 0, moduleTypeId, null, null].map((value) => value === null ? "NULL" : sqlLiteral(value)).join(",")}),`
+      + `(${[taskId, "task", "Acceptance task", 2, "", createdAt, createdAt, projectId, null, 0, "a", 0, taskTypeId, moduleId, moduleId].map((value) => value === null ? "NULL" : sqlLiteral(value)).join(",")});`,
+  );
+  return { projectId, moduleId, taskId };
+}
+
 export async function durableAgentTerminalFlowScenario(context) {
   const tmux = await (context.findTmux ?? findTmux)();
   const identifier = `${process.pid}-${Date.now()}`;
@@ -388,18 +440,12 @@ export async function durableAgentTerminalFlowScenario(context) {
   const sessionName = `pt-${runId}`;
   const repository = path.join(context.sandboxRoot, "repository");
   await mkdir(repository, { recursive: true });
-  const projectId = await context.sqlite(
-    context.databasePath,
-    "SELECT id FROM worktracker_project ORDER BY created_at LIMIT 1;",
-  );
-  const issueRows = (await context.sqlite(
-    context.databasePath,
-    `SELECT id,type FROM worktracker_issue WHERE project_id=${sqlLiteral(projectId)} `
-      + "ORDER BY sequence_id;",
-  )).split(/\r?\n/).filter(Boolean).map((row) => row.split("|"));
-  const moduleId = issueRows.find(([, type]) => type === "module")?.[0] ?? projectId;
-  const taskId = issueRows.find(([, type]) => type === "task")?.[0] ?? moduleId;
   const startedAt = new Date().toISOString();
+  const { projectId, moduleId, taskId } = await durableFlowTargets(
+    context,
+    identifier,
+    startedAt,
+  );
 
   await context.run(tmux, [
     "-L",
@@ -434,7 +480,7 @@ export async function durableAgentTerminalFlowScenario(context) {
         + ");"
         + "INSERT INTO agent_terminal_sessions "
         + "(agent_run_id, tmux_session_name, task_id, module_id, project_id, agent, "
-        + "created_at, scope) VALUES ("
+        + "created_at, scope, runtime_cleanup_pending) VALUES ("
         + [
           runId,
           sessionName,
@@ -444,6 +490,7 @@ export async function durableAgentTerminalFlowScenario(context) {
           "codex",
           startedAt,
           "task",
+          0,
         ].map(sqlLiteral).join(",")
         + ");",
     );

@@ -1,0 +1,63 @@
+query WorkTrackerWorkspace {
+  workspace {
+    id
+    slug
+    name
+    onboarding_required
+  }
+}
+
+query WorkTrackerProjects {
+  projects {
+    id
+    name
+    slug
+    description
+    manual_module_order
+  }
+}
+
+query WorkTrackerModules($projectId: String!, $includeArchived: Boolean) {
+  modules(project_id: $projectId, include_archived: $includeArchived) {
+    id
+    name
+    project_id
+    sequence_id
+    key
+    is_archived
+    issue_type
+  }
+}
+
+mutation AcknowledgeWorkTrackerOnboarding {
+  acknowledge_onboarding {
+    id
+    slug
+    name
+    onboarding_required
+  }
+}
+
+mutation CreateWorkTrackerProject($name: String!, $slug: String!, $description: String) {
+  create_project(name: $name, slug: $slug, description: $description) {
+    id
+    name
+    slug
+    description
+    manual_module_order
+  }
+}
+
+mutation UpdateWorkTrackerProject($id: String!, $name: String, $description: String) {
+  update_project(id: $id, name: $name, description: $description) {
+    id
+    name
+    slug
+    description
+    manual_module_order
+  }
+}
+
+mutation DeleteWorkTrackerProject($id: String!) {
+  delete_project(id: $id)
+}

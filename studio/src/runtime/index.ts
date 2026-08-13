@@ -8,9 +8,12 @@ export type {
   ServiceHealthListener,
   RuntimeStartupConfiguration,
   RuntimeValues,
+  SettingsRoutes,
   StudioPlatform,
   StudioRuntime,
   UserNoticeListener,
+  WorkTrackerGraphQlExecute,
+  WorkTrackerReadRoutes,
 } from "./contract";
 export {
   USER_NOTICE_SEVERITIES,

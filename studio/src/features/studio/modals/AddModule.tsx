@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
 import { useClientStore } from "../../../state/clientStore";
-import { useStudioStore } from "../../projects/store";
+import { useStudioStore } from "../../projects";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { setModuleFolder, useConfig } from "../stores/configStore";
 import {

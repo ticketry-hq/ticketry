@@ -191,6 +191,25 @@ export interface TerminalsApiInterface {
     terminalsList(requestParameters: TerminalsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<TerminalRun>>;
 
     /**
+     * Creates request options for terminalsMcpAuthorizeCreate without sending the request
+     * @throws {RequiredError}
+     * @memberof TerminalsApiInterface
+     */
+    terminalsMcpAuthorizeCreateRequestOpts(): Promise<runtime.RequestOpts>;
+
+    /**
+     *
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TerminalsApiInterface
+     */
+    terminalsMcpAuthorizeCreateRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Open>>;
+
+    /**
+     */
+    terminalsMcpAuthorizeCreate(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Open>;
+
+    /**
      * Creates request options for terminalsResumableList without sending the request
      * @param {string} [moduleId]
      * @param {string} [projectId]
@@ -494,6 +513,45 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
      */
     async terminalsList(requestParameters: TerminalsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<TerminalRun>> {
         const response = await this.terminalsListRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for terminalsMcpAuthorizeCreate without sending the request
+     */
+    async terminalsMcpAuthorizeCreateRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/terminals/mcp-authorize`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async terminalsMcpAuthorizeCreateRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Open>> {
+        const requestOptions = await this.terminalsMcpAuthorizeCreateRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => OpenFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async terminalsMcpAuthorizeCreate(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Open> {
+        const response = await this.terminalsMcpAuthorizeCreateRaw(initOverrides);
         return await response.value();
     }
 

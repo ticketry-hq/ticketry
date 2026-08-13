@@ -30,10 +30,13 @@ mod native_terminal_visibility;
 pub mod native_terminal_worker;
 pub mod ownership;
 mod release_manifest;
+pub mod runs_persistence;
+pub mod settings_persistence;
 pub mod supervisor;
 pub mod terminal_runtime;
 mod tmux_viewer;
 pub mod viewer_commands;
+pub mod work_management;
 
 const MAIN_WINDOW_LABEL: &str = "main";
 const SMOKE_EXIT_AFTER_STARTUP: &str = "MUXED_DESKTOP_SMOKE_EXIT_AFTER_STARTUP";
@@ -42,8 +45,6 @@ const PACKAGED_HOOK_RUNNER_ENV: &str = "MUXED_PACKAGED_HOOK_RUNNER";
 const HOOK_RUNNER_BINARY: &str = "ticketry-hook";
 const DEVELOPMENT_BACKEND_PORT_ENV: &str = "MUXED_DESKTOP_BACKEND_PORT";
 const WORKTRACKER_MCP_PORT: u16 = 8123;
-const WORKTRACKER_MCP_ENABLED: bool = true;
-const WORKTRACKER_MCP_REQUIRED: bool = false;
 const HEALTH_EVENT: &str = "desktop-service-health";
 const USER_NOTICE_EVENT: &str = "desktop-user-notice";
 const DEVELOPMENT_WEBVIEW_ORIGIN: &str = "http://127.0.0.1:5174";
@@ -128,6 +129,19 @@ fn detach_transient_viewers(application: &tauri::AppHandle) {
 fn shutdown_packaged_backend(application: &tauri::AppHandle) {
     let state = application.state::<DesktopServiceState>();
     state.stopping.store(true, Ordering::Release);
+    let ownership = application.state::<DesktopDataDirectoryOwnership>();
+    let _ = settings_persistence::publish_readiness(
+        &ownership.data_directory,
+        &settings_persistence::Slice2Readiness::unavailable(),
+    );
+    let mcp_runtime = state
+        .mcp_runtime
+        .lock()
+        .expect("MCP runtime lock poisoned")
+        .take();
+    if let Some(runtime) = mcp_runtime {
+        tauri::async_runtime::block_on(runtime.shutdown());
+    }
     let supervisor = state
         .supervisor
         .lock()
@@ -287,6 +301,7 @@ struct RuntimeStartupConfiguration {
 
 struct DesktopServiceState {
     supervisor: Mutex<Option<Supervisor>>,
+    mcp_runtime: Mutex<Option<work_management::mcp::McpRuntime>>,
     configuration: Mutex<Option<RuntimeStartupConfiguration>>,
     health: Mutex<ServiceHealth>,
     notices: Mutex<Vec<UserNotice>>,
@@ -298,6 +313,7 @@ impl DesktopServiceState {
     fn new() -> Self {
         Self {
             supervisor: Mutex::new(None),
+            mcp_runtime: Mutex::new(None),
             configuration: Mutex::new(None),
             health: Mutex::new(ServiceHealth::starting()),
             notices: Mutex::new(Vec::new()),
@@ -613,7 +629,7 @@ fn development_supervisor_options() -> Result<SupervisorOptions, String> {
     // packaged launches. An occupied port is an actionable startup error; the
     // supervisor must not silently move a public endpoint.
     options.mcp_port_candidates = vec![WORKTRACKER_MCP_PORT];
-    options.mcp_required = WORKTRACKER_MCP_REQUIRED;
+    options.mcp_required = false;
     if cfg!(debug_assertions) {
         match (
             optional_port(DEVELOPMENT_BACKEND_PORT_ENV)?,
@@ -650,7 +666,11 @@ fn optional_port(name: &str) -> Result<Option<u16>, String> {
         .ok_or_else(|| format!("{name} must be a valid TCP port (1-65535)"))
 }
 
-fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
+fn launch_packaged_backend(
+    application: &tauri::App,
+    graphql_api: &tauri_graphql::TransportApiImpl,
+    bootstrap_worktracker: bool,
+) -> Result<(), String> {
     let state = application.state::<DesktopServiceState>();
     state.publish(application.handle(), ServiceHealth::starting());
     state.publish(application.handle(), ServiceHealth::migrating());
@@ -658,21 +678,29 @@ fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
     let binary = sidecar_binary(application)?;
     let hook_runner = hook_runner_binary(application)?;
     let data_dir = established_data_directory().map_err(|error| error.to_string())?;
+    settings_persistence::publish_readiness(
+        &data_dir,
+        &settings_persistence::Slice2Readiness::unavailable(),
+    )
+    .map_err(|error| format!("could not close the Slice 2 readiness gate: {error}"))?;
     let origin = desktop_webview_origin()?;
-    let commands = if WORKTRACKER_MCP_ENABLED {
-        CommandTable::packaged_services(binary, data_dir, &origin)
-    } else {
-        CommandTable::packaged_backend(binary, data_dir, &origin)
-    }
-    .map_err(|error| error.to_string())?
-    .with_environment({
-        let mut environment = discovery::resolved_tool_environment()?;
-        environment.push((
-            PACKAGED_HOOK_RUNNER_ENV.to_owned(),
-            hook_runner.to_string_lossy().into_owned(),
-        ));
-        environment
-    });
+    let mcp_port = configured_mcp_port()?;
+    let commands = CommandTable::packaged_backend(binary, &data_dir, &origin)
+        .map_err(|error| error.to_string())?
+        .with_environment({
+            let mut environment = discovery::resolved_tool_environment()?;
+            environment.push((
+                PACKAGED_HOOK_RUNNER_ENV.to_owned(),
+                hook_runner.to_string_lossy().into_owned(),
+            ));
+            environment.push((
+                "WORKTRACKER_MCP_URL".to_owned(),
+                format!("http://127.0.0.1:{mcp_port}/mcp"),
+            ));
+            environment.push(("TICKETRY_RUST_WORKTRACKER_OWNER".to_owned(), "1".to_owned()));
+            environment.push(("TICKETRY_RUST_SLICE2_OWNER".to_owned(), "1".to_owned()));
+            environment
+        });
     let mut supervisor = Supervisor::try_new(commands, development_supervisor_options()?)
         .map_err(|error| error.to_string())?;
     if let Err(error) = supervisor.launch() {
@@ -694,6 +722,49 @@ fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
     let port = supervisor
         .port()
         .expect("ready supervisor retains its assigned port");
+    if bootstrap_worktracker {
+        if let Err(error) =
+            tauri::async_runtime::block_on(graphql_foundation::adopt_worktracker_and_install(
+                &data_dir.join("rust-core.sqlite3"),
+                &data_dir,
+                graphql_api,
+            ))
+        {
+            let message = format!("fresh WorkTracker adoption failed: {}", error.message);
+            let failure = SupervisorError {
+                service: "worktracker-adoption".to_owned(),
+                kind: supervisor::FailureKind::Migration,
+                message: message.clone(),
+            };
+            state.publish(
+                application.handle(),
+                ServiceHealth::failed(&failure, supervisor.log_path()),
+            );
+            let _ = supervisor.shutdown();
+            return Err(message);
+        }
+    }
+    let mcp_runtime = match tauri::async_runtime::block_on(start_in_process_mcp(
+        &data_dir,
+        port,
+        supervisor.credential(),
+        mcp_port,
+    )) {
+        Ok(runtime) => runtime,
+        Err(message) => {
+            let error = SupervisorError {
+                service: "mcp".to_owned(),
+                kind: supervisor::FailureKind::Bind,
+                message: message.clone(),
+            };
+            state.publish(
+                application.handle(),
+                ServiceHealth::failed(&error, supervisor.log_path()),
+            );
+            *state.supervisor.lock().expect("supervisor lock poisoned") = Some(supervisor);
+            return Err(message);
+        }
+    };
     state.retain_supervisor_notices(&supervisor.events());
     if env::var(SMOKE_EXIT_AFTER_STARTUP).as_deref() == Ok("1") {
         if let Err(message) = verify_packaged_backend(port, supervisor.credential(), &origin) {
@@ -710,14 +781,43 @@ fn launch_packaged_backend(application: &tauri::App) -> Result<(), String> {
             return Err("desktop backend smoke authentication check failed".to_owned());
         }
     }
+    if let Err(error) = settings_persistence::publish_readiness(
+        &data_dir,
+        &settings_persistence::Slice2Readiness::complete(),
+    ) {
+        tauri::async_runtime::block_on(mcp_runtime.shutdown());
+        let _ = supervisor.shutdown();
+        return Err(format!("could not publish Slice 2 readiness: {error}"));
+    }
     let configuration = sidecar_runtime_configuration(port, supervisor.credential());
     *state
         .configuration
         .lock()
         .expect("runtime configuration lock poisoned") = Some(configuration);
     *state.supervisor.lock().expect("supervisor lock poisoned") = Some(supervisor);
+    *state.mcp_runtime.lock().expect("MCP runtime lock poisoned") = Some(mcp_runtime);
     state.publish(application.handle(), ServiceHealth::ready());
     Ok(())
+}
+
+fn configured_mcp_port() -> Result<u16, String> {
+    optional_port("MUXED_DESKTOP_MCP_PORT").map(|port| port.unwrap_or(WORKTRACKER_MCP_PORT))
+}
+
+async fn start_in_process_mcp(
+    data_directory: &Path,
+    backend_port: u16,
+    backend_api_key: &str,
+    mcp_port: u16,
+) -> Result<work_management::mcp::McpRuntime, String> {
+    work_management::mcp::McpRuntime::start(work_management::mcp::McpConfiguration {
+        address: work_management::mcp::loopback(mcp_port).map_err(|error| error.to_string())?,
+        database_path: data_directory.join("state.db"),
+        media_root: data_directory.join("media"),
+        backend_base_url: format!("http://127.0.0.1:{backend_port}/api"),
+        backend_api_key: backend_api_key.to_owned(),
+    })
+    .await
 }
 
 fn verify_packaged_backend(port: u16, credential: &str, origin: &str) -> Result<(), String> {
@@ -810,8 +910,30 @@ fn start_supervisor_monitor(application: tauri::AppHandle) {
             let result = supervisor.poll();
             let events = supervisor.events();
             let new_events = events.get(observed_events..).unwrap_or(&[]);
-            let pair_is_ready = supervisor.port().is_some()
-                && (!WORKTRACKER_MCP_REQUIRED || supervisor.mcp_port().is_some());
+            let backend_is_ready = supervisor.port().is_some();
+            let mcp_error = if result.is_ok() && backend_is_ready {
+                ensure_in_process_mcp(&state, supervisor).err()
+            } else {
+                None
+            };
+            let pair_is_ready = backend_is_ready
+                && state
+                    .mcp_runtime
+                    .lock()
+                    .expect("MCP runtime lock poisoned")
+                    .as_ref()
+                    .is_some_and(work_management::mcp::McpRuntime::is_running);
+            let readiness = if pair_is_ready {
+                settings_persistence::Slice2Readiness::complete()
+            } else {
+                settings_persistence::Slice2Readiness::unavailable()
+            };
+            let readiness_result = established_data_directory()
+                .map_err(|error| error.to_string())
+                .and_then(|directory| {
+                    settings_persistence::publish_readiness(&directory, &readiness)
+                        .map_err(|error| error.to_string())
+                });
             let health_updates = recovery_health_updates(new_events, pair_is_ready);
             observed_events = events.len();
 
@@ -831,9 +953,61 @@ fn start_supervisor_monitor(application: tauri::AppHandle) {
                     &application,
                     ServiceHealth::failed(&error, supervisor.log_path()),
                 );
+            } else if let Some(message) = mcp_error {
+                state.publish(
+                    &application,
+                    ServiceHealth::failed(
+                        &SupervisorError {
+                            service: "mcp".to_owned(),
+                            kind: supervisor::FailureKind::Crash,
+                            message,
+                        },
+                        supervisor.log_path(),
+                    ),
+                );
+            } else if let Err(error) = readiness_result {
+                state.publish(
+                    &application,
+                    ServiceHealth::failed(
+                        &SupervisorError {
+                            service: "slice2-readiness".to_owned(),
+                            kind: supervisor::FailureKind::Crash,
+                            message: error.to_string(),
+                        },
+                        supervisor.log_path(),
+                    ),
+                );
             }
         }
     });
+}
+
+fn ensure_in_process_mcp(
+    state: &DesktopServiceState,
+    supervisor: &Supervisor,
+) -> Result<(), String> {
+    let mut runtime = state.mcp_runtime.lock().expect("MCP runtime lock poisoned");
+    if runtime
+        .as_ref()
+        .is_some_and(work_management::mcp::McpRuntime::is_running)
+    {
+        return Ok(());
+    }
+    if let Some(stopped) = runtime.take() {
+        tauri::async_runtime::block_on(stopped.shutdown());
+    }
+    let data_directory = established_data_directory().map_err(|error| error.to_string())?;
+    let backend_port = supervisor
+        .port()
+        .ok_or_else(|| "backend is unavailable for WorkTracker MCP".to_owned())?;
+    let mcp_port = configured_mcp_port()?;
+    *runtime = Some(tauri::async_runtime::block_on(start_in_process_mcp(
+        &data_directory,
+        backend_port,
+        supervisor.credential(),
+        mcp_port,
+    ))?);
+    Ok(())
 }
 
 fn absolute_folder_path(selection: Option<FilePath>) -> Result<Option<String>, String> {
@@ -857,6 +1031,30 @@ fn desktop_runtime_configuration(
     state: tauri::State<'_, DesktopServiceState>,
 ) -> Result<RuntimeStartupConfiguration, String> {
     state.configuration()
+}
+
+#[tauri::command]
+async fn desktop_launch_default_coding_agent(
+    window: tauri::WebviewWindow,
+    issue_id: String,
+    services: tauri::State<'_, DesktopServiceState>,
+    ownership: tauri::State<'_, DesktopDataDirectoryOwnership>,
+) -> Result<serde_json::Value, String> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("agent launch is restricted to the local main window".to_owned());
+    }
+    let configuration = services.configuration()?;
+    let database = work_management::open_for_commands(&ownership.data_directory.join("state.db"))
+        .await
+        .map_err(|error| error.to_string())?;
+    work_management::launch_policy::submit_interactive(
+        &database,
+        settings_persistence::ProfileStore::new(ownership.data_directory.join("profiles.json")),
+        &configuration.endpoints.agent_api,
+        &configuration.values.work_tracker_api_key,
+        issue_id,
+    )
+    .await
 }
 
 fn frontend_log_line(level: &str, message: &str) -> Result<String, String> {
@@ -918,7 +1116,7 @@ fn desktop_retry_services(
     let (result, log_path) = match supervisor_guard.as_mut() {
         Some(supervisor) => {
             let observed_events = supervisor.events().len();
-            let result = supervisor.retry();
+            let mut result = supervisor.retry();
             let events = supervisor.events();
             let new_events = events.get(observed_events..).unwrap_or(&[]);
             if result.is_ok() {
@@ -931,6 +1129,13 @@ fn desktop_retry_services(
                     .lock()
                     .expect("runtime configuration lock poisoned") =
                     Some(sidecar_runtime_configuration(port, supervisor.credential()));
+                if let Err(message) = ensure_in_process_mcp(&state, supervisor) {
+                    result = Err(SupervisorError {
+                        service: "mcp".to_owned(),
+                        kind: supervisor::FailureKind::Crash,
+                        message,
+                    });
+                }
             }
             (result, supervisor.log_path().to_path_buf())
         }
@@ -1010,6 +1215,7 @@ pub fn run() {
         .invoke_handler(graphql_foundation::combine_with_native_handler(
             tauri::generate_handler![
                 desktop_runtime_configuration,
+                desktop_launch_default_coding_agent,
                 desktop_append_frontend_log,
                 desktop_retry_services,
                 desktop_pick_folder,
@@ -1034,28 +1240,43 @@ pub fn run() {
         ))
         .setup(move |application| {
             let ownership = application.state::<DesktopDataDirectoryOwnership>();
-            let startup_error = ownership.startup_error.clone();
-            if startup_error.is_none() {
-                let foundation_database = ownership.data_directory.join("rust-core.sqlite3");
-                if let Err(error) =
-                    tauri::async_runtime::block_on(graphql_foundation::initialize_and_install(
-                        &foundation_database,
-                        &setup_graphql_api,
-                    ))
-                {
-                    eprintln!(
-                        "Ticketry GraphQL foundation is unavailable ({}): {}",
-                        serde_json::to_value(error.code)
-                            .unwrap_or(serde_json::Value::String("unknown".to_owned())),
-                        error.message
-                    );
-                }
-            }
+            let mut startup_error = ownership.startup_error.clone();
             let owns_data_directory = ownership
                 .guard
                 .lock()
                 .expect("data-directory lock poisoned")
                 .is_some();
+            let bootstrap_worktracker =
+                owns_data_directory && !ownership.data_directory.join("state.db").is_file();
+            if startup_error.is_none() && owns_data_directory {
+                if let Err(error) = settings_persistence::publish_readiness(
+                    &ownership.data_directory,
+                    &settings_persistence::Slice2Readiness::unavailable(),
+                ) {
+                    startup_error = Some(format!(
+                        "Ticketry could not close the Slice 2 readiness gate: {error}"
+                    ));
+                }
+            }
+            if startup_error.is_none() && !bootstrap_worktracker {
+                let foundation_database = ownership.data_directory.join("rust-core.sqlite3");
+                if let Err(error) = tauri::async_runtime::block_on(
+                    graphql_foundation::adopt_worktracker_and_install(
+                        &foundation_database,
+                        &ownership.data_directory,
+                        &setup_graphql_api,
+                    ),
+                ) {
+                    let message = format!(
+                        "Ticketry GraphQL foundation is unavailable ({}): {}",
+                        serde_json::to_value(error.code)
+                            .unwrap_or(serde_json::Value::String("unknown".to_owned())),
+                        error.message
+                    );
+                    eprintln!("{message}");
+                    startup_error = Some(message);
+                }
+            }
             let state = application.state::<DesktopServiceState>();
             if let Some(message) = startup_error {
                 let log_path = supervisor::sidecar_log_path(&ownership.data_directory);
@@ -1074,7 +1295,9 @@ pub fn run() {
                     Some(failed_runtime_configuration(health.clone()));
                 state.publish(application.handle(), health);
             } else if owns_data_directory {
-                if let Err(message) = launch_packaged_backend(application) {
+                if let Err(message) =
+                    launch_packaged_backend(application, &setup_graphql_api, bootstrap_worktracker)
+                {
                     eprintln!("Ticketry desktop services failed to initialize: {message}");
                     let log_path = supervisor::sidecar_log_path(
                         established_data_directory().map_err(|error| error.to_string())?,

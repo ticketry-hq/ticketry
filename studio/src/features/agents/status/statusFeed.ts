@@ -8,7 +8,7 @@ import { useClientStore } from "../../../state/clientStore";
 import { scratchBucketId, useTerminalStore } from "../terminal";
 import { SCRATCH_RUN_TASK_ID } from "../types";
 import { useClientStore as useTicketWorkspaceStore } from "../../../state/clientStore";
-import { useWorkflowEditorStore } from "../../workflows/workflowEditorStore";
+import { useWorkflowEditorStore } from "../../workflows";
 import type { DesignDoc } from "../types";
 import { useAgentStatusStore } from "./store";
 import { statusWebSocketUrl } from "../../../runtime";

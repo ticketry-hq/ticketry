@@ -1,3 +1,46 @@
+type AgentModel {
+	id: String!
+	provider: String!
+	name: String!
+	permitted_reasoning_levels: [String!]!
+}
+
+type AgentRunHolding {
+	agent_run_id: String!
+	project_id: String!
+	task_id: String
+	module_id: String!
+	agent: String!
+	scope: String!
+	started_at: String!
+	state: String!
+	updated_at: String!
+	provider_session_id: String
+}
+
+type Attachment {
+	id: String!
+	issue: String!
+	filename: String!
+	mime_type: String!
+	size: Int
+	url: String!
+	created_at: String!
+}
+
+type AutomationAttemptProjection {
+	attempt_id: String!
+	root_attempt_id: String!
+	retry_of_attempt_id: String
+	work_item_id: String!
+	status: String!
+	error: String
+	failure: Json
+	retryable: Boolean!
+	agent_run_id: String
+	updated_at: String!
+}
+
 input BooleanFilterInput {
 	eq: Boolean
 	ne: Boolean
@@ -8,6 +51,13 @@ input BooleanFilterInput {
 	is_in: [Boolean!]
 	is_not_in: [Boolean!]
 	is_null: Boolean
+}
+
+type CurrentRunTermination {
+	agent_run_id: String!
+	terminated: Boolean!
+	already_terminated: Boolean!
+	durable_fact_applied: Boolean!
 }
 
 input CursorInput {
@@ -27,6 +77,12 @@ input FloatFilterInput {
 	is_null: Boolean
 	between: [Float!]
 	not_between: [Float!]
+}
+
+type GlobalLaunchDefault {
+	provider: String!
+	model: String
+	reasoning: String
 }
 
 input IdentityFilterInput {
@@ -57,7 +113,105 @@ input IntegerFilterInput {
 	not_between: [Int!]
 }
 
+type IssueType {
+	id: String!
+	project: String!
+	name: String!
+	level: String!
+	color: String!
+	sort_order: Int!
+	start_state: String
+	workflow_revision: Int!
+	is_pathfind: Boolean!
+	created_at: String!
+	updated_at: String!
+}
+
+type IssueTypeTransition {
+	id: Int!
+	issue_type: String!
+	from_state: String!
+	to_state: String!
+	agent_allowed: Boolean!
+}
+
 scalar Json
+
+type KeybindingSetting {
+	scope: String!
+	key: String!
+	value: Json!
+	updated_at: String!
+}
+
+type LaunchBinding {
+	id: Int!
+	issue_type: String!
+	state: String!
+	prompt: String!
+	required_skills: [String!]!
+	model: String
+	reasoning: String
+	auto_start: Boolean!
+	subtree_run_enabled: Boolean!
+	created_at: String!
+	updated_at: String!
+}
+
+type LifecycleAccepted {
+	accepted: Boolean!
+	known_run: Boolean!
+	applied: Boolean!
+	state: String
+	occurred_at: String!
+	event_cursor: Int
+}
+
+type LocalFeatureFlags {
+	sidebar: Boolean!
+	projects: Boolean!
+}
+
+input LocalFeatureFlagsInput {
+	sidebar: Boolean!
+	projects: Boolean!
+}
+
+type LocalModuleLink {
+	module_id: String!
+	path: String!
+}
+
+input LocalModuleLinkInput {
+	module_id: String!
+	path: String!
+}
+
+type LocalProfile {
+	name: String!
+	workspace_slug: String!
+	agent_prompt: String
+	agent_prompts: Json!
+	module_links: [LocalModuleLink!]!
+	recent_project_id: String
+	recent_module_ids: Json!
+}
+
+input LocalProfileInput {
+	name: String!
+	workspace_slug: String!
+	agent_prompt: String
+	agent_prompts: Json
+	module_links: [LocalModuleLinkInput!]
+	recent_project_id: String
+	recent_module_ids: Json
+}
+
+type LocalSettings {
+	recent_profile_index: Int
+	profiles: [LocalProfile!]!
+	features: LocalFeatureFlags!
+}
 
 type MigrationProbes {
 	id: Int!
@@ -93,7 +247,57 @@ input MigrationProbesOrderInput {
 	value: OrderByEnum
 }
 
+type Module {
+	id: String!
+	name: String!
+	project_id: String!
+	sequence_id: Int!
+	key: String!
+	is_archived: Boolean!
+	issue_type: String!
+}
+
 type Mutation {
+	acknowledge_onboarding: Workspace!
+	create_project(name: String!, slug: String!, description: String, workspace_slug: String): Project!
+	update_project(id: String!, name: String, description: String): Project!
+	delete_project(id: String!): Boolean!
+	create_state(project_id: String!, name: String!, group: String!, color: String): State!
+	update_state(id: String!, name: String, group: String, color: String, sort_order: Int): State!
+	reorder_states(project_id: String!, ordered_ids: [String!]!): [State!]!
+	create_issue_type(project_id: String!, name: String!, level: String!, color: String): IssueType!
+	update_issue_type(id: String!, name: String, color: String, sort_order: Int, start_state_id: String, workflow_revision: Int): IssueType!
+	delete_issue_type(id: String!, reassign_to: String): Boolean!
+	reorder_issue_types(project_id: String!, ordered_ids: [String!]!): [IssueType!]!
+	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorkItem!
+	update_work_item(id: String!, name: String, description: String, issue_type_id: String): WorkItem!
+	archive_work_item(id: String!): WorkItem!
+	reorder_work_item(id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorkItem!
+	reparent_work_item(id: String!, parent_id: String, before_id: String, after_id: String): WorkItem!
+	delete_work_item(id: String!): Boolean!
+	create_attachment(issue_id: String!, filename: String!, mime_type: String, content_base64: String!): Attachment!
+	transition_work_item(id: String!, target_state_id: String!, origin: String): WorkItem!
+	set_work_item_blockers(id: String!, blocked_by_ids: [String!]!): WorkItem!
+	add_work_item_blocker(id: String!, blocker_id: String!): WorkItem!
+	add_work_item_dependent(id: String!, dependent_id: String!): WorkItem!
+	create_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): IssueTypeTransition!
+	update_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): IssueTypeTransition!
+	delete_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, workflow_revision: Int!): Boolean!
+	remove_state_from_issue_type_workflow(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
+	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): LaunchBinding!
+	delete_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
+	delete_state(state_id: String!): Boolean!
+	update_keybinding_setting(value: Json!): KeybindingSetting!
+	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
+	add_local_profile(profile: LocalProfileInput!): LocalSettings!
+	replace_local_profile(index: Int!, profile: LocalProfileInput!): LocalSettings!
+	delete_local_profile(index: Int!): LocalSettings!
+	select_local_profile(index: Int!): LocalSettings!
+	replace_feature_flags(features: LocalFeatureFlagsInput!): LocalSettings!
+	retry_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
+	dismiss_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
+	ingest_agent_lifecycle(agent_run_id: String!, kind: String!, occurred_at: String!, provider_session_id: String): LifecycleAccepted!
+	terminate_current_agent_run: CurrentRunTermination!
 	setMigrationProbe(value: String!): Boolean!
 }
 
@@ -132,8 +336,68 @@ input PaginationInput @oneOf {
 	offset: OffsetInput
 }
 
+type Project {
+	id: String!
+	name: String!
+	slug: String!
+	description: String!
+	manual_module_order: Boolean!
+}
+
+type Provider {
+	id: String!
+	slug: String!
+	activated: Boolean!
+	supports_unattended: Boolean!
+}
+
+type ProviderCatalog {
+	configurable_providers: [Provider!]!
+	providers: [Provider!]!
+	agent_models: [AgentModel!]!
+	reasoning_levels: [ReasoningLevel!]!
+	global_default: GlobalLaunchDefault
+}
+
 type Query {
 	migrationProbes(filters: MigrationProbesFilterInput, having: MigrationProbesHavingInput, orderBy: MigrationProbesOrderInput, pagination: PaginationInput): MigrationProbesConnection!
+	workspace: Workspace
+	projects: [Project!]!
+	modules(project_id: String!, include_archived: Boolean): [Module!]!
+	work_items(project_id: String, module_id: String, state_id: String): [WorkItem!]!
+	work_items_by_ids(ids: [String!]!): [WorkItem!]!
+	work_item(id: String!): WorkItem
+	states(project_id: String!): [State!]!
+	issue_types(project_id: String!): [IssueType!]!
+	issue_type(id: String!): IssueType
+	issue_type_transitions(issue_type_id: String!): [IssueTypeTransition!]!
+	launch_bindings(project_id: String!): [LaunchBinding!]!
+	providers: [Provider!]!
+	agent_models: [AgentModel!]!
+	reasoning_levels: [ReasoningLevel!]!
+	attachments(issue_id: String!): [Attachment!]!
+	keybinding_setting: KeybindingSetting
+	provider_catalog: ProviderCatalog!
+	local_settings: LocalSettings!
+	automation_attempts(project_id: String!, task_id: String): [AutomationAttemptProjection!]!
+	agent_run_holdings(project_id: String!, task_id: String): [AgentRunHolding!]!
+}
+
+type ReasoningLevel {
+	id: String!
+	name: String!
+}
+
+type State {
+	id: String!
+	project: String!
+	name: String!
+	group: String!
+	color: String!
+	sort_order: Int!
+	is_protected: Boolean!
+	created_at: String!
+	updated_at: String!
 }
 
 input StringFilterInput {
@@ -168,6 +432,34 @@ input TextFilterInput {
 	is_null: Boolean
 	between: [String!]
 	not_between: [String!]
+}
+
+type WorkItem {
+	id: String!
+	name: String!
+	project_id: String!
+	sequence_id: Int!
+	state: String
+	state_revision: Int!
+	description: String!
+	parent_id: String
+	module_id: String
+	sub_issues_count: Int!
+	key: String!
+	is_archived: Boolean!
+	created_at: String!
+	updated_at: String!
+	rank: String!
+	issue_type: String!
+	blocked_by_ids: [String!]!
+	blocks_ids: [String!]!
+}
+
+type Workspace {
+	id: String!
+	slug: String!
+	name: String!
+	onboarding_required: Boolean!
 }
 
 """

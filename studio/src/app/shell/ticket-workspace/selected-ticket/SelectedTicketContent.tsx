@@ -42,7 +42,7 @@ import {
   useRekeyedTerminalFocus,
 } from "./internal/useWorkspaceTabFocus";
 import { useWorkspaceTabPresentation } from "./internal/useWorkspaceTabPresentation";
-import { useActivatedProviders } from "../../../../features/workflows/launchProviderCatalog";
+import { useActivatedProviders } from "../../../../features/workflows";
 
 export type {
   ScratchLaunchMode,

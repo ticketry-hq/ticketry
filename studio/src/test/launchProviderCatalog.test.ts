@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const catalogApi = vi.hoisted(() => ({
+  getProviderCatalog: vi.fn(),
   getLaunchProviderCapabilities: vi.fn(),
 }));
 
@@ -11,6 +12,7 @@ vi.mock("../shared/api/client", async (importOriginal) => ({
 
 import { providerListPlaceholder } from "../features/workflows/launchProviderCatalog";
 import { loadProviderCapabilities } from "../features/workflows/providerQueries";
+import { queryClient } from "../shared/query/queryClient";
 
 const capability = (agent: string) => ({
   agent,
@@ -24,6 +26,10 @@ const capability = (agent: string) => ({
 describe("provider capabilities query", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    queryClient.removeQueries();
+    catalogApi.getProviderCatalog.mockResolvedValue({
+      value: { activated_providers: ["claude"], global_default: null },
+    });
   });
 
   it("coalesces concurrent reads onto one request", async () => {
@@ -37,6 +43,7 @@ describe("provider capabilities query", () => {
     ]);
 
     expect(catalogApi.getLaunchProviderCapabilities).toHaveBeenCalledTimes(1);
+    expect(catalogApi.getProviderCatalog).toHaveBeenCalledTimes(1);
   });
 
   it("cancels an older read before a forced post-write refresh", async () => {
@@ -56,6 +63,7 @@ describe("provider capabilities query", () => {
 
     expect(fresh.map((entry) => entry.agent)).toEqual(["claude"]);
     expect(catalogApi.getLaunchProviderCapabilities).toHaveBeenCalledTimes(2);
+    expect(catalogApi.getProviderCatalog).toHaveBeenCalledTimes(2);
   });
 
   it("distinguishes loading, a dead fetch, and nothing activated", () => {

@@ -38,7 +38,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 30 | Ordinary module creation stays open through folder-link failure and closes only after a successful retry. |
 | 31 | Pathless module selection preserves the prior selection on cancel or save failure and resumes after a valid link. |
 | 32 | A native attachment-process exit closes its viewer and releases outside viewer ownership without ending the durable terminal. |
-| 33 | Story-tree rows keep flexible titles first and state-colored compact ticket identifiers at the trailing edge while canonical-key, sequence, and title search remain available. |
+| 33 | Story-tree rows keep state-colored compact ticket identifiers at the leading edge, followed by flexible titles, while canonical-key, sequence, and title search remain available. |
 | 34 | The Task workspace names child issues, review findings and their cancel labels, dependency chips and blocker candidates, the parent picker and Module link, and deletion confirmation copy as compact ticket identifiers without leaking canonical keys. |
 | 35 | Live and restored task-bound terminal tabs and their close affordances read as the compact ticket identifier, while scratch and taskless sessions keep identifier-free labels. |
 | 36 | A live terminal falsely tombstoned by legacy runtime reconciliation returns to its active lifecycle when the repaired status snapshot arrives. |

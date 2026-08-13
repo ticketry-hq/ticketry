@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
 
 describe("overhaul acceptance — work-item rows", () => {
-  it("[overhaul-33] keeps titles first and compact ticket identifiers at the trailing edge", async () => {
+  it("[overhaul-33] keeps compact ticket identifiers at the leading edge", async () => {
     const http = fixture();
     const implementation = {
       id: "implementation",
@@ -96,15 +96,15 @@ describe("overhaul acceptance — work-item rows", () => {
     const key = within(parent).getByText("T-33");
     expect([...parent.children]).toEqual([
       expect.any(HTMLElement),
+      key,
       title,
       status,
-      key,
     ]);
     expect(title).toHaveClass("min-w-0", "flex-1", "truncate");
     expect(key).toHaveClass("shrink-0");
     expect(key).toHaveStyle({ color: "#5b8def" });
     expect(parent).not.toHaveTextContent("·");
-    expect(parent.lastElementChild).toBe(key);
+    expect(parent.children[1]).toBe(key);
 
     fireEvent.click(parent);
     expect(parent).toHaveAttribute("aria-selected", "true");
@@ -116,7 +116,7 @@ describe("overhaul acceptance — work-item rows", () => {
     const childTitle = within(child).getByText("Implementation child");
     const fallbackKey = within(child).getByText("T-34");
     expect(childTitle.parentElement).toBe(child);
-    expect(child.lastElementChild).toBe(fallbackKey);
+    expect(child.children[1]).toBe(fallbackKey);
     expect(fallbackKey).toHaveClass("shrink-0");
     expect(child).toHaveStyle({ paddingLeft: "2ch" });
     expect(child).not.toHaveTextContent("·");

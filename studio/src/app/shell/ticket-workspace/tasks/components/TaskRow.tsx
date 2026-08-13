@@ -210,6 +210,16 @@ function PlanningRowView({
         </span>
       )}
 
+      {identifier ? (
+        <span
+          data-task-id-token
+          className={`mr-2 shrink-0 ${stateColor ? "" : "text-text-muted"}`}
+          style={stateColor ? { color: stateColor } : undefined}
+        >
+          {identifier}
+        </span>
+      ) : null}
+
       <span className="min-w-0 flex-1 truncate">{name}</span>
 
       {isScratch ? (
@@ -228,16 +238,6 @@ function PlanningRowView({
           />
         </>
       )}
-
-      {identifier ? (
-        <span
-          data-task-id-token
-          className={`ml-2 shrink-0 ${stateColor ? "" : "text-text-muted"}`}
-          style={stateColor ? { color: stateColor } : undefined}
-        >
-          {identifier}
-        </span>
-      ) : null}
     </li>
   );
 }

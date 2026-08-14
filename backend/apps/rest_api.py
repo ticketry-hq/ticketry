@@ -20,6 +20,10 @@ from apps.runs import api as runs
 from apps.settings_store import api as settings
 from apps.settings_store.schemas import ProfileBody
 from apps.terminals import api as terminals
+from apps.terminals.authorization import (
+    RunAuthorizationError,
+    verify_run_authorization,
+)
 from apps.worktrees import api as worktrees
 from studio_server.contracts import LifecycleEvent
 
@@ -275,6 +279,10 @@ class AgentOverrideSerializer(serializers.Serializer):
     agent = serializers.CharField(required=False)
 
 
+class RunNowRequestSerializer(serializers.Serializer):
+    origin = serializers.ChoiceField(choices=("human", "agent"), required=False)
+
+
 class GraphRunRequestSerializer(serializers.Serializer):
     """Graph-run create body: provider override plus execution mode."""
 
@@ -308,6 +316,25 @@ class LaunchedAgentResponseSerializer(serializers.Serializer):
     target_id = serializers.CharField()
     agent = serializers.CharField()
     agent_run_id = serializers.CharField()
+
+
+class CommittedStateSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+
+
+class RunNowResponseSerializer(serializers.Serializer):
+    target_id = serializers.CharField()
+    committed_state = CommittedStateSerializer()
+    run = LaunchedAgentResponseSerializer()
+
+
+class RunNowRefusalSerializer(serializers.Serializer):
+    target_id = serializers.CharField()
+    committed_state = CommittedStateSerializer(allow_null=True)
+    run = LaunchedAgentResponseSerializer(allow_null=True)
+    detail = serializers.CharField()
+    code = serializers.CharField()
 
 
 def _serialize_result(result):
@@ -585,3 +612,33 @@ class LaunchAgentView(AuthenticatedAPIView):
     @extend_schema(operation_id="workItemsLaunchAgentCreate", tags=["execution"], request=AgentOverrideSerializer, responses={201: LaunchedAgentResponseSerializer, 400: ErrorEnvelopeSerializer, 404: ErrorEnvelopeSerializer, 422: ErrorEnvelopeSerializer, 503: ErrorEnvelopeSerializer})
     def post(self, request, issue_id):
         return _serialize_result(execution.create_launch_agent(issue_id, _pydantic(execution.LaunchAgentIn, request.data)))
+
+
+class RunNowView(AuthenticatedAPIView):
+    @extend_schema(
+        operation_id="workItemsRunNowCreate",
+        tags=["execution"],
+        request=RunNowRequestSerializer,
+        responses={
+            201: RunNowResponseSerializer,
+            400: RunNowRefusalSerializer,
+            404: RunNowRefusalSerializer,
+            409: RunNowRefusalSerializer,
+            422: RunNowRefusalSerializer,
+            503: RunNowRefusalSerializer,
+        },
+    )
+    def post(self, request, issue_id):
+        try:
+            caller_agent_run_id = verify_run_authorization(
+                request.headers.get("Authorization")
+            )
+        except RunAuthorizationError:
+            caller_agent_run_id = None
+        return _serialize_result(
+            execution.create_run_now(
+                issue_id,
+                _pydantic(execution.RunNowIn, request.data),
+                caller_agent_run_id=caller_agent_run_id,
+            )
+        )

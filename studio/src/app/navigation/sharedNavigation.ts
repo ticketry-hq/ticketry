@@ -23,6 +23,7 @@ import {
 import { getModulesSnapshot } from "../../features/projects";
 import { useStudioStore } from "../../features/projects/store";
 import { useClientStore } from "../../state/clientStore";
+import { startRunNowForSelectedItem } from "../../features/work-items";
 
 const MODULE_POSITION_ACTION_PREFIX = "modules.select-position-";
 
@@ -95,6 +96,9 @@ export function routeSharedNavigation(
         startInstantChangeFlow();
         event.preventDefault();
       }
+      return;
+    case "run-now":
+      if (startRunNowForSelectedItem()) event.preventDefault();
       return;
     case "status":
       openStatus(ctx);

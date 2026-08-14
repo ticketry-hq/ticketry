@@ -52,9 +52,21 @@ test("committed artifact declares itself authoritative and removes provenance", 
   );
   assert.equal(
     artifact.workflows.Story.transitions.find(
+      ([source, target]) => source === "Ideas" && target === "Implement",
+    )[2].agentAllowed,
+    true,
+  );
+  assert.equal(
+    artifact.workflows.Story.transitions.find(
       ([source, target]) => source === "Tickets" && target === "Implement",
     )[2].agentAllowed,
     false,
+  );
+  assert.equal(
+    artifact.workflows.Story.transitions.find(
+      ([source, target]) => source === "Implement" && target === "Grill",
+    )[2].agentAllowed,
+    true,
   );
   assert.ok(
     Object.values(artifact.workflows).every((workflow) =>

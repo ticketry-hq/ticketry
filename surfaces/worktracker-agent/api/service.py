@@ -25,6 +25,7 @@ from worktracker_sdk.generated import (
     ProjectsApi,
     ProvidersApi,
     ReasoningLevelsApi,
+    RunNowRefusal,
     StatesApi,
     WorkItemCreate,
     WorkItemsApi,
@@ -1204,6 +1205,44 @@ class WorktrackerService:
                 raise
             return {"target_id": target_id, "error": detail}
         return launched.model_dump(mode="json")
+
+    def run_now(
+        self,
+        id_or_key: str,
+        *,
+        authorization: str | None = None,
+    ) -> Dict[str, Any]:
+        """Invoke the backend-owned composed Run Now capability as an agent."""
+
+        target_id = str(id_or_key)
+        try:
+            target_id = str(self._sdk_resolve_task_id(id_or_key))
+            result = self.sdk.execution.run_now(
+                target_id,
+                origin="agent",
+                authorization=authorization,
+            )
+        except ApiException as error:
+            if isinstance(error.data, RunNowRefusal):
+                return error.data.model_dump(mode="json")
+            body = self._sdk_error_body(error)
+            if body is None:
+                raise
+            try:
+                refusal = RunNowRefusal.model_validate(body)
+            except ValueError:
+                pass
+            else:
+                return refusal.model_dump(mode="json")
+            detail = body.get("error") or body.get("detail") or "task_not_found"
+            return {
+                "target_id": target_id,
+                "committed_state": None,
+                "run": None,
+                "detail": detail,
+                "code": body.get("code") or detail,
+            }
+        return result.model_dump(mode="json")
 
     def reparent_tasks(
         self,

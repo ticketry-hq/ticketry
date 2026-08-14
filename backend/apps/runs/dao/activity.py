@@ -64,11 +64,20 @@ async def last_activity_by_module(
 async def agent_status_records(
     project_id: str,
     *,
+    runtime_namespace: str,
     task_id: Optional[str] = None,
     window_days: int = DEFAULT_ACTIVITY_WINDOW_DAYS,
     now: Optional[datetime] = None,
 ) -> list[RunRecord]:
-    """Return active runs plus recent ended tombstones for a status scope."""
+    """Return locally active runs plus recent ended tombstones for a scope.
+
+    An unresolved run owned by another terminal runtime is not locally live:
+    this backend cannot discover or reconcile its tmux session. Excluding that
+    row keeps the status snapshot aligned with terminal discovery and lets the
+    client retire a previously observed ghost run. Current launch persistence
+    creates the run and terminal mirror atomically, so a terminal-less active
+    row is likewise an orphan rather than a locally observable run.
+    """
 
     rows = AgentRun.objects.filter(issue__project_id=project_id).exclude(
         scope="docchat"
@@ -84,6 +93,12 @@ async def agent_status_records(
     )
     cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=window_days)).isoformat()
     rows = rows.filter(
+        Q(ended_at__isnull=False)
+        | Q(
+            agentterminalsession__runtime_namespace=runtime_namespace,
+            agentterminalsession__terminated_at__isnull=True,
+        )
+    ).filter(
         Q(ended_at__isnull=True) | Q(status_updated_at__gte=cutoff)
     ).order_by("-status_updated_at", "-id")
 

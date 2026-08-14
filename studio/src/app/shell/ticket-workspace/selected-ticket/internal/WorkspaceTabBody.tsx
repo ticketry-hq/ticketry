@@ -89,7 +89,7 @@ export function WorkspaceTabBody({
   );
   const terminalEngaged = bodyEngaged && activeKind === "terminal";
   const terminalRingBox =
-    activeKind === "terminal" ? "top-0 -bottom-2 -left-2 -right-2" : "inset-0";
+    activeKind === "terminal" ? "top-0 bottom-0 -left-2 -right-2" : "inset-0";
 
   return (
     <div

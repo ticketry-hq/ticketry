@@ -18,6 +18,7 @@ from apps.runs.bus import (
     publish_document,
 )
 from apps.runs.models import AgentRun, AutomationAttempt
+from apps.terminals import launch as terminal_launch
 from apps.terminals.models import AgentTerminalSession
 from studio_server.asgi import application
 from studio_server.contracts import AutomationAttemptRecord, LifecycleEvent
@@ -69,6 +70,7 @@ async def _seed_run(
         project_id=project_id,
         agent="codex",
         created_at="2026-07-12T10:00:00+00:00",
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
         scope=scope,
     )
 

@@ -44,6 +44,7 @@ unsafe extern "C" {
         viewport_width: f64,
         viewport_height: f64,
     ) -> GhosttyGridSize;
+    fn muxed_ghostty_view_is_focused(view: *mut c_void) -> bool;
     fn muxed_ghostty_view_focus(view: *mut c_void);
     fn muxed_ghostty_view_set_scroll_callback(
         view: *mut c_void,

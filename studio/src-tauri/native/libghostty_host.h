@@ -55,6 +55,7 @@ muxed_ghostty_grid_size_s
 muxed_ghostty_view_show(void *view, double x, double y, double width,
                        double height, double viewport_width,
                        double viewport_height);
+bool muxed_ghostty_view_is_focused(void *view);
 void muxed_ghostty_view_focus(void *view);
 
 // Normalization policy shared with the browser Terminal viewer: pixel deltas

@@ -53,19 +53,40 @@ export function WorkspaceLauncher({
   activatedProviders: ReadonlySet<string>;
   providersLoaded: boolean;
   providersFailed: boolean;
-  onLaunchTaskAgent: (agent: SessionMeta["agent"]) => void;
+  onLaunchTaskAgent: (
+    agent: SessionMeta["agent"],
+    context: TicketLaunchContext,
+  ) => void;
 }) {
   const [launchOpen, setLaunchOpen] = useState(false);
   const launchCommittedRef = useRef(false);
   const launchTriggerRef = useRef<HTMLButtonElement>(null);
   const launchMenuRef = useRef<HTMLDivElement>(null);
+  const launcherIdentity =
+    launchContext.kind === "task"
+      ? [
+          bucket,
+          launchContext.kind,
+          launchContext.projectId,
+          launchContext.moduleId ?? "",
+          launchContext.taskId,
+          launchContext.ticketSeq ?? "",
+        ].join("\u0000")
+      : [bucket, launchContext.kind].join("\u0000");
+  const currentLauncherIdentityRef = useRef(launcherIdentity);
+  const openLauncherRef = useRef<{
+    identity: string;
+    context: WorkspaceLauncherContext;
+  } | null>(null);
+  currentLauncherIdentityRef.current = launcherIdentity;
 
   // The launcher menu never survives a workspace-context change: switching
   // bucket or launcher kind must not leave a hidden launch in progress.
   useEffect(() => {
     setLaunchOpen(false);
     launchCommittedRef.current = false;
-  }, [bucket, launchContext.kind]);
+    openLauncherRef.current = null;
+  }, [launcherIdentity]);
 
   // While open: focus lands on the first menu item, and a pointer press
   // outside the trigger/menu dismisses without consuming the outside action.
@@ -74,7 +95,7 @@ export function WorkspaceLauncher({
     launchMenuRef.current
       ?.querySelector<HTMLButtonElement>("[role=menuitem]")
       ?.focus();
-    function onPointerDown(event: MouseEvent) {
+    function onPointerDown(event: PointerEvent) {
       const target = event.target as Node;
       if (
         launchMenuRef.current?.contains(target) ||
@@ -82,10 +103,11 @@ export function WorkspaceLauncher({
       ) {
         return;
       }
+      openLauncherRef.current = null;
       setLaunchOpen(false);
     }
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [launchOpen]);
 
   const launcherItems: { id: string; label: string }[] =
@@ -94,9 +116,11 @@ export function WorkspaceLauncher({
           { id: "plan", label: "Plan" },
           { id: "instant", label: "Instant" },
         ]
-      : AVAILABLE_AGENTS.filter((agent) => activatedProviders.has(agent)).map(
-          (agent) => ({ id: agent, label: agent }),
-        );
+      : providersLoaded && !providersFailed
+        ? AVAILABLE_AGENTS.filter((agent) => activatedProviders.has(agent)).map(
+            (agent) => ({ id: agent, label: agent }),
+          )
+        : [];
   const launcherNotice =
     launchContext.kind === "scratch" || launcherItems.length > 0
       ? null
@@ -107,16 +131,30 @@ export function WorkspaceLauncher({
 
   function activateLauncherItem(id: string) {
     if (launchCommittedRef.current) return;
-    launchCommittedRef.current = true;
-    setLaunchOpen(false);
-    if (launchContext.kind === "scratch") {
-      launchContext.onChooseMode(id as ScratchLaunchMode);
+    const opened = openLauncherRef.current;
+    if (!opened || opened.identity !== currentLauncherIdentityRef.current) {
+      setLaunchOpen(false);
       return;
     }
-    onLaunchTaskAgent(id as SessionMeta["agent"]);
+    launchCommittedRef.current = true;
+    openLauncherRef.current = null;
+    setLaunchOpen(false);
+    if (opened.context.kind === "scratch") {
+      opened.context.onChooseMode(id as ScratchLaunchMode);
+      return;
+    }
+    onLaunchTaskAgent(id as SessionMeta["agent"], opened.context);
   }
 
   function onLauncherMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      openLauncherRef.current = null;
+      setLaunchOpen(false);
+      launchTriggerRef.current?.focus();
+      return;
+    }
     const items = Array.from(
       launchMenuRef.current?.querySelectorAll<HTMLButtonElement>(
         "[role=menuitem]",
@@ -124,7 +162,13 @@ export function WorkspaceLauncher({
     );
     if (items.length === 0) return;
     const current = items.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === "ArrowDown") {
+    if (
+      (event.key === "Enter" || event.key === " ") &&
+      current >= 0
+    ) {
+      event.preventDefault();
+      activateLauncherItem(items[current].dataset.launcherItem ?? "");
+    } else if (event.key === "ArrowDown") {
       event.preventDefault();
       items[(current + 1) % items.length].focus();
     } else if (event.key === "ArrowUp") {
@@ -136,11 +180,6 @@ export function WorkspaceLauncher({
     } else if (event.key === "End") {
       event.preventDefault();
       items[items.length - 1].focus();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      setLaunchOpen(false);
-      launchTriggerRef.current?.focus();
     }
   }
 
@@ -152,7 +191,15 @@ export function WorkspaceLauncher({
         ref={launchTriggerRef}
         onClick={() =>
           setLaunchOpen((open) => {
-            if (!open) launchCommittedRef.current = false;
+            if (!open) {
+              launchCommittedRef.current = false;
+              openLauncherRef.current = {
+                identity: launcherIdentity,
+                context: launchContext,
+              };
+            } else {
+              openLauncherRef.current = null;
+            }
             return !open;
           })
         }
@@ -190,6 +237,7 @@ export function WorkspaceLauncher({
                 key={item.id}
                 type="button"
                 role="menuitem"
+                data-launcher-item={item.id}
                 onClick={() => activateLauncherItem(item.id)}
                 className="px-3 py-1 text-left text-xs font-medium text-text-muted hover:bg-pane-title hover:text-text-primary"
               >

@@ -111,7 +111,7 @@ mod tests {
                 scroll_sink: ScrollGestureSink::new(first_worker),
                 scroll_context: 0,
                 process_context: 0,
-                visibility: NativeTerminalVisibility::Visible,
+                visibility: NativeTerminalVisibility::visible(),
                 preparation_phase: Arc::new(AtomicU8::new(PRESENTED)),
             },
         );
@@ -124,7 +124,7 @@ mod tests {
                 scroll_sink: ScrollGestureSink::new(second_worker),
                 scroll_context: 0,
                 process_context: 0,
-                visibility: NativeTerminalVisibility::Visible,
+                visibility: NativeTerminalVisibility::visible(),
                 preparation_phase: Arc::new(AtomicU8::new(PRESENTED)),
             },
         );
@@ -150,7 +150,7 @@ mod tests {
                 scroll_sink: ScrollGestureSink::new(worker),
                 scroll_context: 0,
                 process_context: 0,
-                visibility: NativeTerminalVisibility::Visible,
+                visibility: NativeTerminalVisibility::visible(),
                 preparation_phase: Arc::new(AtomicU8::new(PRESENTED)),
             },
         );
@@ -158,8 +158,8 @@ mod tests {
         {
             let mut registry = entries.lock().expect("registry");
             let entry = registry.get_mut("native-retained").expect("entry");
-            assert!(entry.visibility.hide());
-            assert!(!entry.visibility.hide());
+            assert!(entry.visibility.hide(false));
+            assert!(!entry.visibility.hide(false));
             assert!(entry.visibility.show_after_frame(120, 36).unwrap());
             assert!(!entry.visibility.show_after_frame(120, 36).unwrap());
             entry
@@ -214,7 +214,7 @@ mod tests {
                 scroll_sink: ScrollGestureSink::new(worker),
                 scroll_context: 0,
                 process_context: 0,
-                visibility: NativeTerminalVisibility::Hidden,
+                visibility: NativeTerminalVisibility::hidden(),
                 preparation_phase: Arc::clone(&reservation.phase),
             },
         );

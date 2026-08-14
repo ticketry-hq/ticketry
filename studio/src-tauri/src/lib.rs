@@ -21,6 +21,7 @@ use supervisor::{CommandTable, Supervisor, SupervisorError, SupervisorEvent, Sup
 
 pub mod discovery;
 pub mod native_terminal;
+pub mod native_terminal_focus_trace;
 pub mod native_terminal_frames;
 mod native_terminal_preparation;
 pub mod native_terminal_scroll;
@@ -1024,7 +1025,8 @@ pub fn run() {
             native_terminal::native_terminal_hide,
             native_terminal::native_terminal_show,
             native_terminal::native_terminal_focus,
-            native_terminal::native_terminal_detach
+            native_terminal::native_terminal_detach,
+            native_terminal_focus_trace::native_terminal_trace
         ])
         .setup(|application| {
             let ownership = application.state::<DesktopDataDirectoryOwnership>();

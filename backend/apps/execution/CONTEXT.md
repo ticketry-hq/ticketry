@@ -72,6 +72,19 @@ An issue in a completed workflow group, the `Review` state, a cancelled group,
 or archived. Satisfaction is the only dependency gate used by subtree
 execution.
 
+**Run now**:
+The composed capability that sends one idea straight into implementation: it
+moves a Story from `Ideas` to `Implement` through the ordinary transition gate,
+stamping its caller's real origin, and then launches a task-scoped run for the
+committed destination. It is deliberately *not* subtree execution — it arms no
+root, writes no launch fact, and observes no frontier. It refuses outright when
+the target already has a live agent run or terminal, and resolves module
+ancestry, profile, launch binding, and required skills before moving, so a
+knowable prerequisite failure leaves the Story in `Ideas`. Its move and its
+launch are one capability precisely so no caller can leave an idea in
+`Implement` with nothing running.
+_Avoid_: Instant change, quick run, direct launch
+
 **Subtree reset**:
 Deletion of one armed root's launch facts. It preserves the root header,
 workflow state, and dependency edges, and starts no work by itself. Reset takes

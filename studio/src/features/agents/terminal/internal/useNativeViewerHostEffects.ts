@@ -2,26 +2,38 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, type RefObject } from "react";
 
 import { clippedNativeTerminalFrame } from "./nativeTerminalFrame";
+import { traceViewerFocus } from "./focusTrace";
 import { registerTerminalFocus } from "./terminalRegistry";
 import type { NativeTerminalStatus } from "./nativeViewerFailure";
 
+// `native_terminal_focus` rejects a viewer whose reveal has not committed, and
+// hides/shows are serialized through the presentation queue while focus is not.
+// Both focus paths therefore wait for presentation rather than racing it.
 export function useNativeViewerFocusRegistration({
   sessionId,
   handle,
+  presented,
   visible,
   modalOpen,
 }: {
   sessionId: string;
   handle: string | null;
+  presented: boolean;
   visible: boolean;
   modalOpen: boolean;
 }): void {
   useEffect(() => {
-    if (!handle || !visible || modalOpen) return;
+    if (!handle || !presented || !visible || modalOpen) return;
     return registerTerminalFocus(sessionId, () => {
-      void invoke("native_terminal_focus", { handle });
+      traceViewerFocus("focus requested by registry", { session: sessionId });
+      void invoke("native_terminal_focus", { handle }).catch((error) => {
+        traceViewerFocus("focus request FAILED", {
+          session: sessionId,
+          error: String(error),
+        });
+      });
     });
-  }, [handle, modalOpen, sessionId, visible]);
+  }, [handle, modalOpen, presented, sessionId, visible]);
 }
 
 export function useNativeViewerFrameSync({
@@ -80,25 +92,42 @@ export function useNativeViewerFocusSignal({
   sessionId,
   handle,
   focusSignal,
+  presented,
   visible,
   modalOpen,
 }: {
   sessionId: string;
   handle: string | null;
   focusSignal?: number;
+  presented: boolean;
   visible: boolean;
   modalOpen: boolean;
 }): void {
   const handledFocusSignalRef = useRef(0);
 
   useEffect(() => {
-    if (!handle || !visible || modalOpen) return;
+    if (!handle || !presented || !visible || modalOpen) return;
     const pendingSignal =
       focusSignal !== undefined &&
       focusSignal !== 0 &&
       focusSignal !== handledFocusSignalRef.current;
     if (!pendingSignal) return;
     handledFocusSignalRef.current = focusSignal;
-    void invoke("native_terminal_focus", { handle });
-  }, [focusSignal, handle, modalOpen, sessionId, visible]);
+    traceViewerFocus("focus requested by signal", {
+      session: sessionId,
+      focusSignal,
+    });
+    void invoke("native_terminal_focus", { handle }).catch((error) => {
+      // A refused request must not spend the signal: releasing it lets the next
+      // reveal of this viewer carry the same request through.
+      if (handledFocusSignalRef.current === focusSignal) {
+        handledFocusSignalRef.current = 0;
+      }
+      traceViewerFocus("focus request FAILED", {
+        session: sessionId,
+        focusSignal,
+        error: String(error),
+      });
+    });
+  }, [focusSignal, handle, modalOpen, presented, sessionId, visible]);
 }

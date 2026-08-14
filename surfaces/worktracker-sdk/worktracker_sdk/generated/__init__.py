@@ -57,6 +57,7 @@ __all__ = [
     "AgentStatusScopeResponse",
     "Attachment",
     "AutomationAttempt",
+    "CommittedState",
     "Config",
     "ConfigurationReorder",
     "CreateTerminal",
@@ -110,6 +111,9 @@ __all__ = [
     "ReplacedViewer",
     "ResumableTerminal",
     "ResumeResult",
+    "RunNowRefusal",
+    "RunNowRequest",
+    "RunNowResponse",
     "SaveDocument",
     "ScopeEnum",
     "SelfTerminateResult",
@@ -174,6 +178,7 @@ from worktracker_sdk.generated.models.agent_status_response import AgentStatusRe
 from worktracker_sdk.generated.models.agent_status_scope_response import AgentStatusScopeResponse as AgentStatusScopeResponse
 from worktracker_sdk.generated.models.attachment import Attachment as Attachment
 from worktracker_sdk.generated.models.automation_attempt import AutomationAttempt as AutomationAttempt
+from worktracker_sdk.generated.models.committed_state import CommittedState as CommittedState
 from worktracker_sdk.generated.models.config import Config as Config
 from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder as ConfigurationReorder
 from worktracker_sdk.generated.models.create_terminal import CreateTerminal as CreateTerminal
@@ -227,6 +232,9 @@ from worktracker_sdk.generated.models.release_result import ReleaseResult as Rel
 from worktracker_sdk.generated.models.replaced_viewer import ReplacedViewer as ReplacedViewer
 from worktracker_sdk.generated.models.resumable_terminal import ResumableTerminal as ResumableTerminal
 from worktracker_sdk.generated.models.resume_result import ResumeResult as ResumeResult
+from worktracker_sdk.generated.models.run_now_refusal import RunNowRefusal as RunNowRefusal
+from worktracker_sdk.generated.models.run_now_request import RunNowRequest as RunNowRequest
+from worktracker_sdk.generated.models.run_now_response import RunNowResponse as RunNowResponse
 from worktracker_sdk.generated.models.save_document import SaveDocument as SaveDocument
 from worktracker_sdk.generated.models.scope_enum import ScopeEnum as ScopeEnum
 from worktracker_sdk.generated.models.self_terminate_result import SelfTerminateResult as SelfTerminateResult

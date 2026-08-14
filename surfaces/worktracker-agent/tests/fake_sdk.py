@@ -12,6 +12,7 @@ from worktracker_sdk.root_api import (
     ExecuteGraphOut,
     LaunchedAgentOut,
     ResetGraphOut,
+    RunNowOut,
 )
 
 
@@ -208,6 +209,19 @@ def make_launched_agent(**over) -> LaunchedAgentOut:
     return LaunchedAgentOut(**data)
 
 
+def make_run_now(**over) -> RunNowOut:
+    data = dict(
+        target_id="44444444-4444-4444-4444-444444444444",
+        committed_state={
+            "id": "77777777-7777-7777-7777-777777777777",
+            "name": "Implement",
+        },
+        run=make_launched_agent(),
+    )
+    data.update(over)
+    return RunNowOut(**data)
+
+
 __all__ = [
     "DependencyGraphNodeOut",
     "DependencyGraphOut",
@@ -224,6 +238,7 @@ __all__ = [
     "make_launched_agent",
     "make_module",
     "make_project",
+    "make_run_now",
     "make_state",
     "make_work_item",
     "raises",

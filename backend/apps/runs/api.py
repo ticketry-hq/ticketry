@@ -151,10 +151,19 @@ async def get_module_activity(
 async def agent_status(project_id: str, task_id: str | None = None):
     """Return the authoritative run-status snapshot for a project or task."""
 
+    # Import at the composition boundary to keep the runs DAO independent of
+    # the concrete terminal runtime while making status and terminal discovery
+    # agree about which unresolved sessions this backend owns.
+    from apps.terminals.launch import terminal_runtime
+
     at = datetime.now(timezone.utc).isoformat()
     return AgentStatusSnapshot(
         scope=AgentStatusScope(project_id=project_id, task_id=task_id),
-        runs=await dao.agent_status_records(project_id, task_id=task_id),
+        runs=await dao.agent_status_records(
+            project_id,
+            runtime_namespace=terminal_runtime.namespace,
+            task_id=task_id,
+        ),
         automation_attempts=await dao.automation_attempt_status_records(
             project_id, task_id=task_id
         ),

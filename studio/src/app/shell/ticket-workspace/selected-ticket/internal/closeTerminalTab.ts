@@ -1,8 +1,11 @@
 import {
+  isScratchBucket,
   useTerminalStore,
 } from "../../../../../features/agents/terminal/appNavigation";
 import { toast } from "../../../../../state/clientStore";
 import { apiErrorMessage } from "../../../../../shared/api/client";
+import { queryClient } from "../../../../../shared/query/queryClient";
+import { queryKeys } from "../../../../../shared/query/keys";
 import type { SessionId } from "../../../../../features/agents/types";
 
 /**
@@ -21,6 +24,12 @@ export async function closeTerminalTab(
     } catch (error) {
       toast.error(`Terminal could not be closed: ${apiErrorMessage(error)}`);
       return;
+    }
+    if (!isScratchBucket(bucket)) {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.terminalSessions.resumable(bucket),
+        exact: true,
+      });
     }
   } else {
     term.closeTab(sessionId);

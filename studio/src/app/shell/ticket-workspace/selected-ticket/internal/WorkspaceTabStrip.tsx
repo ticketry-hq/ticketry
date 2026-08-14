@@ -11,6 +11,7 @@ import { terminalLabel } from "./terminalLabel";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
 import {
   WorkspaceLauncher,
+  type TicketLaunchContext,
   type WorkspaceLauncherContext,
 } from "./WorkspaceLauncher";
 
@@ -121,7 +122,10 @@ export function WorkspaceTabStrip({
   onSelectTab: (tab: TaskWorkspaceTabIdentity) => void;
   onCloseDocument: (docId: string) => void;
   onCloseTerminal: (sessionId: string) => void;
-  onLaunchTaskAgent: (agent: SessionMeta["agent"]) => void;
+  onLaunchTaskAgent: (
+    agent: SessionMeta["agent"],
+    context: TicketLaunchContext,
+  ) => void;
 }) {
   return (
     <div

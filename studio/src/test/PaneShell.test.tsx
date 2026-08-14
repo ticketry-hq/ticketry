@@ -15,6 +15,10 @@ function renderPanePair() {
   return {
     stories: container.querySelector('[data-pane="tasks"]'),
     workspace: container.querySelector('[data-pane="details-or-terminal"]')!,
+    storiesBody: container.querySelector('[data-pane="tasks"] .overflow-auto')!,
+    workspaceBody: container.querySelector(
+      '[data-pane="details-or-terminal"] .overflow-auto',
+    )!,
   };
 }
 
@@ -44,6 +48,15 @@ describe("PaneShell", () => {
 
     expect(stories).toHaveClass("hide-scrollbars");
     expect(workspace).toHaveClass("hide-scrollbars");
+  });
+
+  it("drops the workspace pane's bottom padding so the terminal reaches the pane edge", () => {
+    const { storiesBody, workspaceBody } = renderPanePair();
+
+    expect(workspaceBody).toHaveClass("pb-0");
+    expect(workspaceBody).not.toHaveClass("p-2");
+    expect(workspaceBody).toHaveClass("px-2", "pt-2");
+    expect(storiesBody).toHaveClass("p-2");
   });
 
   it("swaps emphasis when the focused pane store value changes", () => {

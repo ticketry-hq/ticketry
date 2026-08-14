@@ -130,6 +130,20 @@ export function markNativeViewerPresented(runId: string, token: symbol): void {
   publish();
 }
 
+/**
+ * Records a hide the presentation queue performed on its own behalf.
+ *
+ * Revealing one viewer hides whichever other viewer is on screen, without the
+ * hidden viewer's host asking for it. Unless that is recorded, the host still
+ * believes it is presented and will never re-show itself.
+ */
+export function markNativeViewerDisplaced(runId: string): void {
+  const entry = entries.get(runId);
+  if (!entry || entry.presentedBy === null) return;
+  entry.presentedBy = null;
+  publish();
+}
+
 export function markNativeViewerHidden(runId: string, token: symbol): void {
   const entry = entries.get(runId);
   if (!entry || entry.presentedBy !== token) return;

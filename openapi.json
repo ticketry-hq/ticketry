@@ -3586,6 +3586,110 @@
                 }
             }
         },
+        "/work-tracker/work-items/{issue_id}/run-now": {
+            "post": {
+                "operationId": "workItemsRunNowCreate",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "execution"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RunNowRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RunNowRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RunNowRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/work-tracker/work-items/batch": {
             "post": {
                 "operationId": "batchWorkItems",
@@ -4085,6 +4189,21 @@
                     "status",
                     "updated_at",
                     "work_item_id"
+                ]
+            },
+            "CommittedState": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
                 ]
             },
             "Config": {
@@ -5307,6 +5426,70 @@
                 "required": [
                     "agent_run_id",
                     "resumed_from"
+                ]
+            },
+            "RunNowRefusal": {
+                "type": "object",
+                "properties": {
+                    "target_id": {
+                        "type": "string"
+                    },
+                    "committed_state": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CommittedState"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "run": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LaunchedAgentResponse"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "committed_state",
+                    "detail",
+                    "run",
+                    "target_id"
+                ]
+            },
+            "RunNowRequest": {
+                "type": "object",
+                "properties": {
+                    "origin": {
+                        "$ref": "#/components/schemas/OriginEnum"
+                    }
+                }
+            },
+            "RunNowResponse": {
+                "type": "object",
+                "properties": {
+                    "target_id": {
+                        "type": "string"
+                    },
+                    "committed_state": {
+                        "$ref": "#/components/schemas/CommittedState"
+                    },
+                    "run": {
+                        "$ref": "#/components/schemas/LaunchedAgentResponse"
+                    }
+                },
+                "required": [
+                    "committed_state",
+                    "run",
+                    "target_id"
                 ]
             },
             "SaveDocument": {

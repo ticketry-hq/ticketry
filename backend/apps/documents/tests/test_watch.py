@@ -15,6 +15,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from asgiref.sync import async_to_sync
 
 from apps.documents import dao, watch
 
@@ -88,6 +89,38 @@ async def test_create_and_update_flow(tmp_path: Path):
     assert len(rows) == 1
     assert rows[0].rel_path == "design.html"
     assert rows[0].discovered_by_run_id == "run-1"
+
+
+async def test_watcher_survives_temporary_async_to_sync_launch_loop(tmp_path: Path):
+    root = tmp_path / "design"
+    root.mkdir()
+    frames: list[dict] = []
+
+    async def publish(frame):
+        frames.append(frame)
+
+    async def launch_from_temporary_loop() -> bool:
+        return watch.start_watch(
+            agent_run_id="run-sync-launch",
+            design_dir=str(root),
+            module_id="m1",
+            task_id="t1",
+            scope="task",
+            publish=publish,
+        )
+
+    await watch.startup()
+    try:
+        started = await asyncio.to_thread(async_to_sync(launch_from_temporary_loop))
+        assert started is True
+        await asyncio.sleep(0.5)
+
+        (root / "spec.md").write_text("# Discovered after launch returned")
+
+        await _wait_for(lambda: frames)
+        assert frames[0]["doc"]["rel_path"] == "spec.md"
+    finally:
+        await watch.shutdown()
 
 
 async def test_markdown_create_and_update_flow_is_case_insensitive(tmp_path: Path):

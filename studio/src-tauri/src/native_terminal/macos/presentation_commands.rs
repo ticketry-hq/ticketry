@@ -61,28 +61,45 @@ pub fn native_terminal_hide(
     handle: String,
 ) -> Result<(), String> {
     let view = {
-        let mut registry = state
+        let registry = state
             .entries
             .lock()
             .expect("native terminal registry poisoned");
         let entry = registry
-            .get_mut(&handle)
+            .get(&handle)
             .ok_or_else(|| "native terminal handle was not found".to_owned())?;
-        if !entry.visibility.hide() {
+        crate::native_terminal_focus_trace::trace(
+            "command hide",
+            &format!("run={} handle={handle}", entry.run_id),
+        );
+        if !entry.visibility.accepts_input() {
             return Ok(());
         }
         entry.view
     };
+    // Hiding makes AppKit resign first responder, so whether this viewer holds
+    // the keyboard has to be read before the view is hidden. The next reveal
+    // uses it to give the keyboard back.
     let (hidden_sender, hidden_receiver) = mpsc::channel();
     window
         .run_on_main_thread(move || {
+            let focused = unsafe { muxed_ghostty_view_is_focused(view as *mut c_void) };
             unsafe { muxed_ghostty_view_hide(view as *mut c_void) };
-            let _ = hidden_sender.send(());
+            let _ = hidden_sender.send(focused);
         })
         .map_err(|error| error.to_string())?;
-    hidden_receiver
+    let focused = hidden_receiver
         .recv_timeout(Duration::from_secs(2))
-        .map_err(|_| "timed out hiding the native terminal view".to_owned())
+        .map_err(|_| "timed out hiding the native terminal view".to_owned())?;
+    state
+        .entries
+        .lock()
+        .expect("native terminal registry poisoned")
+        .get_mut(&handle)
+        .ok_or_else(|| "native terminal handle was not found".to_owned())?
+        .visibility
+        .hide(focused);
+    Ok(())
 }
 
 #[tauri::command]
@@ -146,15 +163,33 @@ pub fn native_terminal_show(
     let size = shown_receiver
         .recv_timeout(Duration::from_secs(2))
         .map_err(|_| "timed out showing the native terminal view".to_owned())?;
-    state
-        .entries
-        .lock()
-        .expect("native terminal registry poisoned")
-        .get_mut(&handle)
-        .ok_or_else(|| "native terminal handle was not found".to_owned())?
-        .visibility
-        .show_after_frame(size.columns, size.rows)
-        .map_err(str::to_owned)?;
+    let restore_focus = {
+        let mut registry = state
+            .entries
+            .lock()
+            .expect("native terminal registry poisoned");
+        let entry = registry
+            .get_mut(&handle)
+            .ok_or_else(|| "native terminal handle was not found".to_owned())?;
+        entry
+            .visibility
+            .show_after_frame(size.columns, size.rows)
+            .map_err(str::to_owned)?;
+        entry.visibility.take_focus_restoration()
+    };
+    crate::native_terminal_focus_trace::trace(
+        "command show",
+        &format!("run={run_id} handle={handle} restoresFocus={restore_focus}"),
+    );
+    // A viewer the user was typing into keeps the keyboard across a hide/show
+    // cycle it never asked for; one that was idle must not steal it.
+    if restore_focus {
+        window
+            .run_on_main_thread(move || unsafe {
+                muxed_ghostty_view_focus(view as *mut c_void);
+            })
+            .map_err(|error| error.to_string())?;
+    }
     Ok(NativeTerminalStatus {
         handle,
         run_id,
@@ -178,8 +213,16 @@ pub fn native_terminal_focus(
             .get(&handle)
             .ok_or_else(|| "native terminal handle was not found".to_owned())?;
         if !entry.visibility.accepts_input() {
+            crate::native_terminal_focus_trace::trace(
+                "command focus REJECTED (viewer not presented)",
+                &format!("run={} handle={handle}", entry.run_id),
+            );
             return Err("hidden native terminal cannot receive focus".to_owned());
         }
+        crate::native_terminal_focus_trace::trace(
+            "command focus",
+            &format!("run={} handle={handle}", entry.run_id),
+        );
         entry.view
     };
     window

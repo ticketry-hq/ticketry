@@ -16,6 +16,7 @@ void *muxed_ghostty_view_new(void *opaque, void *parent_view,
 void muxed_ghostty_view_free(void *opaque) {
   MuxedGhosttyView *view = opaque;
   if (view == nil) return;
+  muxed_focus_trace(view, "view freed", view->_acceptsInput);
   view->_scrollCallback = NULL;
   view->_scrollContext = NULL;
   view->_resizeCallback = NULL;
@@ -121,11 +122,13 @@ void muxed_ghostty_view_present(void *opaque) {
   view->_acceptsInput = YES;
   view.hidden = NO;
   [view reportGridResize];
+  muxed_focus_trace(view, "presented", view->_acceptsInput);
 }
 
 void muxed_ghostty_view_hide(void *opaque) {
   MuxedGhosttyView *view = opaque;
   if (view == nil) return;
+  muxed_focus_trace(view, "hide requested", view->_acceptsInput);
   view->_reportsGridResize = NO;
   view->_acceptsInput = NO;
   if (view.window.firstResponder == view)
@@ -145,10 +148,17 @@ muxed_ghostty_view_show(void *opaque, double x, double y, double width,
   return size;
 }
 
+bool muxed_ghostty_view_is_focused(void *opaque) {
+  MuxedGhosttyView *view = opaque;
+  return view != nil && view.window.firstResponder == view;
+}
+
 void muxed_ghostty_view_focus(void *opaque) {
   MuxedGhosttyView *view = opaque;
-  if (view != nil && view->_acceptsInput)
-    [view.window makeFirstResponder:view];
+  if (view == nil) return;
+  muxed_focus_trace(view, "focus requested", view->_acceptsInput);
+  if (view->_acceptsInput) [view.window makeFirstResponder:view];
+  muxed_focus_trace_settled(view, "focus requested");
 }
 
 muxed_ghostty_scroll_intent_s

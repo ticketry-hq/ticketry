@@ -7,10 +7,6 @@ import {
   useTerminalForegroundStore,
   type ForegroundOwner,
 } from "./internal/foregroundStore";
-import {
-  registerPoolDriver,
-  syncEntries,
-} from "./internal/entryPool";
 import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
 import { clippedNativeTerminalFrame } from "./internal/nativeTerminalFrame";
@@ -34,6 +30,7 @@ import {
   useNativeViewerMount,
 } from "./internal/nativeViewerMountRegistry";
 import { ensureNativeViewerLifecycle } from "./internal/nativeViewerLifecycle";
+import { activeElementLabel, traceViewerFocus } from "./internal/focusTrace";
 
 export function NativeGhosttyTerminal({
   sessionId,
@@ -67,7 +64,6 @@ export function NativeGhosttyTerminal({
   modalOpenRef.current = modalOpen;
   activeRef.current = active;
 
-  useEffect(() => syncEntries(sessions), [sessions]);
   const session = sessions[sessionId] ?? null;
   const runId = session?.agentRunId ?? null;
   const key = session ? foregroundKey(session) : null;
@@ -97,6 +93,7 @@ export function NativeGhosttyTerminal({
   useNativeViewerFocusRegistration({
     sessionId,
     handle: sharedHandle,
+    presented: presentedHere,
     visible,
     modalOpen,
   });
@@ -116,6 +113,7 @@ export function NativeGhosttyTerminal({
     sessionId,
     handle: sharedHandle,
     focusSignal,
+    presented: presentedHere,
     visible,
     modalOpen,
   });
@@ -125,6 +123,15 @@ export function NativeGhosttyTerminal({
     if (!retained || !runId) return;
     const hidden = !visible || modalOpen;
     if (!handle) return;
+    traceViewerFocus(hidden ? "wants hidden" : "wants presented", {
+      run: runId,
+      active,
+      visible,
+      modalOpen,
+      resolvedOwner,
+      presentedHere,
+      activeElement: activeElementLabel(),
+    });
     // The destination host moves the one shared view. The prior host must not
     // race that move with a hide merely because foreground ownership changed.
     if (hidden && resolvedOwner !== owner) return;
@@ -185,10 +192,8 @@ export function NativeGhosttyTerminal({
 
   useEffect(() => {
     if (manageForegroundHost && active) registerHost(owner, hostRef.current);
-    const releaseDriver = manageForegroundHost && active ? registerPoolDriver() : null;
     return () => {
       if (manageForegroundHost && active) unregisterHost(owner);
-      releaseDriver?.();
     };
   }, [
     active,
@@ -214,7 +219,7 @@ export function NativeGhosttyTerminal({
     <div className="relative h-full w-full bg-pane-panel">
       <div
         ref={hostRef}
-        className="absolute bottom-2 left-2 right-2 top-[10px] bg-pane-panel"
+        className="absolute bottom-0 left-2 right-2 top-[10px] bg-pane-panel"
         data-testid="native-terminal-host"
         data-terminal-renderer="libghostty"
       />

@@ -7,6 +7,7 @@ from django.dispatch import receiver
 
 from worktracker.signals import issue_state_changed
 
+from apps.execution import auto_start_suppression
 from apps.execution import driver
 from apps.runs.bus import publish_automation_attempt
 from apps.runs.models import AutomationAttempt
@@ -99,12 +100,15 @@ def launch_workflow_automation(
 
     if not all((project_id, transition_id, from_state_id, to_state_id)):
         return
+    auto_start_suppressed = auto_start_suppression.consume(str(issue_id))
     if not (
         transition_snapshot
         and str(transition_snapshot.get("from")) == str(from_state_id)
         and str(transition_snapshot.get("to")) == str(to_state_id)
         and transition_snapshot.get("auto_start") is True
     ):
+        return
+    if auto_start_suppressed:
         return
     try:
         issue = (

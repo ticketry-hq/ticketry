@@ -6,6 +6,7 @@
 
 /** Codes worth a sentence. Anything else keeps its raw code. */
 const LAUNCH_FAILURE_REASONS: Record<string, string> = {
+  no_profile_selected: "Select a Studio launch profile before trying again.",
   // ADR-0015: a binding naming a deactivated provider is blocked, never
   // silently substituted, so the message names the specific cause and fix.
   provider_not_activated:
@@ -43,16 +44,25 @@ function requiredSkillFailure(body: unknown): RequiredSkillFailure | null {
 
 function errorDetailFrom(body: unknown): { code: string | null; message: string | null } {
   if (!body || typeof body !== "object") return { code: null, message: null };
+  const bodyCode = (body as { code?: unknown }).code;
   const detail = (body as { detail?: unknown }).detail;
   if (!detail || typeof detail !== "object") {
     return {
-      code: typeof detail === "string" && detail ? detail : null,
+      code: typeof bodyCode === "string" && bodyCode
+        ? bodyCode
+        : typeof detail === "string" && detail
+          ? detail
+          : null,
       message: null,
     };
   }
   const { error, message } = detail as { error?: unknown; message?: unknown };
   return {
-    code: typeof error === "string" && error ? error : null,
+    code: typeof bodyCode === "string" && bodyCode
+      ? bodyCode
+      : typeof error === "string" && error
+        ? error
+        : null,
     message: typeof message === "string" && message ? message : null,
   };
 }

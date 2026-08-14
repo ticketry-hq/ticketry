@@ -30,6 +30,11 @@ import type {
   WorkItemPatch,
   Workspace,
 } from "./types";
+import {
+  instanceOfRunNowRefusal,
+  type RunNowRefusal,
+  type RunNowResponse,
+} from "@worktracker/typescript-sdk/models";
 import { runtimeConfiguration } from "../../runtime";
 import { authenticatedHostFetch } from "./authenticatedHostFetch";
 
@@ -76,6 +81,10 @@ export class ApiError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+export class RunNowRefusalError extends ApiError {
+  declare body: RunNowRefusal;
 }
 
 async function request<T>(
@@ -401,6 +410,41 @@ export const executeTaskSubtree = (
     graphRunRequest:
       mode === undefined ? {} : { mode: GraphRunExecutionModeEnum[mode] },
   }));
+
+/** Move one eligible idea to Implement and launch its task-scoped run. */
+export const runWorkItemNow = async (issueId: string): Promise<RunNowResponse> => {
+  try {
+    return await call(() => sdk().execution.workItemsRunNowCreate({
+      issueId,
+      runNowRequest: { origin: OriginEnum.human },
+    }));
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.body !== null &&
+      typeof error.body === "object" &&
+      instanceOfRunNowRefusal(error.body)
+    ) {
+      throw new RunNowRefusalError(error.status, error.message, error.body);
+    }
+    throw error;
+  }
+};
+
+/** Canonical transition capability for one work-item type. */
+export const listIssueTypeTransitions = (
+  issueTypeId: string,
+): Promise<ScopedWorkflowSettings["transitions"]> =>
+  call(async () => {
+    const transitions = await sdk().workflows.listIssueTypeTransitions({
+      typeId: issueTypeId,
+    });
+    return transitions.map((transition) => ({
+      from_state_id: transition.from_state,
+      to_state_id: transition.to_state,
+      agent_allowed: transition.agent_allowed ?? true,
+    }));
+  });
 
 export const listIssueTypes = (projectId: string) =>
   call<IssueType[]>(async () =>

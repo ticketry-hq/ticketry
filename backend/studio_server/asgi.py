@@ -44,9 +44,11 @@ from apps.terminals.reconciliation import reconcile_terminals
 from apps.worktrees import service as worktrees_service
 
 
-# Stop every design-directory watcher on shutdown; rescan re-discovers (#521).
+# Own every design-directory watcher on the durable ASGI lifespan loop. Launch
+# calls may otherwise arrive through a temporary ``async_to_sync`` loop.
 
-register_shutdown(documents_watch.stop_all)
+register_startup(documents_watch.startup)
+register_shutdown(documents_watch.shutdown)
 register_startup(hook_spool.start)
 register_shutdown(hook_spool.stop)
 

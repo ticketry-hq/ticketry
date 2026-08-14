@@ -1,3 +1,4 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "xterm/css/xterm.css";
 
@@ -17,6 +18,7 @@ import { useTerminalPresentation } from "./internal/useTerminalPresentation";
 import { registerTerminalFocus } from "./internal/terminalRegistry";
 import { NativeGhosttyTerminal } from "./NativeGhosttyTerminal";
 import { nativeGhosttyAvailable } from "./internal/nativeGhosttyAvailability";
+import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -44,7 +46,10 @@ export function Terminal({
   const session = useTerminalStore((state) =>
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
-  const [nativeAvailable, setNativeAvailable] = useState(false);
+  const desktop = isTauri();
+  const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(() =>
+    desktop ? null : false,
+  );
   const [nativeFailure, setNativeFailure] = useState<{
     sessionId: string | null;
     reason: string;
@@ -56,6 +61,7 @@ export function Terminal({
     nativeFailure?.sessionId === sessionId ? nativeFailure.reason : null;
 
   useEffect(() => {
+    if (!desktop) return;
     let active = true;
     void nativeGhosttyAvailable().then((available) => {
       if (active) setNativeAvailable(available);
@@ -63,7 +69,21 @@ export function Terminal({
     return () => {
       active = false;
     };
-  }, []);
+  }, [desktop]);
+
+  useEffect(() => {
+    if (!sessionId || !session) return;
+    ensureTerminalRunCreated(sessionId, session);
+  }, [session, sessionId]);
+
+  if (desktop && (nativeAvailable === null || !session?.agentRunId)) {
+    return (
+      <div
+        className="h-full w-full bg-pane-panel"
+        data-testid="terminal-renderer-pending"
+      />
+    );
+  }
 
   if (
     nativeAvailable &&
@@ -85,7 +105,7 @@ export function Terminal({
   }
   const fallback = (
     <XtermTerminal
-      sessionId={active ? sessionId : null}
+      sessionId={active || session?.status === "connecting" ? sessionId : null}
       owner={owner}
       focusSignal={focusSignal}
     />

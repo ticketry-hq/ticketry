@@ -1,9 +1,13 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status";
+import {
+  dispatchStatusFrame,
+  statusFeed,
+} from "../features/agents/status/statusFeed";
 import {
   useTerminalStore,
   type SessionMeta,
@@ -32,6 +36,10 @@ vi.mock(
     ),
   }),
 );
+
+class FakeWebSocket {
+  close() {}
+}
 
 function session(
   sessionId: string,
@@ -99,6 +107,45 @@ describe("overhaul acceptance — terminals", () => {
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
     terminalApi.getTerminals.mockResolvedValue([]);
     terminalApi.listResumableTerminals.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    statusFeed.stop();
+    vi.unstubAllGlobals();
+  });
+
+  it("[overhaul-81] opens a document tab discovered by the backend watcher", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    statusFeed.start("project-1");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          ticketSeq={1}
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(terminalApi.getDocuments).toHaveBeenCalled());
+
+    act(() => dispatchStatusFrame({
+      v: 1,
+      type: "document",
+      at: "2026-08-14T12:00:00Z",
+      task_id: "story-1",
+      module_id: "module-1",
+      event: "created",
+      doc: { id: "spec", rel_path: "SPEC.html", label: "Spec" },
+    }));
+
+    expect(await screen.findByRole("tab", { name: "Spec" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("[overhaul-50] keeps the same opened terminal mounted across Details and documents", async () => {

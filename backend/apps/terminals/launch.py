@@ -29,8 +29,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from django.db import close_old_connections
-
 from apps.terminals.agents.injectors import (
     DEFAULT_LIFECYCLE_URL,
     DEFAULT_MCP_URL,
@@ -55,7 +53,6 @@ from apps.runs.bus import publish_backend_session_sync, publish_document, publis
 from apps.settings_store import config as cfgmod
 from apps.settings_store.config import NoConfigurationSelected, module_link_path
 from apps.terminals.launch_configuration import (
-    LaunchConfigurationError,
     ResolvedLaunchConfiguration,
     resolve_task_launch_configuration,
 )
@@ -74,6 +71,9 @@ from apps.terminals.runtime import (
     TerminalDimensions,
     TerminalRuntime,
     TmuxTerminalRuntime,
+)
+from apps.terminals.task_launch_preflight import (
+    enforce_provider_activation as _enforce_provider_activation,
 )
 from studio_server.atomic_files import atomic_write_bytes
 from studio_server.contracts import AgentLifecycleFrame, RunRecord
@@ -116,30 +116,6 @@ class LaunchIntent:
     def __post_init__(self) -> None:
         if self.issue_id is None:
             object.__setattr__(self, "issue_id", self.task_id)
-
-
-def _enforce_provider_activation(agent: str) -> frozenset[str]:
-    """Refuse a deactivated provider for every launch scope."""
-
-    from worktracker.services.launch_bindings import (
-        LaunchBindingError,
-        validate_provider_options,
-    )
-    from worktracker.services.provider_catalog import activated_provider_slugs
-
-    try:
-        activated_providers = activated_provider_slugs()
-        validate_provider_options(
-            agent=agent,
-            model=None,
-            reasoning=None,
-            activated_providers=activated_providers,
-        )
-    except LaunchBindingError as exc:
-        raise LaunchConfigurationError(exc.code) from exc
-    finally:
-        close_old_connections()
-    return activated_providers
 
 
 def _prepare_runtime_command(

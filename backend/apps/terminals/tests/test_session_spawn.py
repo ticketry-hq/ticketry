@@ -28,9 +28,12 @@ import apps.terminals.launch as session_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
+from apps.terminals.agents.skills.preflight import ResolvedSkills
+from apps.terminals.launch_configuration import ResolvedLaunchConfiguration
 from apps.terminals.tests.fakes import FakeAdapter, patch_terminal_runtime
 from apps.terminals.launch import LaunchIntent
 from apps.terminals.tmux._core import TmuxSessionError
+from apps.worktrees import dao as worktrees_dao
 from apps.settings_store.config import NoConfigurationSelected
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
@@ -200,6 +203,50 @@ async def test_spawn_happy_path_returns_id_and_persists(
     assert created["dimensions"] == launch._INITIAL_TERMINAL_DIMENSIONS
     assert "claude" in created["command"]
     assert created["command"].startswith("env -u NO_COLOR ")
+
+
+async def test_spawn_resolves_required_skills_against_live_worktree(
+    tmp_config, tmp_path, monkeypatch
+):
+    module_folder = tmp_path / "repo"
+    module_folder.mkdir()
+    worktree_folder = tmp_path / "worktree"
+    worktree_folder.mkdir()
+    _profile(tmp_config, module_folder)
+    _patch_worktracker(monkeypatch)
+    created = _capture_create_session(monkeypatch)
+    _patch_argv(monkeypatch)
+    await sync_to_async(worktrees_dao.create)(
+        task_id=TASK_ID,
+        repo_root=str(module_folder),
+        path=str(worktree_folder),
+        branch="wt/CODING-635",
+        base_branch="main",
+        base_commit="0" * 40,
+        status="active",
+    )
+    resolved_cwds = []
+
+    def resolve_skills(**kwargs):
+        resolved_cwds.append(kwargs["cwd"])
+        return ResolvedSkills(("tdd",), (), frozenset(), "a" * 40)
+
+    monkeypatch.setattr(session_module, "resolve_required_skills", resolve_skills)
+
+    await session_module.launch_agent_run(
+        _intent(
+            launch_configuration=ResolvedLaunchConfiguration(
+                prompt="Implement the task.",
+                agent="claude",
+                model=None,
+                reasoning=None,
+                required_skills=("tdd",),
+            )
+        )
+    )
+
+    assert resolved_cwds == [str(worktree_folder)]
+    assert created["cwd"] == str(worktree_folder)
 
 
 async def test_spawn_materializes_an_oversized_tmux_command(

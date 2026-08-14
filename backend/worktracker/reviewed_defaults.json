@@ -84,11 +84,11 @@
   },
   "prompts": {
     "Story": {
-      "Ideas": "This Story is in `Ideas`. Gather enough context to decide whether it needs an interactive grill session or can proceed through the normal delivery workflow. Read the title, description, attachments, linked material, and relevant repository context. If essential product or behavior decisions are missing or ambiguous, move the Story to `Grill` using the MCP server and stop without inventing those decisions. If the available context is sufficient, move the Story to `Spec` using the MCP server so the normal Spec, Tickets, and Implement pipeline can continue. Do not implement the work, create implementation tickets, or bypass the workflow while in `Ideas`. After making the transition, terminate the current agent session using the MCP server.",
+      "Ideas": "This Story is in `Ideas`. Gather enough context to choose its delivery route. Read the title, description, attachments, linked material, and relevant repository context. If the work is small, unambiguous, and self-contained, call the MCP server's `run_now` tool so it moves the Story to `Implement` and launches the implementation run as one operation; never use a bare state move for this route. If essential product or behavior decisions are missing or ambiguous, move the Story to `Grill` using the MCP server and stop without inventing those decisions. If the available context is sufficient for the normal delivery workflow, move the Story to `Spec` using the MCP server so the Spec, Tickets, and Implement pipeline can continue. Do not implement the work or create implementation tickets while in `Ideas`. After making the transition or calling `run_now`, terminate the current agent session using the MCP server.",
       "Grill": "This task is in `Grill`.\n\nUse the `$grill-with-docs` skill to interview the person.\n\nWhen this is complete, move this Story to `Spec` using the MCP server.\n\nOnce you are done, kill the current coding agent session with the MCP too.",
       "Spec": "This task is in `Spec`.\n\nUse the `to-spec` skill to turn the agreed requirements into the Story's implementation specification and link the finished spec from the Story. Do not create implementation tickets in this stage.\n\nWhen this is complete, move this Story to `Tickets` using the MCP server.\n\nOnce you are done, kill the current coding agent session with the MCP too.",
       "Tickets": "This task is in `Tickets`.\n\nUse the `to-tickets` skill to split the approved specification into scoped Implementation children and record their dependency edges. Do not implement any ticket in this stage.\n\nWhen this is complete, move this Story to `Implement` using the MCP server.\n\nOnce you are done, kill the current coding agent session with the MCP too.",
-      "Implement": "This task is in `Implement`:\n\nThe implementation campaign is running across your Implementation children; your job is coordination and integration, not re-implementing the children. Do not move the story yourself - it advances to `Review` on its own once every Implementation child is terminal and at least one is `Done`. Surface cross-child integration problems as they appear.\n\nIf there are no implementation stories under this, then implement the story itself and move it to 'Review' using the /tdd skill.\n\nFor dependencies, treat 'Review' state as unblocked.\n\nAfter this terminate this session using the MCP server with the terminate_current_run tool.",
+      "Implement": "This task is in `Implement`:\n\nThe implementation campaign is running across your Implementation children; your job is coordination and integration, not re-implementing the children. Do not move the story yourself - it advances to `Review` on its own once every Implementation child is terminal and at least one is `Done`. Surface cross-child integration problems as they appear.\n\nIf there are no Implementation children, first confirm this is still a small, unambiguous direct change. If it is larger or more ambiguous, stop without guessing and move the Story to `Grill` using the MCP server so it can rejoin refinement. Otherwise implement the Story itself and move it to `Review` using the /tdd skill.\n\nFor dependencies, treat `Review` state as unblocked.\n\nAfter this terminate this session using the MCP server with the terminate_current_run tool.",
       "Review": "This task is in `Review`. **What you do depends on this ticket's Type.**\n\n**If this is an Implementation child:** run `code-review` over this child's changes and report findings plainly. The review deliverable is the findings; completing it does not itself request or trigger a move to `Done`.\n\n**If this is a Story:** review the *combined* result of all children together, looking for integration issues that per-child review cannot catch. Turn each actionable finding into a new **Implementation** child through the dedicated `create_review_finding` tool - it creates the child directly in `Implement`, parented to this Story, carrying a fixed `Path` (repo-relative file) / inclusive `Lines` (start-end) / optional `Note` evidence block, so fixes rejoin the same execution machinery. Do not draw a `blocked_by` dependency edge and do not fix findings inline here; implementation waits for a person's kickoff outside this review deliverable. ",
       "Done": "Do nothing!",
       "Cancelled": "Do nothing."
@@ -143,6 +143,13 @@
           }
         ],
         [
+          "Ideas",
+          "Implement",
+          {
+            "agentAllowed": true
+          }
+        ],
+        [
           "Grill",
           "Ideas",
           {
@@ -187,6 +194,13 @@
         [
           "Tickets",
           "Cancelled",
+          {
+            "agentAllowed": true
+          }
+        ],
+        [
+          "Implement",
+          "Grill",
           {
             "agentAllowed": true
           }

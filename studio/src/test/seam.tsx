@@ -35,6 +35,13 @@ export interface HttpFixture {
   ): Promise<void>;
   graphRunCount(id: string): number;
   graphRunModes(id: string): Array<string | null>;
+  runNowCount(id: string): number;
+  /** Fails the next Run Now POST only, leaving other requests untouched. */
+  failNextRunNow(status: number, body?: unknown): void;
+  /** Holds Run Now responses until the returned release is called. */
+  holdRunNow(): () => void;
+  setRunNowTransitionEnabled(enabled: boolean): void;
+  refreshRunNowCapabilities(issueTypeId: string): Promise<void>;
   /** Fails the next graph-run POST only, leaving other requests untouched. */
   failNextGraphRun(status: number, body?: unknown): void;
   /** Holds graph-run responses until the returned release is called. */
@@ -70,6 +77,10 @@ interface GraphRunCall {
   mode: string | null;
 }
 
+interface RunNowCall {
+  id: string;
+}
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -87,9 +98,13 @@ class BoundaryFixture implements StudioFixture {
   readonly patches: PatchCall[] = [];
   readonly reorders: ReorderCall[] = [];
   readonly graphRuns: GraphRunCall[] = [];
+  readonly runNowCalls: RunNowCall[] = [];
   private graphRunFailures: Array<{ status: number; body: unknown }> = [];
   private graphRunGate: Promise<void> | null = null;
+  private runNowFailures: Array<{ status: number; body: unknown }> = [];
+  private runNowGate: Promise<void> | null = null;
   private subtreeRunEnabled = true;
+  private runNowTransitionEnabled = true;
   private readonly transitionRanks = new Map<string, string>();
   private nextFailure: { status: number; body: unknown } | null = null;
   private patchWaiters: Array<{
@@ -209,6 +224,36 @@ class BoundaryFixture implements StudioFixture {
       .map((candidate) => candidate.mode);
   }
 
+  runNowCount(id: string): number {
+    return this.runNowCalls.filter((candidate) => candidate.id === id).length;
+  }
+
+  failNextRunNow(status: number, body: unknown = null): void {
+    this.runNowFailures.push({ status, body });
+  }
+
+  holdRunNow(): () => void {
+    let release = (): void => {};
+    this.runNowGate = new Promise<void>((resolve) => {
+      release = () => {
+        this.runNowGate = null;
+        resolve();
+      };
+    });
+    return release;
+  }
+
+  setRunNowTransitionEnabled(enabled: boolean): void {
+    this.runNowTransitionEnabled = enabled;
+  }
+
+  async refreshRunNowCapabilities(issueTypeId: string): Promise<void> {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.workflows.transitionsByIssueType(issueTypeId),
+      exact: true,
+    });
+  }
+
   failNextGraphRun(status: number, body: unknown = null): void {
     this.graphRunFailures.push({ status, body });
   }
@@ -283,6 +328,26 @@ class BoundaryFixture implements StudioFixture {
     ) {
       return json([...this.issueTypes.values()]);
     }
+    const transitionCollectionMatch = path.match(
+      /\/work-tracker\/issue-types\/([^/]+)\/transitions$/,
+    );
+    if (method === "GET" && transitionCollectionMatch) {
+      const issueTypeId = decodeURIComponent(transitionCollectionMatch[1]);
+      const ideas = [...this.states.values()].find((state) => state.name === "Ideas");
+      const implement = [...this.states.values()].find((state) => state.name === "Implement");
+      return json(
+        this.runNowTransitionEnabled && ideas?.id && implement?.id
+          ? [{
+              id: 1,
+              issue_type: issueTypeId,
+              from_state: ideas.id,
+              to_state: implement.id,
+              agent_allowed: true,
+              workflow_revision: 1,
+            }]
+          : [],
+      );
+    }
     if (
       method === "GET" &&
       /\/work-tracker\/projects\/[^/]+\/launch-bindings$/.test(path)
@@ -329,6 +394,29 @@ class BoundaryFixture implements StudioFixture {
       if (this.graphRunGate) await this.graphRunGate;
       if (failure) return json(failure.body, failure.status);
       return json({ root_id: id, launched: [] }, 201);
+    }
+    const runNowMatch = path.match(
+      /\/work-tracker\/work-items\/([^/]+)\/run-now$/,
+    );
+    if (method === "POST" && runNowMatch) {
+      const id = decodeURIComponent(runNowMatch[1]);
+      this.runNowCalls.push({ id });
+      const failure = this.runNowFailures.shift();
+      if (this.runNowGate) await this.runNowGate;
+      if (failure) return json(failure.body, failure.status);
+      const current = this.items.get(id);
+      const implement = [...this.states.values()].find((state) => state.name === "Implement");
+      if (!current || !implement?.id) return json({ detail: "Not found" }, 404);
+      this.items.set(id, { ...current, state: implement.id });
+      return json({
+        target_id: id,
+        committed_state: { id: implement.id, name: implement.name },
+        run: {
+          target_id: id,
+          agent: "codex",
+          agent_run_id: `run-now-${id}`,
+        },
+      }, 201);
     }
     const attachmentMatch = path.match(
       /\/work-tracker\/work-items\/([^/]+)\/attachments$/,

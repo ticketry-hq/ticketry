@@ -33,4 +33,5 @@ urlpatterns = [
     path("worktrees/<str:task_id>/discard", rest_api.WorktreeDiscardView.as_view(), name="worktree-discard"),
     path("work-tracker/work-items/<str:issue_id>/graph-run", rest_api.GraphRunView.as_view(), name="graph-run"),
     path("work-tracker/work-items/<str:issue_id>/launch-agent", rest_api.LaunchAgentView.as_view(), name="launch-agent"),
+    path("work-tracker/work-items/<str:issue_id>/run-now", rest_api.RunNowView.as_view(), name="run-now"),
 ]

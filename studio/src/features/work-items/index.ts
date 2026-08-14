@@ -47,3 +47,10 @@ export type { SelectionSurface } from "../../state/clientStore";
 export { rankBetween } from "./utilities/rank";
 export { reachable } from "./utilities/dependencyGraph";
 export type { DependencyEdgeField } from "./utilities/dependencyGraph";
+export {
+  isRunNowEligible,
+  startRunNow,
+  startRunNowForSelectedItem,
+  useRunNowPending,
+  useRunNowTransitions,
+} from "./runNow";

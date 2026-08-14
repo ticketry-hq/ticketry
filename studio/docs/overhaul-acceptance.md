@@ -1,6 +1,6 @@
 # Studio overhaul acceptance gate
 
-The seventy-one checks that were once a manual pre-merge walk are automated by
+The eighty checks that were once a manual pre-merge walk are automated by
 `npm run test:overhaul --workspace @worktracker/studio`. Desktop CI runs that
 named gate before the full Studio suite, typecheck, and build.
 
@@ -21,14 +21,14 @@ named gate before the full Studio suite, typecheck, and build.
 | 13 | A module scratch workspace launches and displays its run summary. |
 | 14 | Reconnect replay closes a missed-membership gap without duplication. |
 | 15 | Switching projects cannot let a stale status snapshot mark a connected run exited. |
-| 16 | A dormant provider session resumes into a newly selected terminal tab. |
+| 16 | Closing a live terminal refreshes its dormant provider session in place, and Resume continues the provider conversation in a newly selected terminal tab. |
 | 17 | Fresh provider onboarding saves an activated provider and global launch default. |
 | 18 | The work-item pane boundary exposes an accessible draggable separator. |
 | 19 | Workflow settings derive state-delete blockers from canonical resources. |
 | 20 | The dialog bus renders confirmation requests and resolves both user choices. |
 | 21 | Repeating Run subtree revives an inactive campaign from the same action. |
 | 22 | Settings cold-opens from the footer onto Models without loading workflow catalogs. |
-| 23 | A native terminal commits outside viewer ownership only after native preparation succeeds, then releases it on detach. |
+| 23 | A prepared native terminal retires the fallback viewer before committing outside viewer ownership, reveals only after that commit, then releases ownership on detach. |
 | 24 | Work-item details render attachments read from the attachment subcollection. |
 | 25 | A workflow-state catalog rename relabels its section without losing held work items. |
 | 26 | First-project onboarding selects the created project before starting its guided tour. |
@@ -53,7 +53,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 45 | Cancelled and no-op module drops write nothing, and a drop does not select the module it landed on. |
 | 46 | A module created in an automatic project leads every module surface, and selection, its folder link, and the sidebar add control are unchanged. |
 | 47 | A module created in a project with Manual module order leads every module surface without leaving that mode, and agent activity cannot demote it. |
-| 48 | A live desktop run prefers the direct native libghostty-to-tmux viewer and retains xterm as its fallback. |
+| 48 | A live desktop run waits for the direct native libghostty-to-tmux viewer without opening the xterm/WebSocket fallback in parallel. |
 | 49 | A persisted terminal appears when its run projection arrives after the workspace first mounts. |
 | 50 | Details and document navigation keep the same opened terminal mounted, then reactivate it in place. |
 | 51 | A tab-strip drag places a module at the indicated tab edge and every module surface follows. |
@@ -67,7 +67,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 59 | A projects read started before an accepted first Module drag cannot restore recency over the resulting Manual module order. |
 | 60 | State transitions consume the authoritative landing rank, while cross-state drag finishes at its explicit drop seam. |
 | 61 | A StrictMode remount never overlaps two native attachments for the same durable terminal run. |
-| 62 | The native terminal clears the workspace tab boundary while retaining its other pane insets. |
+| 62 | The native terminal clears the workspace tab boundary, sits flush against the pane's bottom edge, and retains its side pane insets. |
 | 63 | The native tmux surface, its host layer, and its loading seam use Studio's pane palette instead of a separate black layer. |
 | 64 | Native terminal surfaces are discarded before a WebView reload can reuse stale pane geometry. |
 | 65 | The native Ghostty surface clips Metal output to its pane, preserves its insets, and resizes the durable tmux grid across windowed/fullscreen transitions. |
@@ -78,6 +78,15 @@ named gate before the full Studio suite, typecheck, and build.
 | 70 | Selecting a Work item with no terminals keeps previously opened terminal viewers mounted, and returning reuses the same host. |
 | 71 | Removing the React host that first attached a native viewer after ownership transfers preserves the pool-owned handle, lease, and listeners until the final host leaves. |
 | 72 | Details, document, and terminal destinations remain shielded until the previously presented retained native viewer finishes hiding. |
+| 73 | An authoritative scratch-run snapshot removes omitted foreign or orphaned activity from the visible summary. |
+| 74 | A task workspace launches one fresh promptless task run and activates its acknowledged terminal tab. |
+| 75 | Task launch lists each supported activated provider once, explains unavailable profile/provider states without launching, and leaves scratch launch on Plan and Instant. |
+| 76 | Task launch supports predictable keyboard choice, Escape focus restoration, and non-consuming outside-pointer dismissal. |
+| 77 | Task launch invalidates a changed workspace owner, commits one run per selection, and permits a later intentional fresh run and tab. |
+| 78 | A pending task launch completes create, acknowledgement, and terminal rekey after navigation leaves its terminal surface. |
+| 79 | A person can move a Story directly from Ideas to Implement through the ordinary state picker. |
+| 80 | An eligible Story in Ideas can Run now from Details or global `r`, with guarded pending/refusal behavior, terminal activation, and live workflow eligibility. |
+| 81 | A document discovered by the backend file watcher appears immediately as the active workspace tab. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

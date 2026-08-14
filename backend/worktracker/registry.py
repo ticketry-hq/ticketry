@@ -46,6 +46,16 @@ MODEL_ROUTES = {
             ),
         ),
     },
+    "RunNow": {
+        "reads": (),
+        "writes": (
+            RouteDeclaration(
+                "POST",
+                "/api/work-tracker/work-items/{issue_id}/run-now",
+                "Move an eligible Story to Implement and launch its pinned policy.",
+            ),
+        ),
+    },
     "Workspace": {
         "reads": (
             RouteDeclaration(

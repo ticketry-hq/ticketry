@@ -94,7 +94,15 @@ export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
             {title}
           </div>
         )}
-        <div className="flex-1 overflow-auto p-2 text-sm">{children}</div>
+        {/* The workspace pane hosts the terminal, which must sit flush against
+            the pane's bottom edge — no padding below it. */}
+        <div
+          className={`flex-1 overflow-auto text-sm ${
+            pane === "details-or-terminal" ? "px-2 pt-2 pb-0" : "p-2"
+          }`}
+        >
+          {children}
+        </div>
       </div>
     );
   },

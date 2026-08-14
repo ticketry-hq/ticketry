@@ -204,6 +204,12 @@ export function ensureNativeViewerLifecycle({
       if (settled.columns <= 0 || settled.rows <= 0) {
         throw new Error("native terminal renderer returned an empty grid");
       }
+      // Retire the compatibility viewer before claiming native ownership.
+      // Acquiring the desktop lease while xterm's WebSocket still owns the run
+      // makes the backend evict that socket as `replaced_by_another_viewer`.
+      // The socket then marks the shared session exited and React tears down
+      // the native surface that was meant to replace it.
+      releasePooledTransport(sessionId);
       const acquired = await viewerLease.acquire();
       if (!acquired || disposed || tornDown) {
         const detachedHandle = handle;
@@ -241,7 +247,6 @@ export function ensureNativeViewerLifecycle({
         return;
       }
       attachmentHost.replaceChildren();
-      releasePooledTransport(sessionId);
       publishNativeViewerHandle(
         runId,
         token,

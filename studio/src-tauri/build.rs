@@ -95,6 +95,7 @@ fn build_native_libghostty() {
         manifest.join("native/libghostty_host.m").display()
     );
     for source in [
+        "native/libghostty_focus_trace.m",
         "native/libghostty_runtime.m",
         "native/libghostty_view.m",
         "native/libghostty_view_bridge.m",

@@ -16,11 +16,13 @@ from worktracker_sdk.generated import (
 from worktracker_sdk.root_api import (
     DependencyGraphNodeOut,
     DependencyGraphOut,
+    CommittedStateOut,
     ExecuteGraphOut,
     ExecutionApi,
     LaunchedAgentOut,
     LaunchApi,
     ResetGraphOut,
+    RunNowOut,
 )
 
 
@@ -28,6 +30,7 @@ __all__ = [
     "ApiClient",
     "AttachmentsApi",
     "Configuration",
+    "CommittedStateOut",
     "DependencyGraphNodeOut",
     "DependencyGraphOut",
     "ExecuteGraphOut",
@@ -39,6 +42,7 @@ __all__ = [
     "ModulesApi",
     "ProjectsApi",
     "ResetGraphOut",
+    "RunNowOut",
     "StatesApi",
     "WorkflowsApi",
     "WorkItemsApi",

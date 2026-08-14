@@ -43,6 +43,7 @@ import IssueSidebar from "./IssueSidebar";
 import IssueActionsMenu from "./IssueActionsMenu";
 import { LaunchAgentAction } from "./LaunchAgentAction";
 import { SubtreeRunActions } from "./SubtreeRunActions";
+import { RunNowAction } from "./RunNowAction";
 import { readVersionedItem } from "../../../../../shared/storage/versioned";
 
 const DescriptionEditor = lazy(() => import("../documents/DescriptionEditor"));
@@ -266,6 +267,12 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
                 { onError: reportMutationError },
               )
             }
+          />
+          <RunNowAction
+            item={task}
+            moduleId={epic?.id ?? null}
+            states={states}
+            issueTypes={issueTypes}
           />
           <SubtreeRunActions task={task} moduleId={epic?.id ?? null} />
         </div>

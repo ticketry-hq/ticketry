@@ -23,7 +23,10 @@ import { queryKeys } from "../../../../../shared/query/keys";
 import { closeTerminalTab } from "./closeTerminalTab";
 import { rememberStudioWorkspaceTarget } from "./studioWorkspaceTarget";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
-import type { WorkspaceLauncherContext } from "./WorkspaceLauncher";
+import type {
+  TicketLaunchContext,
+  WorkspaceLauncherContext,
+} from "./WorkspaceLauncher";
 
 function resumeErrorMessage(error: unknown): string {
   const body = error instanceof AgentApiError ? error.body : null;
@@ -226,14 +229,17 @@ export function useWorkspaceTabActions({
     }
   }
 
-  function launchTaskAgent(agent: SessionMeta["agent"]): void {
+  function launchTaskAgent(
+    agent: SessionMeta["agent"],
+    context: TicketLaunchContext,
+  ): void {
     if (!bucket || !launchContext || launchContext.kind !== "task") return;
     openSession({
-      taskId: launchContext.taskId,
-      projectId: launchContext.projectId,
-      moduleId: launchContext.moduleId ?? undefined,
+      taskId: context.taskId,
+      projectId: context.projectId,
+      moduleId: context.moduleId ?? undefined,
       agent,
-      ticketSeq: launchContext.ticketSeq,
+      ticketSeq: context.ticketSeq,
     });
     setActive(bucket, "terminal");
     if (owner === "studio") rememberPendingTerminalRef.current = true;

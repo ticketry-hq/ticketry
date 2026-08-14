@@ -110,7 +110,7 @@ describe("native viewer attachment acceptance", () => {
     });
   });
 
-  it("[overhaul-23] reveals a prepared native viewer only after lease authority commits", async () => {
+  it("[overhaul-23] retires fallback before claiming and revealing a prepared native viewer", async () => {
     vi.stubEnv("VITE_WT_API_KEY", "native-terminal-secret");
     const lifecycle: string[] = [];
     let commitLease!: () => void;
@@ -200,13 +200,13 @@ describe("native viewer attachment acceptance", () => {
     });
     expect(requests[0].headers.get("x-api-key")).toBe("native-terminal-secret");
     expect(lifecycle.indexOf("native_terminal_attach")).toBeLessThan(
+      lifecycle.indexOf("release_fallback"),
+    );
+    expect(lifecycle.indexOf("release_fallback")).toBeLessThan(
       lifecycle.indexOf("lease"),
     );
     expect(lifecycle.indexOf("lease")).toBeLessThan(
       lifecycle.indexOf("native_terminal_show"),
-    );
-    expect(lifecycle.indexOf("native_terminal_show")).toBeLessThan(
-      lifecycle.indexOf("release_fallback"),
     );
 
     view.unmount();

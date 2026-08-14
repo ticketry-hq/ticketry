@@ -20,8 +20,10 @@ Key characteristics:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import uuid
+from concurrent.futures import Future
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
@@ -48,6 +50,41 @@ class _Watch:
 
 
 _WATCHES: Dict[str, _Watch] = {}
+_OWNER_LOOP: asyncio.AbstractEventLoop | None = None
+_OWNER_CONTEXT: contextvars.Context | None = None
+
+
+def _watch_done(agent_run_id: str, task: asyncio.Task) -> None:
+    """Forget a completed watcher and report unexpected loop failures."""
+
+    current = _WATCHES.get(agent_run_id)
+    if current is not None and current.task is task:
+        _WATCHES.pop(agent_run_id, None)
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is not None:
+        logger.warning("design doc watcher stopped run=%s: %s", agent_run_id, error)
+
+
+async def startup() -> None:
+    """Bind watcher tasks to the backend's long-lived ASGI event loop."""
+
+    global _OWNER_CONTEXT, _OWNER_LOOP
+    _OWNER_LOOP = asyncio.get_running_loop()
+    _OWNER_CONTEXT = contextvars.copy_context()
+
+
+async def shutdown() -> None:
+    """Stop and join every watcher before releasing the ASGI event loop."""
+
+    global _OWNER_CONTEXT, _OWNER_LOOP
+    watches = list(_WATCHES.values())
+    stop_all()
+    if watches:
+        await asyncio.gather(*(watch.task for watch in watches), return_exceptions=True)
+    _OWNER_LOOP = None
+    _OWNER_CONTEXT = None
 
 
 async def _register_document(
@@ -156,7 +193,7 @@ async def _watch_loop(
                 )
 
 
-def start_watch(
+def _start_watch_on_current_loop(
     *,
     agent_run_id: str,
     design_dir: Optional[str],
@@ -186,6 +223,11 @@ def start_watch(
         return False
 
     stop_event = asyncio.Event()
+    task_context = (
+        _OWNER_CONTEXT.copy()
+        if _OWNER_LOOP is asyncio.get_running_loop() and _OWNER_CONTEXT is not None
+        else None
+    )
     task = asyncio.create_task(
         _watch_loop(
             agent_run_id=agent_run_id,
@@ -197,13 +239,74 @@ def start_watch(
             publish=publish,
         ),
         name=f"design-watch-{agent_run_id[:8]}",
+        context=task_context,
     )
+    task.add_done_callback(lambda completed: _watch_done(agent_run_id, completed))
     _WATCHES[agent_run_id] = _Watch(task, stop_event)
     return True
 
 
+async def _start_watch_on_owner(**kwargs) -> bool:
+    return _start_watch_on_current_loop(**kwargs)
+
+
+def start_watch(
+    *,
+    agent_run_id: str,
+    design_dir: Optional[str],
+    module_id: str,
+    task_id: str,
+    scope: str,
+    publish,
+) -> bool:
+    """Start a watcher on the backend-owned loop, regardless of caller context.
+
+    Programmatic launches enter async code through ``async_to_sync``. The event
+    loop created for that bridge is destroyed as soon as launch returns, so a
+    watcher attached to it cannot survive long enough to observe agent writes.
+    ASGI startup records its durable lifespan loop; foreign launch loops hand
+    watcher creation back to that owner before returning.
+    """
+
+    kwargs = {
+        "agent_run_id": agent_run_id,
+        "design_dir": design_dir,
+        "module_id": module_id,
+        "task_id": task_id,
+        "scope": scope,
+        "publish": publish,
+    }
+    owner = _OWNER_LOOP
+    if owner is not None and owner.is_running():
+        try:
+            current = asyncio.get_running_loop()
+        except RuntimeError:
+            current = None
+        if current is not owner:
+            future: Future[bool] = asyncio.run_coroutine_threadsafe(
+                _start_watch_on_owner(**kwargs), owner
+            )
+            return future.result()
+    return _start_watch_on_current_loop(**kwargs)
+
+
 def stop_watch(agent_run_id: str) -> None:
     """Stop a run's watcher; idempotent for unknown/already-stopped runs."""
+
+    owner = _OWNER_LOOP
+    if owner is not None and owner.is_running():
+        try:
+            current = asyncio.get_running_loop()
+        except RuntimeError:
+            current = None
+        if current is not owner:
+            owner.call_soon_threadsafe(_stop_watch_on_current_loop, agent_run_id)
+            return
+    _stop_watch_on_current_loop(agent_run_id)
+
+
+def _stop_watch_on_current_loop(agent_run_id: str) -> None:
+    """Stop one watcher while executing on its owning event loop."""
 
     watch = _WATCHES.pop(agent_run_id, None)
     if watch is None:

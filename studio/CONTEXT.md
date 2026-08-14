@@ -55,6 +55,16 @@ _Avoid_: Active pane, selected pane
 The Stories pane's rapid-capture surface where one submitted idea becomes a Story in the currently selected module.
 _Avoid_: Task entry, generic issue composer
 
+**Run now action**:
+The work-item Details control that sends an idea straight into implementation,
+skipping Grill, Spec, and Tickets. It is offered only while the item sits in a
+state the workflow lets a human move directly to `Implement`, so workflow
+configuration alone decides whether it exists. A successful click relocates the
+row out of Ideas and activates that work item's terminal, because the run it
+started is the thing worth looking at. Distinct from an Instant run, which is
+taskless and scratch-scoped.
+_Avoid_: Instant change, quick implement, skip button
+
 **Subtree lifecycle chicklets**:
 The compact per-lifecycle-state summary of agent runs attached to a work item and
 its descendants. Each visible state has its own glyph and count so attention and
@@ -245,9 +255,10 @@ _Avoid_: Pane, focus region, tab group
 
 **Navigation mode**:
 The edit view's default state, in which Studio owns the keyboard: Shift+Tab
-cycles navigation zones, arrows move within a zone, and Enter dives into the
-active tab body. A terminal body remains in navigation mode until Enter is
-pressed again to enter terminal typing mode.
+cycles navigation zones, arrows move within a zone, and Enter — or Right on a
+story with nothing left to expand — dives into the active tab body. A terminal
+body remains in navigation mode until Enter is pressed again to enter terminal
+typing mode.
 _Avoid_: Command mode, normal mode, browse mode
 
 **Terminal typing mode**:

@@ -230,6 +230,52 @@ describe("overhaul acceptance — Stories and details", () => {
     });
   });
 
+  it("[overhaul-79] lets a person move a Story directly from Ideas to Implement", async () => {
+    const http = fixture();
+    const implement = {
+      id: "implement",
+      name: "Implement",
+      group: "started",
+      color: null,
+      sort_order: 4,
+    };
+    http.tree("module-1", {
+      rootIds: ["story-1", "implement-seed"],
+      children: { "story-1": [], "implement-seed": [] },
+      order: ["story-1", "implement-seed"],
+    });
+    http.workItems([
+      workItem({ id: "story-1", name: "Ready for direct kickoff" }),
+      workItem({
+        id: "implement-seed",
+        name: "Already implementing",
+        key: "MEML-2",
+        state: implement,
+      }),
+    ]);
+    const patched = http.expectPatch("story-1", {
+      state_id: "implement",
+      origin: "human",
+    });
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    fireEvent.click(
+      within(stories).getByRole("treeitem", { name: /Ready for direct kickoff/ }),
+    );
+    const details = screen.getByRole("region", { name: "Details" });
+    fireEvent.click(await within(details).findByRole("button", { name: "Ideas" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Implement" }));
+
+    await patched;
+    await waitFor(() => {
+      expect(within(stories).getByRole("button", { name: "Collapse Ideas" }))
+        .toHaveTextContent("Ideas0");
+      expect(within(stories).getByRole("button", { name: "Collapse Implement" }))
+        .toHaveTextContent("Implement2");
+    });
+  });
+
   it("[overhaul-03] leaves a dragged row where dropped after the server reply", async () => {
     const http = fixture();
     http.tree("module-1", {

@@ -78,6 +78,7 @@ static const uint16_t kMuxedScrollMaxLines = 20;
   }
 
   ghostty_surface_set_content_scale(_surface, scale, scale);
+  muxed_focus_trace(self, "view created", _acceptsInput);
   return self;
 }
 
@@ -94,15 +95,23 @@ static const uint16_t kMuxedScrollMaxLines = 20;
 }
 
 - (BOOL)becomeFirstResponder {
-  if (!_acceptsInput) return NO;
+  if (!_acceptsInput) {
+    muxed_focus_trace(self, "becomeFirstResponder refused", _acceptsInput);
+    return NO;
+  }
   BOOL accepted = [super becomeFirstResponder];
   if (accepted && _surface != NULL) ghostty_surface_set_focus(_surface, true);
+  muxed_focus_trace(self,
+                    accepted ? "becomeFirstResponder" : "becomeFirstResponder rejected",
+                    _acceptsInput);
   return accepted;
 }
 
 - (BOOL)resignFirstResponder {
   BOOL resigned = [super resignFirstResponder];
   if (resigned && _surface != NULL) ghostty_surface_set_focus(_surface, false);
+  muxed_focus_trace(self, "resignFirstResponder", _acceptsInput);
+  muxed_focus_trace_settled(self, "resignFirstResponder");
   return resigned;
 }
 
@@ -150,6 +159,7 @@ static const uint16_t kMuxedScrollMaxLines = 20;
   if (!_acceptsInput || _surface == NULL) return;
   if ((event.modifierFlags & NSEventModifierFlagCommand) &&
       event.keyCode == 0x35) {
+    muxed_focus_trace(self, "disengaged by cmd-escape", _acceptsInput);
     [self.window makeFirstResponder:self.superview];
     return;
   }

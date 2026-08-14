@@ -41,12 +41,16 @@ export function useWorkspaceTerminalSessions(
   );
   const focusSession = useTerminalStore((state) => state.focusSession);
   const openSession = useTerminalStore((state) => state.openSession);
-  const mountedTaskRunIds = useAgentStatusStore((state) =>
-    bucket && !scratch
-      ? Object.values(state.runs)
-          .filter((run) => run.task_id === bucket)
-          .map((run) => run.agent_run_id)
-      : EMPTY_RUN_IDS,
+  // Compared by value: a fresh array on every pushed run frame would re-run the
+  // restore/refetch effects that consume it, churning viewer presentation.
+  const mountedTaskRunIds = useAgentStatusStore(
+    useShallow((state) =>
+      bucket && !scratch
+        ? Object.values(state.runs)
+            .filter((run) => run.task_id === bucket)
+            .map((run) => run.agent_run_id)
+        : EMPTY_RUN_IDS,
+    ),
   );
   const mountedScratchRunIds = useAgentStatusStore(
     useShallow((state) =>

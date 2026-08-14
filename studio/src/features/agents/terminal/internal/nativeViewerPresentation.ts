@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { markNativeViewerDisplaced } from "./nativeViewerMountRegistry";
+
 type VisibleViewer = {
   runId: string;
   handle: string;
@@ -20,6 +22,7 @@ async function hideCurrentViewer(nextRunId: string): Promise<void> {
   if (!current || current.runId === nextRunId) return;
   await invoke("native_terminal_hide", { handle: current.handle });
   if (visibleViewer?.handle === current.handle) visibleViewer = null;
+  markNativeViewerDisplaced(current.runId);
 }
 
 /** Serializes a first attachment with every retained hide/show operation. */

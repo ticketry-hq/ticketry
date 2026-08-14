@@ -109,18 +109,19 @@ describe("native viewer attachment acceptance", () => {
     });
   });
 
-  it("[overhaul-62] clears the workspace tab boundary without moving the other native edges", () => {
+  it("[overhaul-62] clears the workspace tab boundary and sits flush at the bottom without moving the side native edges", () => {
     const view = render(
       <NativeGhosttyTerminal sessionId="session-1" owner="studio" />,
     );
     const host = view.getByTestId("native-terminal-host");
 
     expect(host).toHaveClass(
-      "bottom-2",
+      "bottom-0",
       "left-2",
       "right-2",
       "top-[10px]",
     );
+    expect(host).not.toHaveClass("bottom-2");
     expect(host).not.toHaveClass("inset-2");
     view.unmount();
   });

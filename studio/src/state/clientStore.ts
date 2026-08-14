@@ -214,6 +214,7 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "o", label: "Open Agent" },
   { key: "n", label: "Plan" },
   { key: "i", label: "Instant Change" },
+  { key: "r", label: "Run now" },
   { key: "s", label: "Status" },
   { key: "e", label: "Settings" },
   { key: "f", label: "Set Folder" },

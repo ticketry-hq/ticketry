@@ -242,7 +242,7 @@ pub fn native_terminal_attach(
             scroll_sink,
             scroll_context,
             process_context,
-            visibility: NativeTerminalVisibility::Hidden,
+            visibility: NativeTerminalVisibility::hidden(),
             preparation_phase: Arc::clone(&preparation_phase),
         },
     ) {

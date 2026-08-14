@@ -26,10 +26,11 @@ PREVIOUS_DEFAULT_PROMPTS_BY_STATE = {
 }
 
 
-def _canonical_states(project, State):
+def _canonical_states(project, State, alias):
+    state_rows = State.objects.using(alias)
     states = {
         state.name: state
-        for state in State.objects.filter(project_id=project.id).order_by("id")
+        for state in state_rows.filter(project_id=project.id).order_by("id")
     }
     for previous_name, current_name in (
         ("Idea", "Grill"),
@@ -43,13 +44,13 @@ def _canonical_states(project, State):
             # case. Leave both rows alone rather than deleting project-owned data.
             continue
         previous_state.name = current_name
-        previous_state.save(update_fields=["name"])
+        previous_state.save(using=alias, update_fields=["name"])
         states[current_name] = previous_state
 
     for sort_order, (name, group, color) in enumerate(DEFAULT_STATES):
         state = states.get(name)
         if state is None:
-            state = State.objects.create(
+            state = state_rows.create(
                 id=uuid.uuid4(),
                 project_id=project.id,
                 name=name,
@@ -72,23 +73,27 @@ def _canonical_states(project, State):
                 setattr(state, field, value)
                 update_fields.append(field)
         if update_fields:
-            state.save(update_fields=update_fields)
+            state.save(using=alias, update_fields=update_fields)
     return {name: states[name] for name, _group, _color in DEFAULT_STATES}
 
 
-def _retire_ready(project, states, Issue, State):
+def _retire_ready(project, states, Issue, State, alias):
     implement = states["Implement"]
     ready_ids = list(
-        State.objects.filter(project_id=project.id, name="Ready").values_list(
+        State.objects.using(alias).filter(
+            project_id=project.id, name="Ready"
+        ).values_list(
             "id", flat=True
         )
     )
     if not ready_ids:
         return
-    Issue.objects.filter(project_id=project.id, state_id__in=ready_ids).update(
+    Issue.objects.using(alias).filter(
+        project_id=project.id, state_id__in=ready_ids
+    ).update(
         state_id=implement.id
     )
-    State.objects.filter(id__in=ready_ids).delete()
+    State.objects.using(alias).filter(id__in=ready_ids).delete()
 
 
 def _rebuild_type_workflows(
@@ -96,10 +101,13 @@ def _rebuild_type_workflows(
     states,
     IssueType,
     IssueTypeTransition,
+    alias,
 ):
+    issue_types = IssueType.objects.using(alias)
+    transitions = IssueTypeTransition.objects.using(alias)
     canonical_state_ids = {state.id for state in states.values()}
     for type_name, template in DEFAULT_WORKFLOW_TEMPLATES.items():
-        issue_type = IssueType.objects.filter(
+        issue_type = issue_types.filter(
             project_id=project.id,
             name=type_name,
             level="task",
@@ -116,7 +124,7 @@ def _rebuild_type_workflows(
             issue_type.workflow_revision = 1
             update_fields.append("workflow_revision")
         if update_fields:
-            issue_type.save(update_fields=update_fields)
+            issue_type.save(using=alias, update_fields=update_fields)
 
         desired_edges = {
             (states[source].id, states[target].id): template[
@@ -125,7 +133,7 @@ def _rebuild_type_workflows(
             for source, targets in template["transitions"].items()
             for target in targets
         }
-        canonical_edges = IssueTypeTransition.objects.filter(
+        canonical_edges = transitions.filter(
             issue_type_id=issue_type.id,
             from_state_id__in=canonical_state_ids,
             to_state_id__in=canonical_state_ids,
@@ -133,14 +141,14 @@ def _rebuild_type_workflows(
         for edge in canonical_edges:
             key = (edge.from_state_id, edge.to_state_id)
             if key not in desired_edges:
-                edge.delete()
+                edge.delete(using=alias)
                 continue
             expected_agent_allowed = desired_edges.pop(key)
             if edge.agent_allowed != expected_agent_allowed:
                 edge.agent_allowed = expected_agent_allowed
-                edge.save(update_fields=["agent_allowed"])
+                edge.save(using=alias, update_fields=["agent_allowed"])
 
-        IssueTypeTransition.objects.bulk_create(
+        transitions.bulk_create(
             IssueTypeTransition(
                 issue_type_id=issue_type.id,
                 from_state_id=source_id,
@@ -156,8 +164,11 @@ def _sync_launch_bindings(
     states,
     IssueType,
     LaunchBinding,
+    alias,
 ):
-    for issue_type in IssueType.objects.filter(
+    issue_types = IssueType.objects.using(alias)
+    bindings = LaunchBinding.objects.using(alias)
+    for issue_type in issue_types.filter(
         project_id=project.id,
         name__in=DEFAULT_AGENT_PROMPTS_BY_ISSUE_TYPE,
         level="task",
@@ -166,7 +177,7 @@ def _sync_launch_bindings(
             reviewed_prompt = DEFAULT_AGENT_PROMPTS_BY_ISSUE_TYPE[issue_type.name][
                 state_name
             ]
-            binding, created = LaunchBinding.objects.get_or_create(
+            binding, created = bindings.get_or_create(
                 issue_type_id=issue_type.id,
                 state_id=state.id,
                 defaults={
@@ -206,7 +217,7 @@ def _sync_launch_bindings(
                 binding.subtree_run_enabled = expected_subtree_run
                 update_fields.append("subtree_run_enabled")
             if update_fields:
-                binding.save(update_fields=update_fields)
+                binding.save(using=alias, update_fields=update_fields)
 
 
 def migrate_matt_style_workflow(apps, schema_editor):
@@ -216,21 +227,24 @@ def migrate_matt_style_workflow(apps, schema_editor):
     IssueType = apps.get_model("worktracker", "IssueType")
     IssueTypeTransition = apps.get_model("worktracker", "IssueTypeTransition")
     LaunchBinding = apps.get_model("worktracker", "LaunchBinding")
+    alias = schema_editor.connection.alias if schema_editor is not None else "default"
 
-    for project in Project.objects.all().order_by("id"):
-        states = _canonical_states(project, State)
-        _retire_ready(project, states, Issue, State)
+    for project in Project.objects.using(alias).all().order_by("id"):
+        states = _canonical_states(project, State, alias)
+        _retire_ready(project, states, Issue, State, alias)
         _rebuild_type_workflows(
             project,
             states,
             IssueType,
             IssueTypeTransition,
+            alias,
         )
         _sync_launch_bindings(
             project,
             states,
             IssueType,
             LaunchBinding,
+            alias,
         )
 
 

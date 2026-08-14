@@ -1,262 +1,215 @@
-"""MCP parity tests for the scoped per-type workflow operations."""
+"""MCP parity tests for workflow tools assembled from the CRUD contract."""
 
 import inspect
+from types import SimpleNamespace
 from uuid import UUID
 
-import pytest
 from worktracker_sdk.generated import (
-    AddWorkflowTransitionIn,
-    ScopedLaunchBindingIn,
-    ScopedWorkflowLaunchBindingOut,
-    ScopedWorkflowOut,
-    ScopedWorkflowTransitionOut,
-    SetWorkflowAutoStartIn,
-    SetWorkflowStartStateIn,
-    SetWorkflowTransitionPermissionIn,
-    WorkflowRevisionIn,
-    WorkflowStandingWarningOut,
+    IssueTypeTransition,
+    LaunchBinding,
+    PatchedIssueType,
+    PatchedIssueTypeTransition,
 )
-from worktracker_sdk.generated.exceptions import ApiException
 
-from fake_sdk import FakeGeneratedSdk, make_api_error, raises
+from fake_sdk import FakeGeneratedSdk
 from worktracker_agent.api.service import WorktrackerService
 from worktracker_agent.mcp.tools_adapter import generate_worktracker_tools
 
 
-TYPE = "11111111-1111-1111-1111-111111111111"
-READY = "22222222-2222-2222-2222-222222222222"
-BUILD = "33333333-3333-3333-3333-333333333333"
-DONE = "44444444-4444-4444-4444-444444444444"
+TYPE = UUID("11111111-1111-1111-1111-111111111111")
+PROJECT = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+READY = UUID("22222222-2222-2222-2222-222222222222")
+BUILD = UUID("33333333-3333-3333-3333-333333333333")
+DONE = UUID("44444444-4444-4444-4444-444444444444")
+PROVIDER = UUID("55555555-5555-5555-5555-555555555555")
+MODEL = UUID("66666666-6666-6666-6666-666666666666")
+REASONING = UUID("77777777-7777-7777-7777-777777777777")
 
 
-def _workflow(revision=7):
-    return ScopedWorkflowOut(
-        issue_type_id=UUID(TYPE),
-        start_state_id=UUID(READY),
-        workflow_revision=revision,
-        transitions=[
-            ScopedWorkflowTransitionOut(
-                from_state_id=UUID(READY),
-                to_state_id=UUID(BUILD),
-                agent_allowed=False,
-            )
-        ],
-        launch_bindings=[
-            ScopedWorkflowLaunchBindingOut(
-                state_id=UUID(BUILD),
-                prompt="Implement the ticket",
-                required_skills=["to-spec", "to-tickets"],
-                agent="codex",
-                auto_start=True,
-                subtree_run_enabled=False,
-            )
-        ],
-        warnings=[
-            WorkflowStandingWarningOut(
-                code="no_path_to_completed",
-                state_id=UUID(BUILD),
-                message="Build has no path to a completed state.",
-            )
-        ],
-    )
-
-
-def _service(operation, result=None):
+def _sdk():
     sdk = FakeGeneratedSdk()
-    sdk.workflows.returns[operation] = result or _workflow()
-    return WorktrackerService(base_url="http://example.test", sdk=sdk), sdk
-
-
-def test_read_returns_permissions_auto_start_and_standing_warnings():
-    service, sdk = _service("get_issue_type_workflow_settings")
-
-    result = service.get_issue_type_workflow_settings(TYPE)
-
-    assert result.transitions[0].agent_allowed is False
-    assert result.launch_bindings[0].auto_start is True
-    assert result.warnings[0].code == "no_path_to_completed"
-    assert sdk.workflows.calls[0][1] == (UUID(TYPE),)
-
-
-@pytest.mark.parametrize(
-    ("method", "args", "operation", "body_type", "body_fields"),
-    [
-        (
-            "add_issue_type_workflow_transition",
-            (TYPE, READY, BUILD, 7, False),
-            "add_issue_type_workflow_transition",
-            AddWorkflowTransitionIn,
-            {
-                "from_state_id": UUID(READY),
-                "to_state_id": UUID(BUILD),
-                "agent_allowed": False,
-                "workflow_revision": 7,
-            },
+    sdk.issue_types.returns["get_issue_type"] = SimpleNamespace(
+        id=TYPE,
+        project=PROJECT,
+        start_state=READY,
+        workflow_revision=7,
+    )
+    sdk.states.returns["list_states"] = [
+        SimpleNamespace(id=READY, name="Ready", group="unstarted"),
+        SimpleNamespace(id=BUILD, name="Build", group="started"),
+        SimpleNamespace(id=DONE, name="Done", group="completed"),
+    ]
+    sdk.workflows.returns["list_issue_type_transitions"] = [
+        SimpleNamespace(
+            id=1,
+            issue_type=TYPE,
+            from_state=READY,
+            to_state=BUILD,
+            agent_allowed=False,
         ),
-        (
-            "remove_issue_type_workflow_transition",
-            (TYPE, READY, BUILD, 7),
-            "remove_issue_type_workflow_transition",
-            WorkflowRevisionIn,
-            {"workflow_revision": 7},
+        SimpleNamespace(
+            id=2,
+            issue_type=TYPE,
+            from_state=BUILD,
+            to_state=DONE,
+            agent_allowed=True,
         ),
-        (
-            "set_issue_type_workflow_transition_permission",
-            (TYPE, READY, BUILD, False, 7),
-            "set_issue_type_workflow_transition_permission",
-            SetWorkflowTransitionPermissionIn,
-            {"agent_allowed": False, "workflow_revision": 7},
-        ),
-        (
-            "set_issue_type_workflow_start_state",
-            (TYPE, BUILD, 7),
-            "set_issue_type_workflow_start_state",
-            SetWorkflowStartStateIn,
-            {"state_id": UUID(BUILD), "workflow_revision": 7},
-        ),
-        (
-            "upsert_issue_type_workflow_launch_binding",
-            (
-                TYPE,
-                BUILD,
-                7,
-                "Implement",
-                "codex",
-                "gpt-5",
-                "high",
-                ["to-tickets", "to-spec"],
-            ),
-            "upsert_issue_type_workflow_launch_binding",
-            ScopedLaunchBindingIn,
-            {
+    ]
+    sdk.providers.returns["list_providers"] = [
+        SimpleNamespace(id=PROVIDER, slug="codex", activated=True)
+    ]
+    sdk.models.returns["list_agent_models"] = [
+        SimpleNamespace(id=MODEL, provider=PROVIDER, name="gpt-5")
+    ]
+    sdk.reasoning_levels.returns["list_reasoning_levels"] = [
+        SimpleNamespace(id=REASONING, name="high")
+    ]
+    sdk.launch_bindings.returns["list_launch_bindings"] = [
+        SimpleNamespace(
+            id=3,
+            issue_type=TYPE,
+            state=BUILD,
+            prompt="Implement",
+            required_skills=["tdd"],
+            model=MODEL,
+            reasoning=REASONING,
+            auto_start=True,
+            subtree_run_enabled=False,
+            created_at=None,
+            updated_at=None,
+            model_dump=lambda: {
+                "id": 3,
+                "issue_type": TYPE,
+                "state": BUILD,
                 "prompt": "Implement",
-                "agent": "codex",
-                "model": "gpt-5",
-                "reasoning": "high",
-                "required_skills": ["to-tickets", "to-spec"],
-                "workflow_revision": 7,
+                "required_skills": ["tdd"],
+                "model": MODEL,
+                "reasoning": REASONING,
+                "auto_start": True,
+                "subtree_run_enabled": False,
+                "created_at": None,
+                "updated_at": None,
             },
-        ),
-        (
-            "clear_issue_type_workflow_launch_binding",
-            (TYPE, BUILD, 7),
-            "clear_issue_type_workflow_launch_binding",
-            WorkflowRevisionIn,
-            {"workflow_revision": 7},
-        ),
-        (
-            "set_issue_type_workflow_auto_start",
-            (TYPE, BUILD, True, 7),
-            "set_issue_type_workflow_auto_start",
-            SetWorkflowAutoStartIn,
-            {"auto_start": True, "workflow_revision": 7},
-        ),
-    ],
-)
-def test_write_maps_one_to_one_to_scoped_rest_operation(
-    method, args, operation, body_type, body_fields
-):
-    service, sdk = _service(operation, _workflow(8))
-
-    result = getattr(service, method)(*args)
-
-    assert result.workflow_revision == 8
-    _name, call_args, _kwargs = sdk.workflows.calls[0]
-    body = call_args[-1]
-    assert isinstance(body, body_type)
-    for field, expected in body_fields.items():
-        assert getattr(body, field) == expected
+        )
+    ]
+    return sdk
 
 
-@pytest.mark.parametrize(
-    ("operation", "method", "args", "status", "detail"),
-    [
-        (
-            "set_issue_type_workflow_start_state",
-            "set_issue_type_workflow_start_state",
-            (TYPE, DONE, 6),
-            409,
-            "Workflow revision is stale; read the current workflow and retry.",
-        ),
-        (
-            "set_issue_type_workflow_auto_start",
-            "set_issue_type_workflow_auto_start",
-            (TYPE, BUILD, True, 7),
-            422,
-            "Configure a launch binding before changing auto-start.",
-        ),
-    ],
-)
-def test_write_surfaces_service_rejection(operation, method, args, status, detail):
-    service, sdk = _service(operation)
-    sdk.workflows.returns[operation] = raises(
-        make_api_error(status, {"detail": detail})
+def test_read_assembles_the_legacy_tool_shape_from_crud_rows():
+    sdk = _sdk()
+    service = WorktrackerService(base_url="http://example.test", sdk=sdk)
+
+    result = service.get_issue_type_workflow_settings(str(TYPE))
+
+    assert result["workflow_revision"] == 7
+    assert result["transitions"][0] == {
+        "from_state_id": READY,
+        "to_state_id": BUILD,
+        "agent_allowed": False,
+    }
+    assert result["launch_bindings"][0]["agent"] == "codex"
+    assert result["launch_bindings"][0]["model"] == "gpt-5"
+    assert result["warnings"] == []
+
+
+def test_transition_writes_use_the_crud_operations_and_revision_bodies():
+    sdk = _sdk()
+    service = WorktrackerService(base_url="http://example.test", sdk=sdk)
+
+    service.add_issue_type_workflow_transition(
+        str(TYPE), str(READY), str(BUILD), 7, False
+    )
+    service.set_issue_type_workflow_transition_permission(
+        str(TYPE), str(READY), str(BUILD), False, 7
+    )
+    service.remove_issue_type_workflow_transition(
+        str(TYPE), str(READY), str(BUILD), 7
     )
 
-    result = getattr(service, method)(*args)
+    create_body = sdk.workflows.calls[0][1][1]
+    assert isinstance(create_body, IssueTypeTransition)
+    assert create_body.from_state == READY
+    update_body = sdk.workflows.calls[1][1][3]
+    assert isinstance(update_body, PatchedIssueTypeTransition)
+    assert update_body.workflow_revision == 7
+    assert sdk.revisioned_delete.calls[0][0] == "delete_transition"
+    assert sdk.revisioned_delete.calls[0][1] == (TYPE, READY, BUILD, 7)
 
-    assert result == {"ok": False, "detail": detail}
+
+def test_start_state_moves_through_issue_type_update():
+    sdk = _sdk()
+    service = WorktrackerService(base_url="http://example.test", sdk=sdk)
+
+    service.set_issue_type_workflow_start_state(str(TYPE), str(BUILD), 7)
+
+    body = sdk.issue_types.calls[-1][1][1]
+    assert isinstance(body, PatchedIssueType)
+    assert body.start_state == BUILD
+    assert body.workflow_revision == 7
 
 
-def test_workflow_server_error_still_raises():
-    service, sdk = _service("get_issue_type_workflow_settings")
-    sdk.workflows.returns["get_issue_type_workflow_settings"] = raises(
-        make_api_error(500, {"detail": "boom"})
+def test_launch_binding_tool_resolves_catalog_rows_without_changing_arguments():
+    sdk = _sdk()
+    service = WorktrackerService(base_url="http://example.test", sdk=sdk)
+
+    service.upsert_issue_type_workflow_launch_binding(
+        str(TYPE),
+        str(BUILD),
+        7,
+        "Next prompt",
+        "codex",
+        "gpt-5",
+        "high",
+        ["to-spec"],
     )
 
-    with pytest.raises(ApiException):
-        service.get_issue_type_workflow_settings(TYPE)
+    _, args, _ = sdk.launch_bindings.calls[-1]
+    assert args[:2] == (BUILD, TYPE)
+    body = args[2]
+    assert isinstance(body, LaunchBinding)
+    assert body.model == MODEL
+    assert body.reasoning == REASONING
+    assert body.auto_start is True
 
 
-def test_workflow_configuration_tools_are_registered_with_public_signatures():
+def test_auto_start_and_clear_reuse_the_composite_launch_binding_resource():
+    sdk = _sdk()
+    service = WorktrackerService(base_url="http://example.test", sdk=sdk)
+
+    service.set_issue_type_workflow_auto_start(str(TYPE), str(BUILD), False, 7)
+    service.clear_issue_type_workflow_launch_binding(str(TYPE), str(BUILD), 8)
+
+    body = sdk.launch_bindings.calls[-1][1][2]
+    assert body.auto_start is False
+    assert body.workflow_revision == 7
+    assert sdk.revisioned_delete.calls[-1][1] == (TYPE, BUILD, 8)
+
+
+def test_workflow_configuration_tools_keep_their_public_signatures():
     tools = dict(generate_worktracker_tools())
     expected = {
         "get_issue_type_workflow_settings": ("type_id",),
         "add_issue_type_workflow_transition": (
-            "type_id",
-            "from_state_id",
-            "to_state_id",
-            "workflow_revision",
-            "agent_allowed",
+            "type_id", "from_state_id", "to_state_id", "workflow_revision", "agent_allowed"
         ),
         "remove_issue_type_workflow_transition": (
-            "type_id",
-            "from_state_id",
-            "to_state_id",
-            "workflow_revision",
+            "type_id", "from_state_id", "to_state_id", "workflow_revision"
         ),
         "set_issue_type_workflow_transition_permission": (
-            "type_id",
-            "from_state_id",
-            "to_state_id",
-            "agent_allowed",
-            "workflow_revision",
+            "type_id", "from_state_id", "to_state_id", "agent_allowed", "workflow_revision"
         ),
         "set_issue_type_workflow_start_state": (
-            "type_id",
-            "state_id",
-            "workflow_revision",
+            "type_id", "state_id", "workflow_revision"
         ),
         "upsert_issue_type_workflow_launch_binding": (
-            "type_id",
-            "state_id",
-            "workflow_revision",
-            "prompt",
-            "agent",
-            "model",
-            "reasoning",
-            "required_skills",
+            "type_id", "state_id", "workflow_revision", "prompt", "agent", "model",
+            "reasoning", "required_skills"
         ),
         "clear_issue_type_workflow_launch_binding": (
-            "type_id",
-            "state_id",
-            "workflow_revision",
+            "type_id", "state_id", "workflow_revision"
         ),
         "set_issue_type_workflow_auto_start": (
-            "type_id",
-            "state_id",
-            "auto_start",
-            "workflow_revision",
+            "type_id", "state_id", "auto_start", "workflow_revision"
         ),
     }
 

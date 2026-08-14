@@ -8,14 +8,16 @@ off the SDK exception body, a 5xx propagating, and the read surface.
 """
 
 import pytest
-from worktracker_sdk.generated import WorkItemPatch
+from worktracker_sdk.generated import PatchedWorkItemPatch
 from worktracker_sdk.generated.exceptions import ApiException
 
 from fake_sdk import (
     FakeGeneratedSdk,
     make_api_error,
     make_detail,
-    make_scope_context,
+    make_flat_work_item,
+    make_issue_type,
+    make_state,
     make_work_item,
     raises,
 )
@@ -46,7 +48,7 @@ def test_set_task_blockers_maps_sdk_edges():
 
     name, args, _kwargs = client.work_items.calls[0]
     assert name == "update_work_item"
-    assert args[0] == TASK and isinstance(args[1], WorkItemPatch)
+    assert args[0] == TASK and isinstance(args[1], PatchedWorkItemPatch)
     assert [str(i) for i in args[1].blocked_by_ids] == [DEPENDENT]
     assert result == {
         "task_id": TASK,
@@ -57,7 +59,7 @@ def test_set_task_blockers_maps_sdk_edges():
 
 def test_add_task_blocker_maps_sdk_edges():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item"] = make_detail(make_work_item(id=TASK))
+    client.work_items.returns["get_work_item"] = make_work_item(id=TASK)
     client.work_items.returns["update_work_item"] = make_work_item(
         id=TASK, blocked_by_ids=[BLOCKER], blocks_ids=[DEPENDENT]
     )
@@ -77,9 +79,7 @@ def test_add_task_blocker_maps_sdk_edges():
 
 def test_add_task_dependent_writes_edge_on_the_dependent():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item"] = make_detail(
-        make_work_item(id=DEPENDENT)
-    )
+    client.work_items.returns["get_work_item"] = make_work_item(id=DEPENDENT)
     client.work_items.returns["update_work_item"] = make_work_item(
         id=DEPENDENT, blocked_by_ids=[TASK], blocks_ids=[]
     )
@@ -139,7 +139,7 @@ def test_self_block_returns_clean_error():
 
 def test_cycle_returns_clean_error():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item"] = make_detail(make_work_item(id=TASK))
+    client.work_items.returns["get_work_item"] = make_work_item(id=TASK)
     client.work_items.returns["update_work_item"] = raises(
         _dep_error(422, "That blocker would create a cycle.")
     )
@@ -165,17 +165,17 @@ def test_server_error_still_raises():
 
 def test_get_task_details_surfaces_edges():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item"] = make_detail(
-        make_work_item(
-            id=TASK,
-            name="T",
-            project_id=BLOCKER,
-            sequence_id=1,
-            blocked_by_ids=[BLOCKER],
-            blocks_ids=[DEPENDENT],
-        )
+    client.work_items.returns["get_work_item"] = make_flat_work_item(
+        id=TASK,
+        name="T",
+        project_id=BLOCKER,
+        sequence_id=1,
+        blocked_by_ids=[BLOCKER],
+        blocks_ids=[DEPENDENT],
     )
-    client.work_items.returns["list_project_work_items"] = []
+    client.issue_types.returns["list_issue_types"] = [make_issue_type()]
+    client.work_items.returns["list_work_items"] = []
+    client.attachments.returns["list_work_item_attachments"] = []
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
     detail = service.get_task_details(TASK)
@@ -184,19 +184,110 @@ def test_get_task_details_surfaces_edges():
     assert [str(i) for i in detail.blocks_ids] == [DEPENDENT]
 
 
-# --- Read: scope-context wrapper ---------------------------------------------
+# --- Read: scope-context assembled from canonical CRUD reads -----------------
 
 
-def test_get_scope_context_returns_all_keys():
+def test_get_scope_context_assembles_unresolved_edges_and_advisory():
     client = FakeGeneratedSdk()
-    client.work_items.returns["get_work_item_scope_context"] = make_scope_context()
+    client.work_items.returns["get_work_item"] = make_flat_work_item(
+        id=TASK,
+        key="CODIN-1",
+        blocked_by_ids=[BLOCKER],
+        blocks_ids=[DEPENDENT],
+    )
+    client.work_items.returns["list_work_items"] = [
+        make_flat_work_item(
+            id=BLOCKER,
+            key="CODIN-2",
+            name="blocker",
+            state=BLOCKER,
+        ),
+        make_flat_work_item(
+            id=DEPENDENT,
+            key="CODIN-3",
+            name="dependent",
+        ),
+    ]
+    client.states.returns["list_states"] = [
+        make_state(id=BLOCKER, name="Doing", group="started")
+    ]
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
     ctx = service.get_scope_context(TASK)
 
+    assert set(ctx.model_dump()) == {"task", "depends_on", "depended_by", "advisory"}
+    assert str(ctx.task.id) == TASK
     assert str(ctx.depends_on[0].id) == BLOCKER
-    assert ctx.depended_by == []
-    assert "unresolved" in ctx.advisory
+    assert ctx.depends_on[0].state_group == "started"
+    assert ctx.depends_on[0].resolved is False
+    assert str(ctx.depended_by[0].id) == DEPENDENT
+    assert ctx.advisory == (
+        "1 of 1 blocker(s) unresolved (CODIN-2) - stay within this task; "
+        "do not implement upstream work."
+    )
+    assert [call[0] for call in client.work_items.calls] == [
+        "get_work_item",
+        "list_work_items",
+    ]
+    assert client.work_items.calls[1][2] == {}
+
+
+def test_get_scope_context_marks_resolved_blocker_and_keeps_advisory_shape():
+    client = FakeGeneratedSdk()
+    client.work_items.returns["get_work_item"] = make_flat_work_item(
+        id=TASK,
+        key="CODIN-1",
+        blocked_by_ids=[BLOCKER],
+    )
+    client.work_items.returns["list_work_items"] = [
+        make_flat_work_item(
+            id=BLOCKER,
+            key="CODIN-2",
+            name="blocker",
+            state=BLOCKER,
+        )
+    ]
+    client.states.returns["list_states"] = [
+        make_state(id=BLOCKER, name="Done", group="completed")
+    ]
+    service = WorktrackerService(base_url="http://example.test", sdk=client)
+
+    ctx = service.get_scope_context("CODIN-1")
+
+    assert ctx.depends_on[0].resolved is True
+    assert ctx.depends_on[0].state_group == "completed"
+    assert ctx.advisory == (
+        "No unresolved blockers - deliver only this task and nothing beyond its scope."
+    )
+
+
+def test_get_scope_context_marks_review_blocker_resolved():
+    client = FakeGeneratedSdk()
+    client.work_items.returns["get_work_item"] = make_flat_work_item(
+        id=TASK,
+        key="CODIN-1",
+        blocked_by_ids=[BLOCKER],
+    )
+    client.work_items.returns["list_work_items"] = [
+        make_flat_work_item(
+            id=BLOCKER,
+            key="CODIN-2",
+            name="blocker",
+            state=BLOCKER,
+        )
+    ]
+    client.states.returns["list_states"] = [
+        make_state(id=BLOCKER, name="Review", group="started")
+    ]
+    service = WorktrackerService(base_url="http://example.test", sdk=client)
+
+    ctx = service.get_scope_context("CODIN-1")
+
+    assert ctx.depends_on[0].resolved is True
+    assert ctx.depends_on[0].state_group == "started"
+    assert ctx.advisory == (
+        "No unresolved blockers - deliver only this task and nothing beyond its scope."
+    )
 
 
 # --- Registration ------------------------------------------------------------

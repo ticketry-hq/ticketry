@@ -63,27 +63,29 @@ def resolve_task_launch_configuration(
 
     try:
         from apps.settings_store.provider_catalog import load_provider_catalog
+        from worktracker.services.provider_catalog import activated_provider_slugs
 
         catalog = load_provider_catalog()
+        activated_providers = activated_provider_slugs()
         binding = (
             resolve_launch_binding(
                 issue.issue_type_id,
                 destination_state_id,
-                activated_providers=catalog.activated_providers,
+                activated_providers=activated_providers,
             )
             if destination_state_id is not None
             else resolve_issue_launch_binding(
                 issue,
-                activated_providers=catalog.activated_providers,
+                activated_providers=activated_providers,
             )
         )
-        configured_agent = binding.agent
+        configured_agent = binding.provider_slug
         agent = agent_override or configured_agent
         provider_changed = bool(
             agent_override and configured_agent and agent_override != configured_agent
         )
-        model = None if provider_changed else binding.model
-        reasoning = None if provider_changed else binding.reasoning
+        model = None if provider_changed else binding.model_name
+        reasoning = None if provider_changed else binding.reasoning_name
         agent, model, reasoning = apply_global_launch_default(
             agent=agent,
             model=model,
@@ -100,7 +102,7 @@ def resolve_task_launch_configuration(
             agent=agent,
             model=model,
             reasoning=reasoning,
-            activated_providers=catalog.activated_providers,
+            activated_providers=activated_providers,
         )
     except LaunchBindingError as exc:
         raise LaunchConfigurationError(exc.code) from exc

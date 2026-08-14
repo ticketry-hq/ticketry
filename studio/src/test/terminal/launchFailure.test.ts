@@ -16,4 +16,35 @@ describe("launchFailureMessage", () => {
       }),
     ).toBe("Launch unavailable: new-session failed: tmux server exited");
   });
+
+  it("renders every actionable required-skill rejection field", () => {
+    expect(
+      launchFailureMessage({
+        body: {
+          code: "required_skill_unavailable",
+          provider: "claude",
+          skill: "grilling",
+          reason: "collision",
+          detail: "A different provider-visible skill already reserves 'grilling'.",
+          remediation: "Rename the provider-visible skill, then retry.",
+          retryable: false,
+        },
+      }),
+    ).toBe(
+      "Required skill 'grilling' is unavailable for claude (collision): "
+        + "A different provider-visible skill already reserves 'grilling'. "
+        + "Next action: Rename the provider-visible skill, then retry.",
+    );
+  });
+
+  it("reads the flat error code returned by execution endpoints", () => {
+    expect(
+      launchFailureMessage({
+        body: {
+          detail: "no_profile_selected",
+          code: "no_profile_selected",
+        },
+      }),
+    ).toBe("Select a Studio launch profile before trying again.");
+  });
 });

@@ -10,8 +10,6 @@ class AgentRunAdmin(admin.ModelAdmin):
         "agent",
         "status",
         "issue",
-        "scope",
-        "terminal_owner_id",
         "started_at",
         "ended_at",
     )
@@ -23,8 +21,6 @@ class AgentRunAdmin(admin.ModelAdmin):
         "issue__name",
         "issue__project__name",
         "cwd",
-        "doc_rel_path",
-        "terminal_owner_id",
         "error",
     )
     readonly_fields = ("id",)

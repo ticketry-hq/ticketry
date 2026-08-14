@@ -33,3 +33,14 @@ class ConflictError(ServiceError):
 
     def __init__(self, message: str):
         super().__init__(409, message)
+
+
+class FieldValidationError(ServiceError):
+    """Structured field errors produced by framework-neutral services."""
+
+    def __init__(self, errors, *, status_code: int = 400):
+        super().__init__(status_code, "Request validation failed.")
+        self.errors = errors
+
+    def as_body(self):
+        return self.errors

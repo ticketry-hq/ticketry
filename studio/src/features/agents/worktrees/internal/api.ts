@@ -1,19 +1,17 @@
-// Per-task worktree host API (ticket #589), extracted from studio/lib/api.ts
-// into a shared module (CODIN-922) so both the Studio DetailsTab and the
+// Per-task worktree host API (ticket #589), extracted from the former Studio request layer
+// into a shared module (CODIN-922) so both the Studio SelectedTicketDetails and the
 // Backlog issue workspace surface the same controls.
 //
 // gated: CODIN-668 — the host /api/worktrees surface is not in the SDK's
-// OpenAPI. Routes are mounted at /api (not under /api/work-tracker); they
-// resolve the local profile/repo themselves, so no work-tracker auth header is
-// needed. There is no integrate call by design — landing fires on Done
-// server-side.
+// OpenAPI. Routes are mounted at /api (not under /api/work-tracker) and use
+// the same launch-scoped authentication as the rest of the host API. There is
+// no integrate call by design — landing fires on Done server-side.
 
 // Mirror of server WorktreeStatusOut. Discriminated on `kind`:
 //   "worktree" — an active/conflict worktree (git fields populated, live),
 //   "no_repo"  — no git repo encloses the task path (`reason` set),
 //   "none"     — in a repo but no worktree yet (the Create button shows).
-import { dedupeInFlight } from "../../../../shared/api/dedupe";
-import { agentApiUrl } from "../../../../runtime";
+import { authenticatedHostFetch } from "../../../../shared/api/authenticatedHostFetch";
 
 export interface WorktreeStatus {
   kind: "worktree" | "no_repo" | "none";
@@ -50,14 +48,7 @@ async function hostRequest<T>(
   path: string,
   init?: RequestInit & { signal?: AbortSignal },
 ): Promise<T> {
-  const resp = await fetch(agentApiUrl(path), {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+  const resp = await authenticatedHostFetch(path, init);
   let body: unknown = null;
   const text = await resp.text();
   if (text) {
@@ -85,12 +76,13 @@ function worktreeQuery(ctx: WorktreeContext): string {
   return q ? `?${q}` : "";
 }
 
-// WorktreeBlock mounts in both DetailsTab and IssueWorkspace for the same
-// issue; coalescing by full URL turns those duplicate status reads into one
-// request.
-export const getWorktree = (taskId: string, ctx: WorktreeContext) => {
+export const getWorktree = (
+  taskId: string,
+  ctx: WorktreeContext,
+  signal?: AbortSignal,
+) => {
   const url = `/api/worktrees?task_id=${encodeURIComponent(taskId)}${worktreeQuery(ctx).replace(/^\?/, "&")}`;
-  return dedupeInFlight(`GET ${url}`, () => hostRequest<WorktreeStatus>(url));
+  return hostRequest<WorktreeStatus>(url, { signal });
 };
 
 export const createWorktree = (taskId: string, ctx: WorktreeContext) =>

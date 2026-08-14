@@ -118,6 +118,21 @@ pub struct TmuxViewerControl {
     session: String,
 }
 
+/// A tmux client command for a terminal emulator that owns its own PTY.
+///
+/// libghostty launches this command directly, so this type owns only the
+/// validated command and the out-of-band controls Ticketry still needs.
+pub struct TmuxCommandViewer {
+    command: String,
+    tmux: PathBuf,
+    session: String,
+}
+
+pub struct TmuxCommandViewerControl {
+    tmux: PathBuf,
+    session: String,
+}
+
 impl TmuxViewer {
     /// Attach a transient PTY client to the durable session for `run_id`.
     ///
@@ -163,16 +178,6 @@ impl TmuxViewer {
         })
     }
 
-    /// Read raw bytes from tmux. PTY EOF is distinct from a client exit or
-    /// explicit detach.
-    pub fn read(&mut self, buffer: &mut [u8]) -> Result<usize, ViewerReadError> {
-        match self.reader.read(buffer) {
-            Ok(0) => Err(ViewerReadError::Outcome(ViewerOutcome::PtyEof)),
-            Ok(read) => Ok(read),
-            Err(error) => Err(ViewerReadError::Pty(error)),
-        }
-    }
-
     /// Split the blocking output reader from the operations that must remain
     /// responsive while a webview is slow to consume output.
     pub fn into_control_and_reader(self) -> (TmuxViewerControl, Box<dyn Read + Send>) {
@@ -186,39 +191,6 @@ impl TmuxViewer {
             },
             self.reader,
         )
-    }
-
-    /// Send raw renderer input to the attached tmux client.
-    pub fn write_all(&mut self, input: &[u8]) -> Result<(), TmuxViewerError> {
-        self.writer.write_all(input).map_err(io_error)?;
-        self.writer.flush().map_err(io_error)?;
-        Ok(())
-    }
-
-    /// Resize both the viewer PTY and its application-derived tmux window.
-    pub fn resize(&self, columns: u16, rows: u16) -> Result<(), TmuxViewerError> {
-        let size = pty_size(columns, rows)?;
-        self.master.resize(size).map_err(pty_error)?;
-        resize_tmux_window(&self.tmux, &self.session, columns, rows)
-    }
-
-    /// Move this viewer through tmux copy-mode history without exposing a
-    /// command, executable, socket, or session target to the caller.
-    pub fn scroll(
-        &self,
-        direction: TmuxScrollDirection,
-        lines: u16,
-    ) -> Result<(), TmuxViewerError> {
-        scroll_tmux(&self.tmux, &self.session, direction, lines)
-    }
-
-    /// Report a spontaneous tmux client exit separately from PTY EOF.
-    pub fn poll_client_exit(&mut self) -> Result<Option<ViewerOutcome>, TmuxViewerError> {
-        Ok(self.client.try_wait().map_err(io_error)?.map(|status| {
-            ViewerOutcome::TmuxClientExited {
-                exit_code: status.exit_code(),
-            }
-        }))
     }
 
     /// End only this viewer's tmux client and PTY; it never kills the session.
@@ -275,28 +247,53 @@ impl TmuxViewerControl {
     }
 }
 
-/// A raw read can produce bytes, a terminal outcome, or an I/O failure.
-#[derive(Debug)]
-pub enum ViewerReadError {
-    Outcome(ViewerOutcome),
-    Pty(io::Error),
-}
+impl TmuxCommandViewer {
+    pub fn prepare(run_id: &str) -> Result<Self, TmuxViewerError> {
+        validate_run_id(run_id)?;
+        let tmux = approved_tmux_path()?;
+        let socket = tmux_socket()?;
+        let session = session_name(run_id);
+        if !session_exists(&tmux, &session)? {
+            return Err(TmuxViewerError::SessionNotFound {
+                run_id: run_id.to_owned(),
+            });
+        }
+        let command = tmux_attach_shell_command(&tmux, &socket, &session);
+        Ok(Self {
+            command,
+            tmux,
+            session,
+        })
+    }
 
-impl fmt::Display for ViewerReadError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Outcome(outcome) => write!(formatter, "viewer ended: {outcome:?}"),
-            Self::Pty(error) => write!(formatter, "PTY read failed: {error}"),
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+
+    pub fn into_control(self) -> TmuxCommandViewerControl {
+        TmuxCommandViewerControl {
+            tmux: self.tmux,
+            session: self.session,
         }
     }
 }
 
-impl std::error::Error for ViewerReadError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Pty(error) => Some(error),
-            Self::Outcome(_) => None,
-        }
+impl TmuxCommandViewerControl {
+    pub fn resize(&self, columns: u16, rows: u16) -> Result<(), TmuxViewerError> {
+        pty_size(columns, rows)?;
+        resize_tmux_window(&self.tmux, &self.session, columns, rows)
+    }
+
+    pub fn scroll(
+        &self,
+        direction: TmuxScrollDirection,
+        lines: u16,
+    ) -> Result<(), TmuxViewerError> {
+        scroll_tmux(&self.tmux, &self.session, direction, lines)
+    }
+
+    pub fn detach(self) -> Result<ViewerOutcome, TmuxViewerError> {
+        Ok(ViewerOutcome::Detached)
     }
 }
 
@@ -384,6 +381,43 @@ fn tmux_attach_command(tmux: &Path, socket: &str, session: &str) -> CommandBuild
     command.env_remove("TERMINFO");
     command.env_remove("TERMINFO_DIRS");
     command
+}
+
+fn tmux_attach_shell_command(tmux: &Path, socket: &str, session: &str) -> String {
+    let mut environment = vec![
+        "-u".to_owned(),
+        "LC_ALL".to_owned(),
+        format!("TERM={VIEWER_TERM}"),
+        format!("LC_CTYPE={VIEWER_LC_CTYPE}"),
+    ];
+    #[cfg(target_os = "macos")]
+    environment.push(format!("TERMINFO={VIEWER_TERMINFO}"));
+    #[cfg(not(target_os = "macos"))]
+    environment.extend([
+        "-u".to_owned(),
+        "TERMINFO".to_owned(),
+        "-u".to_owned(),
+        "TERMINFO_DIRS".to_owned(),
+    ]);
+
+    let arguments = environment
+        .iter()
+        .map(|value| shell_quote(value))
+        .chain([
+            shell_quote(&tmux.to_string_lossy()),
+            shell_quote("-L"),
+            shell_quote(socket),
+            shell_quote("attach-session"),
+            shell_quote("-t"),
+            shell_quote(session),
+        ])
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("/usr/bin/env {arguments}")
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
 fn session_exists(tmux: &Path, session: &str) -> Result<bool, TmuxViewerError> {
@@ -493,6 +527,21 @@ mod tests {
             validate_run_id("run; kill-server"),
             Err(TmuxViewerError::InvalidRunId)
         ));
+    }
+
+    #[test]
+    fn direct_command_launches_tmux_without_a_ticketry_bridge() {
+        let command = tmux_attach_shell_command(
+            Path::new("/Applications/Ticketry's Tools/tmux"),
+            "muxed-dev",
+            "pt-run-123",
+        );
+
+        assert!(command.starts_with("/usr/bin/env "));
+        assert!(!command.starts_with("exec "));
+        assert!(command.contains("'/Applications/Ticketry'\"'\"'s Tools/tmux'"));
+        assert!(command.contains("'attach-session' '-t' 'pt-run-123'"));
+        assert!(!command.contains("muxed-ghostty-bridge"));
     }
 
     #[test]

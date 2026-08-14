@@ -1,13 +1,25 @@
+from unittest.mock import patch
+
 import pytest
 
 from apps.settings_store.models import AppSetting
+from worktracker.models import AgentModel, Provider, ReasoningLevel
 
 
 pytestmark = pytest.mark.django_db
 
 
-def test_missing_provider_catalog_uses_first_run_defaults(client):
-    response = client.get("/api/settings/provider-catalog")
+@pytest.fixture
+def auth(settings):
+    settings.WORKTRACKER_API_TOKEN = "test-token"
+    settings.WORKTRACKER_DISABLE_AUTH = False
+    return {"x-api-key": "test-token"}
+
+
+def test_missing_provider_catalog_combines_activation_with_the_global_default(
+    client, auth
+):
+    response = client.get("/api/settings/provider-catalog", headers=auth)
 
     assert response.status_code == 200
     assert response.json() == {
@@ -18,139 +30,94 @@ def test_missing_provider_catalog_uses_first_run_defaults(client):
     }
 
 
-def test_provider_catalog_round_trips_as_one_host_scoped_setting(client):
+def test_global_default_round_trips_as_one_host_scoped_setting(client, auth):
+    provider = Provider.objects.get(slug="codex")
+    model = AgentModel.objects.create(provider=provider, name="gpt-5")
+    reasoning, _ = ReasoningLevel.objects.get_or_create(name="high")
+    model.permitted_reasoning_levels.add(reasoning)
     catalog = {
-        "activated_providers": ["claude", "codex"],
+        "activated_providers": ["codex"],
         "global_default": {
             "provider": "codex",
             "model": "gpt-5",
             "reasoning": "high",
-        },
+        }
     }
 
     response = client.put(
         "/api/settings/provider-catalog",
         data={"value": catalog},
         content_type="application/json",
+        headers=auth,
     )
 
     assert response.status_code == 200
-    # The save also reports its blast radius — how many launch bindings this
-    # activation set now blocks. No bindings exist here, so none.
-    assert response.json() == {"value": catalog, "blocked_launch_bindings": 0}
+    assert response.json() == {"value": catalog}
     setting = AppSetting.objects.get()
     assert (setting.scope, setting.key) == ("host", "provider_catalog")
-    assert client.get("/api/settings/provider-catalog").json() == {"value": catalog}
+    assert client.get("/api/settings/provider-catalog", headers=auth).json() == {
+        "value": catalog
+    }
 
 
-def _launch_binding(agent: str) -> None:
-    """One launch binding pinned to ``agent``, in its own type/state pair."""
+def test_provider_catalog_write_rolls_back_activation_when_setting_write_fails(
+    client, auth
+):
+    before = dict(Provider.objects.values_list("slug", "activated"))
 
-    import uuid
-
-    from worktracker.models import (
-        IssueType,
-        LaunchBinding,
-        Project,
-        State,
-        Workspace,
-    )
-
-    workspace, _ = Workspace.objects.get_or_create(
-        slug="ws", defaults={"id": uuid.uuid4(), "name": "ws"}
-    )
-    project, _ = Project.objects.get_or_create(
-        slug="P", defaults={"id": uuid.uuid4(), "workspace": workspace, "name": "P"}
-    )
-    LaunchBinding.objects.create(
-        issue_type=IssueType.objects.create(
-            id=uuid.uuid4(), project=project, name=f"Type {agent}", level="task"
-        ),
-        state=State.objects.create(
-            id=uuid.uuid4(), project=project, name=f"State {agent}", group="started"
-        ),
-        prompt="do the thing",
-        agent=agent,
-    )
-
-
-def test_the_impact_preview_counts_bindings_a_deactivation_would_block(client):
-    """Every other workflow mutation shows its blast radius before committing."""
-
-    _launch_binding("codex")
-    _launch_binding("claude")
-
-    response = client.post(
-        "/api/settings/provider-catalog/impact",
-        data={
-            "value": {
-                "activated_providers": ["claude", "gemini"],
-                "global_default": None,
-            }
-        },
-        content_type="application/json",
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {"blocked_launch_bindings": 1}
-    # A preview saves nothing.
-    assert not AppSetting.objects.exists()
-
-
-def test_the_impact_preview_reports_nothing_when_nothing_is_deactivated(client):
-    response = client.post(
-        "/api/settings/provider-catalog/impact",
-        data={
-            "value": {
-                "activated_providers": ["claude", "codex", "gemini"],
-                "global_default": None,
-            }
-        },
-        content_type="application/json",
-    )
-
-    assert response.json() == {"blocked_launch_bindings": 0}
-
-
-@pytest.mark.parametrize(
-    "catalog",
-    [
-        {
-            "activated_providers": ["claude", "agy"],
-            "global_default": None,
-        },
-        {
-            "activated_providers": ["claude"],
-            "global_default": {
-                "provider": "codex",
-                "model": "gpt-5",
-                "reasoning": "high",
+    with patch.object(
+        AppSetting.objects,
+        "update_or_create",
+        side_effect=RuntimeError("setting write failed"),
+    ), pytest.raises(RuntimeError, match="setting write failed"):
+        client.put(
+            "/api/settings/provider-catalog",
+            data={
+                "value": {
+                    "activated_providers": ["codex"],
+                    "global_default": None,
+                }
             },
-        },
-        {
-            "activated_providers": ["codex"],
-            "global_default": {
-                "provider": "codex",
-                "model": "claude-opus-4",
-                "reasoning": "high",
-            },
-        },
-        {
-            "activated_providers": ["gemini"],
-            "global_default": {
-                "provider": "gemini",
-                "model": "gemini-2.5-pro",
-                "reasoning": "high",
-            },
-        },
-    ],
-)
-def test_provider_catalog_rejects_invalid_schema_without_persisting(client, catalog):
+            content_type="application/json",
+            headers=auth,
+        )
+
+    assert dict(Provider.objects.values_list("slug", "activated")) == before
+
+
+def test_invalid_global_default_does_not_change_provider_activation(client, auth):
+    before = dict(Provider.objects.values_list("slug", "activated"))
+
     response = client.put(
         "/api/settings/provider-catalog",
-        data={"value": catalog},
+        data={
+            "value": {
+                "activated_providers": ["codex"],
+                "global_default": {
+                    "provider": "codex",
+                    "model": "missing-model",
+                    "reasoning": None,
+                },
+            }
+        },
         content_type="application/json",
+        headers=auth,
     )
 
     assert response.status_code == 422
-    assert not AppSetting.objects.exists()
+    assert dict(Provider.objects.values_list("slug", "activated")) == before
+
+
+def test_activation_impact_route_is_removed(client):
+    response = client.post(
+        "/api/settings/provider-catalog/impact",
+        data={
+            "value": {
+                "activated_providers": [],
+                "global_default": None,
+            }
+        },
+        content_type="application/json",
+    )
+
+    assert response.status_code == 404

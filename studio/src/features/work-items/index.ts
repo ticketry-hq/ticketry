@@ -1,18 +1,56 @@
 // Retained work-item state and workspace interfaces. The retired backlog view
 // and its composition are intentionally absent from this public surface.
-export { useWorkItems } from "./hooks";
-export { useBacklogStore, matchesQuery, groupBacklog } from "./internal/backlogStore";
-export type { EpicGroup, TreeNode } from "./internal/backlogStore";
-export { usePlanningFilterStore } from "./internal/planningFilterStore";
-export { useSelectionStore } from "./stores/selectionStore";
-export type { SelectionSurface } from "./stores/selectionStore";
-export { rankBetween } from "./utilities/rank";
-// The issue-detail UI (IssueDetail, IssueWorkspace, WorkspacePane, …) is
-// deliberately NOT re-exported here: every current consumer of this hub
-// imports stores only, and a UI re-export would drag the whole issue-detail
-// component graph into their dev module graphs (bundle-barrel-imports).
-// UI consumers import from ./issue-detail, which is its own public entrypoint.
 export {
-  DEFAULT_WORKSPACE,
-  useIssueDrawerWorkspaceStore,
-} from "./issue-detail/internal/drawerWorkspaceStore";
+  useChangeWorkItemType,
+  useCreateWorkItem,
+  useEditWorkItemDescription,
+  useRenameWorkItem,
+  useReorderWorkItem,
+  useSetWorkItemBlockers,
+  useSetWorkItemParent,
+  useSetWorkItemState,
+} from "./mutations";
+export type {
+  ChangeWorkItemTypeArgs,
+  EditWorkItemDescriptionArgs,
+  ModuleMembership,
+  RenameWorkItemArgs,
+  ReorderWorkItemArgs,
+  SetWorkItemBlockersArgs,
+  SetWorkItemParentArgs,
+  SetWorkItemStateArgs,
+} from "./mutations";
+export {
+  getModuleTreeSnapshot,
+  loadModuleTree,
+  useWorkItem,
+  useWorkItemAttachments,
+  useModuleTree,
+  useWorkItemsByIds,
+} from "./queries";
+export {
+  deriveEpic,
+  resolveBlockerChips,
+} from "./selectors";
+export type { BlockerChip } from "./selectors";
+export { formatWorkItemDisplayIdentifier } from "./displayIdentifier";
+export {
+  groupBacklog,
+  matchesQuery,
+  NO_EPIC,
+  toggleEpic,
+} from "./internal/backlogSelectors";
+export type { EpicGroup, TreeNode } from "./internal/backlogSelectors";
+export { usePlanningFilterStore } from "./internal/planningFilterStore";
+export { useClientStore } from "../../state/clientStore";
+export type { SelectionSurface } from "../../state/clientStore";
+export { rankBetween } from "./utilities/rank";
+export { reachable } from "./utilities/dependencyGraph";
+export type { DependencyEdgeField } from "./utilities/dependencyGraph";
+export {
+  isRunNowEligible,
+  startRunNow,
+  startRunNowForSelectedItem,
+  useRunNowPending,
+  useRunNowTransitions,
+} from "./runNow";

@@ -48,6 +48,7 @@ const ACTION_LABELS: Record<string, string> = {
   "open-with-prompt-command": "Open Agent with Prompt (Command)",
   plan: "Plan",
   "instant-change": "Instant Change",
+  "run-now": "Run now",
   status: "Status",
   settings: "Settings",
   "set-folder": "Set Folder",

@@ -10,28 +10,29 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from worktracker_sdk.generated import (
-    AddWorkflowTransitionIn,
     ApiClient,
     AttachmentsApi,
     Configuration,
+    IssueTypeTransition,
     IssueTypesApi,
+    LaunchBinding,
+    LaunchBindingsApi,
+    ModelsApi,
     ModulesApi,
-    ModuleWorkItemIn,
+    PatchedIssueType,
+    PatchedIssueTypeTransition,
+    PatchedWorkItemPatch,
     ProjectsApi,
-    ReviewFindingIn,
-    ScopedLaunchBindingIn,
-    SetWorkflowAutoStartIn,
-    SetWorkflowStartStateIn,
-    SetWorkflowTransitionPermissionIn,
+    ProvidersApi,
+    ReasoningLevelsApi,
+    RunNowRefusal,
     StatesApi,
-    WorkItemIn,
-    WorkItemPatch,
+    WorkItemCreate,
     WorkItemsApi,
-    WorkflowRevisionIn,
     WorkflowsApi,
 )
 from worktracker_sdk.generated.exceptions import ApiException, NotFoundException
-from worktracker_sdk.root_api import ExecutionApi, LaunchApi
+from worktracker_sdk.root_api import ExecutionApi, LaunchApi, RevisionedDeleteApi
 
 from worktracker_agent.api.schemas import (
     WorktrackerAttachmentInfo,
@@ -47,7 +48,17 @@ from worktracker_agent.api.schemas import (
 
 # Owned backend used when no base url is supplied.
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8787/api/work-tracker"
+DEFAULT_BASE_URL = "http://127.0.0.1:8787/api"
+RESOLVED_STATE_GROUPS = frozenset({"completed", "cancelled"})
+REVIEW_STATE_NAME = "Review"
+
+
+def _dependency_state_resolved(state: Any | None) -> bool:
+    """Match graph scheduling: Review releases dependents before completion."""
+
+    return state is not None and (
+        state.group in RESOLVED_STATE_GROUPS or state.name == REVIEW_STATE_NAME
+    )
 
 
 @dataclass(frozen=True)
@@ -61,9 +72,14 @@ class GeneratedSdk:
     states: StatesApi
     work_items: WorkItemsApi
     workflows: WorkflowsApi
+    launch_bindings: LaunchBindingsApi
+    models: ModelsApi
+    providers: ProvidersApi
+    reasoning_levels: ReasoningLevelsApi
     attachments: AttachmentsApi
     execution: ExecutionApi
     launch: LaunchApi
+    revisioned_delete: RevisionedDeleteApi
 
     @classmethod
     def connect(cls, base_url: str, api_key: Optional[str]) -> "GeneratedSdk":
@@ -80,9 +96,14 @@ class GeneratedSdk:
             states=StatesApi(api_client),
             work_items=WorkItemsApi(api_client),
             workflows=WorkflowsApi(api_client),
+            launch_bindings=LaunchBindingsApi(api_client),
+            models=ModelsApi(api_client),
+            providers=ProvidersApi(api_client),
+            reasoning_levels=ReasoningLevelsApi(api_client),
             attachments=AttachmentsApi(api_client),
             execution=ExecutionApi(api_client),
             launch=LaunchApi(api_client),
+            revisioned_delete=RevisionedDeleteApi(api_client),
         )
 
 
@@ -106,7 +127,14 @@ class WorktrackerService:
         )
         resolved_api_key = api_key or os.getenv("WORKTRACKER_API_KEY")
 
-        self.base_url = resolved_base_url.rstrip("/")
+        # The generated operations already carry the /work-tracker segment, so
+        # the SDK wants the /api root. Accept either form of the configured
+        # base: the documented WORKTRACKER_BASE_URL ends in /work-tracker, and
+        # passing that through unchanged doubles the segment and 404s every
+        # read. The generated Configuration patches its `host` setter to strip
+        # this, but its constructor writes _base_path directly and never calls
+        # that setter, so the strip has to happen here too.
+        self.base_url = resolved_base_url.rstrip("/").removesuffix("/work-tracker")
         self.api_key = resolved_api_key
         self.workspace_slug = workspace_slug
         self.sdk = sdk or GeneratedSdk.connect(self.base_url, resolved_api_key)
@@ -132,17 +160,30 @@ class WorktrackerService:
             sort_order=it.sort_order,
         )
 
-    def _map_task(self, wi, include_description: bool = False) -> WorktrackerTask:
+    def _issue_types_by_id(self, project_id: UUID) -> Dict[str, WorktrackerIssueType]:
+        """Read the type rows used to enrich bare work-item type ids."""
+
+        return {
+            str(item.id): self._map_issue_type(item)
+            for item in self.sdk.issue_types.list_issue_types(project_id)
+        }
+
+    def _map_task(
+        self,
+        wi,
+        issue_types: Dict[str, WorktrackerIssueType],
+        include_description: bool = False,
+    ) -> WorktrackerTask:
         return WorktrackerTask(
             id=wi.id,
             name=wi.name,
             project_id=wi.project_id,
-            state_id=(wi.state.id if wi.state and wi.state.id else None),
+            state_id=wi.state,
             description=(wi.description if include_description else None),
             sequence_id=wi.sequence_id or 0,
             key=wi.key,
             parent_id=wi.parent_id,
-            issue_type=self._map_issue_type(wi.issue_type),
+            issue_type=issue_types[str(wi.issue_type)],
             is_archived=wi.is_archived,
             blocked_by_ids=list(wi.blocked_by_ids or []),
             blocks_ids=list(wi.blocks_ids or []),
@@ -152,7 +193,8 @@ class WorktrackerService:
         try:
             return UUID(id_or_key)
         except ValueError:
-            return self.sdk.work_items.get_work_item(id_or_key).task.id
+            result = self.sdk.work_items.get_work_item(id_or_key)
+            return getattr(result, "task", result).id
 
     def list_projects(self) -> List[WorktrackerProject]:
         return [
@@ -169,6 +211,7 @@ class WorktrackerService:
         resolved = self._resolve_project_id(project_id)
         if not resolved:
             return []
+        issue_types = self._issue_types_by_id(UUID(resolved))
         return [
             WorktrackerModule(
                 id=m.id,
@@ -177,7 +220,7 @@ class WorktrackerService:
                 sequence_id=m.sequence_id or 0,
                 key=m.key,
                 is_archived=m.is_archived,
-                issue_type=self._map_issue_type(m.issue_type),
+                issue_type=issue_types[str(m.issue_type)],
             )
             for m in self.sdk.modules.list_modules(UUID(resolved))
         ]
@@ -197,9 +240,7 @@ class WorktrackerService:
             for item in self.sdk.issue_types.list_issue_types(UUID(resolved))
         ]
 
-    def _resolve_task_issue_type_id(
-        self, project_id: str, issue_type: str
-    ) -> UUID:
+    def _resolve_task_issue_type_id(self, project_id: str, issue_type: str) -> UUID:
         """Resolve a required task-type name or id to its project-scoped UUID."""
         if not issue_type:
             raise ValueError("issue_type is required.")
@@ -271,34 +312,40 @@ class WorktrackerService:
         resolved = self._resolve_project_id(project_id)
         if not resolved:
             return []
-        if module_id:
-            items = self.sdk.work_items.list_module_work_items(UUID(module_id))
-        else:
-            state_uuid = None
-            if state_name:
-                state = next(
-                    (
-                        item
-                        for item in self.get_states(resolved)
-                        if item.name.lower() == state_name.lower()
-                    ),
-                    None,
-                )
-                if not state:
-                    return []
-                state_uuid = state.id
-            items = self.sdk.work_items.list_project_work_items(
-                UUID(resolved), state=state_uuid
+        state_uuid = None
+        if state_name:
+            state = next(
+                (
+                    item
+                    for item in self.get_states(resolved)
+                    if item.name.lower() == state_name.lower()
+                ),
+                None,
             )
-        return [self._map_task(item, include_description) for item in items]
+            if not state:
+                return []
+            state_uuid = state.id
+        project_uuid = UUID(resolved)
+        items = self.sdk.work_items.list_work_items(
+            project=project_uuid,
+            module=UUID(module_id) if module_id else None,
+            state=state_uuid,
+        )
+        issue_types = self._issue_types_by_id(project_uuid)
+        return [
+            self._map_task(item, issue_types, include_description) for item in items
+        ]
 
     def get_task_details(self, id_or_key: str) -> WorktrackerTaskDetail:
-        envelope = self.sdk.work_items.get_work_item(id_or_key)
-        raw = envelope.task
-        task = self._map_task(raw, include_description=True)
-        children = self.sdk.work_items.list_project_work_items(
-            raw.project_id, parent=raw.id
-        )
+        result = self.sdk.work_items.get_work_item(id_or_key)
+        raw = getattr(result, "task", result)
+        issue_types = self._issue_types_by_id(raw.project_id)
+        task = self._map_task(raw, issue_types, include_description=True)
+        children = [
+            item
+            for item in self.sdk.work_items.list_work_items(project=raw.project_id)
+            if item.parent_id == raw.id
+        ]
         attachments = [
             WorktrackerAttachmentInfo(
                 id=a.id,
@@ -307,11 +354,13 @@ class WorktrackerService:
                 size=a.size or 0,
                 asset_url=a.url or "",
             )
-            for a in envelope.attachments or []
+            # raw.id is a UUID after the DRF change; the generated signature
+            # takes a str and pydantic rejects the object outright.
+            for a in self.sdk.attachments.list_work_item_attachments(str(raw.id))
         ]
         return WorktrackerTaskDetail(
             **task.model_dump(),
-            sub_tasks=[self._map_task(c) for c in children],
+            sub_tasks=[self._map_task(c, issue_types) for c in children],
             attachments=attachments,
         )
 
@@ -329,30 +378,16 @@ class WorktrackerService:
             raise ValueError(f"Could not resolve project: {project_id}")
         issue_type_id = self._resolve_task_issue_type_id(resolved, issue_type)
         state_id = self._resolve_state_id(resolved, state_name)
-        if module_id:
-            if state_id is not None:
-                raise ValueError(
-                    "state_name is not supported when creating work through a module. "
-                    "Create the task with parent_id through create_sub_task instead."
-                )
-            created = self.sdk.work_items.create_module_work_item(
-                UUID(module_id),
-                ModuleWorkItemIn(
-                    name=name,
-                    description=description,
-                    issue_type_id=issue_type_id,
-                ),
-            )
-        else:
-            created = self.sdk.work_items.create_project_work_item(
-                UUID(resolved),
-                WorkItemIn(
-                    name=name,
-                    description=description,
-                    issue_type_id=issue_type_id,
-                    state_id=state_id,
-                ),
-            )
+        created = self.sdk.work_items.create_work_item(
+            UUID(resolved),
+            WorkItemCreate(
+                name=name,
+                description=description,
+                parent_id=UUID(module_id) if module_id else None,
+                issue_type_id=issue_type_id,
+                state_id=state_id,
+            ),
+        )
         return created.id
 
     def create_sub_task(
@@ -370,9 +405,9 @@ class WorktrackerService:
         issue_type_id = self._resolve_task_issue_type_id(resolved, issue_type)
         state_id = self._resolve_state_id(resolved, state_name)
         parent_uuid = self._sdk_resolve_task_id(parent_id)
-        created = self.sdk.work_items.create_project_work_item(
+        created = self.sdk.work_items.create_work_item(
             UUID(resolved),
-            WorkItemIn(
+            WorkItemCreate(
                 name=name,
                 description=description,
                 parent_id=parent_uuid,
@@ -451,7 +486,7 @@ class WorktrackerService:
         Builds the fixed evidence block from ``path`` / ``line_start`` /
         ``line_end`` / ``note`` and, if it is well-formed, creates a direct
         Implementation child born in its workflow start stage under
-        ``parent_id`` through the SDK's dedicated finding surface. Every
+        ``parent_id`` through the ordinary work-item create. Every
         rejection is returned as ``{"ok": False, ...}`` carrying a
         machine-readable reason rather than raised: malformed evidence locally
         (``code``/``detail``), and — from the backend gate — a parent that is
@@ -483,12 +518,14 @@ class WorktrackerService:
             return {"ok": False, "parent_id": parent_id, **body}
 
         try:
-            created = self.sdk.work_items.create_review_finding(
+            created = self.sdk.work_items.create_work_item(
                 UUID(resolved),
-                ReviewFindingIn(
+                WorkItemCreate.model_construct(
                     parent_id=parent_uuid,
                     name=name,
                     description=evidence["description"],
+                    issue_type_id=None,
+                    state_id=None,
                 ),
             )
         except ApiException as error:
@@ -519,11 +556,120 @@ class WorktrackerService:
             return {"ok": False, **body}
 
     def get_issue_type_workflow_settings(self, type_id: str):
-        """Read one type's live workflow, including standing warnings."""
-        return self._workflow_request(
-            self.sdk.workflows.get_issue_type_workflow_settings,
-            UUID(type_id),
-        )
+        """Assemble the legacy tool shape from canonical CRUD reads."""
+
+        def assemble():
+            issue_type = self.sdk.issue_types.get_issue_type(UUID(type_id))
+            transitions = self.sdk.workflows.list_issue_type_transitions(
+                UUID(type_id)
+            )
+            bindings = [
+                item
+                for item in self.sdk.launch_bindings.list_launch_bindings(
+                    issue_type.project
+                )
+                if item.issue_type == UUID(type_id)
+            ]
+            states = self.sdk.states.list_states(issue_type.project)
+            providers = {item.id: item for item in self.sdk.providers.list_providers()}
+            models = {item.id: item for item in self.sdk.models.list_agent_models()}
+            reasoning_levels = {
+                item.id: item for item in self.sdk.reasoning_levels.list_reasoning_levels()
+            }
+
+            adjacency: Dict[UUID, set[UUID]] = {}
+            reverse: Dict[UUID, set[UUID]] = {}
+            for edge in transitions:
+                adjacency.setdefault(edge.from_state, set()).add(edge.to_state)
+                reverse.setdefault(edge.to_state, set()).add(edge.from_state)
+
+            def reachable(seed, graph):
+                seen = set(seed)
+                pending = list(seed)
+                while pending:
+                    current = pending.pop()
+                    for neighbor in graph.get(current, set()):
+                        if neighbor not in seen:
+                            seen.add(neighbor)
+                            pending.append(neighbor)
+                return seen
+
+            state_by_id = {item.id: item for item in states}
+            warnings = []
+            if issue_type.start_state not in state_by_id:
+                warnings.append(
+                    {
+                        "code": "start_state_not_configured",
+                        "state_id": None,
+                        "message": "No start state is configured for this work-item type.",
+                    }
+                )
+            else:
+                members = reachable({issue_type.start_state}, adjacency)
+                completed = {
+                    state.id
+                    for state in states
+                    if state.id in members and state.group == "completed"
+                }
+                can_reach_completed = reachable(completed, reverse)
+                for state in states:
+                    if state.id in members and state.id not in can_reach_completed:
+                        warnings.append(
+                            {
+                                "code": "no_path_to_completed",
+                                "state_id": state.id,
+                                "message": f"{state.name} has no path to a completed state.",
+                            }
+                        )
+
+            binding_rows = []
+            for binding in bindings:
+                model_row = models.get(binding.model)
+                provider = providers.get(model_row.provider) if model_row else None
+                reasoning = reasoning_levels.get(binding.reasoning)
+                if provider is not None and not provider.activated:
+                    state_name = state_by_id.get(binding.state)
+                    warnings.append(
+                        {
+                            "code": "provider_not_activated",
+                            "state_id": binding.state,
+                            "message": (
+                                f"{state_name.name if state_name else 'This state'} launches "
+                                f"with {provider.slug}, which is deactivated in Settings → "
+                                "Model configuration; those launches are blocked."
+                            ),
+                        }
+                    )
+                binding_rows.append(
+                    {
+                        "state_id": binding.state,
+                        "prompt": binding.prompt,
+                        "required_skills": binding.required_skills,
+                        "agent": provider.slug if provider else None,
+                        "model": model_row.name if model_row else None,
+                        "reasoning": reasoning.name if reasoning else None,
+                        "auto_start": binding.auto_start,
+                        "subtree_run_enabled": binding.subtree_run_enabled,
+                    }
+                )
+
+            return {
+                "issue_type_id": issue_type.id,
+                "start_state_id": issue_type.start_state,
+                "workflow_revision": issue_type.workflow_revision,
+                "transitions": [
+                    {
+                        "from_state_id": edge.from_state,
+                        "to_state_id": edge.to_state,
+                        "agent_allowed": edge.agent_allowed,
+                    }
+                    for edge in transitions
+                ],
+                "launch_bindings": binding_rows,
+                "warnings": warnings,
+            }
+
+        return self._workflow_request(assemble)
 
     def add_issue_type_workflow_transition(
         self,
@@ -534,11 +680,13 @@ class WorktrackerService:
         agent_allowed: bool = True,
     ):
         return self._workflow_request(
-            self.sdk.workflows.add_issue_type_workflow_transition,
+            self.sdk.workflows.create_issue_type_transition,
             UUID(type_id),
-            AddWorkflowTransitionIn(
-                from_state_id=UUID(from_state_id),
-                to_state_id=UUID(to_state_id),
+            IssueTypeTransition.model_construct(
+                id=0,
+                issue_type=UUID(type_id),
+                from_state=UUID(from_state_id),
+                to_state=UUID(to_state_id),
                 agent_allowed=agent_allowed,
                 workflow_revision=workflow_revision,
             ),
@@ -552,11 +700,11 @@ class WorktrackerService:
         workflow_revision: int,
     ):
         return self._workflow_request(
-            self.sdk.workflows.remove_issue_type_workflow_transition,
+            self.sdk.revisioned_delete.delete_transition,
             UUID(type_id),
             UUID(from_state_id),
             UUID(to_state_id),
-            WorkflowRevisionIn(workflow_revision=workflow_revision),
+            workflow_revision,
         )
 
     def set_issue_type_workflow_transition_permission(
@@ -568,11 +716,11 @@ class WorktrackerService:
         workflow_revision: int,
     ):
         return self._workflow_request(
-            self.sdk.workflows.set_issue_type_workflow_transition_permission,
-            UUID(type_id),
+            self.sdk.workflows.update_issue_type_transition,
             UUID(from_state_id),
             UUID(to_state_id),
-            SetWorkflowTransitionPermissionIn(
+            UUID(type_id),
+            PatchedIssueTypeTransition(
                 agent_allowed=agent_allowed,
                 workflow_revision=workflow_revision,
             ),
@@ -585,10 +733,10 @@ class WorktrackerService:
         workflow_revision: int,
     ):
         return self._workflow_request(
-            self.sdk.workflows.set_issue_type_workflow_start_state,
+            self.sdk.issue_types.update_issue_type,
             UUID(type_id),
-            SetWorkflowStartStateIn(
-                state_id=UUID(state_id),
+            PatchedIssueType(
+                start_state=UUID(state_id),
                 workflow_revision=workflow_revision,
             ),
         )
@@ -604,19 +752,74 @@ class WorktrackerService:
         reasoning: Optional[str] = None,
         required_skills: Optional[List[str]] = None,
     ):
-        return self._workflow_request(
-            self.sdk.workflows.upsert_issue_type_workflow_launch_binding,
-            UUID(type_id),
-            UUID(state_id),
-            ScopedLaunchBindingIn(
-                prompt=prompt,
-                agent=agent,
-                model=model,
-                reasoning=reasoning,
-                required_skills=required_skills,
+        def upsert():
+            issue_type = self.sdk.issue_types.get_issue_type(UUID(type_id))
+            bindings = self.sdk.launch_bindings.list_launch_bindings(
+                issue_type.project
+            )
+            current = next(
+                (
+                    item
+                    for item in bindings
+                    if item.issue_type == UUID(type_id)
+                    and item.state == UUID(state_id)
+                ),
+                None,
+            )
+            providers = {item.id: item for item in self.sdk.providers.list_providers()}
+            model_rows = self.sdk.models.list_agent_models()
+            reasoning_rows = self.sdk.reasoning_levels.list_reasoning_levels()
+
+            model_id = current.model if current else None
+            if model is not None:
+                matches = [item for item in model_rows if item.name == model]
+                if agent is not None:
+                    matches = [
+                        item
+                        for item in matches
+                        if providers.get(item.provider)
+                        and providers[item.provider].slug == agent
+                    ]
+                if len(matches) != 1:
+                    raise ValueError(
+                        f"Could not resolve one catalog model for provider={agent!r}, model={model!r}."
+                    )
+                model_id = matches[0].id
+            elif agent is not None and current is None:
+                raise ValueError("A provider is represented by its model row; supply model.")
+
+            reasoning_id = current.reasoning if current else None
+            if reasoning is not None:
+                matches = [item for item in reasoning_rows if item.name == reasoning]
+                if len(matches) != 1:
+                    raise ValueError(
+                        f"Could not resolve reasoning level {reasoning!r}."
+                    )
+                reasoning_id = matches[0].id
+
+            payload = LaunchBinding.model_construct(
+                id=current.id if current else 0,
+                issue_type=UUID(type_id),
+                state=UUID(state_id),
+                prompt=prompt if prompt is not None else (current.prompt if current else None),
+                required_skills=(
+                    required_skills
+                    if required_skills is not None
+                    else (current.required_skills if current else [])
+                ),
+                model=model_id,
+                reasoning=reasoning_id,
+                auto_start=current.auto_start if current else False,
+                subtree_run_enabled=current.subtree_run_enabled if current else False,
                 workflow_revision=workflow_revision,
-            ),
-        )
+                created_at=getattr(current, "created_at", None),
+                updated_at=getattr(current, "updated_at", None),
+            )
+            return self.sdk.launch_bindings.upsert_launch_binding(
+                UUID(state_id), UUID(type_id), payload
+            )
+
+        return self._workflow_request(upsert)
 
     def clear_issue_type_workflow_launch_binding(
         self,
@@ -625,10 +828,10 @@ class WorktrackerService:
         workflow_revision: int,
     ):
         return self._workflow_request(
-            self.sdk.workflows.clear_issue_type_workflow_launch_binding,
+            self.sdk.revisioned_delete.delete_launch_binding,
             UUID(type_id),
             UUID(state_id),
-            WorkflowRevisionIn(workflow_revision=workflow_revision),
+            workflow_revision,
         )
 
     def set_issue_type_workflow_auto_start(
@@ -638,15 +841,31 @@ class WorktrackerService:
         auto_start: bool,
         workflow_revision: int,
     ):
-        return self._workflow_request(
-            self.sdk.workflows.set_issue_type_workflow_auto_start,
-            UUID(type_id),
-            UUID(state_id),
-            SetWorkflowAutoStartIn(
-                auto_start=auto_start,
-                workflow_revision=workflow_revision,
-            ),
-        )
+        def update_auto_start():
+            issue_type = self.sdk.issue_types.get_issue_type(UUID(type_id))
+            current = next(
+                (
+                    item
+                    for item in self.sdk.launch_bindings.list_launch_bindings(
+                        issue_type.project
+                    )
+                    if item.issue_type == UUID(type_id)
+                    and item.state == UUID(state_id)
+                ),
+                None,
+            )
+            if current is None:
+                raise ValueError("Configure a launch binding before changing auto-start.")
+            payload_data = current.model_dump()
+            payload_data.update(
+                auto_start=auto_start, workflow_revision=workflow_revision
+            )
+            payload = LaunchBinding.model_construct(**payload_data)
+            return self.sdk.launch_bindings.upsert_launch_binding(
+                UUID(state_id), UUID(type_id), payload
+            )
+
+        return self._workflow_request(update_auto_start)
 
     def update_task_status(
         self,
@@ -695,7 +914,7 @@ class WorktrackerService:
         try:
             self.sdk.work_items.update_work_item(
                 str(resolved_id),
-                WorkItemPatch(state_id=state.id, origin="agent"),
+                PatchedWorkItemPatch(state_id=state.id, origin="agent"),
             )
         except ApiException as error:
             body = self._sdk_error_body(error)
@@ -718,10 +937,10 @@ class WorktrackerService:
     ) -> bool:
         del project_id
         detail = self.sdk.work_items.get_work_item(task_id)
-        existing = detail.task.description or ""
+        existing = detail.description or ""
         merged = f"{existing}\n\n{new_content}" if existing else new_content
         self.sdk.work_items.update_work_item(
-            str(detail.task.id), WorkItemPatch(description=merged)
+            str(detail.id), PatchedWorkItemPatch(description=merged)
         )
         return True
 
@@ -748,7 +967,7 @@ class WorktrackerService:
         resolved_id = self._sdk_resolve_task_id(id_or_key)
         updated = self.sdk.work_items.update_work_item(
             str(resolved_id),
-            WorkItemPatch(**fields),
+            PatchedWorkItemPatch(**fields),
         )
         return {
             "ok": True,
@@ -805,7 +1024,8 @@ class WorktrackerService:
         resolved_blockers = [self._sdk_resolve_task_id(item) for item in blocked_by_ids]
         try:
             updated = self.sdk.work_items.update_work_item(
-                str(resolved_id), WorkItemPatch(blocked_by_ids=resolved_blockers)
+                str(resolved_id),
+                PatchedWorkItemPatch(blocked_by_ids=resolved_blockers),
             )
         except ApiException as error:
             # Self-block / cycle guards return a 4xx with a human message.
@@ -822,12 +1042,12 @@ class WorktrackerService:
         resolved_id = self._sdk_resolve_task_id(task_id)
         resolved_blocker = self._sdk_resolve_task_id(blocker_task_id)
         try:
-            current = self.sdk.work_items.get_work_item(str(resolved_id)).task
+            current = self.sdk.work_items.get_work_item(str(resolved_id))
             blockers = list(current.blocked_by_ids or [])
             if resolved_blocker not in blockers:
                 blockers.append(resolved_blocker)
             updated = self.sdk.work_items.update_work_item(
-                str(resolved_id), WorkItemPatch(blocked_by_ids=blockers)
+                str(resolved_id), PatchedWorkItemPatch(blocked_by_ids=blockers)
             )
         except ApiException as error:
             detail = self._sdk_error_detail(error)
@@ -843,9 +1063,73 @@ class WorktrackerService:
         return self.add_task_blocker(dependent_task_id, task_id)
 
     def get_scope_context(self, id_or_key: str) -> WorktrackerScopeContext:
-        """Read the dependency slice for a task (#670). Accepts UUID or KEY-N."""
-        sc = self.sdk.work_items.get_work_item_scope_context(id_or_key)
-        return WorktrackerScopeContext(**sc.model_dump(mode="json"))
+        """Assemble a task's dependency slice from canonical CRUD reads."""
+        result = self.sdk.work_items.get_work_item(id_or_key)
+        task = getattr(result, "task", result)
+        neighbor_ids = {
+            str(item)
+            for item in (*list(task.blocked_by_ids or []), *list(task.blocks_ids or []))
+        }
+        listed = self.sdk.work_items.list_work_items()
+        neighbors = {
+            str(item.id): item for item in listed if str(item.id) in neighbor_ids
+        }
+
+        missing_ids = neighbor_ids - neighbors.keys()
+        if missing_ids:
+            missing = ", ".join(sorted(missing_ids))
+            raise ValueError(
+                f"Dependency work item(s) missing from canonical read: {missing}"
+            )
+
+        referenced = [task, *neighbors.values()]
+        project_ids = {
+            item.project_id for item in referenced if getattr(item, "state", None)
+        }
+        states = {
+            str(state.id): state
+            for project_id in project_ids
+            for state in self.sdk.states.list_states(project_id)
+        }
+
+        def scope_ref(item):
+            state_id = getattr(item, "state", None)
+            state = states.get(str(state_id)) if state_id else None
+            group = state.group if state is not None else None
+            return {
+                "id": item.id,
+                "key": item.key,
+                "name": item.name,
+                "state_group": group,
+                "resolved": _dependency_state_resolved(state),
+            }
+
+        depends_on_refs = [
+            scope_ref(neighbors[str(item)]) for item in task.blocked_by_ids or []
+        ]
+        depended_by_refs = [
+            scope_ref(neighbors[str(item)]) for item in task.blocks_ids or []
+        ]
+
+        unresolved = [item for item in depends_on_refs if not item["resolved"]]
+        if unresolved:
+            keys = ", ".join(item["key"] for item in unresolved)
+            advisory = (
+                f"{len(unresolved)} of {len(depends_on_refs)} blocker(s) unresolved "
+                f"({keys}) - stay within this task; do not implement upstream work."
+            )
+        else:
+            advisory = (
+                "No unresolved blockers - deliver only this task and nothing beyond "
+                "its scope."
+            )
+
+        return WorktrackerScopeContext(
+            task=scope_ref(task),
+            depends_on=depends_on_refs,
+            depended_by=depended_by_refs,
+            advisory=advisory,
+        )
 
     @classmethod
     def _sdk_execution_error(cls, error: ApiException) -> Optional[str]:
@@ -913,11 +1197,52 @@ class WorktrackerService:
         try:
             launched = self.sdk.launch.default_coding_agent(target_id)
         except ApiException as error:
+            body = self._sdk_error_body(error)
+            if body and body.get("code") == "required_skill_unavailable":
+                return {"target_id": target_id, "error": body}
             detail = self._sdk_execution_error(error)
             if detail is None:
                 raise
             return {"target_id": target_id, "error": detail}
         return launched.model_dump(mode="json")
+
+    def run_now(
+        self,
+        id_or_key: str,
+        *,
+        authorization: str | None = None,
+    ) -> Dict[str, Any]:
+        """Invoke the backend-owned composed Run Now capability as an agent."""
+
+        target_id = str(id_or_key)
+        try:
+            target_id = str(self._sdk_resolve_task_id(id_or_key))
+            result = self.sdk.execution.run_now(
+                target_id,
+                origin="agent",
+                authorization=authorization,
+            )
+        except ApiException as error:
+            if isinstance(error.data, RunNowRefusal):
+                return error.data.model_dump(mode="json")
+            body = self._sdk_error_body(error)
+            if body is None:
+                raise
+            try:
+                refusal = RunNowRefusal.model_validate(body)
+            except ValueError:
+                pass
+            else:
+                return refusal.model_dump(mode="json")
+            detail = body.get("error") or body.get("detail") or "task_not_found"
+            return {
+                "target_id": target_id,
+                "committed_state": None,
+                "run": None,
+                "detail": detail,
+                "code": body.get("code") or detail,
+            }
+        return result.model_dump(mode="json")
 
     def reparent_tasks(
         self,
@@ -931,7 +1256,7 @@ class WorktrackerService:
         if not resolved:
             raise ValueError(f"Could not resolve project: {project_id}")
         project_uuid = UUID(resolved)
-        parent = self.sdk.work_items.get_work_item(parent_task_id).task
+        parent = self.sdk.work_items.get_work_item(parent_task_id)
         if parent.project_id != project_uuid:
             raise ValueError(
                 f"Parent task {parent.id} is not in project {project_uuid}"
@@ -942,7 +1267,7 @@ class WorktrackerService:
         failed = []
         for raw_id in task_ids:
             try:
-                child = self.sdk.work_items.get_work_item(raw_id).task
+                child = self.sdk.work_items.get_work_item(raw_id)
             except NotFoundException:
                 skipped.append({"task_id": raw_id, "reason": "not_found"})
                 continue
@@ -954,7 +1279,7 @@ class WorktrackerService:
                 continue
             try:
                 self.sdk.work_items.update_work_item(
-                    str(child.id), WorkItemPatch(parent_id=parent.id)
+                    str(child.id), PatchedWorkItemPatch(parent_id=parent.id)
                 )
             except ApiException as error:
                 failed.append({"task_id": str(child.id), "error": str(error)})

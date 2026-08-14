@@ -1,4 +1,4 @@
-"""Fail-closed resolution of persistently installed workflow skills."""
+"""Resolve existing workflow skills and install missing fallback copies."""
 
 from __future__ import annotations
 
@@ -9,8 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from .catalog import CatalogValidationError, catalog_root, tree_digest, verify_catalog
-from .installation import SkillInstallationError, verify_provider_installation
+from .catalog import CatalogValidationError, verify_catalog
+from .installation import (
+    SkillInstallationError,
+    install_packaged_skills,
+    visible_skill_candidates,
+)
 
 
 WORKTRACKER_TOOLS = frozenset(
@@ -47,15 +51,52 @@ class RequiredSkillUnavailable(RuntimeError):
         self.reason = reason
         self.message = message
         self.conflicting_path = conflicting_path
+        self.remediation = self._remediation()
         super().__init__(
             f"required_skill_unavailable: provider={provider} skill={skill} "
-            f"reason={reason}: {message}"
+            f"reason={reason}: {message} Next action: {self.remediation}"
         )
+
+    def _remediation(self) -> str:
+        if self.reason in {"collision", "installation_collision"}:
+            location = (
+                f" at {self.conflicting_path}"
+                if self.conflicting_path is not None
+                else ""
+            )
+            return (
+                f"Rename the provider-visible skill{location} or change its declared "
+                "name, then retry. Ticketry will not modify user-installed skills."
+            )
+        if self.reason == "unknown":
+            return "Choose a skill from Ticketry's packaged catalog, then retry."
+        if self.reason == "tool_unavailable":
+            return "Restore the required WorkTracker MCP tools, then retry."
+        if self.reason.startswith("installation_"):
+            return "Repair Ticketry's packaged provider-skill installation, then retry."
+        if self.reason == "provider_unsupported":
+            return "Select a supported, up-to-date provider, then retry."
+        if self.reason == "catalog_invalid":
+            return "Repair or reinstall the Ticketry application, then retry."
+        return "Repair the required-skill launch configuration, then retry."
+
+    def as_payload(self) -> dict[str, object]:
+        """Return the stable transport contract for an expected rejection."""
+
+        return {
+            "code": "required_skill_unavailable",
+            "provider": self.provider,
+            "skill": self.skill,
+            "reason": self.reason,
+            "detail": self.message,
+            "remediation": self.remediation,
+            "retryable": True,
+        }
 
 
 @dataclass(frozen=True)
 class ResolvedSkills:
-    """Verified catalog packages and facts frozen for one launch."""
+    """Provider-visible skills and dependency facts frozen for one launch."""
 
     requested: tuple[str, ...]
     packages: tuple[tuple[str, Path], ...]
@@ -65,53 +106,6 @@ class ResolvedSkills:
     @property
     def names(self) -> tuple[str, ...]:
         return tuple(name for name, _ in self.packages)
-
-
-def _provider_skill_roots(provider: str, cwd: Path) -> tuple[Path, ...]:
-    home = Path.home()
-    if provider == "claude":
-        claude_home = Path(os.environ.get("CLAUDE_CONFIG_DIR", home / ".claude"))
-        plugin_root = home / ".claude/plugins"
-        plugin_skills = (
-            tuple(plugin_root.rglob("skills")) if plugin_root.is_dir() else ()
-        )
-        return (
-            claude_home / "skills",
-            cwd / ".claude/skills",
-            *plugin_skills,
-        )
-    if provider == "codex":
-        codex_home = Path(os.environ.get("CODEX_HOME", home / ".codex"))
-        return (
-            codex_home / "skills",
-            home / ".agents/skills",
-            cwd / ".agents/skills",
-            cwd / ".codex/skills",
-        )
-    if provider == "agy":
-        extension_root = home / ".gemini/extensions"
-        extension_skills = (
-            tuple(extension_root.glob("*/skills")) if extension_root.is_dir() else ()
-        )
-        return (
-            home / ".agents/skills",
-            home / ".agy/skills",
-            cwd / ".agents/skills",
-            cwd / ".agy/skills",
-            *extension_skills,
-        )
-    if provider == "gemini":
-        gemini_home = Path(os.environ.get("GEMINI_CLI_HOME", home))
-        extension_root = gemini_home / ".gemini/extensions"
-        extension_skills = (
-            tuple(extension_root.glob("*/skills")) if extension_root.is_dir() else ()
-        )
-        return (
-            gemini_home / ".gemini/skills",
-            cwd / ".gemini/skills",
-            *extension_skills,
-        )
-    return ()
 
 
 def _dependency_closure(
@@ -126,26 +120,6 @@ def _dependency_closure(
         closure.add(name)
         frontier.extend(packages_by_name[name]["dependencies"])
     return closure
-
-
-def _visible_candidates(root: Path, reserved: set[str]):
-    """Yield canonical reserved names advertised below one provider skill root."""
-
-    if not root.is_dir():
-        return
-    for candidate in root.iterdir():
-        if not candidate.is_dir():
-            continue
-        names = {candidate.name} & reserved
-        try:
-            contents = (candidate / "SKILL.md").read_text(encoding="utf-8")
-            match = re.search(r"(?m)^name:\s*([a-z0-9-]+)\s*$", contents)
-            if match and match.group(1) in reserved:
-                names.add(match.group(1))
-        except OSError:
-            pass
-        for name in names:
-            yield name, candidate
 
 
 def _version_tuple(value: str) -> tuple[int, int, int] | None:
@@ -196,7 +170,7 @@ def resolve_required_skills(
     supports_required_skills: bool,
     available_tools: frozenset[str],
 ) -> ResolvedSkills:
-    """Verify catalog, dependencies, tools, and provider-visible collisions."""
+    """Reuse existing skills, installing bundled fallbacks only when absent."""
 
     requested = tuple(required_skills)
     if not requested:
@@ -204,10 +178,10 @@ def resolve_required_skills(
 
     try:
         lock = verify_catalog()
-        packages_by_name = {
-            package["name"]: package for package in lock["packages"]
-        }
-        unknown = next((name for name in requested if name not in packages_by_name), None)
+        packages_by_name = {package["name"]: package for package in lock["packages"]}
+        unknown = next(
+            (name for name in requested if name not in packages_by_name), None
+        )
         if unknown is not None:
             raise RequiredSkillUnavailable(
                 provider=provider,
@@ -228,14 +202,6 @@ def resolve_required_skills(
         _verify_approved_provider_version(provider, providers, requested[0])
 
         closure = _dependency_closure(requested, packages_by_name)
-        ordered = tuple(
-            (
-                package["name"],
-                (catalog_root() / package["path"]).resolve(),
-            )
-            for package in lock["packages"]
-            if package["name"] in closure
-        )
         required_tools = frozenset(
             tool
             for name in closure
@@ -254,34 +220,43 @@ def resolve_required_skills(
                 message=f"Required WorkTracker tools are unavailable: {sorted(missing_tools)}.",
             )
 
-        locked_digests = {
-            name: packages_by_name[name]["digest"] for name in closure
-        }
-        for root in _provider_skill_roots(provider, Path(cwd).resolve()):
-            for name, candidate in _visible_candidates(root, closure):
-                try:
-                    identical = candidate.is_dir() and tree_digest(candidate) == locked_digests[name]
-                except (OSError, CatalogValidationError):
-                    identical = False
-                if not identical:
-                    raise RequiredSkillUnavailable(
-                        provider=provider,
-                        skill=name,
-                        reason="collision",
-                        message=f"A different provider-visible skill already reserves {name!r}.",
-                        conflicting_path=candidate,
-                    )
+        visible = visible_skill_candidates(
+            provider,
+            names=closure,
+            cwd=Path(cwd),
+        )
+        if any(not visible[name] for name in closure):
+            try:
+                install_packaged_skills(providers=(provider,))
+            except SkillInstallationError as exc:
+                raise RequiredSkillUnavailable(
+                    provider=provider,
+                    skill=exc.skill,
+                    reason=f"installation_{exc.reason}",
+                    message=exc.message,
+                ) from exc
+            visible = visible_skill_candidates(
+                provider,
+                names=closure,
+                cwd=Path(cwd),
+            )
+            still_missing = next(
+                (name for name in closure if not visible[name]),
+                None,
+            )
+            if still_missing is not None:
+                raise RequiredSkillUnavailable(
+                    provider=provider,
+                    skill=still_missing,
+                    reason="installation_missing",
+                    message="The required skill could not be installed.",
+                )
 
-        try:
-            verify_provider_installation(provider, names=closure)
-        except SkillInstallationError as exc:
-            raise RequiredSkillUnavailable(
-                provider=provider,
-                skill=exc.skill,
-                reason=f"installation_{exc.reason}",
-                message=exc.message,
-                conflicting_path=exc.path if exc.reason == "collision" else None,
-            ) from exc
+        ordered = tuple(
+            (package["name"], visible[package["name"]][0])
+            for package in lock["packages"]
+            if package["name"] in closure
+        )
 
         return ResolvedSkills(
             requested=requested,
@@ -308,6 +283,5 @@ def skill_prompt_envelope(resolved: ResolvedSkills) -> str:
     names = ", ".join(resolved.requested)
     return (
         "Ticketry invocation resources:\n"
-        f"- Required skills supplied for this invocation: {names}\n"
-        f"- Pinned upstream mattpocock/skills revision: {resolved.upstream_revision}"
+        f"- Required skills available for this invocation: {names}"
     )

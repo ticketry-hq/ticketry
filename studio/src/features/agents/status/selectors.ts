@@ -73,7 +73,10 @@ function taskRunIds(
   taskId: string,
   descendantTaskIds: readonly string[],
 ): string[] {
-  return [taskId, ...descendantTaskIds].flatMap((id) => state.byTask[id] ?? []);
+  const taskIds = new Set([taskId, ...descendantTaskIds]);
+  return Object.values(state.runs)
+    .filter((run) => run.task_id !== null && taskIds.has(run.task_id))
+    .map((run) => run.agent_run_id);
 }
 
 export function selectTaskAgentLifecycle(
@@ -125,7 +128,7 @@ export function selectScratchLifecycleChips(
 
   const counts = new Map<RawLifecycleState, number>();
   for (const run of Object.values(state.runs)) {
-    if (run.moduleId !== moduleId) continue;
+    if (run.module_id !== moduleId) continue;
     if (run.scope !== "plan" && run.scope !== "instant") continue;
     if (!isLiveAgentRunState(run.state)) continue;
     if (!LIFECYCLE_STATE_ORDER.includes(run.state)) continue;
@@ -153,9 +156,9 @@ export function selectScratchRunIds(
   if (state.projectId !== projectId) return [];
   const ids: string[] = [];
   for (const run of Object.values(state.runs)) {
-    if (run.moduleId !== moduleId) continue;
+    if (run.module_id !== moduleId) continue;
     if (run.scope !== "plan" && run.scope !== "instant") continue;
-    ids.push(run.runId);
+    ids.push(run.agent_run_id);
   }
   return ids;
 }
@@ -186,7 +189,7 @@ export function selectModuleLifecycleCounts(
     working: 0,
   };
   for (const run of Object.values(state.runs)) {
-    if (run.moduleId !== moduleId || !isModuleLifecycleState(run.state)) continue;
+    if (run.module_id !== moduleId || !isModuleLifecycleState(run.state)) continue;
     counts[run.state] += 1;
   }
   return counts;

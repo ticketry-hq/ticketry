@@ -3,7 +3,21 @@ from .project import Project
 from .issue_type import IssueType
 from .state import State
 from .constants import TYPE_CHOICES
-from worktracker.state_identity import normalize_state_id
+
+
+_REVISION_FIELDS = (
+    "project_id",
+    "type",
+    "issue_type_id",
+    "parent_id",
+    "module_id",
+    "state_id",
+    "name",
+    "sequence_id",
+    "is_archived",
+    "rank",
+    "description",
+)
 
 
 class Issue(models.Model):
@@ -13,8 +27,7 @@ class Issue(models.Model):
 
     - ``type`` splits modules from tasks; routes filter on it.
     - ``parent`` is the one tree link — epic membership AND subtask parent.
-    - ``state`` is a single FK, serialized as one nested object (never a bare
-      id, never a sibling ``state_detail``).
+    - ``state`` is a single FK, serialized as its bare primary key.
     - ``sequence_id`` is allocated from the project's shared counter, so the
       ``key`` (``{project.slug}-{sequence_id}``) is unique within the project.
     """
@@ -51,18 +64,21 @@ class Issue(models.Model):
         blank=True,
         related_name="issues",
     )
-    # Latest committed workflow-state transition for this WorkItem. Together
-    # with Project.state_revision this row is the compact replay projection.
+    # Latest committed change for this WorkItem. Together with
+    # Project.state_revision this row is the compact replay projection.
     state_revision = models.PositiveBigIntegerField(default=0)
     name = models.CharField(max_length=512)
     sequence_id = models.PositiveIntegerField()
     is_archived = models.BooleanField(default=False)
-    # Fractional-index sort key for manual within-column reorder (#626). A
-    # single global key per issue (Jira/LexoRank model); each board / story-map
-    # column sorts only its own members by it, so two issues in different
-    # columns are never compared. Reorder is the sole write path
+    # Fractional-index sort key for manual reorder (#626). A single global key
+    # per issue (Jira/LexoRank model); each sibling group sorts only its own
+    # members by it, so two issues in different groups are never compared. It
+    # carries two orders: a task's position within its planning-context column,
+    # and — for module work items — the module's position within its project's
+    # Manual module order. Reorder is the sole write path
     # (worktracker.ranking.key_between); the migration backfills it in
-    # ``sequence_id`` order so nothing moves on first load.
+    # ``sequence_id`` order so nothing moves on first load. Module ranks are
+    # ignored entirely until ``Project.manual_module_order`` is true.
     rank = models.CharField(max_length=64, blank=True, default="", db_index=True)
     description = models.TextField(blank=True, default="")
     # A directed Issue↔Issue blocker relation (#624), orthogonal to the parent
@@ -100,31 +116,42 @@ class Issue(models.Model):
         return f"{self.key} {self.name}"
 
     def save(self, *args, **kwargs):
-        """Persist state identity and its project revision atomically.
+        """Persist the issue and its project change revision atomically.
 
-        All supported state writers use ``Issue.save``. Serializing them on the
-        project row gives every real state identity change one durable,
-        project-monotonic revision, including create-into-state. Narrow saves
-        that omit ``state`` do not participate.
+        Every supported writer crosses ``Issue.save`` before commit. Serializing
+        changed records on the project row gives creates, field edits, reorders
+        and workflow moves one durable, project-monotonic cursor for live
+        delivery and reconnect replay. M2M-only writers opt in with
+        ``force_change_revision`` after validating their pending relation edit.
         """
 
+        force_change_revision = kwargs.pop("force_change_revision", False)
         update_fields = kwargs.get("update_fields")
-        if update_fields is not None and not {"state", "state_id"}.intersection(
-            update_fields
-        ):
-            return super().save(*args, **kwargs)
-        if self._state.adding and self.state_id is None:
-            return super().save(*args, **kwargs)
-
         using = kwargs.get("using") or self._state.db or "default"
         with transaction.atomic(using=using):
-            old_state_id = (
-                Issue.objects.using(using)
+            persisted = (
+                None
+                if self._state.adding
+                else Issue.objects.using(using)
                 .filter(pk=self.pk)
-                .values_list("state_id", flat=True)
+                .values(*_REVISION_FIELDS)
                 .first()
             )
-            if normalize_state_id(old_state_id) != normalize_state_id(self.state_id):
+            written_fields = (
+                set(_REVISION_FIELDS)
+                if update_fields is None
+                else {
+                    field
+                    for field in _REVISION_FIELDS
+                    if field in update_fields
+                    or field.removesuffix("_id") in update_fields
+                }
+            )
+            changed = force_change_revision or persisted is None or any(
+                persisted[field] != getattr(self, field) for field in written_fields
+            )
+            self._work_item_change_revision_advanced = changed
+            if changed:
                 self.state_revision = Project.next_state_revision(
                     self.project_id, using=using
                 )

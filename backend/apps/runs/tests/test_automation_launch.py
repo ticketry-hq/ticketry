@@ -7,19 +7,21 @@ import uuid
 
 import pytest
 from django.db import transaction
-from django.test import override_settings
-from ninja.testing import TestClient
+from django.test import Client, override_settings
 
 from apps.execution import signals as execution_signals
-from apps.runs.api import router as runs_router
 from apps.runs.models import AutomationAttempt
 from apps.settings_store.models import AppSetting
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from worktracker.models import (
+    AgentModel,
     Issue,
     IssueType,
     IssueTypeTransition,
     LaunchBinding,
     Project,
+    Provider,
+    ReasoningLevel,
     State,
     Workspace,
 )
@@ -28,7 +30,23 @@ from worktracker.signals import issue_state_changed
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
-runs_client = TestClient(runs_router)
+runs_client = Client()
+
+
+def _catalog_selection(provider_slug, model_name, reasoning_name=None):
+    provider = Provider.objects.get(slug=provider_slug)
+    if not provider.activated:
+        provider.activated = True
+        provider.save(update_fields=("activated",))
+    model, _ = AgentModel.objects.get_or_create(
+        provider=provider,
+        name=model_name,
+    )
+    reasoning = None
+    if reasoning_name is not None:
+        reasoning, _ = ReasoningLevel.objects.get_or_create(name=reasoning_name)
+        model.permitted_reasoning_levels.add(reasoning)
+    return model, reasoning
 
 
 def _automation_policy(*, auto_start=True):
@@ -59,14 +77,14 @@ def _automation_policy(*, auto_start=True):
         from_state=before,
         to_state=after,
     )
+    model, reasoning = _catalog_selection("codex", "gpt-5-codex", "high")
     LaunchBinding.objects.create(
         issue_type=issue_type,
         state=after,
         auto_start=auto_start,
         prompt="Review the committed implementation",
-        agent="codex",
-        model="gpt-5-codex",
-        reasoning="high",
+        model=model,
+        reasoning=reasoning,
     )
     module = Issue.objects.create(
         id=uuid.uuid4(),
@@ -136,12 +154,12 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
         slug="MAT",
         workspace_slug=workspace.slug,
     )
+    _catalog_selection("codex", "gpt-5.4")
     AppSetting.objects.create(
         scope="host",
         key="provider_catalog",
         value=json.dumps(
             {
-                "activated_providers": ["codex"],
                 "global_default": {"provider": "codex", "model": "gpt-5.4"},
             }
         ),
@@ -149,9 +167,7 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
     )
     story_type = IssueType.objects.get(project=project, name="Story")
     module_type = IssueType.objects.get(project=project, level="module")
-    states = {
-        state.name: state for state in State.objects.filter(project=project)
-    }
+    states = {state.name: state for state in State.objects.filter(project=project)}
     module = Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -185,9 +201,10 @@ def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
     story.state = states["Implement"]
     story.save(update_fields=["state", "updated_at"])
 
-    assert [
-        launch["launch_configuration"].required_skills for launch in launches
-    ] == [("to-spec",), ("to-tickets",)]
+    assert [launch["launch_configuration"].required_skills for launch in launches] == [
+        ("to-spec",),
+        ("to-tickets",),
+    ]
     assert AutomationAttempt.objects.filter(issue=story).count() == 2
 
 
@@ -353,13 +370,13 @@ def test_startup_failure_marks_attempt_failed_without_reverting_state(monkeypatc
 
 def test_destination_binding_selects_the_automated_launch_configuration(monkeypatch):
     issue, after = _automation_policy()
+    model, reasoning = _catalog_selection("claude", "sonnet", "medium")
     LaunchBinding.objects.create(
         issue_type=issue.issue_type,
         state=issue.state,
         prompt="Continue implementation",
-        agent="claude",
-        model="sonnet",
-        reasoning="medium",
+        model=model,
+        reasoning=reasoning,
     )
     launches = []
 
@@ -388,14 +405,14 @@ def test_each_transition_uses_its_own_destination_binding(monkeypatch):
         from_state=middle,
         to_state=final,
     )
+    model, reasoning = _catalog_selection("claude", "sonnet", "medium")
     LaunchBinding.objects.create(
         issue_type=issue.issue_type,
         state=final,
         auto_start=True,
         prompt="Close the completed work",
-        agent="claude",
-        model="sonnet",
-        reasoning="medium",
+        model=model,
+        reasoning=reasoning,
     )
     launches = []
 
@@ -430,9 +447,7 @@ def test_delayed_event_uses_frozen_historical_auto_start(monkeypatch):
         events.append(kwargs)
 
     monkeypatch.setattr("apps.execution.driver.spawn_run", spawn)
-    issue_state_changed.disconnect(
-        dispatch_uid="execution_launch_workflow_automation"
-    )
+    issue_state_changed.disconnect(dispatch_uid="execution_launch_workflow_automation")
     issue_state_changed.connect(capture, dispatch_uid="test-capture-delayed")
     try:
         issue.state = after
@@ -478,8 +493,8 @@ def test_failed_attempt_retry_is_user_initiated_and_idempotent(monkeypatch):
         return "agent-run-retry"
 
     monkeypatch.setattr("apps.execution.driver.spawn_run", spawn)
-    first = runs_client.post(f"/automation-attempts/{failed.id}/retry")
-    second = runs_client.post(f"/automation-attempts/{failed.id}/retry")
+    first = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
+    second = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
     replay_errors = []
     monkeypatch.setattr(
         "apps.execution.signals.logger.exception",
@@ -509,6 +524,8 @@ def test_failed_attempt_retry_is_user_initiated_and_idempotent(monkeypatch):
         "work_item_id": str(issue.id),
         "status": "succeeded",
         "error": None,
+        "failure": None,
+        "retryable": False,
         "agent_run_id": "agent-run-retry",
         "updated_at": first.json()["updated_at"],
     }
@@ -517,3 +534,45 @@ def test_failed_attempt_retry_is_user_initiated_and_idempotent(monkeypatch):
     assert AutomationAttempt.objects.filter(issue=issue).count() == 2
     issue.refresh_from_db()
     assert issue.state_id == after.id
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_required_skill_failure_is_actionable_and_retryable(monkeypatch):
+    issue, after = _automation_policy()
+
+    async def rejected_spawn(**kwargs):
+        raise RequiredSkillUnavailable(
+            provider="codex",
+            skill="code-review",
+            reason="collision",
+            message="A different provider-visible skill already reserves 'code-review'.",
+        )
+
+    monkeypatch.setattr("apps.execution.driver.spawn_run", rejected_spawn)
+    monkeypatch.setattr(
+        "apps.execution.signals.publish_automation_attempt_sync", lambda attempt: None
+    )
+    issue.state = after
+    issue.save(update_fields=["state", "updated_at"])
+
+    failed = AutomationAttempt.objects.get(issue=issue)
+    assert failed.status == AutomationAttempt.Status.FAILED
+    assert failed.retryable is True
+    assert failed.error_details == {
+        "code": "required_skill_unavailable",
+        "provider": "codex",
+        "skill": "code-review",
+        "reason": "collision",
+        "detail": "A different provider-visible skill already reserves 'code-review'.",
+        "remediation": (
+            "Rename the provider-visible skill or change its declared name, then "
+            "retry. Ticketry will not modify user-installed skills."
+        ),
+        "retryable": True,
+    }
+
+    response = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert response.json()["retryable"] is True
+    assert AutomationAttempt.objects.filter(issue=issue).count() == 2

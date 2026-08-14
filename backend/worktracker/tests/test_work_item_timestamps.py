@@ -1,4 +1,4 @@
-"""Audit timestamps on WorkItemOut."""
+"""Audit timestamps on WorkTracker work-item responses."""
 
 import uuid
 
@@ -21,7 +21,7 @@ def _task(client, project, auth, name):
         {"name": name, "issue_type_id": str(issue_type.id)},
         auth,
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     return response.json()
 
 
@@ -31,5 +31,5 @@ def test_work_item_out_exposes_timestamps(client, project, auth):
     assert task["created_at"] and task["updated_at"]
 
     response = client.get(f"{BASE}/work-items/{task['id']}", headers=auth)
-    detail = response.json()["task"]
+    detail = response.json()
     assert detail["created_at"] and detail["updated_at"]

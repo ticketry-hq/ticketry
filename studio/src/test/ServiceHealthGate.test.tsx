@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ServiceHealthGate } from "../app/studio/ServiceHealthGate";
+import { ServiceHealthGate } from "../app/startup/ServiceHealthGate";
 import type {
   ServiceHealth,
   ServiceHealthListener,

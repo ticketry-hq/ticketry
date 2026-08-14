@@ -5,8 +5,6 @@ from worktracker.tests.factories import ensure_issue
 
 @pytest.fixture(autouse=True)
 def seeded_agent_run_issues(request):
-    """Seed the deterministic Issue FKs used by run fixtures."""
-
     if request.node.get_closest_marker("django_db") is None:
         return
     for project_id, module_id, task_ids in (

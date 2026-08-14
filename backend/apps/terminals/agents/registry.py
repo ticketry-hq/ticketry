@@ -38,7 +38,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from worktracker.launch_capabilities import PROVIDER_CAPABILITIES
 from worktracker.services.launch_bindings import (
     LaunchBindingError,
     validate_provider_options,
@@ -46,14 +45,21 @@ from worktracker.services.launch_bindings import (
 
 from apps.terminals.launch_configuration import LaunchConfigurationError
 
-from apps.terminals.agents.injectors.agy import inject_agy_lifecycle_settings
+from apps.terminals.agents.injectors import InjectedLaunch
+from apps.terminals.agents.injectors.agy import (
+    inject_agy_launch,
+    inject_agy_lifecycle_settings,
+)
 from apps.terminals.agents.injectors.claude import (
     inject_claude_lifecycle_settings,
 )
 from apps.terminals.agents.injectors.codex import (
     inject_codex_lifecycle_settings,
 )
-from apps.terminals.agents.injectors.gemini import inject_gemini_lifecycle_settings
+from apps.terminals.agents.injectors.gemini import (
+    inject_gemini_launch,
+    inject_gemini_lifecycle_settings,
+)
 from apps.terminals.agents.skills.preflight import (
     ResolvedSkills,
     WORKTRACKER_TOOLS,
@@ -77,7 +83,9 @@ class LaunchAugmentation:
     temporary_artifacts: tuple[Path, ...] = ()
 
 
-def _artifact_root(agent_run_id: str) -> Path:
+def create_temporary_artifact_root(agent_run_id: str) -> Path:
+    """Create a private invocation directory owned by one agent run."""
+
     if not re.fullmatch(r"[A-Za-z0-9_-]+", agent_run_id):
         raise ValueError("agent_run_id is unsafe for a temporary artifact path")
     parent = Path(tempfile.gettempdir()) / "ticketry-agent-runs"
@@ -146,6 +154,9 @@ class AgentAdapter:
     _resume_command: Callable[[str], list[str]] | None = None
     supports_worktracker_mcp: bool = False
     supports_required_skills: bool = True
+    #: Providers with no inline settings flag write a run-scoped settings file
+    #: and point an env var at it. ``None`` means the provider injects inline.
+    _inject_with_settings_file: Callable[..., InjectedLaunch] | None = None
 
     def command(
         self,
@@ -161,9 +172,16 @@ class AgentAdapter:
         catalog, so a deactivated provider is refused here even if a caller
         forgot to check. Command construction can run on the async launch path,
         where that sync ORM read is illegal — such a caller passes the set it
-        already loaded off-thread (see ``TerminalSessionService.spawn``) rather
+        already loaded off-thread (see ``launch_agent_run``) rather
         than opting out of the gate.
         """
+
+        if activated_providers is not None:
+            if self.slug not in activated_providers:
+                raise LaunchConfigurationError("provider_not_activated")
+            # The task launch resolver already validated this catalog-backed
+            # model/reasoning pair off the async event loop.
+            return self._command(prompt, model, reasoning)
 
         try:
             _, model, reasoning = validate_provider_options(
@@ -209,53 +227,37 @@ class AgentAdapter:
 
         Required skills are installed persistently during Ticketry startup.
         Launch augmentation is limited to lifecycle and MCP configuration.
+
+        Which of the two paths a provider takes is registry data, not a slug
+        comparison: an adapter without ``_inject_with_settings_file`` injects
+        inline and owns no temp artifacts.
         """
         del skills
 
-        if self.slug == "claude":
-            injected = self.inject(
-                argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-            )
-            return LaunchAugmentation(tuple(injected))
-
-        if self.slug == "codex":
-            injected = self.inject(
-                argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-            )
-            return LaunchAugmentation(tuple(injected))
-
-        root = _artifact_root(agent_run_id)
-        try:
-            settings_path = root / "settings.json"
-            if self.slug == "agy":
-                injected = inject_agy_lifecycle_settings(
-                    argv,
-                    agent_run_id,
-                    lifecycle_url=lifecycle_url,
-                    mcp_url=mcp_url,
-                    settings_path=settings_path,
-                )
-                environment = {
-                    injected[1].split("=", 1)[0]: injected[1].split("=", 1)[1]
-                }
-                provider_argv = injected[2:]
-            elif self.slug == "gemini":
-                injected = inject_gemini_lifecycle_settings(
-                    argv,
-                    agent_run_id,
-                    lifecycle_url=lifecycle_url,
-                    mcp_url=mcp_url,
-                    settings_path=settings_path,
-                )
-                environment = {
-                    injected[1].split("=", 1)[0]: injected[1].split("=", 1)[1]
-                }
-                provider_argv = injected[2:]
-            else:
-                raise RuntimeError(f"no launch augmenter registered for {self.slug}")
+        if self._inject_with_settings_file is None:
             return LaunchAugmentation(
-                tuple(provider_argv),
-                tuple(environment.items()),
+                tuple(
+                    self.inject(
+                        argv,
+                        agent_run_id,
+                        lifecycle_url=lifecycle_url,
+                        mcp_url=mcp_url,
+                    )
+                )
+            )
+
+        root = create_temporary_artifact_root(agent_run_id)
+        try:
+            result = self._inject_with_settings_file(
+                argv,
+                agent_run_id,
+                lifecycle_url=lifecycle_url,
+                mcp_url=mcp_url,
+                settings_path=root / "settings.json",
+            )
+            return LaunchAugmentation(
+                tuple(result.argv),
+                tuple(result.environment.items()),
                 (root,),
             )
         except Exception:
@@ -279,35 +281,14 @@ class AgentAdapter:
         return self._resume_command(provider_session_id)
 
 
-def _inject_claude(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    return inject_claude_lifecycle_settings(
-        argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-    )
-
-
-def _inject_agy(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    return inject_agy_lifecycle_settings(
-        argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-    )
-
-
-def _inject_codex(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    return inject_codex_lifecycle_settings(
-        argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url
-    )
-
-
-def _inject_gemini(argv, agent_run_id, *, lifecycle_url, mcp_url):
-    return inject_gemini_lifecycle_settings(
-        argv,
-        agent_run_id,
-        lifecycle_url=lifecycle_url,
-        mcp_url=mcp_url,
-    )
-
-
 def _resume_claude(provider_session_id: str) -> list[str]:
-    return ["claude", "--allow-dangerously-skip-permissions", "--resume", provider_session_id]
+    return [
+        "claude",
+        "--permission-mode",
+        "auto",
+        "--resume",
+        provider_session_id,
+    ]
 
 
 def _resume_agy(provider_session_id: str) -> list[str]:
@@ -336,7 +317,7 @@ def _command_claude(
         options.extend(["--model", model])
     if reasoning is not None:
         options.extend(["--effort", reasoning])
-    return ["claude", "--allow-dangerously-skip-permissions", *options, prompt]
+    return ["claude", "--permission-mode", "auto", *options, prompt]
 
 
 def _command_agy(
@@ -370,39 +351,34 @@ _REGISTRY: dict[str, AgentAdapter] = {
     "claude": AgentAdapter(
         "claude",
         _command_claude,
-        _inject_claude,
+        inject_claude_lifecycle_settings,
         _resume_command=_resume_claude,
         supports_worktracker_mcp=True,
     ),
     "agy": AgentAdapter(
         "agy",
         _command_agy,
-        _inject_agy,
+        inject_agy_lifecycle_settings,
         _resume_command=_resume_agy,
         supports_worktracker_mcp=True,
+        _inject_with_settings_file=inject_agy_launch,
     ),
     "codex": AgentAdapter(
         "codex",
         _command_codex,
-        _inject_codex,
+        inject_codex_lifecycle_settings,
         _resume_command=_resume_codex,
         supports_worktracker_mcp=True,
     ),
     "gemini": AgentAdapter(
         "gemini",
         _command_gemini,
-        _inject_gemini,
+        inject_gemini_lifecycle_settings,
         _resume_command=_resume_gemini,
         supports_worktracker_mcp=True,
+        _inject_with_settings_file=inject_gemini_launch,
     ),
 }
-
-if set(_REGISTRY) != set(PROVIDER_CAPABILITIES):
-    raise RuntimeError(
-        "Agent registry and launch-binding provider capabilities must declare "
-        "the same agent slugs."
-    )
-
 
 def get_adapter(slug: str) -> AgentAdapter:
     """Return the adapter for ``slug`` or raise :class:`UnknownAgent`."""

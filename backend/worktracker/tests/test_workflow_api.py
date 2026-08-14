@@ -25,7 +25,7 @@ from worktracker.tests.conftest import BASE, patch_json
 
 @pytest.fixture
 def sdlc(project):
-    """Seed the seven canonical states + Story type; return ``(states, story)``."""
+    """Seed the canonical states + Story type; return ``(states, story)``."""
 
     states = {
         name: State.objects.create(
@@ -66,7 +66,7 @@ def test_legal_state_patch_returns_200(client, project, sdlc, auth):
     )
 
     assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Spec"
+    assert r.json()["state"] == str(states["Spec"].id)
 
 
 @pytest.mark.django_db
@@ -84,7 +84,7 @@ def test_unlabelled_rest_patch_is_human_on_human_only_edge(
     )
 
     assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Implement"
+    assert r.json()["state"] == str(states["Implement"].id)
 
 
 @pytest.mark.django_db
@@ -269,7 +269,7 @@ def test_failing_subscriber_never_masks_the_committed_write(client, project, sdl
         issue_state_changed.disconnect(dispatch_uid="test_boom")
 
     assert r.status_code == 200
-    assert r.json()["state"]["name"] == "Spec"
+    assert r.json()["state"] == str(states["Spec"].id)
     issue.refresh_from_db()
     assert issue.state.name == "Spec"  # committed, not rolled back
 

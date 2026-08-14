@@ -12,6 +12,9 @@ from worktracker.models import (
     IssueType,
     IssueTypeTransition,
     LaunchBinding,
+    AgentModel,
+    Provider,
+    ReasoningLevel,
     State,
     Workspace,
 )
@@ -80,6 +83,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         (state["name"], state["group"])
         for state in REVIEWED_DEFAULTS["states"]
     ] == [
+        ("Ideas", "backlog"),
         ("Grill", "backlog"),
         ("Spec", "unstarted"),
         ("Tickets", "unstarted"),
@@ -92,6 +96,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         state["name"]: state["autoStart"]
         for state in REVIEWED_DEFAULTS["states"]
     } == {
+        "Ideas": True,
         "Grill": False,
         "Spec": True,
         "Tickets": True,
@@ -101,6 +106,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         "Cancelled": False,
     }
     assert REVIEWED_DEFAULTS["requiredSkills"] == {
+        "Ideas": [],
         "Grill": ["grill-with-docs"],
         "Spec": ["to-spec"],
         "Tickets": ["to-tickets"],
@@ -112,8 +118,9 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
 
     expected_workflows = {
         "Story": {
-            "start": "Grill",
+            "start": "Ideas",
             "states": {
+                "Ideas",
                 "Grill",
                 "Spec",
                 "Tickets",
@@ -123,12 +130,17 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
                 "Cancelled",
             },
             "edges": {
+                ("Ideas", "Grill", True),
+                ("Ideas", "Spec", True),
+                ("Ideas", "Implement", True),
+                ("Grill", "Ideas", True),
                 ("Grill", "Spec", True),
                 ("Grill", "Cancelled", True),
                 ("Spec", "Tickets", True),
                 ("Spec", "Cancelled", True),
                 ("Tickets", "Implement", False),
                 ("Tickets", "Cancelled", True),
+                ("Implement", "Grill", True),
                 ("Implement", "Review", True),
                 ("Implement", "Cancelled", True),
                 ("Review", "Implement", True),
@@ -170,7 +182,13 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         } == expected["edges"]
 
     story_prompts = REVIEWED_DEFAULTS["prompts"]["Story"]
-    assert "requirements" in story_prompts["Grill"]
+    assert "small, unambiguous, and self-contained" in story_prompts["Ideas"]
+    assert "`run_now`" in story_prompts["Ideas"]
+    assert "never use a bare state move" in story_prompts["Ideas"]
+    assert "`Grill`" in story_prompts["Ideas"]
+    assert "`Spec`" in story_prompts["Ideas"]
+    assert "Do not implement" in story_prompts["Ideas"]
+    assert "$grill-with-docs" in story_prompts["Grill"]
     assert "`Spec`" in story_prompts["Grill"]
     assert "`Tickets`" not in story_prompts["Grill"]
     assert "specification" in story_prompts["Spec"]
@@ -179,6 +197,9 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
     assert "Implementation children" in story_prompts["Tickets"]
     assert "`Implement`" in story_prompts["Tickets"]
     assert "`Spec`" not in story_prompts["Tickets"]
+    assert "no Implementation children" in story_prompts["Implement"]
+    assert "larger or more ambiguous" in story_prompts["Implement"]
+    assert "move the Story to `Grill`" in story_prompts["Implement"]
     for prompts in REVIEWED_DEFAULTS["prompts"].values():
         assert "directly in `Implement`" in prompts["Review"]
         assert "directly in `Ready`" not in prompts["Review"]
@@ -268,8 +289,14 @@ def test_fresh_project_materializes_the_reviewed_artifact():
             for state_name, binding in bindings.items()
         } == REVIEWED_DEFAULTS["requiredSkills"]
         assert {
-            binding.subtree_run_enabled for binding in bindings.values()
-        } == {issue_type.name == "Story"}
+            state_name: binding.subtree_run_enabled
+            for state_name, binding in bindings.items()
+        } == {
+            state["name"]: (
+                issue_type.name == "Story" and state["name"] != "Ideas"
+            )
+            for state in REVIEWED_DEFAULTS["states"]
+        }
         assert {
             state_name: binding.auto_start
             for state_name, binding in bindings.items()
@@ -352,14 +379,20 @@ def test_project_creation_only_adds_missing_seed_rows(monkeypatch):
             agent_allowed=False,
         )
         state_name = REVIEWED_DEFAULTS["states"][0]["name"]
+        provider = Provider.objects.get(slug="claude")
+        model = AgentModel.objects.create(
+            provider=provider,
+            name="project-owned-model",
+        )
+        reasoning = ReasoningLevel.objects.get(name="high")
+        model.permitted_reasoning_levels.add(reasoning)
         binding = LaunchBinding.objects.create(
             issue_type=story,
             state=states[state_name],
             prompt="Project-owned prompt",
             required_skills=["project-owned-skill"],
-            agent="project-owned-agent",
-            model="project-owned-model",
-            reasoning="high",
+            model=model,
+            reasoning=reasoning,
             auto_start=True,
             subtree_run_enabled=False,
         )

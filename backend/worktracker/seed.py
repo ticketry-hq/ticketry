@@ -54,11 +54,14 @@ def ensure_issue_types(project, IssueType, Issue=None):
                 "id": uuid.uuid4(),
                 "level": level,
                 "sort_order": order,
+                "is_pathfind": name == "PathFind",
             },
         )
 
 
-def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
+def ensure_launch_bindings(
+    project, IssueType, State, LaunchBinding, *, using=None
+):
     """Write the reviewed launch defaults as explicit project policy rows.
 
     Only canonical task types and canonical states are selected. Custom types
@@ -69,10 +72,12 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
         name for name, level in DEFAULT_ISSUE_TYPES if level == "task"
     ]
     state_names = [name for name, _group, _color in DEFAULT_STATES]
-    issue_types = IssueType.objects.filter(
+    issue_types = IssueType.objects.using(using).filter(
         project=project, name__in=task_type_names, level="task"
     )
-    states = State.objects.filter(project=project, name__in=state_names)
+    states = State.objects.using(using).filter(
+        project=project, name__in=state_names
+    )
     supports_subtree_run = any(
         field.name == "subtree_run_enabled"
         for field in LaunchBinding._meta.get_fields()
@@ -84,16 +89,22 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
     supports_auto_start = any(
         field.name == "auto_start" for field in LaunchBinding._meta.get_fields()
     )
+    supports_agent = any(
+        field.name == "agent" for field in LaunchBinding._meta.get_fields()
+    )
     for issue_type in issue_types:
         for state in states:
             defaults = {
                 "prompt": default_agent_prompt(issue_type.name, state.name),
-                "agent": None,
                 "model": None,
                 "reasoning": None,
             }
+            if supports_agent:
+                defaults["agent"] = None
             if supports_subtree_run:
-                defaults["subtree_run_enabled"] = issue_type.name == "Story"
+                defaults["subtree_run_enabled"] = (
+                    issue_type.name == "Story" and state.name != "Ideas"
+                )
             if supports_required_skills:
                 defaults["required_skills"] = list(
                     DEFAULT_REQUIRED_SKILLS.get(state.name, ())
@@ -102,7 +113,7 @@ def ensure_launch_bindings(project, IssueType, State, LaunchBinding):
                 defaults["auto_start"] = DEFAULT_AUTO_START_BY_STATE.get(
                     state.name, False
                 )
-            LaunchBinding.objects.get_or_create(
+            LaunchBinding.objects.using(using).get_or_create(
                 issue_type=issue_type,
                 state=state,
                 defaults=defaults,
@@ -187,7 +198,7 @@ def ensure_state_order(project, State):
     """Stamp ``sort_order`` on the project's states in canonical workflow order.
 
     States are ranked by their *name's* position in :data:`DEFAULT_STATES` (so
-    Refinement precedes Ready and Implement precedes Review even though each pair
+    Spec precedes Tickets and Implement precedes Review even though each pair
     shares a group). Non-canonical/custom states fall back to their group's rank
     and sort after all canonical states; ties break on ``created_at``. States are
     numbered ``0..n-1``; only rows whose order changes are written.

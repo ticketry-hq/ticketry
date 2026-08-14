@@ -4,17 +4,13 @@ const catalogApi = vi.hoisted(() => ({
   getLaunchProviderCapabilities: vi.fn(),
 }));
 
-vi.mock("../features/studio/workflowApi", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/workflowApi")>()),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...catalogApi,
 }));
 
-import {
-  ensureLaunchProviderCatalog,
-  fetchLaunchProviderCatalog,
-  providerListPlaceholder,
-  useLaunchProviderCatalog,
-} from "../features/workflows/launchProviderCatalog";
+import { providerListPlaceholder } from "../features/workflows/launchProviderCatalog";
+import { loadProviderCapabilities } from "../features/workflows/providerQueries";
 
 const capability = (agent: string) => ({
   agent,
@@ -25,64 +21,41 @@ const capability = (agent: string) => ({
   reasoning_levels: [],
 });
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-describe("launchProviderCatalog", () => {
+describe("provider capabilities query", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    useLaunchProviderCatalog.setState({
-      capabilities: [],
-      loaded: false,
-      failed: false,
-    });
   });
 
-  it("coalesces concurrent read-only fetches onto one request", async () => {
+  it("coalesces concurrent reads onto one request", async () => {
     catalogApi.getLaunchProviderCapabilities.mockResolvedValue([
       capability("claude"),
     ]);
 
     await Promise.all([
-      fetchLaunchProviderCatalog(),
-      fetchLaunchProviderCatalog(),
+      loadProviderCapabilities(),
+      loadProviderCapabilities(),
     ]);
 
     expect(catalogApi.getLaunchProviderCapabilities).toHaveBeenCalledTimes(1);
   });
 
-  it("does not hand a writer a response that predates its write", async () => {
-    // The read-only GET started before the PUT committed, so returning it as-is
-    // would publish the pre-save activation set as authoritative.
+  it("cancels an older read before a forced post-write refresh", async () => {
     let resolveStale: (value: unknown) => void = () => {};
-    const responses = [
-      () => new Promise((resolve) => {
-        resolveStale = resolve;
-      }),
-      async () => [capability("claude")],
-    ];
-    catalogApi.getLaunchProviderCapabilities.mockImplementation(() =>
-      (responses.shift() ?? (async () => []))());
+    catalogApi.getLaunchProviderCapabilities
+      .mockImplementationOnce(
+        () => new Promise((resolve) => {
+          resolveStale = resolve;
+        }),
+      )
+      .mockResolvedValueOnce([capability("claude")]);
 
-    const stale = fetchLaunchProviderCatalog();
-    const fresh = await fetchLaunchProviderCatalog({ force: true });
+    const stale = loadProviderCapabilities();
+    const fresh = await loadProviderCapabilities({ force: true });
     resolveStale([capability("claude"), capability("gemini")]);
-    await stale;
+    await stale.catch(() => undefined);
 
-    expect(fresh.map((c) => c.agent)).toEqual(["claude"]);
+    expect(fresh.map((entry) => entry.agent)).toEqual(["claude"]);
     expect(catalogApi.getLaunchProviderCapabilities).toHaveBeenCalledTimes(2);
-  });
-
-  it("records a failed fetch so an empty list is not read as an answer", async () => {
-    catalogApi.getLaunchProviderCapabilities.mockRejectedValue(
-      new Error("offline"),
-    );
-
-    ensureLaunchProviderCatalog();
-    await flush();
-
-    const state = useLaunchProviderCatalog.getState();
-    expect(state.loaded).toBe(false);
-    expect(state.failed).toBe(true);
   });
 
   it("distinguishes loading, a dead fetch, and nothing activated", () => {

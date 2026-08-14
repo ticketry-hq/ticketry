@@ -20,6 +20,10 @@ def test_new_project_seeds_known_bindings_as_explicit_rows_and_nothing_wildcard(
     story = IssueType.objects.get(project=created, name="Story")
     implement = State.objects.get(project=created, name="Implement")
     seeded = LaunchBinding.objects.get(issue_type=story, state=implement)
+    ideas = LaunchBinding.objects.get(
+        issue_type=story,
+        state__name="Ideas",
+    )
     grill = LaunchBinding.objects.get(
         issue_type=story,
         state__name="Grill",
@@ -34,10 +38,15 @@ def test_new_project_seeds_known_bindings_as_explicit_rows_and_nothing_wildcard(
     )
 
     assert seeded.prompt == DEFAULT_AGENT_PROMPTS["Implement"]
-    assert seeded.agent is None
     assert seeded.model is None
     assert seeded.reasoning is None
     assert seeded.subtree_run_enabled is True
+    assert ideas.required_skills == []
+    assert ideas.auto_start is True
+    assert ideas.subtree_run_enabled is False
+    assert "interactive grill session" in ideas.prompt
+    assert "`Grill`" in ideas.prompt
+    assert "`Spec`" in ideas.prompt
     assert grill.required_skills == ["grill-with-docs"]
     assert grill.auto_start is False
     assert spec.required_skills == ["to-spec"]

@@ -1,7 +1,6 @@
 import type { FetchAPI } from "./generated/index.js";
-import type { StateOut } from "./generated/models/StateOut.js";
-import { WorkTrackerApiError } from "./errors.js";
-import { createAuthenticatedFetch } from "./client.js";
+import type { State } from "./generated/models/State.js";
+import { createWorkTrackerClient } from "./client.js";
 
 export type RawLifecycleState =
   | "starting"
@@ -20,9 +19,12 @@ export type AgentRunScope = "task" | "plan" | "instant" | "docchat";
 
 export interface RunRecord {
   agent_run_id: string;
+  project_id?: string;
   task_id: string | null;
   module_id: string;
+  agent?: string;
   scope: AgentRunScope;
+  started_at?: string;
   state: RawLifecycleState;
   updated_at: string;
 }
@@ -48,6 +50,16 @@ export interface AutomationAttemptRecord {
   work_item_id: string;
   status: AutomationAttemptStatus;
   error: string | null;
+  failure: {
+    code: string;
+    provider: string;
+    skill: string;
+    reason: string;
+    detail: string;
+    remediation: string;
+    retryable: boolean;
+  } | null;
+  retryable: boolean;
   agent_run_id: string | null;
   updated_at: string;
 }
@@ -83,13 +95,13 @@ export interface BackendSessionFrame {
   at: string;
 }
 
-export type WorkItemState = Omit<StateOut, "id" | "group" | "color"> & {
+export type WorkItemState = Omit<State, "id" | "group" | "color"> & {
   id: string;
   group: string;
   color: string | null;
 };
 
-/** One committed work-item state projection on the project status feed. */
+/** One committed work-item change projection on the project status feed. */
 export interface WorkItemStateFrame {
   v: 1;
   type: "work_item_state";
@@ -98,6 +110,7 @@ export interface WorkItemStateFrame {
   state: WorkItemState | null;
   revision: number;
   updated_at: string;
+  membership_changed?: boolean;
 }
 
 /** One authoritative workflow-state catalog row on the project status feed. */
@@ -173,41 +186,25 @@ export interface AgentStatusClient {
 export function createAgentStatusClient(
   options: AgentStatusClientOptions,
 ): AgentStatusClient {
-  const basePath = options.baseUrl.replace(/\/+$/, "");
-  const fetchApi = createAuthenticatedFetch(options);
+  const client = createWorkTrackerClient(options);
 
   return {
     async getAgentStatus({ projectId, taskId, signal }) {
-      const query = new URLSearchParams({ project_id: projectId });
-      if (taskId !== undefined) query.set("task_id", taskId);
-      const headers = new Headers({ Accept: "application/json" });
-      const response = await fetchApi(
-        `${basePath}/runs/agent-status?${query.toString()}`,
-        { headers, signal },
-      );
-      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
-      return (await response.json()) as AgentStatusSnapshot;
+      return (await client.runs.runsAgentStatusRetrieve(
+        { projectId, taskId },
+        signal ? { signal } : undefined,
+      )) as AgentStatusSnapshot;
     },
     async launchAgent({ issueId }) {
-      const headers = new Headers({
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      });
-      const response = await fetchApi(
-        `${basePath}/work-items/${encodeURIComponent(issueId)}/launch-agent`,
-        { method: "POST", headers, body: JSON.stringify({}) },
-      );
-      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
-      return (await response.json()) as LaunchedAgent;
+      return (await client.execution.workItemsLaunchAgentCreate({
+        issueId,
+        agentOverride: {},
+      })) as LaunchedAgent;
     },
     async retryAutomationAttempt({ attemptId }) {
-      const headers = new Headers({ Accept: "application/json" });
-      const response = await fetchApi(
-        `${basePath}/automation-attempts/${encodeURIComponent(attemptId)}/retry`,
-        { method: "POST", headers },
-      );
-      if (!response.ok) throw await WorkTrackerApiError.fromResponse(response);
-      return (await response.json()) as AutomationAttemptRecord;
+      return (await client.runs.automationAttemptsRetryCreate({
+        attemptId,
+      })) as AutomationAttemptRecord;
     },
   };
 }

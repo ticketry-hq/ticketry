@@ -92,6 +92,29 @@ def test_launch_no_module_ancestry_returns_clean_error(monkeypatch):
     assert result == {"target_id": TARGET, "error": "module_id_required"}
 
 
+def test_launch_required_skill_rejection_returns_actionable_contract(monkeypatch):
+    client = FakeGeneratedSdk()
+    failure = {
+        "code": "required_skill_unavailable",
+        "provider": "claude",
+        "skill": "grilling",
+        "reason": "collision",
+        "detail": "A different provider-visible skill already reserves 'grilling'.",
+        "remediation": "Rename the provider-visible skill, then retry.",
+        "retryable": False,
+    }
+    client.launch.returns["default_coding_agent"] = raises(
+        make_api_error(409, failure)
+    )
+    service = _service(client)
+    monkeypatch.setattr(service, "_sdk_resolve_task_id", lambda value: value)
+
+    assert service.launch_default_coding_agent(TARGET) == {
+        "target_id": TARGET,
+        "error": failure,
+    }
+
+
 def test_launch_5xx_propagates(monkeypatch):
     client = FakeGeneratedSdk()
     client.launch.returns["default_coding_agent"] = raises(

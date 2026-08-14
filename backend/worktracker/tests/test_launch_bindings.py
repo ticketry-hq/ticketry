@@ -3,7 +3,15 @@ import uuid
 import pytest
 from django.core.exceptions import ValidationError
 
-from worktracker.models import Issue, IssueType, LaunchBinding, State
+from worktracker.models import (
+    AgentModel,
+    Issue,
+    IssueType,
+    LaunchBinding,
+    Provider,
+    ReasoningLevel,
+    State,
+)
 from worktracker.services.launch_bindings import (
     LaunchBindingError,
     get_launch_binding,
@@ -11,8 +19,6 @@ from worktracker.services.launch_bindings import (
     validate_provider_options,
     validate_unattended_launch_binding,
 )
-from worktracker.services.errors import ValidationError as ServiceValidationError
-from worktracker.services.scoped_workflows import upsert_launch_binding
 
 
 @pytest.fixture
@@ -26,22 +32,24 @@ def launch_policy(project):
     return issue_type, state
 
 
+def _save_binding(issue_type, state, **values):
+    binding = LaunchBinding(issue_type=issue_type, state=state, **values)
+    binding.full_clean()
+    binding.save()
+    return binding
+
+
 @pytest.mark.django_db
-def test_upsert_preserves_required_skill_order_and_rejects_invalid_catalog_entries(
+def test_binding_preserves_required_skill_order_and_rejects_invalid_catalog_entries(
     project, launch_policy
 ):
     issue_type, state = launch_policy
-    upsert_launch_binding(
-        issue_type.id,
-        state.id,
+    binding = _save_binding(
+        issue_type,
+        state,
         prompt="Refine the work",
-        agent="codex",
-        model=None,
-        reasoning=None,
-        workflow_revision=issue_type.workflow_revision,
         required_skills=["to-tickets", "grill-with-docs", "to-spec"],
     )
-    binding = LaunchBinding.objects.get(issue_type=issue_type, state=state)
 
     assert binding.required_skills == [
         "to-tickets",
@@ -49,40 +57,29 @@ def test_upsert_preserves_required_skill_order_and_rejects_invalid_catalog_entri
         "to-spec",
     ]
 
-    issue_type.refresh_from_db()
-    with pytest.raises(LaunchBindingError) as exc:
-        upsert_launch_binding(
-            issue_type.id,
-            state.id,
+    with pytest.raises(ValidationError) as exc:
+        _save_binding(
+            issue_type,
+            state,
             prompt="Refine the work",
-            agent="codex",
-            model=None,
-            reasoning=None,
-            workflow_revision=issue_type.workflow_revision,
             required_skills=["not-in-the-pinned-snapshot"],
         )
-    assert exc.value.code == "invalid_required_skills"
-    assert exc.value.field == "required_skills"
+    assert "required_skills" in exc.value.message_dict
 
 
 @pytest.mark.django_db
 def test_required_skills_need_a_non_empty_prompt(project, launch_policy):
     issue_type, state = launch_policy
 
-    with pytest.raises(LaunchBindingError) as exc:
-        upsert_launch_binding(
-            issue_type.id,
-            state.id,
+    with pytest.raises(ValidationError) as exc:
+        _save_binding(
+            issue_type,
+            state,
             prompt=" ",
-            agent="codex",
-            model=None,
-            reasoning=None,
-            workflow_revision=issue_type.workflow_revision,
             required_skills=["to-spec"],
         )
 
-    assert exc.value.code == "prompt_required_for_skills"
-    assert exc.value.field == "prompt"
+    assert "prompt" in exc.value.message_dict
 
 
 @pytest.mark.django_db
@@ -90,16 +87,11 @@ def test_resolution_uses_type_and_current_state_not_structural_parent_depth(
     project, launch_policy
 ):
     issue_type, state = launch_policy
-    upsert_launch_binding(
-        issue_type.id,
-        state.id,
+    binding = _save_binding(
+        issue_type,
+        state,
         prompt="Build it",
-        agent="codex",
-        model=None,
-        reasoning=None,
-        workflow_revision=issue_type.workflow_revision,
     )
-    binding = LaunchBinding.objects.get(issue_type=issue_type, state=state)
     parent = Issue.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -143,14 +135,14 @@ def test_unconfigured_custom_type_or_state_gets_no_invented_binding(
 @pytest.mark.django_db
 def test_binding_without_prompt_is_not_launchable(project, launch_policy):
     issue_type, state = launch_policy
-    upsert_launch_binding(
-        issue_type.id,
-        state.id,
+    model = AgentModel.objects.get(
+        provider=Provider.objects.get(slug="codex"), name="gpt-5.4"
+    )
+    _save_binding(
+        issue_type,
+        state,
         prompt="  ",
-        agent="codex",
-        model=None,
-        reasoning=None,
-        workflow_revision=issue_type.workflow_revision,
+        model=model,
     )
     issue = Issue.objects.create(
         id=uuid.uuid4(),
@@ -171,17 +163,15 @@ def test_binding_without_prompt_is_not_launchable(project, launch_policy):
 
 @pytest.mark.django_db
 def test_provider_reasoning_incompatibility_is_clear(project, launch_policy):
-    issue_type, state = launch_policy
-
+    AgentModel.objects.get(
+        provider=Provider.objects.get(slug="gemini"),
+        name="gemini-3.1-pro-preview",
+    )
     with pytest.raises(LaunchBindingError) as exc:
-        upsert_launch_binding(
-            issue_type.id,
-            state.id,
-            prompt="Investigate",
+        validate_provider_options(
             agent="gemini",
             model="gemini-3.1-pro-preview",
             reasoning="high",
-            workflow_revision=issue_type.workflow_revision,
         )
 
     assert exc.value.code == "unsupported_reasoning"
@@ -191,17 +181,11 @@ def test_provider_reasoning_incompatibility_is_clear(project, launch_policy):
 
 @pytest.mark.django_db
 def test_provider_model_incompatibility_is_clear(project, launch_policy):
-    issue_type, state = launch_policy
-
     with pytest.raises(LaunchBindingError) as exc:
-        upsert_launch_binding(
-            issue_type.id,
-            state.id,
-            prompt="Investigate",
+        validate_provider_options(
             agent="gemini",
             model="gpt-5.4",
             reasoning=None,
-            workflow_revision=issue_type.workflow_revision,
         )
 
     assert exc.value.code == "unsupported_model"
@@ -212,14 +196,9 @@ def test_provider_model_incompatibility_is_clear(project, launch_policy):
 
 @pytest.mark.django_db
 def test_provider_validation_rejects_a_deactivated_provider():
-    from apps.settings_store.models import AppSetting
+    from worktracker.models import Provider
 
-    AppSetting.objects.create(
-        scope="host",
-        key="provider_catalog",
-        value='{"activated_providers":["claude"],"global_default":null}',
-        updated_at="2026-07-25T00:00:00+00:00",
-    )
+    Provider.objects.filter(slug="codex").update(activated=False)
 
     with pytest.raises(LaunchBindingError) as exc:
         validate_provider_options(agent="codex", model="gpt-5.4", reasoning="high")
@@ -239,17 +218,13 @@ def test_unattended_launch_accepts_a_blank_binding_backed_by_the_global_default(
     AppSetting.objects.create(
         scope="host",
         key="provider_catalog",
-        value=(
-            '{"activated_providers":["claude","codex","gemini"],'
-            '"global_default":{"provider":"codex","model":"gpt-5.4"}}'
-        ),
+        value='{"global_default":{"provider":"codex","model":"gpt-5.4"}}',
         updated_at="2026-07-27T00:00:00+00:00",
     )
     binding = LaunchBinding.objects.create(
         issue_type=issue_type,
         state=state,
         prompt="Automate this",
-        agent=None,
         model=None,
         reasoning=None,
     )
@@ -266,7 +241,6 @@ def test_unattended_launch_refuses_a_blank_binding_without_a_global_default(
         issue_type=issue_type,
         state=state,
         prompt="Automate this",
-        agent=None,
         model=None,
         reasoning=None,
     )
@@ -290,18 +264,14 @@ def test_binding_rejects_cross_project_type_state_pair(project, launch_policy):
         id=uuid.uuid4(), project=other_project, name="Build", group="started"
     )
 
-    with pytest.raises(ServiceValidationError) as exc:
-        upsert_launch_binding(
-            issue_type.id,
-            foreign_state.id,
+    with pytest.raises(ValidationError) as exc:
+        _save_binding(
+            issue_type,
+            foreign_state,
             prompt="Nope",
-            agent="codex",
-            model=None,
-            reasoning=None,
-            workflow_revision=issue_type.workflow_revision,
         )
 
-    assert exc.value.message == "State does not belong to this project."
+    assert "state" in exc.value.message_dict
 
 
 @pytest.mark.django_db
@@ -323,22 +293,26 @@ def test_model_validation_protects_admin_and_other_direct_writes(
         issue_type=issue_type,
         state=foreign_state,
         prompt="Nope",
-        agent="codex",
     )
     with pytest.raises(ValidationError) as exc:
         cross_project.full_clean()
     assert "state" in exc.value.message_dict
 
+    gemini_model = AgentModel.objects.get(
+        provider=Provider.objects.get(slug="gemini"),
+        name="gemini-3.1-pro-preview",
+    )
+    high = ReasoningLevel.objects.get(name="high")
     invalid_provider_options = LaunchBinding(
         issue_type=issue_type,
         state=state,
         prompt="Nope",
-        agent="gemini",
-        model="gpt-5.4",
+        model=gemini_model,
+        reasoning=high,
     )
     with pytest.raises(ValidationError) as exc:
         invalid_provider_options.full_clean()
-    assert "model" in exc.value.message_dict
+    assert "reasoning" in exc.value.message_dict
 
     invalid_required_skills = LaunchBinding(
         issue_type=issue_type,

@@ -12,7 +12,7 @@ from apps.terminals.agents.prompts import (
     build_planning_context_prompt,
 )
 from apps.settings_store.config import config
-from apps.settings_store.defaults import DEFAULT_AGENT_PROMPTS
+from worktracker.launch_seeds import DEFAULT_AGENT_PROMPTS
 from studio_server.contracts import ModuleSummary, TaskState, TaskSummary
 
 
@@ -61,6 +61,28 @@ def test_build_doc_chat_prompt_forbids_creating_new_docs():
     assert "Do not create" in prompt
 
 
+def test_build_doc_chat_prompt_uses_the_supplied_profiles_module_link():
+    profile = SimpleNamespace(
+        module_links=[{"module_id": "module-1", "path": "/active/repo"}]
+    )
+
+    prompt = build_doc_chat_prompt(
+        doc_rel_path="LLD.html", module_id="module-1", profile=profile
+    )
+
+    assert "Local Module Folder: /active/repo" in prompt
+
+
+def test_build_doc_chat_prompt_keeps_missing_link_explicit():
+    prompt = build_doc_chat_prompt(
+        doc_rel_path="LLD.html",
+        module_id="module-1",
+        profile=SimpleNamespace(module_links=[]),
+    )
+
+    assert "Local Module Folder: \n" in prompt
+
+
 def test_build_context_prompt_keeps_factual_context_and_tools_neutral():
     prompt = build_context_prompt(_task("Refinement", "Story"))
 
@@ -102,7 +124,7 @@ def test_profile_default_prompt_is_not_launch_authority(monkeypatch):
                 agent_prompts={},
                 agent_prompt="CUSTOM DEFAULT: follow our operations handbook.",
                 workspace_slug="",
-                module_folders={},
+                module_links=[],
             )
         ],
     )
@@ -119,7 +141,7 @@ def test_resolved_binding_prompt_overrides_legacy_profile_prompt():
         agent_prompts={"Implement": "LEGACY PROFILE PROMPT"},
         agent_prompt="LEGACY DEFAULT",
         workspace_slug="meml",
-        module_folders={"module-1": "/repo"},
+        module_links=[{"module_id": "module-1", "path": "/repo"}],
     )
 
     prompt = build_context_prompt(
@@ -154,7 +176,9 @@ def test_selected_workflow_prompt_is_opaque_over_neutral_framing(monkeypatch):
                 },
                 agent_prompt=None,
                 workspace_slug="workspace",
-                module_folders={"module-1": "/code/module"},
+                module_links=[
+                    {"module_id": "module-1", "path": "/code/module"}
+                ],
             )
         ],
     )
@@ -200,9 +224,9 @@ def test_design_directory_instructions_present_when_dir_given():
     assert "Write every user-reviewable HTML design document" not in prompt
 
 
-def test_idea_launch_omits_design_directory_block():
+def test_ideas_launch_omits_design_directory_block():
     prompt = build_context_prompt(
-        _task("Idea", "Story"),
+        _task("Ideas", "Story"),
         design_dir="spec/x/T943--example",
     )
 
@@ -219,60 +243,60 @@ def test_refinement_launch_keeps_design_directory_block():
     assert "Design directory: spec/x/T943--example" in prompt
 
 
-def test_project_binding_wins_for_idea_state(monkeypatch):
+def test_project_binding_wins_for_ideas_state(monkeypatch):
     monkeypatch.setattr(
         config,
         "profiles",
         [
             SimpleNamespace(
-                agent_prompts={"Idea": "CUSTOM IDEA PROMPT"},
+                agent_prompts={"Ideas": "CUSTOM IDEAS PROMPT"},
                 agent_prompt=None,
                 workspace_slug="",
-                module_folders={},
+                module_links=[],
             )
         ],
     )
     monkeypatch.setattr(config, "current_profile_index", 0)
 
     prompt = build_context_prompt(
-        _task("Idea", "Story"), workflow_prompt="PROJECT IDEA PROMPT"
+        _task("Ideas", "Story"), workflow_prompt="PROJECT IDEAS PROMPT"
     )
 
-    assert "PROJECT IDEA PROMPT" in prompt
-    assert "CUSTOM IDEA PROMPT" not in prompt
-    assert "This task is in `Idea`" not in prompt
+    assert "PROJECT IDEAS PROMPT" in prompt
+    assert "CUSTOM IDEAS PROMPT" not in prompt
+    assert "This task is in `Ideas`" not in prompt
 
 
-def test_custom_idea_prompt_is_not_supplemented_with_hard_constraints(monkeypatch):
-    """A project binding's Idea prompt fully owns its stage guidance."""
+def test_custom_ideas_prompt_is_not_supplemented_with_hard_constraints(monkeypatch):
+    """A project binding's Ideas prompt fully owns its stage guidance."""
 
     monkeypatch.setattr(
         config,
         "profiles",
         [
             SimpleNamespace(
-                agent_prompts={"Idea": "CUSTOM IDEA PROMPT: transition when ready"},
+                agent_prompts={"Ideas": "CUSTOM IDEAS PROMPT: transition when ready"},
                 agent_prompt=None,
                 workspace_slug="",
-                module_folders={},
+                module_links=[],
             )
         ],
     )
     monkeypatch.setattr(config, "current_profile_index", 0)
 
     prompt = build_context_prompt(
-        _task("Idea", "Story"),
-        workflow_prompt="CUSTOM IDEA PROMPT: transition when ready",
+        _task("Ideas", "Story"),
+        workflow_prompt="CUSTOM IDEAS PROMPT: transition when ready",
     )
 
-    assert "CUSTOM IDEA PROMPT: transition when ready" in prompt
-    assert "Hard constraints for the `Idea` stage" not in prompt
+    assert "CUSTOM IDEAS PROMPT: transition when ready" in prompt
+    assert "Hard constraints for the `Ideas` stage" not in prompt
     assert "do not create design artifacts or design documents" not in prompt.lower()
     assert "do not make any state or lifecycle change" not in prompt.lower()
-    assert "Leave the ticket in `Idea`" not in prompt
+    assert "Leave the ticket in `Ideas`" not in prompt
 
 
-def test_custom_non_idea_prompt_gets_no_idea_boundary(monkeypatch):
+def test_custom_non_ideas_prompt_gets_no_ideas_boundary(monkeypatch):
     monkeypatch.setattr(
         config,
         "profiles",
@@ -281,7 +305,7 @@ def test_custom_non_idea_prompt_gets_no_idea_boundary(monkeypatch):
                 agent_prompts={"Review": "CUSTOM REVIEW PROMPT"},
                 agent_prompt=None,
                 workspace_slug="",
-                module_folders={},
+                module_links=[],
             )
         ],
     )
@@ -292,7 +316,7 @@ def test_custom_non_idea_prompt_gets_no_idea_boundary(monkeypatch):
     )
 
     assert "CUSTOM REVIEW PROMPT" in prompt
-    assert "Hard constraints for the `Idea` stage" not in prompt
+    assert "Hard constraints for the `Ideas` stage" not in prompt
 
 
 def test_no_design_directory_block_when_dir_absent():

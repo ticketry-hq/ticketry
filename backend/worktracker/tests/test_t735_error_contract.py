@@ -81,10 +81,35 @@ def test_duplicate_project_slug_raises_conflict(project):
 # --- framework-neutrality regression fence ---------------------------------
 
 
-def test_no_service_module_imports_ninja():
+#: Modules whose import would let a service signal a failure in a way
+#: ``api/router.py:_http_errors()`` never sees. ``ninja`` is the obvious one;
+#: ``django.shortcuts`` (``get_object_or_404``) and ``django.http``
+#: (``Http404``) are the quiet ones — they are not Ninja, so a narrower fence
+#: misses them, but they raise a framework exception that bypasses the
+#: ``ServiceError`` contract and reaches non-HTTP callers (the MCP surface) as
+#: a Django HTTP error.
+_FRAMEWORK_ERROR_MODULES = ("ninja", "django.shortcuts", "django.http")
+
+#: ``queries.py`` imports ``Http404`` on purpose, to *convert* what
+#: ``worktracker/work_items.py`` still raises into ``NotFoundError``. That
+#: module sits outside ``services/`` and is a separate follow-up; until it is
+#: converted, the catch is the thing keeping the contract true.
+_CONVERSION_EXEMPT = {"queries.py"}
+
+
+def test_services_raise_only_framework_neutral_errors():
+    """No service module may import a framework's own error mechanism.
+
+    Services raise ``ServiceError`` subclasses carrying an HTTP-mappable
+    ``status_code`` and ``message``; ``api/router.py:_http_errors()`` is the
+    single translation seam.
+    """
+
     services_dir = pathlib.Path(__file__).resolve().parent.parent / "services"
     offenders = []
     for path in services_dir.glob("*.py"):
+        if path.name in _CONVERSION_EXEMPT:
+            continue
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -93,9 +118,16 @@ def test_no_service_module_imports_ninja():
                 names = [node.module or ""]
             else:
                 continue
-            if any(n == "ninja" or n.startswith("ninja.") for n in names):
+            if any(
+                name == forbidden or name.startswith(f"{forbidden}.")
+                for name in names
+                for forbidden in _FRAMEWORK_ERROR_MODULES
+            ):
                 offenders.append(path.name)
-    assert offenders == [], f"service modules must not import Ninja: {offenders}"
+    assert offenders == [], (
+        "service modules must raise ServiceError, not framework errors: "
+        f"{offenders}"
+    )
 
 
 # --- route boundary pins the 409 mapping -----------------------------------

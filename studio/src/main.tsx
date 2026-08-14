@@ -2,9 +2,13 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import StudioApp from "./app/studio/App";
+import { QueryClientProvider } from "@tanstack/react-query";
+import StudioApp from "./app/StudioApp";
 import { ModalHost } from "./app/modal/ModalHost";
+import { DialogHost } from "./app/shell/DialogHost";
 import ToastHost from "./app/shell/ToastHost";
+import { queryClient } from "./shared/query/queryClient";
+import { installFrontendLogBridge } from "./shared/logging/frontendLogBridge";
 
 // Self-hosted fonts (Fontsource, upright variable axes only — no external
 // request). Hanken Grotesk = UI/body; JetBrains Mono = KEY-N / code.
@@ -22,6 +26,10 @@ import {
   initializeBrowserRuntime,
   initializeStudioRuntime,
 } from "./runtime";
+
+if (import.meta.env.DEV && isTauri()) {
+  installFrontendLogBridge({ invoke });
+}
 
 // Studio uses the dark theme from boot.
 document.documentElement.classList.add("dark");
@@ -47,16 +55,20 @@ async function startStudio(): Promise<void> {
     }
     root.render(
       <React.StrictMode>
-        <div className="h-screen w-screen">
-          <div className="studio-surface h-full">
-            <StudioApp />
+        <QueryClientProvider client={queryClient}>
+          <div className="h-screen w-screen">
+            <div className="studio-surface h-full">
+              <StudioApp />
+            </div>
+            <ModalHost />
+            <DialogHost />
+            <ToastHost />
           </div>
-          <ModalHost />
-          <ToastHost />
-        </div>
+        </QueryClientProvider>
       </React.StrictMode>,
     );
   } catch (error) {
+    console.error("[startup] Studio could not start", error);
     const message = error instanceof Error ? error.message : String(error);
     root.render(
       <div className="flex h-screen w-screen items-center justify-center bg-pane-bg p-8 text-text-primary">

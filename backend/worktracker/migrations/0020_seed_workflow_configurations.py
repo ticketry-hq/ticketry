@@ -8,12 +8,17 @@ def seed_known_workflows(apps, schema_editor):
     IssueType = apps.get_model("worktracker", "IssueType")
     State = apps.get_model("worktracker", "State")
     WorkflowConfiguration = apps.get_model("worktracker", "WorkflowConfiguration")
-    for project in Project.objects.all():
+    alias = schema_editor.connection.alias
+    projects = Project.objects.using(alias)
+    issue_types = IssueType.objects.using(alias)
+    state_rows = State.objects.using(alias)
+    configurations = WorkflowConfiguration.objects.using(alias)
+    for project in projects.all():
         states = {
-            state.name: state for state in State.objects.filter(project=project)
+            state.name: state for state in state_rows.filter(project=project)
         }
         for type_name, template in DEFAULT_WORKFLOW_TEMPLATES.items():
-            issue_type = IssueType.objects.filter(
+            issue_type = issue_types.filter(
                 project=project,
                 name=type_name,
                 level="task",
@@ -44,7 +49,7 @@ def seed_known_workflows(apps, schema_editor):
                     for target in targets
                 ],
             }
-            WorkflowConfiguration.objects.get_or_create(
+            configurations.get_or_create(
                 issue_type=issue_type,
                 defaults={"draft": graph, "active": graph, "revision": 1},
             )

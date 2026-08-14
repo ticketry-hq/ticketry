@@ -29,6 +29,7 @@ class IssueType(models.Model):
         blank=True,
     )
     workflow_revision = models.PositiveIntegerField(default=0)
+    is_pathfind = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

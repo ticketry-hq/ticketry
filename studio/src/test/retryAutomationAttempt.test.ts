@@ -21,6 +21,8 @@ const succeeded: AutomationAttemptRecord = {
   work_item_id: "task-1",
   status: "succeeded",
   error: null,
+  failure: null,
+  retryable: false,
   agent_run_id: "run-1",
   updated_at: "2026-07-16T15:01:00Z",
 };

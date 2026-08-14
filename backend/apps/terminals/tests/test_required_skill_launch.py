@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -8,6 +9,10 @@ import pytest
 import apps.terminals.launch as launch
 import apps.terminals.agents.registry as agent_registry
 from apps.runs.models import AgentRun
+from apps.terminals.models import AgentTerminalSession
+from apps.terminals.reconciliation import TerminalReconciler
+from apps.terminals.runtime import TerminalRuntimeError
+from apps.terminals.tests.fakes import patch_terminal_runtime
 from apps.terminals.agents.registry import (
     cleanup_temporary_artifacts,
     get_adapter,
@@ -59,7 +64,9 @@ def _resolved(monkeypatch, tmp_path: Path, provider: str = "claude"):
     )
 
 
-def test_resolution_freezes_dependency_closure_tools_and_revision(monkeypatch, tmp_path):
+def test_resolution_freezes_dependency_closure_tools_and_revision(
+    monkeypatch, tmp_path
+):
     resolved = _resolved(monkeypatch, tmp_path)
 
     assert resolved.requested == ("grill-with-docs", "to-spec", "to-tickets")
@@ -75,7 +82,8 @@ def test_resolution_freezes_dependency_closure_tools_and_revision(monkeypatch, t
     assert len(resolved.upstream_revision) == 40
     envelope = skill_prompt_envelope(resolved)
     assert "grill-with-docs, to-spec, to-tickets" in envelope
-    assert resolved.upstream_revision in envelope
+    assert "available for this invocation" in envelope
+    assert "Pinned upstream" not in envelope
 
 
 @pytest.mark.parametrize(
@@ -117,7 +125,7 @@ def test_refinement_stage_resolves_only_its_declared_skill_closure(
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
-def test_different_provider_visible_reserved_name_fails_closed(
+def test_different_provider_visible_reserved_name_satisfies_requirement(
     monkeypatch, tmp_path, provider
 ):
     home, repo = _isolate_visible_skills(monkeypatch, tmp_path)
@@ -130,41 +138,64 @@ def test_different_provider_visible_reserved_name_fails_closed(
     conflict = collision_roots[provider] / "to-spec"
     conflict.mkdir(parents=True)
     (conflict / "SKILL.md").write_text("---\nname: to-spec\n---\nchanged\n")
+    install_packaged_skills(providers=(provider,), home=home)
 
-    with pytest.raises(RequiredSkillUnavailable) as caught:
-        resolve_required_skills(
-            provider=provider,
-            required_skills=("to-spec",),
-            cwd=str(repo),
-            supports_required_skills=True,
-            available_tools=WORKTRACKER_TOOLS,
-        )
+    resolved = resolve_required_skills(
+        provider=provider,
+        required_skills=("to-spec",),
+        cwd=str(repo),
+        supports_required_skills=True,
+        available_tools=WORKTRACKER_TOOLS,
+    )
 
-    assert caught.value.reason == "collision"
-    assert caught.value.conflicting_path == conflict
+    assert dict(resolved.packages)["to-spec"] == conflict
     assert (conflict / "SKILL.md").read_text().endswith("changed\n")
     assert AgentRun.objects.count() == 0
+    assert AgentTerminalSession.objects.count() == 0
 
 
-def test_collision_scan_uses_canonical_metadata_not_only_folder_name(
+def test_existing_skill_can_use_canonical_metadata_in_an_alias_directory(
     monkeypatch, tmp_path
 ):
     home, repo = _isolate_visible_skills(monkeypatch, tmp_path)
     conflict = home / ".claude/skills/local-alias"
     conflict.mkdir(parents=True)
     (conflict / "SKILL.md").write_text("---\nname: to-spec\n---\nlocal\n")
+    install_packaged_skills(providers=("claude",), home=home)
 
-    with pytest.raises(RequiredSkillUnavailable) as caught:
-        resolve_required_skills(
-            provider="claude",
-            required_skills=("to-spec",),
-            cwd=str(repo),
-            supports_required_skills=True,
-            available_tools=WORKTRACKER_TOOLS,
-        )
+    resolved = resolve_required_skills(
+        provider="claude",
+        required_skills=("to-spec",),
+        cwd=str(repo),
+        supports_required_skills=True,
+        available_tools=WORKTRACKER_TOOLS,
+    )
 
-    assert caught.value.reason == "collision"
-    assert caught.value.conflicting_path == conflict
+    assert dict(resolved.packages)["to-spec"] == conflict
+
+
+def test_required_skill_rejection_payload_contains_remediation(tmp_path):
+    rejection = RequiredSkillUnavailable(
+        provider="claude",
+        skill="grilling",
+        reason="collision",
+        message="A different provider-visible skill already reserves 'grilling'.",
+        conflicting_path=tmp_path / "skills" / "grilling",
+    )
+
+    assert rejection.as_payload() == {
+        "code": "required_skill_unavailable",
+        "provider": "claude",
+        "skill": "grilling",
+        "reason": "collision",
+        "detail": "A different provider-visible skill already reserves 'grilling'.",
+        "remediation": (
+            f"Rename the provider-visible skill at {tmp_path / 'skills' / 'grilling'} "
+            "or change its declared name, then retry. Ticketry will not modify "
+            "user-installed skills."
+        ),
+        "retryable": True,
+    }
 
 
 def test_identical_provider_visible_reserved_name_is_accepted(monkeypatch, tmp_path):
@@ -180,6 +211,22 @@ def test_identical_provider_visible_reserved_name_is_accepted(monkeypatch, tmp_p
     )
 
     assert "to-spec" in resolved.names
+
+
+@pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
+def test_missing_required_skill_is_installed_on_demand(monkeypatch, tmp_path, provider):
+    home, repo = _isolate_visible_skills(monkeypatch, tmp_path)
+
+    resolved = resolve_required_skills(
+        provider=provider,
+        required_skills=("to-spec",),
+        cwd=str(repo),
+        supports_required_skills=True,
+        available_tools=WORKTRACKER_TOOLS,
+    )
+
+    assert "to-spec" in resolved.names
+    assert (provider_skill_root(provider, home=home) / "to-spec/SKILL.md").is_file()
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
@@ -200,6 +247,7 @@ def test_missing_required_worktracker_tool_fails_preflight(
     assert caught.value.reason == "tool_unavailable"
     assert "create_sub_task" in caught.value.message
     assert AgentRun.objects.count() == 0
+    assert AgentTerminalSession.objects.count() == 0
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
@@ -210,9 +258,7 @@ def test_approved_provider_below_locked_minimum_fails_preflight(
     executable = tmp_path / provider
     executable.write_text(f"#!/bin/sh\nprintf '{provider} 0.0.1\\n'\n")
     executable.chmod(0o700)
-    monkeypatch.setenv(
-        f"MUXED_APPROVED_{provider.upper()}_PATH", str(executable)
-    )
+    monkeypatch.setenv(f"MUXED_APPROVED_{provider.upper()}_PATH", str(executable))
 
     with pytest.raises(RequiredSkillUnavailable) as caught:
         resolve_required_skills(
@@ -225,6 +271,7 @@ def test_approved_provider_below_locked_minimum_fails_preflight(
 
     assert caught.value.reason == "provider_unsupported"
     assert AgentRun.objects.count() == 0
+    assert AgentTerminalSession.objects.count() == 0
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
@@ -250,6 +297,7 @@ def test_corrupt_packaged_catalog_fails_before_durable_state(
 
     assert caught.value.reason == "catalog_invalid"
     assert AgentRun.objects.count() == 0
+    assert AgentTerminalSession.objects.count() == 0
 
 
 @pytest.mark.parametrize("provider", ("claude", "codex", "agy", "gemini"))
@@ -259,7 +307,9 @@ def test_adapter_uses_persistent_exact_locked_installation(
     resolved = _resolved(monkeypatch, tmp_path, provider)
     adapter = get_adapter(provider)
     augmentation = adapter.augment_launch(
-        adapter.command("prompt", activated_providers={"claude", "codex", "gemini"}),
+        adapter.command(
+            "prompt", activated_providers={"claude", "agy", "codex", "gemini"}
+        ),
         f"run-{provider}",
         lifecycle_url="http://127.0.0.1:8123/api/lifecycle/events",
         mcp_url="http://127.0.0.1:8124/mcp",
@@ -270,9 +320,7 @@ def test_adapter_uses_persistent_exact_locked_installation(
         argv = list(augmentation.argv)
         environment = dict(augmentation.environment)
         exposed_root = provider_skill_root(provider, home=tmp_path / "home")
-        exposed = {
-            path.name for path in exposed_root.iterdir() if path.is_dir()
-        }
+        exposed = {path.name for path in exposed_root.iterdir() if path.is_dir()}
         assert "--plugin-dir" not in argv
         assert "--add-dir" not in argv
         assert "HOME" not in environment
@@ -283,9 +331,7 @@ def test_adapter_uses_persistent_exact_locked_installation(
                 Path(environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"]).read_text()
             )
             assert "worktracker-agent" in settings["mcpServers"]
-        assert exposed == {
-            package["name"] for package in verify_catalog()["packages"]
-        }
+        assert exposed == {package["name"] for package in verify_catalog()["packages"]}
         assert all(
             tree_digest(path) == tree_digest(package_path(path.name))
             for path in exposed_root.iterdir()
@@ -311,17 +357,12 @@ async def test_overlay_failure_happens_before_agent_run_or_tmux(
         frozenset(),
         "a" * 40,
     )
-    tmux_called = False
-
-    def create_session(**kwargs):
-        nonlocal tmux_called
-        tmux_called = True
+    runtime = patch_terminal_runtime(monkeypatch)
 
     def fail_augmentation(self, *args, **kwargs):
         raise OSError("overlay unavailable")
 
     monkeypatch.setattr(type(adapter), "augment_launch", fail_augmentation)
-    monkeypatch.setattr(launch.tmux, "create_session", create_session)
 
     with pytest.raises(RequiredSkillUnavailable) as caught:
         await launch._launch(
@@ -337,8 +378,9 @@ async def test_overlay_failure_happens_before_agent_run_or_tmux(
         )
 
     assert caught.value.reason == "launch_configuration_failed"
-    assert not tmux_called
+    assert runtime.requests == []
     assert await AgentRun.objects.acount() == 0
+    assert await AgentTerminalSession.objects.acount() == 0
     assert not (
         tmp_path / "ticketry-agent-runs" / f"preflight-failure-{provider}"
     ).exists()
@@ -352,10 +394,9 @@ async def test_tmux_launch_failure_removes_run_session_and_overlay(
     resolved = _resolved(monkeypatch, tmp_path, provider)
     adapter = get_adapter(provider)
 
-    def fail_create_session(**kwargs):
-        raise RuntimeError("tmux refused launch")
-
-    monkeypatch.setattr(launch.tmux, "create_session", fail_create_session)
+    runtime = patch_terminal_runtime(
+        monkeypatch, create_error=RuntimeError("tmux refused launch")
+    )
     run_id = f"tmux-failure-{provider}"
 
     with pytest.raises(launch.LaunchUnavailable):
@@ -372,4 +413,51 @@ async def test_tmux_launch_failure_removes_run_session_and_overlay(
         )
 
     assert await AgentRun.objects.acount() == 0
+    assert await AgentTerminalSession.objects.acount() == 0
+    assert runtime.terminated == [run_id]
+    assert not (tmp_path / "ticketry-agent-runs" / run_id).exists()
+
+
+async def test_tmux_launch_failure_retains_cleanup_handle_until_termination_succeeds(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(agent_registry.tempfile, "tempdir", str(tmp_path))
+    resolved = _resolved(monkeypatch, tmp_path, "codex")
+    adapter = get_adapter("codex")
+    runtime = patch_terminal_runtime(
+        monkeypatch, create_error=RuntimeError("tmux refused launch")
+    )
+    terminate = runtime.terminate
+
+    def unavailable_terminate(agent_run_id):
+        raise TerminalRuntimeError(f"tmux unavailable for {agent_run_id}")
+
+    monkeypatch.setattr(runtime, "terminate", unavailable_terminate)
+    run_id = "tmux-cleanup-pending-codex"
+
+    with pytest.raises(launch.LaunchUnavailable):
+        await launch._launch(
+            adapter=adapter,
+            issue_id=fixture_issue_id(project_id="p1", module_id="m1", task_id="t1"),
+            argv=["codex", "x" * 9_000],
+            cwd=str(tmp_path),
+            design_dir=None,
+            scope="task",
+            doc_rel_path=None,
+            agent_run_id=run_id,
+            resolved_skills=resolved,
+        )
+
+    run = await AgentRun.objects.aget(id=run_id)
+    assert run.status == "cleanup_pending"
+    assert await AgentTerminalSession.objects.filter(agent_run_id=run_id).aexists()
+    assert (tmp_path / "ticketry-agent-runs" / run_id).exists()
+
+    monkeypatch.setattr(runtime, "terminate", terminate)
+    await asyncio.to_thread(TerminalReconciler(runtime).reconcile)
+
+    assert not await AgentRun.objects.filter(id=run_id).aexists()
+    assert not await AgentTerminalSession.objects.filter(
+        agent_run_id=run_id
+    ).aexists()
     assert not (tmp_path / "ticketry-agent-runs" / run_id).exists()

@@ -15,13 +15,14 @@ import {
   validateLaunchBindingOptions,
 } from "./launchBindingValidation";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
+import { loadProviderCatalog, setProviderCatalog } from "./providerQueries";
 import { ApiError } from "../../shared/api/client";
 import type {
   ConfigurableProvider,
   ProviderCapabilities,
   ProviderCatalog,
 } from "../../shared/api/types";
-import * as api from "../studio/lib/api";
+import * as api from "../../shared/api/client";
 import {
   SETTINGS_CHECKBOX_CLASS,
   SettingsSubsection,
@@ -107,18 +108,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function blockedBindingsSummary(blocked: number): string {
-  return blocked === 1
-    ? "1 launch configuration names a deactivated provider and is blocked "
-      + "until it is repointed."
-    : `${blocked} launch configurations name a deactivated provider and are `
-      + "blocked until they are repointed.";
-}
-
-function blockedBindingsPrompt(blocked: number): string {
-  return `${blockedBindingsSummary(blocked)}\n\nSave anyway?`;
-}
-
 export interface ModelConfigurationCommitState {
   outstandingCount: number;
   saving: boolean;
@@ -167,8 +156,8 @@ export const ModelConfigurationPanel = forwardRef<
     let cancelled = false;
     void (async () => {
       try {
-        const [{ value }] = await Promise.all([
-          api.getProviderCatalog(),
+        const [value] = await Promise.all([
+          loadProviderCatalog(),
           refreshProviderCapabilities(),
         ]);
         if (cancelled) return;
@@ -277,15 +266,8 @@ export const ModelConfigurationPanel = forwardRef<
     setNotice(null);
     setAttention(null);
     try {
-      // Every other workflow mutation previews its blast radius first. A
-      // deactivation silently invalidated every binding naming that provider,
-      // discovered one failed launch at a time — so ask before committing.
-      const { blocked_launch_bindings: blocked } =
-        await api.previewProviderCatalogImpact(draft);
-      if (blocked > 0 && !window.confirm(blockedBindingsPrompt(blocked))) {
-        return;
-      }
       const { value } = await api.putProviderCatalog(draft);
+      setProviderCatalog(value);
       const appliedChanges = describeModelConfigurationChanges(saved, value);
       onChangesApplied?.(appliedChanges);
       setSaved(value);
@@ -294,11 +276,7 @@ export const ModelConfigurationPanel = forwardRef<
       // Activation and the default drive launch selectors elsewhere in the
       // app, so the workflow editor has to see the change without a reload.
       await refreshProviderCapabilities();
-      setNotice(
-        blocked > 0
-          ? `Model configuration saved. ${blockedBindingsSummary(blocked)}`
-          : "Model configuration saved.",
-      );
+      setNotice("Model configuration saved.");
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {

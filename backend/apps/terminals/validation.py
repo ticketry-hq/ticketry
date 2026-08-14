@@ -1,16 +1,24 @@
 """Init-frame validation for the terminal WebSocket consumer.
 
-Pure, side-effect-free: a decoded ``init`` payload in, a ``(validated dict,
-error code)`` tuple out. Structure is checked against the
+Pure, side-effect-free: a decoded ``init`` payload in, a
+``(validated request, error code)`` tuple out. Structure is checked against the
 :mod:`apps.terminals.frames` wire models; the semantic rules that sit
 deliberately outside the schema (geometry clamping, mutually-exclusive spawn
 modes, doc-path safety, task-scope requirement) live here.
+
+Two stages, both typed. The frame is the client's *raw* claim; the
+:class:`SpawnRequest` / :class:`AttachRequest` returned here is the
+*normalized* one — geometry clamped, doc fields resolved. Returning a typed
+value rather than a dict means a downstream field typo is a name error at
+import time, not a ``KeyError`` deep in an async spawn, which is the CODIN-685
+bug class this module's dispatch already guards against structurally.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Optional
+from dataclasses import dataclass
+from typing import Optional, Union
 
 from pydantic import ValidationError
 
@@ -22,11 +30,44 @@ MAX_SESSIONS = 32
 VALID_AGENTS = set(all_slugs())
 
 
+@dataclass(frozen=True)
+class SpawnRequest:
+    """A validated, normalized spawn: geometry clamped, doc fields resolved."""
+
+    agent: str
+    project_id: str
+    module_id: str
+    task_id: Optional[str]
+    initial_prompt: Optional[str]
+    cols: int
+    rows: int
+    is_planning: bool
+    is_instant: bool
+    instant_prompt: Optional[str]
+    is_doc_chat: bool
+    doc_rel_path: Optional[str]
+    doc_id: Optional[str]
+
+
+@dataclass(frozen=True)
+class AttachRequest:
+    """A validated attach to an existing run, with clamped viewer geometry."""
+
+    agent_run_id: str
+    cols: int
+    rows: int
+
+
+#: What ``_validate_init`` yields on success. The two members replace the old
+#: ``mode`` string key: ``isinstance`` is the discriminator.
+InitRequest = Union[SpawnRequest, AttachRequest]
+
+
 def _clamp_dim(value: int) -> int:
     return max(1, min(value, 1000))
 
 
-def _validate_init(payload: dict) -> tuple[Optional[dict], Optional[str]]:
+def _validate_init(payload: dict) -> tuple[Optional[InitRequest], Optional[str]]:
     """Validate an init frame, dispatching on the explicit ``mode`` field (#692).
 
     The client now sends ``mode:"spawn"|"attach"`` (T687-3); the backend no
@@ -53,7 +94,9 @@ def _validate_init(payload: dict) -> tuple[Optional[dict], Optional[str]]:
     return None, "bad_init"
 
 
-def _validate_attach_init(payload: dict) -> tuple[Optional[dict], Optional[str]]:
+def _validate_attach_init(
+    payload: dict,
+) -> tuple[Optional[AttachRequest], Optional[str]]:
     # An attach frame must carry a non-empty run id; rejecting the mismatch is
     # what gives the discriminated union teeth.
     try:
@@ -65,17 +108,18 @@ def _validate_attach_init(payload: dict) -> tuple[Optional[dict], Optional[str]]
     if frame.cols <= 0 or frame.rows <= 0:
         return None, "bad_init"
     return (
-        {
-            "mode": "attach",
-            "agent_run_id": frame.agent_run_id,
-            "cols": _clamp_dim(frame.cols),
-            "rows": _clamp_dim(frame.rows),
-        },
+        AttachRequest(
+            agent_run_id=frame.agent_run_id,
+            cols=_clamp_dim(frame.cols),
+            rows=_clamp_dim(frame.rows),
+        ),
         None,
     )
 
 
-def _validate_spawn_init(payload: dict) -> tuple[Optional[dict], Optional[str]]:
+def _validate_spawn_init(
+    payload: dict,
+) -> tuple[Optional[SpawnRequest], Optional[str]]:
     # A spawn frame must NOT carry a run id — that would mean the client meant to
     # attach but mislabeled the frame.
     if payload.get("agent_run_id") is not None:
@@ -129,21 +173,20 @@ def _validate_spawn_init(payload: dict) -> tuple[Optional[dict], Optional[str]]:
             return None, "bad_init"
 
     return (
-        {
-            "mode": "spawn",
-            "agent": frame.agent,
-            "project_id": frame.project_id,
-            "module_id": frame.module_id,
-            "task_id": task_id,
-            "initial_prompt": frame.initial_prompt,
-            "cols": _clamp_dim(frame.cols),
-            "rows": _clamp_dim(frame.rows),
-            "is_planning": frame.is_planning,
-            "is_instant": frame.is_instant,
-            "instant_prompt": frame.instant_prompt,
-            "is_doc_chat": frame.is_doc_chat,
-            "doc_rel_path": doc_rel_path,
-            "doc_id": doc_id,
-        },
+        SpawnRequest(
+            agent=frame.agent,
+            project_id=frame.project_id,
+            module_id=frame.module_id,
+            task_id=task_id,
+            initial_prompt=frame.initial_prompt,
+            cols=_clamp_dim(frame.cols),
+            rows=_clamp_dim(frame.rows),
+            is_planning=frame.is_planning,
+            is_instant=frame.is_instant,
+            instant_prompt=frame.instant_prompt,
+            is_doc_chat=frame.is_doc_chat,
+            doc_rel_path=doc_rel_path,
+            doc_id=doc_id,
+        ),
         None,
     )

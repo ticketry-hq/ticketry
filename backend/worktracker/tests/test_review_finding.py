@@ -8,13 +8,12 @@ is validated *before any write*: a parent that is not a Story, not in
 parent or draws an edge.
 """
 
-import json
 import uuid
 
 import pytest
 
 from apps.runs.models import AutomationAttempt
-from worktracker.models import DEFAULT_STATES, Issue, IssueType, Project, State, Workspace
+from worktracker.models import DEFAULT_STATES, Issue, IssueType, Project, State
 from worktracker.sequences import allocate_sequence_id
 from worktracker.services.work_items import create_review_finding
 from worktracker.tests.conftest import BASE, post_json
@@ -23,7 +22,7 @@ from worktracker.workflow import InvalidTransition
 
 @pytest.fixture
 def sdlc(project):
-    """Seed the seven canonical states + Story/Implementation types."""
+    """Seed the canonical states + Story/Implementation types."""
 
     states = {
         name: State.objects.create(
@@ -145,9 +144,7 @@ def test_reject_foreign_project_parent(project, sdlc):
     )
 
     with pytest.raises(InvalidTransition) as excinfo:
-        create_review_finding(
-            other.id, parent_id=parent.id, name="F", description="d"
-        )
+        create_review_finding(other.id, parent_id=parent.id, name="F", description="d")
 
     assert excinfo.value.code == "foreign_project"
 
@@ -156,13 +153,13 @@ def test_reject_foreign_project_parent(project, sdlc):
 
 
 @pytest.mark.django_db
-def test_http_create_review_finding_returns_200(client, project, sdlc, auth):
+def test_http_work_item_create_absorbs_review_finding(client, project, sdlc, auth):
     states, types = sdlc
     parent = _story(project, states, types, state="Review")
 
     r = post_json(
         client,
-        f"{BASE}/projects/{project.id}/review-findings",
+        f"{BASE}/projects/{project.id}/work-items",
         {
             "parent_id": str(parent.id),
             "name": "Finding",
@@ -171,14 +168,14 @@ def test_http_create_review_finding_returns_200(client, project, sdlc, auth):
         auth,
     )
 
-    assert r.status_code == 200
+    assert r.status_code == 201
     body = r.json()
-    assert body["state"]["name"] == "Implement"
-    assert body["issue_type"]["name"] == "Implementation"
+    assert body["state"] == str(states["Implement"].id)
+    assert body["issue_type"] == str(types["Implementation"].id)
 
 
 @pytest.mark.django_db
-def test_http_create_review_finding_illegal_parent_returns_structured_422(
+def test_http_absorbed_finding_illegal_parent_returns_structured_422(
     client, project, sdlc, auth
 ):
     states, types = sdlc
@@ -186,7 +183,7 @@ def test_http_create_review_finding_illegal_parent_returns_structured_422(
 
     r = post_json(
         client,
-        f"{BASE}/projects/{project.id}/review-findings",
+        f"{BASE}/projects/{project.id}/work-items",
         {"parent_id": str(parent.id), "name": "F", "description": "d"},
         auth,
     )

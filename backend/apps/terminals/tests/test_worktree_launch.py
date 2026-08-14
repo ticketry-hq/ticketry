@@ -61,7 +61,7 @@ def _profile(tmp_config, module_folder) -> None:
                 "workspace_slug": "ws",
                 "agent_prompt": None,
                 "agent_prompts": {},
-                "module_folders": {MODULE_ID: str(module_folder)},
+                "module_links": [{"module_id": MODULE_ID, "path": str(module_folder)}],
                 "recent_project_id": None,
                 "recent_module_ids": {},
             }
@@ -70,7 +70,9 @@ def _profile(tmp_config, module_folder) -> None:
     )
 
 
-async def _worktree(tmp_path, task_id: str, *, status: str = "active", live: bool = True):
+async def _worktree(
+    tmp_path, task_id: str, *, status: str = "active", live: bool = True
+):
     wt_path = tmp_path / f"wt-{task_id}"
     if live:
         wt_path.mkdir(parents=True, exist_ok=True)
@@ -85,7 +87,14 @@ async def _worktree(tmp_path, task_id: str, *, status: str = "active", live: boo
     )
 
 
-async def _build(module_folder, *, task_id="t1", is_planning=False, is_instant=False, instant_prompt=None):
+async def _build(
+    module_folder,
+    *,
+    task_id="t1",
+    is_planning=False,
+    is_instant=False,
+    instant_prompt=None,
+):
     return await consumers._build_prompt(
         0,
         is_planning=is_planning,
@@ -212,7 +221,9 @@ async def test_plan_never_resolves_worktree(tmp_config, tmp_path, monkeypatch):
     assert err is None
     # Scratch runs stay in the plain checkout (ephemeral worktrees were dropped).
     assert cwd is None
-    assert design_dir == str((module_folder / "spec/platform--m1/planning/a3f9c2d1").resolve())
+    assert design_dir == str(
+        (module_folder / "spec/platform--m1/planning/a3f9c2d1").resolve()
+    )
 
 
 async def test_instant_never_resolves_worktree(tmp_config, tmp_path, monkeypatch):

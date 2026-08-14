@@ -1,132 +1,31 @@
+"""Parallel graph-run scheduling: one advancement fans out to every eligible child.
+
+Serial scheduling has its own suite; both share
+:mod:`apps.execution.tests.graph_scenarios`.
+"""
+
 from __future__ import annotations
 
-import uuid
+import threading
+import time
 
 import pytest
 
 from apps.execution import driver
 from apps.execution.models import GraphRun, LaunchedTask
-from apps.execution.signals import observe_completion
-from worktracker.models import (
-    Issue,
-    IssueType,
-    LaunchBinding,
-    Project,
-    State,
-    Workspace,
+from apps.execution.tests.graph_scenarios import (
+    _agent_run,
+    _successful_spawn,
+    _task,
+    _terminal_session,
 )
-from worktracker.signals import issue_state_changed
+from apps.runs.models import AgentRun
 
 
-pytestmark = pytest.mark.django_db(transaction=True)
-
-
-def _clear_registry():
-    LaunchedTask.objects.all().delete()
-    GraphRun.objects.all().delete()
-
-
-@pytest.fixture(autouse=True)
-def clean_registry():
-    _clear_registry()
-    yield
-    _clear_registry()
-
-
-@pytest.fixture(autouse=True)
-def detach_seam_receiver():
-    issue_state_changed.disconnect(dispatch_uid="execution_observe_issue_state_changed")
-    yield
-    issue_state_changed.connect(
-        observe_completion,
-        dispatch_uid="execution_observe_issue_state_changed",
-    )
-
-
-async def _successful_spawn(**kwargs):
-    _successful_spawn.calls.append(kwargs)
-    return f"run-{len(_successful_spawn.calls)}"
-
-
-_successful_spawn.calls = []
-
-
-@pytest.fixture
-def graph_project():
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    project = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
-    )
-    states = {
-        "todo": State.objects.create(
-            id=uuid.uuid4(), project=project, name="Todo", group="unstarted"
-        ),
-        "started": State.objects.create(
-            id=uuid.uuid4(), project=project, name="In Progress", group="started"
-        ),
-        "review": State.objects.create(
-            id=uuid.uuid4(), project=project, name="Review", group="started"
-        ),
-        "done": State.objects.create(
-            id=uuid.uuid4(), project=project, name="Done", group="completed"
-        ),
-        "cancelled": State.objects.create(
-            id=uuid.uuid4(), project=project, name="Cancelled", group="cancelled"
-        ),
-    }
-    module_type = IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Module", level="module"
-    )
-    story_type = IssueType.objects.create(
-        id=uuid.uuid4(), project=project, name="Story", level="task"
-    )
-    module = Issue.objects.create(
-        id=uuid.uuid4(),
-        project=project,
-        type="module",
-        issue_type=module_type,
-        name="Module",
-        sequence_id=1,
-    )
-    LaunchBinding.objects.create(
-        issue_type=story_type,
-        state=states["todo"],
-        subtree_run_enabled=True,
-    )
-    root = Issue.objects.create(
-        id=uuid.uuid4(),
-        project=project,
-        type="task",
-        issue_type=story_type,
-        parent=module,
-        state=states["todo"],
-        name="Root",
-        sequence_id=2,
-    )
-    return project, module, root, states, story_type
-
-
-def _task(
-    project,
-    issue_type,
-    parent,
-    name,
-    sequence_id,
-    state,
-    *,
-    archived=False,
-):
-    return Issue.objects.create(
-        id=uuid.uuid4(),
-        project=project,
-        type="task",
-        issue_type=issue_type,
-        parent=parent,
-        state=state,
-        name=name,
-        sequence_id=sequence_id,
-        is_archived=archived,
-    )
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.usefixtures("clean_registry", "detach_seam_receiver"),
+]
 
 
 def test_chain_releases_one_child_as_each_predecessor_reaches_review(graph_project):
@@ -292,7 +191,7 @@ def test_spawn_exception_leaves_no_row_and_later_advance_retries(graph_project):
     assert calls == [str(retry.id), str(independent.id), str(retry.id)]
 
 
-def test_launched_child_never_relaunches_without_a_terminal_state(graph_project):
+def test_repeat_execute_refuses_while_launched_child_run_is_active(graph_project):
     _successful_spawn.calls.clear()
     project, _, root, states, story_type = graph_project
     child = _task(project, story_type, root, "Child", 3, states["started"])
@@ -300,11 +199,72 @@ def test_launched_child_never_relaunches_without_a_terminal_state(graph_project)
     assert driver.execute_graph(
         str(root.id), agent="codex", spawn=_successful_spawn
     ) == [str(child.id)]
+    _agent_run(child, "run-1", active=True)
     assert driver.advance(str(root.id), spawn=_successful_spawn) == []
-    assert (
-        driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn) == []
-    )
+    with pytest.raises(ValueError, match="^graph_run_exists$"):
+        driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn)
     assert [call["task_id"] for call in _successful_spawn.calls] == [str(child.id)]
+
+
+def test_repeat_execute_revives_an_ended_launched_child(graph_project):
+    _successful_spawn.calls.clear()
+    project, _, root, states, story_type = graph_project
+    child = _task(project, story_type, root, "Child", 3, states["started"])
+
+    assert driver.execute_graph(
+        str(root.id), agent="codex", spawn=_successful_spawn
+    ) == [str(child.id)]
+    _agent_run(child, "run-1", active=False)
+
+    assert driver.execute_graph(
+        str(root.id), agent="claude", spawn=_successful_spawn
+    ) == [str(child.id)]
+    assert [call["task_id"] for call in _successful_spawn.calls] == [
+        str(child.id),
+        str(child.id),
+    ]
+    assert LaunchedTask.objects.get(task=child).agent_run_id == "run-2"
+    assert GraphRun.objects.get(root=root).agent == "claude"
+
+
+def test_repeat_execute_refuses_while_a_terminal_session_is_active(graph_project):
+    _successful_spawn.calls.clear()
+    project, module, root, states, story_type = graph_project
+    child = _task(project, story_type, root, "Child", 3, states["started"])
+    driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn)
+    run = _agent_run(child, "run-1", active=False)
+    _terminal_session(run, project=project, module=module, task=child)
+
+    with pytest.raises(ValueError, match="^graph_run_exists$"):
+        driver.execute_graph(str(root.id), agent="codex", spawn=_successful_spawn)
+    assert len(_successful_spawn.calls) == 1
+
+
+def test_execute_does_not_hold_a_database_transaction_while_spawning(graph_project):
+    project, _, root, states, story_type = graph_project
+    child = _task(project, story_type, root, "Child", 3, states["todo"])
+
+    async def database_spawn(**kwargs):
+        run_id = "persisted-during-spawn"
+        await AgentRun.objects.acreate(
+            id=run_id,
+            issue_id=kwargs["task_id"],
+            ticket_seq=child.sequence_id,
+            agent="codex",
+            status="running",
+            started_at="2026-08-08T10:00:00+00:00",
+            scope="task",
+        )
+        return run_id
+
+    assert driver.execute_graph(
+        str(root.id), agent="codex", spawn=database_spawn
+    ) == [str(child.id)]
+    assert AgentRun.objects.filter(id="persisted-during-spawn").exists()
+    assert (
+        LaunchedTask.objects.get(task=child).agent_run_id
+        == "persisted-during-spawn"
+    )
 
 
 def test_reset_subtree_clears_rows_and_launches_nothing(graph_project):
@@ -320,7 +280,49 @@ def test_reset_subtree_clears_rows_and_launches_nothing(graph_project):
     assert cleared == [str(a.id), str(b.id)]
     assert not LaunchedTask.objects.filter(root=root).exists()
     assert _successful_spawn.calls == calls_before_reset
-    assert GraphRun.objects.filter(root=root).exists()
+    assert not GraphRun.objects.filter(root=root).exists()
+
+
+def test_reset_waits_for_an_in_flight_advancement(graph_project):
+    """A reset joins the per-root serialization instead of racing a spawn.
+
+    A lifecycle-triggered advancement holds the lock across ``spawn``; a reset
+    arriving in that window must wait, so it clears the launch fact the spawn
+    records rather than leaving an orphan ledger row behind a deleted header.
+    """
+
+    project, _, root, states, story_type = graph_project
+    child = _task(project, story_type, root, "Child", 3, states["todo"])
+    spawn_entered = threading.Event()
+
+    async def blocking_spawn(**kwargs):
+        spawn_entered.set()
+        # Hold the advancement inside its lock long enough for the reset to
+        # reach that same lock while this launch is still un-recorded.
+        time.sleep(0.1)
+        return "run-1"
+
+    errors: list[BaseException] = []
+    cleared: list[str] = []
+
+    def reset_subtree():
+        spawn_entered.wait(timeout=5)
+        try:
+            cleared.extend(driver.reset_subtree(str(root.id)))
+        except BaseException as exc:  # pragma: no cover - surfaced by assertion
+            errors.append(exc)
+
+    thread = threading.Thread(target=reset_subtree)
+    thread.start()
+    assert driver.execute_graph(
+        str(root.id), agent="codex", spawn=blocking_spawn
+    ) == [str(child.id)]
+    thread.join(timeout=10)
+
+    assert errors == []
+    assert cleared == [str(child.id)]
+    assert not LaunchedTask.objects.filter(root=root).exists()
+    assert not GraphRun.objects.filter(root=root).exists()
 
 
 def test_root_blockers_are_irrelevant(graph_project):

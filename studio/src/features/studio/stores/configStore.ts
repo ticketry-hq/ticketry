@@ -1,6 +1,14 @@
-import { create } from "zustand";
-import * as api from "../lib/api";
-import { type Profile } from "../lib/types";
+import { useQuery } from "@tanstack/react-query";
+import * as api from "../../../shared/api/client";
+import { type ConfigPayload, type Profile } from "../lib/types";
+import { queryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/keys";
+
+// Server config (profiles + feature flags) lives in the TanStack Query cache
+// under queryKeys.config — this module is the one place that reads and writes
+// that entry. Components subscribe through useConfig(); non-React code
+// (bootstrap, stores) uses the imperative functions, which share the same
+// cache entry the hooks render from.
 
 export type SidebarPaneComposition =
   | "absent"
@@ -15,83 +23,149 @@ export function sidebarPaneComposition(
   return projectsEnabled ? "projects-and-modules" : "modules";
 }
 
-interface ConfigStoreState {
+export interface ConfigSnapshot {
   profiles: Profile[];
   recentProfileIndex: number | null;
   features: {
     sidebar: boolean;
     projects: boolean;
   };
-
-  loadConfig: () => Promise<void>;
-  selectProfile: (index: number) => Promise<void>;
-  createProfile: (body: Partial<Profile> & { api_key: string }) => Promise<void>;
-  updateProfile: (index: number, body: Partial<Profile> & { api_key: string }) => Promise<void>;
-  deleteProfile: (index: number) => Promise<void>;
-  setModuleFolder: (moduleId: string, path: string) => Promise<void>;
 }
 
-export const useConfigStore = create<ConfigStoreState>((set, get) => ({
+const EMPTY_CONFIG: ConfigSnapshot = {
   profiles: [],
   recentProfileIndex: null,
   features: { sidebar: false, projects: false },
+};
 
-  async loadConfig() {
-    const cfg = await api.getConfig();
-    set({
-      profiles: cfg.profiles,
-      recentProfileIndex: cfg.recent_profile_index,
-      features: cfg.features,
-    });
-  },
+function toSnapshot(payload: ConfigPayload): ConfigSnapshot {
+  return {
+    profiles: payload.profiles,
+    recentProfileIndex: payload.recent_profile_index,
+    features: payload.features,
+  };
+}
 
-  async selectProfile(index: number) {
-    await api.patchConfig({ recent_profile_index: index });
-    set({ recentProfileIndex: index });
-    // Selecting a profile loads its projects. The project tree lives in the
-    // tasks store; dynamic import keeps the configStore ↔ tasksStore cycle from
-    // biting at module-eval time.
-    const { useTasksStore } = await import("./tasksStore");
-    await useTasksStore.getState().loadProjects();
-  },
+async function fetchConfig(): Promise<ConfigSnapshot> {
+  return toSnapshot(await api.getConfig());
+}
 
-  async createProfile(body) {
-    const cfg = await api.postProfile(body);
-    set({ profiles: cfg.profiles, recentProfileIndex: cfg.recent_profile_index });
-  },
+// Profile mutations return the refreshed profile list; feature flags are not
+// part of every mutation payload, so the cached flags are preserved unless
+// the response actually carries them.
+function acceptConfig(payload: ConfigPayload): ConfigSnapshot {
+  const snapshot: ConfigSnapshot = {
+    profiles: payload.profiles,
+    recentProfileIndex: payload.recent_profile_index,
+    features: payload.features ?? getConfigSnapshot().features,
+  };
+  queryClient.setQueryData(queryKeys.config, snapshot);
+  return snapshot;
+}
 
-  async updateProfile(index, body) {
-    const cfg = await api.putProfile(index, body);
-    set({ profiles: cfg.profiles, recentProfileIndex: cfg.recent_profile_index });
-  },
+/** The cached config, or the empty default before the first load resolves. */
+export function getConfigSnapshot(): ConfigSnapshot {
+  return (
+    queryClient.getQueryData<ConfigSnapshot>(queryKeys.config) ?? EMPTY_CONFIG
+  );
+}
 
-  async deleteProfile(index) {
-    const cfg = await api.deleteProfile(index);
-    set({ profiles: cfg.profiles, recentProfileIndex: cfg.recent_profile_index });
-  },
+/** Explicit reload (page load, external change): always hits the server. */
+export async function loadConfig(): Promise<ConfigSnapshot> {
+  return queryClient.fetchQuery({
+    queryKey: queryKeys.config,
+    queryFn: fetchConfig,
+    staleTime: 0,
+  });
+}
 
-  async setModuleFolder(moduleId: string, path: string) {
-    const { recentProfileIndex, profiles } = get();
-    if (recentProfileIndex === null) return;
-    const profile = profiles[recentProfileIndex];
-    if (!profile) return;
-    const nextFolders = { ...profile.module_folders, [moduleId]: path };
-    await get().updateProfile(recentProfileIndex, {
-      name: profile.name,
-      api_url: profile.api_url,
-      api_key: profile.api_key ?? "",
-      workspace_slug: profile.workspace_slug,
-      agent_prompt: profile.agent_prompt,
-      agent_prompts: profile.agent_prompts,
-      module_folders: nextFolders,
-      recent_project_id: profile.recent_project_id ?? null,
-      recent_module_ids: profile.recent_module_ids ?? {},
-    });
-  },
-}));
+/** Subscribe to the config; renders the empty default until loaded. */
+export function useConfig(): ConfigSnapshot {
+  // The app-level queryClient is passed explicitly so the hook works without
+  // a provider in the tree (component tests, isolated hosts).
+  const { data } = useQuery(
+    {
+      queryKey: queryKeys.config,
+      queryFn: fetchConfig,
+    },
+    queryClient,
+  );
+  return data ?? EMPTY_CONFIG;
+}
+
+/**
+ * Test seam: seed or patch the cached config without a network round-trip.
+ * Merges over the current snapshot (or the empty default).
+ */
+export function seedConfig(
+  update:
+    | Partial<ConfigSnapshot>
+    | ((current: ConfigSnapshot) => Partial<ConfigSnapshot>),
+): ConfigSnapshot {
+  const current = getConfigSnapshot();
+  const partial = typeof update === "function" ? update(current) : update;
+  const next = { ...current, ...partial };
+  queryClient.setQueryData(queryKeys.config, next);
+  return next;
+}
+
+export async function selectProfile(index: number): Promise<void> {
+  await api.patchConfig({ recent_profile_index: index });
+  queryClient.setQueryData<ConfigSnapshot>(queryKeys.config, (old) =>
+    old ? { ...old, recentProfileIndex: index } : old,
+  );
+  const { loadProjects } = await import("../../projects/queries");
+  await loadProjects();
+}
+
+export async function createProfile(body: Partial<Profile>): Promise<void> {
+  acceptConfig(await api.postProfile(body));
+}
+
+export async function updateProfile(
+  index: number,
+  body: Partial<Profile>,
+): Promise<void> {
+  acceptConfig(await api.putProfile(index, body));
+}
+
+export async function deleteProfile(index: number): Promise<void> {
+  acceptConfig(await api.deleteProfile(index));
+}
+
+export async function setModuleFolder(
+  moduleId: string,
+  path: string,
+): Promise<void> {
+  const { recentProfileIndex, profiles } = getConfigSnapshot();
+  if (recentProfileIndex === null) return;
+  const profile = profiles[recentProfileIndex];
+  if (!profile) return;
+  const linkIndex = profile.module_links.findIndex(
+    (link) => link.module_id === moduleId,
+  );
+  const moduleLink = { module_id: moduleId, path };
+  const moduleLinks =
+    linkIndex === -1
+      ? [...profile.module_links, moduleLink]
+      : profile.module_links.map((link, index) =>
+          index === linkIndex ? moduleLink : link,
+        );
+  await updateProfile(recentProfileIndex, {
+    ...profile,
+    module_links: moduleLinks,
+  });
+}
+
+export function getModuleFolder(
+  profile: Pick<Profile, "module_links"> | null | undefined,
+  moduleId: string,
+): string | undefined {
+  return profile?.module_links.find((link) => link.module_id === moduleId)?.path;
+}
 
 export function isSidebarEnabled(
-  state: Pick<ConfigStoreState, "features"> = useConfigStore.getState(),
+  state: Pick<ConfigSnapshot, "features"> = getConfigSnapshot(),
 ): boolean {
   return state.features.sidebar;
 }

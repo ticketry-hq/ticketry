@@ -1,18 +1,20 @@
 """Framework-neutral work item mutation services."""
 
+import re
 import uuid
 
 from django.db import transaction
-from django.shortcuts import get_object_or_404
 
 from worktracker.models import Issue, IssueType, Project
 from worktracker.ranking import key_between
 from worktracker.sequences import allocate_sequence_id
 from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
+from worktracker.services.module_reorder import reorder_module
 from worktracker.work_items import (
     append_rank,
     blocker_would_cycle,
     resolve_issue_type,
+    task_qs,
 )
 from worktracker.workflow import (
     InvalidTransition,
@@ -29,6 +31,119 @@ def resolve_module_id(parent: Issue | None) -> uuid.UUID | None:
     if parent.type == "module":
         return parent.id
     return parent.module_id
+
+
+def get_issue(issue_id, *, message="Work item not found."):
+    """Fetch an issue or raise the framework-neutral not-found error.
+
+    Services own a single not-found mechanism: ``NotFoundError`` carries the
+    domain message to ``api/router.py:_http_errors()``, the one translation
+    seam. Django's fetch-or-404 shortcut would bypass it — Ninja's own handler
+    emits a generic body, losing the message, and non-HTTP callers (the MCP
+    surface) would receive a Django HTTP exception where the contract promises
+    a ``ServiceError``. ``test_t735_error_contract`` fences this.
+    """
+
+    try:
+        return Issue.objects.get(pk=issue_id)
+    except Issue.DoesNotExist as exc:
+        raise NotFoundError(message) from exc
+
+
+def retrieve_work_item(issue_id):
+    """Return one task by UUID or key through the framework-neutral boundary."""
+
+    value = str(issue_id)
+    key_match = re.fullmatch(r"([^-]+)-(\d+)", value)
+    try:
+        if key_match:
+            slug, sequence_id = key_match.groups()
+            return task_qs().get(
+                project__slug__iexact=slug,
+                sequence_id=int(sequence_id),
+            )
+        return task_qs().get(pk=uuid.UUID(value))
+    except (Issue.DoesNotExist, ValueError) as exc:
+        raise NotFoundError("Work item not found.") from exc
+
+
+def _pathfind_subtree_ids(*, project_id=None, module_id=None):
+    roots = Issue.objects.filter(type="task", issue_type__is_pathfind=True)
+    if project_id is not None:
+        roots = roots.filter(project_id=project_id)
+    if module_id is not None:
+        roots = roots.filter(module_id=module_id)
+    seen = set(roots.values_list("id", flat=True))
+    frontier = set(seen)
+    while frontier:
+        children = (
+            set(
+                Issue.objects.filter(type="task", parent_id__in=frontier).values_list(
+                    "id", flat=True
+                )
+            )
+            - seen
+        )
+        seen.update(children)
+        frontier = children
+    return seen
+
+
+def list_work_items(
+    *,
+    project_id=None,
+    module_id=None,
+    state_id=None,
+    include_archived=False,
+    include_pathfind=False,
+):
+    """Return the canonical filtered task collection in stable rank order."""
+
+    queryset = task_qs().order_by("rank", "sequence_id", "id")
+    if project_id is not None:
+        queryset = queryset.filter(project_id=project_id)
+    if module_id is not None:
+        queryset = queryset.filter(module_id=module_id)
+    if state_id is not None:
+        queryset = queryset.filter(state_id=state_id)
+    if not include_archived:
+        queryset = queryset.exclude(is_archived=True)
+    if not include_pathfind:
+        queryset = queryset.exclude(
+            id__in=_pathfind_subtree_ids(
+                project_id=project_id,
+                module_id=module_id,
+            )
+        )
+    return list(queryset)
+
+
+def batch_work_items(ids):
+    """Return existing tasks in the caller's de-duplicated id order."""
+
+    ordered_ids = tuple(dict.fromkeys(ids))
+    items_by_id = {item.id: item for item in task_qs().filter(id__in=ordered_ids)}
+    return [items_by_id[item_id] for item_id in ordered_ids if item_id in items_by_id]
+
+
+def create_work_item(project_id, **data):
+    """Choose the canonical ordinary-task or review-finding create workflow."""
+
+    if not data.get("issue_type_id"):
+        return create_review_finding(
+            project_id,
+            parent_id=data["parent_id"],
+            name=data["name"],
+            description=data.get("description") or "",
+        )
+    return create_project_work_item(
+        project_id,
+        name=data["name"],
+        issue_type_id=data["issue_type_id"],
+        state_id=data.get("state_id"),
+        description=data.get("description"),
+        parent_id=data.get("parent_id"),
+    )
 
 
 def create_project_work_item(
@@ -60,7 +175,7 @@ def create_project_work_item(
     if description is not None:
         issue.description = description
     if parent_id:
-        parent = get_object_or_404(Issue, pk=parent_id)
+        parent = get_issue(parent_id, message="Parent work item not found.")
         issue.parent = parent
         issue.module_id = resolve_module_id(parent)
     # Birth is gated like the move is (#870): a typed item is born in its
@@ -172,7 +287,7 @@ def create_module_work_item(
 ):
     """Create a task under a module and return the saved issue."""
 
-    module = get_object_or_404(Issue, pk=module_id)
+    module = get_issue(module_id, message="Module not found.")
     sequence_id = allocate_sequence_id(module.project_id)
 
     issue = Issue(
@@ -211,7 +326,7 @@ def update_work_item(issue_id: uuid.UUID, **data):
     transition caller and defaults to ``human`` for REST compatibility.
     """
 
-    issue = get_object_or_404(Issue, pk=issue_id)
+    issue = get_issue(issue_id)
 
     if "state_id" in data:
         origin = data.pop("origin", "human")
@@ -232,16 +347,26 @@ def update_work_item(issue_id: uuid.UUID, **data):
     parent_changed = "parent_id" in data
     if parent_changed:
         parent_id = data["parent_id"]
-        parent = get_object_or_404(Issue, pk=parent_id) if parent_id else None
+        parent = (
+            get_issue(parent_id, message="Parent work item not found.")
+            if parent_id
+            else None
+        )
         issue.parent = parent
         issue.module_id = resolve_module_id(parent)
     if "name" in data:
         issue.name = data["name"]
     if "description" in data:
         issue.description = data["description"]
+    if "issue_type_id" in data:
+        issue.issue_type = resolve_issue_type(
+            issue.project_id,
+            data["issue_type_id"],
+            issue.type,
+        )
 
     with transaction.atomic():
-        issue.save()
+        issue.save(force_change_revision="blocked_by_ids" in data)
 
         if parent_changed:
             descendants = []
@@ -270,10 +395,25 @@ def update_work_item(issue_id: uuid.UUID, **data):
     return issue
 
 
-def reorder_work_item(issue_id: uuid.UUID, before_id=None, after_id=None):
-    """Move an issue between same-project neighbors and persist the new rank."""
+def reorder_work_item(
+    issue_id: uuid.UUID, before_id=None, after_id=None, initial_order_ids=None
+):
+    """Move an issue between same-project neighbors and persist the new rank.
 
-    issue = get_object_or_404(Issue, pk=issue_id)
+    Module work items carry a second order — the project's Manual module order
+    — whose first drag has to freeze a baseline and flip the project's ordering
+    mode atomically. That belongs to ``module_reorder``; the task path below is
+    the plain fractional-rank move it has always been (#360).
+    """
+
+    issue = get_issue(issue_id)
+    if issue.type == "module":
+        return reorder_module(issue, before_id, after_id, initial_order_ids)
+    if initial_order_ids:
+        raise ValidationError(
+            "initial_order_ids applies only to module work items."
+        )
+
     before = _reorder_neighbor(issue, before_id)
     after = _reorder_neighbor(issue, after_id)
 
@@ -292,7 +432,7 @@ def reorder_work_item(issue_id: uuid.UUID, before_id=None, after_id=None):
 def delete_work_item(issue_id: uuid.UUID):
     """Delete an empty issue and reject issues with children."""
 
-    issue = get_object_or_404(Issue, pk=issue_id)
+    issue = get_issue(issue_id)
     if issue.children.exists():
         raise ConflictError("Issue has children; empty or re-parent them first.")
     issue.delete()
@@ -301,7 +441,9 @@ def delete_work_item(issue_id: uuid.UUID):
 def _reorder_neighbor(issue, neighbor_id):
     if neighbor_id is None:
         return None
-    neighbor = get_object_or_404(Issue, pk=neighbor_id)
+    neighbor = get_issue(neighbor_id, message="Neighbor not found.")
     if neighbor.project_id != issue.project_id:
         raise ValidationError("Neighbor belongs to another project.")
+    if neighbor.type == "module":
+        raise ValidationError("A task may not be ranked against a module.")
     return neighbor

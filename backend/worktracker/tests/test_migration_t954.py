@@ -7,22 +7,9 @@ import pytest
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
-from worktracker.models import Issue, IssueType
-from worktracker.seed import ensure_issue_types
-
 APP = "worktracker"
 BEFORE = "0011_forcetransition"
 AFTER = "0012_canonical_module_issue_type"
-
-
-@pytest.mark.django_db
-def test_fresh_project_seed_uses_module_as_the_module_default(project):
-    ensure_issue_types(project, IssueType, Issue)
-
-    module_type = IssueType.objects.get(project=project, name="Module")
-    assert module_type.level == "module"
-    assert module_type.is_default is True
-    assert not IssueType.objects.filter(project=project, name="Epic", level="module").exists()
 
 
 def _rewind():

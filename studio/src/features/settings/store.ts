@@ -1,7 +1,23 @@
 import { create } from "zustand";
 import * as api from "../../shared/api/client";
 import { ApiError } from "../../shared/api/client";
-import { toast } from "../../app/stores/toastStore";
+import { toast } from "../../state/clientStore";
+import {
+  getStatesSnapshot,
+  removeState,
+  setStates,
+  setStatesSorted,
+  upsertState,
+} from "../../shared/query/stateCatalog";
+import {
+  ensureSettings as ensureSettingsData,
+  getIssueTypesSnapshot,
+  loadSettings as loadSettingsData,
+  refreshSubtreeRunCapabilities as refreshCapabilitiesData,
+  setIssueTypes,
+  setIssueTypesSorted,
+  synchronizeSubtreeRunCapabilities as synchronizeCapabilities,
+} from "./queries";
 import type {
   IssueType,
   IssueTypeCreate,
@@ -9,7 +25,6 @@ import type {
   State,
   StateCreate,
   StatePatch,
-  SubtreeRunCapabilityMap,
 } from "../../shared/api/types";
 
 function errMessage(e: unknown): string {
@@ -17,25 +32,11 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-const bySortOrder = <T extends { sort_order?: number }>(rows: T[]): T[] =>
-  [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-
-const capabilityGenerations = new Map<string, number>();
-
-function nextCapabilityGeneration(projectId: string): number {
-  const generation = (capabilityGenerations.get(projectId) ?? 0) + 1;
-  capabilityGenerations.set(projectId, generation);
-  return generation;
-}
-
+// Client state only: which project the settings surface is showing, and the
+// last mutation error. Issue types, workflow states, and the subtree-run
+// capability map live in the query cache (./queries, shared/query/stateCatalog).
 interface SettingsState {
   projectId: string | null;
-  issueTypes: IssueType[];
-  states: State[];
-  subtreeRunCapabilities: SubtreeRunCapabilityMap;
-  capabilitiesLoaded: boolean;
-  settingsLoaded: boolean;
-  loading: boolean;
   /** Mutation-error message — no longer rendered inline; mutations toast (#638). */
   error: string | null;
   /** Page-LOAD error: set only by loadSettings; SettingsView renders THIS inline. */
@@ -65,99 +66,35 @@ interface SettingsState {
   reorderStates: (orderedIds: string[]) => Promise<void>;
 }
 
-let inFlightSettings: { projectId: string; request: Promise<void> } | null = null;
-
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   projectId: null,
-  issueTypes: [],
-  states: [],
-  subtreeRunCapabilities: {},
-  capabilitiesLoaded: false,
-  settingsLoaded: false,
-  loading: false,
   error: null,
   loadError: null,
 
   async ensureSettings(projectId) {
-    if (get().projectId === projectId && get().capabilitiesLoaded) return;
-    if (inFlightSettings?.projectId === projectId) {
-      return inFlightSettings.request;
+    set({ projectId });
+    try {
+      await ensureSettingsData(projectId);
+    } catch (e) {
+      if (get().projectId === projectId) set({ loadError: errMessage(e) });
     }
-    const request = get()
-      .loadSettings(projectId)
-      .finally(() => {
-        if (inFlightSettings?.request === request) inFlightSettings = null;
-      });
-    inFlightSettings = { projectId, request };
-    return request;
   },
 
   async loadSettings(projectId) {
-    const capabilityGeneration = nextCapabilityGeneration(projectId);
-    set({
-      projectId,
-      loading: true,
-      settingsLoaded: false,
-      loadError: null,
-      subtreeRunCapabilities: {},
-      capabilitiesLoaded: false,
-    });
+    set({ projectId, loadError: null });
     try {
-      const [issueTypes, states, subtreeRunCapabilities] = await Promise.all([
-        api.listIssueTypes(projectId),
-        api.listStates(projectId),
-        api.listSubtreeRunCapabilities(projectId),
-      ]);
-      if (get().projectId !== projectId) return;
-      set((state) => ({
-        issueTypes: bySortOrder(issueTypes),
-        states: bySortOrder(states),
-        settingsLoaded: true,
-        loading: false,
-        ...(capabilityGenerations.get(projectId) === capabilityGeneration
-          ? { subtreeRunCapabilities, capabilitiesLoaded: true }
-          : {
-              subtreeRunCapabilities: state.subtreeRunCapabilities,
-              capabilitiesLoaded: state.capabilitiesLoaded,
-            }),
-      }));
+      await loadSettingsData(projectId);
     } catch (e) {
-      if (get().projectId === projectId) {
-        set({ loadError: errMessage(e), loading: false });
-      }
+      if (get().projectId === projectId) set({ loadError: errMessage(e) });
     }
   },
 
   async refreshSubtreeRunCapabilities(projectId) {
-    const capabilityGeneration = nextCapabilityGeneration(projectId);
-    try {
-      const subtreeRunCapabilities =
-        await api.listSubtreeRunCapabilities(projectId);
-      if (
-        get().projectId === projectId &&
-        capabilityGenerations.get(projectId) === capabilityGeneration
-      ) {
-        set({ subtreeRunCapabilities, capabilitiesLoaded: true });
-      }
-    } catch {
-      // The workflow save already succeeded. Preserve the last known map and
-      // let a later project/settings load retry rather than reporting the save
-      // itself as failed.
-    }
+    await refreshCapabilitiesData(projectId);
   },
 
   synchronizeSubtreeRunCapabilities(projectId, issueTypeId, enabledStateIds) {
-    nextCapabilityGeneration(projectId);
-    if (get().projectId !== projectId) return;
-    set((state) => {
-      const subtreeRunCapabilities = { ...state.subtreeRunCapabilities };
-      if (enabledStateIds.length > 0) {
-        subtreeRunCapabilities[issueTypeId] = enabledStateIds;
-      } else {
-        delete subtreeRunCapabilities[issueTypeId];
-      }
-      return { subtreeRunCapabilities, capabilitiesLoaded: true };
-    });
+    synchronizeCapabilities(projectId, issueTypeId, enabledStateIds);
   },
 
   // --- issue types ----------------------------------------------------------
@@ -167,7 +104,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (!projectId) return null;
     try {
       const created = await api.createIssueType(projectId, body);
-      set({ issueTypes: bySortOrder([...get().issueTypes, created]) });
+      setIssueTypesSorted(projectId, [...getIssueTypesSnapshot(projectId), created]);
       return created;
     } catch (e) {
       toast.error(errMessage(e));
@@ -177,32 +114,39 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   async patchType(id, patch) {
-    const snapshot = get().issueTypes;
-    const optimistic = bySortOrder(
+    const projectId = get().projectId;
+    if (!projectId) return;
+    const snapshot = getIssueTypesSnapshot(projectId);
+    setIssueTypes(
+      projectId,
       snapshot.map((t) => (t.id === id ? { ...t, ...patch } : t)),
     );
-    set({ issueTypes: optimistic, error: null });
+    set({ error: null });
     try {
       const updated = await api.patchIssueType(id, patch);
-      set({
-        issueTypes: bySortOrder(
-          get().issueTypes.map((t) => (t.id === id ? updated : t)),
-        ),
-      });
+      setIssueTypesSorted(
+        projectId,
+        getIssueTypesSnapshot(projectId).map((t) => (t.id === id ? updated : t)),
+      );
     } catch (e) {
-      set({ issueTypes: snapshot, error: errMessage(e) });
+      setIssueTypes(projectId, snapshot);
+      set({ error: errMessage(e) });
       toast.error(errMessage(e));
     }
   },
 
   async deleteType(id, reassignTo) {
-    const snapshot = get().issueTypes;
-    set({ issueTypes: snapshot.filter((t) => t.id !== id), error: null });
+    const projectId = get().projectId;
+    if (!projectId) return;
+    const snapshot = getIssueTypesSnapshot(projectId);
+    setIssueTypes(projectId, snapshot.filter((t) => t.id !== id));
+    set({ error: null });
     try {
       await api.deleteIssueType(id, reassignTo);
       toast.success("Type deleted");
     } catch (e) {
-      set({ issueTypes: snapshot, error: errMessage(e) });
+      setIssueTypes(projectId, snapshot);
+      set({ error: errMessage(e) });
       toast.error(errMessage(e));
     }
   },
@@ -210,17 +154,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   async reorderTypes(orderedIds) {
     const projectId = get().projectId;
     if (!projectId) return;
-    const snapshot = get().issueTypes;
+    const snapshot = getIssueTypesSnapshot(projectId);
     const rank = new Map(orderedIds.map((id, i) => [id, i]));
-    const optimistic = [...snapshot].sort(
-      (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
+    setIssueTypes(
+      projectId,
+      // Ranked order is the point of the optimistic write, so it must survive
+      // the catalog's sort_order normalization until the server answers.
+      [...snapshot].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)),
     );
-    set({ issueTypes: optimistic, error: null });
+    set({ error: null });
     try {
-      const reordered = await api.reorderIssueTypes(projectId, orderedIds);
-      set({ issueTypes: bySortOrder(reordered) });
+      setIssueTypesSorted(projectId, await api.reorderIssueTypes(projectId, orderedIds));
     } catch (e) {
-      set({ issueTypes: snapshot, error: errMessage(e) });
+      setIssueTypes(projectId, snapshot);
+      set({ error: errMessage(e) });
       toast.error(errMessage(e));
     }
   },
@@ -232,7 +179,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (!projectId) return null;
     try {
       const created = await api.createState(projectId, body);
-      set({ states: bySortOrder([...get().states, created]) });
+      upsertState(projectId, created);
       return created;
     } catch (e) {
       toast.error(errMessage(e));
@@ -242,32 +189,36 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   async patchState(id, patch) {
-    const snapshot = get().states;
-    const optimistic = bySortOrder(
+    const projectId = get().projectId;
+    if (!projectId) return;
+    const snapshot = getStatesSnapshot(projectId);
+    setStates(
+      projectId,
       snapshot.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     );
-    set({ states: optimistic, error: null });
+    set({ error: null });
     try {
       const updated = await api.patchState(id, patch);
-      set({
-        states: bySortOrder(
-          get().states.map((s) => (s.id === id ? updated : s)),
-        ),
-      });
+      upsertState(projectId, updated);
     } catch (e) {
-      set({ states: snapshot, error: errMessage(e) });
+      setStates(projectId, snapshot);
+      set({ error: errMessage(e) });
       toast.error(errMessage(e));
     }
   },
 
   async deleteState(id, reassignTo) {
-    const snapshot = get().states;
-    set({ states: snapshot.filter((s) => s.id !== id), error: null });
+    const projectId = get().projectId;
+    if (!projectId) return;
+    const snapshot = getStatesSnapshot(projectId);
+    removeState(projectId, id);
+    set({ error: null });
     try {
       await api.deleteState(id, reassignTo);
       toast.success("State deleted");
     } catch (e) {
-      set({ states: snapshot, error: errMessage(e) });
+      setStates(projectId, snapshot);
+      set({ error: errMessage(e) });
       toast.error(errMessage(e));
     }
   },
@@ -275,17 +226,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   async reorderStates(orderedIds) {
     const projectId = get().projectId;
     if (!projectId) return;
-    const snapshot = get().states;
+    const snapshot = getStatesSnapshot(projectId);
     const rank = new Map(orderedIds.map((id, i) => [id, i]));
-    const optimistic = [...snapshot].sort(
-      (a, b) => (rank.get(a.id ?? "") ?? 0) - (rank.get(b.id ?? "") ?? 0),
+    setStates(
+      projectId,
+      [...snapshot].sort(
+        (a, b) => (rank.get(a.id ?? "") ?? 0) - (rank.get(b.id ?? "") ?? 0),
+      ),
     );
-    set({ states: optimistic, error: null });
+    set({ error: null });
     try {
-      const reordered = await api.reorderStates(projectId, orderedIds);
-      set({ states: bySortOrder(reordered) });
+      setStatesSorted(projectId, await api.reorderStates(projectId, orderedIds));
     } catch (e) {
-      set({ states: snapshot, error: errMessage(e) });
+      setStates(projectId, snapshot);
+      set({ error: errMessage(e) });
       toast.error(errMessage(e));
     }
   },

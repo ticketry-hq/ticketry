@@ -1,15 +1,21 @@
 import { useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { useTasksStore } from "../stores/tasksStore";
+import { useStudioStore } from "../../projects/store";
+import { useClientStore } from "../../../state/clientStore";
+import { useCachedStates } from "../../../shared/query/stateCatalog";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
+import { useSetWorkItemState } from "../../work-items";
+import { apiErrorMessage, isNoOpTransition } from "../../../shared/api/client";
+import { toast } from "../../../state/clientStore";
 
 export function StatusUpdate() {
-  const allStates = useTasksStore((s) => s.states);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
+  const allStates = useCachedStates(selectedProjectId);
   // Only real, settable Plane states (the synthetic scratch state has no id).
   const states = allStates.filter((st) => st.id !== null);
-  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
-  const selectedTaskId = useTasksStore((s) => s.selectedTaskId);
+  const selectedTaskId = useClientStore((s) => s.selectedTaskId);
+  const setState = useSetWorkItemState();
   const popModal = useModalStore((s) => s.popModal);
 
   const [selectedStateId, setSelectedStateId] = useState(
@@ -22,12 +28,13 @@ export function StatusUpdate() {
   );
 
   async function commit(stateId: string | null = selectedStateId): Promise<void> {
-    const current = useTasksStore.getState();
-    const target = current.states.find((state) => state.id === stateId);
+    const currentProjectId = useStudioStore.getState().selectedProjectId;
+    const currentTaskId = useClientStore.getState().selectedTaskId;
+    const target = states.find((state) => state.id === stateId);
     if (!target || !target.id) return;
     if (
-      current.selectedProjectId !== selectedProjectId ||
-      current.selectedTaskId !== selectedTaskId ||
+      currentProjectId !== selectedProjectId ||
+      currentTaskId !== selectedTaskId ||
       !selectedProjectId ||
       !selectedTaskId
     ) {
@@ -35,8 +42,13 @@ export function StatusUpdate() {
     }
     setBusy(true);
     try {
-      await current.updateTaskStatus(selectedProjectId, selectedTaskId, target.id);
+      await setState.mutateAsync({
+        id: selectedTaskId,
+        state: target as typeof target & { id: string },
+      });
       popModal();
+    } catch (error) {
+      if (!isNoOpTransition(error)) toast.error(apiErrorMessage(error));
     } finally {
       setBusy(false);
     }

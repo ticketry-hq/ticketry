@@ -28,15 +28,16 @@ _TERMINAL_STATES = ("exited", "error")
 
 def settle_ended_runs(apps, schema_editor):
     AgentRun = apps.get_model("runs", "AgentRun")
+    runs = AgentRun.objects.using(schema_editor.connection.alias)
 
-    stale = AgentRun.objects.filter(ended_at__isnull=False).exclude(
+    stale = runs.filter(ended_at__isnull=False).exclude(
         lifecycle_state__in=(*_TERMINAL_STATES, "")
     ).exclude(lifecycle_state__isnull=True)
 
     # Pair the timestamp with the state so the row stays internally coherent,
     # matching what the exit paths now persist.
     for run in stale.only("id", "ended_at").iterator():
-        AgentRun.objects.filter(pk=run.pk).update(
+        runs.filter(pk=run.pk).update(
             lifecycle_state="exited",
             lifecycle_updated_at=run.ended_at,
         )

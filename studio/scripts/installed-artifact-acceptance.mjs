@@ -25,8 +25,11 @@ const REQUIRED_SCENARIOS = [
 
 const REQUIRED_SKILLS = [
   "code-review",
+  "domain-modeling",
   "grill-with-docs",
+  "grilling",
   "implement",
+  "setup-matt-pocock-skills",
   "tdd",
   "to-spec",
   "to-tickets",

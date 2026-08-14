@@ -12,15 +12,18 @@ import {
 import { TEMP_TASK_ID } from "../../features/agents/types";
 import {
   closeTerminalTab,
-  useIssueDrawerWorkspaceStore,
-} from "../../features/work-items/issue-detail/appNavigation";
-import type { Row } from "../../features/studio/pages/tasks/TasksPane";
-import { focusStoriesSearch } from "../../features/studio/pages/tasks/storiesFocus";
+  useTicketWorkspaceStore,
+} from "../shell/ticket-workspace/selected-ticket/appNavigation";
+import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
+import { focusStoriesSearch } from "../shell/ticket-workspace/tasks/storiesFocus";
 import {
   createNavigationContext,
   type NavigationContext,
 } from "./navigationContext";
-import { useTasksStore } from "../../features/studio/stores/tasksStore";
+import { getModulesSnapshot } from "../../features/projects";
+import { useStudioStore } from "../../features/projects/store";
+import { useClientStore } from "../../state/clientStore";
+import { startRunNowForSelectedItem } from "../../features/work-items";
 
 const MODULE_POSITION_ACTION_PREFIX = "modules.select-position-";
 
@@ -37,19 +40,20 @@ export function routeModulePositionNavigation(
   const position = Number(actionId.slice(MODULE_POSITION_ACTION_PREFIX.length));
   if (!Number.isInteger(position) || position < 1 || position > 10) return false;
 
-  const tasks = useTasksStore.getState();
-  const module = tasks.modules[position - 1];
-  if (!module || module.id === tasks.selectedModuleId) return false;
+  const projectId = useStudioStore.getState().selectedProjectId;
+  const ui = useClientStore.getState();
+  const module = getModulesSnapshot(projectId)[position - 1];
+  if (!module || module.id === ui.selectedModuleId) return false;
 
   event.preventDefault();
-  void tasks.selectModule(module.id);
+  void ui.selectModule(module.id);
   return true;
 }
 
 /** Routes shortcuts shared by both Studio layouts. */
 export function routeSharedNavigation(
   event: KeyboardEvent,
-  taskRows: Row[],
+  taskRows: TreeRow[],
   actionId: string | null,
 ): void {
   const ctx = createNavigationContext(event, taskRows);
@@ -92,6 +96,9 @@ export function routeSharedNavigation(
         startInstantChangeFlow();
         event.preventDefault();
       }
+      return;
+    case "run-now":
+      if (startRunNowForSelectedItem()) event.preventDefault();
       return;
     case "status":
       openStatus(ctx);
@@ -142,15 +149,12 @@ function closeActiveWorkspaceTab(ctx: NavigationContext): void {
     ctx.tasks.selectedModuleId,
   );
 
-  const workspace = useIssueDrawerWorkspaceStore.getState();
+  const workspace = useTicketWorkspaceStore.getState();
   const current = workspace.workspaces[bucket];
   const active = current?.active ?? "details";
 
   if (active === "doc") {
-    const activeDocId =
-      current?.activeDocId ??
-      current?.docs.find((document) => document.open)?.docId ??
-      null;
+    const activeDocId = current?.activeDocId ?? null;
     if (activeDocId) {
       workspace.closeDoc(bucket, activeDocId);
       ctx.event.preventDefault();
@@ -161,7 +165,6 @@ function closeActiveWorkspaceTab(ctx: NavigationContext): void {
 
   const sessionId = useWorkspaceTabsStore.getState().activeByTask[bucket];
   if (!sessionId) return;
-  const ticketKey = ctx.tasks.tasks.find((task) => task.id === taskId)?.key;
-  void closeTerminalTab(sessionId, bucket, ticketKey);
+  void closeTerminalTab(sessionId, bucket);
   ctx.event.preventDefault();
 }

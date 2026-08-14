@@ -3,10 +3,13 @@
 from datetime import datetime, timezone
 
 import pytest
+from asgiref.sync import sync_to_async
 from django.db import IntegrityError
 
 from apps.runs import dao
 from apps.runs.models import AgentRun
+from apps.terminals.models import AgentTerminalSession
+from worktracker.models import Issue
 from worktracker.tests.factories import (
     ensure_issue,
     fixture_issue_id,
@@ -50,6 +53,7 @@ def _make_run(
         issue_id=fixture_issue_id(
             project_id=project_id, module_id=module_id, task_id=task_id
         ),
+        ticket_seq=472,
         agent="claude",
         status="running",
         started_at=started_at,
@@ -72,6 +76,7 @@ async def test_insert_round_trips_full_row() -> None:
     assert str(stored[0].issue_id) == fixture_issue_id(
         project_id="proj-1", module_id="mod-1", task_id="task-1"
     )
+    assert stored[0].ticket_seq == 472
     assert stored[0].cwd == "/tmp/work"
 
 
@@ -92,6 +97,7 @@ async def test_insert_round_trips_nullable_fields() -> None:
     run = await AgentRun.objects.aget(id="run-null")
 
     assert run.issue_id is not None
+    assert run.ticket_seq is None
     assert run.ended_at is None
     assert run.exit_code is None
     assert run.error is None
@@ -355,4 +361,126 @@ async def test_status_routing_uses_run_scope_before_terminal_session_exists() ->
         fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1"),
         fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None),
         "plan",
+        "claude",
+        "2026-05-29T10:00:00",
     )
+
+
+async def test_doc_chat_runs_are_not_published_to_the_client() -> None:
+    run = _make_run(
+        "hidden-doc-run",
+        task_id="task-1",
+        started_at="2026-05-29T10:00:00",
+    )
+    run.scope = "docchat"
+    await dao.insert_agent_run(run)
+
+    assert await dao.get_status_routing(run.id) is None
+    records = await dao.agent_status_records(
+        fixture_uuid("proj-1"),
+        runtime_namespace="current-runtime",
+        now=datetime(2026, 5, 29, 11, tzinfo=timezone.utc),
+    )
+    assert run.id not in {record.agent_run_id for record in records}
+
+
+async def test_parentless_task_run_routes_as_a_task() -> None:
+    scaffold_task = await sync_to_async(ensure_issue)(
+        project_id="parentless-project",
+        module_id="scaffold-module",
+        task_id="scaffold-task",
+    )
+    task_id = fixture_uuid("parentless-task")
+    task = await Issue.objects.acreate(
+        id=task_id,
+        project_id=scaffold_task.project_id,
+        type="task",
+        issue_type_id=scaffold_task.issue_type_id,
+        parent=None,
+        module=None,
+        name="Parentless task",
+        sequence_id=3,
+    )
+    run = AgentRun(
+        id="parentless-task-run",
+        issue=task,
+        agent="codex",
+        status="running",
+        started_at="2026-08-03T10:00:00+00:00",
+        scope="task",
+    )
+    await dao.insert_agent_run(run)
+    await AgentTerminalSession.objects.acreate(
+        agent_run=run,
+        tmux_session_name=f"tmux-{run.id}",
+        task_id=str(task.id),
+        module_id=str(task.id),
+        project_id=str(task.project_id),
+        agent=run.agent,
+        created_at=run.started_at,
+        runtime_namespace="current-runtime",
+        scope=run.scope,
+    )
+
+    records = await dao.agent_status_records(
+        str(task.project_id),
+        runtime_namespace="current-runtime",
+        now=datetime(2026, 8, 3, 11, tzinfo=timezone.utc),
+    )
+
+    assert len(records) == 1
+    assert records[0].task_id == task_id
+    assert records[0].module_id == task_id
+    assert await dao.get_run_routing(run.id) == (task_id, task_id)
+    assert await dao.get_status_routing(run.id) == (
+        str(task.project_id),
+        task_id,
+        task_id,
+        "task",
+        "codex",
+        "2026-08-03T10:00:00+00:00",
+    )
+
+
+async def test_status_records_exclude_active_foreign_runtime_sessions() -> None:
+    current = _make_run(
+        "current-runtime-run",
+        task_id="task-1",
+        started_at="2026-08-10T10:00:00+00:00",
+    )
+    foreign = _make_run(
+        "foreign-runtime-run",
+        task_id="task-2",
+        started_at="2026-08-10T10:01:00+00:00",
+    )
+    orphan = _make_run(
+        "terminal-less-run",
+        task_id="t",
+        started_at="2026-08-10T10:02:00+00:00",
+    )
+    for run in (current, foreign, orphan):
+        run.lifecycle_state = "working"
+        await dao.insert_agent_run(run)
+    for run, namespace in (
+        (current, "current-runtime"),
+        (foreign, "foreign-runtime"),
+    ):
+        await AgentTerminalSession.objects.acreate(
+            agent_run=run,
+            tmux_session_name=f"tmux-{run.id}",
+            task_id=str(run.issue_id),
+            module_id="mod-1",
+            project_id="proj-1",
+            agent=run.agent,
+            created_at=run.started_at,
+            runtime_namespace=namespace,
+            scope=run.scope,
+        )
+
+    records = await dao.agent_status_records(
+        fixture_uuid("proj-1"),
+        runtime_namespace="current-runtime",
+        now=datetime(2026, 8, 10, 11, tzinfo=timezone.utc),
+    )
+
+    assert [record.agent_run_id for record in records] == [current.id]

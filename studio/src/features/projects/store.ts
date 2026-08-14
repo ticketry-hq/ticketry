@@ -1,10 +1,19 @@
 import { create } from "zustand";
 import * as api from "../../shared/api/client";
 import { ApiError } from "../../shared/api/client";
-import { fetchModuleActivity, sortModulesByRecency } from "./utilities/moduleRecency";
 import * as recentProjects from "./utilities/recentProjects";
-import { toast } from "../../app/stores/toastStore";
-import { useSelectionStore } from "../work-items/stores/selectionStore";
+import { toast } from "../../state/clientStore";
+import { useClientStore } from "../../state/clientStore";
+import {
+  createProjectRecord,
+  deleteProjectRecord,
+  getModulesSnapshot,
+  getProjectsSnapshot,
+  loadModules,
+  loadProjects,
+  updateProjectRecord,
+} from "./queries";
+import { markModuleCreated } from "./internal/newlyCreatedModules";
 import type {
   Module,
   Project,
@@ -12,9 +21,10 @@ import type {
   ProjectPatch,
   View,
 } from "../../shared/api/types";
+import { loadIssueTypes } from "../settings";
+import { getConfigSnapshot } from "../studio/stores/configStore";
 
 const VIEWS: View[] = ["backlog", "settings"];
-export type ProjectResourceStatus = "idle" | "loading" | "ready" | "error";
 
 /** Coerce a raw URL segment to a known view, defaulting to backlog. */
 export function normalizeView(raw: string | undefined): View {
@@ -26,15 +36,13 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+// Client-only state: which project is open and which view is active. The
+// project and module lists themselves live in the TanStack Query cache
+// (features/projects/queries.ts); components subscribe with
+// useProjectsQuery/useModulesQuery.
 interface StudioState {
-  projects: Project[];
   selectedProjectId: string | null;
-  modules: Module[];
   activeView: View;
-  loadingProjects: boolean;
-  projectResourceStatus: ProjectResourceStatus;
-  projectLoadError: string | null;
-  loadingModules: boolean;
   error: string | null;
 
   loadProjects: () => Promise<void>;
@@ -68,36 +76,16 @@ export interface DeleteProjectResult {
 }
 
 export const useStudioStore = create<StudioState>((set, get) => ({
-  projects: [],
   selectedProjectId: null,
-  modules: [],
   activeView: "backlog",
-  loadingProjects: false,
-  projectResourceStatus: "idle",
-  projectLoadError: null,
-  loadingModules: false,
   error: null,
 
   async loadProjects() {
-    if (get().projectResourceStatus === "loading") return;
-    set({
-      loadingProjects: true,
-      projectResourceStatus: "loading",
-      projectLoadError: null,
-    });
     try {
-      const projects = await api.listProjects();
-      set({
-        projects,
-        loadingProjects: false,
-        projectResourceStatus: "ready",
-      });
-    } catch (e) {
-      set({
-        projectLoadError: errMessage(e),
-        loadingProjects: false,
-        projectResourceStatus: "error",
-      });
+      await loadProjects();
+    } catch {
+      // Load state and errors live on the query; callers that render them
+      // subscribe through useProjectsQuery.
     }
   },
 
@@ -106,21 +94,27 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     // "Used" = updated on every project switch (#665); the MRU order survives
     // reload and drives both startup selection and post-delete redirect.
     recentProjects.touch(id);
-    set({ selectedProjectId: id, modules: [], loadingModules: true, error: null });
+    set({ selectedProjectId: id, error: null });
+    useClientStore.setState({
+      selectedModuleId: null,
+      selectedTaskId: null,
+      workspaceSelection: { kind: "task" },
+    });
     try {
-      // Fetch modules and their recency signal in parallel, then sort once here
-      // so every workitems surface that reads `modules` (backlog groups,
-      // EpicRail, board swimlanes, story map columns)
-      // inherits the same newest-activity-first order (#831). The recency
-      // signal comes through a provider seam: with no provider registered — or
-      // on any failure — the map is empty and the API order is preserved.
-      const [modules, activity] = await Promise.all([
-        api.listModules(id),
-        fetchModuleActivity(id),
-      ]);
-      set({ modules: sortModulesByRecency(modules, activity), loadingModules: false });
+      await loadModules(id);
+      const { recentProfileIndex, profiles } = getConfigSnapshot();
+      const recentModuleId =
+        recentProfileIndex === null
+          ? undefined
+          : profiles[recentProfileIndex]?.recent_module_ids?.[id];
+      if (
+        recentModuleId &&
+        getModulesSnapshot(id).some((module) => module.id === recentModuleId)
+      ) {
+        await useClientStore.getState().selectModule(recentModuleId);
+      }
     } catch (e) {
-      set({ error: errMessage(e), loadingModules: false });
+      set({ error: errMessage(e) });
     }
   },
 
@@ -131,17 +125,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   async reloadModules() {
     const id = get().selectedProjectId;
     if (!id) return;
-    set({ loadingModules: true, error: null });
+    set({ error: null });
     try {
-      // Same fetch + recency sort as selectProject, so a reload after a create
-      // keeps the newest-activity-first order every workitems surface reads.
-      const [modules, activity] = await Promise.all([
-        api.listModules(id),
-        fetchModuleActivity(id),
-      ]);
-      set({ modules: sortModulesByRecency(modules, activity), loadingModules: false });
+      await loadModules(id);
     } catch (e) {
-      set({ error: errMessage(e), loadingModules: false });
+      set({ error: errMessage(e) });
     }
   },
 
@@ -157,14 +145,17 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   async createModuleForProjectWithError(projectId, name) {
-    const issueTypes = await api.listIssueTypes(projectId);
+    const issueTypes = await loadIssueTypes(projectId);
     const moduleType = issueTypes.find(
       (issueType) => issueType.level === "module" && issueType.name === "Module",
     );
     if (!moduleType) throw new Error("The Module issue type is unavailable.");
     const created = await api.createModule(projectId, name, moduleType.id);
+    // Recorded before the reload so the canonical order that reload produces
+    // already leads with the new module, in either ordering mode (#366).
+    markModuleCreated(projectId, created.id);
     // Reload so both normal create and guided create preserve the same ordering.
-    if (get().selectedProjectId === projectId) await get().reloadModules();
+    await loadModules(projectId).catch(() => {});
     return created;
   },
 
@@ -182,18 +173,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   async createProjectWithError(body) {
-    const created = await api.createProject(body);
-    set({ projects: [...get().projects, created] });
-    return created;
+    return createProjectRecord(body);
   },
 
   async updateProject(id, patch) {
     try {
-      const updated = await api.updateProject(id, patch);
-      set({
-        projects: get().projects.map((p) => (p.id === id ? updated : p)),
-      });
-      return updated;
+      return await updateProjectRecord(id, patch);
     } catch (e) {
       toast.error(errMessage(e));
       return null;
@@ -201,15 +186,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   async deleteProject(id) {
-    const snapshot = get().projects;
     const wasSelected = get().selectedProjectId === id;
-    // Optimistic removal; restore the whole list if the request fails.
-    set({ projects: snapshot.filter((p) => p.id !== id) });
     try {
-      await api.deleteProject(id);
+      await deleteProjectRecord(id);
       toast.success("Project deleted");
     } catch (e) {
-      set({ projects: snapshot });
       toast.error(errMessage(e));
       return { redirect: false, targetId: null };
     }
@@ -218,8 +199,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
     // The open project is gone: drop any selection it owned (not auto-cleared)
     // and resolve the MRU survivor for the caller to navigate to.
-    useSelectionStore.getState().clear();
-    const targetId = recentProjects.resolveStartProject(get().projects, id);
+    useClientStore.getState().selectionClear();
+    const targetId = recentProjects.resolveStartProject(getProjectsSnapshot(), id);
     return { redirect: true, targetId };
   },
 }));

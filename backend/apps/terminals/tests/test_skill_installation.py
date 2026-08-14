@@ -47,35 +47,83 @@ def test_install_is_offline_persistent_idempotent_and_provider_native(tmp_path):
         } == before[provider]
 
 
-def test_install_refuses_user_owned_collision_without_overwriting(tmp_path):
+def test_install_accepts_existing_skill_without_overwriting(tmp_path):
     home = tmp_path / "home"
     conflict = provider_skill_root("codex", home=home, environ={}) / "to-spec"
     conflict.mkdir(parents=True)
     skill_file = conflict / "SKILL.md"
     skill_file.write_text("---\nname: to-spec\n---\nuser-owned\n")
 
+    installed = install_packaged_skills(providers=("codex",), home=home, environ={})
+
+    assert installed["codex"] == conflict.parent
+    assert skill_file.read_text().endswith("user-owned\n")
+    assert (
+        verify_provider_installation("codex", names=("to-spec",), home=home, environ={})
+        == conflict.parent
+    )
+
+
+def test_existing_skill_does_not_prevent_other_provider_installations(tmp_path):
+    home = tmp_path / "home"
+    conflict = provider_skill_root("codex", home=home, environ={}) / "to-spec"
+    conflict.mkdir(parents=True)
+    skill_file = conflict / "SKILL.md"
+    skill_file.write_text("---\nname: to-spec\n---\nuser-owned\n")
+    claude_root = provider_skill_root("claude", home=home, environ={})
+
+    installed = install_packaged_skills(
+        providers=("claude", "codex"), home=home, environ={}
+    )
+
+    assert installed["claude"] == claude_root
+    assert (claude_root / "to-spec/SKILL.md").is_file()
+    assert skill_file.read_text().endswith("user-owned\n")
+
+
+def test_install_refuses_file_that_blocks_missing_skill(tmp_path):
+    home = tmp_path / "home"
+    conflict = provider_skill_root("codex", home=home, environ={}) / "to-spec"
+    conflict.parent.mkdir(parents=True)
+    conflict.write_text("user-owned\n")
+
     with pytest.raises(SkillInstallationError) as caught:
         install_packaged_skills(providers=("codex",), home=home, environ={})
 
     assert caught.value.reason == "collision"
     assert caught.value.path == conflict
-    assert skill_file.read_text().endswith("user-owned\n")
+    assert conflict.exists()
+    assert conflict.read_text() == "user-owned\n"
 
 
-def test_install_refuses_alias_collision(tmp_path):
+def test_install_accepts_symlinked_existing_skill(tmp_path):
+    home = tmp_path / "home"
+    conflict = provider_skill_root("codex", home=home, environ={}) / "to-spec"
+    conflict.parent.mkdir(parents=True)
+    target = tmp_path / "user-owned-skill"
+    target.mkdir()
+    (target / "SKILL.md").write_text("---\nname: to-spec\n---\nuser-owned\n")
+    conflict.symlink_to(target, target_is_directory=True)
+
+    install_packaged_skills(providers=("codex",), home=home, environ={})
+
+    assert conflict.is_symlink()
+    assert (conflict / "SKILL.md").read_text().endswith("user-owned\n")
+
+
+def test_install_accepts_existing_skill_in_alias_directory(tmp_path):
     home = tmp_path / "home"
     alias = provider_skill_root("claude", home=home, environ={}) / "my-spec"
     alias.mkdir(parents=True)
     (alias / "SKILL.md").write_text("---\nname: to-spec\n---\nlocal\n")
 
-    with pytest.raises(SkillInstallationError) as caught:
-        install_packaged_skills(providers=("claude",), home=home, environ={})
+    install_packaged_skills(providers=("claude",), home=home, environ={})
 
-    assert caught.value.reason == "collision"
-    assert caught.value.path == alias
+    assert not (alias.parent / "to-spec").exists()
+    assert (alias / "SKILL.md").read_text().endswith("local\n")
 
 
-def test_install_repairs_only_a_manifest_owned_unchanged_version(
+def test_install_keeps_existing_managed_version_when_catalog_changes(
     monkeypatch, tmp_path
 ):
     home = tmp_path / "home"
@@ -113,16 +161,16 @@ def test_install_repairs_only_a_manifest_owned_unchanged_version(
 
     install_packaged_skills(providers=("codex",), home=home, environ={})
 
-    assert tree_digest(root / "to-spec") == new_digest
+    assert tree_digest(root / "to-spec") == old_digest
 
 
-def test_verification_fails_after_installed_skill_is_modified(tmp_path):
+def test_verification_accepts_modified_existing_skill(tmp_path):
     home = tmp_path / "home"
     install_packaged_skills(providers=("agy",), home=home, environ={})
     root = provider_skill_root("agy", home=home, environ={})
-    (root / "to-spec/SKILL.md").write_text("changed\n")
+    (root / "to-spec/SKILL.md").write_text("---\nname: to-spec\n---\nchanged\n")
 
-    with pytest.raises(SkillInstallationError) as caught:
+    assert (
         verify_provider_installation("agy", names=("to-spec",), home=home, environ={})
-
-    assert caught.value.reason == "modified"
+        == root
+    )

@@ -1,35 +1,47 @@
-import { create } from "zustand";
+import { useQuery } from "@tanstack/react-query";
 import * as api from "../../shared/api/client";
+import { queryClient } from "../../shared/query/queryClient";
+import { queryKeys } from "../../shared/query/keys";
 
-interface OnboardingState {
-  onboardingRequired: boolean;
-  loadWorkspaceState: () => Promise<void>;
-  acknowledgeOnboarding: () => Promise<void>;
+async function fetchOnboardingRequired(): Promise<boolean> {
+  return (await api.getWorkspace()).onboarding_required;
 }
 
-/**
- * Owns whether first-run onboarding is still unacknowledged for this
- * workspace. Loaded during the bootstrap fan-out; the run-local tour store
- * next door owns tour progress, not this durable flag.
- */
-export const useOnboardingStore = create<OnboardingState>((set) => ({
-  onboardingRequired: false,
+export async function loadWorkspaceState(): Promise<void> {
+  try {
+    await queryClient.fetchQuery({
+      queryKey: queryKeys.workspace,
+      queryFn: fetchOnboardingRequired,
+      staleTime: 0,
+    });
+  } catch (error) {
+    // A flaky workspace endpoint must not strand an existing user during
+    // bootstrap. Absence is deliberately interpreted as no pending welcome.
+    console.warn("[onboarding] workspace state load failed", error);
+    queryClient.setQueryData(queryKeys.workspace, false);
+  }
+}
 
-  // Deliberately never rejects: a flaky workspace endpoint must not reach the
-  // bootstrap error path and strand an existing user on a retry screen. The
-  // failure mode is a missing welcome, not a blocked launch.
-  async loadWorkspaceState() {
-    try {
-      const workspace = await api.getWorkspace();
-      set({ onboardingRequired: workspace.onboarding_required });
-    } catch (error) {
-      console.warn("[onboarding] workspace state load failed", error);
-      set({ onboardingRequired: false });
-    }
-  },
+export async function acknowledgeOnboarding(): Promise<void> {
+  const workspace = await api.acknowledgeOnboarding();
+  queryClient.setQueryData(
+    queryKeys.workspace,
+    workspace.onboarding_required,
+  );
+}
 
-  async acknowledgeOnboarding() {
-    const workspace = await api.acknowledgeOnboarding();
-    set({ onboardingRequired: workspace.onboarding_required });
-  },
-}));
+export function getOnboardingRequiredSnapshot(): boolean {
+  return queryClient.getQueryData<boolean>(queryKeys.workspace) ?? false;
+}
+
+export function useOnboardingRequired(): boolean {
+  const { data } = useQuery(
+    {
+      queryKey: queryKeys.workspace,
+      queryFn: fetchOnboardingRequired,
+      enabled: false,
+    },
+    queryClient,
+  );
+  return data ?? false;
+}

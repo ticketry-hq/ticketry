@@ -40,6 +40,7 @@ test("committed artifact declares itself authoritative and removes provenance", 
   assert.deepEqual(
     Object.fromEntries(artifact.states.map((state) => [state.name, state.autoStart])),
     {
+      Ideas: true,
       Grill: false,
       Spec: true,
       Tickets: true,
@@ -51,9 +52,21 @@ test("committed artifact declares itself authoritative and removes provenance", 
   );
   assert.equal(
     artifact.workflows.Story.transitions.find(
+      ([source, target]) => source === "Ideas" && target === "Implement",
+    )[2].agentAllowed,
+    true,
+  );
+  assert.equal(
+    artifact.workflows.Story.transitions.find(
       ([source, target]) => source === "Tickets" && target === "Implement",
     )[2].agentAllowed,
     false,
+  );
+  assert.equal(
+    artifact.workflows.Story.transitions.find(
+      ([source, target]) => source === "Implement" && target === "Grill",
+    )[2].agentAllowed,
+    true,
   );
   assert.ok(
     Object.values(artifact.workflows).every((workflow) =>
@@ -65,6 +78,7 @@ test("committed artifact declares itself authoritative and removes provenance", 
     ),
   );
   assert.deepEqual(artifact.requiredSkills, {
+    Ideas: [],
     Grill: ["grill-with-docs"],
     Spec: ["to-spec"],
     Tickets: ["to-tickets"],
@@ -144,22 +158,22 @@ const rejectionFixtures = [
     mutate: (value) => {
       value.states[0].group = "triage";
     },
-    message: /State 'Grill' has invalid board group 'triage'/,
+    message: /State 'Ideas' has invalid board group 'triage'/,
   },
   {
     name: "unrecognised stage auto-start value",
     mutate: (value) => {
       value.states[0].autoStart = "sometimes";
     },
-    message: /Stage 'Grill'.*unrecognised autoStart value 'sometimes'/,
+    message: /Stage 'Ideas'.*unrecognised autoStart value 'sometimes'/,
   },
   {
     name: "auto-start without a prompt",
     mutate: (value) => {
       value.states[0].autoStart = true;
-      delete value.prompts.Story.Grill;
+      delete value.prompts.Story.Ideas;
     },
-    message: /Stage 'Grill' declares autoStart.*Story.*no prompt to launch with/,
+    message: /Stage 'Ideas' declares autoStart.*Story.*no prompt to launch with/,
   },
   {
     name: "missing state group and color",
@@ -168,8 +182,8 @@ const rejectionFixtures = [
       delete value.states[0].color;
     },
     message: [
-      /State 'Grill' is missing its board group/,
-      /State 'Grill' is missing its color/,
+      /State 'Ideas' is missing its board group/,
+      /State 'Ideas' is missing its color/,
     ],
   },
   {
@@ -224,7 +238,9 @@ const rejectionFixtures = [
   {
     name: "unrecognised edge agent-permission value",
     mutate: (value) => {
-      value.workflows.Story.transitions[0][2].agentAllowed = "sometimes";
+      value.workflows.Story.transitions.find(
+        ([source, target]) => source === "Grill" && target === "Spec",
+      )[2].agentAllowed = "sometimes";
     },
     message: /edge 'Grill -> Spec'.*unrecognised agentAllowed value 'sometimes'/,
   },

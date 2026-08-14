@@ -8,7 +8,7 @@
 // internals, and foreground registry — remains implementation.
 //
 // The interface, by intent:
-//   launchSession / launchDocChat  create a run (the spawn verb, separate from display)
+//   launchSession                 creates a run (the spawn verb, separate from display)
 //   useTaskSessions / useActiveSession
 //                                  the tab-strip queries: a bucket's ordered
 //                                  terminal tabs (with lifecycle) + focused tab
@@ -18,6 +18,8 @@
 //                                  interface changes)
 
 export { LifecycleBadge } from "./LifecycleBadge";
+export { Terminal } from "./Terminal";
+export { RetainedTerminalViewers } from "./RetainedTerminalViewers";
 // The modal bodies (AgentPicker, ModuleFolder, PromptInput) are deliberately
 // NOT value re-exported: ModalHost lazy-imports them from their own public
 // leaf entrypoints, and a value re-export here would drag their whole UI
@@ -38,18 +40,19 @@ export type {
   LifecycleState,
   LifecycleTone,
 } from "./lifecycle";
-export type {
-  FolderConfigHook,
-  ModuleFolderPayload,
-} from "./ModuleFolder";
+export type { ModuleFolderPayload } from "./ModuleFolder";
 
 export {
   launchSession,
-  launchDocChat,
   useTaskSessions,
   useActiveSession,
   type SessionTab,
 } from "./hooks";
+export {
+  usePersistedTerminalSessions,
+  useResumableTerminalSessions,
+  useScratchTerminalSessions,
+} from "./queries";
 
 // The store hook plus the pure keys/types hosts need to address sessions.
 // Deliberately named — the selector library and mutation internals stay in
@@ -57,18 +60,15 @@ export {
 export {
   bucketFor,
   bucketOfMeta,
-  docChatKey,
   isScratchBucket,
   scratchBucketId,
-  scratchResumableKey,
   useTerminalStore,
   type SessionMeta,
   type SessionStatus,
 } from "./internal/sessionStore";
-export { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
+export { useClientStore as useWorkspaceTabsStore } from "../../../state/clientStore";
 export {
   launchAgent,
-  launchDocumentAgent,
   attachToRun,
   ackTerminal,
   closeTerminal,
@@ -88,8 +88,6 @@ export type {
   ScratchPlanningLaunch,
 } from "./create/types";
 
-export type { ResumableTerminalSession } from "../types";
-
 // Foreground arbitration helpers. `<Terminal>` absorbs claim handling, so most
 // callers never need these; exported for the shells that reason about
 // ownership transfer explicitly (and their tests).
@@ -100,3 +98,5 @@ export {
   useTerminalForegroundStore,
   type ForegroundOwner,
 } from "./internal/foregroundStore";
+export { focusTerminal } from "./internal/terminalRegistry";
+export { launchFailureMessage } from "./internal/launchFailure";

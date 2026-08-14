@@ -13,7 +13,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from worktracker.models import Issue, Project, State, Workspace
+from worktracker.models import Issue, IssueType, Project, State, Workspace
 from apps.worktrees import dao, service, signals
 
 
@@ -30,9 +30,13 @@ def sync_executor(monkeypatch):
 @pytest.fixture
 def project():
     ws = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    return Project.objects.create(
+    project = Project.objects.create(
         id=uuid.uuid4(), workspace=ws, name="Coding", slug="CODIN", seq_counter=10
     )
+    IssueType.objects.create(
+        id=uuid.uuid4(), project=project, name="Story", level="task"
+    )
+    return project
 
 
 def _state(project, group: str) -> State:
@@ -49,6 +53,7 @@ def _task(project, *, seq: int, state: State) -> Issue:
         name="A task",
         sequence_id=seq,
         state=state,
+        issue_type=IssueType.objects.get(project=project, level="task"),
     )
 
 
@@ -89,7 +94,7 @@ def test_close_hook_no_worktree_noop(project, monkeypatch):
     monkeypatch.setattr(service, "integrate", integrate)
 
     completed = _state(project, "completed")
-    task = _task(project, seq=2, state=completed)  # save into completed, no record
+    _task(project, seq=2, state=completed)  # save into completed, no record
 
     integrate.assert_not_called()
 
@@ -112,6 +117,7 @@ def test_close_hook_subtask_does_not_land_parent(project, monkeypatch):
         sequence_id=4,
         state=completed,
         parent=parent,
+        issue_type=parent.issue_type,
     )
 
     # Only the sub-task entered completed; its own id owns no worktree.

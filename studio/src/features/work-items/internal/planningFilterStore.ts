@@ -44,7 +44,7 @@ const LEGACY_KEY_PREFIX = "studio.planningFilter.";
 const EMPTY: Selection = { epicIds: [], stateIds: [] };
 
 // Load a project's persisted selection; a missing/invalid key — or any storage
-// failure — degrades to all-empty rather than throwing (mirrors uiStore).
+// failure — degrades to all-empty rather than throwing (mirrors clientStore).
 function loadSelection(projectId: string): Selection {
   try {
     const raw = readVersionedItem(KEY_PREFIX + projectId, [

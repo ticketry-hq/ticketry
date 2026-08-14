@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "xterm/css/xterm.css";
 
 import {
@@ -14,7 +15,10 @@ import {
 import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
 import { useTerminalPresentation } from "./internal/useTerminalPresentation";
-import { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
+import { registerTerminalFocus } from "./internal/terminalRegistry";
+import { NativeGhosttyTerminal } from "./NativeGhosttyTerminal";
+import { nativeGhosttyAvailable } from "./internal/nativeGhosttyAvailability";
+import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
@@ -24,13 +28,111 @@ const OWNER_LABEL: Record<ForegroundOwner, string> = {
 type TerminalProps = {
   sessionId: string | null;
   owner?: ForegroundOwner;
+  /** Whether this terminal is the workspace's currently presented surface. */
+  active?: boolean;
   /** A controlled request to focus the currently presented terminal. */
   focusSignal?: number;
+  onNativeVisibilityPendingChange?: (runId: string, pending: boolean) => void;
 };
 
 /** Presents a pooled terminal session on one foreground surface. */
-export function Terminal({ sessionId, owner = "studio", focusSignal }: TerminalProps) {
-  return <XtermTerminal sessionId={sessionId} owner={owner} focusSignal={focusSignal} />;
+export function Terminal({
+  sessionId,
+  owner = "studio",
+  focusSignal,
+  active = true,
+  onNativeVisibilityPendingChange,
+}: TerminalProps) {
+  const session = useTerminalStore((state) =>
+    sessionId ? state.sessions[sessionId] ?? null : null,
+  );
+  const desktop = isTauri();
+  const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(() =>
+    desktop ? null : false,
+  );
+  const [nativeFailure, setNativeFailure] = useState<{
+    sessionId: string | null;
+    reason: string;
+  } | null>(null);
+  const markNativeUnavailable = useCallback((reason: string) => {
+    setNativeFailure({ sessionId, reason });
+  }, [sessionId]);
+  const nativeFailureReason =
+    nativeFailure?.sessionId === sessionId ? nativeFailure.reason : null;
+
+  useEffect(() => {
+    if (!desktop) return;
+    let active = true;
+    void nativeGhosttyAvailable().then((available) => {
+      if (active) setNativeAvailable(available);
+    });
+    return () => {
+      active = false;
+    };
+  }, [desktop]);
+
+  useEffect(() => {
+    if (!sessionId || !session) return;
+    ensureTerminalRunCreated(sessionId, session);
+  }, [session, sessionId]);
+
+  if (desktop && (nativeAvailable === null || !session?.agentRunId)) {
+    return (
+      <div
+        className="h-full w-full bg-pane-panel"
+        data-testid="terminal-renderer-pending"
+      />
+    );
+  }
+
+  if (
+    nativeAvailable &&
+    sessionId &&
+    session?.agentRunId &&
+    nativeViewerSessionIsLive(session.status) &&
+    !nativeFailureReason
+  ) {
+    return (
+      <NativeGhosttyTerminal
+        sessionId={sessionId}
+        owner={owner}
+        focusSignal={focusSignal}
+        active={active}
+        onUnavailable={markNativeUnavailable}
+        onVisibilityPendingChange={onNativeVisibilityPendingChange}
+      />
+    );
+  }
+  const fallback = (
+    <XtermTerminal
+      sessionId={active || session?.status === "connecting" ? sessionId : null}
+      owner={owner}
+      focusSignal={focusSignal}
+    />
+  );
+  if (!nativeFailureReason) return fallback;
+  return (
+    <div className="relative h-full w-full">
+      {fallback}
+      <div
+        role="status"
+        data-testid="native-terminal-fallback-notice"
+        className="pointer-events-none absolute bottom-2 right-2 max-w-[min(32rem,calc(100%-1rem))] rounded border border-lifecycle-attention/40 bg-pane-bg/95 px-2 py-1 text-xs text-lifecycle-attention shadow"
+      >
+        Native terminal unavailable: {nativeFailureReason}. Using compatibility renderer.
+      </div>
+    </div>
+  );
+}
+
+function nativeViewerSessionIsLive(status: string): boolean {
+  return ![
+    "exited",
+    "error",
+    "viewer_closed",
+    "pty_eof",
+    "session_lost",
+  ].includes(status);
 }
 
 function XtermTerminal({
@@ -41,9 +143,7 @@ function XtermTerminal({
   const sessions = useTerminalStore((state) => state.sessions);
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
   const unregisterHost = useTerminalForegroundStore((state) => state.unregisterHost);
-  const focusRequest = useWorkspaceTabsStore((state) => state.focusRequest);
   const handledFocusSignalRef = useRef(0);
-  const handledFocusRequestRef = useRef(0);
 
   useEffect(() => syncEntries(sessions), [sessions]);
 
@@ -67,16 +167,20 @@ function XtermTerminal({
   }, [hostRef, owner, registerHost, unregisterHost]);
 
   useEffect(() => {
+    if (!visibleSessionId) return;
+    return registerTerminalFocus(visibleSessionId, () => {
+      if (mountedIdRef.current !== visibleSessionId) return;
+      getEntry(visibleSessionId)?.term.focus?.();
+    });
+  }, [mountedIdRef, visibleSessionId]);
+
+  useEffect(() => {
     const pendingSignal =
       focusSignal !== undefined &&
       focusSignal !== 0 &&
       focusSignal !== handledFocusSignalRef.current;
-    const pendingRequest =
-      focusRequest !== null &&
-      focusRequest.sessionId === visibleSessionId &&
-      focusRequest.sequence !== handledFocusRequestRef.current;
     if (
-      (!pendingSignal && !pendingRequest) ||
+      !pendingSignal ||
       !visibleSessionId ||
       mountedIdRef.current !== visibleSessionId
     ) {
@@ -88,11 +192,8 @@ function XtermTerminal({
     if (pendingSignal && focusSignal !== undefined) {
       handledFocusSignalRef.current = focusSignal;
     }
-    if (pendingRequest && focusRequest) {
-      handledFocusRequestRef.current = focusRequest.sequence;
-    }
     entry.term.focus?.();
-  }, [focusRequest, focusSignal, mountedIdRef, visibleSessionId]);
+  }, [focusSignal, mountedIdRef, visibleSessionId]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
 

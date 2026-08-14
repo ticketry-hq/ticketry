@@ -46,16 +46,16 @@ def test_generated_client_and_tag_apis_are_public() -> None:
 
 
 def test_generated_model_round_trips() -> None:
-    from worktracker_sdk.generated import ProjectOut
+    from worktracker_sdk.generated import Project
 
-    project = ProjectOut(
+    project = Project(
         id=UUID("11111111-1111-1111-1111-111111111111"),
         name="Memory Lane",
         slug="MEML",
         description="Generated model smoke test",
     )
 
-    assert ProjectOut.from_json(project.to_json()) == project
+    assert Project.model_validate_json(project.model_dump_json()) == project
 
 
 class _StubHttpResponse:
@@ -69,7 +69,7 @@ class _StubHttpResponse:
 def test_generated_api_uses_stubbed_http_layer() -> None:
     from worktracker_sdk import ApiClient, Configuration, ProjectsApi
 
-    configuration = Configuration(host="https://worktracker.test/api/work-tracker")
+    configuration = Configuration(host="https://worktracker.test/api")
     client = ApiClient(configuration)
     client.rest_client.pool_manager.request = lambda *args, **kwargs: _StubHttpResponse(
         200,
@@ -89,7 +89,7 @@ def test_generated_api_maps_http_errors() -> None:
     from worktracker_sdk import ApiClient, Configuration, ProjectsApi
     from worktracker_sdk.generated.exceptions import NotFoundException
 
-    configuration = Configuration(host="https://worktracker.test/api/work-tracker")
+    configuration = Configuration(host="https://worktracker.test/api")
     client = ApiClient(configuration)
     client.rest_client.pool_manager.request = lambda *args, **kwargs: _StubHttpResponse(
         404,

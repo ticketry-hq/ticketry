@@ -104,7 +104,6 @@ def _prepare_pending_database(data_dir: Path) -> Path:
         {
             "MUXED_DATA_DIR": str(data_dir),
             "MUXED_STATE_DB": str(database_path),
-            "MUXED_SKIP_LOCAL_STATE_MIGRATION": "1",
         }
     )
     subprocess.run(
@@ -355,6 +354,11 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
     ) as port:
         headers = {"x-api-key": (tmp_path / "worktracker_token").read_text().strip()}
         base_url = f"http://127.0.0.1:{port}/api/work-tracker"
+        workspace_response = httpx.get(
+            f"{base_url}/workspace", headers=headers, timeout=30
+        )
+        assert workspace_response.status_code == 200
+        assert workspace_response.json()["slug"] == "meml"
         project_response = httpx.post(
             f"{base_url}/projects",
             headers=headers,
@@ -372,10 +376,14 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
         assert issue_types_response.status_code == 200
         issue_types = issue_types_response.json()
         module_type_id = next(
-            issue_type["id"] for issue_type in issue_types if issue_type["level"] == "module"
+            issue_type["id"]
+            for issue_type in issue_types
+            if issue_type["level"] == "module"
         )
         task_type_id = next(
-            issue_type["id"] for issue_type in issue_types if issue_type["name"] == "Story"
+            issue_type["id"]
+            for issue_type in issue_types
+            if issue_type["name"] == "Story"
         )
 
         module_response = httpx.post(
@@ -418,6 +426,25 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
                     "task",
                 ),
             )
+            database.execute(
+                """
+                INSERT INTO agent_terminal_sessions (
+                    agent_run_id, tmux_session_name, task_id, module_id,
+                    project_id, agent, created_at, scope
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    f"pt-{run_id}",
+                    task_id,
+                    module_id,
+                    project_id,
+                    "codex",
+                    "2020-01-01T00:00:00+00:00",
+                    "task",
+                ),
+            )
+
         spool_identity = hashlib.sha256(
             str(tmp_path.resolve()).encode("utf-8")
         ).hexdigest()[:16]
@@ -500,9 +527,7 @@ def test_frozen_backend_refuses_to_start_without_native_hook_runner(tmp_path):
 
     assert result.returncode == 1
     assert (
-        result.stdout.splitlines().count(
-            "MUXED_FAILURE crash sidecar could not start"
-        )
+        result.stdout.splitlines().count("MUXED_FAILURE crash sidecar could not start")
         == 1
     )
     assert "packaged hook runner is missing" in result.stderr
@@ -568,19 +593,7 @@ def test_packaged_sidecar_starts_mcp_and_completes_initialize():
 def test_sidecar_migrates_authenticates_and_stops(tmp_path):
     port = _free_port()
     credential = "ephemeral-test-credential"
-    environment = {
-        key: value
-        for key, value in os.environ.items()
-        if key
-        not in {
-            "MUXED_DATA_DIR",
-            "MUXED_DESKTOP_ORIGIN",
-            "MUXED_STATE_DB",
-            "DJANGO_SETTINGS_MODULE",
-            "WORKTRACKER_API_TOKEN",
-            "WORKTRACKER_DISABLE_AUTH",
-        }
-    }
+    environment = _isolated_sidecar_environment()
     environment["MUXED_SIDECAR_CREDENTIAL"] = credential
     environment["MUXED_ADMIN_ENABLED"] = "true"
     process = subprocess.Popen(
@@ -621,6 +634,12 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
             raise AssertionError("sidecar did not emit a readiness line")
 
         url = f"http://127.0.0.1:{port}/api/work-tracker/projects"
+        workspace_url = f"http://127.0.0.1:{port}/api/work-tracker/workspace"
+        workspace_response = httpx.get(
+            workspace_url, headers={"x-api-key": credential}, timeout=30
+        )
+        assert workspace_response.status_code == 200
+        assert workspace_response.json()["slug"] == "meml"
         assert (
             httpx.get(url, headers={"x-api-key": credential}, timeout=5).status_code
             == 200
@@ -633,14 +652,14 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
         assert config_response.status_code == 200
         assert config_response.json() == {
             "recent_profile_index": 0,
-            "features": {"projects": False},
+            "features": {"sidebar": False, "projects": False},
             "profiles": [
                 {
                     "name": "Local",
                     "workspace_slug": "meml",
                     "agent_prompt": None,
                     "agent_prompts": {},
-                    "module_folders": {},
+                    "module_links": [],
                     "recent_project_id": None,
                     "recent_module_ids": {},
                 }
@@ -675,9 +694,7 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
             timeout=5,
         )
         assert preflight.status_code == 204
-        assert (
-            preflight.headers["access-control-allow-origin"] == "tauri://localhost"
-        )
+        assert preflight.headers["access-control-allow-origin"] == "tauri://localhost"
         assert "x-api-key" in preflight.headers["access-control-allow-headers"]
         assert (
             httpx.get(f"http://127.0.0.1:{port}/wt-admin/", timeout=5).status_code
@@ -771,7 +788,7 @@ def test_sidecar_startup_installs_skills_before_readiness(tmp_path):
         assert {path.name for path in root.iterdir() if path.is_dir()} == expected
 
 
-def test_sidecar_startup_refuses_a_user_owned_skill_collision(tmp_path):
+def test_sidecar_startup_uses_an_existing_user_skill_without_warning(tmp_path):
     home = tmp_path / "home"
     conflict = home / ".codex/skills/to-spec"
     conflict.mkdir(parents=True)
@@ -780,19 +797,25 @@ def test_sidecar_startup_refuses_a_user_owned_skill_collision(tmp_path):
     environment = _isolated_sidecar_environment()
     environment["HOME"] = str(home)
 
-    result = subprocess.run(
+    process = subprocess.Popen(
         _sidecar_command(_free_port(), data_dir),
         cwd=tmp_path,
         env=environment,
         text=True,
-        capture_output=True,
-        timeout=30,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
+    try:
+        _wait_for_readiness(process)
+        process.terminate()
+        assert process.wait(timeout=10) == 0
+        stderr = process.stderr.read()
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=10)
 
-    assert result.returncode == 1
-    assert "skill_installation_failed" in result.stderr
-    assert "Refusing to overwrite" in result.stderr
-    assert '"event":"ready"' not in result.stdout
+    assert '"event":"provider_skill_preparation_failed"' not in stderr
     assert (conflict / "SKILL.md").read_text().endswith("user-owned\n")
 
 
@@ -892,17 +915,21 @@ def test_packaged_posture_is_forced_and_secret_survives_restarts(tmp_path):
         assert first_secret != inherited_development_secret
         assert first_secret != "muxed-localhost-only"
         assert stat.S_IMODE(secret_file.stat().st_mode) == 0o600
+        api_headers = {
+            "Host": "localhost",
+            "x-api-key": (tmp_path / "worktracker_token").read_text().strip(),
+        }
 
         loopback_response = httpx.get(
             f"http://127.0.0.1:{port}/api/config",
-            headers={"Host": "localhost"},
+            headers=api_headers,
             timeout=5,
         )
         assert loopback_response.status_code == 200
 
         rejected_host = httpx.get(
             f"http://127.0.0.1:{port}/api/config",
-            headers={"Host": "untrusted.invalid"},
+            headers={**api_headers, "Host": "untrusted.invalid"},
             timeout=5,
         )
         assert rejected_host.status_code == 400

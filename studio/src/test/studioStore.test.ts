@@ -6,6 +6,8 @@ vi.mock("../shared/api/client", async () => {
     ...actual,
     listProjects: vi.fn(),
     listModules: vi.fn(),
+    getTasks: vi.fn(),
+    putProfile: vi.fn(),
     createProject: vi.fn(),
     updateProject: vi.fn(),
     deleteProject: vi.fn(),
@@ -16,38 +18,56 @@ import * as api from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
 import { registerModuleRecencyProvider } from "../features/projects/utilities/moduleRecency";
 import { normalizeView, useStudioStore } from "../features/projects/store";
-import { useSelectionStore } from "../features/work-items/stores/selectionStore";
+import {
+  getModulesSnapshot,
+  getProjectsSnapshot,
+  seedProjects,
+} from "../features/projects";
+import { useClientStore } from "../state/clientStore";
+import { queryClient } from "../shared/query/queryClient";
 import type { Module, Project } from "../shared/api/types";
+import { seedConfig } from "../features/studio/stores/configStore";
 
 const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
 const listModules = api.listModules as ReturnType<typeof vi.fn>;
+const getTasks = api.getTasks as ReturnType<typeof vi.fn>;
+const putProfile = api.putProfile as ReturnType<typeof vi.fn>;
 const createProject = api.createProject as ReturnType<typeof vi.fn>;
 const updateProject = api.updateProject as ReturnType<typeof vi.fn>;
 const deleteProject = api.deleteProject as ReturnType<typeof vi.fn>;
 
-const P = (id: string): Project => ({ id, name: id, slug: id.toUpperCase(), description: "" });
+const P = (id: string): Project => ({
+  id,
+  name: id,
+  slug: id.toUpperCase(),
+  description: "",
+  manual_module_order: false,
+});
 
 beforeEach(() => {
   localStorage.clear();
+  queryClient.clear();
   // Default: no recency provider registered → empty activity map → API order
   // preserved (the generic-without-overlay behavior). Individual tests below
   // register a provider to exercise the recency-ordered path.
   registerModuleRecencyProvider(async () => ({}));
   listProjects.mockReset();
   listModules.mockReset().mockResolvedValue([]);
+  getTasks.mockReset().mockResolvedValue({
+    rootIds: [],
+    children: {},
+    order: [],
+    states: [],
+    workItems: [],
+  });
+  putProfile.mockReset();
   createProject.mockReset();
   updateProject.mockReset();
   deleteProject.mockReset();
-  useSelectionStore.getState().clear();
+  useClientStore.getState().selectionClear();
   useStudioStore.setState({
-    projects: [],
     selectedProjectId: null,
-    modules: [],
     activeView: "backlog",
-    loadingProjects: false,
-    projectResourceStatus: "idle",
-    projectLoadError: null,
-    loadingModules: false,
     error: null,
   });
 });
@@ -65,14 +85,10 @@ describe("normalizeView", () => {
 });
 
 describe("studioStore", () => {
-  it("loadProjects makes the project list ready as one resource", async () => {
+  it("loadProjects populates the cached project list", async () => {
     listProjects.mockResolvedValue([{ id: "p1", name: "Studio", slug: "CODIN" }]);
     await useStudioStore.getState().loadProjects();
-    const s = useStudioStore.getState();
-    expect(s.projects).toHaveLength(1);
-    expect(s.loadingProjects).toBe(false);
-    expect(s.projectResourceStatus).toBe("ready");
-    expect(s.projectLoadError).toBeNull();
+    expect(getProjectsSnapshot()).toHaveLength(1);
   });
 
   it("selectProject loads that project's modules", async () => {
@@ -82,9 +98,130 @@ describe("studioStore", () => {
     await useStudioStore.getState().selectProject("p1");
     const s = useStudioStore.getState();
     expect(s.selectedProjectId).toBe("p1");
-    expect(s.modules).toHaveLength(1);
-    expect(s.loadingModules).toBe(false);
+    expect(getModulesSnapshot("p1")).toHaveLength(1);
     expect(listModules).toHaveBeenCalledWith("p1");
+  });
+
+  it("restores the profile's recent module when its project loads", async () => {
+    listModules.mockResolvedValue([
+      { id: "m1", name: "Studio", project_id: "p1" },
+    ]);
+    seedConfig({
+      recentProfileIndex: 0,
+      profiles: [
+        {
+          name: "Local",
+          workspace_slug: "meml",
+          agent_prompt: null,
+          agent_prompts: {},
+          module_links: [{ module_id: "m1", path: "/repos/m1" }],
+          recent_project_id: "p1",
+          recent_module_ids: { p1: "m1" },
+        },
+      ],
+    });
+
+    await useStudioStore.getState().selectProject("p1");
+
+    expect(useClientStore.getState().selectedModuleId).toBe("m1");
+    expect(getTasks).toHaveBeenCalledWith("p1", "m1");
+  });
+
+  it("restores the remembered task after its module tree loads", async () => {
+    listModules.mockResolvedValue([
+      { id: "m1", name: "Studio", project_id: "p1" },
+    ]);
+    getTasks.mockResolvedValue({
+      rootIds: ["story-1"],
+      children: { "story-1": [] },
+      order: ["story-1"],
+      states: [],
+      workItems: [],
+    });
+    localStorage.setItem(
+      "studio.selectedTaskByModule:v1",
+      JSON.stringify({ m1: "story-1" }),
+    );
+    seedConfig({
+      recentProfileIndex: 0,
+      profiles: [
+        {
+          name: "Local",
+          workspace_slug: "meml",
+          agent_prompt: null,
+          agent_prompts: {},
+          module_links: [{ module_id: "m1", path: "/repos/m1" }],
+          recent_project_id: "p1",
+          recent_module_ids: { p1: "m1" },
+        },
+      ],
+    });
+
+    await useStudioStore.getState().selectProject("p1");
+
+    expect(useClientStore.getState().selectedTaskId).toBe("story-1");
+  });
+
+  it("does not restore a remembered task missing from the loaded module", async () => {
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    seedConfig({
+      recentProfileIndex: 0,
+      profiles: [
+        {
+          name: "Local",
+          workspace_slug: "meml",
+          agent_prompt: null,
+          agent_prompts: {},
+          module_links: [{ module_id: "m1", path: "/repos/m1" }],
+          recent_project_id: "p1",
+          recent_module_ids: { p1: "m1" },
+        },
+      ],
+    });
+    getTasks.mockResolvedValue({
+      rootIds: [],
+      children: {},
+      order: [],
+      states: [],
+      workItems: [],
+    });
+    localStorage.setItem(
+      "studio.selectedTaskByModule:v1",
+      JSON.stringify({ m1: "deleted-story" }),
+    );
+
+    await useClientStore.getState().selectModule("m1");
+
+    expect(useClientStore.getState().selectedTaskId).toBeNull();
+  });
+
+  it("persists a module selection in the active profile", async () => {
+    const profile = {
+      name: "Local",
+      workspace_slug: "meml",
+      agent_prompt: null,
+      agent_prompts: {},
+      module_links: [{ module_id: "m1", path: "/repos/m1" }],
+      recent_project_id: "p1",
+      recent_module_ids: {},
+    };
+    seedConfig({ recentProfileIndex: 0, profiles: [profile] });
+    useStudioStore.setState({ selectedProjectId: "p1" });
+    putProfile.mockImplementation(async (_index, body) => ({
+      recent_profile_index: 0,
+      profiles: [body],
+      features: { sidebar: false, projects: false },
+    }));
+
+    await useClientStore.getState().selectModule("m1");
+
+    expect(putProfile).toHaveBeenCalledWith(
+      0,
+      expect.objectContaining({
+        recent_project_id: "p1",
+        recent_module_ids: { p1: "m1" },
+      }),
+    );
   });
 
   it("does not refetch modules for the already-selected project", async () => {
@@ -97,10 +234,8 @@ describe("studioStore", () => {
   it("captures an api error instead of throwing to render", async () => {
     listProjects.mockRejectedValue(new ApiError(500, "boom", { detail: "boom" }));
     await expect(useStudioStore.getState().loadProjects()).resolves.toBeUndefined();
-    expect(useStudioStore.getState().projectResourceStatus).toBe("error");
-    expect(useStudioStore.getState().projectLoadError).toContain("500");
     expect(useStudioStore.getState().error).toBeNull();
-    expect(useStudioStore.getState().projects).toEqual([]);
+    expect(getProjectsSnapshot()).toEqual([]);
   });
 
   it("selectProject orders modules newest-activity-first via the recency provider (#831)", async () => {
@@ -113,7 +248,7 @@ describe("studioStore", () => {
     }));
     await useStudioStore.getState().selectProject("p1");
     // d (newest) then b (older) lead; a then c (no activity) keep API order.
-    expect(useStudioStore.getState().modules.map((m) => m.id)).toEqual([
+    expect(getModulesSnapshot("p1").map((m) => m.id)).toEqual([
       "d",
       "b",
       "a",
@@ -127,7 +262,7 @@ describe("studioStore", () => {
     listModules.mockResolvedValue([M("a"), M("b"), M("c")]);
     // beforeEach registered the no-op provider (empty map) — API order stands.
     await useStudioStore.getState().selectProject("p1");
-    expect(useStudioStore.getState().modules.map((m) => m.id)).toEqual([
+    expect(getModulesSnapshot("p1").map((m) => m.id)).toEqual([
       "a",
       "b",
       "c",
@@ -142,7 +277,7 @@ describe("studioStore", () => {
       throw new Error("runs endpoint down");
     });
     await useStudioStore.getState().selectProject("p1");
-    expect(useStudioStore.getState().modules.map((m) => m.id)).toEqual([
+    expect(getModulesSnapshot("p1").map((m) => m.id)).toEqual([
       "a",
       "b",
       "c",
@@ -168,7 +303,7 @@ describe("studioStore project CRUD (#665)", () => {
       .getState()
       .createProject({ slug: "P1", name: "p1" });
     expect(result).toEqual(created);
-    expect(useStudioStore.getState().projects).toEqual([created]);
+    expect(getProjectsSnapshot()).toEqual([created]);
   });
 
   it("createProject returns null on a duplicate-key error and appends nothing", async () => {
@@ -177,63 +312,57 @@ describe("studioStore project CRUD (#665)", () => {
       .getState()
       .createProject({ slug: "MEML", name: "dup" });
     expect(result).toBeNull();
-    expect(useStudioStore.getState().projects).toEqual([]);
+    expect(getProjectsSnapshot()).toEqual([]);
   });
 
   it("updateProject replaces the row in the list", async () => {
-    useStudioStore.setState({ projects: [P("p1"), P("p2")] });
+    seedProjects([P("p1"), P("p2")]);
     const updated = { ...P("p1"), name: "Renamed" };
     updateProject.mockResolvedValue(updated);
     await useStudioStore.getState().updateProject("p1", { name: "Renamed" });
-    expect(useStudioStore.getState().projects[0].name).toBe("Renamed");
-    expect(useStudioStore.getState().projects[1].id).toBe("p2");
+    expect(getProjectsSnapshot()[0].name).toBe("Renamed");
+    expect(getProjectsSnapshot()[1].id).toBe("p2");
   });
 
   it("deleteProject of the selected project removes it, clears selection, and resolves the MRU survivor", async () => {
-    useStudioStore.setState({
-      projects: [P("p1"), P("p2")],
-      selectedProjectId: "p1",
-    });
+    seedProjects([P("p1"), P("p2")]);
     // p2 then p1 used → MRU [p1, p2]; deleting p1 leaves p2 as the survivor.
     await useStudioStore.getState().selectProject("p2");
     await useStudioStore.getState().selectProject("p1");
-    useSelectionStore.getState().toggle("backlog", "issue-x");
+    useClientStore.getState().selectionToggle("backlog", "issue-x");
     deleteProject.mockResolvedValue(undefined);
 
     const result = await useStudioStore.getState().deleteProject("p1");
 
     expect(result).toEqual({ redirect: true, targetId: "p2" });
-    expect(useStudioStore.getState().projects.map((p) => p.id)).toEqual(["p2"]);
-    expect(useSelectionStore.getState().ids.size).toBe(0);
+    expect(getProjectsSnapshot().map((p) => p.id)).toEqual(["p2"]);
+    expect(useClientStore.getState().selection.ids.size).toBe(0);
   });
 
   it("deleteProject of a non-selected project removes it without a redirect", async () => {
-    useStudioStore.setState({
-      projects: [P("p1"), P("p2")],
-      selectedProjectId: "p1",
-    });
+    seedProjects([P("p1"), P("p2")]);
+    useStudioStore.setState({ selectedProjectId: "p1" });
     deleteProject.mockResolvedValue(undefined);
     const result = await useStudioStore.getState().deleteProject("p2");
     expect(result).toEqual({ redirect: false, targetId: null });
-    expect(useStudioStore.getState().projects.map((p) => p.id)).toEqual(["p1"]);
+    expect(getProjectsSnapshot().map((p) => p.id)).toEqual(["p1"]);
   });
 
   it("deleteProject of the last project redirects to null (→ create screen)", async () => {
-    useStudioStore.setState({ projects: [P("p1")], selectedProjectId: "p1" });
+    seedProjects([P("p1")]);
+    useStudioStore.setState({ selectedProjectId: "p1" });
     deleteProject.mockResolvedValue(undefined);
     const result = await useStudioStore.getState().deleteProject("p1");
     expect(result).toEqual({ redirect: true, targetId: null });
   });
 
-  it("deleteProject rolls back the optimistic removal when the request fails", async () => {
-    useStudioStore.setState({
-      projects: [P("p1"), P("p2")],
-      selectedProjectId: "p1",
-    });
+  it("deleteProject keeps the list intact when the request fails", async () => {
+    seedProjects([P("p1"), P("p2")]);
+    useStudioStore.setState({ selectedProjectId: "p1" });
     deleteProject.mockRejectedValue(new ApiError(500, "boom", { detail: "boom" }));
     const result = await useStudioStore.getState().deleteProject("p1");
     expect(result).toEqual({ redirect: false, targetId: null });
-    // The list is restored — nothing was permanently removed.
-    expect(useStudioStore.getState().projects.map((p) => p.id)).toEqual(["p1", "p2"]);
+    // Nothing was removed — the delete never landed.
+    expect(getProjectsSnapshot().map((p) => p.id)).toEqual(["p1", "p2"]);
   });
 });

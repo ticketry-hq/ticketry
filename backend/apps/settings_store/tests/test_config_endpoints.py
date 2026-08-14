@@ -138,13 +138,14 @@ def test_round_trip_profile_crud(client, tmp_config, sample_profile):
         "workspace_slug",
         "agent_prompt",
         "agent_prompts",
-        "module_folders",
+        "module_links",
         "recent_project_id",
         "recent_module_ids",
     }
 
     on_disk = json.loads(tmp_config.read_text())
     assert set(on_disk["profiles"][0]) == set(body["profiles"][0])
+    assert on_disk["profiles"][0]["module_links"] == []
 
     updated = {**sample_profile, "name": "Renamed"}
     response = client.put(
@@ -169,13 +170,56 @@ def test_round_trip_profile_crud(client, tmp_config, sample_profile):
         content_type="application/json",
     )
     assert response.status_code == 400
-    assert response.json() == {"detail": {"error": "index_out_of_range"}}
-    assert response.content == b'{"detail":{"error":"index_out_of_range"}}'
+    assert response.json() == {
+        "detail": "index_out_of_range",
+        "code": "index_out_of_range",
+    }
+    assert response.content == (
+        b'{"detail":"index_out_of_range","code":"index_out_of_range"}'
+    )
 
     response = client.delete("/api/config/profiles/0")
     assert response.status_code == 200
     assert response.json()["profiles"] == []
     assert response.json()["recent_profile_index"] is None
+
+
+def test_profile_module_links_round_trip_canonically(client, tmp_config, sample_profile):
+    linked_profile = {
+        **sample_profile,
+        "module_links": [
+            {"module_id": "module-one", "path": "/repos/one"},
+            {"module_id": "module-two", "path": "/repos/two"},
+        ],
+        "recent_project_id": "project-one",
+        "recent_module_ids": {"project-one": "module-two"},
+    }
+
+    response = client.post(
+        "/api/config/profiles",
+        data=linked_profile,
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["profiles"] == [linked_profile]
+    assert json.loads(tmp_config.read_text())["profiles"] == [linked_profile]
+    assert client.get("/api/config").json()["profiles"] == [linked_profile]
+
+
+def test_profile_writes_reject_legacy_module_folders(client, sample_profile):
+    legacy_profile = {
+        key: value for key, value in sample_profile.items() if key != "module_links"
+    }
+    legacy_profile["module_folders"] = {"module-one": "/repos/one"}
+
+    response = client.post(
+        "/api/config/profiles",
+        data=legacy_profile,
+        content_type="application/json",
+    )
+
+    assert response.status_code == 422
 
 
 def test_profile_writes_reject_features_and_do_not_disturb_file(
@@ -256,7 +300,7 @@ def test_profile_optional_fields_use_source_defaults(client):
             "workspace_slug": "workspace",
             "agent_prompt": None,
             "agent_prompts": {},
-            "module_folders": {},
+            "module_links": [],
             "recent_project_id": None,
             "recent_module_ids": {},
         }
@@ -323,8 +367,14 @@ def test_replace_and_delete_out_of_range_error_shape(client, sample_profile):
         content_type="application/json",
     )
     assert response.status_code == 400
-    assert response.json() == {"detail": {"error": "index_out_of_range"}}
+    assert response.json() == {
+        "detail": "index_out_of_range",
+        "code": "index_out_of_range",
+    }
 
     response = client.delete("/api/config/profiles/0")
     assert response.status_code == 400
-    assert response.json() == {"detail": {"error": "index_out_of_range"}}
+    assert response.json() == {
+        "detail": "index_out_of_range",
+        "code": "index_out_of_range",
+    }

@@ -41,7 +41,7 @@ def test_valid_token_200(client, project, module_type):
         content_type="application/json",
         headers=good,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
 
 
 @pytest.mark.django_db
@@ -54,4 +54,4 @@ def test_disable_auth_allows_missing_token(client, project, module_type, setting
         data=json.dumps({"name": "X", "issue_type_id": str(module_type.id)}),
         content_type="application/json",
     )
-    assert r.status_code == 200
+    assert r.status_code == 201

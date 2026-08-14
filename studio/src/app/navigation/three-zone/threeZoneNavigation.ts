@@ -1,6 +1,6 @@
-import type { Row } from "../../../features/studio/pages/tasks/TasksPane";
-import { useUIStore } from "../../../features/studio/stores/uiStore";
-import { routeTaskWorkspaceEditViewAction } from "../../../features/work-items/issue-detail/appNavigation";
+import type { TreeRow } from "../../shell/ticket-workspace/tasks/TasksPane";
+import { useClientStore } from "../../../state/clientStore";
+import { routeTaskWorkspaceEditViewAction } from "../../shell/ticket-workspace/selected-ticket/appNavigation";
 import { isTypingTarget } from "../../../shared/utilities/keyboard";
 import {
   consume,
@@ -22,12 +22,12 @@ export const EDIT_VIEW_BODY_DISENGAGE_CHORD = {
  */
 export function routeThreeZoneNavigation(
   event: KeyboardEvent,
-  taskRows: Row[],
+  taskRows: TreeRow[],
   actionId: string | null,
 ): boolean {
   if (actionId === "edit-view.next-zone") {
     consume(event);
-    const ui = useUIStore.getState();
+    const ui = useClientStore.getState();
     ui.setNavigationModality("keyboard");
     ui.cycleEditViewZone();
     return true;
@@ -58,7 +58,7 @@ export function routeThreeZoneNavigation(
  * Gives an engaged body every key except Cmd+Escape.
  */
 export function routeThreeZoneBodyEngagement(event: KeyboardEvent): boolean {
-  const ui = useUIStore.getState();
+  const ui = useClientStore.getState();
   const isEngaged =
     ui.editViewZone === "active-tab-body" &&
     ui.editViewBodyEngaged;
@@ -103,7 +103,7 @@ function routeActiveTabBodyZone(
   if (!destination) return false;
 
   consume(event);
-  useUIStore.getState().setEditViewZone(destination);
+  useClientStore.getState().setEditViewZone(destination);
   return true;
 }
 
@@ -140,7 +140,7 @@ function routeTabStripZone(
         "highlight-previous",
       );
       if (outcome === "clamped") {
-        useUIStore.getState().setEditViewZone("stories");
+        useClientStore.getState().setEditViewZone("stories");
       }
       return workspaceActionHandled(outcome);
     }
@@ -169,9 +169,10 @@ function expandTaskOrExitToTabStrip(
 ): boolean {
   const row = currentTaskRow(ctx);
   if (!row) return false;
-  if (row.hasChildren && !row.isExpanded) {
+  if (row.expandable && !row.expanded) {
     consume(ctx.event);
-    ctx.ui.setExpanded(row.task.id, true);
+    const moduleId = ctx.tasks.selectedModuleId;
+    if (moduleId) ctx.ui.setExpanded(moduleId, row.id, true);
     return true;
   }
   if (
@@ -191,6 +192,9 @@ function setTaskExpanded(
 ): boolean {
   consume(ctx.event);
   const row = currentTaskRow(ctx);
-  if (row?.hasChildren) ctx.ui.setExpanded(row.task.id, expanded);
+  const moduleId = ctx.tasks.selectedModuleId;
+  if (row?.expandable && moduleId) {
+    ctx.ui.setExpanded(moduleId, row.id, expanded);
+  }
   return true;
 }

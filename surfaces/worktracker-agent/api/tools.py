@@ -10,6 +10,7 @@ from worktracker_agent.api.schemas import (
     WorktrackerScopeContext,
     WorktrackerOperationResult,
 )
+from worktracker_agent.mcp.termination import _request_authorization
 
 
 class WorktrackerToolset:
@@ -375,6 +376,24 @@ class WorktrackerToolset:
         workflow state. Repeated calls each start a fresh run.
         """
         return self.service.launch_default_coding_agent(id_or_key)
+
+    def run_now_tool(
+        self,
+        ctx: Any,
+        id_or_key: str,
+    ) -> dict:
+        """Move an eligible Story to Implement and launch its agent as one action.
+
+        ``id_or_key`` accepts a work-item UUID or key (for example ``MEML-9``).
+        The backend owns refusal, destination-policy preflight, workflow move,
+        and task-scoped launch ordering. Refusals are returned as structured
+        results; a committed destination is present only when the move occurred.
+        """
+
+        return self.service.run_now(
+            id_or_key,
+            authorization=_request_authorization(),
+        )
 
     def get_task_scope_context_tool(
         self,

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useTasksStore } from "../studio/stores/tasksStore";
+import { useStudioStore } from "../projects/store";
 import { IssueTypesSection } from "./IssueTypesSection";
 import { StateCatalog } from "./StateCatalog";
 import { useWorkflowEditorStore } from "./workflowEditorStore";
@@ -9,7 +9,7 @@ export function WorkflowSettingsPanel({
 }: {
   activeSection: "states" | "issue-types";
 }) {
-  const projectId = useTasksStore((state) => state.selectedProjectId);
+  const projectId = useStudioStore((state) => state.selectedProjectId);
   const loading = useWorkflowEditorStore((state) => state.loading);
   const action = useWorkflowEditorStore((state) => state.action);
   const load = useWorkflowEditorStore((state) => state.load);

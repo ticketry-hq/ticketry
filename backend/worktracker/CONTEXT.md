@@ -42,6 +42,13 @@ _Avoid_: Publish error, blocking validation failure, legacy defect
 The user-controlled relative position of a work item within its planning context. It is the product's scheduling signal, not a categorical urgency classification.
 _Avoid_: Priority, urgency badge
 
+**Transition landing position**:
+Where a work item appears in its destination state's grouping after a
+non-positional state change: appended after that state's current last item.
+An explicit drop position from a cross-column drag overrides it, and items
+already in a state are never rearranged by someone else's arrival.
+_Avoid_: chronological column order, state-entry timestamp, auto-sort
+
 **Onboarding-required project**:
 A freshly provisioned default project whose installation-wide onboarding has
 not been completed, dismissed, or superseded by user-created planning data. It
@@ -127,9 +134,9 @@ _Avoid_: enabled state, per-type state list, hidden state
 The cleanup that accompanies any edit which disconnects states from an issue
 type's start state (removing a state, deleting an edge, changing the start
 state): the disconnected states' transitions and launch bindings for that
-type are deleted, after a human confirms a preview of exactly what goes. The
-project state catalog is never touched — pruning removes per-type
-configuration, not states.
+type are deleted. The client derives the impact from the canonical rows before
+a human confirms the edit. The project state catalog is never touched —
+pruning removes per-type configuration, not states.
 _Avoid_: cascade delete, orphan cleanup, state deletion
 
 **Transition origin**:
@@ -159,6 +166,16 @@ types, workflows and launch bindings — the first time it is asked for. Other
 project rows continue to exist and remain reachable over the API; they are
 simply not what the surface resolves to.
 _Avoid_: current selection, implicit workspace, hidden project, fallback project
+
+**Module ordering mode**:
+The durable, project-owned fact that decides how a module collection read is
+ordered. Every project begins and migrates into *automatic*, where the read is
+newest-created-first and clients may layer agent-activity recency on top. A
+project acquires *Manual module order* on its first module drag, after which
+the read is the module work items' ascending fractional rank and no activity
+may rearrange it. It is a one-way decision in this version, and it belongs to
+the project rather than to a user, device, or module surface.
+_Avoid_: sort preference, per-user order, recency toggle, pinned modules
 
 **Work-item change revision**:
 The project-monotonic counter stamped on a work item whenever a committed change
@@ -194,3 +211,30 @@ while any item in the subtree has live agent work. Cancellation also archives,
 but as a side effect of entering a cancelled state; archiving is the direct
 act, and it says nothing about whether the work was finished or abandoned.
 _Avoid_: delete, cancel, done, soft delete, hidden state, archived state
+
+**Route registry**:
+The single declaration of which reads and which writes exist for each model,
+against which the live route table is checked. It answers "how many ways can
+this model be read or written?" — a question the surface could not previously
+answer — and it forbids the undeclared route rather than merely discouraging it.
+It is asserted against the route table, not against any web framework, so it
+outlives both.
+_Avoid_: URL conf, API docs, OpenAPI document, endpoint list
+
+**Canonical collection read**:
+The one read that returns a model's rows for a given scope. Narrower views are
+requested by declared filter parameters on that same route — for work items,
+project, module, state, archived visibility, and PathFind visibility — rather
+than by adding another overlapping collection endpoint. Every filtered response
+merges rows into the same normalized client store by id; filters describe
+membership, never a second record location.
+_Avoid_: list variant, nested work-item list, request-keyed record cache
+
+**Domain operation**:
+A write that is not model CRUD — work-item, state, or issue-type reorder;
+remove-state-from-workflow (because no row records graph membership); or
+onboarding acknowledgement. Each is deliberately exceptional and lives in a
+named place apart from the CRUD surface, so exceptions stay countable instead
+of hiding among equally-bespoke handlers. Transition rows themselves are CRUD.
+There are exactly five, and the route registry records why each cannot be CRUD.
+_Avoid_: custom action, unreasoned RPC endpoint, ad-hoc view

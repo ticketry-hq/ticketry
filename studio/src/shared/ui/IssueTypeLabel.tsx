@@ -1,7 +1,7 @@
-import type { IssueTypeOut } from "@worktracker/typescript-sdk/models";
+import type { IssueType } from "../api/types";
 
 interface IssueTypeLabelProps {
-  issueType: Pick<IssueTypeOut, "level" | "name">;
+  issueType: Pick<IssueType, "level" | "name">;
 }
 
 export function IssueTypeLabel({ issueType }: IssueTypeLabelProps) {

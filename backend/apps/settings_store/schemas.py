@@ -2,7 +2,12 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ModuleLinkBody(BaseModel):
+    module_id: str
+    path: str
 
 
 class ProfileBody(BaseModel):
@@ -11,10 +16,10 @@ class ProfileBody(BaseModel):
     name: str
     workspace_slug: str
     agent_prompt: Optional[str] = None
-    agent_prompts: dict = {}
-    module_folders: dict = {}
+    agent_prompts: dict = Field(default_factory=dict)
+    module_links: list[ModuleLinkBody] = Field(default_factory=list)
     recent_project_id: Optional[str] = None
-    recent_module_ids: dict = {}
+    recent_module_ids: dict = Field(default_factory=dict)
 
 
 class FeaturesBody(BaseModel):

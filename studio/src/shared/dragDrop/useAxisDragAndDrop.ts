@@ -8,8 +8,16 @@ import {
   type DragEventHandler,
 } from "react";
 
-export type DragAxis = "vertical" | "horizontal";
-export type DropIntent = "near" | "far";
+import {
+  intentWithinSpan,
+  pointerAlongAxis,
+  resolvePlacementAlongAxis,
+  spanAlongAxis,
+  type DragAxis,
+  type DropIntent,
+} from "./axisPlacement";
+
+export type { DragAxis, DropIntent };
 
 export interface DragPayloadCodec<Payload> {
   readonly type: string;
@@ -29,7 +37,7 @@ export interface AxisDragAndDropOptions<Payload, TargetId extends string> {
   readonly onDrop?: (
     payload: Payload,
     resolved: ResolvedDrop<TargetId>,
-    event: ReactDragEvent<HTMLElement>,
+    event: ReactDragEvent<HTMLElement> | DragEvent,
   ) => void;
 }
 
@@ -40,6 +48,11 @@ export interface DragSourceProps {
 }
 
 export interface DropTargetProps {
+  /**
+   * Registers the rendered element so placement can still be resolved while
+   * the pointer is outside the target's cross-axis bounds.
+   */
+  readonly ref: (node: HTMLElement | null) => void;
   readonly onDragOver: DragEventHandler<HTMLElement>;
   readonly onDragLeave: DragEventHandler<HTMLElement>;
   readonly onDrop: DragEventHandler<HTMLElement>;
@@ -85,11 +98,8 @@ function resolveIntent(
   axis: DragAxis,
   event: ReactDragEvent<HTMLElement>,
 ): DropIntent {
-  const rect = event.currentTarget.getBoundingClientRect();
-  const pointer = axis === "vertical" ? event.clientY : event.clientX;
-  const start = axis === "vertical" ? rect.top : rect.left;
-  const length = axis === "vertical" ? rect.height : rect.width;
-  return pointer < start + length / 2 ? "near" : "far";
+  const span = spanAlongAxis(axis, event.currentTarget.getBoundingClientRect());
+  return intentWithinSpan(span, pointerAlongAxis(axis, event));
 }
 
 export function useAxisDragAndDrop<Payload, TargetId extends string>(
@@ -107,6 +117,8 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
   const serializedPayloadRef = useRef<string | null>(null);
   const disabledRef = useRef(disabled);
   const onDropRef = useRef(options.onDrop);
+  /** The mounted drop targets, keyed by id, for axis placement. */
+  const targetElementsRef = useRef(new Map<TargetId, HTMLElement>());
 
   disabledRef.current = disabled;
   onDropRef.current = options.onDrop;
@@ -141,9 +153,117 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
     [updateState],
   );
 
+  const commitDrop = useCallback(
+    (
+      event: ReactDragEvent<HTMLElement> | DragEvent,
+      expectedTargetId: TargetId | null,
+    ) => {
+      try {
+        const serialized = event.dataTransfer?.getData(codec.type) ?? "";
+        const payload = codec.deserialize(serialized);
+        const current = stateRef.current;
+        const targetId = expectedTargetId ?? current.targetId;
+        if (
+          !disabledRef.current &&
+          payload !== null &&
+          serialized === serializedPayloadRef.current &&
+          targetId !== null &&
+          current.targetId === targetId &&
+          current.intent !== null
+        ) {
+          onDropRef.current?.(
+            payload,
+            { targetId, intent: current.intent },
+            event,
+          );
+        }
+      } catch {
+        // Invalid payloads are rejected and share the normal cleanup path.
+      } finally {
+        clearAll();
+      }
+    },
+    [clearAll, codec],
+  );
+
   useEffect(() => {
     if (disabled) clearAll();
   }, [clearAll, disabled]);
+
+  const isDragging = state.payload !== null;
+
+  /*
+    While a drag is live the surface keeps targeting on its own axis, even when
+    the pointer is outside every target's cross-axis bounds — above or below a
+    horizontal tab strip, beside a vertical list. The controller only sees
+    dragover on the target hitboxes themselves, so these document listeners
+    resolve the remaining positions from the registered target geometry and
+    accept the release there (#365).
+  */
+  useEffect(() => {
+    if (!isDragging || disabled) return;
+
+    const carriesActivePayload = (event: DragEvent) => {
+      const serialized = serializedPayloadRef.current;
+      if (stateRef.current.payload === null || serialized === null) return false;
+      if (event.dataTransfer === null) return true;
+      return transferMatchesActivePayload(
+        event.dataTransfer,
+        codec.type,
+        serialized,
+      );
+    };
+
+    const onDocumentDragOver = (event: DragEvent) => {
+      // A drop target under the pointer has already resolved this position.
+      if (event.defaultPrevented) return;
+      if (!carriesActivePayload(event)) {
+        clearResolvedTarget();
+        return;
+      }
+
+      const placement = resolvePlacementAlongAxis(
+        axis,
+        event,
+        targetElementsRef.current,
+      );
+      if (placement === null) {
+        clearResolvedTarget();
+        return;
+      }
+
+      event.preventDefault();
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = "move";
+      updateState({ ...stateRef.current, ...placement });
+    };
+
+    const onDocumentDrop = (event: DragEvent) => {
+      // The target's own handler has already committed this release.
+      if (event.defaultPrevented) return;
+      if (stateRef.current.targetId === null) {
+        clearAll();
+        return;
+      }
+      event.preventDefault();
+      commitDrop(event, null);
+    };
+
+    document.addEventListener("dragover", onDocumentDragOver);
+    document.addEventListener("drop", onDocumentDrop);
+    return () => {
+      document.removeEventListener("dragover", onDocumentDragOver);
+      document.removeEventListener("drop", onDocumentDrop);
+    };
+  }, [
+    axis,
+    clearAll,
+    clearResolvedTarget,
+    codec,
+    commitDrop,
+    disabled,
+    isDragging,
+    updateState,
+  ]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -222,6 +342,10 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
       if (cached) return cached;
 
       const props: DropTargetProps = {
+        ref: (node) => {
+          if (node === null) targetElementsRef.current.delete(targetId);
+          else targetElementsRef.current.set(targetId, node);
+        },
         onDragOver: (event) => {
           const current = stateRef.current;
           if (
@@ -250,28 +374,7 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
         },
         onDrop: (event) => {
           event.preventDefault();
-          try {
-            const serialized = event.dataTransfer.getData(codec.type);
-            const payload = codec.deserialize(serialized);
-            const current = stateRef.current;
-            if (
-              !disabledRef.current &&
-              payload !== null &&
-              serialized === serializedPayloadRef.current &&
-              current.targetId === targetId &&
-              current.intent !== null
-            ) {
-              onDropRef.current?.(
-                payload,
-                { targetId, intent: current.intent },
-                event,
-              );
-            }
-          } catch {
-            // Invalid payloads are rejected and share the normal cleanup path.
-          } finally {
-            clearAll();
-          }
+          commitDrop(event, targetId);
         },
       };
       targetProps.set(targetId, props);
@@ -284,6 +387,7 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
     clearAll,
     clearResolvedTarget,
     codec,
+    commitDrop,
     disabled,
     updateState,
   ]);

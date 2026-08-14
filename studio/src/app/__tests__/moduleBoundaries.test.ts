@@ -6,7 +6,6 @@ const SRC = resolve(__dirname, "../..");
 const PRODUCT_ROOTS = [
   "features/agents",
   "features/studio",
-  "features/documents",
   "features/projects",
   "features/settings",
   "features/work-items",
@@ -21,7 +20,6 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/lifecycle",
   "features/agents/status",
   "features/agents/status/statusFeed",
-  "features/agents/stores/configStore",
   "features/agents/terminal",
   "features/agents/terminal/appNavigation",
   "features/agents/terminal/create/launchTerminalCreate",
@@ -30,14 +28,13 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/terminal/ModuleFolder",
   "features/agents/terminal/ModuleFolderSelection",
   "features/agents/terminal/PromptInput",
-  "features/agents/terminal/WorkspaceTerminalHost",
   "features/agents/types",
   "features/agents/worktrees",
-  "features/studio/components/ModuleTabStrip",
-  "features/studio/lib/api",
   "features/studio/lib/liveTerminalCycle",
+  "features/studio/lib/defaultProject",
   "features/studio/lib/planeUrl",
   "features/studio/lib/taskTree",
+  "features/studio/lib/types",
   "features/studio/modals/AddModule",
   "features/studio/modals/AddProject",
   "features/studio/modals/KeyboardShortcutsModal",
@@ -45,33 +42,24 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/studio/modals/PlanFeature",
   "features/studio/modals/SettingsModal",
   "features/studio/modals/StatusUpdate",
-  "features/studio/pages/modules/ModulesPane",
-  "features/studio/pages/projects/ProjectsPane",
-  "features/studio/pages/tasks/storiesFocus",
-  "features/studio/pages/tasks/TasksPane",
-  "features/studio/pages/tasks/hooks/useTaskTree",
-  "features/studio/pages/workspace/TicketWorkspace",
   "features/studio/stores/configStore",
-  "features/studio/stores/tasksStore",
-  "features/studio/stores/uiStore",
-  "features/studio/workflowApi",
-  "features/documents/DescriptionEditor",
-  "features/documents/WorkspaceDocTab",
+  "state/clientStore",
   "features/projects",
+  "features/projects/queries",
   "features/projects/store",
+  "features/settings",
   "features/settings/changeLedger",
   "features/settings/store",
   "features/work-items",
-  "features/work-items/issue-detail",
-  "features/work-items/issue-detail/appNavigation",
-  "features/work-items/stores/selectionStore",
+  "features/work-items/queries",
+  "state/clientStore",
   "features/workflows/ModelConfigurationPanel",
+  "features/workflows/providerQueries",
   "features/workflows/LaunchDefaultPicker",
   "features/workflows/launchBindingValidation",
   "features/workflows/launchProviderCatalog",
   "features/workflows/StateConfigurationPanel",
   "features/workflows/WorkflowSettingsPanel",
-  "features/workflows/stateCatalogSync",
   "features/workflows/workflowEditorStore",
 ]);
 
@@ -101,6 +89,26 @@ function productRoot(path: string): string | null {
 }
 
 describe("module boundaries", () => {
+  it("makes the visible Studio composition readable from the app tree", () => {
+    const expectedImports: Record<string, string[]> = {
+      "app/StudioApp.tsx": ["./shell/StudioShell"],
+      "app/shell/StudioShell.tsx": ["./StudioLayout"],
+      "app/shell/StudioLayout.tsx": [
+        "./sidebar/StudioSidebar",
+        "./ticket-workspace/TicketWorkspace",
+      ],
+      "app/shell/ticket-workspace/TicketWorkspace.tsx": [
+        "./tasks/TasksPane",
+        "./selected-ticket/SelectedTicket",
+      ],
+    };
+
+    for (const [file, imports] of Object.entries(expectedImports)) {
+      const source = readFileSync(join(SRC, file), "utf8");
+      for (const specifier of imports) expect(source).toContain(specifier);
+    }
+  });
+
   it("keeps shared modules independent of app and product code", () => {
     const violations: string[] = [];
     for (const file of walk(join(SRC, "shared"))) {

@@ -1,32 +1,30 @@
 import type {
-  AttachmentOut as GeneratedAttachment,
-  IssueTypeIn as GeneratedIssueTypeCreate,
-  IssueTypeOut as GeneratedIssueType,
-  IssueTypePatch as GeneratedIssueTypePatch,
-  LaunchBindingOut as GeneratedLaunchBinding,
-  ModuleOut as GeneratedModule,
-  ModuleWorkItemIn as GeneratedModuleWorkItemCreate,
-  ProjectIn as GeneratedProjectCreate,
-  ProjectOut as GeneratedProject,
-  ProjectPatch as GeneratedProjectPatch,
-  ProviderCapabilitiesOut as GeneratedProviderCapabilities,
-  ScopeContextOut as GeneratedScopeContext,
-  ScopeRef as GeneratedScopeRef,
-  StateIn as GeneratedStateCreate,
-  StateOut as GeneratedState,
-  StatePatch as GeneratedStatePatch,
-  WorkItemDetailOut as GeneratedWorkItemDetail,
-  WorkItemIn as GeneratedWorkItemCreate,
-  WorkItemOut as GeneratedWorkItem,
-  WorkItemPatch as GeneratedWorkItemPatch,
-  WorkspaceOut as GeneratedWorkspace,
+  Attachment as GeneratedAttachment,
+  GraphRunExecutionModeEnum as GeneratedGraphRunExecutionMode,
+  Module as GeneratedModule,
+  Project as GeneratedProject,
+  PatchedProject as GeneratedProjectPatch,
+  WorkItem as GeneratedWorkItem,
+  WorkItemCreate as GeneratedWorkItemCreate,
+  PatchedWorkItemPatch as GeneratedWorkItemPatch,
+  Workspace as GeneratedWorkspace,
 } from "@worktracker/typescript-sdk";
 
 export type Project = GeneratedProject;
-export type ProjectCreate = GeneratedProjectCreate;
+// `manual_module_order` joins `id` as server-owned: a project's module
+// ordering mode is set by the module reorder domain operation, never by a
+// create or update body.
+export type ProjectCreate = Omit<GeneratedProject, "id" | "manual_module_order">;
 export type ProjectPatch = GeneratedProjectPatch;
 export type Workspace = GeneratedWorkspace;
-export type LaunchBinding = GeneratedLaunchBinding;
+export interface LaunchBinding extends LaunchBindingInput {
+  id: number;
+  issue_type_id: string;
+  state_id: string;
+  auto_start?: boolean;
+  subtree_run_enabled?: boolean;
+  workflow_revision: number;
+}
 export interface LaunchBindingInput {
   prompt?: string | null;
   required_skills?: string[] | null;
@@ -34,7 +32,21 @@ export interface LaunchBindingInput {
   model?: string | null;
   reasoning?: string | null;
 }
-export type ProviderCapabilities = GeneratedProviderCapabilities;
+export interface ProviderCapabilities {
+  agent: string;
+  accepts_model: boolean;
+  accepts_any_model: boolean;
+  model_aliases?: string[];
+  model_prefixes?: string[];
+  reasoning_levels?: string[];
+  supports_unattended?: boolean;
+}
+
+export interface StateImpact {
+  state_id: string;
+  total_work_items: number;
+  protection_rules?: Array<{ code: string; message: string }>;
+}
 
 // Host-wide provider activation plus the single global launch default
 // (ADR-0015). The `agy` adapter stays in code but is not configurable here.
@@ -50,23 +62,25 @@ export interface ProviderCatalog {
 }
 export type SubtreeRunCapabilityMap = Record<string, string[]>;
 
+// Scheduling mode of one graph-run campaign. Omitting it on the wire keeps the
+// historical parallel fan-out, so callers only pass it to opt into serial.
+export type GraphRunExecutionMode = `${GeneratedGraphRunExecutionMode}`;
+
 export type Module = GeneratedModule;
 
 export type IssueLevel = "module" | "task";
-export type IssueType = Omit<
-  GeneratedIssueType,
-  "level" | "name" | "color" | "sort_order"
-> & {
+export interface IssueType {
+  id: string;
+  project?: string;
   name: string;
   level: IssueLevel;
   color: string | null;
   sort_order: number;
-};
+  start_state?: string | null;
+  workflow_revision?: number;
+}
 
-export type State = Omit<
-  GeneratedState,
-  "id" | "name" | "group" | "color" | "sort_order"
-> & {
+export interface State {
   id: string | null;
   name: string;
   group: string;
@@ -74,30 +88,17 @@ export type State = Omit<
   sort_order?: number;
   /** #629 · read-only — server is the sole writer; never sent on create/patch. */
   is_protected?: boolean;
-};
+}
 
-export type WorkItem = Omit<
-  GeneratedWorkItem,
-  | "blocked_by_ids"
-  | "blocks_ids"
-  | "description"
-  | "is_archived"
-  | "parent_id"
-  | "rank"
-  | "sequence_id"
-  | "state"
-  | "sub_issues_count"
-> & {
-  sequence_id: number | null;
-  state: State | null;
-  description: string | null;
-  parent_id: string | null;
-  sub_issues_count: number;
-  is_archived?: boolean;
-  rank?: string;
-  blocked_by_ids: string[];
-  blocks_ids: string[];
-};
+export type WorkItem = GeneratedWorkItem;
+
+export interface ModuleTree {
+  rootIds: string[];
+  /** Absent key = children have not been read; [] = known childless. */
+  children: Record<string, string[]>;
+  /** Canonical server order for deterministic rankless fallbacks. */
+  order: string[];
+}
 
 export type Attachment = Omit<
   GeneratedAttachment,
@@ -107,37 +108,13 @@ export type Attachment = Omit<
   size: number | null;
 };
 
-export type WorkItemDetail = Omit<
-  GeneratedWorkItemDetail,
-  "task" | "attachments"
-> & {
+export interface WorkItemDetail {
   task: WorkItem;
   attachments: Attachment[];
-};
+}
 
 export type WorkItemCreate = GeneratedWorkItemCreate;
-export type ModuleWorkItemCreate = GeneratedModuleWorkItemCreate;
-
-// Agent scope-context payload (#667 B). Read-only; consumed by agents, not the
-// graph view (which derives from already-loaded items). Tightens the generated
-// shape so required fields are non-optional.
-export type ScopeRef = Omit<
-  GeneratedScopeRef,
-  "state_group" | "resolved"
-> & {
-  state_group: string | null;
-  resolved: boolean;
-};
-
-export type ScopeContext = Omit<
-  GeneratedScopeContext,
-  "task" | "depends_on" | "depended_by" | "advisory"
-> & {
-  task: ScopeRef;
-  depends_on: ScopeRef[];
-  depended_by: ScopeRef[];
-  advisory: string;
-};
+export type ModuleWorkItemCreate = GeneratedWorkItemCreate;
 
 export type WorkItemPatch = Omit<
   GeneratedWorkItemPatch,
@@ -145,32 +122,33 @@ export type WorkItemPatch = Omit<
 > & {
   blocked_by_ids?: string[];
   name?: string;
+  issue_type_id?: string;
 };
 
-export type IssueTypeCreate = Omit<
-  GeneratedIssueTypeCreate,
-  "level"
-> & {
+export interface IssueTypeCreate {
+  name: string;
   level: IssueLevel;
-};
-export type IssueTypePatch = Omit<
-  GeneratedIssueTypePatch,
-  "name" | "color" | "sort_order"
-> & {
+  color?: string | null;
+}
+export interface IssueTypePatch {
   name?: string;
-  color?: string;
+  level?: IssueLevel;
+  color?: string | null;
   sort_order?: number;
-};
-export type StateCreate = GeneratedStateCreate;
-export type StatePatch = Omit<
-  GeneratedStatePatch,
-  "name" | "color" | "group" | "sort_order"
-> & {
+  start_state?: string | null;
+  workflow_revision?: number;
+}
+export interface StateCreate {
+  name: string;
+  group: string;
+  color?: string | null;
+}
+export interface StatePatch {
   name?: string;
-  color?: string;
+  color?: string | null;
   group?: string;
   sort_order?: number;
-};
+}
 
 export interface WorkflowEdge {
   from: string;
@@ -255,7 +233,6 @@ export interface WorkflowDiagnostic {
 export interface WorkItemFilters {
   parent?: string;
   state?: string;
-  includePathfind?: boolean;
 }
 
 export type View = "backlog" | "settings";

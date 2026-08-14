@@ -3,12 +3,6 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class ProjectSummary(BaseModel):
-    id: str
-    name: str
-    identifier: str = ""
-
-
 class ModuleSummary(BaseModel):
     id: str
     name: str
@@ -142,9 +136,12 @@ class RunRecord(BaseModel):
     """Transport-neutral latest lifecycle state for one durable agent run."""
 
     agent_run_id: str
+    project_id: str
     task_id: Optional[str]
     module_id: str
+    agent: str
     scope: Literal["task", "plan", "instant", "docchat"]
+    started_at: str
     state: LifecycleState
     updated_at: str
 
@@ -168,6 +165,8 @@ class AutomationAttemptRecord(BaseModel):
     work_item_id: str
     status: AutomationAttemptStatus
     error: Optional[str] = None
+    failure: Optional[dict] = None
+    retryable: bool = False
     agent_run_id: Optional[str] = None
     updated_at: str
 
@@ -221,7 +220,7 @@ class WorkItemState(BaseModel):
 
 
 class WorkItemStateFrame(BaseModel):
-    """Versioned project-feed delta for one committed work-item state move."""
+    """Versioned project-feed delta for one committed work-item change."""
 
     v: Literal[1] = 1
     type: Literal["work_item_state"] = "work_item_state"
@@ -230,6 +229,7 @@ class WorkItemStateFrame(BaseModel):
     state: Optional[WorkItemState]
     revision: int
     updated_at: str
+    membership_changed: bool = False
 
 
 class WorkflowStateFrame(BaseModel):

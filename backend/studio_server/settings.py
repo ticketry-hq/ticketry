@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from apps.settings_store.config import CONFIG_DIR
+from studio_server.database import default_database_settings
 
 
 # Muxed is a localhost developer tool; these defaults match that posture.
@@ -32,6 +33,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.admin",
     "channels",
+    "rest_framework",
+    "drf_spectacular",
     "apps.runs",
     "apps.terminals",
     "apps.documents",
@@ -91,22 +94,32 @@ WORKTRACKER_TOKEN_FILE = CONFIG_DIR / "worktracker_token"
 MUXED_DESKTOP_ORIGIN = os.environ.get("MUXED_DESKTOP_ORIGIN", "")
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": Path(os.environ.get("MUXED_STATE_DB", CONFIG_DIR / "state.db")),
-        "CONN_MAX_AGE": 0,
-        "OPTIONS": {
-            "init_command": (
-                "PRAGMA journal_mode=WAL; "
-                "PRAGMA busy_timeout=5000; "
-                "PRAGMA foreign_keys=ON;"
-            ),
-        },
-    },
+    "default": default_database_settings(
+        Path(os.environ.get("MUXED_STATE_DB", CONFIG_DIR / "state.db"))
+    )
 }
 
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
+}
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "worktracker.rest.authentication.ApiKeyAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "worktracker.rest.exceptions.service_exception_handler",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Ticketry HTTP API",
+    "VERSION": "0.1.0",
+    "SCHEMA_PATH_PREFIX": r"^/api",
+    "SCHEMA_PATH_PREFIX_TRIM": True,
+    "SERVERS": [{"url": "/api"}],
 }

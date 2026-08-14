@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from .issue_type import IssueType
+from .provider_catalog import AgentModel, ReasoningLevel
 from .state import State
 
 
@@ -16,9 +17,20 @@ class LaunchBinding(models.Model):
     )
     prompt = models.TextField(blank=True, default="")
     required_skills = models.JSONField(default=list, blank=True)
-    agent = models.CharField(max_length=64, blank=True, null=True)
-    model = models.CharField(max_length=255, blank=True, null=True)
-    reasoning = models.CharField(max_length=32, blank=True, null=True)
+    model = models.ForeignKey(
+        AgentModel,
+        on_delete=models.PROTECT,
+        related_name="launch_bindings",
+        blank=True,
+        null=True,
+    )
+    reasoning = models.ForeignKey(
+        ReasoningLevel,
+        on_delete=models.PROTECT,
+        related_name="launch_bindings",
+        blank=True,
+        null=True,
+    )
     auto_start = models.BooleanField(default=False)
     subtree_run_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -37,14 +49,26 @@ class LaunchBinding(models.Model):
     def has_launch_policy(self) -> bool:
         """Whether this row carries launch policy rather than only a flag.
 
-        ``subtree_run_enabled`` lives on this row but has a lifetime of its
-        own, so a row can exist purely to carry that flag. Every "is a launch
-        configured here" read goes through this predicate instead of through
-        the row's existence, which would otherwise report a state as
-        configured merely because subtree-run was switched on for it.
+        Automation flags no longer create flag-only rows. Every "is a launch
+        configured here" read still goes through this predicate because the
+        prompt can deliberately inherit its model from the global default.
         """
 
-        return bool(self.prompt.strip() or self.agent)
+        return bool(self.prompt.strip() or self.model_id)
+
+    @property
+    def provider_slug(self) -> str | None:
+        """Return the provider implied by the selected catalog model."""
+
+        return self.model.provider.slug if self.model_id else None
+
+    @property
+    def model_name(self) -> str | None:
+        return self.model.name if self.model_id else None
+
+    @property
+    def reasoning_name(self) -> str | None:
+        return self.reasoning.name if self.reasoning_id else None
 
     def clean(self):
         super().clean()
@@ -60,16 +84,26 @@ class LaunchBinding(models.Model):
 
         from worktracker.services.launch_bindings import (  # avoid import cycle
             LaunchBindingError,
-            validate_provider_options,
             validate_required_skills,
         )
 
-        try:
-            validate_provider_options(
-                agent=self.agent, model=self.model, reasoning=self.reasoning
+        if self.reasoning_id and not self.model_id:
+            errors["reasoning"] = "Choose a model before configuring reasoning."
+        elif (
+            self.reasoning_id
+            and self.model_id
+            and not self.model.permitted_reasoning_levels.filter(
+                pk=self.reasoning_id
+            ).exists()
+        ):
+            errors["reasoning"] = (
+                f"Reasoning '{self.reasoning.name}' is not permitted for model "
+                f"'{self.model.name}'."
             )
-        except LaunchBindingError as exc:
-            errors[exc.field or "agent"] = exc.message
+        if (self.auto_start or self.subtree_run_enabled) and not self.has_launch_policy:
+            errors["auto_start"] = (
+                "Configure a launch binding before enabling automation."
+            )
         try:
             self.required_skills = validate_required_skills(
                 required_skills=self.required_skills,

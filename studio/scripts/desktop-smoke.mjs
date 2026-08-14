@@ -3,19 +3,14 @@ import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { resolveTauriCliPath } from "./desktop-dev.mjs";
 import {
   assertDevelopmentEndpointAgreement,
   buildDevelopmentSmokeConfiguration,
 } from "./desktop-smoke-config.mjs";
 
 const studioRoot = fileURLToPath(new URL("..", import.meta.url));
-const tauriCli = path.join(
-  studioRoot,
-  "node_modules",
-  "@tauri-apps",
-  "cli",
-  "tauri.js",
-);
+const tauriCli = resolveTauriCliPath();
 const executable = path.join(
   studioRoot,
   "src-tauri",
@@ -29,6 +24,11 @@ const backendBuildScript = path.join(
   "backend",
   "packaging",
   "build-sidecar.sh",
+);
+const libghosttyPrepareScript = path.join(
+  studioRoot,
+  "scripts",
+  "prepare-libghostty.sh",
 );
 const backendSidecarSmoke = path.join(
   studioRoot,
@@ -157,6 +157,28 @@ async function assertPackagedAssets() {
 
 const guiSmokeSupported = supportsGuiSmoke();
 
+await runCommandWithTimeout(
+  "pinned libghostty preparation",
+  "sh",
+  [libghosttyPrepareScript],
+  600_000,
+  smokeEnvironment,
+);
+
+// Tauri validates every externalBin path while compiling the development
+// shell. A clean checkout deliberately contains no generated sidecar, so
+// produce the ignored smoke binary before either `tauri dev` or `tauri build`.
+// Packaged-only mode prepares it in its own block below.
+if (mode === "all" || mode === "dev") {
+  await runCommandWithTimeout(
+    "development backend sidecar build",
+    "bash",
+    [backendBuildScript],
+    300_000,
+    smokeEnvironment,
+  );
+}
+
 if (mode === "all" || mode === "dev") {
   assertDevelopmentEndpointAgreement(
     developmentSmokeConfiguration.webviewUrl,
@@ -177,13 +199,15 @@ if (mode === "all" || mode === "dev") {
 
 if (mode === "all" || mode === "packaged") {
   await withSmokeDataDirectory(async (packagedSmokeEnvironment) => {
-    await runCommandWithTimeout(
-      "packaged backend sidecar build",
-      "bash",
-      [backendBuildScript],
-      300_000,
-      packagedSmokeEnvironment,
-    );
+    if (mode === "packaged") {
+      await runCommandWithTimeout(
+        "packaged backend sidecar build",
+        "bash",
+        [backendBuildScript],
+        300_000,
+        packagedSmokeEnvironment,
+      );
+    }
     await runCommandWithTimeout(
       "desktop production build",
       process.execPath,

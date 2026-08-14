@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
-import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -26,7 +25,8 @@ from apps.documents.models import DesignDocument
 from apps.runs import dao as runs_dao
 from apps.terminals.dao import SCRATCH_TASK_ID
 from apps import worktracker_queries
-from apps.settings_store.config import resolve_profile
+from apps.settings_store.config import module_link_path, resolve_profile
+from studio_server.atomic_files import atomic_write_bytes
 
 
 # Asset types servable from inside a registered design directory. Anything
@@ -59,8 +59,12 @@ class SaveDocumentResult:
     digest: str
 
 
-def _doc_payload(row: DesignDocument) -> dict:
-    """Shape one registry row for the workspace document list."""
+def doc_payload(row: DesignDocument) -> dict:
+    """Shape one registry row for the wire.
+
+    Shared with :mod:`apps.documents.watch` so a field added to the listing
+    shape also reaches live watch frames.
+    """
 
     return {
         "id": row.id,
@@ -132,7 +136,7 @@ async def list_scratch_documents(module_id: str) -> list[dict]:
     rows = await documents_dao.list_for_scratch(module_id, SCRATCH_TASK_ID)
     await _prune_missing_documents(rows)
     rows = await documents_dao.list_for_scratch(module_id, SCRATCH_TASK_ID)
-    return [_doc_payload(r) for r in rows]
+    return [doc_payload(r) for r in rows]
 
 
 async def list_task_documents(
@@ -160,7 +164,7 @@ async def list_task_documents(
     if project_id and module_id:
         try:
             prof = resolve_profile(profile)
-            folder = prof.module_folders.get(module_id)
+            folder = module_link_path(prof, module_id)
             if folder and os.path.isdir(folder):
                 modules = await worktracker_queries.get_modules(project_id)
                 module = next((m for m in modules if m.id == module_id), None)
@@ -182,7 +186,7 @@ async def list_task_documents(
     rows = await documents_dao.list_for_task(task_id)
     await _prune_missing_documents(rows)
     rows = await documents_dao.list_for_task(task_id)
-    return [_doc_payload(r) for r in rows]
+    return [doc_payload(r) for r in rows]
 
 
 async def read_document_asset(
@@ -272,20 +276,7 @@ def _digest_guarded_atomic_replace(
     if normalized_digest != current_digest:
         return SaveDocumentResult(status="conflict", digest=current_digest)
 
-    fd, temporary_path = tempfile.mkstemp(
-        prefix=f"{target.name}.", suffix=".tmp", dir=target.parent
-    )
-    temporary = Path(temporary_path)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(content)
-        os.replace(temporary, target)
-    except Exception:
-        try:
-            temporary.unlink()
-        except FileNotFoundError:
-            pass
-        raise
+    atomic_write_bytes(target, content)
 
     return SaveDocumentResult(
         status="saved", digest=hashlib.sha256(content).hexdigest()

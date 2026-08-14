@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 import net from "node:net";
 import path from "node:path";
 
-import { resolveDevelopmentDataDirectory } from "../studio/scripts/desktop-dev.mjs";
+import { createDevelopmentLogCapture } from "./dev-log-capture.mjs";
+import {
+  createTemporarySqliteProfile,
+  removeTemporarySqliteProfile,
+  resolveDevelopmentDataDirectory,
+  stopTemporaryTmuxServer,
+} from "../studio/scripts/desktop-dev.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const useProcessGroups = process.platform !== "win32";
@@ -16,6 +22,37 @@ const defaultMcpPort = 8123;
 let stopping = false;
 let exitCode = 0;
 let forceStopTimer;
+let shutdownCleanup;
+let developmentLogs;
+
+function writeWebLine(channel, message) {
+  if (developmentLogs) {
+    developmentLogs.write("web", channel, `${message}\n`);
+    return;
+  }
+  const output = channel === "stderr" ? console.error : console.log;
+  output(message);
+}
+
+function captureChildOutput(child, source) {
+  child.stdout?.on("data", (chunk) => {
+    developmentLogs?.write(source, "stdout", chunk);
+  });
+  child.stderr?.on("data", (chunk) => {
+    developmentLogs?.write(source, "stderr", chunk);
+  });
+  child.stdout?.once("end", () => developmentLogs?.flush(source, "stdout"));
+  child.stderr?.once("end", () => developmentLogs?.flush(source, "stderr"));
+}
+
+export function parseWebDevOptions(args = []) {
+  const normalized = args[0] === "--" ? args.slice(1) : args;
+  if (normalized.length === 0) return { temporarySqlite: false };
+  if (normalized.length === 1 && normalized[0] === "--temp-sqlite") {
+    return { temporarySqlite: true };
+  }
+  throw new Error("usage: npm run web -- [--temp-sqlite]");
+}
 
 function canListen(port, host = "127.0.0.1") {
   return new Promise((resolve, reject) => {
@@ -64,6 +101,22 @@ export async function selectWebPort({
   );
 }
 
+export async function selectTemporaryMcpPort({ isAvailable = canListen } = {}) {
+  return await isAvailable(defaultMcpPort) ? defaultMcpPort : null;
+}
+
+export async function selectWebMcpPort({
+  environment = process.env,
+  isAvailable = canListen,
+} = {}) {
+  return selectWebPort({
+    name: "MCP port",
+    requestedPort: environment.MUXED_WEB_MCP_PORT,
+    firstPort: defaultMcpPort,
+    isAvailable,
+  });
+}
+
 export function buildWebFrontendCommand(frontendPort) {
   return [
     "npm run dev --workspace @worktracker/studio --",
@@ -84,44 +137,78 @@ export function buildWebRuntimeEnvironment({
   mcpPort = defaultMcpPort,
 }) {
   const backendOrigin = `http://127.0.0.1:${backendPort}`;
-  const mcpUrl = `http://127.0.0.1:${mcpPort}/mcp`;
   const apiKey = environment.WORKTRACKER_API_KEY ?? environment.WORKTRACKER_API_TOKEN;
 
-  return {
+  const runtimeEnvironment = {
     ...environment,
     ...(apiKey ? { WORKTRACKER_API_KEY: apiKey } : {}),
-    MCP_HOST: "127.0.0.1",
-    MCP_PORT: String(mcpPort),
-    MCP_TRANSPORT: "http",
     MUXED_BACKEND_PORT: String(backendPort),
     MUXED_VITE_BACKEND_ORIGIN: backendOrigin,
     MUXED_WEB_BACKEND_PORT: String(backendPort),
     STUDIO_RUN_CONTROL_URL: `${backendOrigin}/api/terminals/self-terminate`,
     WORKTRACKER_BASE_URL: `${backendOrigin}/api/work-tracker`,
-    WORKTRACKER_MCP_URL: mcpUrl,
   };
+  if (mcpPort === null) {
+    delete runtimeEnvironment.MCP_HOST;
+    delete runtimeEnvironment.MCP_PORT;
+    delete runtimeEnvironment.MCP_TRANSPORT;
+    delete runtimeEnvironment.WORKTRACKER_MCP_URL;
+  } else {
+    runtimeEnvironment.MCP_HOST = "127.0.0.1";
+    runtimeEnvironment.MCP_PORT = String(mcpPort);
+    runtimeEnvironment.MCP_TRANSPORT = "http";
+    runtimeEnvironment.WORKTRACKER_MCP_URL = `http://127.0.0.1:${mcpPort}/mcp`;
+  }
+  return runtimeEnvironment;
 }
 
-function start(name, command, environment) {
+function start(name, command, environment, { optional = false } = {}) {
   const child = spawn(command, {
     cwd: root,
     detached: useProcessGroups,
     env: environment,
     shell: true,
-    stdio: "inherit",
+    stdio: ["inherit", "pipe", "pipe"],
   });
+  captureChildOutput(child, name);
 
+  let failedToSpawn = false;
   children.add(child);
   child.once("error", (error) => {
-    console.error(`[web] Could not start ${name}: ${error.message}`);
+    failedToSpawn = true;
+    children.delete(child);
+    writeWebLine(
+      "stderr",
+      `[web] Could not start ${optional ? `optional ${name}; continuing without it` : name}: ${error.message}`,
+    );
+    if (!optional && !stopping) {
+      stopping = true;
+      exitCode = 1;
+      stopChildren("SIGTERM");
+      scheduleForceStop();
+    }
+    finishIfStopped();
   });
   child.once("exit", (code, signal) => {
     children.delete(child);
+    if (failedToSpawn) {
+      finishIfStopped();
+      return;
+    }
+
+    if (optional && !stopping) {
+      writeWebLine(
+        "stderr",
+        `[web] Optional ${name} stopped${signal ? ` (${signal})` : ` with exit code ${code ?? 1}`}; continuing without it.`,
+      );
+      return;
+    }
 
     if (!stopping) {
       stopping = true;
       exitCode = code ?? (signal ? 1 : 0);
-      console.error(
+      writeWebLine(
+        "stderr",
         `[web] ${name} stopped${signal ? ` (${signal})` : ` with exit code ${exitCode}`}; shutting down.`,
       );
       stopChildren("SIGTERM");
@@ -133,15 +220,16 @@ function start(name, command, environment) {
 }
 
 function runDjangoCommand(args, environment, label) {
-  console.log(`[web] ${label}`);
+  writeWebLine("stdout", `[web] ${label}`);
 
   return new Promise((resolve, reject) => {
     const child = spawn("uv", ["run", "python", "manage.py", ...args], {
       cwd: path.join(root, "backend"),
       detached: useProcessGroups,
       env: environment,
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
     });
+    captureChildOutput(child, `django-${args[0]}`);
 
     children.add(child);
     child.once("error", (error) => {
@@ -169,11 +257,15 @@ function runDjangoCommand(args, environment, label) {
 export function buildWebDevelopmentEnvironment({
   cwd = root,
   environment = process.env,
+  temporarySqlite = false,
+  temporaryRoot,
 } = {}) {
-  const dataDirectory = path.resolve(
-    cwd,
-    resolveDevelopmentDataDirectory({ cwd, environment }),
-  );
+  const dataDirectory = temporarySqlite
+    ? createTemporarySqliteProfile({ temporaryRoot })
+    : path.resolve(
+      cwd,
+      resolveDevelopmentDataDirectory({ cwd, environment }),
+    );
   const tmuxSocket = `muxed-dev-${
     createHash("sha256")
       .update(dataDirectory)
@@ -183,20 +275,35 @@ export function buildWebDevelopmentEnvironment({
 
   return {
     dataDirectory,
+    temporarySqlite,
     environment: {
       ...environment,
       MUXED_ADMIN_ENABLED: "true",
+      MUXED_ENABLE_LOCAL_POSTGRES: "true",
       MUXED_DATA_DIR: dataDirectory,
       MUXED_DESKTOP_ORIGIN: "",
-      MUXED_SKIP_LOCAL_STATE_MIGRATION: "1",
       MUXED_STATE_DB: path.join(dataDirectory, "state.db"),
       MUXED_TMUX_SOCKET: tmuxSocket,
+      ...(temporarySqlite ? { MUXED_FORCE_SQLITE: "true" } : {}),
       // This stack only listens on loopback. Developers can explicitly set
       // false and provide matching backend/frontend tokens to exercise auth.
       WORKTRACKER_DISABLE_AUTH:
         environment.WORKTRACKER_DISABLE_AUTH ?? "true",
     },
   };
+}
+
+export function cleanupTemporaryWebLaunch(
+  launch,
+  {
+    stopTmux = stopTemporaryTmuxServer,
+    removeProfile = removeTemporarySqliteProfile,
+    log = console.log,
+  } = {},
+) {
+  stopTmux(launch.environment.MUXED_TMUX_SOCKET);
+  removeProfile(launch.dataDirectory);
+  log(`[web] Removed temporary SQLite profile: ${launch.dataDirectory}`);
 }
 
 async function prepareDjango(environment) {
@@ -244,7 +351,10 @@ function stopChildren(signal) {
       }
     } catch (error) {
       if (error?.code !== "ESRCH") {
-        console.error(`[web] Could not stop process ${child.pid}: ${error.message}`);
+        writeWebLine(
+          "stderr",
+          `[web] Could not stop process ${child.pid}: ${error.message}`,
+        );
       }
     }
   }
@@ -265,6 +375,21 @@ function finishIfStopped() {
   if (forceStopTimer) {
     clearTimeout(forceStopTimer);
   }
+  const cleanup = shutdownCleanup;
+  shutdownCleanup = undefined;
+  if (cleanup) {
+    try {
+      cleanup();
+    } catch (error) {
+      exitCode ||= 1;
+      writeWebLine(
+        "stderr",
+        `[web] Temporary SQLite cleanup failed: ${error.message}`,
+      );
+    }
+  }
+  developmentLogs?.close();
+  developmentLogs = undefined;
   process.exitCode = exitCode;
 }
 
@@ -282,14 +407,22 @@ function handleSignal(signal, code) {
 }
 
 export async function main() {
+  developmentLogs = createDevelopmentLogCapture();
   process.on("SIGINT", () => handleSignal("SIGINT", 130));
   process.on("SIGTERM", () => handleSignal("SIGTERM", 143));
 
-  const launch = buildWebDevelopmentEnvironment();
+  const options = parseWebDevOptions(process.argv.slice(2));
+  const launch = buildWebDevelopmentEnvironment({
+    temporarySqlite: options.temporarySqlite,
+  });
+  if (launch.temporarySqlite) {
+    shutdownCleanup = () => cleanupTemporaryWebLaunch(launch);
+  }
   mkdirSync(launch.dataDirectory, { recursive: true });
 
-  console.log(`[web] Development data: ${launch.dataDirectory}`);
-  console.log("[web] Press Ctrl+C to stop both services.");
+  writeWebLine("stdout", `[web] Development data: ${launch.dataDirectory}`);
+  writeWebLine("stdout", `[web] Development logs: ${developmentLogs.logPath}`);
+  writeWebLine("stdout", "[web] Press Ctrl+C to stop both services.");
 
   try {
     await prepareDjango(launch.environment);
@@ -304,25 +437,38 @@ export async function main() {
         requestedPort: launch.environment.MUXED_FRONTEND_PORT,
         firstPort: 5174,
       });
-      const mcpPort = await selectWebPort({
-        name: "MCP port",
-        requestedPort: launch.environment.MUXED_WEB_MCP_PORT ?? String(defaultMcpPort),
-        firstPort: defaultMcpPort,
-      });
+      const mcpPort = launch.temporarySqlite
+        ? await selectTemporaryMcpPort()
+        : await selectWebMcpPort({
+          environment: launch.environment,
+        });
       const backendOrigin = `http://127.0.0.1:${backendPort}`;
       const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
-      const mcpUrl = `http://127.0.0.1:${mcpPort}/mcp`;
       const runtimeEnvironment = buildWebRuntimeEnvironment({
         environment: launch.environment,
         backendPort,
         mcpPort,
       });
 
-      console.log(`[web] Starting backend at ${backendOrigin}`);
-      console.log(`[web] Starting Ticketry at ${frontendOrigin}`);
-      console.log(`[web] Starting WorkTracker MCP at ${mcpUrl}`);
+      writeWebLine("stdout", `[web] Starting backend at ${backendOrigin}`);
+      writeWebLine("stdout", `[web] Starting Ticketry at ${frontendOrigin}`);
+      if (mcpPort === null) {
+        writeWebLine(
+          "stdout",
+          "[web] MCP port 8123 is unavailable; continuing without MCP.",
+        );
+      } else {
+        writeWebLine(
+          "stdout",
+          `[web] Starting WorkTracker MCP at http://127.0.0.1:${mcpPort}/mcp`,
+        );
+      }
       start("backend", "./scripts/dev.sh backend", runtimeEnvironment);
-      start("MCP", buildWebMcpCommand(), runtimeEnvironment);
+      if (mcpPort !== null) {
+        start("MCP", buildWebMcpCommand(), runtimeEnvironment, {
+          optional: launch.temporarySqlite,
+        });
+      }
       start(
         "frontend",
         buildWebFrontendCommand(frontendPort),
@@ -333,7 +479,10 @@ export async function main() {
     if (!stopping) {
       stopping = true;
       exitCode = 1;
-      console.error(`[web] Could not start web development: ${error.message}`);
+      writeWebLine(
+        "stderr",
+        `[web] Could not start web development: ${error.message}`,
+      );
     }
     finishIfStopped();
   }
@@ -341,7 +490,9 @@ export async function main() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
-    console.error(`[web] Launch failed: ${error.message}`);
+    writeWebLine("stderr", `[web] Launch failed: ${error.message}`);
+    developmentLogs?.close();
+    developmentLogs = undefined;
     process.exitCode = 1;
   });
 }

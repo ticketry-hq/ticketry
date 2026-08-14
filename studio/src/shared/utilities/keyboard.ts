@@ -5,6 +5,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
     target.tagName === "INPUT" ||
     target.tagName === "TEXTAREA" ||
     target.tagName === "SELECT" ||
-    target.isContentEditable
+    target.isContentEditable ||
+    target.getAttribute("contenteditable") === "true"
   );
 }

@@ -12,7 +12,7 @@ async def test_spooled_codex_event_reaches_normal_lifecycle_ingress(
 ):
     captured = []
 
-    async def ingest(_request, event):
+    async def ingest(event):
         captured.append(event)
 
     monkeypatch.setenv(hook_spool.HOOK_SPOOL_DIR_ENV, str(tmp_path))
@@ -45,7 +45,7 @@ async def test_spool_uses_the_existing_provider_specific_event_mapping(
 ):
     captured = []
 
-    async def ingest(_request, event):
+    async def ingest(event):
         captured.append(event)
 
     monkeypatch.setenv(hook_spool.HOOK_SPOOL_DIR_ENV, str(tmp_path))
@@ -67,7 +67,7 @@ async def test_spool_uses_the_existing_provider_specific_event_mapping(
 async def test_malformed_or_unmapped_spool_files_are_discarded(
     monkeypatch, tmp_path
 ):
-    async def unexpected_ingest(_request, _event):
+    async def unexpected_ingest(_event):
         raise AssertionError("malformed events must not reach ingress")
 
     monkeypatch.setenv(hook_spool.HOOK_SPOOL_DIR_ENV, str(tmp_path))

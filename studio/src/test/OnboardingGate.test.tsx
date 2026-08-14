@@ -7,26 +7,18 @@ const catalogApi = vi.hoisted(() => ({
   putProviderCatalog: vi.fn(),
 }));
 
-vi.mock("../features/studio/lib/api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../features/studio/lib/api")>()),
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...catalogApi,
+  getWorkspace: vi.fn(),
+  acknowledgeOnboarding: vi.fn(),
 }));
-
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
-  );
-  return {
-    ...actual,
-    getWorkspace: vi.fn(),
-    acknowledgeOnboarding: vi.fn(),
-  };
-});
 
 import * as api from "../shared/api/client";
 import { OnboardingGate } from "../app/onboarding/OnboardingGate";
-import { useOnboardingStore } from "../app/onboarding/onboardingStore";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
+import { queryClient } from "../shared/query/queryClient";
+import { queryKeys } from "../shared/query/keys";
 
 const acknowledgeOnboarding = api.acknowledgeOnboarding as ReturnType<typeof vi.fn>;
 
@@ -44,7 +36,7 @@ beforeEach(() => {
     slug: "meml",
     onboarding_required: false,
   });
-  useOnboardingStore.setState({ onboardingRequired: false });
+  queryClient.setQueryData(queryKeys.workspace, false);
   useOnboardingTourStore.getState().reset();
 });
 
@@ -61,7 +53,7 @@ describe("OnboardingGate", () => {
   });
 
   it("substitutes the onboarding surface for the app shell while required", () => {
-    useOnboardingStore.setState({ onboardingRequired: true });
+    queryClient.setQueryData(queryKeys.workspace, true);
 
     render(
       <OnboardingGate>
@@ -74,7 +66,7 @@ describe("OnboardingGate", () => {
   });
 
   it("hands off to the app shell while the guided tour is active", () => {
-    useOnboardingStore.setState({ onboardingRequired: true });
+    queryClient.setQueryData(queryKeys.workspace, true);
     useOnboardingTourStore.getState().start("created-project");
 
     render(
@@ -85,11 +77,11 @@ describe("OnboardingGate", () => {
 
     expect(screen.getByText("App shell")).toBeInTheDocument();
     expect(screen.queryByTestId("onboarding-welcome")).not.toBeInTheDocument();
-    expect(useOnboardingStore.getState().onboardingRequired).toBe(true);
+    expect(queryClient.getQueryData(queryKeys.workspace)).toBe(true);
   });
 
   it("skip acknowledges onboarding and reveals the app shell", async () => {
-    useOnboardingStore.setState({ onboardingRequired: true });
+    queryClient.setQueryData(queryKeys.workspace, true);
 
     render(
       <OnboardingGate>
@@ -105,7 +97,7 @@ describe("OnboardingGate", () => {
   });
 
   it("keeps the surface with an inline error when acknowledgement fails", async () => {
-    useOnboardingStore.setState({ onboardingRequired: true });
+    queryClient.setQueryData(queryKeys.workspace, true);
     acknowledgeOnboarding.mockRejectedValue(new Error("boom"));
 
     render(

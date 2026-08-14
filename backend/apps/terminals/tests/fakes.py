@@ -1,14 +1,77 @@
-"""In-memory TerminalSessionService test adapter."""
+"""Test doubles for application launch and the public terminal runtime."""
 
 from __future__ import annotations
 
-import itertools
 from dataclasses import dataclass, field
-from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
-from apps.terminals.session import LaunchIntent, SessionNotFound
 from apps.terminals.agents.registry import LaunchAugmentation, ResumeUnsupported
+from apps.terminals.runtime import (
+    CreateTerminal,
+    TerminalObservation,
+    TerminalObservationError,
+    TerminalState,
+    TerminationResult,
+)
+
+
+@dataclass
+class RecordingTerminalRuntime:
+    """Small application-test fake for launch and cleanup orchestration."""
+
+    namespace: str = "test"
+    legacy_namespaces: tuple[str, ...] = ()
+    create_error: Exception | None = None
+    requests: list[CreateTerminal] = field(default_factory=list)
+    terminated: list[str] = field(default_factory=list)
+    present: set[str] = field(default_factory=set)
+    exited: dict[str, int | None] = field(default_factory=dict)
+    unavailable: set[str] = field(default_factory=set)
+
+    def create(self, request: CreateTerminal) -> None:
+        self.requests.append(request)
+        if self.create_error is not None:
+            raise self.create_error
+        self.present.add(request.agent_run_id)
+
+    def inspect(self, agent_run_id: str) -> TerminalObservation:
+        if agent_run_id in self.unavailable:
+            raise TerminalObservationError(agent_run_id)
+        if agent_run_id in self.exited:
+            return TerminalObservation(
+                TerminalState.EXITED,
+                self.exited[agent_run_id],
+            )
+        state = (
+            TerminalState.RUNNING
+            if agent_run_id in self.present
+            else TerminalState.MISSING
+        )
+        return TerminalObservation(state)
+
+    def terminate(self, agent_run_id: str) -> TerminationResult:
+        self.terminated.append(agent_run_id)
+        was_present = (
+            agent_run_id in self.present or agent_run_id in self.exited
+        )
+        self.present.discard(agent_run_id)
+        self.exited.pop(agent_run_id, None)
+        return TerminationResult(was_present=was_present)
+
+    def finish(self, agent_run_id: str, exit_code: int | None = None) -> None:
+        self.present.discard(agent_run_id)
+        self.exited[agent_run_id] = exit_code
+
+    def fail_observation(self, agent_run_id: str) -> None:
+        self.unavailable.add(agent_run_id)
+
+
+def patch_terminal_runtime(monkeypatch, *, create_error: Exception | None = None):
+    from apps.terminals import launch
+
+    runtime = RecordingTerminalRuntime(create_error=create_error)
+    monkeypatch.setattr(launch, "terminal_runtime", runtime)
+    return runtime
 
 
 @dataclass
@@ -100,138 +163,3 @@ class FakeAdapter:
         if self.resume_fn is None:
             raise ResumeUnsupported(self.slug)
         return self.resume_fn(provider_session_id)
-
-
-@dataclass
-class _FakeHandle:
-    service: "InMemorySessionService"
-    agent_run_id: str
-    viewer_id: str
-    _released: bool = False
-
-    def attach_argv(self) -> list[str]:
-        return ["fake-attach", self.agent_run_id]
-
-    def scroll(self, direction: str, lines: int = 3) -> None:
-        self.service.scrolls.append((self.agent_run_id, direction, lines))
-
-    def resize(self, cols: int, rows: int) -> None:
-        self.service.resizes.append((self.agent_run_id, cols, rows))
-
-    refresh_client_size = resize
-
-    def activate(self, session: Any) -> Any | None:
-        previous_session = self.service.viewer_sessions.get(self.agent_run_id)
-        self.service.viewers[self.agent_run_id] = self.viewer_id
-        self.service.viewer_sessions[self.agent_run_id] = session
-        return previous_session
-
-    def release(self) -> None:
-        if self._released:
-            return
-        if self.service.viewers.get(self.agent_run_id) == self.viewer_id:
-            self.service.viewers.pop(self.agent_run_id, None)
-            self.service.viewer_sessions.pop(self.agent_run_id, None)
-        self._released = True
-
-    def __enter__(self) -> "_FakeHandle":
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        self.release()
-
-
-class InMemorySessionService:
-    def __init__(self) -> None:
-        self._ids = itertools.count(1)
-        self.runs: dict[str, SimpleNamespace] = {}
-        self.sessions: dict[str, SimpleNamespace] = {}
-        self.viewers: dict[str, str] = {}
-        self.viewer_sessions: dict[str, Any] = {}
-        self.stopped_watchers: list[str] = []
-        self.scrolls: list[tuple[str, str, int]] = []
-        self.resizes: list[tuple[str, int, int]] = []
-
-    async def spawn(self, intent: LaunchIntent) -> str:
-        run_id = f"run-{next(self._ids)}"
-        run = SimpleNamespace(
-            id=run_id,
-            agent=intent.agent,
-            project_id=intent.project_id,
-            module_id=intent.module_id,
-            task_id=intent.task_id,
-            status="running",
-            ended_at=None,
-        )
-        session = SimpleNamespace(
-            agent_run_id=run_id,
-            tmux_session_name=f"pt-{run_id}",
-            task_id=intent.task_id,
-            module_id=intent.module_id,
-            project_id=intent.project_id,
-            agent=intent.agent,
-            scope=intent.scope,
-            doc_rel_path=intent.doc_rel_path,
-            created_at="now",
-            terminated_at=None,
-        )
-        self.runs[run_id] = run
-        self.sessions[run_id] = session
-        return run_id
-
-    def terminate(self, agent_run_id: str) -> None:
-        run = self.runs.get(agent_run_id)
-        session = self.sessions.get(agent_run_id)
-        active = (
-            run is not None and run.ended_at is None
-        ) or (
-            session is not None and session.terminated_at is None
-        )
-        if not active:
-            return
-        if run is not None and run.ended_at is None:
-            run.status = "terminated"
-            run.ended_at = "now"
-        if session is not None and session.terminated_at is None:
-            session.terminated_at = "now"
-        self.stopped_watchers.append(agent_run_id)
-
-    def live_run_for(self, task_id: str):
-        live = [
-            run
-            for run in self.runs.values()
-            if run.task_id == task_id and run.status == "running"
-        ]
-        return live[-1] if live else None
-
-    def sessions_for(self, task_id: str):
-        return [
-            session
-            for session in self.sessions.values()
-            if session.task_id == task_id and session.terminated_at is None
-        ]
-
-    def attach(self, agent_run_id: str, *, viewer_id: str | None = None) -> _FakeHandle:
-        if agent_run_id not in self.sessions:
-            raise SessionNotFound(agent_run_id)
-        viewer_id = viewer_id or f"viewer-{next(self._ids)}"
-        return _FakeHandle(self, agent_run_id, viewer_id)
-
-    def reconcile(self):
-        reaped = [
-            run_id
-            for run_id, session in self.sessions.items()
-            if getattr(session, "dead", False) and session.terminated_at is None
-        ]
-        for run_id in reaped:
-            self.sessions[run_id].terminated_at = "now"
-            run = self.runs.get(run_id)
-            if run is not None and run.ended_at is None:
-                run.status = "exited"
-                run.ended_at = "now"
-            self.stopped_watchers.append(run_id)
-        return SimpleNamespace(
-            soft_deleted=reaped,
-            untracked=[],
-            inventory_available=True,
-        )

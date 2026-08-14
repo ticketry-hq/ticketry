@@ -6,12 +6,12 @@ installer, dependency closure, provider matrix, MCP requirements, and digests
 are recorded in `lock.json`; the upstream MIT license is retained in
 `UPSTREAM_LICENSE`.
 
-Runtime code reads only these packaged resources. It never invokes `npx` or
-downloads skill content. Desktop startup installs the verified snapshot into
-each supported provider's normal persistent skill directory and refuses to
-start if a user-owned conflict prevents that installation. The operation is
-idempotent, upgrades only copies recorded in Ticketry's ownership manifest, and
-can be repaired manually with:
+Runtime code never invokes `npx` or downloads skill content. A valid existing
+provider-visible skill satisfies a workflow requirement regardless of its
+content digest. When a required name is absent, Ticketry installs its bundled
+snapshot as an offline fallback in the provider's normal persistent skill
+directory. Existing skills are never overwritten merely because the bundled
+snapshot changed. Installation is idempotent and can also be run manually with:
 
 ```sh
 muxed-backend skills install

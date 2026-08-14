@@ -55,6 +55,16 @@ _Avoid_: Active pane, selected pane
 The Stories pane's rapid-capture surface where one submitted idea becomes a Story in the currently selected module.
 _Avoid_: Task entry, generic issue composer
 
+**Run now action**:
+The work-item Details control that sends an idea straight into implementation,
+skipping Grill, Spec, and Tickets. It is offered only while the item sits in a
+state the workflow lets a human move directly to `Implement`, so workflow
+configuration alone decides whether it exists. A successful click relocates the
+row out of Ideas and activates that work item's terminal, because the run it
+started is the thing worth looking at. Distinct from an Instant run, which is
+taskless and scratch-scoped.
+_Avoid_: Instant change, quick implement, skip button
+
 **Subtree lifecycle chicklets**:
 The compact per-lifecycle-state summary of agent runs attached to a work item and
 its descendants. Each visible state has its own glyph and count so attention and
@@ -71,12 +81,35 @@ hydrated as one local planning view. Agent-run status is joined to this hierarch
 for presentation; it is not stored as part of the hierarchy.
 _Avoid_: Agent-status tree, lazily fetched branch tree
 
+**Module folder**:
+The profile-to-module link carrying the local filesystem path where that
+module's code lives for that profile. The same module may link to a different
+path in another profile or have no link in a fresh profile.
+_Avoid_: Repo path, module directory, worktree, project folder
+
 **Module tab strip**:
 The single module switcher row spanning the Stories and Workspace panes, listing
-every module of the active project in the recency order captured when the project
-loaded. Selecting a tab is the same act as selecting that module anywhere else,
-and the strip also hosts module creation.
+every module of the active project in the canonical module order, with module
+creation at its leftmost point. Selecting a tab is the same act as selecting
+that module anywhere else.
 _Avoid_: Pane header tabs, open-tab set, browser-style tabs
+
+**Canonical module order**:
+The one project-wide module order every module surface — sidebar, tab strip,
+backlog grouping, module pickers, keyboard position shortcuts — renders
+identically. It is the recency order until the project is first manually
+reordered, and the manually set order from then on; a newly created module
+always enters at the front. In recency mode that front placement is held
+explicitly until the new module has agent activity of its own, since it would
+otherwise sort behind every module that has ever been worked in.
+_Avoid_: Recency order, per-surface order, tab order
+
+**Manual module order**:
+The shared, user-arranged canonical module order a project acquires on its
+first module drag, seeded from the order visible at that moment. It belongs to
+the project, not the user, and once set it is never reshuffled by agent
+activity.
+_Avoid_: Pinned modules, per-user module order, sort preference
 
 **Module activity badge**:
 The per-module aggregate count of non-terminal agent runs — task-bound and
@@ -109,12 +142,20 @@ decision and never accepts another run as a target.
 _Avoid_: Objective completion, arbitrary run termination, self-kill
 
 **Model configuration** (Settings section):
-The Studio Settings surface listing the built-in providers, each with an activation toggle, above a single global launch default picker. It manages only which providers are activated and the one default triple; it never stores credentials, per-provider model lists, or reasoning-level lists.
-_Avoid_: provider catalog editor, model catalog, credentials panel
+The Studio Settings surface for the persisted Provider, model, and
+reasoning-level catalog. It toggles activation on Provider rows, adds model rows
+under a provider, maintains each model's permitted reasoning-level links, and
+edits the validated global launch default. Credentials and executable adapters
+remain outside this catalog.
+_Avoid_: hardcoded provider list, free-text model setting, credentials panel
 
 **Launch default picker**:
-The reusable Studio component that selects a (provider, model, reasoning) triple together — provider constrained to activated providers, model as a known-model dropdown that also accepts free text, reasoning from the provider's code-owned levels. It is shared by the workflow launch configuration form and the Model configuration section.
-_Avoid_: provider dropdown, model field, reasoning select
+The reusable Studio component that selects a (provider, model, reasoning)
+triple from catalog rows: an activated Provider, one of its model rows, and one
+of that model's linked reasoning levels. It offers an add-model action instead
+of accepting free text and is shared by workflow launch configuration and the
+Model configuration section.
+_Avoid_: free-text model, code-owned reasoning list, unrelated dropdown trio
 
 **Keymap context**:
 One of Studio's fixed keyboard-resolution layers — the open modal,
@@ -214,9 +255,10 @@ _Avoid_: Pane, focus region, tab group
 
 **Navigation mode**:
 The edit view's default state, in which Studio owns the keyboard: Shift+Tab
-cycles navigation zones, arrows move within a zone, and Enter dives into the
-active tab body. A terminal body remains in navigation mode until Enter is
-pressed again to enter terminal typing mode.
+cycles navigation zones, arrows move within a zone, and Enter — or Right on a
+story with nothing left to expand — dives into the active tab body. A terminal
+body remains in navigation mode until Enter is pressed again to enter terminal
+typing mode.
 _Avoid_: Command mode, normal mode, browse mode
 
 **Terminal typing mode**:
@@ -288,20 +330,80 @@ _Avoid_: Onboarding reset, re-arming onboarding, replaying the tour
 
 **Work item**:
 The aggregate the backend owns and serves as `WorkItemOut` — the thing a Story,
-Implementation, or Module all are. Studio holds exactly one client-side copy of
-each, keyed by id; every surface that needs one reads it by id rather than
-carrying its own. Older Studio code names the same aggregate Task or Issue in
-type and store names; those spellings survive only where they already exist and
-name the surface, not the record.
+Implementation, or Module all are. Older Studio code names the same aggregate
+Task or Issue in type and store names; those spellings survive only where they
+already exist and name the surface, not the record.
 _Avoid_: Task record, issue record, task summary
 
-**Work-item store**:
-The single owner of every work-item record Studio holds. Panes, trees, and
-pickers keep the ids they need and resolve records through it, so a record can
-never exist in two places and disagree with itself. It is the only place a
-work-item record is written, and the status-feed revision guards live alongside
-it because a guard held apart from its data protects nothing.
-_Avoid_: Detail store, issue cache, work-item cache
+**Work-item entry**:
+The one holding of a work item's field values, keyed by that work item's id.
+Panes, trees, and pickers keep the ids they need and resolve the record through
+its entry, so every surface reading one work item reads the same object. A
+change to that work item reaches every surface at once, because there is one
+place for it to reach.
+_Avoid_: Work-item store, detail store, issue cache, record cache
+
+**Record copy**:
+Any second holding of a work item's field values outside its work-item entry —
+a collection that carries whole records, a re-shaped summary type, a row that
+carries a name, a component's own snapshot. Named so it can be prohibited: two
+copies of one record are two answers to the same question, and the one being
+read is decided by accident. The prohibition is enforced by tests, not by
+convention, because it was asserted in prose twice and was false both times.
+_Avoid_: Cache entry, projection, denormalised view
+
+**Membership**:
+Which work items belong to a collection and in what order — a module's tree, a
+state section's rows, a parent's children. The server decides it and sends it as
+ids, and Studio holds it as ids, never as records, so membership can go stale
+without any record disagreeing with itself.
+_Avoid_: Task list, tree data, section contents
+
+**Row**:
+What a planning pane renders one line from: an id and the structural facts of
+its position — depth, parent, whether it can expand, whether it is expanded — and
+never a field of the record it points at. A row for the module scratch
+workspace carries no work-item id at all, because the scratch workspace is not
+a work item. Rows are computed on read and kept nowhere, so the rendered view
+exists only as what is on screen.
+_Avoid_: Task summary, list item, tree node, presentation record
+
+**Client store**:
+The one holding of everything the server never said — which pane has focus, what
+is expanded, what is selected, what is typed but not sent, which tab a workspace
+is on. Every value in it is an id, a boolean, a number, a stack of things the
+person did, or their own text. Because there is one, a test can read all of it
+and assert that nothing a server said has found its way in.
+_Avoid_: UI store, view store, app state, local state
+
+**Intent and validity**:
+The rule the client store follows for anything that points at something: the
+store keeps what the person last chose, and a derivation decides whether that
+choice still exists. A workspace left on a terminal tab whose run has since been
+dismissed shows its Details, and nothing has to correct the stored value.
+_Avoid_: Stale pointer, fallback state, reconciliation
+
+**Terminal tab**:
+One agent run, shown in a task workspace. A work item has many runs and so many
+tabs; a run has one tmux session for its whole life, named from the run's own
+id, so reattaching returns to the same session rather than making another. What
+the tab shows is that session; what the tab *is* is the run.
+_Avoid_: Terminal session tab, tmux tab, agent tab
+
+**Run liveness**:
+Whether an agent run is starting, working, waiting, or finished, and when that
+last changed. It arrives only as values pushed on the status feed, never by a
+read, so the store that receives it is the run's one holding for it and not a
+copy of anything. A run that never opened a terminal has liveness all the same.
+_Avoid_: Terminal status, session state, tmux liveness, terminated_at
+
+**Work-item batch read**:
+The single request that carries many work-item ids and returns their records.
+Every pane asks for one work item at a time; the requests it makes inside a
+short window leave together as one. It exists so that one holding per work item
+costs one request rather than one request per work item, and so that no reply is
+ever written into a holding other than its own.
+_Avoid_: List read, bulk fetch, prefetch, cache seeding
 
 **Selection paint**:
 Rendering the newly selected work item's panel from the record Studio already

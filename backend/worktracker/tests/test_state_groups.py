@@ -1,8 +1,8 @@
 """#734 hardening: direct coverage of state-group interpretation (#705).
 
-The signal and scope-context suites exercise ``state_group`` indirectly; this
-pins the framework-neutral helper itself — id resolution, the None/unknown
-fallbacks, and the resolved-group vocabulary the FE mirrors.
+The signal suite exercises ``state_group`` indirectly; this pins the
+framework-neutral helper itself — id resolution, the None/unknown fallbacks,
+and the resolved-group vocabulary shared with dependency consumers.
 """
 
 import uuid
@@ -10,7 +10,7 @@ import uuid
 import pytest
 
 from worktracker.models import State
-from worktracker.state_groups import RESOLVED_GROUPS, state_group
+from worktracker.state import RESOLVED_GROUPS, state_group
 
 
 @pytest.mark.django_db

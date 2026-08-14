@@ -9,6 +9,7 @@ ingress/MCP URLs).
 
 import os
 import sys
+from dataclasses import dataclass
 
 # Re-exported, not restated: the hook reporter owns the ingress port and path so
 # the fallback a hook uses on its own is by construction the same URL the
@@ -39,6 +40,20 @@ DEFAULT_MCP_URL = f"http://127.0.0.1:{DEFAULT_MCP_PORT}/mcp"
 
 PACKAGED_HOOK_RUNNER_ENV = "MUXED_PACKAGED_HOOK_RUNNER"
 HOOK_SPOOL_DIR_ENV = "MUXED_HOOK_SPOOL_DIR"
+
+
+@dataclass(frozen=True)
+class InjectedLaunch:
+    """A provider transformation that also needs process environment.
+
+    Providers with no inline settings flag write a run-scoped settings file and
+    point an environment variable at it. Returning the variable name and value
+    structurally — rather than pre-encoding a shell ``env`` wrapper into the
+    argv — spares the caller from parsing it back apart.
+    """
+
+    argv: tuple[str, ...]
+    environment: dict[str, str]
 
 
 def hook_argv(slug: str, script_path: str, *arguments: str) -> list[str]:

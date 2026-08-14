@@ -1,60 +1,62 @@
-import uuid
-
 import django.db.models.deletion
 from django.db import migrations, models
 
 
-_SCRATCH_TASK_ID = "00000000-0000-0000-0000-000000000000"
+SCRATCH_TASK_ID = "00000000-0000-0000-0000-000000000000"
 
 
-def _uuid_or_none(value):
-    if not value or value == _SCRATCH_TASK_ID:
-        return None
-    try:
-        return uuid.UUID(str(value))
-    except (TypeError, ValueError, AttributeError):
-        return None
-
-
-def backfill_issue_and_scope(apps, schema_editor):
-    """Link legacy routing columns to Issue, dropping unresolvable runs."""
-
+def backfill_agent_run_issues(apps, schema_editor):
     AgentRun = apps.get_model("runs", "AgentRun")
     AgentTerminalSession = apps.get_model("terminals", "AgentTerminalSession")
     Issue = apps.get_model("worktracker", "Issue")
-    using = schema_editor.connection.alias
+    alias = schema_editor.connection.alias
 
-    terminal_scopes = dict(
-        AgentTerminalSession.objects.using(using).values_list(
-            "agent_run_id", "scope"
+    issue_ids = {
+        str(issue_id)
+        for issue_id in Issue.objects.using(alias).values_list("id", flat=True)
+    }
+    resolved_runs = []
+    orphan_ids = []
+    for run in AgentRun.objects.using(alias).only(
+        "id", "task_id", "module_id"
+    ).iterator():
+        resolved_id = (
+            run.task_id
+            if run.task_id and run.task_id != SCRATCH_TASK_ID
+            else run.module_id
         )
-    )
-    for run in AgentRun.objects.using(using).all().iterator():
-        candidate = _uuid_or_none(run.task_id) or _uuid_or_none(run.module_id)
-        issue = (
-            Issue.objects.using(using).filter(pk=candidate).first()
-            if candidate is not None
-            else None
+        if resolved_id and str(resolved_id) in issue_ids:
+            run.issue_id = resolved_id
+            resolved_runs.append(run)
+        else:
+            orphan_ids.append(run.id)
+
+    if resolved_runs:
+        AgentRun.objects.using(alias).bulk_update(
+            resolved_runs, ["issue"], batch_size=500
         )
-        if issue is None:
-            # A non-null FK cannot represent this legacy row. Its one-to-one
-            # terminal mirror cascades with it; unrelated application data is
-            # deliberately left untouched.
-            run.delete(using=using)
-            continue
-        scope = run.scope or terminal_scopes.get(run.pk)
-        if not scope:
-            scope = "task" if issue.module_id else "plan"
-        AgentRun.objects.using(using).filter(pk=run.pk).update(
-            issue_id=issue.pk,
-            scope=scope,
-        )
+    if orphan_ids:
+        for offset in range(0, len(orphan_ids), 500):
+            batch = orphan_ids[offset : offset + 500]
+            AgentTerminalSession.objects.using(alias).filter(
+                agent_run_id__in=batch
+            ).delete()
+            AgentRun.objects.using(alias).filter(
+                id__in=batch
+            ).delete()
+    print(f"AgentRun issue backfill deleted {len(orphan_ids)} orphan row(s)")
+
+
+def backfill_agent_run_scopes(apps, schema_editor):
+    AgentRun = apps.get_model("runs", "AgentRun")
+    alias = schema_editor.connection.alias
+    AgentRun.objects.using(alias).filter(scope__isnull=True).update(scope="task")
 
 
 class Migration(migrations.Migration):
     dependencies = [
         ("runs", "0007_backfill_terminal_lifecycle_state"),
-        ("terminals", "0002_agent_run_viewer_lease"),
+        ("terminals", "0001_initial"),
         ("worktracker", "0036_issue_module"),
     ]
 
@@ -69,15 +71,10 @@ class Migration(migrations.Migration):
                 to="worktracker.issue",
             ),
         ),
-        migrations.RunPython(backfill_issue_and_scope, migrations.RunPython.noop),
-        migrations.RemoveIndex(
-            model_name="agentrun",
-            name="idx_agent_runs_task_started_at",
+        migrations.RunPython(
+            backfill_agent_run_issues,
+            migrations.RunPython.noop,
         ),
-        migrations.RemoveField(model_name="agentrun", name="workspace_slug"),
-        migrations.RemoveField(model_name="agentrun", name="project_id"),
-        migrations.RemoveField(model_name="agentrun", name="module_id"),
-        migrations.RemoveField(model_name="agentrun", name="task_id"),
         migrations.AlterField(
             model_name="agentrun",
             name="issue",
@@ -87,9 +84,28 @@ class Migration(migrations.Migration):
                 to="worktracker.issue",
             ),
         ),
+        migrations.RunPython(
+            backfill_agent_run_scopes,
+            migrations.RunPython.noop,
+        ),
         migrations.AlterField(
             model_name="agentrun",
             name="scope",
             field=models.CharField(),
         ),
+        migrations.RemoveIndex(
+            model_name="agentrun",
+            name="idx_agent_runs_task_started_at",
+        ),
+        migrations.AddIndex(
+            model_name="agentrun",
+            index=models.Index(
+                fields=["issue", "-started_at"],
+                name="idx_agent_runs_issue_started",
+            ),
+        ),
+        migrations.RemoveField(model_name="agentrun", name="project_id"),
+        migrations.RemoveField(model_name="agentrun", name="module_id"),
+        migrations.RemoveField(model_name="agentrun", name="task_id"),
+        migrations.RemoveField(model_name="agentrun", name="workspace_slug"),
     ]

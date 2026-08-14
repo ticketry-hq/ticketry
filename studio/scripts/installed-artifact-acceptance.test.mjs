@@ -10,10 +10,13 @@ import {
   sanitizedDesktopEnvironment,
 } from "./installed-artifact-acceptance.mjs";
 
-const SELECTED_SKILLS = [
+const PACKAGED_SKILLS = [
   "code-review",
+  "domain-modeling",
   "grill-with-docs",
+  "grilling",
   "implement",
+  "setup-matt-pocock-skills",
   "tdd",
   "to-spec",
   "to-tickets",
@@ -30,10 +33,10 @@ const passingResult = {
   skill_configuration_unchanged: true,
   skill_overlay_cleanup: true,
   packaged_skill_providers: {
-    claude: SELECTED_SKILLS,
-    codex: SELECTED_SKILLS,
-    agy: SELECTED_SKILLS,
-    gemini: SELECTED_SKILLS,
+    claude: PACKAGED_SKILLS,
+    codex: PACKAGED_SKILLS,
+    agy: PACKAGED_SKILLS,
+    gemini: PACKAGED_SKILLS,
   },
   diagnostics: [
     { kind: "missing_dependency", message: "tmux is required; install it or approve its executable path." },
@@ -93,7 +96,7 @@ test("acceptance requires packaged skill provider evidence", () => {
       ...passingResult,
       packaged_skill_providers: {
         ...passingResult.packaged_skill_providers,
-        codex: SELECTED_SKILLS.slice(0, -1),
+        codex: PACKAGED_SKILLS.filter((skill) => skill !== "domain-modeling"),
       },
     }),
     /required packaged skills for codex/,

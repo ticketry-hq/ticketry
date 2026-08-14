@@ -1,32 +1,11 @@
-import { create } from "zustand";
+import { useSyncExternalStore } from "react";
 import type { SessionMeta } from "./sessionStore";
 
-// CODIN-749 — single-owner terminal foreground registry.
-//
-// Deliberately session-agnostic: it stores foreground *claims* and mount
-// *targets*, never session metadata. Session identity + lifecycle stay owned by
-// terminalStore; the xterm/WS objects stay owned by the shared terminal layer.
-// This store is the thin policy layer that
-// decides which surface — the fallback workspace or issue drawer — may present
-// a given live session at any instant, so a session can
-// only ever have one foreground xterm DOM owner.
-
-// The surfaces that can present a terminal. `studio` is the implicit default;
-// `drawer` (issue drawer) is an explicit claim. Absence of any live session for
-// a key is the implicit "no foreground owner / backgrounded" state, expressed
-// as a `null`-equivalent resolution (fallback to `studio`) rather than a stored value.
 export type ForegroundOwner = "studio" | "drawer";
 
-interface TerminalForegroundState {
-  // Foreground key -> the owner currently claiming it. Only non-default
-  // (`drawer`) claims are recorded; `studio` is the implicit
-  // fallback, so an unclaimed live session is studio-eligible without any write.
+interface TerminalForegroundRegistry {
   claims: Record<string, ForegroundOwner>;
-  // Per-owner registered mount-target element. Workspace hosts register
-  // Kept so a host can attach the *same* shared Terminal — never spawn a second.
   hostTargets: Partial<Record<ForegroundOwner, HTMLElement | null>>;
-
-  // Adapter API called by terminal-presenting surfaces.
   acquire: (key: string, owner: ForegroundOwner) => void;
   release: (key: string) => void;
   releaseOwner: (owner: ForegroundOwner) => void;
@@ -35,100 +14,100 @@ interface TerminalForegroundState {
   unregisterHost: (owner: ForegroundOwner) => void;
 }
 
-export const useTerminalForegroundStore = create<TerminalForegroundState>(
-  (set) => ({
-    claims: {},
-    hostTargets: {},
+type Listener = () => void;
+const listeners = new Set<Listener>();
+let claims: Record<string, ForegroundOwner> = {};
+let hostTargets: Partial<Record<ForegroundOwner, HTMLElement | null>> = {};
 
-    acquire(key, owner) {
-      // `studio` is the implicit default, so claiming it for a key is exactly
-      // releasing that key. Kept as a symmetric no-op for testability.
-      if (owner === "studio") {
-        set((s) => {
-          if (!(key in s.claims)) return s;
-          const claims = { ...s.claims };
-          delete claims[key];
-          return { claims };
-        });
-        return;
-      }
-      set((s) => {
-        if (s.claims[key] === owner) return s;
-        return { claims: { ...s.claims, [key]: owner } };
-      });
-    },
+function publish(): void {
+  snapshot = { ...actions, claims, hostTargets };
+  for (const listener of listeners) listener();
+}
 
-    release(key) {
-      set((s) => {
-        if (!(key in s.claims)) return s;
-        const claims = { ...s.claims };
-        delete claims[key];
-        return { claims };
-      });
-    },
+const actions = {
+  acquire(key: string, owner: ForegroundOwner) {
+    if (owner === "studio") {
+      actions.release(key);
+      return;
+    }
+    if (claims[key] === owner) return;
+    claims = { ...claims, [key]: owner };
+    publish();
+  },
+  release(key: string) {
+    if (!(key in claims)) return;
+    const next = { ...claims };
+    delete next[key];
+    claims = next;
+    publish();
+  },
+  releaseOwner(owner: ForegroundOwner) {
+    const next = Object.fromEntries(
+      Object.entries(claims).filter(([, value]) => value !== owner),
+    );
+    if (Object.keys(next).length === Object.keys(claims).length) return;
+    claims = next;
+    publish();
+  },
+  rekey(oldKey: string, newKey: string) {
+    if (oldKey === newKey || claims[oldKey] === undefined) return;
+    const next = { ...claims };
+    const owner = next[oldKey];
+    delete next[oldKey];
+    next[newKey] = owner;
+    claims = next;
+    publish();
+  },
+  registerHost(owner: ForegroundOwner, el: HTMLElement | null) {
+    hostTargets = { ...hostTargets, [owner]: el };
+    publish();
+  },
+  unregisterHost(owner: ForegroundOwner) {
+    if (!(owner in hostTargets)) return;
+    const next = { ...hostTargets };
+    delete next[owner];
+    hostTargets = next;
+    publish();
+  },
+};
 
-    releaseOwner(owner) {
-      set((s) => {
-        const claims = Object.fromEntries(
-          Object.entries(s.claims).filter(([, v]) => v !== owner),
-        );
-        if (Object.keys(claims).length === Object.keys(s.claims).length) {
-          return s;
-        }
-        return { claims };
-      });
-    },
+let snapshot: TerminalForegroundRegistry = { ...actions, claims, hostTargets };
 
-    rekey(oldKey, newKey) {
-      if (oldKey === newKey) return;
-      set((s) => {
-        const owner = s.claims[oldKey];
-        if (owner === undefined) return s;
-        const claims = { ...s.claims };
-        delete claims[oldKey];
-        claims[newKey] = owner;
-        return { claims };
-      });
-    },
+function subscribe(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
 
-    registerHost(owner, el) {
-      set((s) => ({ hostTargets: { ...s.hostTargets, [owner]: el } }));
-    },
+function useRegistry<T>(selector: (state: TerminalForegroundRegistry) => T): T {
+  const state = useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
+  return selector(state);
+}
 
-    unregisterHost(owner) {
-      set((s) => {
-        if (!(owner in s.hostTargets)) return s;
-        const hostTargets = { ...s.hostTargets };
-        delete hostTargets[owner];
-        return { hostTargets };
-      });
-    },
-  }),
-);
+export const useTerminalForegroundStore = Object.assign(useRegistry, {
+  getState: () => snapshot,
+  setState: (next: Partial<TerminalForegroundRegistry>) => {
+    if (next.claims) claims = next.claims;
+    if (next.hostTargets) hostTargets = next.hostTargets;
+    publish();
+  },
+  subscribe,
+});
 
-// ---- Pure helpers (the single source of truth for "who owns this key") ----
-
-// A session's durable foreground key: its run identity when known, else its
-// live session id. Every host derives the key from the same
-// SessionMeta, so they always agree on the key for a given live run.
-export function foregroundKey(meta: Pick<SessionMeta, "agentRunId" | "sessionId">): string {
+export function foregroundKey(
+  meta: Pick<SessionMeta, "agentRunId" | "sessionId">,
+): string {
   return meta.agentRunId ?? meta.sessionId;
 }
 
-// Who owns a key right now — an explicit `drawer` claim, else
-// the `studio` default.
 export function resolveOwner(
-  state: Pick<TerminalForegroundState, "claims">,
+  state: Pick<TerminalForegroundRegistry, "claims">,
   key: string,
 ): ForegroundOwner {
   return state.claims[key] ?? "studio";
 }
 
-// Whether the fallback host may attach a session's xterm DOM. False exactly when
-// another surface (the drawer) holds the session's
-// foreground key.
 export function isStudioEligible(
-  state: Pick<TerminalForegroundState, "claims">,
+  state: Pick<TerminalForegroundRegistry, "claims">,
   meta: Pick<SessionMeta, "agentRunId" | "sessionId">,
 ): boolean {
   return resolveOwner(state, foregroundKey(meta)) === "studio";

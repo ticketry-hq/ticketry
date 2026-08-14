@@ -17,21 +17,24 @@ dist/
 # Node / Studio
 node_modules/
 studio/dist/
-eventcatalog/.astro/
-eventcatalog/.eventcatalog-core/
-eventcatalog/dist/
-eventcatalog/exports/
-eventcatalog/domains/**/ticketry-backend/openapi.json
-modelcatalog/.astro/
-modelcatalog/.eventcatalog-core/
-modelcatalog/dist/
-modelcatalog/components/language.generated.json
-modelcatalog/node_modules
+studio/playwright-report/
+studio/test-results/
+docs/eventcatalog/.astro/
+docs/eventcatalog/.eventcatalog-core/
+docs/eventcatalog/dist/
+docs/eventcatalog/exports/
+docs/eventcatalog/domains/**/ticketry-backend/openapi.json
+docs/modelcatalog/.astro/
+docs/modelcatalog/.eventcatalog-core/
+docs/modelcatalog/dist/
+docs/modelcatalog/components/language.generated.json
+docs/modelcatalog/node_modules
 .openapi-generator/
 studio/src-tauri/binaries/
 .env
 .env.*
 !.env.example
+/.ticketry-dev/
 
 # Editor / OS
 .DS_Store

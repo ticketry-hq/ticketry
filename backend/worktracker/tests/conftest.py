@@ -1,9 +1,8 @@
 """Fixtures for the worktracker package tests.
 
-Covers both the standalone model/sequence tests and the relocated
-router/SDK integration suite, which exercises the ninja API through the
-package's own minimal Django host (``worktracker.tests.urls``). No host
-application is required — worktracker self-tests.
+Covers both the standalone model/sequence tests and the relocated DRF/SDK
+integration suite through the package's own minimal Django host
+(``worktracker.tests.urls``). No host application is required.
 """
 
 import json
@@ -17,6 +16,17 @@ from worktracker.models import IssueType, Project, State, Workspace
 
 TOKEN = "test-token"
 BASE = "/api/work-tracker"
+
+
+def openapi_path(schema, mounted_path):
+    """Return the document-relative path for an absolute mounted API path."""
+
+    server_base = schema["servers"][0]["url"].rstrip("/")
+    if not mounted_path.startswith(f"{server_base}/"):
+        raise AssertionError(
+            f"{mounted_path!r} is outside the OpenAPI server base {server_base!r}"
+        )
+    return mounted_path[len(server_base) :]
 
 
 @pytest.fixture(autouse=True)

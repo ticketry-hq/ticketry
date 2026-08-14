@@ -20,7 +20,10 @@ async def automation_attempt_status_records(
         # items (and therefore automation attempts) are UUID-scoped.
         return []
 
-    rows = AutomationAttempt.objects.filter(issue__project_id=scoped_project_id)
+    rows = AutomationAttempt.objects.filter(
+        issue__project_id=scoped_project_id,
+        dismissed_at__isnull=True,
+    )
     if task_id is not None:
         rows = rows.filter(issue_id=scoped_task_id)
     rows = rows.order_by("-updated_at", "-created_at").select_related("root_attempt")

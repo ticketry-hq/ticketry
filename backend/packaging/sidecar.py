@@ -18,6 +18,8 @@ import threading
 import traceback
 from pathlib import Path
 
+from studio_server.atomic_files import atomic_write_bytes
+
 
 CREDENTIAL_ENV = "MUXED_SIDECAR_CREDENTIAL"
 DEFAULT_DESKTOP_ORIGIN = "tauri://localhost"
@@ -25,7 +27,9 @@ PACKAGED_HOOK_RUNNER_ENV = "MUXED_PACKAGED_HOOK_RUNNER"
 HOOK_SPOOL_DIR_ENV = "MUXED_HOOK_SPOOL_DIR"
 MIGRATION_FAILURE_LINE = "MUXED_FAILURE migration database could not be migrated"
 STARTUP_FAILURE_LINE = "MUXED_FAILURE crash sidecar could not start"
+SKILL_PREPARATION_EVENT = "provider_skill_preparation_failed"
 SNAPSHOT_RETENTION = 3
+POSTGRES_MIGRATION_LOCK_ID = 0x5449434B45545259
 
 HOOK_MODULES = {
     "agy": "apps.terminals.agents.hooks.agy_hook",
@@ -56,25 +60,12 @@ def load_or_create_secret_key(data_dir: Path) -> str:
 
     secret_path = data_dir / "django_secret_key"
     if not secret_path.exists():
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=".django_secret_key.",
-            suffix=".tmp",
-            dir=data_dir,
+        atomic_write_bytes(
+            secret_path,
+            secrets.token_urlsafe(48).encode(),
+            mode=0o600,
+            fsync=True,
         )
-        temporary_path = Path(temporary_name)
-        try:
-            os.fchmod(descriptor, 0o600)
-            with os.fdopen(descriptor, "w") as secret_file:
-                descriptor = -1
-                secret_file.write(secrets.token_urlsafe(48))
-                secret_file.flush()
-                os.fsync(secret_file.fileno())
-            os.replace(temporary_path, secret_path)
-        except BaseException:
-            if descriptor >= 0:
-                os.close(descriptor)
-            temporary_path.unlink(missing_ok=True)
-            raise
 
     os.chmod(secret_path, 0o600)
     secret = secret_path.read_text()
@@ -178,34 +169,58 @@ def _verify_database_integrity(connection) -> None:
         raise RuntimeError(f"state database integrity check failed: {detail}")
 
 
+@contextlib.contextmanager
+def _database_migration_lock(connection):
+    """Serialize schema setup when several sidecars share one Postgres DB."""
+
+    if connection.vendor != "postgresql":
+        yield
+        return
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_lock(%s)", [POSTGRES_MIGRATION_LOCK_ID])
+    try:
+        yield
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_unlock(%s)", [POSTGRES_MIGRATION_LOCK_ID])
+
+
 def migrate_and_provision() -> None:
     import django
     from django.core.management import call_command
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
 
+    django.setup()
     database_path = Path(os.environ["MUXED_STATE_DB"])
     database_existed = database_path.is_file()
-    django.setup()
-    _verify_database_integrity(connection)
-    executor = MigrationExecutor(connection)
-    migrations_pending = bool(
-        executor.migration_plan(executor.loader.graph.leaf_nodes())
-    )
-    if database_existed and migrations_pending:
-        _create_pre_migration_snapshot(database_path, connection)
+    with _database_migration_lock(connection):
+        if connection.vendor == "sqlite":
+            _verify_database_integrity(connection)
+        executor = MigrationExecutor(connection)
+        migrations_pending = bool(
+            executor.migration_plan(executor.loader.graph.leaf_nodes())
+        )
+        if connection.vendor == "sqlite" and database_existed and migrations_pending:
+            _create_pre_migration_snapshot(database_path, connection)
 
-    call_command("migrate", interactive=False, verbosity=1)
-    provision_output = io.StringIO()
-    call_command("provision", stdout=provision_output)
+        call_command("migrate", interactive=False, verbosity=1)
+        provision_output = io.StringIO()
+        call_command("provision", stdout=provision_output)
 
-    from apps.settings_store import service as settings_service
+        from apps.settings_store import service as settings_service
+        from django.conf import settings
 
-    provisioned = json.loads(provision_output.getvalue())
-    settings_service.ensure_local_profile(
-        name="Local",
-        workspace_slug=provisioned["workspace_slug"],
-    )
+        provisioned = json.loads(provision_output.getvalue())
+        # Provision may generate the first-run token after Django settings have
+        # loaded. Make that credential authoritative for the running process as
+        # well as the persisted token file.
+        settings.WORKTRACKER_API_TOKEN = provisioned["token"]
+        settings_service.ensure_local_profile(
+            name="Local",
+            workspace_slug=provisioned["workspace_slug"],
+        )
 
 
 def readiness_line(port: int) -> str:
@@ -313,6 +328,33 @@ def install_skill_catalog() -> int:
     return 0
 
 
+def prepare_provider_skills() -> None:
+    """Prepare optional provider integrations without gating application use."""
+
+    from apps.terminals.agents.skills.installation import (
+        SkillInstallationError,
+        install_packaged_skills,
+    )
+
+    try:
+        install_packaged_skills()
+    except Exception as exc:
+        diagnostic = {
+            "event": SKILL_PREPARATION_EVENT,
+            "reason": getattr(exc, "reason", "unexpected"),
+            "message": getattr(exc, "message", str(exc)),
+        }
+        if isinstance(exc, SkillInstallationError):
+            diagnostic.update(
+                {
+                    "provider": exc.provider,
+                    "skill": exc.skill,
+                    "path": str(exc.path),
+                }
+            )
+        print(json.dumps(diagnostic, separators=(",", ":")), file=sys.stderr, flush=True)
+
+
 def verify_skill_installations() -> int:
     """Verify the persistent provider installations without changing them."""
 
@@ -339,7 +381,6 @@ def smoke_skill_providers() -> int:
         smoke_root = Path(temporary)
         os.environ.setdefault("MUXED_DATA_DIR", str(smoke_root / "data"))
         os.environ.setdefault("MUXED_STATE_DB", str(smoke_root / "data/state.db"))
-        os.environ.setdefault("MUXED_SKIP_LOCAL_STATE_MIGRATION", "1")
         os.environ.setdefault("DJANGO_SETTINGS_MODULE", "studio_server.settings")
 
         import django
@@ -466,9 +507,6 @@ def main(argv: list[str] | None = None) -> int:
     # that was never going to succeed. Classify it as ``crash`` instead.
     try:
         configure_environment(args)
-        from apps.terminals.agents.skills.installation import install_packaged_skills
-
-        install_packaged_skills()
     except BaseException as exc:
         if isinstance(exc, KeyboardInterrupt):
             raise
@@ -485,6 +523,7 @@ def main(argv: list[str] | None = None) -> int:
         traceback.print_exc()
         print(MIGRATION_FAILURE_LINE, flush=True)
         return 1
+    prepare_provider_skills()
     serve(args.port)
     return 0
 

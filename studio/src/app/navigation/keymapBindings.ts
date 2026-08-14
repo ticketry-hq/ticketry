@@ -170,6 +170,7 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   },
   globalBinding("plan", "n"),
   globalBinding("instant-change", "i"),
+  globalBinding("run-now", "r"),
   globalBinding("status", "s"),
   globalBinding("settings", "e"),
   globalBinding("set-folder", "f"),

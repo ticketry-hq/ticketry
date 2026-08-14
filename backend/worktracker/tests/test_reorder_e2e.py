@@ -21,15 +21,18 @@ def _api(live_server):
     )
 
 
-def _create(client, project_id, name):
-    r = client.post(f"/projects/{project_id}/work-items", json={"name": name})
-    assert r.status_code == 200, r.text
+def _create(client, project_id, issue_type_id, name):
+    r = client.post(
+        f"/projects/{project_id}/work-items",
+        json={"name": name, "issue_type_id": str(issue_type_id)},
+    )
+    assert r.status_code == 201, r.text
     return r.json()
 
 
 def _list_ids(client, project_id):
     """A fresh GET — the 'reload' — returning ids in server (rank) order."""
-    r = client.get(f"/projects/{project_id}/work-items")
+    r = client.get(f"/work-items?project={project_id}")
     assert r.status_code == 200, r.text
     return [i["id"] for i in r.json()]
 
@@ -42,11 +45,11 @@ def _reorder(client, item_id, before=None, after=None):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_within_column_reorder_persists_over_http(live_server, project):
+def test_within_column_reorder_persists_over_http(live_server, project, task_type):
     with _api(live_server) as client:
-        a = _create(client, project.id, "A")
-        b = _create(client, project.id, "B")
-        c = _create(client, project.id, "C")
+        a = _create(client, project.id, task_type.id, "A")
+        b = _create(client, project.id, task_type.id, "B")
+        c = _create(client, project.id, task_type.id, "C")
 
         # Creation order is the baseline (each create appends to the tail).
         assert _list_ids(client, project.id) == [a["id"], b["id"], c["id"]]
@@ -68,18 +71,19 @@ def test_within_column_reorder_persists_over_http(live_server, project):
         assert _list_ids(client, project.id) == [c["id"], b["id"], a["id"]]
 
         # Only the moved row ever changed rank: neighbors keep their keys.
-        final = {i["id"]: i["rank"] for i in client.get(
-            f"/projects/{project.id}/work-items"
-        ).json()}
+        final = {
+            i["id"]: i["rank"]
+            for i in client.get(f"/work-items?project={project.id}").json()
+        }
         assert final[c["id"]] < final[b["id"]] < final[a["id"]]
 
 
 @pytest.mark.django_db(transaction=True)
-def test_dense_reinserts_persist_over_http(live_server, project):
+def test_dense_reinserts_persist_over_http(live_server, project, task_type):
     with _api(live_server) as client:
-        lo = _create(client, project.id, "lo")
-        hi = _create(client, project.id, "hi")
-        mover = _create(client, project.id, "mover")
+        lo = _create(client, project.id, task_type.id, "lo")
+        hi = _create(client, project.id, task_type.id, "hi")
+        mover = _create(client, project.id, task_type.id, "mover")
 
         # Repeatedly drop `mover` between the same two neighbors; every reload
         # keeps a valid, strictly-ordered column (the string space never runs out).
@@ -91,11 +95,11 @@ def test_dense_reinserts_persist_over_http(live_server, project):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_inverted_neighbors_rejected_over_http(live_server, project):
+def test_inverted_neighbors_rejected_over_http(live_server, project, task_type):
     with _api(live_server) as client:
-        a = _create(client, project.id, "A")
-        b = _create(client, project.id, "B")
-        c = _create(client, project.id, "C")
+        a = _create(client, project.id, task_type.id, "A")
+        b = _create(client, project.id, task_type.id, "B")
+        c = _create(client, project.id, task_type.id, "C")
         # a.rank < b.rank; before=b, after=a is inverted → 422, order unchanged.
         r = _reorder(client, c["id"], before=b["id"], after=a["id"])
         assert r.status_code == 422, r.text

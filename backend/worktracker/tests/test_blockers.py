@@ -1,7 +1,7 @@
 """#624 — the directed Issue↔Issue blocker relation (blocks / blocked-by).
 
-Exercises the additive ``blocked_by`` M2M through the package's ninja host:
-the replace-set patch field, both id arrays on ``WorkItemOut``, the self-block
+Exercises the additive ``blocked_by`` M2M through the package's DRF host:
+the replace-set patch field, both id arrays on the work-item response, the self-block
 and cycle guards, and the M2M-drop-on-delete behaviour.
 """
 
@@ -26,7 +26,7 @@ def _task(client, project, auth, name):
         {"name": name, "issue_type_id": str(issue_type.id)},
         auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     return r.json()
 
 
@@ -45,7 +45,7 @@ def test_patch_sets_blocked_by_edge_and_both_id_arrays(client, project, auth):
     # The reverse edge falls out for free on B (read-only ``blocks``).
     rb = client.get(f"{BASE}/work-items/{b['id']}", headers=auth)
     assert rb.status_code == 200
-    task_b = rb.json()["task"]
+    task_b = rb.json()
     assert task_b["blocks_ids"] == [a["id"]]
     assert task_b["blocked_by_ids"] == []
 
@@ -134,7 +134,7 @@ def test_deleting_a_blocker_drops_the_edge(client, project, auth):
     assert r.status_code == 204
 
     ra = client.get(f"{BASE}/work-items/{a['id']}", headers=auth)
-    assert ra.json()["task"]["blocked_by_ids"] == []
+    assert ra.json()["blocked_by_ids"] == []
     assert Issue.objects.filter(pk=a["id"]).exists()
 
 

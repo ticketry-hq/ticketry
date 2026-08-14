@@ -1,8 +1,21 @@
+"""Contract checks for Ticketry's sole drf-spectacular HTTP document."""
+
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 
-from django.core.management import call_command
+from worktracker.registry import declared_public_route_keys, declared_route_keys
 
-from worktracker.openapi import API_ROOT, build_openapi_schema
+
+ROOT = Path(__file__).resolve().parents[3]
+BACKEND = ROOT / "backend"
+CONTRACT = ROOT / "openapi.json"
+
+
+def _schema():
+    return json.loads(CONTRACT.read_text(encoding="utf-8"))
 
 
 def _operations(schema):
@@ -12,110 +25,190 @@ def _operations(schema):
                 yield path, method, operation
 
 
-def test_export_is_byte_deterministic(tmp_path):
+def _export(destination):
+    environment = os.environ.copy()
+    environment["DJANGO_SETTINGS_MODULE"] = "worktracker.openapi_settings"
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "django",
+            "spectacular",
+            "--file",
+            str(destination),
+            "--format",
+            "openapi-json",
+        ],
+        cwd=BACKEND,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_drf_spectacular_export_is_byte_deterministic(tmp_path):
     first = tmp_path / "first.json"
     second = tmp_path / "second.json"
 
-    call_command("export_openapi", first)
-    call_command("export_openapi", second)
+    first_run = _export(first)
+    second_run = _export(second)
 
-    assert first.read_bytes() == second.read_bytes()
-    assert first.read_bytes().endswith(b"\n")
-    assert json.loads(first.read_text()) == build_openapi_schema()
+    assert first_run.returncode == 0, first_run.stderr
+    assert second_run.returncode == 0, second_run.stderr
+    assert first.read_bytes() == second.read_bytes() == CONTRACT.read_bytes()
 
 
-def test_operations_have_unique_explicit_ids_tags_security_and_errors():
-    schema = build_openapi_schema()
-    operations = list(_operations(schema))
+def test_contract_is_the_complete_declared_ticketry_surface():
+    schema = _schema()
+    live = {(method.upper(), f"/api{path}") for path, method, _ in _operations(schema)}
+
+    assert live == declared_route_keys()
+    assert "/work-tracker/schema" not in schema["paths"]
+    assert schema["servers"] == [{"url": "/api"}]
+
+
+def test_operations_have_unique_ids_and_explicit_security():
+    operations = list(_operations(_schema()))
     operation_ids = [operation["operationId"] for _, _, operation in operations]
+    security_by_key = {
+        (method.upper(), f"/api{path}"): operation["security"]
+        for path, method, operation in operations
+    }
 
     assert len(operation_ids) == len(set(operation_ids))
-    assert all(not operation_id.startswith("worktracker_api_") for operation_id in operation_ids)
-    assert all(operation["tags"] != ["worktracker"] for _, _, operation in operations)
-    assert all(operation["security"] == [{"ApiKeyAuth": []}] for _, _, operation in operations)
-    assert all("401" in operation["responses"] for _, _, operation in operations)
-    assert schema["servers"] == [{"url": API_ROOT}]
-    assert schema["components"]["securitySchemes"]["ApiKeyAuth"] == {
+    assert all("security" in operation for _, _, operation in operations)
+    assert {
+        key for key, security in security_by_key.items() if security == [{}]
+    } == declared_public_route_keys()
+    assert all(
+        security
+        == ([{}] if key in declared_public_route_keys() else [{"ApiKeyAuth": []}])
+        for key, security in security_by_key.items()
+    )
+    assert _schema()["components"]["securitySchemes"]["ApiKeyAuth"] == {
         "type": "apiKey",
         "in": "header",
         "name": "x-api-key",
     }
 
 
-def test_contract_models_multipart_and_empty_responses():
-    schema = build_openapi_schema()
-    upload = schema["paths"]["/work-items/{issue_id}/attachments"]["post"]
-    delete = schema["paths"]["/work-items/{issue_id}"]["delete"]
-    patch = schema["components"]["schemas"]["WorkItemPatch"]["properties"]
-
+def test_contract_records_flat_relations_and_binary_attachment_upload():
+    schema = _schema()
+    work_item = schema["components"]["schemas"]["WorkItem"]["properties"]
+    upload = schema["paths"]["/work-tracker/work-items/{issue_id}/attachments"]["post"]
     multipart = upload["requestBody"]["content"]["multipart/form-data"]["schema"]
-    assert "file" in multipart["properties"]
-    assert "file" in multipart["required"]
-    assert multipart["properties"]["file"]["format"] == "binary"
-    assert delete["responses"]["204"] == {"description": "No Content"}
 
-    for field in ("parent_id", "state_id"):
-        assert field not in schema["components"]["schemas"]["WorkItemPatch"].get(
-            "required", []
-        )
-        assert {"type": "null"} in patch[field]["anyOf"]
-    assert patch["origin"] == {
-        "default": "human",
-        "enum": ["human", "agent"],
-        "title": "Origin",
+    assert work_item["state"] == {
         "type": "string",
+        "format": "uuid",
+        "nullable": True,
+        "readOnly": True,
+    }
+    assert work_item["issue_type"]["format"] == "uuid"
+    assert multipart["required"] == ["file"]
+    assert multipart["properties"]["file"] == {
+        "type": "string",
+        "format": "binary",
     }
 
 
-def test_configuration_feature_models_are_published():
-    schemas = build_openapi_schema()["components"]["schemas"]
+def test_run_now_refusals_document_the_partial_outcome():
+    schema = _schema()
+    operation = schema["paths"]["/work-tracker/work-items/{issue_id}/run-now"]["post"]
+    refusal_ref = "#/components/schemas/RunNowRefusal"
 
-    assert schemas["ConfigBody"]["properties"]["features"] == {
-        "$ref": "#/components/schemas/FeaturesBody"
+    for status in ("400", "404", "409", "422", "503"):
+        assert operation["responses"][status]["content"]["application/json"]["schema"] == {
+            "$ref": refusal_ref,
+        }
+
+    refusal = schema["components"]["schemas"]["RunNowRefusal"]
+    assert refusal["required"] == [
+        "code",
+        "committed_state",
+        "detail",
+        "run",
+        "target_id",
+    ]
+    assert refusal["properties"]["committed_state"] == {
+        "allOf": [{"$ref": "#/components/schemas/CommittedState"}],
+        "nullable": True,
     }
-    assert schemas["FeaturesBody"] == {
-        "properties": {
-            "sidebar": {"title": "Sidebar", "type": "boolean"},
-            "projects": {"title": "Projects", "type": "boolean"},
-        },
-        "required": ["sidebar", "projects"],
-        "title": "FeaturesBody",
-        "type": "object",
+    assert refusal["properties"]["run"] == {
+        "allOf": [{"$ref": "#/components/schemas/LaunchedAgentResponse"}],
+        "nullable": True,
     }
 
 
-def test_retired_operations_are_absent():
-    schema = build_openapi_schema()
-    operations = {
-        (path, method, operation["operationId"])
-        for path, method, operation in _operations(schema)
+def test_work_item_batch_read_is_a_bounded_post_body():
+    schema = _schema()
+    operation = schema["paths"]["/work-tracker/work-items/batch"]["post"]
+    request = operation["requestBody"]["content"]["application/json"]["schema"]
+    body_schema = schema["components"]["schemas"][request["$ref"].rsplit("/", 1)[1]]
+
+    assert operation["operationId"] == "batchWorkItems"
+    assert body_schema["required"] == ["ids"]
+    assert body_schema["properties"]["ids"] == {
+        "type": "array",
+        "items": {"type": "string", "format": "uuid"},
+        "maxItems": 100,
+        "minItems": 1,
     }
 
-    retired_ids = {
-        "updateModule",
-        "deleteModule",
-        "listAttachments",
-        "updateAttachment",
-        "deleteAttachment",
-        "archiveWorkItem",
-        "unarchiveWorkItem",
-    }
-    assert retired_ids.isdisjoint(operation_id for _, _, operation_id in operations)
-    assert "/attachments/{attachment_id}" not in schema["paths"]
-    assert set(schema["paths"]["/work-items/{issue_id}/attachments"]) == {"post"}
+
+def test_work_item_collection_has_no_response_hiding_parameters():
+    schema = _schema()
+    operation = schema["paths"]["/work-tracker/work-items"]["get"]
+    parameter_names = {parameter["name"] for parameter in operation["parameters"]}
+
+    assert "include_archived" not in parameter_names
+    assert "include_pathfind" not in parameter_names
 
 
-def test_sprint_contract_is_absent():
-    schema = build_openapi_schema()
+def test_module_archived_filter_and_issue_type_reassignment_body_are_declared():
+    schema = _schema()
+    module_list = schema["paths"]["/work-tracker/projects/{project_id}/modules"]["get"]
+    issue_type_delete = schema["paths"]["/work-tracker/issue-types/{type_id}"]["delete"]
 
-    assert all("sprint" not in path.lower() for path in schema["paths"])
-    assert all("sprint" not in name.lower() for name in schema["components"]["schemas"])
-    assert "sprint_id" not in schema["components"]["schemas"]["WorkItemOut"]["properties"]
-    assert "sprint_id" not in schema["components"]["schemas"]["WorkItemPatch"]["properties"]
+    assert any(
+        parameter["name"] == "include_archived" and parameter["in"] == "query"
+        for parameter in module_list["parameters"]
+    )
+    assert "requestBody" in issue_type_delete
+    assert not any(
+        parameter["name"] == "reassign_to"
+        for parameter in issue_type_delete.get("parameters", [])
+    )
 
 
-def test_work_item_priority_contract_is_absent():
-    schema = build_openapi_schema()
+def test_project_contract_exposes_a_read_only_module_ordering_mode():
+    schemas = _schema()["components"]["schemas"]
+    project = schemas["Project"]
 
-    for name in ("ModuleWorkItemIn", "WorkItemIn", "WorkItemPatch", "WorkItemOut"):
-        assert "priority" not in schema["components"]["schemas"][name]["properties"]
+    assert project["properties"]["manual_module_order"]["type"] == "boolean"
+    assert project["properties"]["manual_module_order"]["readOnly"] is True
+    assert "manual_module_order" in project["required"]
+    # A project's ordering mode flips through the module reorder domain
+    # operation, so the general project update must not accept it as input —
+    # the patch shape carries it read-only, exactly as it carries ``id``.
+    patched = schemas["PatchedProject"]["properties"]["manual_module_order"]
+    assert patched["readOnly"] is True
+
+
+def test_reorder_contract_exposes_the_optional_first_drag_baseline():
+    reorder = _schema()["components"]["schemas"]["WorkItemReorder"]
+    baseline = reorder["properties"]["initial_order_ids"]
+
+    assert baseline["type"] == "array"
+    assert baseline["items"]["format"] == "uuid"
+    # Only a module's very first drag sends it, so it must stay optional for
+    # every ordinary within-column task reorder.
+    assert "initial_order_ids" not in reorder.get("required", [])
+
+
+def test_deleted_composite_routes_are_absent():
+    paths = _schema()["paths"]
+
+    assert "/work-tracker/work-items/{issue_id}/scope-context" not in paths
+    assert "/work-tracker/issue-types/{type_id}/workflow-settings" not in paths
+    assert "/work-tracker/projects/{project_id}/review-findings" not in paths

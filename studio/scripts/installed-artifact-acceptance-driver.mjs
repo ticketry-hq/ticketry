@@ -554,8 +554,11 @@ export async function packagedSkillEvidenceScenario(context) {
 
   const requiredSkills = [
     "code-review",
+    "domain-modeling",
     "grill-with-docs",
+    "grilling",
     "implement",
+    "setup-matt-pocock-skills",
     "tdd",
     "to-spec",
     "to-tickets",

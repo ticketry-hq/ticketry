@@ -1,28 +1,26 @@
 import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { useTasksStore } from "../stores/tasksStore";
+import { useClientStore } from "../../../state/clientStore";
+import { useStudioStore } from "../../projects/store";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
-import { useConfigStore } from "../../agents/stores/configStore";
+import { setModuleFolder, useConfig } from "../stores/configStore";
 import {
   ModuleFolderSelection,
   useModuleFolderSelection,
 } from "../../agents/terminal/ModuleFolderSelection";
 
 /**
- * Collects a module name and optional local folder, then creates the module.
+ * Collects a module name and local folder, then creates the module.
  *
  * Folder persistence happens only after the new module ID exists. If that
  * persistence fails, retrying reuses the created ID instead of creating a
  * duplicate module.
  */
 export function AddModule() {
-  const selectedProjectId = useTasksStore((s) => s.selectedProjectId);
-  const createModule = useTasksStore((s) => s.createModule);
+  const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const popModal = useModalStore((s) => s.popModal);
-  const profiles = useConfigStore((s) => s.profiles);
-  const recentProfileIndex = useConfigStore((s) => s.recentProfileIndex);
-  const setModuleFolder = useConfigStore((s) => s.setModuleFolder);
+  const { profiles, recentProfileIndex } = useConfig();
 
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -35,8 +33,12 @@ export function AddModule() {
     recentProfileIndex,
   });
 
-  // Block submit on blank names or while a create is pending.
-  const canSubmit = name.trim().length > 0 && !busy && !!selectedProjectId;
+  // Both planning and local setup are required before this coherent flow starts.
+  const canSubmit =
+    name.trim().length > 0 &&
+    folderSelection.value.trim().length > 0 &&
+    !busy &&
+    !!selectedProjectId;
 
   async function submit(): Promise<void> {
     if (!canSubmit || !selectedProjectId || submittingRef.current) return;
@@ -47,25 +49,27 @@ export function AddModule() {
     try {
       let moduleId = createdModuleIdRef.current;
       if (!moduleId) {
-        await createModule(selectedProjectId, name.trim());
-        moduleId = useTasksStore.getState().selectedModuleId;
-        if (!moduleId) {
-          throw new Error("Created module was not selected.");
-        }
+        const created = await useStudioStore
+          .getState()
+          .createModuleForProjectWithError(selectedProjectId, name.trim());
+        moduleId = created.id;
+        if (!moduleId) throw new Error("The created module has no id.");
         createdModuleIdRef.current = moduleId;
         setCreatedModuleId(moduleId);
       }
 
+      const resolvedModuleId = moduleId;
       const folder = folderSelection.value.trim();
-      if (folder) {
-        try {
-          await setModuleFolder(moduleId, folder);
-        } catch {
-          setError(
-            "Module created, but its folder could not be saved. Retry to save the folder.",
-          );
-          return;
-        }
+      try {
+        await setModuleFolder(resolvedModuleId, folder);
+      } catch {
+        setError(
+          "Module created, but its folder could not be saved. Retry to save the folder.",
+        );
+        return;
+      }
+      if (useClientStore.getState().selectedModuleId !== resolvedModuleId) {
+        await useClientStore.getState().selectModule(resolvedModuleId);
       }
       popModal();
     } catch {
@@ -85,7 +89,7 @@ export function AddModule() {
           actionId: [MODAL_ACTIONS.previous, MODAL_ACTIONS.next],
           label: "Move",
         },
-        { actionId: MODAL_ACTIONS.confirm, label: "Create" },
+        { actionId: MODAL_ACTIONS.confirm, label: "Create module" },
         { actionId: MODAL_ACTIONS.close, label: "Cancel" },
       ]}
       onAction={(actionId) => {
@@ -112,7 +116,11 @@ export function AddModule() {
         className="w-full bg-pane-bg px-2 py-1 font-mono text-sm outline-none ring-1 ring-pane-border focus:ring-focus-accent"
       />
       <div className="mt-3">
-        <ModuleFolderSelection selection={folderSelection} />
+        <ModuleFolderSelection
+          selection={folderSelection}
+          ariaLabel="Module folder"
+          placeholder="Local folder"
+        />
       </div>
       {error && <div className="mt-2 text-sm text-red-400">{error}</div>}
       <div className="mt-3 flex justify-end gap-2">
@@ -129,7 +137,7 @@ export function AddModule() {
           onClick={() => void submit()}
           className="rounded border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent disabled:opacity-50"
         >
-          {createdModuleId ? "Save Folder" : "Create"}
+          {createdModuleId ? "Save folder" : "Create module"}
         </button>
       </div>
     </ModalShell>

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import {
+  getConfigSnapshot,
   isSidebarEnabled,
-  useConfigStore,
 } from "../../features/studio/stores/configStore";
 
 export type OnboardingTourStep =
@@ -31,7 +31,7 @@ const INACTIVE = {
 };
 
 function openingStep(): OnboardingTourStep {
-  const config = useConfigStore.getState();
+  const config = getConfigSnapshot();
   return isSidebarEnabled(config) && config.features.projects
     ? "projects-pane"
     : "module-create";

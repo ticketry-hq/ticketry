@@ -94,7 +94,7 @@ async def drain_file(path: Path) -> bool:
         # creating an apps.runs.api import cycle.
         from apps.runs.api import ingest_lifecycle_event
 
-        await ingest_lifecycle_event(None, LifecycleEvent(**payload))
+        await ingest_lifecycle_event(LifecycleEvent(**payload))
         return True
     except Exception as exc:
         logger.warning("discarding invalid lifecycle hook spool file %s: %s", path, exc)

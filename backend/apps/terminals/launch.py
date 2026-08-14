@@ -1,17 +1,17 @@
-"""Shared agent launch primitive (ticket #714, parent #707).
+"""Application-owned agent launch and explicit terminal cleanup.
 
 The *launch half* of the WS terminal spawn path, lifted out of
 ``terminals.consumers._spawn_persisted`` into a single module-level callable so
-the human WebSocket flow and the Session seam's programmatic ``spawn``
-(``apps.terminals.session``, T800) share one launch path. :func:`_launch`
+the human WebSocket flow and programmatic launches share one path. :func:`_launch`
 injects per-agent lifecycle
-hooks, persists the ``AgentRun`` row, creates the detached tmux session (which
-runs the agent command), and starts the design-dir document watcher — then
-returns the run id. On a persist/tmux failure it deletes the just-inserted row
-and raises :class:`LaunchUnavailable`, so no caller can leak an orphan run.
+hooks, asks the persistence service to record the launch, creates the detached
+terminal through the public runtime, and starts the design-dir document watcher — then
+returns the run id. On a persistence/runtime failure it compensates the launch
+and raises :class:`LaunchUnavailable`. If runtime cleanup is temporarily
+unavailable, it retains a cleanup-pending run so reconciliation can retry.
 
-The *viewer half* (PTY spawn, ``PtySession``, client-size refresh, pump) stays
-in the consumer; :func:`_launch` never touches ``cols``/``rows`` or ``self``.
+Viewer attachment is owned separately by :mod:`apps.terminals.viewer_attachments`;
+:func:`_launch` never handles transport or viewer policy.
 
 Dependencies point one way: ``consumers`` imports from here; this module never
 imports ``consumers``.
@@ -23,11 +23,11 @@ import asyncio
 import logging
 import os
 import shlex
+import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-
-from django.db import close_old_connections
 
 from apps.terminals.agents.injectors import (
     DEFAULT_LIFECYCLE_URL,
@@ -36,23 +36,49 @@ from apps.terminals.agents.injectors import (
 )
 from apps.terminals.agents.registry import (
     AgentAdapter,
-    LaunchAugmentation,
+    UnknownAgent,
     cleanup_temporary_artifacts,
+    cleanup_temporary_artifacts_for_run,
+    create_temporary_artifact_root,
+    get_adapter,
 )
 from apps.terminals.agents.skills.preflight import (
     RequiredSkillUnavailable,
     ResolvedSkills,
+    resolve_required_skills,
+    skill_prompt_envelope,
 )
-from apps.terminals.dao.constants import SCRATCH_TASK_ID
 from apps.documents import watch as documents_watch
-from apps.runs.bus import publish_document, publish_status
-from apps.runs.models import AgentRun
-from apps.terminals.tmux import sessions as tmux_sessions
+from apps.runs.bus import publish_backend_session_sync, publish_document, publish_status
+from apps.settings_store import config as cfgmod
+from apps.settings_store.config import NoConfigurationSelected, module_link_path
+from apps.terminals.launch_configuration import (
+    ResolvedLaunchConfiguration,
+    resolve_task_launch_configuration,
+)
+from apps.terminals.persistence import (
+    LaunchRecords,
+    compensate_launch,
+    load_resume_launch,
+    mark_launch_cleanup_pending,
+    persist_launch,
+    persist_termination,
+    termination_context,
+)
+from apps.terminals.prompt_builder import _build_prompt, _resolve_profile_index
+from apps.terminals.runtime import (
+    CreateTerminal,
+    TerminalDimensions,
+    TerminalRuntime,
+    TmuxTerminalRuntime,
+)
+from apps.terminals.task_launch_preflight import (
+    enforce_provider_activation as _enforce_provider_activation,
+)
+from studio_server.atomic_files import atomic_write_bytes
 from studio_server.contracts import AgentLifecycleFrame, RunRecord
-from worktracker.models import Issue
 
 logger = logging.getLogger(__name__)
-tmux = tmux_sessions
 
 _APPROVED_AGENT_PATHS = {
     "claude": "MUXED_APPROVED_CLAUDE_PATH",
@@ -60,6 +86,59 @@ _APPROVED_AGENT_PATHS = {
     "codex": "MUXED_APPROVED_CODEX_PATH",
     "gemini": "MUXED_APPROVED_GEMINI_PATH",
 }
+
+# tmux rejects a shell-command once its control message grows too large. Keep
+# direct commands comfortably below that boundary; large prompts are executed
+# from a private run-scoped wrapper instead.
+_TMUX_DIRECT_COMMAND_MAX_BYTES = 8 * 1024
+_INITIAL_TERMINAL_DIMENSIONS = TerminalDimensions(columns=80, rows=24)
+
+# Application callers depend on the public runtime protocol.  Tests replace
+# this instance with the in-memory runtime or a recording fake.
+terminal_runtime: TerminalRuntime = TmuxTerminalRuntime()
+
+
+@dataclass(frozen=True)
+class LaunchIntent:
+    """Application inputs for preparing one agent launch."""
+
+    agent: str | None
+    project_id: str
+    module_id: str | None
+    task_id: str
+    issue_id: str | None = None
+    scope: str = "task"
+    initial_prompt: str | None = None
+    doc_rel_path: str | None = None
+    doc_id: str | None = None
+    launch_configuration: ResolvedLaunchConfiguration | None = None
+
+    def __post_init__(self) -> None:
+        if self.issue_id is None:
+            object.__setattr__(self, "issue_id", self.task_id)
+
+
+def _prepare_runtime_command(
+    agent_run_id: str, argv: list[str]
+) -> tuple[str, tuple[Path, ...]]:
+    """Return a runtime-safe command and any run-scoped artifacts it owns."""
+
+    command = shlex.join(argv)
+    if len(command.encode("utf-8")) <= _TMUX_DIRECT_COMMAND_MAX_BYTES:
+        return command, ()
+
+    root = create_temporary_artifact_root(agent_run_id)
+    script = root / "launch.sh"
+    try:
+        atomic_write_bytes(
+            script,
+            f"#!/bin/sh\nexec {command}\n".encode("utf-8"),
+            mode=0o700,
+        )
+    except BaseException:
+        cleanup_temporary_artifacts((root,))
+        raise
+    return shlex.quote(str(script)), (root,)
 
 
 def _env_url(name: str) -> Optional[str]:
@@ -115,25 +194,19 @@ def _approved_agent_argv(agent: str, argv: list[str]) -> list[str]:
 class LaunchUnavailable(Exception):
     """The persisted launch could not complete.
 
-    Raised when the persist/create worker fails (tmux missing/broken or the DB
-    write failed). :func:`_launch` deletes the orphan ``AgentRun`` row before
-    raising, so callers decide only whether to fall back (the WS consumer) or
-    let it propagate (the Session seam's ``spawn``, T800).
+    Raised when persistence or runtime creation fails. :func:`_launch`
+    terminates any partial runtime and deletes orphan application rows before
+    raising. If termination cannot be confirmed, it preserves a cleanup-pending
+    application handle for reconciliation.
     """
 
 
-def _delete_agent_run(run_id: str) -> None:
-    """Remove an agent_runs row left orphaned by a failed tmux create.
+class ResumeUnavailable(Exception):
+    """The requested historical provider conversation cannot be resumed."""
 
-    Runs in an ``asyncio.to_thread`` worker; the direct sync ORM delete
-    replaces the old SQLAlchemy ``asyncio.run`` bridge. The thread
-    connection is closed before returning.
-    """
-
-    try:
-        AgentRun.objects.filter(id=run_id).delete()
-    finally:
-        close_old_connections()
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
 
 
 async def _launch(
@@ -147,12 +220,13 @@ async def _launch(
     doc_rel_path: Optional[str],
     agent_run_id: str,
     resumed_from: Optional[str] = None,
+    provider_session_id: Optional[str] = None,
     resolved_skills: ResolvedSkills | None = None,
 ) -> str:
-    """Persist and start one agent run inside a detached tmux session.
+    """Persist and start one agent run inside a detached terminal runtime.
 
-    The single shared launch path for both the WS consumer and the Session
-    seam's programmatic ``spawn`` (T800). All inputs are already-built
+    The single shared launch path for WebSocket and programmatic callers. All
+    inputs are already-built
     launch facts the caller computed; no ``self``, ``profile``, ``init`` dict,
     or ``cols``/``rows`` cross the boundary.
 
@@ -167,8 +241,8 @@ async def _launch(
     :param issue_id: the task or module Issue anchoring the run.
     :param agent_run_id: pre-minted, non-null run id (callers mint it upstream).
     :return: ``agent_run_id`` — the persisted, live run.
-    :raises LaunchUnavailable: on persist/tmux failure; the orphan row is
-        deleted before the raise so no run leaks.
+    :raises LaunchUnavailable: on persistence/runtime failure; launch records
+        are deleted after runtime cleanup is confirmed or retained for retry.
     """
 
     started_at = datetime.now(timezone.utc).isoformat()
@@ -184,25 +258,13 @@ async def _launch(
     argv = _approved_agent_argv(agent, argv)
     resolved_skills = resolved_skills or ResolvedSkills((), (), frozenset(), "")
     try:
-        if hasattr(adapter, "augment_launch"):
-            augmentation = adapter.augment_launch(
-                argv,
-                agent_run_id,
-                lifecycle_url=lifecycle_url,
-                mcp_url=mcp_url,
-                skills=resolved_skills,
-            )
-        else:
-            augmentation = LaunchAugmentation(
-                tuple(
-                    adapter.inject(
-                        argv,
-                        agent_run_id,
-                        lifecycle_url=lifecycle_url,
-                        mcp_url=mcp_url,
-                    )
-                )
-            )
+        augmentation = adapter.augment_launch(
+            argv,
+            agent_run_id,
+            lifecycle_url=lifecycle_url,
+            mcp_url=mcp_url,
+            skills=resolved_skills,
+        )
     except RequiredSkillUnavailable:
         raise
     except Exception as exc:
@@ -221,84 +283,77 @@ async def _launch(
         "env",
         "-u",
         "NO_COLOR",
-        *(f"{name}={value}" for name, value in augmentation.environment),
         *(str(item) for item in augmentation.argv),
     ]
-    command = shlex.join(final_argv)
-
-    run = AgentRun(
-        id=agent_run_id,
-        issue_id=issue_id,
-        agent=agent,
-        status="running",
-        started_at=started_at,
-        lifecycle_state="starting",
-        lifecycle_updated_at=started_at,
-        cwd=cwd,
-        design_dir=design_dir,
-        resumed_from=resumed_from,
-        scope=scope,
-        doc_rel_path=doc_rel_path,
-    )
-
-    def _persist_and_create() -> tuple[str, str, str | None]:
-        # Runs in a to_thread worker: direct sync ORM insert then
-        # create_session, which runs the agent command inside tmux. Close the
-        # thread connection when the atomic launch attempt finishes.
-        created_session = False
-        try:
-            issue = Issue.objects.only("id", "project_id", "module_id").get(
-                id=issue_id
-            )
-            project_id = str(issue.project_id)
-            module_id = str(issue.module_id or issue.id)
-            task_id = str(issue.id) if issue.module_id else None
-            run.save(force_insert=True)
-            tmux_sessions.create_session(
-                agent_run_id=agent_run_id,
-                task_id=task_id or SCRATCH_TASK_ID,
-                module_id=module_id,
-                project_id=project_id,
-                agent=agent,
-                command=command,
-                cwd=cwd,
-                scope=scope,
-                doc_rel_path=doc_rel_path,
-            )
-            created_session = True
-            # This is also the durable transport-ready marker. Reconciliation
-            # deliberately ignores the run between its insert and this update.
-            updated = AgentRun.objects.filter(id=agent_run_id).update(
-                terminal_owner_id=tmux_sessions.terminal_owner_id()
-            )
-            if updated != 1:
-                raise RuntimeError("persist terminal ownership failed")
-            return project_id, module_id, task_id
-        except Exception:
-            if created_session:
-                try:
-                    tmux_sessions.terminate_session(agent_run_id)
-                except Exception:
-                    logger.exception(
-                        "failed to roll back tmux session run=%s", agent_run_id
-                    )
-            raise
-        finally:
-            close_old_connections()
-
     try:
-        project_id, module_id, task_id = await asyncio.to_thread(
-            _persist_and_create
+        command, command_artifacts = _prepare_runtime_command(
+            agent_run_id, final_argv
         )
     except Exception as exc:
-        # tmux missing/broken, or persistence failed — delete the half-created
-        # row so no orphan remains, then signal the caller to decide.
-        logger.exception("terminal launch failed run=%s", agent_run_id)
-        try:
-            await asyncio.to_thread(_delete_agent_run, agent_run_id)
-        except Exception:
-            pass
         cleanup_temporary_artifacts(augmentation.temporary_artifacts)
+        raise LaunchUnavailable(f"could not prepare runtime command: {exc}") from exc
+    temporary_artifacts = (
+        *augmentation.temporary_artifacts,
+        *command_artifacts,
+    )
+
+    launch_persisted = False
+    try:
+        routing = await asyncio.to_thread(
+            persist_launch,
+            LaunchRecords(
+                agent_run_id=agent_run_id,
+                issue_id=issue_id,
+                agent=agent,
+                started_at=started_at,
+                cwd=cwd,
+                design_dir=design_dir,
+                resumed_from=resumed_from,
+                scope=scope,
+                doc_rel_path=doc_rel_path,
+                runtime_namespace=terminal_runtime.namespace,
+                provider_session_id=provider_session_id,
+            ),
+        )
+        launch_persisted = True
+        await asyncio.to_thread(
+            terminal_runtime.create,
+            CreateTerminal(
+                agent_run_id=agent_run_id,
+                command=command,
+                working_directory=cwd,
+                environment=dict(augmentation.environment),
+                dimensions=_INITIAL_TERMINAL_DIMENSIONS,
+            ),
+        )
+    except Exception as exc:
+        # Runtime creation can fail after making a partial terminal. Explicitly
+        # compensate both sides; terminate is idempotent when nothing exists.
+        logger.exception("terminal launch failed run=%s", agent_run_id)
+        cleanup_confirmed = not launch_persisted
+        if launch_persisted:
+            try:
+                await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
+                cleanup_confirmed = True
+            except Exception:
+                logger.warning(
+                    "terminal launch compensation failed run=%s",
+                    agent_run_id,
+                    exc_info=True,
+                )
+                try:
+                    await asyncio.to_thread(mark_launch_cleanup_pending, agent_run_id)
+                except Exception:
+                    logger.exception(
+                        "could not mark terminal launch cleanup pending run=%s",
+                        agent_run_id,
+                    )
+        if cleanup_confirmed:
+            try:
+                await asyncio.to_thread(compensate_launch, agent_run_id)
+            except Exception:
+                pass
+            cleanup_temporary_artifacts(temporary_artifacts)
         raise LaunchUnavailable(str(exc)) from exc
 
     # The run row exists and the agent is live inside tmux: tell connected
@@ -307,14 +362,17 @@ async def _launch(
     # The same state is persisted above so a snapshot or page reload cannot
     # regress this live run to the deliberately hidden `unknown` state.
     await publish_status(
-        project_id,
+        routing.project_id,
         AgentLifecycleFrame(
             at=started_at,
             run=RunRecord(
                 agent_run_id=agent_run_id,
-                task_id=task_id,
-                module_id=module_id,
+                project_id=routing.project_id,
+                task_id=routing.task_id,
+                module_id=routing.module_id,
+                agent=agent,
                 scope=scope,
+                started_at=started_at,
                 state="starting",
                 updated_at=started_at,
             ),
@@ -323,17 +381,174 @@ async def _launch(
 
     # Watch the run's design directory for generated HTML for the rest of the
     # run (#521).
-    async def publish_document_frame(frame_module_id: str, frame: dict) -> None:
-        del frame_module_id
-        await publish_document(project_id, frame)
+    async def publish_document_frame(frame: dict) -> None:
+        await publish_document(routing.project_id, frame)
 
     documents_watch.start_watch(
         agent_run_id=agent_run_id,
         design_dir=design_dir,
-        module_id=module_id,
-        task_id=task_id,
+        module_id=routing.module_id,
+        task_id=routing.task_id,
         scope=scope,
         publish=publish_document_frame,
     )
 
     return agent_run_id
+
+
+async def launch_agent_run(intent: LaunchIntent) -> str:
+    """Prepare provider policy and create a persisted terminal-backed run."""
+
+    launch_configuration = intent.launch_configuration
+    effective_agent = intent.agent
+    if intent.scope == "task" and launch_configuration is None:
+        launch_configuration = await asyncio.to_thread(
+            resolve_task_launch_configuration,
+            intent.task_id,
+            agent_override=intent.agent,
+        )
+    if launch_configuration is not None:
+        effective_agent = launch_configuration.agent
+    if effective_agent is None:
+        raise ValueError("unknown_agent")
+    activated_providers = await asyncio.to_thread(
+        _enforce_provider_activation, effective_agent
+    )
+
+    profile_index = _resolve_profile_index()
+    if profile_index is None:
+        raise NoConfigurationSelected("No profile selected.")
+    profile = cfgmod.Config().profiles[profile_index]
+    module_folder: Optional[str] = module_link_path(profile, intent.module_id)
+    if module_folder and not os.path.isdir(module_folder):
+        module_folder = None
+    cwd = module_folder or os.path.expanduser("~")
+    agent_run_id = uuid.uuid4().hex
+
+    try:
+        adapter = get_adapter(effective_agent)
+    except UnknownAgent:
+        raise ValueError("unknown_agent") from None
+    required_skills = (
+        launch_configuration.required_skills
+        if launch_configuration is not None
+        else ()
+    )
+    prompt, design_dir, worktree_cwd, err = await _build_prompt(
+        profile_index,
+        is_planning=intent.scope == "plan",
+        is_instant=intent.scope == "instant",
+        instant_prompt=intent.initial_prompt if intent.scope == "instant" else None,
+        project_id=intent.project_id,
+        module_id=intent.module_id,
+        task_id=None if intent.scope in {"plan", "instant"} else intent.task_id,
+        initial_prompt=None if intent.scope == "instant" else intent.initial_prompt,
+        agent_run_id=agent_run_id,
+        module_folder=module_folder,
+        is_doc_chat=intent.scope == "docchat",
+        doc_rel_path=intent.doc_rel_path,
+        doc_id=intent.doc_id,
+        persist_task_id=intent.task_id,
+        workflow_prompt=(
+            launch_configuration.prompt
+            if launch_configuration is not None
+            else None
+        ),
+        agent=effective_agent,
+    )
+    if err is not None:
+        if err == "no_profile_selected":
+            raise NoConfigurationSelected("No profile selected.")
+        raise ValueError(err)
+    if worktree_cwd:
+        cwd = worktree_cwd
+
+    resolved_skills = await asyncio.to_thread(
+        resolve_required_skills,
+        provider=effective_agent,
+        required_skills=required_skills,
+        cwd=cwd,
+        supports_required_skills=adapter.supports_required_skills,
+        available_tools=adapter.available_worktracker_tools,
+    )
+    envelope = skill_prompt_envelope(resolved_skills)
+    if envelope:
+        prompt = f"{prompt}\n\n{envelope}"
+    argv = adapter.command(
+        prompt,
+        model=(
+            launch_configuration.model if launch_configuration is not None else None
+        ),
+        reasoning=(
+            launch_configuration.reasoning
+            if launch_configuration is not None
+            else None
+        ),
+        activated_providers=activated_providers,
+    )
+    return await _launch(
+        adapter=adapter,
+        issue_id=intent.issue_id,
+        argv=argv,
+        cwd=cwd,
+        design_dir=design_dir,
+        scope=intent.scope,
+        doc_rel_path=intent.doc_rel_path,
+        agent_run_id=agent_run_id,
+        resolved_skills=resolved_skills,
+    )
+
+
+def terminate_agent_run(agent_run_id: str) -> None:
+    """Explicitly terminate runtime mechanics, then persist application state."""
+
+    ended_at = datetime.now(timezone.utc).isoformat()
+    context = termination_context(agent_run_id)
+    terminal_runtime.terminate(agent_run_id)
+    cleanup_temporary_artifacts_for_run(agent_run_id)
+    if not context.was_active:
+        return
+    documents_watch.stop_watch(agent_run_id)
+    persist_termination(agent_run_id, ended_at=ended_at)
+    if context.project_id:
+        publish_backend_session_sync(
+            context.project_id, agent_run_id, "exited", at=ended_at
+        )
+
+
+async def resume_provider_conversation(agent_run_id: str) -> str:
+    """Continue one ended provider conversation in a fresh persisted launch.
+
+    The application loads historical launch context and prepares the
+    provider-native resume argv. The terminal runtime receives only the new
+    run handle and prepared terminal inputs; it is never given the old run,
+    terminal session, or provider conversation as a separate concept.
+    """
+
+    facts = await asyncio.to_thread(load_resume_launch, agent_run_id)
+    if facts is None:
+        raise ResumeUnavailable("unknown_run")
+    if facts.ended_at is None:
+        raise ResumeUnavailable("run_still_active")
+    if not facts.provider_session_id:
+        raise ResumeUnavailable("no_provider_session_id")
+    if not facts.cwd or not os.path.isdir(facts.cwd):
+        raise ResumeUnavailable("cwd_missing")
+
+    adapter = get_adapter(facts.agent)
+    argv = adapter.resume_command(facts.provider_session_id)
+    new_run_id = uuid.uuid4().hex
+    return await _launch(
+        adapter=adapter,
+        issue_id=facts.issue_id,
+        argv=argv,
+        cwd=facts.cwd,
+        design_dir=facts.design_dir,
+        scope=facts.scope,
+        doc_rel_path=None,
+        agent_run_id=new_run_id,
+        # Provider identity is the sole resume continuity persisted onto the
+        # new run. The old AgentRun and terminal session remain historical.
+        provider_session_id=facts.provider_session_id,
+        resolved_skills=ResolvedSkills((), (), frozenset(), ""),
+    )

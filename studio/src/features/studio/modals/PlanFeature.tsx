@@ -10,12 +10,16 @@ import type {
   TerminalCreateRequest,
 } from "../../agents/terminal/create/types";
 import { useModalStore } from "../../../app/modal/modalStore";
-import { useConfigStore as useAgentConfigStore } from "../../agents/stores/configStore";
+import { getConfigSnapshot, getModuleFolder } from "../stores/configStore";
 import { TEMP_TASK_ID } from "../../agents/types";
-import { useTasksStore } from "../stores/tasksStore";
+import { useStudioStore } from "../../projects/store";
+import { useClientStore } from "../../../state/clientStore";
+import { queryClient } from "../../../shared/query/queryClient";
+import { queryKeys } from "../../../shared/query/keys";
+import type { WorkItem } from "../../../shared/api/types";
 
 function selectScratchWorkspace(): void {
-  void useTasksStore.getState().selectTask(TEMP_TASK_ID);
+  useClientStore.getState().selectTask(TEMP_TASK_ID);
 }
 
 // The Studio adapter for the shared terminal-create launcher (CODIN-839): it
@@ -34,10 +38,10 @@ function studioPlanFlow(): TerminalCreateFlow {
   });
   return {
     hasModuleFolder(moduleId) {
-      const { recentProfileIndex, profiles } = useAgentConfigStore.getState();
+      const { recentProfileIndex, profiles } = getConfigSnapshot();
       const profile =
         recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-      return Boolean(profile?.module_folders?.[moduleId]);
+      return Boolean(getModuleFolder(profile, moduleId));
     },
     openFolderGate(req) {
       // Resume the same launch after the folder saves: chain through the prompt
@@ -75,7 +79,8 @@ function studioPlanFlow(): TerminalCreateFlow {
  * modal chain. Behaviour is unchanged from the user's point of view.
  */
 export function startPlanFlow(): void {
-  const { selectedProjectId, selectedModuleId } = useTasksStore.getState();
+  const { selectedProjectId } = useStudioStore.getState();
+  const { selectedModuleId } = useClientStore.getState();
   if (!selectedProjectId || !selectedModuleId) return;
   const req: TerminalCreateRequest = {
     projectId: selectedProjectId,
@@ -86,13 +91,16 @@ export function startPlanFlow(): void {
 
 /**
  * Kick off the instant-change flow:
- * 1) If `module_folders[selectedModuleId]` is empty, push ModuleFolder first
+ * 1) If the selected module has no link, push ModuleFolder first
  *    (chained `next` resumes into PromptInput → AgentPicker (mode: instant)).
  * 2) Otherwise push PromptInput with `next: agent-picker, mode: instant`.
  */
 export function startInstantChangeFlow(): void {
-  const cfg = useAgentConfigStore.getState();
-  const tasks = useTasksStore.getState();
+  const cfg = getConfigSnapshot();
+  const tasks = {
+    ...useStudioStore.getState(),
+    ...useClientStore.getState(),
+  };
   const modal = useModalStore.getState();
 
   const { recentProfileIndex, profiles } = cfg;
@@ -107,7 +115,7 @@ export function startInstantChangeFlow(): void {
 
   const profile =
     recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = profile?.module_folders?.[selectedModuleId];
+  const folder = getModuleFolder(profile, selectedModuleId);
 
   if (!folder) {
     modal.pushModal({
@@ -133,7 +141,10 @@ function selectedTaskLaunchContext(): {
   taskId: string;
   ticketSeq: number | null;
 } | null {
-  const tasks = useTasksStore.getState();
+  const tasks = {
+    ...useStudioStore.getState(),
+    ...useClientStore.getState(),
+  };
   const { selectedProjectId, selectedModuleId, selectedTaskId } = tasks;
   if (
     !selectedProjectId ||
@@ -141,10 +152,9 @@ function selectedTaskLaunchContext(): {
     !selectedTaskId ||
     selectedTaskId === TEMP_TASK_ID
   ) return null;
-  const selected = [
-    ...tasks.tasks,
-    ...Object.values(tasks.subtasks).flat(),
-  ].find((task) => task.id === selectedTaskId);
+  const selected = queryClient.getQueryData<WorkItem>(
+    queryKeys.workItems.byId(selectedTaskId),
+  );
   if (!selected) return null;
   return {
     projectId: selectedProjectId,
@@ -156,14 +166,14 @@ function selectedTaskLaunchContext(): {
 
 /** Equivalent entry for `o` (open agent on selected task). */
 export function startOpenFlow(): void {
-  const cfg = useAgentConfigStore.getState();
+  const cfg = getConfigSnapshot();
   const modal = useModalStore.getState();
   const { recentProfileIndex, profiles } = cfg;
   const context = selectedTaskLaunchContext();
   if (!context) return;
   const profile =
     recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = profile?.module_folders?.[context.moduleId];
+  const folder = getModuleFolder(profile, context.moduleId);
   if (!folder) {
     modal.pushModal({
       type: "module-folder",
@@ -183,14 +193,14 @@ export function startOpenFlow(): void {
 
 /** Entry for shift+enter (open with prompt). */
 export function startOpenWithPromptFlow(): void {
-  const cfg = useAgentConfigStore.getState();
+  const cfg = getConfigSnapshot();
   const modal = useModalStore.getState();
   const { recentProfileIndex, profiles } = cfg;
   const context = selectedTaskLaunchContext();
   if (!context) return;
   const profile =
     recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
-  const folder = profile?.module_folders?.[context.moduleId];
+  const folder = getModuleFolder(profile, context.moduleId);
   if (!folder) {
     modal.pushModal({
       type: "module-folder",

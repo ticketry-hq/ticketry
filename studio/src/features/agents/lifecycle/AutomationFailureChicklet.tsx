@@ -21,6 +21,7 @@ export function AutomationFailureChicklet({
   if (attempts.length === 0) return null;
 
   const failed = attempts.filter((attempt) => attempt.status === "failed");
+  const retryable = failed.filter((attempt) => attempt.retryable);
   const pending = attempts.filter((attempt) => attempt.status === "pending");
   const retryPending = isRetrying || pending.length > 0;
   const title = failed
@@ -30,12 +31,12 @@ export function AutomationFailureChicklet({
 
   const retry = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (retryPending || failed.length === 0) return;
+    if (retryPending || retryable.length === 0) return;
     setIsRetrying(true);
     setRetryError(null);
     try {
       await Promise.all(
-        failed.map((attempt) => retryAutomationAttempt(attempt.attempt_id)),
+        retryable.map((attempt) => retryAutomationAttempt(attempt.attempt_id)),
       );
     } catch (error) {
       setRetryError(error instanceof Error ? error.message : "Retry failed");
@@ -57,10 +58,16 @@ export function AutomationFailureChicklet({
         type="button"
         className="border-l border-red-500/40 px-1 hover:bg-red-500/15 disabled:cursor-wait"
         aria-label="Retry failed automated launch"
-        disabled={retryPending || failed.length === 0}
+        disabled={retryPending || retryable.length === 0}
         onClick={(event) => void retry(event)}
       >
-        {retryPending ? "Retrying…" : retryError ? "Retry failed" : "Retry"}
+        {retryPending
+          ? "Retrying…"
+          : retryError
+            ? "Retry failed"
+            : retryable.length > 0
+              ? "Retry"
+              : "Fix required"}
       </button>
     </span>
   );

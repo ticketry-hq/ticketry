@@ -1,10 +1,15 @@
 import { type FormEvent, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
 import type { ProviderCatalog } from "../../shared/api/types";
-import * as api from "../../features/studio/lib/api";
-import { useTasksStore } from "../../features/studio/stores/tasksStore";
-import { useLaunchProviderCatalog } from "../../features/workflows/launchProviderCatalog";
-import { useOnboardingStore } from "./onboardingStore";
+import * as api from "../../shared/api/client";
+import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
+import { getConfigSnapshot } from "../../features/studio/stores/configStore";
+import { useStudioStore } from "../../features/projects/store";
+import {
+  setProviderCapabilities,
+  setProviderCatalog,
+} from "../../features/workflows/providerQueries";
+import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 import { OnboardingProviders } from "./OnboardingProviders";
 
@@ -16,11 +21,9 @@ const EMPTY_CATALOG: ProviderCatalog = {
 };
 
 export default function OnboardingWelcome() {
-  const acknowledgeOnboarding = useOnboardingStore(
-    (state) => state.acknowledgeOnboarding,
-  );
+  const projectsEnabled = getConfigSnapshot().features.projects;
   const [pane, setPane] = useState<WelcomePane>("providers");
-  const createProject = useTasksStore((state) => state.createProject);
+  const createProject = useStudioStore((state) => state.createProjectWithError);
   const startTour = useOnboardingTourStore((state) => state.start);
   const [name, setName] = useState("Coding");
   const [slug, setSlug] = useState("CDN");
@@ -28,6 +31,21 @@ export default function OnboardingWelcome() {
   const [skipping, setSkipping] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [skipError, setSkipError] = useState<string | null>(null);
+
+  const continueFromProviders = async () => {
+    if (projectsEnabled) {
+      setPane("project");
+      return;
+    }
+
+    let projectId = useStudioStore.getState().selectedProjectId;
+    if (!projectId) {
+      const project = await resolveDefaultProject();
+      await useStudioStore.getState().selectProject(project.id);
+      projectId = project.id;
+    }
+    if (projectId) startTour(projectId);
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -40,6 +58,8 @@ export default function OnboardingWelcome() {
         slug: slug.trim(),
         description: "",
       });
+      if (!project.id) throw new Error("The created project has no id.");
+      await useStudioStore.getState().selectProject(project.id);
       startTour(project.id);
     } catch (cause) {
       setCreateError(apiErrorMessage(cause));
@@ -52,8 +72,9 @@ export default function OnboardingWelcome() {
     setSkipping(true);
     setSkipError(null);
     try {
-      await api.putProviderCatalog(EMPTY_CATALOG);
-      useLaunchProviderCatalog.setState({ capabilities: [], loaded: true });
+      const { value } = await api.putProviderCatalog(EMPTY_CATALOG);
+      setProviderCatalog(value);
+      setProviderCapabilities([]);
       await acknowledgeOnboarding();
     } catch (cause) {
       setSkipError(apiErrorMessage(cause));
@@ -71,8 +92,11 @@ export default function OnboardingWelcome() {
           Welcome to WorkTracker
         </div>
 
-        {pane === "providers" ? (
-          <OnboardingProviders onContinue={() => setPane("project")} />
+        {!projectsEnabled || pane === "providers" ? (
+          <OnboardingProviders
+            continueLabel={projectsEnabled ? "Continue" : "Get started"}
+            onContinue={continueFromProviders}
+          />
         ) : (
           <>
             <h1 className="mt-3 text-2xl font-semibold text-text-primary">

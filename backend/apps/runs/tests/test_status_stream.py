@@ -3,12 +3,14 @@
 import asyncio
 import time
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from asgiref.sync import sync_to_async
 from channels.testing.websocket import WebsocketCommunicator
 
 from apps.runs import dao
+from apps.runs.consumers import StatusStreamConsumer
 from apps.runs.api import ingest_lifecycle_event
 from apps.runs.bus import (
     publish_automation_attempt,
@@ -16,9 +18,12 @@ from apps.runs.bus import (
     publish_document,
 )
 from apps.runs.models import AgentRun, AutomationAttempt
+from apps.terminals import launch as terminal_launch
+from apps.terminals.models import AgentTerminalSession
 from studio_server.asgi import application
 from studio_server.contracts import AutomationAttemptRecord, LifecycleEvent
 from django.db import OperationalError, close_old_connections, transaction
+from django.utils import timezone
 from worktracker.models import Issue, IssueType, Project, State, Workspace
 from worktracker.services import workflow_config
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
@@ -27,12 +32,8 @@ from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 pytestmark = pytest.mark.django_db(transaction=True)
 PROJECT_1_ID = fixture_uuid("proj-1")
 PROJECT_2_ID = fixture_uuid("proj-2")
-MODULE_1_ID = fixture_issue_id(
-    project_id="proj-1", module_id="mod-1", task_id=None
-)
-TASK_1_ID = fixture_issue_id(
-    project_id="proj-1", module_id="mod-1", task_id="task-1"
-)
+MODULE_1_ID = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id=None)
+TASK_1_ID = fixture_issue_id(project_id="proj-1", module_id="mod-1", task_id="task-1")
 
 
 async def _issue_type(project: Project, *, level: str = "task") -> IssueType:
@@ -61,6 +62,17 @@ async def _seed_run(
             scope=scope,
         )
     )
+    await AgentTerminalSession.objects.acreate(
+        agent_run_id=run_id,
+        tmux_session_name=f"tmux-{run_id}",
+        task_id="task-1",
+        module_id="mod-1",
+        project_id=project_id,
+        agent="codex",
+        created_at="2026-07-12T10:00:00+00:00",
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
+        scope=scope,
+    )
 
 
 async def _connect(
@@ -72,6 +84,18 @@ async def _connect(
         if cursor is not None:
             path += f"&cursor={cursor}"
     return WebsocketCommunicator(application, path)
+
+
+async def test_status_frame_is_ignored_after_disconnect() -> None:
+    """A group event queued behind disconnect must not write to a closed ASGI socket."""
+
+    consumer = StatusStreamConsumer()
+    consumer._disconnected = True
+    consumer.send_json = AsyncMock()
+
+    await consumer.status_frame({"frame": {"v": 1, "type": "test"}})
+
+    consumer.send_json.assert_not_awaited()
 
 
 async def test_status_requires_project_id() -> None:
@@ -92,10 +116,42 @@ async def test_connect_sends_versioned_authoritative_snapshot() -> None:
     assert frame["v"] == 1
     assert frame["type"] == "snapshot"
     assert frame["scope"] == {"project_id": PROJECT_1_ID, "task_id": None}
-    assert frame["work_item_cursor"] == 0
+    project = await Project.objects.aget(pk=PROJECT_1_ID)
+    assert frame["work_item_cursor"] == project.state_revision
     assert frame["workflow_states"] == []
     assert [run["agent_run_id"] for run in frame["runs"]] == ["run-1"]
     assert frame["at"]
+    await socket.disconnect()
+
+
+async def test_snapshot_stamp_precedes_run_rows_read(monkeypatch) -> None:
+    """``at`` must be stamped before the run rows are read.
+
+    Clients reconcile any known run the snapshot omits as exited unless the
+    run is newer than ``at``. A stamp taken after the read would let a run
+    spawned mid-query sort before the stamp and be declared exited while its
+    terminal is perfectly healthy.
+    """
+
+    from datetime import datetime, timezone
+
+    await _seed_run("run-1")
+    observed: dict[str, str] = {}
+    real_records = dao.agent_status_records
+
+    async def recording_records(project_id, **kwargs):
+        observed["queried_at"] = datetime.now(timezone.utc).isoformat()
+        return await real_records(project_id, **kwargs)
+
+    monkeypatch.setattr(dao, "agent_status_records", recording_records)
+
+    socket = await _connect(PROJECT_1_ID)
+    connected, _ = await socket.connect()
+    assert connected
+    frame = await socket.receive_json_from()
+
+    assert frame["type"] == "snapshot"
+    assert frame["at"] <= observed["queried_at"]
     await socket.disconnect()
 
 
@@ -163,7 +219,9 @@ async def _catalog_project(slug: str) -> Project:
     )
 
 
-async def test_state_rename_and_recolor_are_published_to_active_project_client() -> None:
+async def test_state_rename_and_recolor_are_published_to_active_project_client() -> (
+    None
+):
     """A same-group edit still has to reach peers (#1462).
 
     Rename and recolor leave ``group`` untouched, so the old group-only
@@ -302,6 +360,8 @@ async def test_connect_reconciles_unresolved_automation_attempts() -> None:
             "work_item_id": str(issue.id),
             "status": "failed",
             "error": "tmux unavailable",
+            "failure": None,
+            "retryable": True,
             "agent_run_id": None,
             "updated_at": attempt.updated_at.isoformat(),
         }
@@ -309,14 +369,48 @@ async def test_connect_reconciles_unresolved_automation_attempts() -> None:
     await socket.disconnect()
 
 
+async def test_connect_omits_dismissed_automation_attempts() -> None:
+    workspace = await sync_to_async(Workspace.objects.create)(
+        id=uuid.uuid4(), slug="dismissed-attempt", name="dismissed-attempt"
+    )
+    project = await sync_to_async(Project.objects.create)(
+        id=uuid.uuid4(), workspace=workspace, name="Dismissed attempt", slug="DISMISS"
+    )
+    issue_type = await _issue_type(project)
+    issue = await sync_to_async(Issue.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="Dismissed automation",
+        sequence_id=1,
+    )
+    await sync_to_async(AutomationAttempt.objects.create)(
+        transition_id=uuid.uuid4(),
+        issue=issue,
+        from_state_id=uuid.uuid4(),
+        to_state_id=uuid.uuid4(),
+        workflow_revision=3,
+        status=AutomationAttempt.Status.FAILED,
+        error="historical failure",
+        dismissed_at=timezone.now(),
+    )
+
+    socket = await _connect(str(project.id))
+    assert (await socket.connect())[0]
+    frame = await socket.receive_json_from()
+
+    assert frame["automation_attempts"] == []
+    await socket.disconnect()
+
+
 async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
-    await _seed_run("run-1", scope="docchat")
+    await _seed_run("run-1", scope="task")
     socket = await _connect(PROJECT_1_ID)
     assert (await socket.connect())[0]
     await socket.receive_json_from()  # snapshot
 
     await ingest_lifecycle_event(
-        None,
         LifecycleEvent(
             agent_run_id="run-1",
             agent="codex",
@@ -331,9 +425,12 @@ async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
         "at": "2026-07-12T10:01:00+00:00",
         "run": {
             "agent_run_id": "run-1",
+            "project_id": PROJECT_1_ID,
             "task_id": TASK_1_ID,
             "module_id": MODULE_1_ID,
-            "scope": "docchat",
+            "agent": "codex",
+            "scope": "task",
+            "started_at": "2026-07-12T10:00:00+00:00",
             "state": "working",
             "updated_at": "2026-07-12T10:01:00+00:00",
         },
@@ -387,6 +484,7 @@ async def test_automation_attempt_frame_is_typed_and_project_scoped() -> None:
             work_item_id="task-1",
             status="failed",
             error="tmux unavailable",
+            retryable=True,
             agent_run_id=None,
             updated_at="2026-07-16T10:00:00+00:00",
         ),
@@ -403,6 +501,8 @@ async def test_automation_attempt_frame_is_typed_and_project_scoped() -> None:
             "work_item_id": "task-1",
             "status": "failed",
             "error": "tmux unavailable",
+            "failure": None,
+            "retryable": True,
             "agent_run_id": None,
             "updated_at": "2026-07-16T10:00:00+00:00",
         },
@@ -474,6 +574,52 @@ async def test_committed_state_change_publishes_complete_project_delta() -> None
     await other_project_socket.disconnect()
 
 
+async def test_create_and_field_edit_publish_distinct_change_revisions() -> None:
+    workspace = await sync_to_async(Workspace.objects.create)(
+        id=uuid.uuid4(), slug="changed", name="changed"
+    )
+    project = await sync_to_async(Project.objects.create)(
+        id=uuid.uuid4(), workspace=workspace, name="Changed", slug="CHANGED"
+    )
+    state = await sync_to_async(State.objects.create)(
+        id=uuid.uuid4(), project=project, name="Todo", group="unstarted"
+    )
+    issue_type = await _issue_type(project)
+    socket = await _connect(str(project.id))
+    assert (await socket.connect())[0]
+    assert (await socket.receive_json_from())["work_item_cursor"] == 0
+
+    issue = await sync_to_async(Issue.objects.create)(
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="Created",
+        sequence_id=1,
+        state=state,
+    )
+    created = await socket.receive_json_from()
+    assert (created["work_item_id"], created["revision"]) == (str(issue.id), 1)
+    assert created["membership_changed"] is True
+
+    issue.name = "Edited externally"
+    issue.description = "Fresh description"
+    await sync_to_async(issue.save)(update_fields=["name", "description", "updated_at"])
+    edited = await socket.receive_json_from()
+    assert (edited["work_item_id"], edited["revision"]) == (str(issue.id), 2)
+    assert edited["membership_changed"] is False
+    await socket.disconnect()
+
+    replay = await _connect(str(project.id), cursor=0)
+    assert (await replay.connect())[0]
+    assert (await replay.receive_json_from())["work_item_cursor"] == 0
+    latest = await replay.receive_json_from()
+    assert (latest["work_item_id"], latest["revision"]) == (str(issue.id), 2)
+    assert latest["membership_changed"] is True
+    assert (await replay.receive_json_from())["revision"] == 2
+    await replay.disconnect()
+
+
 async def test_cursor_reconnect_replays_latest_project_projections_in_order() -> None:
     workspace = await sync_to_async(Workspace.objects.create)(
         id=uuid.uuid4(), slug="replay", name="replay"
@@ -499,12 +645,20 @@ async def test_cursor_reconnect_replays_latest_project_projections_in_order() ->
     issue_type = await _issue_type(project)
     other_issue_type = await _issue_type(other_project)
     first = await sync_to_async(Issue.objects.create)(
-        id=uuid.uuid4(), project=project, type="task", issue_type=issue_type,
-        name="First", sequence_id=1
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="First",
+        sequence_id=1,
     )
     second = await sync_to_async(Issue.objects.create)(
-        id=uuid.uuid4(), project=project, type="task", issue_type=issue_type,
-        name="Second", sequence_id=2
+        id=uuid.uuid4(),
+        project=project,
+        type="task",
+        issue_type=issue_type,
+        name="Second",
+        sequence_id=2,
     )
     foreign = await sync_to_async(Issue.objects.create)(
         id=uuid.uuid4(),
@@ -532,26 +686,26 @@ async def test_cursor_reconnect_replays_latest_project_projections_in_order() ->
 
     replay = [await socket.receive_json_from(), await socket.receive_json_from()]
     assert [(frame["work_item_id"], frame["revision"]) for frame in replay] == [
-        (str(second.id), 2),
-        (str(first.id), 3),
+        (str(second.id), 4),
+        (str(first.id), 5),
     ]
     assert replay[-1]["state"]["id"] == str(done.id)
     assert await socket.receive_json_from() == {
         "v": 1,
         "type": "cursor",
         "project_id": str(project.id),
-        "revision": 3,
+        "revision": 5,
     }
     await socket.disconnect()
 
-    duplicate = await _connect(str(project.id), cursor=3)
+    duplicate = await _connect(str(project.id), cursor=5)
     assert (await duplicate.connect())[0]
-    assert (await duplicate.receive_json_from())["work_item_cursor"] == 3
+    assert (await duplicate.receive_json_from())["work_item_cursor"] == 5
     assert await duplicate.receive_json_from() == {
         "v": 1,
         "type": "cursor",
         "project_id": str(project.id),
-        "revision": 3,
+        "revision": 5,
     }
     assert await duplicate.receive_nothing()
     await duplicate.disconnect()
@@ -585,7 +739,7 @@ async def test_concurrent_project_transitions_publish_distinct_revisions() -> No
 
     socket = await _connect(str(project.id))
     assert (await socket.connect())[0]
-    assert (await socket.receive_json_from())["work_item_cursor"] == 0
+    assert (await socket.receive_json_from())["work_item_cursor"] == 2
 
     def move(issue_id, state_id):
         # Django's shared in-memory SQLite test database locks whole tables;
@@ -611,9 +765,9 @@ async def test_concurrent_project_transitions_publish_distinct_revisions() -> No
         ]
     )
 
-    assert sorted(revisions) == [1, 2]
+    assert sorted(revisions) == [3, 4]
     frames = [await socket.receive_json_from(), await socket.receive_json_from()]
-    assert sorted(frame["revision"] for frame in frames) == [1, 2]
+    assert sorted(frame["revision"] for frame in frames) == [3, 4]
     await socket.disconnect()
 
 
@@ -700,6 +854,7 @@ async def test_unset_destination_is_live_and_replayable() -> None:
         "state": None,
         "revision": 2,
         "updated_at": issue.updated_at.isoformat(),
+        "membership_changed": False,
     }
     await live.disconnect()
 

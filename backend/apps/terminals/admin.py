@@ -1,20 +1,27 @@
 from django.contrib import admin
 
-from apps.terminals.models import AgentRunViewerLease
+from apps.terminals.models import AgentTerminalSession
 
 
-@admin.register(AgentRunViewerLease)
-class AgentRunViewerLeaseAdmin(admin.ModelAdmin):
+@admin.register(AgentTerminalSession)
+class AgentTerminalSessionAdmin(admin.ModelAdmin):
     list_display = (
         "agent_run",
-        "viewer_id",
-        "transport",
-        "acquired_at",
-        "expires_at",
+        "tmux_session_name",
+        "agent",
+        "project_id",
+        "module_id",
+        "task_id",
+        "scope",
+        "created_at",
+        "terminated_at",
     )
-    list_filter = ("transport",)
+    list_filter = ("agent", "scope", "project_id", "terminated_at")
     search_fields = (
         "agent_run__id",
-        "viewer_id",
+        "tmux_session_name",
+        "project_id",
+        "module_id",
+        "task_id",
     )
     raw_id_fields = ("agent_run",)

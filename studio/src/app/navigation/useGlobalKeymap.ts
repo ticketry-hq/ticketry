@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useModalStore } from "../modal/modalStore";
 import { isSidebarEnabled } from "../../features/studio/stores/configStore";
-import { useUIStore } from "../../features/studio/stores/uiStore";
+import { useClientStore } from "../../state/clientStore";
 import { isTypingTarget } from "../../shared/utilities/keyboard";
 import {
   focusedPaneActionIds,
@@ -16,13 +16,13 @@ import {
   routeModulePositionNavigation,
   routeSharedNavigation,
 } from "./sharedNavigation";
-import type { Row } from "../../features/studio/pages/tasks/TasksPane";
+import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
 
-const EMPTY_TASK_ROWS: Row[] = [];
+const EMPTY_TASK_ROWS: TreeRow[] = [];
 
 function hasOpenModal(
-  ui: ReturnType<typeof useUIStore.getState>,
+  ui: ReturnType<typeof useClientStore.getState>,
 ): boolean {
   return (
     ui.modalStack.length > 0 ||
@@ -31,7 +31,7 @@ function hasOpenModal(
 }
 
 /** Installs the application-wide keyboard precedence and delegates actions. */
-export function useGlobalKeymap(taskRows: Row[] = EMPTY_TASK_ROWS): void {
+export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
   const taskRowsRef = useRef(taskRows);
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export function useGlobalKeymap(taskRows: Row[] = EMPTY_TASK_ROWS): void {
 
   useEffect(() => {
     function onCaptureKeyDown(event: KeyboardEvent): void {
-      const ui = useUIStore.getState();
+      const ui = useClientStore.getState();
       const sidebarVisible = isSidebarEnabled() && ui.sidebarVisible;
       if (hasOpenModal(ui)) return;
 
@@ -59,7 +59,7 @@ export function useGlobalKeymap(taskRows: Row[] = EMPTY_TASK_ROWS): void {
     }
 
     function onKeyDown(event: KeyboardEvent): void {
-      const ui = useUIStore.getState();
+      const ui = useClientStore.getState();
       const sidebarVisible = isSidebarEnabled() && ui.sidebarVisible;
       if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       const captureAction = studioKeymapRegistry.resolve("capture", event);

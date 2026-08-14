@@ -3,7 +3,13 @@ import { read, touch, resolveStartProject } from "./recentProjects";
 import type { Project } from "../../../shared/api/types";
 
 const KEY = "studio.recentProjects";
-const P = (id: string): Project => ({ id, name: id, slug: id, description: "" });
+const P = (id: string): Project => ({
+  id,
+  name: id,
+  slug: id,
+  description: "",
+  manual_module_order: false,
+});
 
 beforeEach(() => {
   localStorage.clear();

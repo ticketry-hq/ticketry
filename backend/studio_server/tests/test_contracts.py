@@ -7,6 +7,7 @@ def test_shared_task_contracts_are_importable_from_the_server_package():
         name="Shared contracts",
         project_id="project-1",
         state=TaskState(name="Implement"),
+        issue_type="Implementation",
     )
 
     assert task.state.name == "Implement"

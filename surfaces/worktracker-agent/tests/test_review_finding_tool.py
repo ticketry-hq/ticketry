@@ -11,7 +11,7 @@ evidence *before* any SDK write, and it surfaces the backend gate's rejection
 import inspect
 
 import pytest
-from worktracker_sdk.generated import ReviewFindingIn
+from worktracker_sdk.generated import WorkItemCreate
 from worktracker_sdk.generated.exceptions import ApiException
 
 from fake_sdk import FakeGeneratedSdk, make_api_error, make_work_item, raises
@@ -47,7 +47,7 @@ def _gate_error(body):
 
 def test_create_review_finding_builds_block_and_returns_ids():
     client = FakeGeneratedSdk()
-    client.work_items.returns["create_review_finding"] = make_work_item(
+    client.work_items.returns["create_work_item"] = make_work_item(
         id=CHILD, key="MEML-9"
     )
     service = _service(client)
@@ -58,16 +58,17 @@ def test_create_review_finding_builds_block_and_returns_ids():
 
     assert result == {"ok": True, "task_id": CHILD, "key": "MEML-9"}
     name, args, _kwargs = client.work_items.calls[0]
-    assert name == "create_review_finding"
+    assert name == "create_work_item"
     payload = args[1]
-    assert isinstance(payload, ReviewFindingIn)
+    assert isinstance(payload, WorkItemCreate)
     assert str(payload.parent_id) == PARENT
+    assert payload.issue_type_id is None
     assert payload.description == "Path: src/loader.py\nLines: 10-12\nNote: guard it"
 
 
 def test_create_review_finding_omits_note_when_absent():
     client = FakeGeneratedSdk()
-    client.work_items.returns["create_review_finding"] = make_work_item(id=CHILD)
+    client.work_items.returns["create_work_item"] = make_work_item(id=CHILD)
     service = _service(client)
 
     service.create_review_finding(PROJECT, PARENT, "F", "a.py", 5, 5)
@@ -110,9 +111,7 @@ def test_create_review_finding_rejects_bad_range(start, end):
 
 def test_create_review_finding_surfaces_structured_rejection():
     client = FakeGeneratedSdk()
-    client.work_items.returns["create_review_finding"] = raises(
-        _gate_error(GATE_REJECTION)
-    )
+    client.work_items.returns["create_work_item"] = raises(_gate_error(GATE_REJECTION))
     service = _service(client)
 
     result = service.create_review_finding(PROJECT, PARENT, "F", "a.py", 1, 2)
@@ -123,7 +122,7 @@ def test_create_review_finding_surfaces_structured_rejection():
 
 def test_create_review_finding_server_error_still_raises():
     client = FakeGeneratedSdk()
-    client.work_items.returns["create_review_finding"] = raises(
+    client.work_items.returns["create_work_item"] = raises(
         make_api_error(500, {"detail": "boom"})
     )
     service = _service(client)

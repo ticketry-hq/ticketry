@@ -1,12 +1,11 @@
-"""Lifecycle ingress endpoint (ticket #498/#512), ported to ninja."""
+"""Transport-independent lifecycle application operations."""
 
 import logging
 from datetime import datetime, timezone
 
 from django.db import transaction
-from django.http import JsonResponse
+from apps.errors import ApplicationError
 from studio_server.contracts import (
-    AutomationAttemptRecord,
     AgentStatusScope,
     AgentStatusSnapshot,
     AgentLifecycleFrame,
@@ -14,8 +13,6 @@ from studio_server.contracts import (
     RunRecord,
     reduce_lifecycle,
 )
-from ninja import Router, Status
-from worktracker.auth import ApiKeyAuth
 
 from apps.runs import dao
 from apps.runs.bus import publish_status
@@ -25,31 +22,38 @@ from apps.runs.projections import automation_attempt_record
 
 logger = logging.getLogger(__name__)
 
-router = Router(tags=["lifecycle"])
-
-
-@router.post(
-    "/automation-attempts/{attempt_id}/retry",
-    response={200: AutomationAttemptRecord},
-    auth=ApiKeyAuth(),
-)
-def retry_automation_attempt(request, attempt_id: str):
+def retry_automation_attempt(attempt_id: str):
     """Create at most one explicit retry child for one failed attempt."""
 
     with transaction.atomic():
         source = (
             AutomationAttempt.objects.select_for_update()
-            .select_related("issue", "root_attempt")
+            .select_related("issue")
             .filter(pk=attempt_id)
             .first()
         )
         if source is None:
-            return JsonResponse({"error": "automation_attempt_not_found"}, status=404)
+            raise ApplicationError(
+                404,
+                "automation_attempt_not_found",
+                code="automation_attempt_not_found",
+            )
         existing = AutomationAttempt.objects.filter(retry_of=source).first()
         if existing is not None:
             return automation_attempt_record(existing)
         if source.status != AutomationAttempt.Status.FAILED:
-            return JsonResponse({"error": "automation_attempt_not_failed"}, status=409)
+            raise ApplicationError(
+                409,
+                "automation_attempt_not_failed",
+                code="automation_attempt_not_failed",
+            )
+        if not source.retryable:
+            raise ApplicationError(
+                409,
+                "automation_attempt_not_retryable",
+                code="automation_attempt_not_retryable",
+                metadata={"failure": source.error_details},
+            )
         retry = AutomationAttempt.objects.create(
             transition_id=source.transition_id,
             issue=source.issue,
@@ -67,11 +71,9 @@ def retry_automation_attempt(request, attempt_id: str):
     return automation_attempt_record(retry)
 
 
-@router.post("/lifecycle/events", response={202: dict})
-async def ingest_lifecycle_event(request, event: LifecycleEvent):
+async def ingest_lifecycle_event(event: LifecycleEvent):
     """Ingest one agent lifecycle/attention event and relay it (#498/#512).
 
-    :param request: the inbound HTTP request (unused).
     :param event: the normalized lifecycle envelope from a per-agent hook.
     :return: a ``202`` tuple echoing the event and its receive timestamp.
     """
@@ -109,26 +111,27 @@ async def ingest_lifecycle_event(request, event: LifecycleEvent):
         # so the client places it without a lookup; missing routing is skipped.
 
         if routing is not None:
-            project_id, task_id, module_id, scope = routing
+            project_id, task_id, module_id, scope, agent, started_at = routing
             frame = AgentLifecycleFrame(
                 at=event_at,
                 run=RunRecord(
                     agent_run_id=event.agent_run_id,
+                    project_id=project_id,
                     task_id=task_id,
                     module_id=module_id,
+                    agent=agent,
                     scope=scope,
+                    started_at=started_at,
                     state=state,
                     updated_at=event_at,
                 ),
             )
             await publish_status(project_id, frame.model_dump())
 
-    return Status(202, {"accepted": event.model_dump(), "received_at": received_at})
+    return 202, {"accepted": event.model_dump(), "received_at": received_at}
 
 
-@router.get("/runs/module-activity", response={200: dict})
 async def get_module_activity(
-    request,
     project_id: str,
     window_days: int = dao.DEFAULT_ACTIVITY_WINDOW_DAYS,
 ):
@@ -137,7 +140,6 @@ async def get_module_activity(
     Backs the frontend's recency sort of the module list. Modules with no
     qualifying run within the window are simply absent from the map.
 
-    :param request: the inbound HTTP request (unused).
     :param project_id: scope the activity query to one project.
     :param window_days: lookback cap in days; older runs are excluded.
     :return: a ``{module_id: iso8601}`` map.
@@ -146,14 +148,22 @@ async def get_module_activity(
     return await dao.last_activity_by_module(project_id, window_days=window_days)
 
 
-@router.get("/runs/agent-status", response={200: AgentStatusSnapshot})
-async def agent_status(request, project_id: str, task_id: str | None = None):
+async def agent_status(project_id: str, task_id: str | None = None):
     """Return the authoritative run-status snapshot for a project or task."""
+
+    # Import at the composition boundary to keep the runs DAO independent of
+    # the concrete terminal runtime while making status and terminal discovery
+    # agree about which unresolved sessions this backend owns.
+    from apps.terminals.launch import terminal_runtime
 
     at = datetime.now(timezone.utc).isoformat()
     return AgentStatusSnapshot(
         scope=AgentStatusScope(project_id=project_id, task_id=task_id),
-        runs=await dao.agent_status_records(project_id, task_id=task_id),
+        runs=await dao.agent_status_records(
+            project_id,
+            runtime_namespace=terminal_runtime.namespace,
+            task_id=task_id,
+        ),
         automation_attempts=await dao.automation_attempt_status_records(
             project_id, task_id=task_id
         ),

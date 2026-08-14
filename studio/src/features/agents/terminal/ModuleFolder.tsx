@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import { useModalStore, type StandardModalType } from "../../../app/modal/modalStore";
-import { useConfigStore as useAgentConfigStore } from "../stores/configStore";
+import {
+  getModuleFolder,
+  setModuleFolder,
+  useConfig,
+} from "../../studio/stores/configStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import {
@@ -9,66 +13,71 @@ import {
   useModuleFolderSelection,
 } from "./ModuleFolderSelection";
 
-type FolderConfigState = Pick<
-  ReturnType<typeof useAgentConfigStore.getState>,
-  "profiles" | "recentProfileIndex" | "setModuleFolder"
->;
-
-export type FolderConfigHook = <T>(selector: (state: FolderConfigState) => T) => T;
-
 export interface ModuleFolderPayload {
   /** Optional follow-up modal kind to push after saving. */
   next?: StandardModalType;
   nextPayload?: Record<string, unknown>;
   /** Studio terminal-create callers pass explicit module context. */
   moduleId?: string;
+  /** Resume a module switch that was gated on this folder link. */
+  resumeModuleSelection?: boolean;
 }
 
 export function ModuleFolder({
   payload,
-  useConfigStore = useAgentConfigStore,
   runtime = studioRuntime(),
 }: {
   payload?: ModuleFolderPayload;
-  useConfigStore?: FolderConfigHook;
   runtime?: StudioRuntime;
 }) {
-  const recentProfileIndex = useConfigStore((s) => s.recentProfileIndex);
-  const profiles = useConfigStore((s) => s.profiles);
-  const setModuleFolder = useConfigStore((s) => s.setModuleFolder);
+  const { profiles, recentProfileIndex } = useConfig();
   const popModal = useModalStore((s) => s.popModal);
   const pushModal = useModalStore((s) => s.pushModal);
 
   const profile =
     recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
   const moduleId = payload?.moduleId;
-  const initial =
-    moduleId && profile?.module_folders?.[moduleId]
-      ? profile.module_folders[moduleId]
-      : "";
+  const initial = moduleId ? (getModuleFolder(profile, moduleId) ?? "") : "";
 
   const [savedValue, setSavedValue] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const saveInFlight = useRef(false);
   const selection = useModuleFolderSelection({
     profiles,
     recentProfileIndex,
     initialValue: initial,
     runtime,
   });
+  const trimmedValue = selection.value.trim();
 
   async function save(): Promise<void> {
+    if (saveInFlight.current) return;
+    if (!trimmedValue) return;
     if (!moduleId) {
       popModal();
       return;
     }
+    saveInFlight.current = true;
     setBusy(true);
+    setError(null);
     try {
-      await setModuleFolder(moduleId, selection.value);
+      try {
+        await setModuleFolder(moduleId, trimmedValue);
+      } catch {
+        setError("Could not save the module folder. Retry to continue.");
+        return;
+      }
       popModal();
+      if (payload?.resumeModuleSelection) {
+        const { useClientStore } = await import("../../../state/clientStore");
+        await useClientStore.getState().selectModule(moduleId);
+      }
       if (payload?.next) {
         pushModal({ type: payload.next, payload: payload.nextPayload });
       }
     } finally {
+      saveInFlight.current = false;
       setBusy(false);
     }
   }
@@ -87,6 +96,7 @@ export function ModuleFolder({
         // First Enter on highlight: commit highlight to input, no save.
         return;
       }
+      if (!trimmedValue) return;
       // Enter on unchanged value (or no highlight) → save.
       if (selection.value === savedValue && selection.value === initial) {
         // unchanged from initial; still allow saving (commits same value).
@@ -111,6 +121,11 @@ export function ModuleFolder({
       width="w-[80ch]"
     >
       <ModuleFolderSelection selection={selection} autoFocus />
+      {error && (
+        <div className="mt-2 text-sm text-red-400" role="alert">
+          {error}
+        </div>
+      )}
       <div className="mt-3 flex justify-end gap-2">
         <button
           type="button"
@@ -121,7 +136,7 @@ export function ModuleFolder({
         </button>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !trimmedValue}
           onClick={() => void save()}
           className="rounded border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent"
         >

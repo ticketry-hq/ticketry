@@ -9,17 +9,28 @@ Ported from ``web/backend/tests/test_lifecycle_events.py``:
 from datetime import datetime, timezone
 
 import pytest
-from ninja.testing import TestAsyncClient
+from django.test import AsyncClient
 
 from apps.runs import dao
-from apps.runs.api import router
 from apps.runs.models import AgentRun
+from apps.terminals import launch as terminal_launch
+from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
-client = TestAsyncClient(router)
+class HostAsyncClient(AsyncClient):
+    async def get(self, path, *args, **kwargs):
+        return await super().get(f"/api{path}", *args, **kwargs)
+
+    async def post(self, path, *args, json=None, **kwargs):
+        if json is not None:
+            kwargs.update(data=json, content_type="application/json")
+        return await super().post(f"/api{path}", *args, **kwargs)
+
+
+client = HostAsyncClient()
 PROJECT_ID = fixture_uuid("proj-1")
 MODULE_1_ID = fixture_issue_id(
     project_id="proj-1", module_id="mod-1", task_id=None
@@ -55,6 +66,17 @@ async def _seed_run(
             started_at="2026-06-02T10:00:00",
             scope=scope,
         )
+    )
+    await AgentTerminalSession.objects.acreate(
+        agent_run_id=run_id,
+        tmux_session_name=f"tmux-{run_id}",
+        task_id=task_id or "scratch",
+        module_id=module_id,
+        project_id="proj-1",
+        agent="codex",
+        created_at="2026-06-02T10:00:00",
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
+        scope=scope,
     )
 
 
@@ -231,6 +253,8 @@ async def _seed_status_run(
     status: str = "running",
     ended_at: str | None = None,
     scope: str = "task",
+    runtime_namespace: str | None = None,
+    persist_terminal: bool = True,
 ) -> None:
     await dao.insert_agent_run(
         AgentRun(
@@ -247,6 +271,20 @@ async def _seed_status_run(
             scope=scope,
         )
     )
+    if persist_terminal:
+        await AgentTerminalSession.objects.acreate(
+            agent_run_id=run_id,
+            tmux_session_name=f"tmux-{run_id}",
+            task_id=task_id or "scratch",
+            module_id="mod-1",
+            project_id=project_id,
+            agent="codex",
+            created_at=started_at,
+            runtime_namespace=(
+                runtime_namespace or terminal_launch.terminal_runtime.namespace
+            ),
+            scope=scope,
+        )
 
 
 async def test_agent_status_returns_snapshot_body_and_all_run_records(
@@ -279,17 +317,23 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
         "runs": [
             {
                 "agent_run_id": "pre-event",
+                "project_id": PROJECT_ID,
                 "task_id": _task_id("t2"),
                 "module_id": MODULE_1_ID,
+                "agent": "codex",
                 "scope": "plan",
+                "started_at": "2026-07-12T15:05:00+00:00",
                 "state": "unknown",
                 "updated_at": "2026-07-12T15:05:00+00:00",
             },
             {
                 "agent_run_id": "with-event",
+                "project_id": PROJECT_ID,
                 "task_id": _task_id("t1"),
                 "module_id": MODULE_1_ID,
+                "agent": "codex",
                 "scope": "task",
+                "started_at": "2026-07-12T14:00:00+00:00",
                 "state": "needs_input",
                 "updated_at": "2026-07-12T15:00:00+00:00",
             },
@@ -299,9 +343,16 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
     }
 
 
-async def test_agent_status_ended_run_is_an_exited_tombstone() -> None:
+async def test_agent_status_ended_run_is_an_exited_tombstone(monkeypatch) -> None:
     """#978: an ended run must snapshot as `exited` even if its last recorded
     lifecycle event said `working` (or it recorded none at all)."""
+
+    class MockDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 7, 12, 15, 30, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("apps.runs.dao.activity.datetime", MockDatetime)
 
     await _seed_status_run(
         "ended-working", task_id="t1",
@@ -327,6 +378,51 @@ async def test_agent_status_ended_run_is_an_exited_tombstone() -> None:
     assert runs["ended-working"]["updated_at"] == "2026-07-12T15:00:00+00:00"
     assert runs["ended-silent"]["state"] == "exited"
     assert runs["ended-silent"]["updated_at"] == "2026-07-12T14:20:00+00:00"
+
+
+async def test_agent_status_omits_active_run_owned_by_another_runtime() -> None:
+    """A foreign runtime's unresolved row must not create a local live badge."""
+
+    now = datetime.now(timezone.utc).isoformat()
+    await _seed_status_run(
+        "owned",
+        task_id="t1",
+        started_at=now,
+        lifecycle_state="working",
+        lifecycle_updated_at=now,
+    )
+    await _seed_status_run(
+        "foreign-ghost",
+        task_id="t2",
+        started_at=now,
+        lifecycle_state="working",
+        lifecycle_updated_at=now,
+        runtime_namespace="another-runtime",
+    )
+
+    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+
+    assert response.status_code == 200
+    assert [run["agent_run_id"] for run in response.json()["runs"]] == ["owned"]
+
+
+async def test_agent_status_omits_active_run_without_terminal_session() -> None:
+    """An old partial row without a terminal cannot be a live local run."""
+
+    now = datetime.now(timezone.utc).isoformat()
+    await _seed_status_run(
+        "terminal-less-ghost",
+        task_id="t1",
+        started_at=now,
+        lifecycle_state="turn_complete",
+        lifecycle_updated_at=now,
+        persist_terminal=False,
+    )
+
+    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+
+    assert response.status_code == 200
+    assert response.json()["runs"] == []
 
 
 async def test_agent_status_optional_task_filter_is_authoritative_scope() -> None:

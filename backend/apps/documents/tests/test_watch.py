@@ -15,6 +15,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from asgiref.sync import async_to_sync
 
 from apps.documents import dao, watch
 
@@ -38,12 +39,12 @@ async def _wait_for(predicate, timeout: float = 8.0):
 async def test_create_and_update_flow(tmp_path: Path):
     root = tmp_path / "design"
     root.mkdir()
-    frames: list[tuple[str, dict]] = []
+    frames: list[dict] = []
 
-    # Stub async publish matching the Channels-era call-site contract.
+    # Stub async publish matching the single-argument call-site contract.
 
-    async def publish(module_id, frame):
-        frames.append((module_id, frame))
+    async def publish(frame):
+        frames.append(frame)
 
     try:
         started = watch.start_watch(
@@ -64,8 +65,8 @@ async def test_create_and_update_flow(tmp_path: Path):
 
         (root / "design.html").write_text("<html>v1</html>")
         await _wait_for(lambda: frames)
-        module_id, frame = frames[0]
-        assert module_id == "m1"
+        frame = frames[0]
+        assert frame["module_id"] == "m1"
         assert frame["type"] == "document"
         assert frame["event"] == "created"
         assert frame["task_id"] == "t1"
@@ -77,8 +78,8 @@ async def test_create_and_update_flow(tmp_path: Path):
         await asyncio.sleep(watch.DEBOUNCE_SECONDS + 0.1)
         (root / "design.html").write_text("<html>version two</html>")
         await _wait_for(lambda: len(frames) >= 2)
-        assert frames[1][1]["event"] == "updated"
-        assert frames[1][1]["doc"]["rel_path"] == "design.html"
+        assert frames[1]["event"] == "updated"
+        assert frames[1]["doc"]["rel_path"] == "design.html"
 
         watch.stop_watch("run-1")
     finally:
@@ -90,13 +91,45 @@ async def test_create_and_update_flow(tmp_path: Path):
     assert rows[0].discovered_by_run_id == "run-1"
 
 
+async def test_watcher_survives_temporary_async_to_sync_launch_loop(tmp_path: Path):
+    root = tmp_path / "design"
+    root.mkdir()
+    frames: list[dict] = []
+
+    async def publish(frame):
+        frames.append(frame)
+
+    async def launch_from_temporary_loop() -> bool:
+        return watch.start_watch(
+            agent_run_id="run-sync-launch",
+            design_dir=str(root),
+            module_id="m1",
+            task_id="t1",
+            scope="task",
+            publish=publish,
+        )
+
+    await watch.startup()
+    try:
+        started = await asyncio.to_thread(async_to_sync(launch_from_temporary_loop))
+        assert started is True
+        await asyncio.sleep(0.5)
+
+        (root / "spec.md").write_text("# Discovered after launch returned")
+
+        await _wait_for(lambda: frames)
+        assert frames[0]["doc"]["rel_path"] == "spec.md"
+    finally:
+        await watch.shutdown()
+
+
 async def test_markdown_create_and_update_flow_is_case_insensitive(tmp_path: Path):
     root = tmp_path / "design"
     root.mkdir()
-    frames: list[tuple[str, dict]] = []
+    frames: list[dict] = []
 
-    async def publish(module_id, frame):
-        frames.append((module_id, frame))
+    async def publish(frame):
+        frames.append(frame)
 
     try:
         watch.start_watch(
@@ -111,14 +144,14 @@ async def test_markdown_create_and_update_flow_is_case_insensitive(tmp_path: Pat
 
         (root / "SPEC.MD").write_text("# Version 1")
         await _wait_for(lambda: frames)
-        assert frames[0][1]["event"] == "created"
-        assert frames[0][1]["doc"]["rel_path"] == "SPEC.MD"
+        assert frames[0]["event"] == "created"
+        assert frames[0]["doc"]["rel_path"] == "SPEC.MD"
 
         await asyncio.sleep(watch.DEBOUNCE_SECONDS + 0.1)
         (root / "SPEC.MD").write_text("# A longer version 2")
         await _wait_for(lambda: len(frames) >= 2)
-        assert frames[1][1]["event"] == "updated"
-        assert frames[1][1]["doc"]["rel_path"] == "SPEC.MD"
+        assert frames[1]["event"] == "updated"
+        assert frames[1]["doc"]["rel_path"] == "SPEC.MD"
     finally:
         watch.stop_all()
 
@@ -129,10 +162,10 @@ async def test_markdown_create_and_update_flow_is_case_insensitive(tmp_path: Pat
 async def test_non_document_files_are_ignored(tmp_path: Path):
     root = tmp_path / "design"
     root.mkdir()
-    frames: list[tuple[str, dict]] = []
+    frames: list[dict] = []
 
-    async def publish(module_id, frame):
-        frames.append((module_id, frame))
+    async def publish(frame):
+        frames.append(frame)
 
     try:
         watch.start_watch(
@@ -158,7 +191,7 @@ async def test_non_document_files_are_ignored(tmp_path: Path):
     finally:
         watch.stop_all()
 
-    assert [f[1]["doc"]["rel_path"] for f in frames] == ["real.html"]
+    assert [f["doc"]["rel_path"] for f in frames] == ["real.html"]
     assert [r.rel_path for r in await dao.list_for_task("t1")] == ["real.html"]
 
 

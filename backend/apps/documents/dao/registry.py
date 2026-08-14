@@ -95,7 +95,7 @@ async def list_for_task(task_id: str) -> list[DesignDocument]:
     rows = DesignDocument.objects.filter(task_id=task_id).order_by(
         "created_at", "rel_path"
     )
-    return [row async for row in rows]
+    return sorted([row async for row in rows], key=lambda row: row.rel_path)
 
 
 async def list_for_scratch(
@@ -108,4 +108,4 @@ async def list_for_scratch(
         task_id=scratch_task_id,
         module_id=module_id,
     ).order_by("created_at", "rel_path")
-    return [row async for row in rows]
+    return sorted([row async for row in rows], key=lambda row: row.rel_path)

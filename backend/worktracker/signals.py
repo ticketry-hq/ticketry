@@ -18,7 +18,10 @@ The flow, for one ``Issue`` save:
    if they differ it resolves the from/to groups *now* (inside the txn) and
    registers a ``transaction.on_commit`` callback that sends the signal — so a
    rolled-back transition never emits.
-3. ``_log_state_change`` is the single v1 receiver on the signal; it logs only.
+3. The signal fans out to logging plus the ``apps.runs`` status-feed and
+   ``apps.execution`` automation receivers. Grep the signal's ``dispatch_uid``
+   values to enumerate the current set — the no-synchronous-state-mutation rule
+   documented on ``_log_state_change`` binds all of them.
 
 It imports only tracker models and the router-free ``state_group`` helper
 (#705), so ``ready()`` can import it without dragging in the Ninja API surface.
@@ -32,15 +35,18 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import Signal, receiver
 
 from worktracker.models import Issue, IssueType, LaunchBinding, State
-from worktracker.state_identity import normalize_state_id
-from worktracker.state_groups import state_group
-from worktracker.state_projection import workflow_state_projection
+from worktracker.state import (
+    normalize_state_id,
+    state_group,
+    workflow_state_projection,
+)
 
 logger = logging.getLogger(__name__)
 
 # The seam. Sent with ``sender=Issue`` and the eight payload kwargs documented in
 # ``_emit_on_state_change``. Future consumers (graph executor, #700) connect here.
 issue_state_changed = Signal()
+work_item_changed = Signal()
 workflow_state_changed = Signal()
 
 
@@ -54,7 +60,8 @@ def _snapshot_old_workflow_state(sender, instance, **kwargs):
     rendering a stale catalog row until it reconnected.
     """
 
-    committed = State.objects.filter(pk=instance.pk).first()
+    using = kwargs.get("using")
+    committed = State.objects.using(using).filter(pk=instance.pk).first()
     instance._old_workflow_state = (
         workflow_state_projection(committed) if committed is not None else None
     )
@@ -65,7 +72,8 @@ def _emit_on_workflow_state_change(sender, instance, created, **kwargs):
     if created:
         return
     old = getattr(instance, "_old_workflow_state", None)
-    committed = State.objects.get(pk=instance.pk)
+    using = kwargs.get("using")
+    committed = State.objects.using(using).get(pk=instance.pk)
     current = workflow_state_projection(committed)
     # Any projected field differing is a catalog edit peers must repair. A save
     # that touches only unprojected columns compares equal and stays silent.
@@ -77,7 +85,8 @@ def _emit_on_workflow_state_change(sender, instance, created, **kwargs):
         "updated_at": committed.updated_at.isoformat(),
     }
     transaction.on_commit(
-        lambda: workflow_state_changed.send_robust(sender=State, **payload)
+        lambda: workflow_state_changed.send_robust(sender=State, **payload),
+        using=using,
     )
 
 
@@ -91,8 +100,42 @@ def _snapshot_old_state(sender, instance, **kwargs):
     the desired ``from_state_id`` for a create-into-a-state event.
     """
 
+    using = kwargs.get("using")
     instance._old_state_id = (
-        Issue.objects.filter(pk=instance.pk).values_list("state_id", flat=True).first()
+        Issue.objects.using(using)
+        .filter(pk=instance.pk)
+        .values_list("state_id", flat=True)
+        .first()
+    )
+    instance._old_parent_id = (
+        Issue.objects.using(using)
+        .filter(pk=instance.pk)
+        .values_list("parent_id", flat=True)
+        .first()
+    )
+
+
+@receiver(post_save, sender=Issue)
+def _emit_on_work_item_change(sender, instance, created, **kwargs):
+    """Publish every committed WorkItem save on the durable project cursor."""
+
+    if not getattr(instance, "_work_item_change_revision_advanced", False):
+        return
+    using = kwargs.get("using")
+    old_parent_id = getattr(instance, "_old_parent_id", None)
+    payload = {
+        "issue_id": str(instance.pk),
+        "project_id": str(instance.project_id),
+        "state_id": str(instance.state_id) if instance.state_id else None,
+        "revision": instance.state_revision,
+        "updated_at": instance.updated_at.isoformat(),
+        "membership_changed": created
+        or normalize_state_id(old_parent_id)
+        != normalize_state_id(instance.parent_id),
+    }
+    transaction.on_commit(
+        lambda: work_item_changed.send_robust(sender=Issue, **payload),
+        using=using,
     )
 
 
@@ -119,6 +162,7 @@ def _emit_on_state_change(sender, instance, **kwargs):
         live workflow state.
     """
 
+    using = kwargs.get("using")
     old_state_id = getattr(instance, "_old_state_id", None)
     new_state_id = instance.state_id
 
@@ -130,32 +174,35 @@ def _emit_on_state_change(sender, instance, **kwargs):
     payload = {
         "transition_id": str(uuid.uuid4()),
         "transition_snapshot": _transition_snapshot(
-            instance, old_state_id, new_state_id
+            instance, old_state_id, new_state_id, using=using
         ),
         "issue_id": str(instance.pk),
         "project_id": str(instance.project_id),
         "from_state_id": str(old_state_id) if old_state_id else None,
         "to_state_id": str(new_state_id) if new_state_id else None,
-        "from_group": state_group(old_state_id),
-        "to_group": state_group(new_state_id),
+        "from_group": state_group(old_state_id, using=using),
+        "to_group": state_group(new_state_id, using=using),
         "revision": instance.state_revision,
         "updated_at": instance.updated_at.isoformat(),
     }
 
-    transaction.on_commit(lambda: _emit(payload))
+    transaction.on_commit(lambda: _emit(payload), using=using)
 
 
-def _transition_snapshot(instance, from_state_id, to_state_id):
+def _transition_snapshot(instance, from_state_id, to_state_id, *, using=None):
     """Freeze destination entry policy and revision observed by this transition."""
 
     if not from_state_id or not to_state_id:
         return None
-    workflow_revision = IssueType.objects.filter(pk=instance.issue_type_id).values_list(
-        "workflow_revision", flat=True
-    ).first()
+    workflow_revision = (
+        IssueType.objects.using(using)
+        .filter(pk=instance.issue_type_id)
+        .values_list("workflow_revision", flat=True)
+        .first()
+    )
     if workflow_revision is None:
         return None
-    auto_start = LaunchBinding.objects.filter(
+    auto_start = LaunchBinding.objects.using(using).filter(
         issue_type_id=instance.issue_type_id,
         state_id=to_state_id,
         auto_start=True,

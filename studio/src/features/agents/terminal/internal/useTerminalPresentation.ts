@@ -26,6 +26,7 @@ export function useTerminalPresentation({
 }: TerminalPresentationOptions) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mountedIdRef = useRef<string | null>(null);
+  const mountedEntryRef = useRef<TerminalEntry | null>(null);
   const fitRafRef = useRef(0);
 
   useEffect(() => {
@@ -34,6 +35,7 @@ export function useTerminalPresentation({
     if (!sessionId || !session) {
       host.replaceChildren();
       mountedIdRef.current = null;
+      mountedEntryRef.current = null;
       return;
     }
 
@@ -42,10 +44,17 @@ export function useTerminalPresentation({
 
     const scheduleFit = createFitScheduler(entry, hostRef, fitRafRef);
 
-    if (mountedIdRef.current !== sessionId) {
+    // A newly created run is re-keyed from its temporary tab id to the
+    // server-issued viewer id when the ready frame arrives. The pooled entry
+    // (and its xterm instance) does not change. Reopening that same Terminal
+    // first clears its renderer DOM and then calls xterm.open() for a second
+    // time, leaving early output attached to an invisible renderer. Mount by
+    // live-object identity; keep the id ref current for focus routing.
+    if (mountedEntryRef.current !== entry) {
       attachTerminal(entry, host, controlledFocus);
-      mountedIdRef.current = sessionId;
+      mountedEntryRef.current = entry;
     }
+    mountedIdRef.current = sessionId;
 
     fitBeforeConnecting(entry, host);
 

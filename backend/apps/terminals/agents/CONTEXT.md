@@ -44,12 +44,20 @@ _Avoid_: global state prompt, coding-stage prompt, state description
 One application-owned pre-prompt and post-prompt that surround every agent launch prompt. The envelope is changed only in the app, augments an already-valid launch, and never changes a running session or makes a promptless workflow binding launchable.
 _Avoid_: user-configurable prompt, project prompt, profile prompt, fallback workflow prompt
 
+**Bounded launch context**:
+The size-limited factual context supplied when an agent session starts. It carries enough identity and routing information to retrieve the authoritative work item when needed, rather than embedding the work item's full description.
+_Avoid_: embedded work-item snapshot, truncated description
+
 **Workflow launch configuration**:
-The independently inheritable prompt, agent/provider, model, and reasoning defaults selected by a work item's type and current workflow state. Provider-specific values are validated together; unset values inherit only from explicitly configured profile/provider choices.
-_Avoid_: edge launch configuration, parent-depth configuration, required launch form
+The independently inheritable prompt and launch catalog references selected by
+a work item's type and current workflow state. A binding stores foreign keys to
+a model row and a reasoning-level row; the model implies its Provider, and the
+reasoning level must be linked to that model. Unset references inherit from the
+validated global launch default.
+_Avoid_: free-text provider, free-text model, edge launch configuration, parent-depth configuration
 
 **Activated provider**:
-A built-in coding-agent provider (claude, codex, gemini) the host has enabled in Settings. Activation is host-wide and lives outside the code-owned adapter set; the four adapters still exist in code, but only activated ones appear in launch selectors. A launch bound to a non-activated provider is blocked, never silently redirected to another provider.
+A coding-agent provider whose persisted Provider row is activated. Activation is host-wide and mutable through the provider catalog API; executable adapters remain code-owned, and startup fails when adapter slugs and Provider rows differ in either direction. Only activated rows appear in launch selectors. A launch bound to a non-activated provider is blocked, never silently redirected to another provider.
 _Avoid_: installed provider, available adapter, provider catalog entry
 
 **Global launch default**:

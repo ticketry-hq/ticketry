@@ -34,27 +34,19 @@ export interface ModalKeyBinding {
   label: string;
 }
 
-export interface ModalBindingHint {
-  key: string;
-  label: string;
-}
-
 interface ModalState {
   modalStack: ModalDescriptor[];
   presentedNoticeIds: ReadonlySet<string>;
-  activeBindings: ModalBindingHint[] | null;
   pushModal: (modal: StandardModalDescriptor) => void;
   notifyUser: (notice: UserNotice) => void;
   openKeyboardShortcuts: () => void;
   openSettings: () => void;
   popModal: () => void;
-  setActiveBindings: (bindings: ModalBindingHint[] | null) => void;
 }
 
 export const useModalStore = create<ModalState>((set) => ({
   modalStack: [],
   presentedNoticeIds: new Set(),
-  activeBindings: null,
   pushModal: (modal) =>
     set((state) => ({ modalStack: [...state.modalStack, modal] })),
   notifyUser: (candidate) =>
@@ -87,5 +79,4 @@ export const useModalStore = create<ModalState>((set) => ({
     ),
   popModal: () =>
     set((state) => ({ modalStack: state.modalStack.slice(0, -1) })),
-  setActiveBindings: (activeBindings) => set({ activeBindings }),
 }));

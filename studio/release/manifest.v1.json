@@ -8,7 +8,7 @@
       "required_outputs": ["dist/index.html"]
     },
     "tauri": {
-      "command": ["npx", "tauri", "build", "--features", "native-libghostty"],
+      "command": ["npm", "run", "tauri", "--", "build", "--features", "native-libghostty"],
       "binary_name": "ticketry",
       "bundle_formats": ["app", "dmg"]
     },

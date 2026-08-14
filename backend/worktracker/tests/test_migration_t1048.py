@@ -30,9 +30,17 @@ def test_priority_column_is_removed_and_rollback_restores_none_default():
     Workspace = old.get_model(APP, "Workspace")
     Project = old.get_model(APP, "Project")
     Issue = old.get_model(APP, "Issue")
+    IssueType = old.get_model(APP, "IssueType")
     workspace = Workspace.objects.create(id=uuid.uuid4(), slug="old", name="Old")
     project = Project.objects.create(
         id=uuid.uuid4(), workspace=workspace, name="Old", slug="OLD"
+    )
+    task_type = IssueType.objects.create(
+        id=uuid.uuid4(),
+        project=project,
+        name="Story",
+        level="task",
+        is_default=True,
     )
     issue = Issue.objects.create(
         id=uuid.uuid4(),
@@ -41,6 +49,7 @@ def test_priority_column_is_removed_and_rollback_restores_none_default():
         name="Prioritized",
         sequence_id=1,
         priority="urgent",
+        issue_type=task_type,
     )
 
     new = _migrate(AFTER)

@@ -8,12 +8,17 @@ from django.test import Client, override_settings
 
 from apps.execution import driver
 from apps.execution.models import GraphRun, LaunchedTask
+from apps.runs.models import AgentRun
 from apps.terminals.launch_configuration import resolve_task_launch_configuration
+from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from worktracker.models import (
+    AgentModel,
     Issue,
     IssueType,
     LaunchBinding,
     Project,
+    Provider,
+    ReasoningLevel,
     State,
     Workspace,
 )
@@ -122,6 +127,32 @@ def _child(project, parent, state, sequence_id, name="Child"):
     )
 
 
+def _agent_run(issue, run_id: str, *, active: bool) -> AgentRun:
+    return AgentRun.objects.create(
+        id=run_id,
+        issue=issue,
+        ticket_seq=issue.sequence_id,
+        agent="codex",
+        status="running" if active else "exited",
+        started_at="2026-08-08T10:00:00+00:00",
+        ended_at=None if active else "2026-08-08T10:05:00+00:00",
+        scope="task",
+    )
+
+
+def _catalog_launch_policy(*, provider_slug, model_name, reasoning_name=None):
+    provider = Provider.objects.get(slug=provider_slug)
+    model, _ = AgentModel.objects.get_or_create(
+        provider=provider,
+        name=model_name,
+    )
+    reasoning = None
+    if reasoning_name is not None:
+        reasoning, _ = ReasoningLevel.objects.get_or_create(name=reasoning_name)
+        model.permitted_reasoning_levels.add(reasoning)
+    return model, reasoning
+
+
 async def successful_spawn(**kwargs):
     successful_spawn.calls.append(kwargs)
     return f"run-{len(successful_spawn.calls)}"
@@ -147,13 +178,13 @@ def test_execute_graph_refuses_root_until_subtree_run_is_enabled(
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     refused = client.post(
-        f"/api/work-items/{root.id}/execute-graph",
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert refused.status_code == 422
-    assert refused.json()["error"] == "subtree_run_not_enabled"
+    assert refused.json()["code"] == "subtree_run_not_enabled"
     assert successful_spawn.calls == []
 
     LaunchBinding.objects.update_or_create(
@@ -162,7 +193,7 @@ def test_execute_graph_refuses_root_until_subtree_run_is_enabled(
         defaults={"subtree_run_enabled": True},
     )
     accepted = client.post(
-        f"/api/work-items/{root.id}/execute-graph",
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
@@ -187,7 +218,7 @@ def test_execute_graph_allows_a_configured_nested_root(
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     response = client.post(
-        f"/api/work-items/{nested.id}/execute-graph",
+        f"/api/work-tracker/work-items/{nested.id}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
@@ -200,7 +231,7 @@ def test_execute_graph_allows_a_configured_nested_root(
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_execute_graph_returns_new_shape_and_durable_facts(
+def test_create_graph_run_conflicts_when_header_is_already_armed(
     client, project, module, todo, monkeypatch
 ):
     root = task(project, module, todo)
@@ -211,19 +242,21 @@ def test_execute_graph_returns_new_shape_and_durable_facts(
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     first = client.post(
-        f"/api/work-items/{root.id}/execute-graph",
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
+    _agent_run(a, "run-1", active=True)
     second = client.post(
-        f"/api/work-items/{root.id}/execute-graph",
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert first.status_code == 201
     assert first.json() == {"root_id": str(root.id), "launched": [str(a.id)]}
-    assert second.json() == {"root_id": str(root.id), "launched": []}
+    assert second.status_code == 409
+    assert second.json()["code"] == "graph_run_exists"
     header = GraphRun.objects.get(root=root)
     assert (header.project_id, header.module_id, header.agent) == (
         project.id,
@@ -236,6 +269,36 @@ def test_execute_graph_returns_new_shape_and_durable_facts(
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_create_graph_run_revives_inactive_launches(
+    client, project, module, todo, monkeypatch
+):
+    root = task(project, module, todo)
+    child = _child(project, root, todo, 3)
+    successful_spawn.calls.clear()
+    monkeypatch.setattr(driver, "spawn_run", successful_spawn)
+
+    first = client.post(
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
+        data={"agent": "codex"},
+        content_type="application/json",
+    )
+    _agent_run(child, "run-1", active=False)
+    revived = client.post(
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
+        data={"agent": "codex"},
+        content_type="application/json",
+    )
+
+    assert first.status_code == 201
+    assert revived.status_code == 201
+    assert revived.json() == {
+        "root_id": str(root.id),
+        "launched": [str(child.id)],
+    }
+    assert LaunchedTask.objects.get(task=child).agent_run_id == "run-2"
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_execute_graph_omits_provider_override(
     client, project, module, todo, monkeypatch
 ):
@@ -245,7 +308,7 @@ def test_execute_graph_omits_provider_override(
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     response = client.post(
-        f"/api/work-items/{root.id}/execute-graph",
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={},
         content_type="application/json",
     )
@@ -258,13 +321,13 @@ def test_execute_graph_omits_provider_override(
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_execute_graph_missing_task_returns_404(client):
     response = client.post(
-        f"/api/work-items/{uuid.uuid4()}/execute-graph",
+        f"/api/work-tracker/work-items/{uuid.uuid4()}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert response.status_code == 404
-    assert response.json()["error"] == "task_not_found"
+    assert response.json()["code"] == "task_not_found"
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -274,23 +337,35 @@ def test_execute_graph_empty_direct_child_set_returns_422(
     root = task(project, module, todo)
 
     response = client.post(
-        f"/api/work-items/{root.id}/execute-graph",
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert response.status_code == 422
-    assert response.json()["error"] == "graph_empty"
+    assert response.json()["code"] == "graph_empty"
     assert not GraphRun.objects.filter(root=root).exists()
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_execute_graph_get_endpoint_is_deleted(client, project, module, todo):
+@pytest.mark.parametrize(
+    "method,path_suffix",
+    [
+        ("get", "dependency-graph"),
+        ("post", "execute-graph"),
+        ("delete", "execute-graph"),
+    ],
+)
+def test_old_graph_routes_no_longer_resolve(
+    client, project, module, todo, method, path_suffix
+):
     root = task(project, module, todo)
 
-    response = client.get(f"/api/work-items/{root.id}/execute-graph")
+    response = getattr(client, method)(
+        f"/api/work-tracker/work-items/{root.id}/{path_suffix}"
+    )
 
-    assert response.status_code == 405
+    assert response.status_code == 404
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -303,13 +378,13 @@ def test_reset_graph_returns_cleared_ids_and_launches_nothing(
     successful_spawn.calls.clear()
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
     client.post(
-        f"/api/work-items/{root.id}/execute-graph",
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
     calls_before_reset = list(successful_spawn.calls)
 
-    response = client.delete(f"/api/work-items/{root.id}/execute-graph")
+    response = client.delete(f"/api/work-tracker/work-items/{root.id}/graph-run")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -317,6 +392,7 @@ def test_reset_graph_returns_cleared_ids_and_launches_nothing(
         "cleared": [str(a.id), str(b.id)],
     }
     assert not LaunchedTask.objects.filter(root=root).exists()
+    assert not GraphRun.objects.filter(root=root).exists()
     assert successful_spawn.calls == calls_before_reset
 
 
@@ -324,10 +400,10 @@ def test_reset_graph_returns_cleared_ids_and_launches_nothing(
 def test_reset_graph_without_header_returns_404(client, project, module, todo):
     root = task(project, module, todo)
 
-    response = client.delete(f"/api/work-items/{root.id}/execute-graph")
+    response = client.delete(f"/api/work-tracker/work-items/{root.id}/graph-run")
 
     assert response.status_code == 404
-    assert response.json()["error"] == "graph_not_found"
+    assert response.json()["code"] == "graph_not_found"
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -341,7 +417,7 @@ def test_get_dependency_graph_returns_factual_subtree_before_any_run(
     external = task(project, module, todo, sequence_id=6)
     dependent.blocked_by.add(blocker, external)
 
-    response = client.get(f"/api/work-items/{root.id}/dependency-graph")
+    response = client.get(f"/api/work-tracker/work-items/{root.id}/graph-run")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -388,7 +464,7 @@ def test_get_dependency_graph_excludes_archived_descendant_branches(
     archived.save(update_fields=["is_archived"])
     _child(project, archived, todo, 5, name="Hidden grandchild")
 
-    response = client.get(f"/api/work-items/{root.id}/dependency-graph")
+    response = client.get(f"/api/work-tracker/work-items/{root.id}/graph-run")
 
     assert response.status_code == 200
     assert [node["id"] for node in response.json()["nodes"]] == [
@@ -406,9 +482,9 @@ def test_get_dependency_graph_returns_not_found_for_unknown_or_archived_root(
     archived.save(update_fields=["is_archived"])
 
     for root_id in (uuid.uuid4(), archived.id):
-        response = client.get(f"/api/work-items/{root_id}/dependency-graph")
+        response = client.get(f"/api/work-tracker/work-items/{root_id}/graph-run")
         assert response.status_code == 404
-        assert response.json()["error"] == "task_not_found"
+    assert response.json()["code"] == "task_not_found"
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -420,7 +496,7 @@ def test_launch_agent_launches_task_session_with_codex_and_no_prompt(
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     response = client.post(
-        f"/api/work-items/{issue.id}/launch-agent",
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
         data={"agent": "codex"},
         content_type="application/json",
     )
@@ -446,17 +522,21 @@ def test_launch_agent_defaults_to_current_state_binding(
     client, project, module, todo, monkeypatch
 ):
     issue = task(project, module, todo)
+    model, reasoning = _catalog_launch_policy(
+        provider_slug="claude",
+        model_name="sonnet",
+        reasoning_name="high",
+    )
     LaunchBinding.objects.filter(issue_type=issue.issue_type, state=todo).update(
         prompt="Configured workflow prompt",
-        agent="claude",
-        model="sonnet",
-        reasoning="high",
+        model=model,
+        reasoning=reasoning,
     )
     successful_spawn.calls.clear()
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     response = client.post(
-        f"/api/work-items/{issue.id}/launch-agent",
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
         data={},
         content_type="application/json",
     )
@@ -474,18 +554,19 @@ def test_launch_agent_defaults_to_current_state_binding(
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_launch_agent_rejects_promptless_current_state(client, project, module, todo):
     issue = task(project, module, todo)
+    model, _ = _catalog_launch_policy(provider_slug="codex", model_name="gpt-test")
     LaunchBinding.objects.filter(issue_type=issue.issue_type, state=todo).update(
-        prompt="", agent="codex"
+        prompt="", model=model
     )
 
     response = client.post(
-        f"/api/work-items/{issue.id}/launch-agent",
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
         data={},
         content_type="application/json",
     )
 
     assert response.status_code == 422
-    assert response.json()["error"] == "prompt_not_configured"
+    assert response.json()["code"] == "prompt_not_configured"
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -494,8 +575,9 @@ def test_execute_graph_spawn_policy_error_writes_no_failure_state(
 ):
     root = task(project, module, todo)
     child = _child(project, root, todo, 3)
+    model, _ = _catalog_launch_policy(provider_slug="codex", model_name="gpt-test")
     LaunchBinding.objects.filter(issue_type=child.issue_type, state=todo).update(
-        prompt="", agent="codex"
+        prompt="", model=model
     )
 
     async def policy_enforcing_spawn(**kwargs):
@@ -509,7 +591,7 @@ def test_execute_graph_spawn_policy_error_writes_no_failure_state(
     monkeypatch.setattr(driver, "spawn_run", policy_enforcing_spawn)
 
     response = client.post(
-        f"/api/work-items/{root.id}/execute-graph",
+        f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={},
         content_type="application/json",
     )
@@ -528,7 +610,7 @@ def test_launch_agent_does_not_move_target_state_or_seed_subtree_state(
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     client.post(
-        f"/api/work-items/{issue.id}/launch-agent",
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
         data={"agent": "codex"},
         content_type="application/json",
     )
@@ -542,13 +624,13 @@ def test_launch_agent_does_not_move_target_state_or_seed_subtree_state(
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_launch_agent_missing_task_returns_404(client):
     response = client.post(
-        f"/api/work-items/{uuid.uuid4()}/launch-agent",
+        f"/api/work-tracker/work-items/{uuid.uuid4()}/launch-agent",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert response.status_code == 404
-    assert response.json()["error"] == "task_not_found"
+    assert response.json()["code"] == "task_not_found"
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -569,13 +651,13 @@ def test_launch_agent_no_module_ancestry_returns_422(
     monkeypatch.setattr(driver, "spawn_run", successful_spawn)
 
     response = client.post(
-        f"/api/work-items/{orphan.id}/launch-agent",
+        f"/api/work-tracker/work-items/{orphan.id}/launch-agent",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert response.status_code == 422
-    assert response.json()["error"] == "module_id_required"
+    assert response.json()["code"] == "module_id_required"
     assert successful_spawn.calls == []
 
 
@@ -592,13 +674,13 @@ def test_launch_agent_no_profile_returns_400(
 
     monkeypatch.setattr(driver, "spawn_run", no_profile_spawn)
     response = client.post(
-        f"/api/work-items/{issue.id}/launch-agent",
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert response.status_code == 400
-    assert response.json()["error"] == "no_profile_selected"
+    assert response.json()["code"] == "no_profile_selected"
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -614,10 +696,48 @@ def test_launch_agent_launch_unavailable_returns_503(
 
     monkeypatch.setattr(driver, "spawn_run", unavailable_spawn)
     response = client.post(
-        f"/api/work-items/{issue.id}/launch-agent",
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert response.status_code == 503
-    assert response.json()["error"] == "launch_unavailable"
+    assert response.json()["code"] == "launch_unavailable"
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_launch_agent_required_skill_collision_returns_structured_409(
+    client, project, module, todo, monkeypatch
+):
+    issue = task(project, module, todo)
+
+    async def rejected_spawn(**kwargs):
+        raise RequiredSkillUnavailable(
+            provider="claude",
+            skill="grilling",
+            reason="collision",
+            message="A different provider-visible skill already reserves 'grilling'.",
+        )
+
+    monkeypatch.setattr(driver, "spawn_run", rejected_spawn)
+    response = client.post(
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
+        data={"agent": "claude"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "required_skill_unavailable",
+        "provider": "claude",
+        "skill": "grilling",
+        "reason": "collision",
+        "detail": "A different provider-visible skill already reserves 'grilling'.",
+        "remediation": (
+            "Rename the provider-visible skill or change its declared name, then "
+            "retry. Ticketry will not modify user-installed skills."
+        ),
+        "retryable": True,
+    }
+    assert not GraphRun.objects.exists()
+    assert not LaunchedTask.objects.exists()

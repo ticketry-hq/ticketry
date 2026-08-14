@@ -8,15 +8,18 @@ import sys
 from worktracker_sdk.generated import (
     AttachmentsApi,
     IssueTypesApi,
-    MessageError,
+    LaunchBindingsApi,
+    ModelsApi,
     ModulesApi,
     ProjectsApi,
+    ProvidersApi,
+    ReasoningLevelsApi,
     StatesApi,
     WorkItemsApi,
     WorkflowsApi,
 )
 from worktracker_sdk.generated.exceptions import ApiException
-from worktracker_sdk.root_api import ExecutionApi, LaunchApi
+from worktracker_sdk.root_api import ExecutionApi, LaunchApi, RevisionedDeleteApi
 
 from worktracker_agent.api.service import WorktrackerService
 
@@ -82,12 +85,31 @@ def test_default_service_builds_generated_per_tag_clients():
     assert isinstance(service.sdk.work_items, WorkItemsApi)
     assert isinstance(service.sdk.workflows, WorkflowsApi)
     assert isinstance(service.sdk.attachments, AttachmentsApi)
+    assert isinstance(service.sdk.launch_bindings, LaunchBindingsApi)
+    assert isinstance(service.sdk.models, ModelsApi)
+    assert isinstance(service.sdk.providers, ProvidersApi)
+    assert isinstance(service.sdk.reasoning_levels, ReasoningLevelsApi)
     assert isinstance(service.sdk.execution, ExecutionApi)
     assert isinstance(service.sdk.launch, LaunchApi)
-    assert service.sdk.api_client.configuration.host == (
-        "https://worktracker.test/api/work-tracker"
-    )
+    assert isinstance(service.sdk.revisioned_delete, RevisionedDeleteApi)
+    # The generated operations already carry the /work-tracker segment, so the
+    # SDK host must be the /api root. Keeping the segment here is what produced
+    # /api/work-tracker/work-tracker/... and 404'd every read.
+    assert service.sdk.api_client.configuration.host == "https://worktracker.test/api"
     assert service.sdk.api_client.configuration.api_key == {"ApiKeyAuth": "secret"}
+
+
+def test_service_accepts_either_form_of_configured_base_url():
+    """Callers configure the base either way; both must reach the /api root."""
+
+    for configured in (
+        "https://worktracker.test/api/work-tracker",
+        "https://worktracker.test/api/work-tracker/",
+        "https://worktracker.test/api",
+        "https://worktracker.test/api/",
+    ):
+        service = WorktrackerService(base_url=configured, api_key="secret")
+        assert service.sdk.api_client.configuration.host == "https://worktracker.test/api"
 
 
 def test_structured_error_body_wins_over_narrow_generated_error_model():
@@ -100,7 +122,7 @@ def test_structured_error_body_wins_over_narrow_generated_error_model():
     error = ApiException(
         status=422,
         body=json.dumps(body),
-        data=MessageError(detail=body["detail"]),
+        data={"detail": body["detail"]},
     )
 
     assert WorktrackerService._sdk_error_body(error) == body

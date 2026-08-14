@@ -56,6 +56,7 @@ describe("desktop shell security contract", () => {
       windows: ["main"],
       permissions: [
         "allow-desktop-runtime-configuration",
+        "allow-desktop-append-frontend-log",
         "allow-desktop-retry-services",
         "allow-desktop-pick-folder",
         "allow-desktop-preflight-report",
@@ -69,6 +70,8 @@ describe("desktop shell security contract", () => {
         "allow-native-terminal-available",
         "allow-native-terminal-attach",
         "allow-native-terminal-set-frame",
+        "allow-native-terminal-hide",
+        "allow-native-terminal-show",
         "allow-native-terminal-focus",
         "allow-native-terminal-detach",
         "core:event:allow-listen",
@@ -96,14 +99,16 @@ describe("desktop shell security contract", () => {
     ]);
   });
 
-  it("uses the pooled WebSocket terminal while native Ghostty is disabled", async () => {
+  it("prefers native Ghostty when available and preserves the pooled fallback", async () => {
     const presenter = await text(
       "../../src/features/agents/terminal/Terminal.tsx",
     );
 
-    expect(presenter).toContain("return <XtermTerminal");
-    expect(presenter).not.toContain("NativeGhosttyTerminal");
-    expect(presenter).not.toContain("nativeGhosttyAvailable");
+    expect(presenter).toContain("nativeGhosttyAvailable");
+    expect(presenter).toContain("<NativeGhosttyTerminal");
+    expect(presenter).toContain("<XtermTerminal");
+    expect(presenter).toContain("if (!nativeFailureReason) return fallback");
+    expect(presenter).toContain("onUnavailable={markNativeUnavailable}");
   });
 
   it("initializes packaged libghostty from Ticketry's bundled resources", async () => {
@@ -112,8 +117,96 @@ describe("desktop shell security contract", () => {
     expect(host).toContain('setenv("GHOSTTY_RESOURCES_DIR"');
     expect(host).toContain('setenv("TERMINFO"');
     expect(host.indexOf("configure_bundled_ghostty_environment();")).toBeLessThan(
-      host.indexOf("ghostty_init(1, argv)"),
+      host.indexOf("ghostty_init(2, argv)"),
     );
+  });
+
+  it("launches tmux directly in libghostty without a Ticketry byte bridge", async () => {
+    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+    const tmuxViewer = await text("../../src-tauri/src/tmux_viewer.rs");
+    const main = await text("../../src-tauri/src/main.rs");
+
+    expect(nativeTerminal).toContain("TerminalCommandAttachment::prepare");
+    expect(tmuxViewer).toContain('"attach-session"');
+    expect(tmuxViewer).toContain('format!("/usr/bin/env {arguments}")');
+    expect(nativeTerminal).not.toContain("UnixStream");
+    expect(nativeTerminal).not.toContain("io::copy");
+    expect(main).not.toContain("--muxed-ghostty-bridge");
+  });
+
+  it("positions the native terminal in the webview coordinate space", async () => {
+    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+
+    expect(nativeTerminal).toContain("webview_ns_view(&window)");
+    expect(nativeTerminal).toContain("webview.inner() as usize");
+    expect(nativeTerminal).not.toContain("window.ns_view()");
+  });
+
+  it("prepares libghostty hidden at the target window's Retina scale and keeps later scale updates", async () => {
+    const host = await text("../../src-tauri/native/libghostty_host.m");
+
+    expect(host).not.toContain("NSScreen.mainScreen.backingScaleFactor");
+    expect(host).toContain("self.window.backingScaleFactor ?: 1.0");
+    expect(host).toContain("self.layer.contentsScale = scale");
+    expect(host).toContain("ghostty_surface_set_content_scale(_surface, scale, scale)");
+    expect(host.indexOf("self.hidden = YES")).toBeLessThan(
+      host.indexOf("ghostty_surface_new(runtime->app, &config)"),
+    );
+    expect(host.indexOf("[parent addSubview:self")).toBeLessThan(
+      host.indexOf("CGFloat scale = self.window.backingScaleFactor"),
+    );
+    expect(host).toContain("- (void)viewDidChangeBackingProperties");
+    expect(host).toContain("muxed_ghostty_view_present");
+  });
+
+  it("keeps native viewer visibility reversible and hidden viewers non-interactive", async () => {
+    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+    const desktop = await text("../../src-tauri/src/lib.rs");
+    const build = await text("../../src-tauri/build.rs");
+
+    expect(build).toContain('"native_terminal_hide"');
+    expect(build).toContain('"native_terminal_show"');
+    expect(nativeTerminal).toContain("native_terminal_hide");
+    expect(nativeTerminal).toContain("native_terminal_show");
+    expect(desktop).toContain("native_terminal::native_terminal_hide");
+    expect(desktop).toContain("native_terminal::native_terminal_show");
+    expect(nativeTerminal).toContain("hidden native terminal cannot receive focus");
+    expect(host).toContain("view->_acceptsInput = NO");
+    expect(host).toContain("if (!_acceptsInput) return");
+    expect(host).toContain("if (size.columns == 0 || size.rows == 0) return size");
+    expect(host.indexOf("muxed_ghostty_view_set_frame(")).toBeLessThan(
+      host.indexOf("muxed_ghostty_view_present(opaque)"),
+    );
+    const attach = nativeTerminal.match(
+      /pub fn native_terminal_attach[\s\S]*?pub fn native_terminal_reconcile_frame/,
+    )?.[0];
+    expect(attach).toContain("visibility: NativeTerminalVisibility::Hidden");
+    expect(attach).not.toContain("muxed_ghostty_view_present");
+  });
+
+  it("keeps steady-state libghostty render actions off AppKit's input path", async () => {
+    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const runtimeAction = host.match(
+      /static bool runtime_action[\s\S]*?\n}/,
+    )?.[0];
+
+    expect(runtimeAction).toContain("return false");
+    expect(runtimeAction).not.toContain("ghostty_surface_draw");
+  });
+
+  it("forces and acknowledges the hidden Metal frame before presenting libghostty", async () => {
+    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const armRedraw = host.match(
+      /uint64_t muxed_ghostty_view_arm_redraw[\s\S]*?\n}/,
+    )?.[0];
+
+    expect(armRedraw).toContain("ghostty_surface_draw(view->_surface)");
+    expect(armRedraw).toContain("[view recordRedraw]");
+    expect(armRedraw!.indexOf("ghostty_surface_draw(view->_surface)")).toBeLessThan(
+      armRedraw!.indexOf("[view recordRedraw]"),
+    );
+    expect(armRedraw).not.toContain("ghostty_surface_refresh(view->_surface)");
   });
 
   it("keeps the service retry command free of webview-supplied values", async () => {
@@ -148,7 +241,7 @@ describe("desktop shell security contract", () => {
       "release:build": "node scripts/release-build.mjs",
       "release:validate": "node scripts/release-build.mjs --validate",
       "release:test": "node --test scripts/release-build.test.mjs scripts/installed-artifact-acceptance.test.mjs scripts/installed-artifact-acceptance-driver.test.mjs scripts/release-publish.test.mjs",
-      "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && cargo test --manifest-path src-tauri/Cargo.toml && node scripts/desktop-smoke.mjs",
+      "desktop:smoke": "vitest run src/test/desktopShellContract.test.ts && node --test scripts/desktop-concurrent-smoke.test.mjs && node scripts/desktop-smoke.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
       "desktop:smoke:dev": "node scripts/desktop-smoke.mjs dev",
       "desktop:smoke:packaged": "node scripts/desktop-smoke.mjs packaged",
     });

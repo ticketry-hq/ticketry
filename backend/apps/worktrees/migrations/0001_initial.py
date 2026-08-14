@@ -48,7 +48,7 @@ class Migration(migrations.Migration):
                     base_branch VARCHAR NOT NULL,
                     base_commit VARCHAR NOT NULL,
                     status VARCHAR NOT NULL,
-                    ephemeral BOOL NOT NULL DEFAULT 0,
+                    ephemeral BOOL NOT NULL DEFAULT FALSE,
                     created_at VARCHAR NOT NULL,
                     updated_at VARCHAR NOT NULL,
                     PRIMARY KEY (id)

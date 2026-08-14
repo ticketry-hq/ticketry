@@ -44,7 +44,7 @@ class InitSpawnFrame(BaseModel):
 
 
 class InitAttachFrame(BaseModel):
-    """Client → server: reattach to a persisted tmux session (``mode:"attach"``)."""
+    """Client → server: attach to a durable terminal (``mode:"attach"``)."""
 
     type: Literal["init"]
     mode: Literal["attach"]

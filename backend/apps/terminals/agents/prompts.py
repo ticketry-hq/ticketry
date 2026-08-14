@@ -10,7 +10,7 @@ import re
 from typing import Optional
 
 from apps.documents.design_docs import module_dir_name
-from apps.settings_store.config import Profile, config
+from apps.settings_store.config import Profile, config, module_link_path
 from studio_server.contracts import ModuleSummary, TaskSummary
 
 
@@ -69,7 +69,7 @@ def build_context_prompt(
     workspace_slug = getattr(active_profile, "workspace_slug", "")
     module_folder = ""
     if active_profile and module_id:
-        module_folder = active_profile.module_folders.get(module_id, "")
+        module_folder = module_link_path(active_profile, module_id) or ""
 
     # A selected workflow prompt is opaque project-owned guidance. Profile
     # prompt maps are retained only as upgrade input and never participate in
@@ -97,8 +97,8 @@ def build_context_prompt(
     if additional_prompt:
         final_prompt += f"Additional user instructions:\n{additional_prompt}\n\n"
 
-    # Idea-stage launches produce no design documents, so withhold this block (#943).
-    if design_dir and state_name.lower() != "idea":
+    # Ideas-stage launches produce no design documents, so withhold this block (#943).
+    if design_dir and state_name.lower() != "ideas":
         final_prompt += _design_dir_block(design_dir)
 
     final_prompt += "Available tools: WorkTracker MCP server; coding agent status tool."
@@ -263,6 +263,7 @@ def build_doc_chat_prompt(
     doc_rel_path: str,
     module_id: Optional[str] = None,
     user_input: Optional[str] = None,
+    profile: Optional[Profile] = None,
 ) -> str:
     """Prompt for a doc-scoped overlay agent editing one generated doc (#625).
 
@@ -279,12 +280,13 @@ def build_doc_chat_prompt(
         directory (which is the run's working directory).
     :param module_id: module whose local folder is named for orientation.
     :param user_input: the user's requested change, if supplied on summon.
+    :param profile: freshly selected launch profile; the process snapshot is
+        used only for direct callers that do not supply one.
     :return: the doc-chat prompt string.
     """
 
-    module_folder = ""
-    if config.current_profile and module_id:
-        module_folder = config.current_profile.module_folders.get(module_id, "")
+    active_profile = profile if profile is not None else config.current_profile
+    module_folder = module_link_path(active_profile, module_id) or ""
 
     prompt = (
         f"You are editing one generated design document in place.\n\n"

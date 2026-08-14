@@ -28,7 +28,7 @@ def test_multipart_upload_to_disk(client, project, task, auth, tmp_path, setting
         data={"file": upload},
         headers=auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     body = r.json()
     assert body["filename"] == "note.txt"
     assert body["mime_type"] == "text/plain"
@@ -40,7 +40,9 @@ def test_multipart_upload_to_disk(client, project, task, auth, tmp_path, setting
 
 
 @pytest.mark.django_db
-def test_attachment_is_in_work_item_detail(client, project, task, auth, tmp_path, settings):
+def test_attachment_has_its_own_nested_read(
+    client, project, task, auth, tmp_path, settings
+):
     settings.MEDIA_ROOT = str(tmp_path)
     client.post(
         f"{BASE}/work-items/{task['id']}/attachments",
@@ -48,8 +50,11 @@ def test_attachment_is_in_work_item_detail(client, project, task, auth, tmp_path
         headers=auth,
     )
 
-    r = client.get(f"{BASE}/work-items/{task['id']}", headers=auth)
+    r = client.get(f"{BASE}/work-items/{task['id']}/attachments", headers=auth)
     assert r.status_code == 200
-    attachments = r.json()["attachments"]
+    attachments = r.json()
     assert len(attachments) == 1
     assert attachments[0]["url"].startswith("/media/")
+
+    bare = client.get(f"{BASE}/work-items/{task['id']}", headers=auth).json()
+    assert "attachments" not in bare

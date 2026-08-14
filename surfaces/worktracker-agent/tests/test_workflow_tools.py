@@ -14,7 +14,7 @@ gate reason is read off the generated exception body.
 import inspect
 
 import pytest
-from worktracker_sdk.generated import WorkItemPatch
+from worktracker_sdk.generated import PatchedWorkItemPatch
 from worktracker_sdk.generated.exceptions import ApiException
 
 from fake_sdk import (
@@ -68,7 +68,7 @@ def test_update_task_status_returns_structured_success():
     assert result == {"ok": True, "task_id": TASK, "status": "Done"}
     name, args, _kwargs = client.work_items.calls[0]
     assert name == "update_work_item"
-    assert args[0] == TASK and isinstance(args[1], WorkItemPatch)
+    assert args[0] == TASK and isinstance(args[1], PatchedWorkItemPatch)
     assert str(args[1].state_id) == STATE_DONE
 
 

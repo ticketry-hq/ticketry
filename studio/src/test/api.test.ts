@@ -11,17 +11,26 @@ import {
   deleteIssueType,
   deleteState,
   deleteWorkItem,
+  executeTaskSubtree,
   listIssueTypes,
   listModules,
   listProjectWorkItems,
   listProjects,
+  getWorkItem,
+  getProviderCatalog,
   getWorkspace,
   patchIssueType,
   patchState,
   patchWorkItem,
+  putProviderCatalog,
   reorderIssueTypes,
   reorderStates,
 } from "../shared/api/client";
+import {
+  getTerminals,
+  terminateTerminal,
+} from "../features/agents/api/agentApi";
+import type { ProviderCatalog } from "../shared/api/types";
 
 const fetchMock = vi.fn();
 
@@ -56,6 +65,43 @@ describe("api client", () => {
     expect(agentApiBase()).toBe("/api");
     vi.stubEnv("VITE_AGENT_API_BASE", "https://agents.example.com/api");
     expect(agentApiBase()).toBe("https://agents.example.com/api");
+  });
+
+  it("terminates a run on the canonical terminal collection route", async () => {
+    vi.stubEnv("VITE_WT_API_KEY", "terminal-secret");
+    fetchMock.mockResolvedValue(jsonResponse({
+      agent_run_id: "run/1",
+      terminated: true,
+    }));
+
+    await terminateTerminal("run/1");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/terminals?agent_run_id=run%2F1");
+    expect(init.method).toBe("DELETE");
+    expect(new Headers(init.headers).get("x-api-key")).toBe("terminal-secret");
+  });
+
+  it("authenticates terminal discovery with the runtime API key", async () => {
+    vi.stubEnv("VITE_WT_API_KEY", "desktop-terminal-secret");
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await getTerminals("task/1");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/terminals?task_id=task%2F1");
+    expect(new Headers(init.headers).get("x-api-key")).toBe(
+      "desktop-terminal-secret",
+    );
+  });
+
+  it("omits authentication from terminal discovery when the runtime key is empty", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await getTerminals("task-1");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(new Headers(init.headers).has("x-api-key")).toBe(false);
   });
 
   it("sends x-api-key on every request and hits the projects path", async () => {
@@ -97,6 +143,72 @@ describe("api client", () => {
     expect(fetchMock.mock.calls[1][1].method).toBe("POST");
   });
 
+  it("reads provider activation with the global launch default", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/settings/provider-catalog")) {
+        return Promise.resolve(jsonResponse({
+          value: {
+            activated_providers: ["codex"],
+            global_default: {
+              provider: "codex",
+              model: "gpt-5.6-luna",
+              reasoning: "medium",
+            },
+          },
+        }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await expect(getProviderCatalog()).resolves.toEqual({
+      value: {
+        activated_providers: ["codex"],
+        global_default: {
+          provider: "codex",
+          model: "gpt-5.6-luna",
+          reasoning: "medium",
+        },
+      },
+    });
+  });
+
+  it("persists provider activation atomically with the global launch default", async () => {
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        if (method === "PUT" && url.endsWith("/settings/provider-catalog")) {
+          return jsonResponse({ value: JSON.parse(String(init?.body)).value });
+        }
+        throw new Error(`Unexpected ${method} request: ${url}`);
+      },
+    );
+
+    const catalog: ProviderCatalog = {
+      activated_providers: ["codex"],
+      global_default: {
+        provider: "codex",
+        model: "gpt-5.6-luna",
+        reasoning: "medium",
+      },
+    };
+
+    await expect(putProviderCatalog(catalog)).resolves.toEqual({ value: catalog });
+    const writes = fetchMock.mock.calls.filter(([, init]) =>
+      ["PATCH", "PUT"].includes(init?.method),
+    );
+    expect(writes.map(([url, init]) => [
+      String(url),
+      JSON.parse(String(init?.body)),
+    ])).toEqual([
+      [
+        "/api/settings/provider-catalog",
+        { value: catalog },
+      ],
+    ]);
+  });
+
   it("builds the modules path with the project id", async () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await listModules("proj-123");
@@ -127,26 +239,47 @@ describe("api client", () => {
 });
 
 describe("S2 fetchers", () => {
+  it("reads a work item and its attachment subcollection", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/work-items/w1/attachments")) {
+        return Promise.resolve(jsonResponse([
+          {
+            id: "attachment-1",
+            issue: "w1",
+            filename: "notes.md",
+            mime_type: "text/markdown",
+            size: 12,
+            url: "/media/notes.md",
+            created_at: "2026-08-09T12:00:00Z",
+          },
+        ]));
+      }
+      return Promise.resolve(jsonResponse({ id: "w1", name: "Story" }));
+    });
+
+    await expect(getWorkItem("w1")).resolves.toMatchObject({
+      task: { id: "w1", name: "Story" },
+      attachments: [{ id: "attachment-1", filename: "notes.md" }],
+    });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/work-tracker/work-items/w1",
+      "/api/work-tracker/work-items/w1/attachments",
+    ]);
+  });
+
   it("builds the work-items list path with a state filter", async () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await listProjectWorkItems("p1", { state: "s1" });
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/work-tracker/projects/p1/work-items?state=s1",
+      "/api/work-tracker/work-items?project=p1&state=s1",
     );
   });
 
   it("omits the query string when no filters are set", async () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
     await listProjectWorkItems("p1");
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/projects/p1/work-items");
-  });
-
-  it("forwards PathFind inclusion only when explicitly requested", async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]));
-    await listProjectWorkItems("p1", { includePathfind: true });
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/work-tracker/projects/p1/work-items?include_pathfind=true",
-    );
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/work-items?project=p1");
   });
 
   it("POSTs a create body to the project work-items path", async () => {
@@ -185,6 +318,22 @@ describe("S2 fetchers", () => {
     });
   });
 
+  it("omits the execution mode when arming a graph run without one", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ root_id: "w1", launched: [] }, 201));
+    await executeTaskSubtree("w1");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/work-tracker/work-items/w1/graph-run");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({});
+  });
+
+  it("sends the requested execution mode when arming a graph run", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ root_id: "w1", launched: [] }, 201));
+    await executeTaskSubtree("w1", "serial");
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ mode: "serial" });
+  });
+
   it("DELETEs a work item and resolves on an empty 204 body", async () => {
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
     await expect(deleteWorkItem("w1")).resolves.toBeUndefined();
@@ -221,12 +370,11 @@ describe("S6 config fetchers", () => {
     expect(JSON.parse(init.body)).toEqual({ name: "Bug" });
   });
 
-  it("DELETEs an issue type with a reassign_to query when given", async () => {
+  it("DELETEs an issue type with a reassignment body when given", async () => {
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
     await deleteIssueType("t1", "t2");
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/work-tracker/issue-types/t1?reassign_to=t2",
-    );
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/issue-types/t1");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ reassign_to: "t2" });
   });
 
   it("DELETEs an issue type without a query when no reassign target", async () => {
@@ -255,9 +403,7 @@ describe("S6 config fetchers", () => {
 
     fetchMock.mockResolvedValue(jsonResponse(undefined, 204));
     await deleteState("s1", "s2");
-    expect(fetchMock.mock.calls[2][0]).toBe(
-      "/api/work-tracker/states/s1?reassign_to=s2",
-    );
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/work-tracker/states/s1");
 
     fetchMock.mockResolvedValue(jsonResponse([]));
     await reorderStates("p1", ["s2", "s1"]);

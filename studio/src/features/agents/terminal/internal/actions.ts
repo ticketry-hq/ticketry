@@ -2,10 +2,9 @@ import type { SessionId } from "../../types";
 import {
   bucketOfMeta,
   useTerminalStore,
-  type OpenDocChatArgs,
   type OpenSessionArgs,
 } from "./sessionStore";
-import { useWorkspaceTabsStore } from "./workspaceTabsStore";
+import { useClientStore as useWorkspaceTabsStore } from "../../../../state/clientStore";
 
 // The launch/close verbs hosts call. The session store registers every
 // open/rekey/focus/close with the workspace-tabs store itself (CODIN-981), so
@@ -13,10 +12,6 @@ import { useWorkspaceTabsStore } from "./workspaceTabsStore";
 
 export function launchAgent(args: OpenSessionArgs): SessionId {
   return useTerminalStore.getState().openSession(args);
-}
-
-export function launchDocumentAgent(args: OpenDocChatArgs): SessionId {
-  return useTerminalStore.getState().openDocChat(args);
 }
 
 export function attachToRun(args: OpenSessionArgs & { agentRunId: string }): SessionId {

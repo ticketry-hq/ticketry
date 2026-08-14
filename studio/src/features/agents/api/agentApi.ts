@@ -1,12 +1,9 @@
 import type {
-  ConfigPayload,
   DesignDoc,
   PersistedTerminalSession,
-  Profile,
   ResumableTerminalSession,
 } from "../types";
-import { dedupeInFlight } from "../../../shared/api/dedupe";
-import { agentApiUrl } from "../../../runtime";
+import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
 export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
 
 export class ApiError extends Error {
@@ -21,14 +18,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(agentApiUrl(path), {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+  const response = await authenticatedHostFetch(path, init);
   const text = await response.text();
   let body: unknown = null;
   if (text) {
@@ -43,28 +33,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-// Same key as the studio API layer's getConfig: both stores bootstrap from
-// GET /api/config, so concurrent loads share one request.
-export const getConfig = () =>
-  dedupeInFlight("GET /api/config", () => request<ConfigPayload>("/api/config"));
-export const postProfile = (body: Partial<Profile>) =>
-  request<ConfigPayload>("/api/config/profiles", { method: "POST", body: JSON.stringify(body) });
-export const putProfile = (index: number, body: Partial<Profile>) =>
-  request<ConfigPayload>(`/api/config/profiles/${index}`, { method: "PUT", body: JSON.stringify(body) });
-export const deleteProfile = (index: number) =>
-  request<ConfigPayload>(`/api/config/profiles/${index}`, { method: "DELETE" });
-export const patchConfig = (body: { recent_profile_index: number }) =>
-  request<ConfigPayload>("/api/config", { method: "PATCH", body: JSON.stringify(body) });
-
 export const getModuleActivity = (projectId: string): Promise<Record<string, string>> =>
   request<Record<string, string>>(`/api/runs/module-activity?project_id=${encodeURIComponent(projectId)}`).catch(() => ({}));
-// The session/document GETs below coalesce by URL: the Studio workspace and
-// the drawer can mount panes for the same bucket at once, and each pane
-// otherwise issues its own copy of these reads.
 export const getTerminals = (taskId: string, signal?: AbortSignal) => {
   const url = `/api/terminals?task_id=${encodeURIComponent(taskId)}`;
-  if (signal) return request<PersistedTerminalSession[]>(url, { signal });
-  return dedupeInFlight(`GET ${url}`, () => request<PersistedTerminalSession[]>(url));
+  return request<PersistedTerminalSession[]>(url, { signal });
 };
 export const listResumableTerminals = (
   taskId?: string,
@@ -76,7 +49,10 @@ export const listResumableTerminals = (
   if (taskId) params.set("task_id", taskId);
   if (projectId) params.set("project_id", projectId);
   if (moduleId) params.set("module_id", moduleId);
-  return request<ResumableTerminalSession[]>(`/api/terminals/resumable?${params}`, { signal });
+  return request<ResumableTerminalSession[]>(
+    `/api/terminals/resumable?${params}`,
+    { signal },
+  );
 };
 export const getScratchTerminals = (
   projectId: string,
@@ -84,14 +60,15 @@ export const getScratchTerminals = (
   signal?: AbortSignal,
 ) => {
   const url = `/api/terminals/scratch?project_id=${encodeURIComponent(projectId)}${moduleId ? `&module_id=${encodeURIComponent(moduleId)}` : ""}`;
-  if (signal) return request<PersistedTerminalSession[]>(url, { signal });
-  return dedupeInFlight(`GET ${url}`, () => request<PersistedTerminalSession[]>(url));
+  return request<PersistedTerminalSession[]>(url, { signal });
 };
 export const terminateTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; terminated: boolean }>(`/api/terminals/?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "DELETE" });
+  request<{ agent_run_id: string; terminated: boolean }>(`/api/terminals?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "DELETE" });
 export const resumeTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; resumed_from: string }>(`/api/terminals/resume?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "POST" });
-
+  request<{ agent_run_id: string; resumed_from: string }>(
+    `/api/terminals/resume?agent_run_id=${encodeURIComponent(agentRunId)}`,
+    { method: "POST" },
+  );
 export interface CreateTerminalRunRequest {
   agent: "claude" | "agy" | "codex" | "gemini";
   project_id: string;
@@ -101,9 +78,6 @@ export interface CreateTerminalRunRequest {
   is_planning: boolean;
   is_instant: boolean;
   instant_prompt: string | null;
-  is_doc_chat: boolean;
-  doc_rel_path: string | null;
-  doc_id: string | null;
 }
 
 export const createTerminalRun = (body: CreateTerminalRunRequest) =>
@@ -122,13 +96,11 @@ export const getDocuments = (
   if (projectId) params.set("project_id", projectId);
   if (moduleId) params.set("module_id", moduleId);
   const url = `/api/documents?${params}`;
-  if (signal) return request<{ documents: DesignDoc[] }>(url, { signal });
-  return dedupeInFlight(`GET ${url}`, () => request<{ documents: DesignDoc[] }>(url));
+  return request<{ documents: DesignDoc[] }>(url, { signal });
 };
 export const getScratchDocuments = (moduleId: string, signal?: AbortSignal) => {
   const url = `/api/documents?scope=scratch&module_id=${encodeURIComponent(moduleId)}`;
-  if (signal) return request<{ documents: DesignDoc[] }>(url, { signal });
-  return dedupeInFlight(`GET ${url}`, () => request<{ documents: DesignDoc[] }>(url));
+  return request<{ documents: DesignDoc[] }>(url, { signal });
 };
 export const fsComplete = (path: string, signal?: AbortSignal) =>
   request<{ entries: string[] }>(`/api/fs/complete?path=${encodeURIComponent(path)}`, { signal });

@@ -7,7 +7,7 @@ export {
   useTerminalStore,
   type SessionMeta,
 } from "./internal/sessionStore";
-export { useWorkspaceTabsStore } from "./internal/workspaceTabsStore";
+export { useClientStore as useWorkspaceTabsStore } from "../../../state/clientStore";
 export {
   foregroundKey,
   useTerminalForegroundStore,

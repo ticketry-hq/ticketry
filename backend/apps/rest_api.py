@@ -17,9 +17,11 @@ from apps.documents import api as documents
 from apps.execution import api as execution
 from apps.execution.execution_mode import EXECUTION_MODE_CHOICES
 from apps.runs import api as runs
+from apps.runs.run_scopes import RUN_SCOPES
 from apps.settings_store import api as settings
 from apps.settings_store.schemas import ProfileBody
 from apps.terminals import api as terminals
+from apps.terminals import shell_api as terminal_shells
 from apps.terminals.authorization import (
     RunAuthorizationError,
     verify_run_authorization,
@@ -118,11 +120,23 @@ class AgentRunRecordSerializer(serializers.Serializer):
     project_id = serializers.CharField()
     task_id = serializers.CharField(allow_null=True)
     module_id = serializers.CharField()
-    agent = serializers.CharField()
-    scope = serializers.ChoiceField(choices=("task", "plan", "instant", "docchat"))
+    # A shell run has no provider, so the wire carries an explicit null rather
+    # than a fabricated slug (#665).
+    agent = serializers.CharField(allow_null=True)
+    scope = serializers.ChoiceField(choices=RUN_SCOPES)
+    # Write-once snapshots of how the run was launched: the workflow state's
+    # display name and the model launch configuration actually resolved. Null
+    # means "not recorded" — never the work item's current state (#693).
+    launch_state = serializers.CharField(allow_null=True)
+    launch_model = serializers.CharField(allow_null=True)
     started_at = serializers.CharField()
     state = serializers.CharField()
     updated_at = serializers.CharField()
+    # Terminal output activity: ordered by sequence, independent of the
+    # lifecycle axis above (#661).
+    output_sequence = serializers.IntegerField()
+    last_output_at = serializers.CharField(allow_null=True)
+    effective_state = serializers.CharField()
 
 
 class AgentStatusScopeResponseSerializer(serializers.Serializer):
@@ -151,6 +165,15 @@ class ViewerLeaseSerializer(serializers.Serializer):
 class ViewerLeaseReleaseSerializer(serializers.Serializer):
     agent_run_id = serializers.CharField()
     viewer_id = serializers.CharField()
+
+
+class ViewerOutputReportSerializer(serializers.Serializer):
+    agent_run_id = serializers.CharField()
+
+
+class ViewerOutputReportResultSerializer(serializers.Serializer):
+    agent_run_id = serializers.CharField()
+    observed = serializers.BooleanField()
 
 
 class ReplacedViewerSerializer(serializers.Serializer):
@@ -207,11 +230,27 @@ class TerminalRunSerializer(serializers.Serializer):
     created_at = serializers.CharField(required=False)
 
 
+class CreateModuleShellSerializer(serializers.Serializer):
+    module_id = serializers.CharField()
+
+
+class ModuleShellSerializer(serializers.Serializer):
+    agent_run_id = serializers.CharField()
+    module_id = serializers.CharField()
+    created_at = serializers.CharField()
+
+
 class ResumableTerminalSerializer(serializers.Serializer):
     agent_run_id = serializers.CharField()
     agent = serializers.CharField()
     status = serializers.CharField()
     started_at = serializers.CharField()
+    launch_state = serializers.CharField(allow_null=True)
+    launch_model = serializers.CharField(allow_null=True)
+    # The run's own routing scope. A scratch Plan or Instant conversation
+    # records no launch state by design, so this is the only durable source for
+    # the word its resume chip shows (#708).
+    scope = serializers.ChoiceField(choices=RUN_SCOPES)
     provider_session_id = serializers.CharField()
     resumed_from = serializers.CharField(allow_null=True)
 
@@ -472,6 +511,12 @@ class ViewerLeaseReleaseView(AuthenticatedAPIView):
         return _serialize_result(terminals.release_viewer_lease(_pydantic(terminals.ViewerLeaseReleaseBody, request.data)))
 
 
+class ViewerOutputReportView(AuthenticatedAPIView):
+    @extend_schema(tags=["terminals"], request=ViewerOutputReportSerializer, responses=ViewerOutputReportResultSerializer)
+    def post(self, request):
+        return _serialize_result(terminals.report_viewer_output(_pydantic(terminals.ViewerOutputReportBody, request.data)))
+
+
 class TerminalCollectionView(AuthenticatedAPIView):
     @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("task_id", str, required=True)], responses=TerminalRunSerializer(many=True))
     def get(self, request):
@@ -514,6 +559,21 @@ class ScratchTerminalsView(AuthenticatedAPIView):
         if not project_id:
             return Response({"detail": {"error": "project_id_required"}}, status=400)
         return _serialize_result(terminals.list_scratch_terminals(project_id, request.query_params.get("module_id")))
+
+
+class ModuleShellCollectionView(AuthenticatedAPIView):
+    """A module's durable login shells, which are runs with no agent."""
+
+    @extend_schema(tags=["terminals"], parameters=[OpenApiParameter("module_id", str, required=True)], responses=ModuleShellSerializer(many=True))
+    def get(self, request):
+        module_id = request.query_params.get("module_id")
+        if not module_id:
+            return Response({"detail": {"error": "module_id_required"}}, status=400)
+        return _serialize_result(terminal_shells.list_module_shells(module_id))
+
+    @extend_schema(tags=["terminals"], request=CreateModuleShellSerializer, responses={200: AgentRunIdSerializer, 409: ErrorEnvelopeSerializer, 500: ErrorEnvelopeSerializer})
+    def post(self, request):
+        return _serialize_result(terminal_shells.create_module_shell(_pydantic(terminal_shells.CreateModuleShellBody, request.data)))
 
 
 class SelfTerminateView(PublicAPIView):

@@ -8,6 +8,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
+import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { StudioFooter } from "../app/shell/StudioFooter";
 import { useStudioStore } from "../features/projects/store";
 import { useWorkflowEditorStore } from "../features/workflows/workflowEditorStore";
@@ -67,6 +68,11 @@ function renderAndOpenSettings() {
   opener.focus();
   fireEvent.click(opener);
   return opener;
+}
+
+function GlobalKeymapHarness() {
+  useGlobalKeymap();
+  return null;
 }
 
 describe("overhaul acceptance — settings", () => {
@@ -133,6 +139,47 @@ describe("overhaul acceptance — settings", () => {
     expect(settingsApi.getStates).not.toHaveBeenCalled();
     expect(settingsApi.getProjectWorkItems).not.toHaveBeenCalled();
     expect(settingsApi.getIssueTypeWorkflowSettings).not.toHaveBeenCalled();
+  });
+
+  it("[overhaul-122] keeps the keyboard shortcut reference inside Settings instead of the footer", async () => {
+    render(
+      <>
+        <GlobalKeymapHarness />
+        <StudioFooter />
+        <ModalHost />
+      </>,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Open Keyboard Shortcuts" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "?" });
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Studio settings",
+    });
+
+    expect(
+      within(dialog).getByRole("heading", { name: "Keyboard shortcuts" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("table", {
+        name: "Effective keyboard bindings by action and Keymap context",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("tab", { name: "Models" }));
+    expect(
+      within(dialog).getByRole("heading", { name: "Models" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole("tab", { name: "Keyboard shortcuts" }),
+    );
+    expect(
+      within(dialog).getByRole("heading", { name: "Keyboard shortcuts" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps validation, discard, save, failure, and model-only status behavior", async () => {

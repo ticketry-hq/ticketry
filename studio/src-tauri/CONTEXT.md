@@ -7,9 +7,9 @@ on, and publishes a single health signal to the webview.
 ## Language
 
 **Sidecar**:
-A local service process the desktop shell spawns and reaps by owned `Child`
-handle. There are exactly two: the backend and the MCP service, both modes of
-one packaged multi-call executable.
+A local service process the desktop shell spawns and reaps through an owned
+handle that also contains its descendants. There are exactly two: the backend
+and the MCP service, both modes of one packaged multi-call executable.
 _Avoid_: Server, subprocess, daemon, child
 
 **Supervised pair**:
@@ -28,6 +28,29 @@ An already-running `pnpm dev` backend that the desktop shell deliberately
 attaches to instead of spawning its own. The shell holds no lock, owns no
 process, and performs no supervision against it.
 _Avoid_: Attached backend, dev mode, connect backend
+
+**Owned group**:
+The direct sidecar process the shell spawned plus every descendant still inside
+the process group that sidecar leads. It is the entire reach of teardown: the
+shell never finds a process to stop by identifier, loopback port, executable
+name, `tmux` command, or durable terminal session, so anything it did not spawn
+is left alone. A descendant that deliberately leaves the group — with `setsid`,
+or by joining a group this shell never created — has left the boundary, and no
+cleanup is promised for it.
+_Avoid_: Process tree, children, the sidecar's processes
+
+**Best-effort cleanup**:
+The teardown that runs as an owning value goes away rather than through an
+explicit stop. It covers ordinary unwinding — a supervisor leaving scope, a
+failed startup, a panic in a build that unwinds — and nothing more. It cannot
+run after an abrupt death of the desktop process itself: a macOS `SIGKILL`
+(Force Quit, the out-of-memory killer), a power loss, a build configured to
+abort on panic, or an operating-system crash all skip destructors entirely, and
+POSIX gives a process group no parent-death guarantee. A group stranded that way
+outlives the shell: the next launch reclaims the data-directory lock the kernel
+released and starts its own sidecars, but it never hunts the stranded processes
+down, because they are no longer processes it owns.
+_Avoid_: Guaranteed cleanup, automatic teardown, cleanup on exit
 
 **Pinned port**:
 The loopback port a sidecar was first assigned, remembered and rebound on

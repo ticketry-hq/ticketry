@@ -18,7 +18,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from worktracker_sdk.generated.models.scope_enum import ScopeEnum
 from typing import Optional, Set
@@ -33,12 +33,17 @@ class AgentRunRecord(BaseModel):
     project_id: StrictStr
     task_id: Optional[StrictStr]
     module_id: StrictStr
-    agent: StrictStr
+    agent: Optional[StrictStr]
     scope: ScopeEnum
+    launch_state: Optional[StrictStr]
+    launch_model: Optional[StrictStr]
     started_at: StrictStr
     state: StrictStr
     updated_at: StrictStr
-    __properties: ClassVar[List[str]] = ["agent_run_id", "project_id", "task_id", "module_id", "agent", "scope", "started_at", "state", "updated_at"]
+    output_sequence: StrictInt
+    last_output_at: Optional[StrictStr]
+    effective_state: StrictStr
+    __properties: ClassVar[List[str]] = ["agent_run_id", "project_id", "task_id", "module_id", "agent", "scope", "launch_state", "launch_model", "started_at", "state", "updated_at", "output_sequence", "last_output_at", "effective_state"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -84,6 +89,26 @@ class AgentRunRecord(BaseModel):
         if self.task_id is None and "task_id" in self.model_fields_set:
             _dict['task_id'] = None
 
+        # set to None if agent (nullable) is None
+        # and model_fields_set contains the field
+        if self.agent is None and "agent" in self.model_fields_set:
+            _dict['agent'] = None
+
+        # set to None if launch_state (nullable) is None
+        # and model_fields_set contains the field
+        if self.launch_state is None and "launch_state" in self.model_fields_set:
+            _dict['launch_state'] = None
+
+        # set to None if launch_model (nullable) is None
+        # and model_fields_set contains the field
+        if self.launch_model is None and "launch_model" in self.model_fields_set:
+            _dict['launch_model'] = None
+
+        # set to None if last_output_at (nullable) is None
+        # and model_fields_set contains the field
+        if self.last_output_at is None and "last_output_at" in self.model_fields_set:
+            _dict['last_output_at'] = None
+
         return _dict
 
     @classmethod
@@ -102,8 +127,13 @@ class AgentRunRecord(BaseModel):
             "module_id": obj.get("module_id"),
             "agent": obj.get("agent"),
             "scope": obj.get("scope"),
+            "launch_state": obj.get("launch_state"),
+            "launch_model": obj.get("launch_model"),
             "started_at": obj.get("started_at"),
             "state": obj.get("state"),
-            "updated_at": obj.get("updated_at")
+            "updated_at": obj.get("updated_at"),
+            "output_sequence": obj.get("output_sequence"),
+            "last_output_at": obj.get("last_output_at"),
+            "effective_state": obj.get("effective_state")
         })
         return _obj

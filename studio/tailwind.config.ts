@@ -29,6 +29,21 @@ const config: Config = {
           secondary: "#9aa5b8",
           muted: "#7a8599",
         },
+        // Provider identity palette for terminal surfaces (#694). Colour on a
+        // terminal tab says who is running the conversation; `ended` replaces
+        // the hue once a run is no longer live, so colour also means "alive".
+        // `ink` is the near-black every fill is read against — white ink fails
+        // all four fills, worst on codex at 1.23:1, so the pairing is forced.
+        // Kept clear of the lifecycle palette below: those badges are a
+        // separate axis and must not be mistaken for provider identity.
+        provider: {
+          claude: "#D97757",
+          codex: "#E8E8E8",
+          gemini: "#4285F4",
+          agy: "#BB9AF7",
+          ended: "#7a8599",
+          ink: "#0a0a0a",
+        },
         // Lifecycle/attention palette (#504/#511) used by Studio agent state.
         lifecycle: {
           active: "#7dcfff",

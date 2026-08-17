@@ -29,6 +29,13 @@ export interface ResumableTerminalSession {
   status: string;
   started_at: string;
   ended_at?: string | null;
+  /**
+   * The launch snapshot the durable run captured (#693), carried on the dormant
+   * listing so a resume chip reads the phase its conversation began in even
+   * when the run has aged out of the status snapshot (#695).
+   */
+  launch_state?: string | null;
+  launch_model?: string | null;
   provider_session_id: string | null;
   resumed_from: string | null;
   scope?: "task" | "plan" | "instant";

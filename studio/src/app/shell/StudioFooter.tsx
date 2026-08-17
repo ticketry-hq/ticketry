@@ -8,6 +8,7 @@ import {
   type EditViewZone,
 } from "../../state/clientStore";
 import { IconSettings } from "../../shared/ui/icons";
+import { FooterTerminalToggle } from "../../features/terminal-panel";
 
 // Warm the model-only Settings composition before the modal opens.
 const preloadSettings = () => {
@@ -15,17 +16,10 @@ const preloadSettings = () => {
   void import("../../features/workflows/ModelConfigurationPanel");
 };
 
-const preloadKeyboardShortcuts = () => {
-  void import("../../features/studio/modals/KeyboardShortcutsModal");
-};
-
 export function StudioFooter() {
   useSyncExternalStore(
     studioKeymapRegistry.subscribe,
     studioKeymapRegistry.getRevision,
-  );
-  const openKeyboardShortcuts = useModalStore(
-    (s) => s.openKeyboardShortcuts,
   );
   const openSettings = useModalStore((s) => s.openSettings);
   const sidebarVisible = useClientStore((s) => s.sidebarVisible);
@@ -49,7 +43,7 @@ export function StudioFooter() {
           {/* The disengage chip carries the same green as the engaged body ring,
               so the footer and the pane agree on the mode. */}
           <span
-            className={`rounded bg-pane-bg px-1.5 py-0.5 font-bold ${
+            className={`bg-pane-bg px-1.5 py-0.5 font-bold ${
               binding.tone === "engaged"
                 ? "text-lifecycle-success"
                 : "text-focus-accent"
@@ -60,28 +54,18 @@ export function StudioFooter() {
           <span className="text-text-muted">— {binding.label}</span>
         </span>
       ))}
-      <button
-        type="button"
-        onClick={openKeyboardShortcuts}
-        onPointerEnter={preloadKeyboardShortcuts}
-        onFocus={preloadKeyboardShortcuts}
-        aria-label="Open Keyboard Shortcuts"
-        className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-text-muted hover:bg-pane-bg hover:text-text-primary"
-      >
-        <span className="flex items-center gap-1">
-          <span className="rounded bg-pane-bg px-1.5 py-0.5 font-bold text-focus-accent">
-            ?
-          </span>
-          <span>— Keyboard Shortcuts</span>
-        </span>
-      </button>
+      {/* The terminal control is always here, in both panel states: a hidden
+          panel has no header of its own to restore it from. */}
+      <span className="ml-auto flex items-center">
+        <FooterTerminalToggle />
+      </span>
       <button
         type="button"
         onClick={openSettings}
         onPointerEnter={preloadSettings}
         onFocus={preloadSettings}
         aria-label="Open Settings"
-        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-text-muted hover:bg-pane-bg hover:text-text-primary"
+        className="flex items-center gap-1 px-1.5 py-0.5 text-text-muted hover:bg-pane-bg hover:text-text-primary"
       >
         <IconSettings size={14} />
         <span>Settings</span>
@@ -100,7 +84,7 @@ const EDIT_VIEW_FOOTER_ACTIONS: Record<
   stories: [
     { actionIds: ["edit-view.next-zone"], label: "Next Zone" },
     { actionIds: ["edit-view.up", "edit-view.down"], label: "Story" },
-    { actionIds: ["edit-view.right"], label: "Workspace" },
+    { actionIds: ["edit-view.right"], label: "Expand / Dive" },
     { actionIds: ["edit-view.commit"], label: "Dive" },
   ],
   "tab-strip": [
@@ -114,6 +98,13 @@ const EDIT_VIEW_FOOTER_ACTIONS: Record<
     { actionIds: ["edit-view.up"], label: "Tabs" },
     { actionIds: ["edit-view.left"], label: "Stories" },
     { actionIds: ["edit-view.commit"], label: "Engage" },
+  ],
+  // Reaching the panel is already typing in it, so what the footer offers here
+  // is the way back out.
+  "terminal-panel": [
+    { actionIds: ["edit-view.next-zone"], label: "Next Zone" },
+    { actionIds: ["edit-view.up"], label: "Workspace" },
+    { actionIds: ["edit-view.commit"], label: "Type" },
   ],
 };
 

@@ -39,10 +39,17 @@ def publish_backend_session_sync(
     status: Literal["exited", "lost"],
     *,
     at: str | None = None,
+    exit_code: int | None = None,
 ) -> None:
     """Synchronous bridge for an explicit terminal outcome."""
 
-    async_to_sync(publish_backend_session)(project_id, agent_run_id, status, at=at)
+    async_to_sync(publish_backend_session)(
+        project_id,
+        agent_run_id,
+        status,
+        at=at,
+        exit_code=exit_code,
+    )
 
 
 async def publish_backend_session(
@@ -51,13 +58,20 @@ async def publish_backend_session(
     status: Literal["exited", "lost"],
     *,
     at: str | None = None,
+    exit_code: int | None = None,
 ) -> None:
-    """Publish an explicit server-to-tmux terminal outcome."""
+    """Publish an explicit server-to-tmux terminal outcome.
+
+    ``exit_code`` travels with the ending rather than being fetched afterwards,
+    so a surface that must distinguish a clean end from a failed one learns
+    both facts in the same frame (#670).
+    """
 
     frame = BackendSessionFrame(
         agent_run_id=agent_run_id,
         status=status,
         at=at or datetime.now(timezone.utc).isoformat(),
+        exit_code=exit_code,
     )
     await publish_status(project_id, frame.model_dump())
 

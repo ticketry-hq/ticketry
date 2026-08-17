@@ -13,6 +13,8 @@ sends:
     version: 1.0.0
   - id: backend-session-ended
     version: 1.0.0
+  - id: terminal-output-activity-observed
+    version: 1.0.0
 entities:
   - id: agent-run
 readsFrom:
@@ -24,6 +26,12 @@ writesTo:
 Lifecycle attention, WebSocket transport state, and tmux liveness remain
 separate axes. The lifecycle reducer maps provider-neutral event kinds to the
 state Studio renders.
+
+A run's launch snapshots — the workflow state it was launched in and the model
+its launch configuration resolved — ride along on every run record this service
+emits. They are descriptive facts of the launch, so the authoritative snapshot
+and each live delta carry identical values, and no lifecycle event, resume, or
+reconciliation ever rewrites them.
 
 <NodeGraph />
 

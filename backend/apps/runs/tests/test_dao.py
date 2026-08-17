@@ -8,6 +8,7 @@ from django.db import IntegrityError
 
 from apps.runs import dao
 from apps.runs.models import AgentRun
+from apps.runs.run_scopes import SHELL_SCOPE
 from apps.terminals.models import AgentTerminalSession
 from worktracker.models import Issue
 from worktracker.tests.factories import (
@@ -297,6 +298,50 @@ async def test_last_activity_by_module_ranks_and_coalesces() -> None:
         fixture_issue_id(project_id="proj-1", module_id="mod-a", task_id=None): "2026-06-12T09:00:00+00:00",
         fixture_issue_id(project_id="proj-1", module_id="mod-b", task_id=None): "2026-06-13T12:00:00+00:00",
     }
+
+
+async def test_last_activity_excludes_shell_runs() -> None:
+    """Opening a panel shell must not move a module's activity signal (#685).
+
+    A shell run's issue *is* the module work item, so the module-key coalesce
+    files it under the module itself. Without the scope guard it would become
+    the module's "most recent agent interaction" and reorder the module list.
+    """
+
+    agent_run = _make_run(
+        "agent-run", task_id="t", module_id="mod-a", started_at="2026-06-10T09:00:00+00:00"
+    )
+    shell_run = _make_run(
+        "shell-run", task_id=None, module_id="mod-a", started_at="2026-06-18T09:00:00+00:00"
+    )
+    shell_run.scope = SHELL_SCOPE
+    shell_run.agent = None
+    for run in (agent_run, shell_run):
+        await dao.insert_agent_run(run)
+
+    activity = await dao.last_activity_by_module(
+        fixture_uuid("proj-1"), now=datetime(2026, 6, 20, tzinfo=timezone.utc)
+    )
+
+    mod_a = fixture_issue_id(project_id="proj-1", module_id="mod-a", task_id=None)
+    assert activity == {mod_a: "2026-06-10T09:00:00+00:00"}
+
+
+async def test_last_activity_omits_module_whose_only_run_is_a_shell() -> None:
+    """A module with nothing but shells has no agent-activity signal at all."""
+
+    shell_run = _make_run(
+        "shell-only", task_id=None, module_id="mod-b", started_at="2026-06-18T09:00:00+00:00"
+    )
+    shell_run.scope = SHELL_SCOPE
+    shell_run.agent = None
+    await dao.insert_agent_run(shell_run)
+
+    activity = await dao.last_activity_by_module(
+        fixture_uuid("proj-1"), now=datetime(2026, 6, 20, tzinfo=timezone.utc)
+    )
+
+    assert activity == {}
 
 
 async def test_last_activity_window_and_project_scope() -> None:

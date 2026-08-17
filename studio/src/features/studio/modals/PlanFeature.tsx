@@ -139,7 +139,6 @@ function selectedTaskLaunchContext(): {
   projectId: string;
   moduleId: string;
   taskId: string;
-  ticketSeq: number | null;
 } | null {
   const tasks = {
     ...useStudioStore.getState(),
@@ -160,7 +159,6 @@ function selectedTaskLaunchContext(): {
     projectId: selectedProjectId,
     moduleId: selectedModuleId,
     taskId: selectedTaskId,
-    ticketSeq: selected.sequence_id,
   };
 }
 

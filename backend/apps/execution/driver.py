@@ -17,7 +17,8 @@ from worktracker.state import state_group
 from apps.execution.execution_mode import SERIAL, normalize_execution_mode
 from apps.execution.liveness_refresh import request_terminal_liveness_refresh
 from apps.execution.models import GraphRun, LaunchedTask
-from apps.execution.scheduling import launch_candidates
+from apps.execution.scheduling import launch_candidates, manual_launch_candidates
+from apps.execution.work_item_liveness import live_work_item_ids
 from apps.terminals.launch import LaunchIntent, launch_agent_run
 from apps.terminals.launch_configuration import (
     ResolvedLaunchConfiguration,
@@ -29,14 +30,17 @@ logger = logging.getLogger(__name__)
 SpawnRun = Callable[..., Awaitable[str]]
 REVIEW_STATE_NAME = "Review"
 
-# The desktop application owns one supervised backend process. Serialize
-# execute/revive requests *and* every advancement per root in that process so
-# the liveness check, inactive-ledger reset, serial frontier check, and
-# replacement launches form one operation without holding a database
-# transaction open while the terminal worker writes through its own connection.
+# The desktop application owns one supervised backend process. Serialize manual
+# press requests *and* every advancement per root in that process so the
+# per-work-item liveness read, the serial frontier check, and the launches they
+# select form one operation without holding a database transaction open while
+# the terminal worker writes through its own connection.
 # Advancement is reentrant because an execute request advances while holding the
 # same root's lock; concurrent triggers from other threads still queue, and the
-# ``launched_tasks`` primary key remains the final duplicate-launch guard.
+# ``launched_tasks`` primary key remains the final duplicate-launch guard for
+# automatic advancement, which inserts or fails. The manual press is the one
+# writer that may refresh an existing row, and only within the campaign that
+# owns it — a row held by another root still conflicts on that key.
 _GRAPH_EXECUTION_LOCKS: WeakValueDictionary[str, RLock] = WeakValueDictionary()
 _GRAPH_EXECUTION_LOCKS_GUARD = Lock()
 
@@ -188,15 +192,26 @@ def execute_graph(
     mode: str | None = None,
     spawn: SpawnRun | None = None,
 ) -> list[str]:
-    """Arm or manually revive a root and launch eligible direct children.
+    """Arm a root, or advance the campaign it already has (CODING-689).
 
-    A repeat request keeps the duplicate-live-run guard: if any launch recorded
-    for this root is still active, the existing campaign wins and the caller
-    receives ``graph_run_exists``.  Once every recorded run and terminal has
-    ended, however, the request is an explicit user-driven revival.  Its stale
-    launch facts are cleared and the current graph is advanced again — and, like
-    the launch context, its durable execution mode is refreshed from this
-    request.  An omitted ``mode`` means ``parallel`` for backward compatibility.
+    This is the manual path — the user pressing a subtree-run button — and it
+    asks the *work* what may start rather than asking the campaign's own
+    bookkeeping whether it is busy. A root that is already armed keeps its
+    ``GraphRun`` and every launch fact it recorded; only its launch context and
+    durable execution mode are refreshed from this request, so pressing the
+    other button switches an existing campaign's mode. An omitted ``mode``
+    means ``parallel`` for backward compatibility.
+
+    Selection is the startable-child rule: a direct child whose own work is
+    unsatisfied, whose declared blockers are all satisfied, and which has no
+    live agent run or terminal session *on itself*, whoever started it. A stale
+    launch fact on a sibling therefore costs one work item rather than the
+    whole campaign, and a child whose previous run ended unfinished is retried
+    by updating its launch fact in place. A serial press adds the campaign's own
+    bound on top, read from the same work: while any child is live with
+    unfinished work it starts nothing, so an extra press cannot put a second
+    agent beside a healthy one (CODING-728). Automatic advancement keeps its own
+    ledger-based rule verbatim; see :func:`advance`.
 
     :raises ValueError: ``invalid_execution_mode`` for an unsupported mode.
     """
@@ -225,42 +240,42 @@ def execute_graph(
     ).exists():
         raise ValueError("graph_empty")
 
-    try:
-        with _graph_execution_lock(str(root.id)):
-            header = GraphRun.objects.filter(pk=root.id).first()
-            if header is None:
-                GraphRun.objects.create(
+    with _graph_execution_lock(str(root.id)):
+        header = GraphRun.objects.filter(pk=root.id).first()
+        if header is None:
+            try:
+                header = GraphRun.objects.create(
                     root_id=root.id,
                     project_id=root.project_id,
                     module_id=module_id,
                     agent=agent,
                     execution_mode=execution_mode,
                 )
-            else:
-                if _has_active_subtree_launch(str(root.id)):
-                    raise ValueError("graph_run_exists")
-                # This POST is the manual recovery boundary. Completed children
-                # remain satisfied by workflow state; unfinished children whose
-                # prior run ended become launchable again.
-                LaunchedTask.objects.filter(root_id=root.id).delete()
-                header.project_id = root.project_id
-                header.module_id = module_id
-                header.agent = agent
-                header.execution_mode = execution_mode
-                header.save(
-                    update_fields=[
-                        "project",
-                        "module",
-                        "agent",
-                        "execution_mode",
-                        "updated_at",
-                    ]
-                )
+            except IntegrityError as exc:
+                # Preserve the resource-level conflict when concurrent creates
+                # race. Scoped to this one write: a ledger conflict raised by
+                # the launches below is a different fault and must surface as
+                # itself rather than as a header conflict.
+                raise ValueError("graph_run_exists") from exc
+        else:
+            # The press reuses this campaign: its launch ledger is a record
+            # of what was started, not a gate on what may start, so nothing
+            # is cleared here.
+            header.project_id = root.project_id
+            header.module_id = module_id
+            header.agent = agent
+            header.execution_mode = execution_mode
+            header.save(
+                update_fields=[
+                    "project",
+                    "module",
+                    "agent",
+                    "execution_mode",
+                    "updated_at",
+                ]
+            )
 
-            return advance(str(root.id), spawn=spawn)
-    except IntegrityError as exc:
-        # Preserve the resource-level conflict when concurrent creates race.
-        raise ValueError("graph_run_exists") from exc
+        return _advance_manually_locked(header, spawn=spawn)
 
 
 def _graph_execution_lock(root_id: str) -> RLock:
@@ -290,6 +305,11 @@ def _has_active_subtree_launch(root_id: str) -> bool:
 def advance(root_id: str, *, spawn: SpawnRun | None = None) -> list[str]:
     """Launch the direct children this armed root's execution mode permits.
 
+    This is the *automatic* path — a lifecycle observation — and its rule is
+    deliberately unchanged: it reads the campaign's own launch ledger, so it
+    never retries a child this root already launched and never skips a stalled
+    one. The manual press has its own rule; see :func:`execute_graph`.
+
     A parallel root launches every eligible unlaunched direct child. A serial
     root launches exactly the lowest ``(sequence number, task id)`` candidate,
     and only while no recorded launch is live and none has ended with its child
@@ -307,18 +327,30 @@ def advance(root_id: str, *, spawn: SpawnRun | None = None) -> list[str]:
         return _advance_locked(header, spawn=spawn)
 
 
+def _advance_manually_locked(header: GraphRun, *, spawn: SpawnRun | None) -> list[str]:
+    """Launch the startable children one manual press permits (CODING-689).
+
+    The campaign's launch ledger — and so its serial frontier — is not
+    consulted: a stale launch fact is exactly what deadlocked the press. Both
+    bounds are read from the work instead. Per-child liveness prevents a second
+    agent on a running child, and for a serial press a live child with
+    unfinished work also holds its siblings, so an extra press cannot disturb a
+    campaign that is genuinely progressing (CODING-728).
+    """
+
+    children = _direct_children(str(header.root_id))
+    candidates = manual_launch_candidates(
+        children,
+        execution_mode=header.execution_mode,
+        live_task_ids=live_work_item_ids(child.id for child in children),
+        satisfied=satisfied,
+    )
+    return _launch_candidates(header, candidates, spawn=spawn, retry_in_place=True)
+
+
 def _advance_locked(header: GraphRun, *, spawn: SpawnRun | None) -> list[str]:
     root_id = str(header.root_id)
-    children = list(
-        Issue.objects.filter(
-            parent_id=root_id,
-            type="task",
-            is_archived=False,
-        )
-        .select_related("state")
-        .prefetch_related("blocked_by__state")
-        .order_by("sequence_id", "id")
-    )
+    children = _direct_children(root_id)
     frontier = (
         _serial_frontier(root_id)
         if header.execution_mode == SERIAL
@@ -341,6 +373,41 @@ def _advance_locked(header: GraphRun, *, spawn: SpawnRun | None) -> list[str]:
         satisfied=satisfied,
         serial_frontier_pending=frontier.pending,
     )
+    return _launch_candidates(header, candidates, spawn=spawn)
+
+
+def _direct_children(root_id: str) -> list[Issue]:
+    """Read this root's live direct children in launch order."""
+
+    return list(
+        Issue.objects.filter(
+            parent_id=root_id,
+            type="task",
+            is_archived=False,
+        )
+        .select_related("state")
+        .prefetch_related("blocked_by__state")
+        .order_by("sequence_id", "id")
+    )
+
+
+def _launch_candidates(
+    header: GraphRun,
+    candidates: list[Issue],
+    *,
+    spawn: SpawnRun | None,
+    retry_in_place: bool = False,
+) -> list[str]:
+    """Spawn each selected child and record what was started, in order.
+
+    ``retry_in_place`` belongs to the manual press alone (CODING-689): a press
+    reads the work rather than the ledger, so it may relaunch a child this
+    campaign already recorded and must refresh that row instead of adding a
+    second one. Automatic advancement never selects an already-recorded child,
+    so it keeps its insert-or-fail write verbatim.
+    """
+
+    root_id = str(header.root_id)
     launched: list[str] = []
     spawn_call = spawn or spawn_run
 
@@ -360,11 +427,26 @@ def _advance_locked(header: GraphRun, *, spawn: SpawnRun | None) -> list[str]:
             logger.exception("execution subtree launch failed task=%s", child.id)
             continue
 
-        LaunchedTask.objects.create(
-            task=child,
-            root_id=root_id,
-            agent_run_id=run_id,
-        )
+        if retry_in_place:
+            # A press retrying its own child updates that campaign's existing
+            # fact rather than adding a second row. Matching on ``root_id`` too
+            # keeps the write inside the campaign that owns the row: a child
+            # recorded by a different root still raises on the primary key
+            # instead of being silently stolen from that root's ledger.
+            LaunchedTask.objects.update_or_create(
+                task=child,
+                root_id=root_id,
+                defaults={"agent_run_id": run_id},
+            )
+        else:
+            # Automatic advancement never selects a child it already recorded,
+            # so an insert that conflicts is a real duplicate launch and must
+            # fail loudly rather than overwrite the ledger.
+            LaunchedTask.objects.create(
+                task=child,
+                root_id=root_id,
+                agent_run_id=run_id,
+            )
         launched.append(str(child.id))
 
     return launched

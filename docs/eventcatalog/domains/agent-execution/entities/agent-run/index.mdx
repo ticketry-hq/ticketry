@@ -2,7 +2,7 @@
 id: agent-run
 name: Agent Run
 version: 1.0.0
-summary: Durable record of one launched coding-agent session and its normalized lifecycle.
+summary: Durable record of one launched run and its normalized lifecycle — an agent run, or a shell run with no provider.
 owners:
   - ticketry
 aggregateRoot: true
@@ -16,7 +16,7 @@ properties:
     description: Cross-domain reference to the Work Item this run executes, when task-scoped.
   - name: agent
     type: string
-    required: true
+    description: Provider slug. Absent on a shell run, which has no provider at all.
   - name: status
     type: string
     required: true
@@ -27,6 +27,24 @@ properties:
     type: string
   - name: scope
     type: string
+    required: true
+    description: >-
+      The run's durable routing discriminator — task, plan, instant, docchat or
+      shell. It is the only discriminator; shell is the one value whose runs
+      carry no agent.
+  - name: launchState
+    type: string
+    description: >-
+      Write-once snapshot of the display name of the workflow state this run was
+      launched in. Absent when not recorded — a run created before the snapshot
+      existed, or a scope with no workflow state. Never re-read from the Work
+      Item, which moves on while this run's conversation does not.
+  - name: launchModel
+    type: string
+    description: >-
+      Write-once snapshot of the model this run's launch configuration actually
+      resolved, including overrides applied to that launch. Absent when none was
+      resolved; never a fallback to a provider's current default.
   - name: startedAt
     type: datetime
     required: true

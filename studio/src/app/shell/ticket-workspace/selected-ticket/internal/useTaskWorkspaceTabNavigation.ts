@@ -42,7 +42,6 @@ export type WorkspaceTabActionId =
   | "workspace-tab-next"
   | "workspace-tab-previous";
 export type EditViewWorkspaceActionId =
-  | "probe-navigable"
   | "highlight-next"
   | "highlight-previous"
   | "dive-active"
@@ -143,7 +142,6 @@ export function useTaskWorkspaceTabNavigation({
       actionId: EditViewWorkspaceActionId,
     ) => {
       if (tabs.length === 0) return "unavailable";
-      if (actionId === "probe-navigable") return "acted";
       event.preventDefault();
       event.stopImmediatePropagation();
 

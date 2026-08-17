@@ -395,6 +395,11 @@ HOST_ROUTES = (
     ),
     RouteDeclaration(
         "POST",
+        "/api/terminals/viewers/output",
+        "Report one native terminal viewer's output observation.",
+    ),
+    RouteDeclaration(
+        "POST",
         "/api/terminals",
         "Create a durable terminal run through the control-plane service.",
     ),
@@ -407,6 +412,14 @@ HOST_ROUTES = (
         "GET", "/api/terminals/resumable", "List resumable provider conversations."
     ),
     RouteDeclaration("GET", "/api/terminals/scratch", "List scratch terminal runs."),
+    RouteDeclaration(
+        "POST",
+        "/api/terminals/shells",
+        "Create a durable login shell rooted in a module folder.",
+    ),
+    RouteDeclaration(
+        "GET", "/api/terminals/shells", "List a module's live login shells."
+    ),
     RouteDeclaration(
         "POST",
         "/api/terminals/self-terminate",

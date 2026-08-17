@@ -20,7 +20,7 @@ export function SubtreeRunButton({
       aria-busy={pending}
       disabled={pending}
       onClick={onClick}
-      className="rounded border border-pane-border px-2 py-1 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+      className="border border-pane-border px-2 py-1 text-xs text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
     >
       {pending ? pendingLabel : name}
     </button>

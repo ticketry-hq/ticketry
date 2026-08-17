@@ -47,7 +47,6 @@ function liveSession(): SessionMeta {
     projectId: "project-1",
     moduleId: "module-1",
     agent: "codex",
-    ticketSeq: 350,
     status: "ready",
     transport: "ready",
     isPlanning: false,
@@ -93,7 +92,6 @@ function mountLiveTerminal({ keyboard = false }: { keyboard?: boolean } = {}) {
         bucket="story-1"
         projectId="project-1"
         moduleId="module-1"
-        ticketSeq={350}
         owner="studio"
         details={<div>Issue details</div>}
       />
@@ -162,7 +160,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     expect(await screen.findByRole("button", {
       name: "Resume codex terminal",
     })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "T-350 · codex" }))
+    expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
     expect(screen.getByText("Issue details")).toBeInTheDocument();
   });
@@ -175,7 +173,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
     });
 
     fireEvent.click(screen.getByRole("button", {
-      name: "Close terminal T-350 · codex",
+      name: "Close codex terminal",
     }));
 
     await waitFor(() => {
@@ -186,7 +184,7 @@ describe("overhaul acceptance — terminal close synchronization", () => {
         }),
       );
     });
-    expect(screen.getByRole("tab", { name: "T-350 · codex" }))
+    expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toBeInTheDocument();
     expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: "Resume codex terminal" }))

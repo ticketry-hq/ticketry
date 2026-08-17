@@ -204,7 +204,6 @@ export function useWorkspaceTabActions({
         projectId,
         moduleId: moduleId ?? undefined,
         agent: resumableSession.agent,
-        ticketSeq: null,
         agentRunId: resumed.agent_run_id,
         isPlanning: resumableSession.scope === "plan",
         isInstant: resumableSession.scope === "instant",
@@ -239,7 +238,6 @@ export function useWorkspaceTabActions({
       projectId: context.projectId,
       moduleId: context.moduleId ?? undefined,
       agent,
-      ticketSeq: context.ticketSeq,
     });
     setActive(bucket, "terminal");
     if (owner === "studio") rememberPendingTerminalRef.current = true;

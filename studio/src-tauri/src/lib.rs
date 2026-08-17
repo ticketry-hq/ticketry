@@ -21,6 +21,7 @@ use supervisor::{CommandTable, Supervisor, SupervisorError, SupervisorEvent, Sup
 
 pub mod discovery;
 pub mod native_terminal;
+pub mod native_terminal_chords;
 pub mod native_terminal_focus_trace;
 pub mod native_terminal_frames;
 mod native_terminal_preparation;
@@ -28,6 +29,7 @@ pub mod native_terminal_scroll;
 #[cfg(any(test, all(target_os = "macos", feature = "native-libghostty")))]
 mod native_terminal_visibility;
 pub mod native_terminal_worker;
+mod owned_sidecar;
 pub mod ownership;
 mod release_manifest;
 pub mod supervisor;

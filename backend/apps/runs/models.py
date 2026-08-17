@@ -13,7 +13,10 @@ class AgentRun(models.Model):
         Issue, on_delete=models.CASCADE, related_name="agent_runs"
     )
     ticket_seq = models.IntegerField(null=True)
-    agent = models.CharField()
+    # Null for a run that has no provider at all — a shell run (#665). Every
+    # reader must treat the absence as "this run is not an agent run" rather
+    # than substituting a provider slug.
+    agent = models.CharField(null=True)
     status = models.CharField()
     started_at = models.CharField()
     ended_at = models.CharField(null=True)
@@ -25,6 +28,17 @@ class AgentRun(models.Model):
     lifecycle_updated_at = models.CharField(null=True)
     design_dir = models.CharField(null=True)
     resumed_from = models.CharField(null=True)
+    # Write-once launch snapshots (#693): the display name of the workflow
+    # state this run was launched in, and the model launch configuration
+    # actually resolved. Both are decisions frozen at spawn, not caches of a
+    # row that still exists — the work item moves on and the binding can be
+    # edited, and neither rewrites what this conversation was started as. Null
+    # means "not recorded" (a run predating the columns, or a scope that has no
+    # workflow state); readers must never substitute the work item's current
+    # state or a provider's default model. See the terminals ADR
+    # ``0003-runs-snapshot-the-state-they-launched-in``.
+    launch_state = models.CharField(null=True)
+    launch_model = models.CharField(null=True)
     # Hooks can report lifecycle before the terminal-session mirror exists, so
     # the run itself owns the durable routing scope.
     scope = models.CharField()

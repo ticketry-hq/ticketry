@@ -108,4 +108,13 @@ class TerminalRuntime(Protocol):
 
     def inspect(self, agent_run_id: str) -> TerminalObservation: ...
 
+    def capture_screen(self, agent_run_id: str) -> bytes:
+        """Return the durable session's currently rendered screen.
+
+        A mechanical read, deterministic for an unchanged screen so callers can
+        tell a genuinely changed output from an unchanged redraw. It carries no
+        judgement about the run and is never persisted by the runtime.
+        """
+        ...
+
     def terminate(self, agent_run_id: str) -> TerminationResult: ...

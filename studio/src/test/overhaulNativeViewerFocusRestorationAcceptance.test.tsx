@@ -68,7 +68,6 @@ describe("native viewer focus restoration acceptance", () => {
           projectId: "project-1",
           moduleId: "module-1",
           agent: "codex",
-          ticketSeq: 1,
           status: "ready",
           transport: "ready",
           isPlanning: false,

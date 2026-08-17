@@ -231,9 +231,16 @@ def test_execute_graph_allows_a_configured_nested_root(
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_create_graph_run_conflicts_when_header_is_already_armed(
+def test_pressing_an_armed_campaign_with_nothing_to_start_succeeds_inertly(
     client, project, module, todo, monkeypatch
 ):
+    """An existing campaign is advanced, not refused.
+
+    Its only unfinished child is live and its sibling is blocked behind that
+    child, so the press starts nothing — reported as an empty ``launched`` list
+    on the unchanged 201 contract — and leaves the campaign untouched.
+    """
+
     root = task(project, module, todo)
     a = _child(project, root, todo, 3, name="A")
     b = _child(project, root, todo, 4, name="B")
@@ -255,8 +262,9 @@ def test_create_graph_run_conflicts_when_header_is_already_armed(
 
     assert first.status_code == 201
     assert first.json() == {"root_id": str(root.id), "launched": [str(a.id)]}
-    assert second.status_code == 409
-    assert second.json()["code"] == "graph_run_exists"
+    assert second.status_code == 201
+    assert second.json() == {"root_id": str(root.id), "launched": []}
+    assert len(successful_spawn.calls) == 1
     header = GraphRun.objects.get(root=root)
     assert (header.project_id, header.module_id, header.agent) == (
         project.id,
@@ -269,7 +277,7 @@ def test_create_graph_run_conflicts_when_header_is_already_armed(
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_create_graph_run_revives_inactive_launches(
+def test_create_graph_run_retries_a_child_whose_run_has_ended(
     client, project, module, todo, monkeypatch
 ):
     root = task(project, module, todo)
@@ -283,19 +291,20 @@ def test_create_graph_run_revives_inactive_launches(
         content_type="application/json",
     )
     _agent_run(child, "run-1", active=False)
-    revived = client.post(
+    retried = client.post(
         f"/api/work-tracker/work-items/{root.id}/graph-run",
         data={"agent": "codex"},
         content_type="application/json",
     )
 
     assert first.status_code == 201
-    assert revived.status_code == 201
-    assert revived.json() == {
+    assert retried.status_code == 201
+    assert retried.json() == {
         "root_id": str(root.id),
         "launched": [str(child.id)],
     }
     assert LaunchedTask.objects.get(task=child).agent_run_id == "run-2"
+    assert LaunchedTask.objects.filter(task=child).count() == 1
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)

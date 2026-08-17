@@ -57,17 +57,52 @@ function dispatch(frame: AgentStatusFrame): void {
     runs.upsertRun(frame.run);
     return;
   }
+  if (frame.type === "terminal_activity") {
+    if (frame.run.project_id && runs.projectId !== frame.run.project_id) return;
+    runs.applyActivity(frame.run);
+    return;
+  }
   if (frame.type === "backend_session") {
     const sessions = useTerminalStore.getState();
     const sessionId = sessions.sessionByRun[frame.agent_run_id];
     if (sessionId) {
       if (frame.status === "lost") sessions.setSessionLost(sessionId);
-      else sessions.setExited(sessionId);
+      else {
+        const session = sessions.sessions[sessionId];
+        // A confirmed clean end is the happy path: remove the live terminal
+        // tab without treating it as a user dismissal. Its durable run remains
+        // in history and, when provider identity exists, becomes resumable.
+        sessions.closeTab(sessionId, { dismiss: false });
+        // A shell run appears in no agent-terminal listing — not the resumable
+        // row, not a task's or a module scratch bucket's persisted sessions —
+        // so its ending refreshes none of them. The terminal panel reads the
+        // ending from the run projection instead (#670).
+        if (session && !session.isShell) {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.terminalSessions.resumable(
+              session.taskId,
+              session.taskId ? null : session.projectId,
+              session.taskId ? null : session.moduleId,
+            ),
+            exact: true,
+          });
+          void queryClient.invalidateQueries({
+            queryKey: session.taskId
+              ? queryKeys.terminalSessions.persisted(session.taskId)
+              : queryKeys.terminalSessions.scratch(
+                  session.projectId,
+                  session.moduleId,
+                ),
+            exact: true,
+          });
+        }
+      }
     }
     runs.applyState(
       frame.agent_run_id,
       frame.status === "lost" ? "lost" : "exited",
       frame.at,
+      frame.exit_code,
     );
     return;
   }

@@ -22,6 +22,10 @@ from ._contract import (
 class _FakeTerminal:
     request: CreateTerminal
     output: bytearray = field(default_factory=bytearray)
+    # What a capture would render. Fed output accumulates here and is never
+    # drained by a viewer read, so two captures of an unchanged terminal are
+    # byte-identical exactly as a real capture-pane is.
+    screen: bytearray = field(default_factory=bytearray)
     exit_code: int | None = None
     exited: bool = False
     observation_error: Exception | None = None
@@ -134,6 +138,17 @@ class InMemoryTerminalRuntime:
             return TerminalObservation(TerminalState.EXITED, terminal.exit_code)
         return TerminalObservation(TerminalState.RUNNING)
 
+    def capture_screen(self, agent_run_id: str) -> bytes:
+        terminal = self._terminals.get(agent_run_id)
+        if terminal is None:
+            raise TerminalNotFound(agent_run_id)
+        if terminal.observation_error is not None:
+            raise TerminalObservationError(
+                f"could not capture terminal for AgentRun {agent_run_id}"
+            ) from terminal.observation_error
+        with terminal.lock:
+            return bytes(terminal.screen)
+
     def terminate(self, agent_run_id: str) -> TerminationResult:
         with self._lock:
             terminal = self._terminals.pop(agent_run_id, None)
@@ -163,3 +178,4 @@ class InMemoryTerminalRuntime:
             raise TerminalNotFound(agent_run_id)
         with terminal.lock:
             terminal.output.extend(data)
+            terminal.screen.extend(data)

@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { useModalStore } from "../../app/modal/modalStore";
 import {
   focusTerminal,
   registerTerminalFocus,
@@ -7,6 +8,10 @@ import {
 } from "../../features/agents/terminal/internal/terminalRegistry";
 
 describe("terminal focus registry", () => {
+  afterEach(() => {
+    useModalStore.setState({ modalStack: [] });
+  });
+
   it("delivers a focus request issued before the terminal registered", () => {
     // Selecting a tab focuses its terminal in the same tick, before that
     // terminal is visible enough to register a focuser.
@@ -52,6 +57,20 @@ describe("terminal focus registry", () => {
     registerTerminalFocus("session-1", focus);
 
     expect(focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("abandons a held request when a modal opens over it", () => {
+    // The request was banked while the viewer was still attaching; a dialog
+    // then took the foreground. Delivering it on the post-close reveal would
+    // steal focus from whatever the modal restored it to.
+    focusTerminal("session-occluded");
+    useModalStore.getState().openSettings();
+    useModalStore.getState().popModal();
+    const focus = vi.fn();
+
+    registerTerminalFocus("session-occluded", focus);
+
+    expect(focus).not.toHaveBeenCalled();
   });
 
   it("focuses a registered terminal immediately", () => {

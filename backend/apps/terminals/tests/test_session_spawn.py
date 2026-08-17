@@ -22,6 +22,7 @@ import pytest
 from asgiref.sync import async_to_sync, sync_to_async
 
 from apps import worktracker_queries
+import apps.terminals.durable_launch as durable_launch
 import apps.terminals.launch as launch
 import apps.terminals.prompt_builder as prompt_builder
 import apps.terminals.launch as session_module
@@ -200,7 +201,7 @@ async def test_spawn_happy_path_returns_id_and_persists(
     )
     assert terminal.scope == "task"
     assert created["cwd"] == str(module_folder)
-    assert created["dimensions"] == launch._INITIAL_TERMINAL_DIMENSIONS
+    assert created["dimensions"] == durable_launch.INITIAL_TERMINAL_DIMENSIONS
     assert "claude" in created["command"]
     assert created["command"].startswith("env -u NO_COLOR ")
 
@@ -353,9 +354,20 @@ async def test_spawn_publishes_a_starting_lifecycle_delta(
         ),
         "agent": "claude",
         "scope": "task",
+        # The launch snapshots the run was just persisted with travel on the
+        # live frame too, so it cannot disagree with a later snapshot (#693).
+        "launch_state": "Todo",
+        "launch_model": None,
         "started_at": frame["at"],
         "state": "starting",
         "updated_at": frame["at"],
+        # No hosted command has reported a result on a fresh launch.
+        "exit_code": None,
+        # A fresh launch has produced no output yet: sequence zero, and the
+        # creation stamp as the bounded inactivity origin (#661).
+        "output_sequence": 0,
+        "last_output_at": frame["at"],
+        "effective_state": "starting",
     }
 
 

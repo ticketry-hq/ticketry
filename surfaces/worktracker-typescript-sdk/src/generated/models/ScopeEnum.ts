@@ -19,6 +19,7 @@
  * * `plan` - plan
  * * `instant` - instant
  * * `docchat` - docchat
+ * * `shell` - shell
  * @export
  * @enum {string}
  */
@@ -26,7 +27,8 @@ export enum ScopeEnum {
     task = 'task',
     plan = 'plan',
     instant = 'instant',
-    docchat = 'docchat'
+    docchat = 'docchat',
+    shell = 'shell'
 }
 
 

@@ -28,6 +28,21 @@ typedef void (*muxed_ghostty_process_exit_cb)(void *context,
                                              uint32_t exit_code);
 typedef void (*muxed_ghostty_resize_cb)(void *context, uint16_t columns,
                                        uint16_t rows);
+// Studio chords the hosted view keeps from the terminal. While the view is
+// first responder the WebView receives no keys at all, so each chord that must
+// survive an engaged terminal is recognised here and reported to Studio.
+typedef enum {
+  MUXED_GHOSTTY_CHORD_NONE = 0,
+  // The terminal panel's toggle chord (Ctrl+`).
+  MUXED_GHOSTTY_CHORD_PANEL_TOGGLE = 1,
+  // The global Settings chord (Cmd+E).
+  MUXED_GHOSTTY_CHORD_SETTINGS = 2,
+} muxed_ghostty_chord_e;
+
+// Reported when the hosted view recognises a Studio chord instead of
+// forwarding it to the terminal. The view has already handed the keyboard back
+// to the WebView by the time this arrives.
+typedef void (*muxed_ghostty_chord_cb)(void *context, uint8_t chord);
 
 // True when the caller is on AppKit's main thread. Preparation waits (which
 // depend on the main runloop pumping libghostty ticks) must never be entered
@@ -77,6 +92,21 @@ void muxed_ghostty_view_set_resize_callback(void *view,
                                            void *context);
 // After this returns on the main thread the view can no longer emit a
 // gesture, so the caller may release the callback context.
+// While the hosted view is first responder the WebView receives no keys at
+// all, so every Studio chord that must survive an engaged terminal is
+// recognised natively and reported here. Studio still decides what each chord
+// does.
+void muxed_ghostty_view_set_chord_callback(void *view,
+                                          muxed_ghostty_chord_cb callback,
+                                          void *context);
+void muxed_ghostty_view_disable_chord_callback(void *view);
+
+// The chord policy the hosted view applies, exposed so Ticketry can assert it
+// against the Studio keymap's exact-modifier match. Returns a
+// muxed_ghostty_chord_e value; MUXED_GHOSTTY_CHORD_NONE means the key belongs
+// to the terminal.
+uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code);
+
 void muxed_ghostty_view_disable_scroll_callback(void *view);
 void muxed_ghostty_view_disable_resize_callback(void *view);
 void muxed_ghostty_view_disable_process_exit_callback(void *view);

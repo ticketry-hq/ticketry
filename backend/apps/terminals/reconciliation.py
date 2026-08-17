@@ -174,6 +174,10 @@ class TerminalReconciler:
                     agent_run_id,
                     event,
                     at=ended_at,
+                    # The hosted command's own result rides with the ending, so
+                    # a surface can tell a clean end from a failed one from the
+                    # one frame it already reacts to (#670).
+                    exit_code=persisted.exit_code,
                 )
 
         try:

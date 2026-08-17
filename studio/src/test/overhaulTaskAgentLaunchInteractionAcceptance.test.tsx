@@ -26,14 +26,12 @@ describe("overhaul acceptance — task agent launch interaction", () => {
           moduleId: "module-572",
           taskKey: "CODING-572",
           taskName: "Harden launcher",
-          ticketSeq: 572,
           profileReady: true,
           profile: null,
         },
         bucket: "task-572",
         projectId: "project-572",
         moduleId: "module-572",
-        ticketSeq: 572,
         children: (
           <button type="button" onPointerDown={outsidePress}>
             Outside action
@@ -95,7 +93,6 @@ describe("overhaul acceptance — task agent launch interaction", () => {
       moduleId: "module-572",
       taskKey: "CODING-572",
       taskName: "Harden launcher",
-      ticketSeq: 572,
       profileReady: true,
       profile: null,
     };
@@ -105,12 +102,11 @@ describe("overhaul acceptance — task agent launch interaction", () => {
         bucket,
         projectId: "project-572",
         moduleId: "module-572",
-        ticketSeq: 572,
       });
     const mounted = render(view(context));
     const launcher = screen.getByRole("button", { name: "＋ Agent" });
     fireEvent.click(launcher);
-    mounted.rerender(view({ ...context, ticketSeq: null }));
+    mounted.rerender(view({ ...context, moduleId: "module-572-alt" }));
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(terminalApi.createTerminalRun).not.toHaveBeenCalled();
 
@@ -152,13 +148,16 @@ describe("overhaul acceptance — task agent launch interaction", () => {
     await waitFor(() =>
       expect(useTerminalStore.getState().sessions["terminal-run-572-a"]).toMatchObject({
         taskId: "task-572",
-        ticketSeq: 572,
       }),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "＋ Agent" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "codex" }));
     await waitFor(() => expect(terminalApi.createTerminalRun).toHaveBeenCalledTimes(2));
-    expect(screen.getAllByRole("tab", { name: "T-572 · codex" })).toHaveLength(2);
+    // Two runs with no recorded launch state show the same blank label, so the
+    // strip separates them in assistive text alone (#709).
+    expect(screen.getAllByRole("tab", { name: /^codex terminal/ })).toHaveLength(2);
+    expect(screen.getByRole("tab", { name: "codex terminal 1" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "codex terminal 2" })).toBeInTheDocument();
   });
 });

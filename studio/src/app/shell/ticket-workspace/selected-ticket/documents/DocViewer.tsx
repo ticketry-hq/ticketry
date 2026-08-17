@@ -274,7 +274,7 @@ function MarkdownDocViewer({
           <button
             type="button"
             disabled={saving || loadingExternal || draft === markdown}
-            className="rounded-md border border-blue-600 bg-blue-600 px-2.5 py-1 text-xs text-white shadow-md hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="border border-blue-600 bg-blue-600 px-2.5 py-1 text-xs text-white shadow-md hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={saving ? "Saving document" : "Save document"}
             onClick={() => void persistDraft()}
           >
@@ -289,7 +289,7 @@ function MarkdownDocViewer({
                 <button
                   type="button"
                   disabled={saving || loadingExternal}
-                  className="rounded-md border border-pane-border bg-pane-panel px-2.5 py-1 text-xs text-text-primary hover:border-focus-accent disabled:opacity-50"
+                  className="border border-pane-border bg-pane-panel px-2.5 py-1 text-xs text-text-primary hover:border-focus-accent disabled:opacity-50"
                   aria-label="Reload theirs"
                   onClick={() => void reloadExternal()}
                 >
@@ -298,7 +298,7 @@ function MarkdownDocViewer({
                 <button
                   type="button"
                   disabled={saving || loadingExternal}
-                  className="rounded-md border border-lifecycle-attention bg-lifecycle-attention/15 px-2.5 py-1 text-xs text-lifecycle-attention hover:bg-lifecycle-attention/25 disabled:opacity-50"
+                  className="border border-lifecycle-attention bg-lifecycle-attention/15 px-2.5 py-1 text-xs text-lifecycle-attention hover:bg-lifecycle-attention/25 disabled:opacity-50"
                   aria-label="Overwrite with mine"
                   onClick={() => void persistDraft(conflictDigest)}
                 >
@@ -313,7 +313,7 @@ function MarkdownDocViewer({
                 <button
                   type="button"
                   disabled={saving || loadingExternal}
-                  className="rounded-md border border-pane-border bg-pane-panel px-2.5 py-1 text-xs text-text-primary hover:border-focus-accent disabled:opacity-50"
+                  className="border border-pane-border bg-pane-panel px-2.5 py-1 text-xs text-text-primary hover:border-focus-accent disabled:opacity-50"
                   aria-label="Reload external version"
                   onClick={() => void reloadExternal()}
                 >
@@ -322,7 +322,7 @@ function MarkdownDocViewer({
                 <button
                   type="button"
                   disabled={saving || loadingExternal}
-                  className="rounded-md border border-pane-border bg-pane-panel px-2.5 py-1 text-xs text-text-primary hover:border-focus-accent disabled:opacity-50"
+                  className="border border-pane-border bg-pane-panel px-2.5 py-1 text-xs text-text-primary hover:border-focus-accent disabled:opacity-50"
                   aria-label="Compare versions"
                   onClick={() => void compareExternal()}
                 >
@@ -347,7 +347,7 @@ function MarkdownDocViewer({
           <button
             type="button"
             disabled={saving || loadingExternal}
-            className="rounded-md border border-pane-border bg-pane-panel/95 px-2.5 py-1 text-xs text-text-primary shadow-md hover:border-focus-accent"
+            className="border border-pane-border bg-pane-panel/95 px-2.5 py-1 text-xs text-text-primary shadow-md hover:border-focus-accent"
             aria-label="Cancel editing"
             onClick={() => {
               setDraft(markdown);
@@ -375,7 +375,7 @@ function MarkdownDocViewer({
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                   Mine
                 </h3>
-                <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded border border-pane-border bg-pane-panel p-3 text-xs text-text-primary">
+                <pre className="max-h-56 overflow-auto whitespace-pre-wrap border border-pane-border bg-pane-panel p-3 text-xs text-text-primary">
                   {draft}
                 </pre>
               </section>
@@ -383,7 +383,7 @@ function MarkdownDocViewer({
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                   On disk
                 </h3>
-                <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded border border-pane-border bg-pane-panel p-3 text-xs text-text-primary">
+                <pre className="max-h-56 overflow-auto whitespace-pre-wrap border border-pane-border bg-pane-panel p-3 text-xs text-text-primary">
                   {externalMarkdown}
                 </pre>
               </section>
@@ -400,7 +400,7 @@ function MarkdownDocViewer({
                 ) : null}
                 <textarea
                   aria-label="Document source"
-                  className="min-h-[60vh] w-full resize-y rounded-lg border border-pane-border bg-pane-panel p-4 font-mono text-sm text-text-primary focus:border-focus-accent focus:outline-none"
+                  className="min-h-[60vh] w-full resize-y border border-pane-border bg-pane-panel p-4 font-mono text-sm text-text-primary focus:border-focus-accent focus:outline-none"
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                 />
@@ -446,7 +446,7 @@ function MarkdownDocViewer({
             setSourceMode(isFullHtmlDocument(markdown));
             setEditing(true);
           }}
-          className="absolute right-36 top-3 z-10 rounded-md border border-pane-border bg-pane-panel/95 px-2.5 py-1 text-xs text-text-primary shadow-md hover:border-focus-accent"
+          className="absolute right-36 top-3 z-10 border border-pane-border bg-pane-panel/95 px-2.5 py-1 text-xs text-text-primary shadow-md hover:border-focus-accent"
           aria-label={
             isFullHtmlDocument(markdown) ? "Edit document source" : "Edit document"
           }

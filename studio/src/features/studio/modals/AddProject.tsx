@@ -79,7 +79,7 @@ export function AddProject() {
         <button
           type="button"
           onClick={popModal}
-          className="rounded border border-pane-border bg-pane-bg px-3 py-1"
+          className="border border-pane-border bg-pane-bg px-3 py-1"
         >
           Cancel
         </button>
@@ -87,7 +87,7 @@ export function AddProject() {
           type="button"
           disabled={!canSubmit}
           onClick={() => void submit()}
-          className="rounded border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent disabled:opacity-50"
+          className="border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent disabled:opacity-50"
         >
           Create
         </button>

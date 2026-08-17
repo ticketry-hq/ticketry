@@ -130,7 +130,7 @@ export function ModuleFolder({
         <button
           type="button"
           onClick={popModal}
-          className="rounded border border-pane-border bg-pane-bg px-3 py-1"
+          className="border border-pane-border bg-pane-bg px-3 py-1"
         >
           Cancel
         </button>
@@ -138,7 +138,7 @@ export function ModuleFolder({
           type="button"
           disabled={busy || !trimmedValue}
           onClick={() => void save()}
-          className="rounded border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent"
+          className="border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent"
         >
           Save
         </button>

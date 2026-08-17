@@ -40,6 +40,10 @@ from studio_server.routing import websocket_urlpatterns
 
 from apps.documents import watch as documents_watch
 from apps.runs import hook_spool
+from apps.terminals.output_activity import (
+    start_live_output_sweep,
+    stop_live_output_sweep,
+)
 from apps.terminals.reconciliation import reconcile_terminals
 from apps.worktrees import service as worktrees_service
 
@@ -152,6 +156,11 @@ async def _stop_idle_terminal_sweep() -> None:
 
 register_startup(_start_idle_terminal_sweep)
 register_shutdown(_stop_idle_terminal_sweep)
+
+# Terminal-output activity is a property of the durable terminal, not of who is
+# attached to it, so its observation owns the lifespan loop too (#679).
+register_startup(start_live_output_sweep)
+register_shutdown(stop_live_output_sweep)
 
 router = ProtocolTypeRouter(
     {

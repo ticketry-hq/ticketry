@@ -87,7 +87,7 @@ export default function OnboardingWelcome() {
       className="flex h-full w-full items-center justify-center overflow-y-auto bg-pane-bg px-6 py-8"
       data-testid="onboarding-welcome"
     >
-      <main className="w-full max-w-xl rounded-xl border border-pane-border bg-pane-panel p-8 shadow-xl">
+      <main className="w-full max-w-xl border border-pane-border bg-pane-panel p-8 shadow-xl">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-focus-accent">
           Welcome to WorkTracker
         </div>
@@ -115,7 +115,7 @@ export default function OnboardingWelcome() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   data-testid="onboarding-project-name"
-                  className="mt-2 block w-full rounded-md border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
+                  className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
                 />
               </label>
               <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-text-secondary">
@@ -125,7 +125,7 @@ export default function OnboardingWelcome() {
                   onChange={(event) => setSlug(event.target.value)}
                   maxLength={3}
                   data-testid="onboarding-project-key"
-                  className="mt-2 block w-full rounded-md border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm font-normal tracking-normal text-text-primary outline-none focus:border-focus-accent"
+                  className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm font-normal tracking-normal text-text-primary outline-none focus:border-focus-accent"
                 />
                 <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-text-muted">
                   Project key must be exactly three letters, using only A-Z.
@@ -149,7 +149,7 @@ export default function OnboardingWelcome() {
                     creating || skipping || !name.trim() || !slug.trim()
                   }
                   data-testid="onboarding-create-project"
-                  className="rounded-md bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
+                  className="bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creating ? "Creating…" : "Create project"}
                 </button>
@@ -173,7 +173,7 @@ export default function OnboardingWelcome() {
             disabled={skipping}
             onClick={() => void skip()}
             data-testid="onboarding-skip"
-            className="rounded-md px-3 py-2 text-sm font-semibold text-text-muted hover:text-text-primary disabled:opacity-50"
+            className="px-3 py-2 text-sm font-semibold text-text-muted hover:text-text-primary disabled:opacity-50"
           >
             {skipping ? "Skipping…" : skipError ? "Retry skip" : "Skip"}
           </button>

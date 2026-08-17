@@ -18,6 +18,7 @@ from apps.runs.dao.activity import (
     list_design_dirs_for_task as list_design_dirs_for_task,
     last_activity_by_module as last_activity_by_module,
     agent_status_records as agent_status_records,
+    agent_status_record as agent_status_record,
 )
 from apps.runs.dao.automation import (
     automation_attempt_status_records as automation_attempt_status_records,

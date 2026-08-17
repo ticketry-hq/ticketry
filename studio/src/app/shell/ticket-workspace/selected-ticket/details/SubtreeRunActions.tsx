@@ -18,6 +18,8 @@ export function SubtreeRunActions({ task, moduleId }: SubtreeRunActionsProps) {
     item: task,
     actionName: "Run subtree",
     successMessage: "Subtree run started.",
+    inertMessage:
+      "Subtree run started nothing: every remaining work item is finished, blocked, or already running.",
     failureMessage: "Subtree execution could not be started",
   });
   const serial = useSubtreeRunLaunch({
@@ -25,6 +27,8 @@ export function SubtreeRunActions({ task, moduleId }: SubtreeRunActionsProps) {
     mode: "serial",
     actionName: "Run serially",
     successMessage: "Serial subtree run started.",
+    inertMessage:
+      "Serial subtree run started nothing: every remaining work item is finished, blocked, or already running.",
     failureMessage: "Serial subtree execution could not be started",
   });
 

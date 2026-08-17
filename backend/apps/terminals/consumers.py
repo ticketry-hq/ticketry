@@ -20,11 +20,13 @@ from typing import Optional
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 
+from apps.runs.models import AgentRun
 from apps.terminals.control_plane import create_terminal_run
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.launch import LaunchUnavailable
 from apps.terminals.prompt_builder import _build_prompt  # noqa: F401 - test seam
 from apps.terminals import viewer_attachments
+from apps.terminals.output_activity import TerminalOutputObserver
 from apps.terminals.reconciliation_scheduler import (
     schedule_terminal_reconciliation,
 )
@@ -186,6 +188,18 @@ class TerminalConsumer(AsyncWebsocketConsumer):
                 dimensions=TerminalDimensions(cols, rows),
             )
         except TerminalNotFound:
+            # A run that deliberately ended (including the MCP exit tool) is a
+            # normal terminal outcome, not a missing-session failure.  The
+            # runtime disappears before a reconnecting viewer can attach, so
+            # classify from the already-persisted run fact before falling back
+            # to reconciliation for a genuinely missing live session.
+            ended = await AgentRun.objects.filter(
+                id=agent_run_id,
+                ended_at__isnull=False,
+            ).aexists()
+            if ended:
+                await self._send_error("session_ended", close_code=1008)
+                return
             # The runtime no longer has this session while its records may
             # still say it is running. Reconciling now lets the status feed
             # converge on "lost" within seconds instead of waiting for the
@@ -222,6 +236,11 @@ class TerminalConsumer(AsyncWebsocketConsumer):
 
     async def _pump(self, viewer: viewer_attachments.ViewerAttachment) -> None:
         attachment = viewer.attachment
+        # Browser output reports through the shared activity operation. The
+        # observer only takes note here; capture, comparison, persistence, and
+        # publication happen out of band so this pump never waits on status.
+        observer = TerminalOutputObserver(viewer.agent_run_id)
+        observer.start()
 
         async def attachment_to_ws() -> None:
             while True:
@@ -237,6 +256,7 @@ class TerminalConsumer(AsyncWebsocketConsumer):
                     await self.send(bytes_data=chunk)
                 except Exception:
                     return
+                observer.note_output()
 
         async def ws_to_attachment() -> None:
             while True:
@@ -321,6 +341,7 @@ class TerminalConsumer(AsyncWebsocketConsumer):
             pump_a.cancel()
             pump_b.cancel()
             lease_renewal.cancel()
+            observer.close()
             await asyncio.to_thread(viewer.release)
             try:
                 await self.close(code=1000)

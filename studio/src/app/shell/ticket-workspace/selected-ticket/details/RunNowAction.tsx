@@ -33,7 +33,7 @@ export function RunNowAction({
       aria-busy={pending}
       disabled={pending}
       onClick={() => startRunNow(item, moduleId)}
-      className="flex-none rounded-md border border-focus-accent px-2.5 py-1 text-sm text-text-primary hover:bg-pane-title disabled:cursor-wait disabled:opacity-60"
+      className="flex-none border border-focus-accent px-2.5 py-1 text-sm text-text-primary hover:bg-pane-title disabled:cursor-wait disabled:opacity-60"
     >
       {pending ? "Running now…" : "Run now"}
     </button>

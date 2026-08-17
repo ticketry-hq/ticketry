@@ -15,7 +15,6 @@ describe("RichMarkdownEditor", () => {
 
     expect(getByTestId("rich-markdown-editor-shell")).toHaveClass(
       "min-h-[60vh]",
-      "rounded-lg",
       "border-pane-border",
       "bg-pane-panel",
     );
@@ -24,7 +23,6 @@ describe("RichMarkdownEditor", () => {
     expect(popup).toBeInTheDocument();
     expect(popup).not.toHaveClass(
       "min-h-[60vh]",
-      "rounded-lg",
       "border-pane-border",
       "bg-pane-panel",
     );

@@ -280,3 +280,37 @@ const REVIEW_GEOMETRY = (
   </>
 );
 export const IconReview = (p: IconProps) => <Icon {...p}>{REVIEW_GEOMETRY}</Icon>;
+
+// Terminal panel — the window with a strip docked along its bottom edge.
+const PANEL_BOTTOM_GEOMETRY = (
+  <>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M3 15h18" />
+  </>
+);
+export const IconPanelBottom = (p: IconProps) => (
+  <Icon {...p}>{PANEL_BOTTOM_GEOMETRY}</Icon>
+);
+
+// Minimize — the window-furniture rule the panel collapses onto.
+const MINIMIZE_GEOMETRY = <path d="M5 17h14" />;
+export const IconMinimize = (p: IconProps) => (
+  <Icon {...p}>{MINIMIZE_GEOMETRY}</Icon>
+);
+
+// Maximize — the empty frame the panel grows to fill.
+const MAXIMIZE_GEOMETRY = <rect width="14" height="14" x="5" y="5" rx="1" />;
+export const IconMaximize = (p: IconProps) => (
+  <Icon {...p}>{MAXIMIZE_GEOMETRY}</Icon>
+);
+
+// Restore — the smaller frame stepping back out of the maximized one.
+const RESTORE_GEOMETRY = (
+  <>
+    <rect width="11" height="11" x="4" y="9" rx="1" />
+    <path d="M8 9V5h11v11h-4" />
+  </>
+);
+export const IconRestore = (p: IconProps) => (
+  <Icon {...p}>{RESTORE_GEOMETRY}</Icon>
+);

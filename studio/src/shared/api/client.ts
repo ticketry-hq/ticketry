@@ -14,6 +14,7 @@ import type {
   ProjectPatch,
   ConfigurableProvider,
   GraphRunExecutionMode,
+  GraphRunResult,
   State,
   StateCreate,
   StatePatch,
@@ -401,10 +402,12 @@ export const createTask = (
   );
 
 // Omitting `mode` keeps the historical parallel campaign for existing callers.
+// The result reports which work items the press launched, so callers can tell
+// an effective press from an inert one.
 export const executeTaskSubtree = (
   taskId: string,
   mode?: GraphRunExecutionMode,
-) =>
+): Promise<GraphRunResult> =>
   call(() => sdk().execution.workItemsGraphRunCreate({
     issueId: taskId,
     graphRunRequest:

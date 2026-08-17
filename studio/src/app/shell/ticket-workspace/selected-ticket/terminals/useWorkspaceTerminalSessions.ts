@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
+  isLiveTerminalState,
   isScratchBucket,
   useActiveSession,
   usePersistedTerminalSessions,
@@ -133,6 +134,8 @@ export function useVisibleTerminalHistory({
   moduleId: string | null;
   excludedRunIds: ReadonlySet<string>;
 }) {
+  // Which runs become history chips and how each chip is coloured must answer
+  // the same liveness question, so both read `isLiveTerminalState` (#695).
   return useAgentStatusStore((state) => {
     if (!bucket) return [];
     return Object.values(state.runs).filter(
@@ -142,9 +145,7 @@ export function useVisibleTerminalHistory({
             run.project_id === projectId &&
             run.module_id === moduleId
           : run.task_id === bucket) &&
-        (run.state === "exited" ||
-          run.state === "lost" ||
-          run.state === "error") &&
+        !isLiveTerminalState(run.state) &&
         !excludedRunIds.has(run.agent_run_id),
     );
   });

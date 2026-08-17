@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { ModalShell } from "../../../app/modal/ModalShell";
 import {
   studioKeymapRegistry,
@@ -29,6 +29,7 @@ const ESSENTIALS: readonly { id: string; label: string }[] = [
   { id: "capture:edit-view.commit", label: "Engage body" },
   { id: "capture:edit-view.body-disengage", label: "Disengage body" },
   { id: "capture:cycle-terminal-forward", label: "Next terminal" },
+  { id: "capture:toggle-terminal-panel", label: "Toggle terminal panel" },
   { id: "global:search", label: "Search" },
   { id: "global:toggle-sidebar", label: "Toggle sidebar" },
 ];
@@ -38,8 +39,19 @@ function bindingId(binding: EffectiveBinding): string {
 }
 
 export function KeyboardShortcutsModal() {
+  return (
+    <ModalShell
+      title="Keyboard Shortcuts"
+      ariaLabel="Keyboard Shortcuts"
+      width="w-[min(56rem,calc(100vw-2rem))]"
+    >
+      <KeyboardShortcutsPanel />
+    </ModalShell>
+  );
+}
+
+export function KeyboardShortcutsPanel() {
   const [query, setQuery] = useState("");
-  const filterRef = useRef<HTMLInputElement>(null);
   const revision = useSyncExternalStore(
     studioKeymapRegistry.subscribe,
     studioKeymapRegistry.getRevision,
@@ -61,13 +73,15 @@ export function KeyboardShortcutsModal() {
   }, [bindings]);
 
   return (
-    <ModalShell
-      title="Keyboard Shortcuts"
-      ariaLabel="Keyboard Shortcuts"
-      width="w-[min(56rem,calc(100vw-2rem))]"
-      initialFocusRef={filterRef}
-    >
       <div className="space-y-3">
+        <header>
+          <h2 className="text-lg font-semibold text-text-primary">
+            Keyboard shortcuts
+          </h2>
+          <p className="mt-0.5 text-sm text-text-muted">
+            Search Studio actions and the keys that invoke them.
+          </p>
+        </header>
         <section aria-labelledby="keyboard-shortcuts-essentials" className="space-y-2">
           <h3
             id="keyboard-shortcuts-essentials"
@@ -102,17 +116,16 @@ export function KeyboardShortcutsModal() {
             Filter keyboard shortcuts
           </label>
           <input
-            ref={filterRef}
             id="keyboard-shortcuts-filter"
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Filter by action or Keymap context"
-            className="w-full rounded border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent"
+            className="w-full border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent"
           />
         </div>
 
-        <div className="max-h-[60vh] overflow-auto rounded border border-pane-border">
+        <div className="max-h-[60vh] overflow-auto border border-pane-border">
           <table className="w-full border-collapse text-left">
             <caption className="sr-only">
               Effective keyboard bindings by action and Keymap context
@@ -148,7 +161,6 @@ export function KeyboardShortcutsModal() {
           </table>
         </div>
       </div>
-    </ModalShell>
   );
 }
 

@@ -1,0 +1,18 @@
+---
+id: terminal-output-activity-observed
+name: Terminal Output Activity Observed
+version: 1.0.0
+summary: Status-feed delta reporting that a durable terminal's rendered output changed.
+owners:
+  - ticketry
+---
+
+The versioned `terminal_activity` frame carries the whole run record, so it is
+self-sufficient, and is merged by `run.output_sequence`, so a reordered
+delivery cannot rewind the activity axis.
+
+Terminal output activity is a separate axis from the provider lifecycle: it
+answers only whether the rendered output changed and when the backend observed
+that change. An unchanged observation — a repeated chunk or a reconnect redraw
+— publishes nothing, so it cannot extend the inactivity deadline that projects
+a still-live run as `stalled`.

@@ -90,7 +90,7 @@ export function StatusUpdate() {
                 setSelectedStateId(s.id);
                 void commit(s.id);
               }}
-              className={`cursor-pointer rounded px-2 py-1 ${
+              className={`cursor-pointer px-2 py-1 ${
                 i === selectedIndex
                   ? "bg-selection-bg text-text-primary"
                   : "hover:bg-pane-title"

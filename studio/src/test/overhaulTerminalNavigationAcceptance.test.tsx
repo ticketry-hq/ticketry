@@ -59,7 +59,6 @@ function session(
     projectId: "project-1",
     moduleId: "module-1",
     agent: "codex",
-    ticketSeq: 1,
     status,
     transport: status === "ready" ? "ready" : "closed",
     isPlanning: false,
@@ -239,7 +238,6 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={350}
           owner="studio"
           details={<input aria-label="Issue title draft" defaultValue="Draft" />}
         />
@@ -255,13 +253,13 @@ describe("overhaul acceptance — terminals", () => {
       .not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", {
-      name: "Close terminal T-350 · codex",
+      name: "Close codex terminal",
     }));
 
     const resume = await screen.findByRole("button", {
       name: "Resume codex terminal",
     });
-    expect(screen.queryByRole("tab", { name: "T-350 · codex" }))
+    expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
     expect(screen.getAllByRole("button", {
       name: "Resume codex terminal",
@@ -284,7 +282,7 @@ describe("overhaul acceptance — terminals", () => {
     expect(useClientStore.getState().workspaces["story-1"]?.active).toBe(
       "terminal",
     );
-    expect(screen.getByRole("tab", { name: "T-350 · codex" }))
+    expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
       .not.toBeInTheDocument();

@@ -72,11 +72,14 @@ pub fn native_terminal_hide(
             "command hide",
             &format!("run={} handle={handle}", entry.run_id),
         );
-        if !entry.visibility.accepts_input() {
-            return Ok(());
-        }
         entry.view
     };
+    // Do not let the Rust ledger turn this into a no-op. A native show can have
+    // reached AppKit while its command is still settling its ledger entry; a
+    // modal-driven hide that arrives in that interval must still hide the
+    // actual NSView. `muxed_ghostty_view_hide` is idempotent, and visibility
+    // preserves the first focused hide for the next eligible reveal.
+    //
     // Hiding makes AppKit resign first responder, so whether this viewer holds
     // the keyboard has to be read before the view is hidden. The next reveal
     // uses it to give the keyboard back.
@@ -110,7 +113,7 @@ pub fn native_terminal_show(
     frame: NativeTerminalFrame,
 ) -> Result<NativeTerminalStatus, String> {
     validate_native_frame(frame)?;
-    let (view, run_id, scroll_context, resize_context) = {
+    let (view, run_id, contexts) = {
         let registry = state
             .entries
             .lock()
@@ -118,12 +121,7 @@ pub fn native_terminal_show(
         let entry = registry
             .get(&handle)
             .ok_or_else(|| "native terminal handle was not found".to_owned())?;
-        (
-            entry.view,
-            entry.run_id.clone(),
-            entry.scroll_context,
-            entry.process_context,
-        )
+        (entry.view, entry.run_id.clone(), entry.contexts)
     };
     let NativeTerminalFrame {
         x,
@@ -140,12 +138,19 @@ pub fn native_terminal_show(
                 muxed_ghostty_view_set_scroll_callback(
                     view as *mut c_void,
                     Some(report_scroll_gesture),
-                    scroll_context as *mut c_void,
+                    contexts.scroll as *mut c_void,
+                );
+                // A hidden viewer has no keyboard, so Studio chords are
+                // recognised only while the surface is on screen.
+                muxed_ghostty_view_set_chord_callback(
+                    view as *mut c_void,
+                    Some(report_studio_chord),
+                    contexts.chord as *mut c_void,
                 );
                 muxed_ghostty_view_set_resize_callback(
                     view as *mut c_void,
                     Some(report_grid_resize),
-                    resize_context as *mut c_void,
+                    contexts.process as *mut c_void,
                 );
                 muxed_ghostty_view_show(
                     view as *mut c_void,
@@ -244,16 +249,8 @@ pub fn native_terminal_detach(
         .expect("native terminal registry poisoned")
         .remove(&handle)
         .ok_or_else(|| "native terminal handle was not found".to_owned())?;
-    // Viewer detachment stops accepting gestures before the native view is
-    // removed, so a gesture in flight cannot reach the next viewer.
-    entry.scroll_sink.stop_accepting();
+    entry.stop_accepting_events();
     let _ = entry.worker.send(NativeViewerCommand::Detach);
-    let released = free_view(
-        &window,
-        entry.view,
-        entry.scroll_context,
-        entry.process_context,
-    );
+    let released = free_view(&window, entry.view, entry.contexts);
     released.map_err(|error| error.to_string())
 }
-

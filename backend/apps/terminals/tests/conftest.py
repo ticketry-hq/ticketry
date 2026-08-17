@@ -55,6 +55,7 @@ def default_task_launch_configuration(monkeypatch):
             agent=agent_override or "claude",
             model=None,
             reasoning=None,
+            state_name="Todo",
         )
 
     monkeypatch.setattr(session_module, "resolve_task_launch_configuration", resolve)

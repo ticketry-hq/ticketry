@@ -44,6 +44,12 @@ export interface HttpFixture {
   refreshRunNowCapabilities(issueTypeId: string): Promise<void>;
   /** Fails the next graph-run POST only, leaving other requests untouched. */
   failNextGraphRun(status: number, body?: unknown): void;
+  /**
+   * Accepts the next graph-run POST but launches nothing, modelling a press on
+   * a subtree with no startable work. Other graph runs keep launching the
+   * root's children.
+   */
+  nextGraphRunLaunchesNothing(): void;
   /** Holds graph-run responses until the returned release is called. */
   holdGraphRuns(): () => void;
   setSubtreeRunEnabled(enabled: boolean): void;
@@ -100,6 +106,7 @@ class BoundaryFixture implements StudioFixture {
   readonly graphRuns: GraphRunCall[] = [];
   readonly runNowCalls: RunNowCall[] = [];
   private graphRunFailures: Array<{ status: number; body: unknown }> = [];
+  private graphRunInertPresses = 0;
   private graphRunGate: Promise<void> | null = null;
   private runNowFailures: Array<{ status: number; body: unknown }> = [];
   private runNowGate: Promise<void> | null = null;
@@ -258,6 +265,19 @@ class BoundaryFixture implements StudioFixture {
     this.graphRunFailures.push({ status, body });
   }
 
+  nextGraphRunLaunchesNothing(): void {
+    this.graphRunInertPresses += 1;
+  }
+
+  /** The work items an ordinary press on `id` reports as launched. */
+  private launchableChildren(id: string): string[] {
+    for (const tree of this.trees.values()) {
+      const children = tree.children[id];
+      if (children?.length) return [...children];
+    }
+    return [];
+  }
+
   holdGraphRuns(): () => void {
     let release = (): void => {};
     this.graphRunGate = new Promise<void>((resolve) => {
@@ -391,9 +411,14 @@ class BoundaryFixture implements StudioFixture {
       const body = await requestBody(request, init) as { mode?: string };
       this.graphRuns.push({ id, mode: body.mode ?? null });
       const failure = this.graphRunFailures.shift();
+      const inert = this.graphRunInertPresses > 0;
+      if (inert) this.graphRunInertPresses -= 1;
       if (this.graphRunGate) await this.graphRunGate;
       if (failure) return json(failure.body, failure.status);
-      return json({ root_id: id, launched: [] }, 201);
+      // An ordinary press launches the root's startable children; an inert
+      // press is accepted and launches nothing.
+      const launched = inert ? [] : this.launchableChildren(id);
+      return json({ root_id: id, launched }, 201);
     }
     const runNowMatch = path.match(
       /\/work-tracker\/work-items\/([^/]+)\/run-now$/,

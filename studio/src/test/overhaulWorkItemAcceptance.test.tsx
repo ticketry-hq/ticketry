@@ -123,7 +123,20 @@ describe("overhaul acceptance — Stories and details", () => {
       issue_type_id: "implementation",
     });
     const issueTypePicker = within(details).getByTestId("issue-type-picker");
-    fireEvent.click(within(issueTypePicker).getByRole("button", { name: "Story" }));
+    const issueTypeTrigger = within(issueTypePicker).getByRole("button", {
+      name: "Story",
+    });
+    expect(issueTypeTrigger).not.toHaveClass("border", "border-pane-border");
+    const issueTypeLabel = within(issueTypePicker).getByTestId("issue-type-label");
+    expect(issueTypeLabel).toHaveClass(
+      "border",
+      "border-pane-border",
+      "bg-pane-bg",
+      "px-1.5",
+      "py-0.5",
+    );
+    expect(issueTypeLabel).not.toHaveClass("rounded");
+    fireEvent.click(issueTypeTrigger);
     fireEvent.click(await screen.findByRole("button", { name: "Implementation" }));
     await typeChanged;
     expect(

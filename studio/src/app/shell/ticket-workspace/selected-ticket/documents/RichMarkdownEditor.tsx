@@ -46,7 +46,7 @@ export default function RichMarkdownEditor({
 
   return (
     <div
-      className={`${compact ? "min-h-[12rem]" : "min-h-[60vh]"} rounded-lg border border-pane-border bg-pane-panel`}
+      className={`${compact ? "min-h-[12rem]" : "min-h-[60vh]"} border border-pane-border bg-pane-panel`}
       data-testid="rich-markdown-editor-shell"
     >
       <MDXEditor

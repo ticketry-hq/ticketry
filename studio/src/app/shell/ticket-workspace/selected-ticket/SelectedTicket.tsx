@@ -43,7 +43,6 @@ export function SelectedTicket() {
           moduleId: selectedModuleId,
           taskKey: task?.id ?? selectedTaskId,
           taskName: task?.name ?? "",
-          ticketSeq: task?.sequence_id ?? null,
           profileReady: !!profile,
           profile,
         }
@@ -70,7 +69,6 @@ export function SelectedTicket() {
           bucket={bucket}
           projectId={selectedProjectId}
           moduleId={selectedModuleId}
-          ticketSeq={task?.sequence_id ?? null}
           owner="studio"
           details={<SelectedTicketDetails />}
           launchContext={launchContext}

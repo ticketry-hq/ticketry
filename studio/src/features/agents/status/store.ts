@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isTerminalOutcome } from "./runPresentation";
 import type {
   AgentStatusData,
   AgentStatusScope,
@@ -10,7 +11,14 @@ import type {
 interface AgentStatusActions {
   switchProject: (projectId: string) => void;
   upsertRun: (run: RunRecord) => void;
-  applyState: (runId: string, state: RawLifecycleState, at: string) => void;
+  applyActivity: (run: RunRecord) => void;
+  advanceStallEpoch: () => void;
+  applyState: (
+    runId: string,
+    state: RawLifecycleState,
+    at: string,
+    exitCode?: number | null,
+  ) => void;
   reconcileScope: (scope: AgentStatusScope, runs: RunRecord[], at: string) => void;
   upsertAutomationAttempt: (attempt: AutomationAttemptRecord) => void;
   reconcileAutomationAttempts: (attempts: AutomationAttemptRecord[]) => void;
@@ -23,7 +31,6 @@ function isOlder(candidate: string, current: string): boolean {
   return Date.parse(candidate) < Date.parse(current);
 }
 
-const TERMINAL_STATES: ReadonlySet<string> = new Set(["exited", "lost", "error"]);
 const PRUNABLE_STATES: ReadonlySet<string> = new Set(["exited", "lost"]);
 
 /**
@@ -36,13 +43,51 @@ const PRUNABLE_STATES: ReadonlySet<string> = new Set(["exited", "lost"]);
 function supersedes(incoming: RunRecord, current: RunRecord): boolean {
   const cmp = Date.parse(incoming.updated_at) - Date.parse(current.updated_at);
   if (cmp !== 0) return cmp > 0;
-  return TERMINAL_STATES.has(incoming.state) && !TERMINAL_STATES.has(current.state);
+  return isTerminalOutcome(incoming.state) && !isTerminalOutcome(current.state);
+}
+
+function outputSequence(run: RunRecord | undefined): number {
+  return run?.output_sequence ?? 0;
+}
+
+/**
+ * Merge the two axes independently. A lifecycle frame is ordered by its
+ * lifecycle timestamp and an activity observation by its output sequence, so
+ * an older activity frame riding along with a newer lifecycle fact (or the
+ * reverse) can never rewind the other axis. `last_output_at` is deliberately
+ * never compared against the lifecycle timestamp.
+ */
+function mergeAxes(current: RunRecord | undefined, incoming: RunRecord): RunRecord {
+  if (!current || outputSequence(incoming) >= outputSequence(current)) {
+    return incoming;
+  }
+  return {
+    ...incoming,
+    output_sequence: current.output_sequence,
+    last_output_at: current.last_output_at,
+  };
 }
 
 function putRun(data: AgentStatusData, incoming: RunRecord): void {
   const current = data.runs[incoming.agent_run_id];
-  if (current && !supersedes(incoming, current)) return;
-  data.runs[incoming.agent_run_id] = incoming;
+  if (current && !supersedes(incoming, current)) {
+    // The lifecycle axis loses, but a newer activity fact travelling with this
+    // frame must still be kept: the axes are ordered independently. A run that
+    // already reached an outcome is the exception — nothing about a dead run
+    // is still moving, so its activity axis is frozen with it (#663).
+    if (
+      !isTerminalOutcome(current.state) &&
+      outputSequence(incoming) > outputSequence(current)
+    ) {
+      data.runs[incoming.agent_run_id] = {
+        ...current,
+        output_sequence: incoming.output_sequence,
+        last_output_at: incoming.last_output_at,
+      };
+    }
+    return;
+  }
+  data.runs[incoming.agent_run_id] = mergeAxes(current, incoming);
 }
 
 /**
@@ -59,10 +104,10 @@ function putSnapshotRun(data: AgentStatusData, incoming: RunRecord): void {
   const current = data.runs[incoming.agent_run_id];
   if (
     current &&
-    TERMINAL_STATES.has(current.state) &&
-    !TERMINAL_STATES.has(incoming.state)
+    isTerminalOutcome(current.state) &&
+    !isTerminalOutcome(incoming.state)
   ) {
-    data.runs[incoming.agent_run_id] = incoming;
+    data.runs[incoming.agent_run_id] = mergeAxes(current, incoming);
     return;
   }
   putRun(data, incoming);
@@ -71,6 +116,7 @@ function putSnapshotRun(data: AgentStatusData, incoming: RunRecord): void {
 function mutableCopy(state: AgentStatusData): AgentStatusData {
   return {
     projectId: state.projectId,
+    stallEpoch: state.stallEpoch,
     runs: { ...state.runs },
     automationAttempts: { ...state.automationAttempts },
     automationByTask: Object.fromEntries(
@@ -115,6 +161,7 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
   runs: {},
   automationAttempts: {},
   automationByTask: {},
+  stallEpoch: 0,
 
   switchProject(projectId) {
     set((state) => state.projectId === projectId
@@ -135,11 +182,57 @@ export const useAgentStatusStore = create<AgentStatusStore>((set) => ({
     });
   },
 
-  applyState(runId, state, at) {
+  /**
+   * Apply one terminal-output activity delta. The activity axis advances only
+   * for a strictly newer output sequence, and the delta never claims a
+   * lifecycle state of its own: an unknown run is adopted whole, a known one
+   * keeps the provider lifecycle fact it already holds so changed output
+   * restores that state rather than manufacturing `working`.
+   *
+   * A run that already reached an authoritative outcome is left entirely
+   * alone. Its projection is terminal either way, but freezing the axis stops
+   * an observation that raced the ending from stamping a post-mortem
+   * `last_output_at` that a later frame could re-arm a deadline from (#663).
+   */
+  applyActivity(run) {
+    set((state) => {
+      const current = state.runs[run.agent_run_id];
+      if (current && isTerminalOutcome(current.state)) return state;
+      if (current && outputSequence(run) <= outputSequence(current)) return state;
+      const merged = current
+        ? {
+            ...current,
+            output_sequence: run.output_sequence,
+            last_output_at: run.last_output_at,
+          }
+        : run;
+      return { ...state, runs: { ...state.runs, [run.agent_run_id]: merged } };
+    });
+  },
+
+  advanceStallEpoch() {
+    set((state) => ({ ...state, stallEpoch: state.stallEpoch + 1 }));
+  },
+
+  /**
+   * Apply one pushed ending to a run already held here.
+   *
+   * `exitCode` is the hosted command's own result travelling with that ending.
+   * It is recorded only when the ending itself wins the lifecycle axis, and an
+   * ending that observed no code leaves whatever was recorded before it — a
+   * process result is a fact about the process, never something an ending with
+   * nothing to report may erase (#670).
+   */
+  applyState(runId, state, at, exitCode) {
     set((current) => {
       const run = current.runs[runId];
       if (!run) return current;
-      const incoming = { ...run, state, updated_at: at };
+      const incoming = {
+        ...run,
+        state,
+        updated_at: at,
+        exit_code: exitCode ?? run.exit_code ?? null,
+      };
       if (!supersedes(incoming, run)) return current;
       return { ...current, runs: { ...current.runs, [runId]: incoming } };
     });

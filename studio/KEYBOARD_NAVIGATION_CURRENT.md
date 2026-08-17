@@ -17,29 +17,33 @@ Studio has two keyboard-navigation models, selected by sidebar visibility.
 `localStorage["studio.sidebarVisible:v1"]`; the legacy
 `plane-tui:sidebar-visible` key is migrated on read. Entering edit view always
 starts in its Stories zone rather than restoring a previously focused zone
-(`src/features/studio/stores/uiStore.ts`).
+(`src/state/clientStore.ts`, `src/state/persistence.ts`).
 
 ## Edit view
 
 ### Navigation mode and zones
 
 Edit view starts in **navigation mode**, where Studio owns the navigation keys.
-It has exactly three zones:
+It has three zones, plus a fourth that exists only while the terminal panel is
+showing:
 
 1. **Z1 — Stories** (`stories`)
 2. **Z2 — tab strip** (`tab-strip`)
 3. **Z3 — active body** (`active-tab-body`)
+4. **Z4 — terminal panel** (`terminal-panel`), present only while the panel is
+   open (`src/features/terminal-panel/panelStore.ts`)
 
-`Shift+Tab` moves forward through Z1 → Z2 → Z3 → Z1 and wraps. Studio prevents
+`Shift+Tab` moves forward through Z1 → Z2 → Z3 → Z1 and wraps, and through
+Z1 → Z2 → Z3 → Z4 → Z1 while the panel is open. Studio prevents
 the browser's native reverse-tab behavior. Moving from Z1 to Z2 initializes the
 tab-strip highlight from the selected ticket's active tab
-(`src/features/studio/stores/uiStore.ts`,
-`src/features/work-items/issue-detail/WorkspacePane.tsx`).
+(`src/app/navigation/three-zone/threeZoneNavigation.ts`,
+`src/app/shell/ticket-workspace/selected-ticket/SelectedTicketContent.tsx`).
 
 The active zone receives the edit-view navigation emphasis. Mouse or focus
 entry updates the zone consistently
-(`src/features/studio/components/PaneShell.tsx`,
-`src/features/work-items/issue-detail/WorkspacePane.tsx`).
+(`src/app/shell/PaneShell.tsx`,
+`src/app/shell/ticket-workspace/selected-ticket/internal/useWorkspaceTabFocus.ts`).
 
 ### Zone-local keys
 
@@ -47,17 +51,26 @@ entry updates the zone consistently
 |---|---|---|
 | Z1 Stories | `ArrowUp` / `ArrowDown` | Move through visible Story rows and clamp. From no selection, Down selects the first and Up selects the last. Up from the first Story focuses Capture an idea. |
 | Z1 Stories | `ArrowLeft` | Collapse the selected Story when it has expanded children; otherwise no-op. It never changes zones or panes. |
-| Z1 Stories | `ArrowRight` | Expand the selected Story when it has collapsed children; otherwise no-op. It never changes zones or panes. |
+| Z1 Stories | `ArrowRight` | Expand the selected Story when it has collapsed children. When there is nothing left to expand, dive into that ticket's remembered active body in Z3 — the same destination and focus as `Enter`. It never stops at the Z2 tab strip. |
 | Z1 Stories | `Enter` | Commit the selected ticket and dive directly into that ticket's remembered active body in Z3. |
 | Z2 tab strip | `ArrowLeft` / `ArrowRight` | Move the highlight through Details → open documents → open terminals and clamp at both ends. Highlighting alone does not activate a tab. |
 | Z2 tab strip | `Enter` | Commit the highlighted tab, make it active, and dive into its body in Z3. |
+| Z3 active body | `ArrowUp` | Leave the body and make the Z2 tab strip the focused zone. |
+| Z3 active body | `ArrowLeft` | Leave the body and make Z1 Stories the focused zone. |
 | Z3 active body | `Enter` | Engage the active body. On a live terminal this explicitly enters terminal typing mode; Details and documents receive their normal controlled focus. |
+| Z4 terminal panel | (on arrival) | Entering the zone commits to terminal typing mode in the panel's shell — the panel holds nothing else. |
+| Z4 terminal panel | `ArrowUp` | Leave the panel and make Z3 the focused zone. |
+| Z4 terminal panel | `ArrowLeft` | Leave the panel and make Z1 Stories the focused zone. |
+| Z4 terminal panel | `Enter` | Return to typing in the shell after `Cmd+Escape` left it. |
 
-All arrows are zone-local in edit view. In particular, arrows do not move
-between panes, and Z2 does not wrap. `Enter` is the **commit-and-dive** gesture
-from Z1 and Z2; merely reaching a terminal body does not focus xterm or start
-typing (`src/app/navigation/keyboardNavigation.ts`,
-`src/features/work-items/issue-detail/useTaskWorkspaceTabNavigation.ts`).
+Arrows are zone-local in edit view apart from the routes that leave a zone
+outright: Z1 `ArrowRight` dives Z1 → Z3 once the selected Story has nothing left
+to expand, and from Z3 `ArrowUp` goes back to Z2 while `ArrowLeft` goes back to
+Z1. Otherwise arrows do not move between panes, and Z2 does not wrap.
+`Enter` remains the **commit-and-dive** gesture from Z1 and Z2; merely reaching
+a terminal body does not focus xterm or start typing
+(`src/app/navigation/three-zone/threeZoneNavigation.ts`,
+`src/app/shell/ticket-workspace/selected-ticket/internal/useTaskWorkspaceTabNavigation.ts`).
 
 ### Terminal typing mode
 
@@ -65,8 +78,19 @@ A live terminal in Z3 remains in navigation mode until the user explicitly
 presses `Enter`. Once xterm has focus, Studio treats it as **terminal typing
 mode**:
 
-- `Cmd+Escape` is the only chord Studio intercepts. It exits typing and returns
-  to Z1 Stories.
+- `Cmd+Escape` leaves typing mode and returns to the un-engaged active tab body
+  — Z3 stays the focused zone. `ArrowLeft` from there then returns to Z1
+  Stories.
+- `Ctrl+\`` (panel toggle) and `Cmd+E` (Settings) are the other chords Studio
+  intercepts: both work from typing mode too. On the desktop build's native
+  renderer the terminal view owns the keyboard outright, so it recognises those
+  chords itself, hands focus back to the WebView, and reports each one to
+  Studio, where the chord's ordinary binding still owns what it does
+  (`src-tauri/native/libghostty_view.m`,
+  `src/app/navigation/nativeTerminalChords.ts`).
+- The terminal panel's shell engages the same way, so `Cmd+Escape` leaves its
+  typing too. The panel stays open and Z4 stays the focused zone; closing the
+  panel remains `Ctrl+\``'s job, which also hands the zone back to Z3.
 - `Tab`, `Shift+Tab`, `Enter`, arrows, and all other terminal input pass through
   to xterm/the agent unchanged.
 
@@ -83,8 +107,8 @@ The following shortcuts are intentionally inactive in edit view:
   that ticket's remembered body.
 
 They remain active in the full sidebar view
-(`src/app/navigation/keyboardNavigation.ts`,
-`src/features/work-items/issue-detail/useTaskWorkspaceTabNavigation.ts`).
+(`src/app/navigation/full-sidebar-view/fullSidebarViewNavigation.ts`,
+`src/app/shell/ticket-workspace/selected-ticket/internal/useTaskWorkspaceTabNavigation.ts`).
 
 ## Full sidebar view
 
@@ -93,8 +117,8 @@ The logical pane order is Projects → Modules → Stories → Task workspace.
 the focused pane declines the key. Projects and Modules Up/Down cursors clamp;
 Stories Up/Down selection clamps, while Stories Left/Right first performs tree
 collapse, expansion, or parent/child movement where applicable
-(`src/app/navigation/keyboardNavigation.ts`,
-`src/features/studio/stores/uiStore.ts`).
+(`src/app/navigation/full-sidebar-view/fullSidebarViewNavigation.ts`,
+`src/state/clientStore.ts`).
 
 Within the focused Task workspace:
 
@@ -107,7 +131,7 @@ In the full sidebar view and edit-view navigation mode, the registered global
 actions remain available: `/` focuses Stories search; `o`, `n`, `i`, `s`, `w`,
 `f`, `q`, and `e` invoke their displayed Studio actions; `Shift+Enter` opens
 the selected ticket with a prompt (`src/app/navigation/keymapBindings.ts`,
-`src/app/navigation/keyboardNavigation.ts`).
+`src/app/navigation/full-sidebar-view/fullSidebarViewNavigation.ts`).
 
 ## Precedence and editable surfaces
 
@@ -125,11 +149,11 @@ and modal contexts (`src/app/navigation/keymapRegistry.ts`,
 ## Selection, tab memory, and routing
 
 Studio mounts without a router (`src/main.tsx`). Ticket links inside child
-issues, blockers, and findings call the Tasks store's in-app selection action;
+issues, blockers, and findings call the client store's in-app selection action;
 they do not navigate a URL or require a route
-(`src/features/work-items/issue-detail/ChildIssues.tsx`,
-`src/features/work-items/issue-detail/BlockerChipView.tsx`,
-`src/features/work-items/issue-detail/FindingsPanel.tsx`).
+(`src/app/shell/ticket-workspace/selected-ticket/details/ChildIssues.tsx`,
+`src/app/shell/ticket-workspace/selected-ticket/details/BlockerChipView.tsx`,
+`src/app/shell/ticket-workspace/selected-ticket/details/FindingsPanel.tsx`).
 
 The client persists:
 
@@ -145,18 +169,16 @@ entries. Legacy `studio.studio.*`, `studio.coding.*`, and
 stale, malformed, or unavailable storage degrades safely: missing document or
 terminal identities fall back to Details. The focused edit-view zone is never
 persisted and always opens on Z1
-(`src/features/studio/stores/tasksStore.ts`,
-`src/features/work-items/issue-detail/WorkspacePane.tsx`,
-`src/features/studio/stores/uiStore.ts`).
+(`src/state/persistence.ts`, `src/state/clientStore.ts`,
+`src/app/shell/ticket-workspace/selected-ticket/internal/studioWorkspaceTarget.ts`).
 
 ## Behavioral test reference
 
 The implemented contract is exercised through real key events and observable
 focus/selection/tab behavior in:
 
-- `src/test/TaskWorkspaceTabNavigation.test.tsx`
-- `src/test/studioKeymap.test.tsx`
-- `src/test/studioTaskTreeHydration.test.tsx`
+- `src/test/overhaulEditViewNavigationAcceptance.test.tsx`
+- `src/test/overhaulTerminalNavigationAcceptance.test.tsx`
 - `src/test/studioEntry.test.tsx`
 
 The terminology and intended boundaries match `CONTEXT.md` and

@@ -3,11 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from django.db.models import Max, Q
+from django.db.models import Max, Q, Value
 from django.db.models.functions import Coalesce, Greatest
 
 from apps.runs.models import AgentRun
 from apps.runs.dao.constants import DEFAULT_ACTIVITY_WINDOW_DAYS
+from apps.runs.run_scopes import SHELL_SCOPE
+from apps.runs.run_records import build_run_record
 from studio_server.contracts import RunRecord
 
 
@@ -37,6 +39,13 @@ async def last_activity_by_module(
     module's signal is the ``MAX`` of that across its runs. Only runs started
     within ``window_days`` qualify; modules with no qualifying run are absent.
 
+    Shell runs are excluded (#685). A panel shell is an ``AgentRun`` whose
+    issue *is* the module work item, so ``COALESCE(module_id, issue_id)`` files
+    it under the module itself — opening a shell would otherwise stamp "most
+    recent agent interaction" on the module and reorder the module list. This
+    mirrors the ``SHELL_SCOPE`` guard the terminals API and the Studio
+    selectors already apply.
+
     Timestamps are ISO-8601 UTC strings written by a single formatter (the
     terminal consumer's ``started_at`` and the lifecycle ingest's
     ``lifecycle_updated_at``), so lexicographic ``MAX`` ranks correctly.
@@ -52,6 +61,7 @@ async def last_activity_by_module(
         AgentRun.objects.filter(
             issue__project_id=project_id, started_at__gte=cutoff
         )
+        .exclude(scope=SHELL_SCOPE)
         .annotate(module_key=Coalesce("issue__module_id", "issue_id"))
         .values("module_key")
         .annotate(
@@ -90,6 +100,14 @@ async def agent_status_records(
             Coalesce("lifecycle_updated_at", "started_at"),
             Coalesce("ended_at", "started_at"),
         ),
+        # The terminal-output activity axis travels with the snapshot so a
+        # reconnecting client reconstructs the same effective state from
+        # persisted facts instead of a browser-local timer (#661).
+        output_sequence=Coalesce("agentterminalsession__output_sequence", Value(0)),
+        last_output_at=Coalesce(
+            "agentterminalsession__last_output_at",
+            "agentterminalsession__created_at",
+        ),
     )
     cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=window_days)).isoformat()
     rows = rows.filter(
@@ -102,30 +120,43 @@ async def agent_status_records(
         Q(ended_at__isnull=True) | Q(status_updated_at__gte=cutoff)
     ).order_by("-status_updated_at", "-id")
 
-    records: list[RunRecord] = []
-    async for run in rows:
-        if run.ended_at:
-            # An ended run is an exited tombstone regardless of the last
-            # lifecycle event it happened to record — otherwise a fresh
-            # snapshot can present a terminated run as still `working` (#978).
-            state = "exited"
-            updated_at = max(
-                filter(None, (run.ended_at, run.lifecycle_updated_at))
-            )
-        else:
-            state = run.lifecycle_state or "unknown"
-            updated_at = run.lifecycle_updated_at or run.started_at
-        records.append(
-            RunRecord(
-                agent_run_id=run.id,
-                project_id=str(run.issue.project_id),
-                task_id=str(run.issue_id) if run.issue.type == "task" else None,
-                module_id=str(run.run_module_id),
-                agent=run.agent,
-                scope=run.scope,
-                started_at=run.started_at,
-                state=state,
-                updated_at=updated_at,
-            )
+    return [
+        build_run_record(
+            run,
+            module_id=str(run.run_module_id),
+            output_sequence=run.output_sequence,
+            last_output_at=run.last_output_at,
+            now=now,
         )
-    return records
+        async for run in rows
+    ]
+
+
+async def agent_status_record(agent_run_id: str) -> Optional[RunRecord]:
+    """Return one run's authoritative status record, or ``None`` if unknown.
+
+    Used by activity publication so a delta carries the same projection the
+    snapshot would produce for that run.
+    """
+
+    run = (
+        await AgentRun.objects.filter(id=agent_run_id)
+        .select_related("issue")
+        .annotate(
+            run_module_id=Coalesce("issue__module_id", "issue_id"),
+            output_sequence=Coalesce("agentterminalsession__output_sequence", Value(0)),
+            last_output_at=Coalesce(
+                "agentterminalsession__last_output_at",
+                "agentterminalsession__created_at",
+            ),
+        )
+        .afirst()
+    )
+    if run is None:
+        return None
+    return build_run_record(
+        run,
+        module_id=str(run.run_module_id),
+        output_sequence=run.output_sequence,
+        last_output_at=run.last_output_at,
+    )

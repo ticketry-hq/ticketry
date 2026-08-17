@@ -149,7 +149,12 @@ def _value_error_status(error: str) -> int:
 
 
 def create_execute_graph(issue_id: str, payload: ExecuteGraphIn):
-    """Arm a root, or revive it when all prior launches are inactive."""
+    """Arm a root, or advance the campaign it already has.
+
+    An existing campaign is a success, not a conflict; an empty ``launched``
+    list is how an inert press is reported. ``graph_run_exists`` survives only
+    as the resource-level conflict two concurrent creates can still race into.
+    """
 
     try:
         launched = driver.execute_graph(

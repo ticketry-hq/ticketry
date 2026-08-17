@@ -20,6 +20,7 @@ from apps.terminals.tests.fakes import patch_terminal_runtime
 from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.validation import SpawnRequest
 from apps.runs.models import AgentRun
+from apps.runs.run_scopes import SHELL_SCOPE
 from worktracker.models import Issue, IssueType, Project, Workspace
 from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_uuid
 
@@ -66,6 +67,8 @@ def _insert_run(
     provider_session_id=None,
     resumed_from=None,
     status=None,
+    launch_state=None,
+    launch_model=None,
 ):
     """Insert a parent agent_run for terminal-session rows."""
 
@@ -86,6 +89,8 @@ def _insert_run(
         provider_session_id=provider_session_id,
         lifecycle_state=lifecycle_state,
         resumed_from=resumed_from,
+        launch_state=launch_state,
+        launch_model=launch_model,
         scope="plan" if task_id == SCRATCH_TASK_ID else "task",
     )
 
@@ -537,6 +542,9 @@ def test_list_resumable_terminals_filters_collapses_and_excludes_live(client):
             "agent": "claude-code",
             "status": "terminated",
             "started_at": "2026-05-29T12:30:00",
+            "launch_state": None,
+            "launch_model": None,
+            "scope": "task",
             "provider_session_id": "sess-chain",
             "resumed_from": "chain-a",
         },
@@ -545,10 +553,51 @@ def test_list_resumable_terminals_filters_collapses_and_excludes_live(client):
             "agent": "claude-code",
             "status": "terminated",
             "started_at": "2026-05-29T10:00:00",
+            "launch_state": None,
+            "launch_model": None,
+            "scope": "task",
             "provider_session_id": "sess-plain",
             "resumed_from": None,
         },
     ]
+
+
+def test_list_resumable_terminals_carry_their_launch_snapshot():
+    # A dormant chip names the phase its conversation began in, so the listing
+    # carries the run's own launch snapshot rather than leaving the client to
+    # find the run in a status snapshot it may have aged out of (#695). A run
+    # that recorded none is reported as null, never as the work item's current
+    # state.
+    _insert_run(
+        "captured",
+        task_id="task-1",
+        started_at="2026-05-29T12:30:00",
+        ended_at="2026-05-29T13:00:00",
+        provider_session_id="sess-captured",
+        launch_state="Grill",
+        launch_model="opus-5",
+    )
+    _insert_run(
+        "unrecorded",
+        task_id="task-1",
+        ended_at="2026-05-29T12:00:00",
+        provider_session_id="sess-unrecorded",
+    )
+
+    rows = terminals_api.list_resumable_terminals(
+        task_id=fixture_issue_id(
+            project_id="proj-1", module_id="mod-1", task_id="task-1"
+        )
+    )
+
+    snapshots = {
+        row["agent_run_id"]: (row["launch_state"], row["launch_model"])
+        for row in rows
+    }
+    assert snapshots == {
+        "captured": ("Grill", "opus-5"),
+        "unrecorded": (None, None),
+    }
 
 
 def test_list_resumable_terminals_excludes_run_resumed_by_live_successor(client):
@@ -718,7 +767,12 @@ def test_list_resumable_module_runs_includes_plan_and_instant_runs(client):
         "module-instant",
         "module-plan",
     ]
-    assert all("scope" not in row for row in response.json())
+    # A scratch run's scope is the only durable source for its resume chip's
+    # word, since a scratch launch records no launch state (#708).
+    assert {row["agent_run_id"]: row["scope"] for row in response.json()} == {
+        "module-instant": "instant",
+        "module-plan": "plan",
+    }
 
 
 def test_deleting_issue_cascades_to_agent_runs():
@@ -1082,3 +1136,132 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(
         "run-e2e",
         "exited",
     )
+
+
+def test_shell_runs_are_absent_from_the_scratch_and_resumable_lists(
+    client, monkeypatch
+):
+    """A shell run shares the scratch sentinel but not the scratch surfaces.
+
+    Both exclusions are declared rather than inferred, so a shell run cannot
+    surface as a Scratch workspace tab or consume a resume chip (#665).
+    """
+
+    _no_background_reconcile(monkeypatch)
+
+    _insert_run("plan-run", task_id=SCRATCH_TASK_ID)
+    _insert_run("shell-run", task_id=SCRATCH_TASK_ID)
+    _insert_session(
+        "plan-run",
+        task_id=SCRATCH_TASK_ID,
+        created_at="2026-08-15T10:00:00",
+        agent="claude-code",
+        scope="plan",
+    )
+    _insert_session(
+        "shell-run",
+        task_id=SCRATCH_TASK_ID,
+        created_at="2026-08-15T11:00:00",
+        agent=None,
+        scope=SHELL_SCOPE,
+    )
+    AgentRun.objects.filter(id="shell-run").update(agent=None)
+
+    rows = terminals_api.list_scratch_terminals("proj-1", "mod-1")
+    assert [row["agent_run_id"] for row in rows] == ["plan-run"]
+
+    # Even given the provider identity a resume would need, a shell run is not
+    # offered: it has no conversation to continue.
+    AgentRun.objects.filter(id="shell-run").update(
+        ended_at="2026-08-15T12:00:00",
+        status="terminated",
+        provider_session_id="sess-shell",
+    )
+    resumable = terminals_api.list_resumable_terminals(
+        project_id=fixture_uuid("proj-1"),
+        module_id=fixture_issue_id(
+            project_id="proj-1", module_id="mod-1", task_id=None
+        ),
+    )
+    assert "shell-run" not in [row["agent_run_id"] for row in resumable]
+
+
+def _link_module_folder(tmp_config, sample_profile, path) -> str:
+    """Point the selected profile's link for module `mod-1` at ``path``."""
+
+    from apps.terminals.tests.conftest import write_profiles
+
+    module_id = fixture_issue_id(
+        project_id="proj-1", module_id="mod-1", task_id=None
+    )
+    write_profiles(
+        tmp_config,
+        [
+            {
+                **sample_profile,
+                "module_links": [{"module_id": module_id, "path": str(path)}],
+            }
+        ],
+        recent=0,
+    )
+    return module_id
+
+
+def test_module_shell_endpoints_create_and_list_a_module_scoped_shell(
+    client, monkeypatch, tmp_path, tmp_config, sample_profile
+):
+    """POST/GET /api/terminals/shells own a module's login shells (#666)."""
+
+    _no_background_reconcile_shells(monkeypatch)
+    module_folder = tmp_path / "repo"
+    module_folder.mkdir()
+    module_id = _link_module_folder(tmp_config, sample_profile, module_folder)
+
+    created = client.post(
+        "/api/terminals/shells",
+        data=json.dumps({"module_id": module_id}),
+        content_type="application/json",
+    )
+
+    assert created.status_code == 200
+    agent_run_id = created.json()["agent_run_id"]
+    listed = client.get("/api/terminals/shells", {"module_id": module_id})
+    assert listed.status_code == 200
+    assert [row["agent_run_id"] for row in listed.json()] == [agent_run_id]
+
+    # Ending a shell is the ordinary run termination, not a second operation.
+    terminated = client.delete(
+        f"/api/terminals?agent_run_id={agent_run_id}",
+    )
+    assert terminated.status_code == 200
+    assert client.get("/api/terminals/shells", {"module_id": module_id}).json() == []
+
+
+def test_module_shell_creation_is_refused_without_a_module_folder(
+    client, monkeypatch, tmp_config, sample_profile
+):
+    _no_background_reconcile_shells(monkeypatch)
+    module_id = _link_module_folder(tmp_config, sample_profile, "")
+
+    refused = client.post(
+        "/api/terminals/shells",
+        data=json.dumps({"module_id": module_id}),
+        content_type="application/json",
+    )
+
+    assert refused.status_code == 409
+    assert refused.json()["code"] == "module_folder_unset"
+    assert not AgentRun.objects.filter(scope=SHELL_SCOPE).exists()
+
+
+def test_module_shell_listing_requires_a_module(client):
+    response = client.get("/api/terminals/shells")
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "module_id_required"
+
+
+def _no_background_reconcile_shells(monkeypatch):
+    from apps.terminals import shell_api
+
+    monkeypatch.setattr(shell_api, "schedule_terminal_reconciliation", lambda: False)

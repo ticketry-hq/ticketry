@@ -252,7 +252,6 @@ function openAgentPicker(ctx: NavigationContext): boolean {
     projectId: selectedProjectId,
     moduleId: selectedModuleId,
     taskId: row.id,
-    ticketSeq: task.sequence_id,
   };
 
   if (ctx.event.shiftKey) {

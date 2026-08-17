@@ -6,7 +6,7 @@ Ported from ``web/backend/tests/test_lifecycle_events.py``:
 - A recognized kind is reduced and stored as the run's latest state.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from django.test import AsyncClient
@@ -255,6 +255,8 @@ async def _seed_status_run(
     scope: str = "task",
     runtime_namespace: str | None = None,
     persist_terminal: bool = True,
+    launch_state: str | None = None,
+    launch_model: str | None = None,
 ) -> None:
     await dao.insert_agent_run(
         AgentRun(
@@ -268,6 +270,8 @@ async def _seed_status_run(
             ended_at=ended_at,
             lifecycle_state=lifecycle_state,
             lifecycle_updated_at=lifecycle_updated_at,
+            launch_state=launch_state,
+            launch_model=launch_model,
             scope=scope,
         )
     )
@@ -302,6 +306,8 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
         "with-event", task_id="t1", started_at="2026-07-12T14:00:00+00:00",
         lifecycle_state="needs_input",
         lifecycle_updated_at="2026-07-12T15:00:00+00:00",
+        launch_state="Grill",
+        launch_model="gpt-5-codex",
     )
     await _seed_status_run(
         "pre-event", task_id="t2", started_at="2026-07-12T15:05:00+00:00",
@@ -322,9 +328,23 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
                 "module_id": MODULE_1_ID,
                 "agent": "codex",
                 "scope": "plan",
+                # A run that recorded no launch snapshots projects them as
+                # null; the snapshot never falls back to the work item's
+                # current state or a provider default (#693).
+                "launch_state": None,
+                "launch_model": None,
                 "started_at": "2026-07-12T15:05:00+00:00",
                 "state": "unknown",
                 "updated_at": "2026-07-12T15:05:00+00:00",
+                # No hosted command has reported a result on a live run.
+                "exit_code": None,
+                # Both axes travel in the snapshot. This session has produced no
+                # output and reports no provider state, so it falls back to its
+                # creation-time inactivity origin and projects stalled long
+                # after (#661).
+                "output_sequence": 0,
+                "last_output_at": "2026-07-12T15:05:00+00:00",
+                "effective_state": "stalled",
             },
             {
                 "agent_run_id": "with-event",
@@ -333,14 +353,55 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
                 "module_id": MODULE_1_ID,
                 "agent": "codex",
                 "scope": "task",
+                # A run that recorded them projects exactly what it captured
+                # at launch.
+                "launch_state": "Grill",
+                "launch_model": "gpt-5-codex",
                 "started_at": "2026-07-12T14:00:00+00:00",
                 "state": "needs_input",
                 "updated_at": "2026-07-12T15:00:00+00:00",
+                "exit_code": None,
+                "output_sequence": 0,
+                "last_output_at": "2026-07-12T14:00:00+00:00",
+                # A run waiting on the person keeps that signal however long it
+                # waits: it already explains its own silence (#681).
+                "effective_state": "needs_input",
             },
         ],
         "automation_attempts": [],
         "at": "2026-07-12T15:30:00+00:00",
     }
+
+
+async def test_agent_status_projects_the_inactivity_boundary_at_read_time() -> None:
+    """#661: the snapshot projects both axes without rewriting either."""
+
+    await _seed_status_run(
+        "silent-run",
+        task_id="t1",
+        started_at="2026-07-12T15:00:00+00:00",
+        lifecycle_state="working",
+        lifecycle_updated_at="2026-07-12T15:00:00+00:00",
+    )
+    observed = datetime(2026, 7, 12, 15, 0, tzinfo=timezone.utc)
+
+    just_inside = await dao.agent_status_records(
+        PROJECT_ID,
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
+        now=observed + timedelta(seconds=59),
+    )
+    at_boundary = await dao.agent_status_records(
+        PROJECT_ID,
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
+        now=observed + timedelta(seconds=60),
+    )
+
+    assert [record.effective_state for record in just_inside] == ["working"]
+    assert [record.effective_state for record in at_boundary] == ["stalled"]
+    # The persisted provider lifecycle record is untouched by either read.
+    assert [record.state for record in at_boundary] == ["working"]
+    run = await AgentRun.objects.aget(id="silent-run")
+    assert run.lifecycle_state == "working"
 
 
 async def test_agent_status_ended_run_is_an_exited_tombstone(monkeypatch) -> None:

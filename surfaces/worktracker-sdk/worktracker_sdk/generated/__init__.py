@@ -60,6 +60,7 @@ __all__ = [
     "CommittedState",
     "Config",
     "ConfigurationReorder",
+    "CreateModuleShell",
     "CreateTerminal",
     "CreateWorktree",
     "Digest",
@@ -90,6 +91,7 @@ __all__ = [
     "Module",
     "ModuleCreate",
     "ModuleLink",
+    "ModuleShell",
     "Open",
     "OriginEnum",
     "PatchedAgentModel",
@@ -127,6 +129,8 @@ __all__ = [
     "ViewerLease",
     "ViewerLeaseRelease",
     "ViewerLeaseResult",
+    "ViewerOutputReport",
+    "ViewerOutputReportResult",
     "WorkItem",
     "WorkItemBatch",
     "WorkItemCreate",
@@ -181,6 +185,7 @@ from worktracker_sdk.generated.models.automation_attempt import AutomationAttemp
 from worktracker_sdk.generated.models.committed_state import CommittedState as CommittedState
 from worktracker_sdk.generated.models.config import Config as Config
 from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder as ConfigurationReorder
+from worktracker_sdk.generated.models.create_module_shell import CreateModuleShell as CreateModuleShell
 from worktracker_sdk.generated.models.create_terminal import CreateTerminal as CreateTerminal
 from worktracker_sdk.generated.models.create_worktree import CreateWorktree as CreateWorktree
 from worktracker_sdk.generated.models.digest import Digest as Digest
@@ -211,6 +216,7 @@ from worktracker_sdk.generated.models.lifecycle_event import LifecycleEvent as L
 from worktracker_sdk.generated.models.module import Module as Module
 from worktracker_sdk.generated.models.module_create import ModuleCreate as ModuleCreate
 from worktracker_sdk.generated.models.module_link import ModuleLink as ModuleLink
+from worktracker_sdk.generated.models.module_shell import ModuleShell as ModuleShell
 from worktracker_sdk.generated.models.open import Open as Open
 from worktracker_sdk.generated.models.origin_enum import OriginEnum as OriginEnum
 from worktracker_sdk.generated.models.patched_agent_model import PatchedAgentModel as PatchedAgentModel
@@ -248,6 +254,8 @@ from worktracker_sdk.generated.models.transport_enum import TransportEnum as Tra
 from worktracker_sdk.generated.models.viewer_lease import ViewerLease as ViewerLease
 from worktracker_sdk.generated.models.viewer_lease_release import ViewerLeaseRelease as ViewerLeaseRelease
 from worktracker_sdk.generated.models.viewer_lease_result import ViewerLeaseResult as ViewerLeaseResult
+from worktracker_sdk.generated.models.viewer_output_report import ViewerOutputReport as ViewerOutputReport
+from worktracker_sdk.generated.models.viewer_output_report_result import ViewerOutputReportResult as ViewerOutputReportResult
 from worktracker_sdk.generated.models.work_item import WorkItem as WorkItem
 from worktracker_sdk.generated.models.work_item_batch import WorkItemBatch as WorkItemBatch
 from worktracker_sdk.generated.models.work_item_create import WorkItemCreate as WorkItemCreate

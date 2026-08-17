@@ -48,7 +48,12 @@ async def _issue_type(project: Project, *, level: str = "task") -> IssueType:
 
 
 async def _seed_run(
-    run_id: str, *, project_id: str = "proj-1", scope: str = "task"
+    run_id: str,
+    *,
+    project_id: str = "proj-1",
+    scope: str = "task",
+    launch_state: str | None = None,
+    launch_model: str | None = None,
 ) -> None:
     await dao.insert_agent_run(
         AgentRun(
@@ -59,6 +64,8 @@ async def _seed_run(
             agent="codex",
             status="running",
             started_at="2026-07-12T10:00:00+00:00",
+            launch_state=launch_state,
+            launch_model=launch_model,
             scope=scope,
         )
     )
@@ -405,7 +412,9 @@ async def test_connect_omits_dismissed_automation_attempts() -> None:
 
 
 async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
-    await _seed_run("run-1", scope="task")
+    await _seed_run(
+        "run-1", scope="task", launch_state="Grill", launch_model="gpt-5-codex"
+    )
     socket = await _connect(PROJECT_1_ID)
     assert (await socket.connect())[0]
     await socket.receive_json_from()  # snapshot
@@ -430,9 +439,23 @@ async def test_lifecycle_delta_is_self_sufficient_run_record() -> None:
             "module_id": MODULE_1_ID,
             "agent": "codex",
             "scope": "task",
+            # A lifecycle delta describes the run's launch exactly as the
+            # authoritative snapshot does; lifecycle never rewrites the
+            # write-once snapshots (#693).
+            "launch_state": "Grill",
+            "launch_model": "gpt-5-codex",
             "started_at": "2026-07-12T10:00:00+00:00",
             "state": "working",
             "updated_at": "2026-07-12T10:01:00+00:00",
+            # No hosted command has reported a result on a live run.
+            "exit_code": None,
+            # The delta also carries the independently ordered terminal-output
+            # activity axis, so a client can merge it without a snapshot. This
+            # seeded session has produced no output since creation, which the
+            # read-time projection presents as stalled (#661).
+            "output_sequence": 0,
+            "last_output_at": "2026-07-12T10:00:00+00:00",
+            "effective_state": "stalled",
         },
     }
     await socket.disconnect()
@@ -450,6 +473,8 @@ async def test_backend_and_document_frames_are_project_scoped() -> None:
         "agent_run_id": "run-1",
         "status": "lost",
         "at": "now",
+        # A lost runtime observed no process result, so there is none to carry.
+        "exit_code": None,
     }
 
     await publish_document(

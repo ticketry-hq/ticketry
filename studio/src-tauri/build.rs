@@ -23,11 +23,13 @@ fn main() {
             "viewer_status",
             "native_terminal_available",
             "native_terminal_attach",
+            "native_terminal_reconcile_frame",
             "native_terminal_set_frame",
             "native_terminal_hide",
             "native_terminal_show",
             "native_terminal_focus",
             "native_terminal_detach",
+            "native_terminal_trace",
         ]),
     ))
     .expect("failed to build the Ticketry Tauri application");

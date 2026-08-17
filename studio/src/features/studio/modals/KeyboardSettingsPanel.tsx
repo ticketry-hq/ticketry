@@ -19,6 +19,7 @@ const ACTION_LABELS: Record<string, string> = {
   "edit-view.commit": "Enter edit-view selection",
   "edit-view.body-disengage": "Disengage body",
   "cycle-terminal-forward": "Cycle terminal forward",
+  "toggle-terminal-panel": "Toggle terminal panel",
   "cycle-terminal-backward": "Cycle terminal backward",
   "workspace-tab-next": "Next workspace tab",
   "workspace-tab-previous": "Previous workspace tab",
@@ -193,7 +194,7 @@ export function KeyboardSettingsPanel({
         </SettingsStatusLine>
       ) : null}
 
-      <div className="overflow-hidden rounded border border-pane-border">
+      <div className="overflow-hidden border border-pane-border">
         <div className="grid grid-cols-[minmax(12rem,1fr)_8rem_12rem_5rem] gap-3 border-b border-pane-border px-3 py-2 text-sm font-semibold uppercase tracking-wide text-text-muted">
           <span>Action</span>
           <span>Context</span>

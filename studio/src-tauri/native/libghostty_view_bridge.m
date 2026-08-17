@@ -23,6 +23,8 @@ void muxed_ghostty_view_free(void *opaque) {
   view->_resizeContext = NULL;
   view->_processExitCallback = NULL;
   view->_processExitContext = NULL;
+  view->_chordCallback = NULL;
+  view->_chordContext = NULL;
   [view removeFromSuperview];
   [view release];
 }
@@ -191,6 +193,22 @@ void muxed_ghostty_view_disable_scroll_callback(void *opaque) {
   if (view == nil) return;
   view->_scrollCallback = NULL;
   view->_scrollContext = NULL;
+}
+
+void muxed_ghostty_view_set_chord_callback(void *opaque,
+                                          muxed_ghostty_chord_cb callback,
+                                          void *context) {
+  MuxedGhosttyView *view = opaque;
+  if (view == nil) return;
+  view->_chordCallback = callback;
+  view->_chordContext = context;
+}
+
+void muxed_ghostty_view_disable_chord_callback(void *opaque) {
+  MuxedGhosttyView *view = opaque;
+  if (view == nil) return;
+  view->_chordCallback = NULL;
+  view->_chordContext = NULL;
 }
 
 void muxed_ghostty_view_disable_process_exit_callback(void *opaque) {

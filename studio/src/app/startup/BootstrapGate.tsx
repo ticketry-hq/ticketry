@@ -74,7 +74,7 @@ function ConnectingScreen({ status, onRetry }: ConnectingScreenProps) {
           <button
             type="button"
             onClick={onRetry}
-            className="rounded border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent hover:bg-pane-bg"
+            className="border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent hover:bg-pane-bg"
           >
             Retry
           </button>

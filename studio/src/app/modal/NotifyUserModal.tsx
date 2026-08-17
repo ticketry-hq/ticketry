@@ -34,7 +34,7 @@ export function NotifyUserModal({ notice }: { notice: UserNotice }) {
       initialFocusRef={acknowledgementRef}
     >
       <div
-        className={`inline-flex rounded border px-2 py-1 text-xs font-semibold uppercase tracking-wide ${treatment.className}`}
+        className={`inline-flex border px-2 py-1 text-xs font-semibold uppercase tracking-wide ${treatment.className}`}
         data-severity={notice.severity}
       >
         {treatment.label}
@@ -47,7 +47,7 @@ export function NotifyUserModal({ notice }: { notice: UserNotice }) {
           ref={acknowledgementRef}
           type="button"
           onClick={popModal}
-          className="rounded border border-focus-accent bg-pane-title px-3 py-1.5 text-sm font-semibold text-focus-accent"
+          className="border border-focus-accent bg-pane-title px-3 py-1.5 text-sm font-semibold text-focus-accent"
         >
           {notice.acknowledgementLabel}
         </button>

@@ -1,7 +1,7 @@
 import {
   presentLifecycle,
-  type LifecycleState,
   type LifecycleTone,
+  type TerminalPresentationState,
 } from "./lifecycle";
 
 // Tone → border/text classes. The attention tones (amber/red) read distinctly
@@ -32,7 +32,7 @@ export function LifecycleBadge({
   showLabel = true,
   alwaysShowCount = false,
 }: {
-  state: LifecycleState;
+  state: TerminalPresentationState;
   count?: number;
   showLabel?: boolean;
   alwaysShowCount?: boolean;

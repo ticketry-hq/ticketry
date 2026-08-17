@@ -41,13 +41,13 @@ export default function FindingsPanel({ children, projectId, onCancel }: Finding
           Review findings
         </span>
         <span
-          className="rounded-full bg-pane-title px-2 py-0.5 text-xs text-text-secondary"
+          className="bg-pane-title px-2 py-0.5 text-xs text-text-secondary"
           data-testid="findings-queued-count"
         >
           {queued} {queued === 1 ? "fix" : "fixes"} queued
         </span>
       </div>
-      <div className="overflow-hidden rounded-lg border border-pane-border" data-testid="findings-list">
+      <div className="overflow-hidden border border-pane-border" data-testid="findings-list">
         {items.map((f) => {
           const location = formatFindingLocation(f.description);
           const state = stateById(states, f.state);
@@ -78,7 +78,7 @@ export default function FindingsPanel({ children, projectId, onCancel }: Finding
                 )}
               </button>
               <span
-                className="flex-none rounded px-1.5 py-0.5 text-xs"
+                className="flex-none px-1.5 py-0.5 text-xs"
                 data-testid="finding-state"
                 style={{ color: stateColor(state), backgroundColor: `${stateColor(state)}22` }}
               >
@@ -91,7 +91,7 @@ export default function FindingsPanel({ children, projectId, onCancel }: Finding
                   data-testid="finding-cancel"
                   aria-label={identifier ? `Cancel ${identifier}` : "Cancel finding"}
                   title="Cancel finding"
-                  className="flex-none rounded px-1.5 py-0.5 text-xs text-text-muted hover:bg-pane-bg hover:text-lifecycle-danger"
+                  className="flex-none px-1.5 py-0.5 text-xs text-text-muted hover:bg-pane-bg hover:text-lifecycle-danger"
                 >
                   Cancel
                 </button>

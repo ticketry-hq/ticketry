@@ -50,7 +50,7 @@ export default function IssueActionsMenu({
         title="Issue actions"
         data-testid="issue-actions-trigger"
         onClick={() => setOpen((value) => !value)}
-        className="rounded px-1.5 py-0.5 text-base leading-none text-text-secondary transition-colors hover:bg-pane-title hover:text-text-primary"
+        className="px-1.5 py-0.5 text-base leading-none text-text-secondary transition-colors hover:bg-pane-title hover:text-text-primary"
       >
         ⋯
       </button>

@@ -40,9 +40,8 @@ export function beginTerminalCreate(
 
 /**
  * Open the existing scratch planning terminal for a chosen agent. The launch
- * contract is fixed and intentionally minimal: no task (`taskId: null`,
- * `ticketSeq: null`), the caller's module, the carried prompt, and
- * `isPlanning: true`. No parent/state fields are added.
+ * contract is fixed and intentionally minimal: no task (`taskId: null`), the
+ * caller's module, the carried prompt, and `isPlanning: true`. No parent/state fields are added.
  *
  * Presentation (selecting the scratch bucket, activating a terminal workspace)
  * is the caller's responsibility — this only creates the session and returns
@@ -54,7 +53,6 @@ export function launchScratchPlanning(launch: ScratchPlanningLaunch): SessionId 
     projectId: launch.projectId,
     moduleId: launch.moduleId,
     agent: launch.agent,
-    ticketSeq: null,
     initialPrompt: launch.initialPrompt,
     isPlanning: true,
   });

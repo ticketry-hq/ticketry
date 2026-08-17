@@ -197,7 +197,7 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
             {CONFIGURABLE_PROVIDERS.map((provider) => (
               <label
                 key={provider}
-                className="flex items-center justify-between rounded-md border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary"
+                className="flex items-center justify-between border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary"
               >
                 <span>{provider}</span>
                 <input
@@ -251,7 +251,7 @@ export function OnboardingProviders({ continueLabel, onContinue }: Props) {
           type="button"
           onClick={() => void continueOnboarding()}
           disabled={!canContinue}
-          className="rounded-md bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
+          className="bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? "Saving…" : continueLabel}
         </button>

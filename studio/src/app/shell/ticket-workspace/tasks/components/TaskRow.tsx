@@ -11,6 +11,7 @@ import {
   ScratchStateBadge,
 } from "../../../../../features/agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
+import { WorkItemRowLabel } from "./WorkItemRowLabel";
 import { useStudioStore } from "../../../../../features/projects/store";
 import { useClientStore } from "../../../../../state/clientStore";
 import { useQuery } from "@tanstack/react-query";
@@ -210,17 +211,11 @@ function PlanningRowView({
         </span>
       )}
 
-      {identifier ? (
-        <span
-          data-task-id-token
-          className={`mr-2 shrink-0 ${stateColor ? "" : "text-text-muted"}`}
-          style={stateColor ? { color: stateColor } : undefined}
-        >
-          {identifier}
-        </span>
-      ) : null}
-
-      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <WorkItemRowLabel
+        identifier={identifier}
+        stateColor={stateColor}
+        name={name}
+      />
 
       {isScratch ? (
         <ScratchTaskStateBadge moduleId={scratchModuleId} />

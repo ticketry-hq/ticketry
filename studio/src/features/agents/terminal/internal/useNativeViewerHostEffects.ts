@@ -41,6 +41,7 @@ export function useNativeViewerFrameSync({
   hostRef,
   activeRef,
   currentHandleRef,
+  presented,
   visible,
   modalOpen,
   onFailure,
@@ -49,6 +50,7 @@ export function useNativeViewerFrameSync({
   hostRef: RefObject<HTMLDivElement | null>;
   activeRef: RefObject<boolean>;
   currentHandleRef: RefObject<string | null>;
+  presented: boolean;
   visible: boolean;
   modalOpen: boolean;
   onFailure: (error: unknown) => void;
@@ -59,7 +61,11 @@ export function useNativeViewerFrameSync({
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!handle || !host || !visible || modalOpen) return;
+    // Geometry is observed only while this viewer is actually presented. A
+    // retained-but-hidden viewer — occluded by a modal, deactivated, or still
+    // waiting for its reveal to commit — has no on-screen frame to track, and
+    // pushing one would resize a view the user cannot see.
+    if (!handle || !host || !presented || !visible || modalOpen) return;
     const scheduleFrame = () => {
       if (!activeRef.current || resizeFrameRef.current) return;
       resizeFrameRef.current = requestAnimationFrame(() => {
@@ -85,7 +91,7 @@ export function useNativeViewerFrameSync({
       if (resizeFrameRef.current) cancelAnimationFrame(resizeFrameRef.current);
       resizeFrameRef.current = 0;
     };
-  }, [activeRef, currentHandleRef, handle, hostRef, modalOpen, visible]);
+  }, [activeRef, currentHandleRef, handle, hostRef, modalOpen, presented, visible]);
 }
 
 export function useNativeViewerFocusSignal({

@@ -16,7 +16,7 @@ export function GhostChipAdd({
       disabled={disabled}
       aria-label={label}
       onClick={onClick}
-      className="inline-flex h-5 w-5 items-center justify-center rounded-full text-xs text-text-muted opacity-60 transition-colors hover:bg-pane-title hover:text-text-primary focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus-accent disabled:opacity-30"
+      className="inline-flex h-5 w-5 items-center justify-center text-xs text-text-muted opacity-60 transition-colors hover:bg-pane-title hover:text-text-primary focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus-accent disabled:opacity-30"
     >
       +
     </button>

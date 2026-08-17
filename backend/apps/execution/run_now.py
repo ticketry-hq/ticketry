@@ -10,11 +10,10 @@ from weakref import WeakValueDictionary
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from apps.execution import auto_start_suppression, driver
-from apps.runs.models import AgentRun
+from apps.execution.work_item_liveness import has_live_work
 from apps.settings_store.config import NoConfigurationSelected
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.launch import LaunchUnavailable
-from apps.terminals.models import AgentTerminalSession
 from apps.terminals.task_launch_preflight import preflight_task_launch
 from worktracker.models import Issue, State
 from worktracker.services.work_items import update_work_item
@@ -78,20 +77,9 @@ def _has_live_work(
     *,
     caller_agent_run_id: str | None = None,
 ) -> bool:
-    agent_runs = AgentRun.objects.filter(issue_id=target_id, ended_at__isnull=True)
-    terminal_sessions = AgentTerminalSession.objects.filter(
-        task_id=target_id,
-        terminated_at__isnull=True,
-    )
-    if caller_agent_run_id is not None:
-        agent_runs = agent_runs.exclude(id=caller_agent_run_id)
-        terminal_sessions = terminal_sessions.exclude(
-            agent_run_id=caller_agent_run_id
-        )
-    return (
-        agent_runs.exists()
-        or terminal_sessions.exists()
-    )
+    """Run Now's liveness question, answered by the one shared rule."""
+
+    return has_live_work(target_id, exclude_agent_run_id=caller_agent_run_id)
 
 
 def execute(

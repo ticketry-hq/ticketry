@@ -2,6 +2,7 @@
 
 use super::NativeTerminalFrame;
 use crate::native_terminal_frames::{validate_frame, validate_native_frame, PendingFrames};
+use crate::native_terminal_chords::{ChordSink, StudioChord, NATIVE_CHORD_EVENT};
 use crate::native_terminal_preparation::{PreparationGate, TerminalGrid};
 use crate::native_terminal_scroll::ScrollGestureSink;
 use crate::native_terminal_visibility::NativeTerminalVisibility;

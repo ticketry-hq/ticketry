@@ -4,11 +4,14 @@ The *launch half* of the WS terminal spawn path, lifted out of
 ``terminals.consumers._spawn_persisted`` into a single module-level callable so
 the human WebSocket flow and programmatic launches share one path. :func:`_launch`
 injects per-agent lifecycle
-hooks, asks the persistence service to record the launch, creates the detached
-terminal through the public runtime, and starts the design-dir document watcher — then
-returns the run id. On a persistence/runtime failure it compensates the launch
-and raises :class:`LaunchUnavailable`. If runtime cleanup is temporarily
-unavailable, it retains a cleanup-pending run so reconciliation can retry.
+hooks, hands the record-and-create transaction to
+:mod:`apps.terminals.durable_launch`, and starts the design-dir document
+watcher — then returns the run id. The atomicity guarantee on a
+persistence/runtime failure, including :class:`LaunchUnavailable`, belongs to
+that shared transaction and is identical for every durable launch.
+
+This module owns the process-wide :data:`terminal_runtime` instance every
+launch path creates its terminal on.
 
 Viewer attachment is owned separately by :mod:`apps.terminals.viewer_attachments`;
 :func:`_launch` never handles transport or viewer policy.
@@ -52,23 +55,22 @@ from apps.documents import watch as documents_watch
 from apps.runs.bus import publish_backend_session_sync, publish_document, publish_status
 from apps.settings_store import config as cfgmod
 from apps.settings_store.config import NoConfigurationSelected, module_link_path
+from apps.terminals.durable_launch import (
+    LaunchUnavailable as LaunchUnavailable,
+    create_durable_run,
+)
 from apps.terminals.launch_configuration import (
     ResolvedLaunchConfiguration,
     resolve_task_launch_configuration,
 )
 from apps.terminals.persistence import (
     LaunchRecords,
-    compensate_launch,
     load_resume_launch,
-    mark_launch_cleanup_pending,
-    persist_launch,
     persist_termination,
     termination_context,
 )
 from apps.terminals.prompt_builder import _build_prompt, _resolve_profile_index
 from apps.terminals.runtime import (
-    CreateTerminal,
-    TerminalDimensions,
     TerminalRuntime,
     TmuxTerminalRuntime,
 )
@@ -91,7 +93,6 @@ _APPROVED_AGENT_PATHS = {
 # direct commands comfortably below that boundary; large prompts are executed
 # from a private run-scoped wrapper instead.
 _TMUX_DIRECT_COMMAND_MAX_BYTES = 8 * 1024
-_INITIAL_TERMINAL_DIMENSIONS = TerminalDimensions(columns=80, rows=24)
 
 # Application callers depend on the public runtime protocol.  Tests replace
 # this instance with the in-memory runtime or a recording fake.
@@ -191,16 +192,6 @@ def _approved_agent_argv(agent: str, argv: list[str]) -> list[str]:
     return [str(path), *argv[1:]]
 
 
-class LaunchUnavailable(Exception):
-    """The persisted launch could not complete.
-
-    Raised when persistence or runtime creation fails. :func:`_launch`
-    terminates any partial runtime and deletes orphan application rows before
-    raising. If termination cannot be confirmed, it preserves a cleanup-pending
-    application handle for reconciliation.
-    """
-
-
 class ResumeUnavailable(Exception):
     """The requested historical provider conversation cannot be resumed."""
 
@@ -221,6 +212,8 @@ async def _launch(
     agent_run_id: str,
     resumed_from: Optional[str] = None,
     provider_session_id: Optional[str] = None,
+    launch_state: Optional[str] = None,
+    launch_model: Optional[str] = None,
     resolved_skills: ResolvedSkills | None = None,
 ) -> str:
     """Persist and start one agent run inside a detached terminal runtime.
@@ -240,6 +233,11 @@ async def _launch(
         ``"docchat"``).
     :param issue_id: the task or module Issue anchoring the run.
     :param agent_run_id: pre-minted, non-null run id (callers mint it upstream).
+    :param launch_state: display name of the workflow state this run is being
+        launched in, or ``None`` when the launch has no workflow state. Written
+        once here and never updated (#693).
+    :param launch_model: the model launch configuration actually resolved for
+        this run, or ``None`` when none was resolved. Also write-once.
     :return: ``agent_run_id`` — the persisted, live run.
     :raises LaunchUnavailable: on persistence/runtime failure; launch records
         are deleted after runtime cleanup is confirmed or retained for retry.
@@ -297,64 +295,27 @@ async def _launch(
         *command_artifacts,
     )
 
-    launch_persisted = False
-    try:
-        routing = await asyncio.to_thread(
-            persist_launch,
-            LaunchRecords(
-                agent_run_id=agent_run_id,
-                issue_id=issue_id,
-                agent=agent,
-                started_at=started_at,
-                cwd=cwd,
-                design_dir=design_dir,
-                resumed_from=resumed_from,
-                scope=scope,
-                doc_rel_path=doc_rel_path,
-                runtime_namespace=terminal_runtime.namespace,
-                provider_session_id=provider_session_id,
-            ),
-        )
-        launch_persisted = True
-        await asyncio.to_thread(
-            terminal_runtime.create,
-            CreateTerminal(
-                agent_run_id=agent_run_id,
-                command=command,
-                working_directory=cwd,
-                environment=dict(augmentation.environment),
-                dimensions=_INITIAL_TERMINAL_DIMENSIONS,
-            ),
-        )
-    except Exception as exc:
-        # Runtime creation can fail after making a partial terminal. Explicitly
-        # compensate both sides; terminate is idempotent when nothing exists.
-        logger.exception("terminal launch failed run=%s", agent_run_id)
-        cleanup_confirmed = not launch_persisted
-        if launch_persisted:
-            try:
-                await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
-                cleanup_confirmed = True
-            except Exception:
-                logger.warning(
-                    "terminal launch compensation failed run=%s",
-                    agent_run_id,
-                    exc_info=True,
-                )
-                try:
-                    await asyncio.to_thread(mark_launch_cleanup_pending, agent_run_id)
-                except Exception:
-                    logger.exception(
-                        "could not mark terminal launch cleanup pending run=%s",
-                        agent_run_id,
-                    )
-        if cleanup_confirmed:
-            try:
-                await asyncio.to_thread(compensate_launch, agent_run_id)
-            except Exception:
-                pass
-            cleanup_temporary_artifacts(temporary_artifacts)
-        raise LaunchUnavailable(str(exc)) from exc
+    routing = await create_durable_run(
+        runtime=terminal_runtime,
+        records=LaunchRecords(
+            agent_run_id=agent_run_id,
+            issue_id=issue_id,
+            agent=agent,
+            started_at=started_at,
+            cwd=cwd,
+            design_dir=design_dir,
+            resumed_from=resumed_from,
+            scope=scope,
+            doc_rel_path=doc_rel_path,
+            runtime_namespace=terminal_runtime.namespace,
+            provider_session_id=provider_session_id,
+            launch_state=launch_state,
+            launch_model=launch_model,
+        ),
+        command=command,
+        environment=augmentation.environment,
+        temporary_artifacts=temporary_artifacts,
+    )
 
     # The run row exists and the agent is live inside tmux: tell connected
     # /ws/status clients about the spawn (or resume — it shares this path)
@@ -372,9 +333,18 @@ async def _launch(
                 module_id=routing.module_id,
                 agent=agent,
                 scope=scope,
+                # The same snapshots just persisted, so the live frame and a
+                # later authoritative snapshot describe this run identically
+                # (#693).
+                launch_state=launch_state,
+                launch_model=launch_model,
                 started_at=started_at,
                 state="starting",
                 updated_at=started_at,
+                # The terminal mirror was created with this same inactivity
+                # origin, so a launch that never produces output still reaches
+                # the stall boundary from a known point (#661).
+                last_output_at=started_at,
             ),
         ).model_dump(),
     )
@@ -495,6 +465,18 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         scope=intent.scope,
         doc_rel_path=intent.doc_rel_path,
         agent_run_id=agent_run_id,
+        # Every task launch — interactive, automated, or Run Now — reaches this
+        # one point with the configuration it actually resolved, so both
+        # snapshots are captured by the same rule (#693). A scratch or doc-chat
+        # launch has no configuration and records neither.
+        launch_state=(
+            launch_configuration.state_name
+            if launch_configuration is not None
+            else None
+        ),
+        launch_model=(
+            launch_configuration.model if launch_configuration is not None else None
+        ),
         resolved_skills=resolved_skills,
     )
 
@@ -528,6 +510,11 @@ async def resume_provider_conversation(agent_run_id: str) -> str:
     facts = await asyncio.to_thread(load_resume_launch, agent_run_id)
     if facts is None:
         raise ResumeUnavailable("unknown_run")
+    if facts.agent is None:
+        # A run with no provider has no conversation to continue (#665). The
+        # provider-session guard below would also reject it, but the absence is
+        # refused on its own terms rather than left to a coincidence.
+        raise ResumeUnavailable("run_has_no_agent")
     if facts.ended_at is None:
         raise ResumeUnavailable("run_still_active")
     if not facts.provider_session_id:
@@ -547,8 +534,13 @@ async def resume_provider_conversation(agent_run_id: str) -> str:
         scope=facts.scope,
         doc_rel_path=None,
         agent_run_id=new_run_id,
-        # Provider identity is the sole resume continuity persisted onto the
-        # new run. The old AgentRun and terminal session remain historical.
+        # Provider identity and the original launch snapshots are the resume
+        # continuity persisted onto the new run: it continues the same
+        # conversation, so it reports the state and model that conversation
+        # began with rather than whatever the work item says now (#693). The
+        # old AgentRun and terminal session remain historical.
         provider_session_id=facts.provider_session_id,
+        launch_state=facts.launch_state,
+        launch_model=facts.launch_model,
         resolved_skills=ResolvedSkills((), (), frozenset(), ""),
     )

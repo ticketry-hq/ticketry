@@ -21,7 +21,7 @@ from typing_extensions import Self
 
 class ScopeEnum(str, Enum):
     """
-    * `task` - task * `plan` - plan * `instant` - instant * `docchat` - docchat
+    * `task` - task * `plan` - plan * `instant` - instant * `docchat` - docchat * `shell` - shell
     """
 
     """
@@ -31,6 +31,7 @@ class ScopeEnum(str, Enum):
     PLAN = 'plan'
     INSTANT = 'instant'
     DOCCHAT = 'docchat'
+    SHELL = 'shell'
 
     @classmethod
     def from_json(cls, json_str: str) -> Self:

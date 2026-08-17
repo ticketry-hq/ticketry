@@ -23,7 +23,8 @@ from worktracker.models import Issue
 class LaunchRecords:
     agent_run_id: str
     issue_id: str
-    agent: str
+    # ``None`` for an agentless run — a shell run has no provider (#665).
+    agent: str | None
     started_at: str
     cwd: str
     design_dir: str | None
@@ -32,6 +33,10 @@ class LaunchRecords:
     doc_rel_path: str | None
     runtime_namespace: str
     provider_session_id: str | None = None
+    # Write-once launch snapshots (#693). ``None`` for a launch that has no
+    # workflow state or no resolved model; never a substituted default.
+    launch_state: str | None = None
+    launch_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -39,12 +44,18 @@ class ResumeLaunchFacts:
     """Historical application facts needed to prepare a provider resume."""
 
     issue_id: str
-    agent: str
+    # ``None`` for an agentless run; provider resume is refused for one (#665).
+    agent: str | None
     ended_at: str | None
     provider_session_id: str | None
     cwd: str | None
     design_dir: str | None
     scope: str
+    # Carried forward, never recomputed: a resume continues the same
+    # conversation, so it was launched in the same state with the same model
+    # even if the work item has since moved on (#693).
+    launch_state: str | None = None
+    launch_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +77,10 @@ class ReconciliationOutcome:
 
     project_id: str | None
     was_active: bool
+    # The run's recorded process result after this write. ``None`` when nothing
+    # ever observed one, so a caller announcing the ending can pass on the code
+    # without reading the row again (#670).
+    exit_code: int | None = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +119,8 @@ def persist_launch(records: LaunchRecords) -> LaunchRouting:
                 design_dir=records.design_dir,
                 resumed_from=records.resumed_from,
                 provider_session_id=records.provider_session_id,
+                launch_state=records.launch_state,
+                launch_model=records.launch_model,
                 scope=records.scope,
             )
             AgentTerminalSession.objects.create(
@@ -116,6 +133,11 @@ def persist_launch(records: LaunchRecords) -> LaunchRouting:
                 project_id=project_id,
                 agent=records.agent,
                 created_at=records.started_at,
+                # A newly created session has produced no output yet, so its
+                # creation time is the inactivity origin until the first real
+                # observation. Without it a silent launch would have no bounded
+                # `starting`/`working` presentation at all (#661).
+                last_output_at=records.started_at,
                 runtime_namespace=records.runtime_namespace,
                 scope=records.scope,
                 doc_rel_path=records.doc_rel_path,
@@ -139,6 +161,8 @@ def load_resume_launch(agent_run_id: str) -> ResumeLaunchFacts | None:
                 "cwd",
                 "design_dir",
                 "scope",
+                "launch_state",
+                "launch_model",
             )
             .first()
         )
@@ -152,6 +176,8 @@ def load_resume_launch(agent_run_id: str) -> ResumeLaunchFacts | None:
             cwd=row["cwd"],
             design_dir=row["design_dir"],
             scope=row["scope"],
+            launch_state=row["launch_state"],
+            launch_model=row["launch_model"],
         )
     finally:
         close_old_connections()
@@ -286,6 +312,14 @@ def persist_reconciliation_outcome(
             return ReconciliationOutcome(
                 project_id=str(run.issue.project_id),
                 was_active=bool(terminal_updated or run_updated),
+                # The code just written when this pass recorded one, and the
+                # previously recorded one otherwise. Never invented: a missing
+                # runtime leaves whatever the process itself last reported.
+                exit_code=(
+                    exit_code
+                    if run_updated and exit_code is not None
+                    else run.exit_code
+                ),
             )
     finally:
         close_old_connections()

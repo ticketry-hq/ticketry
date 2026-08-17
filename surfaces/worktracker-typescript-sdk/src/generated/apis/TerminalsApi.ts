@@ -21,6 +21,11 @@ import {
     AgentRunIdToJSON,
 } from '../models/AgentRunId.js';
 import {
+    type CreateModuleShell,
+    CreateModuleShellFromJSON,
+    CreateModuleShellToJSON,
+} from '../models/CreateModuleShell.js';
+import {
     type CreateTerminal,
     CreateTerminalFromJSON,
     CreateTerminalToJSON,
@@ -30,6 +35,11 @@ import {
     ErrorEnvelopeFromJSON,
     ErrorEnvelopeToJSON,
 } from '../models/ErrorEnvelope.js';
+import {
+    type ModuleShell,
+    ModuleShellFromJSON,
+    ModuleShellToJSON,
+} from '../models/ModuleShell.js';
 import {
     type Open,
     OpenFromJSON,
@@ -80,6 +90,16 @@ import {
     ViewerLeaseResultFromJSON,
     ViewerLeaseResultToJSON,
 } from '../models/ViewerLeaseResult.js';
+import {
+    type ViewerOutputReport,
+    ViewerOutputReportFromJSON,
+    ViewerOutputReportToJSON,
+} from '../models/ViewerOutputReport.js';
+import {
+    type ViewerOutputReportResult,
+    ViewerOutputReportResultFromJSON,
+    ViewerOutputReportResultToJSON,
+} from '../models/ViewerOutputReportResult.js';
 
 export interface TerminalsCreateRequest {
     createTerminal: CreateTerminal;
@@ -108,6 +128,14 @@ export interface TerminalsScratchListRequest {
     moduleId?: string;
 }
 
+export interface TerminalsShellsCreateRequest {
+    createModuleShell: CreateModuleShell;
+}
+
+export interface TerminalsShellsListRequest {
+    moduleId: string;
+}
+
 export interface TerminalsViewersLeaseCreateRequest {
     viewerLease: ViewerLease;
 }
@@ -118,6 +146,10 @@ export interface TerminalsViewersLeaseReleaseCreateRequest {
 
 export interface TerminalsViewersLeaseRenewCreateRequest {
     viewerLeaseRelease: ViewerLeaseRelease;
+}
+
+export interface TerminalsViewersOutputCreateRequest {
+    viewerOutputReport: ViewerOutputReport;
 }
 
 /**
@@ -279,6 +311,50 @@ export interface TerminalsApiInterface {
     terminalsSelfTerminateCreate(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SelfTerminateResult>;
 
     /**
+     * Creates request options for terminalsShellsCreate without sending the request
+     * @param {CreateModuleShell} createModuleShell
+     * @throws {RequiredError}
+     * @memberof TerminalsApiInterface
+     */
+    terminalsShellsCreateRequestOpts(requestParameters: TerminalsShellsCreateRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * A module\'s durable login shells, which are runs with no agent.
+     * @param {CreateModuleShell} createModuleShell
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TerminalsApiInterface
+     */
+    terminalsShellsCreateRaw(requestParameters: TerminalsShellsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentRunId>>;
+
+    /**
+     * A module\'s durable login shells, which are runs with no agent.
+     */
+    terminalsShellsCreate(requestParameters: TerminalsShellsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentRunId>;
+
+    /**
+     * Creates request options for terminalsShellsList without sending the request
+     * @param {string} moduleId
+     * @throws {RequiredError}
+     * @memberof TerminalsApiInterface
+     */
+    terminalsShellsListRequestOpts(requestParameters: TerminalsShellsListRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * A module\'s durable login shells, which are runs with no agent.
+     * @param {string} moduleId
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TerminalsApiInterface
+     */
+    terminalsShellsListRaw(requestParameters: TerminalsShellsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ModuleShell>>>;
+
+    /**
+     * A module\'s durable login shells, which are runs with no agent.
+     */
+    terminalsShellsList(requestParameters: TerminalsShellsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ModuleShell>>;
+
+    /**
      * Creates request options for terminalsViewersLeaseCreate without sending the request
      * @param {ViewerLease} viewerLease
      * @throws {RequiredError}
@@ -340,6 +416,27 @@ export interface TerminalsApiInterface {
     /**
      */
     terminalsViewersLeaseRenewCreate(requestParameters: TerminalsViewersLeaseRenewCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerLeaseResult>;
+
+    /**
+     * Creates request options for terminalsViewersOutputCreate without sending the request
+     * @param {ViewerOutputReport} viewerOutputReport
+     * @throws {RequiredError}
+     * @memberof TerminalsApiInterface
+     */
+    terminalsViewersOutputCreateRequestOpts(requestParameters: TerminalsViewersOutputCreateRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     *
+     * @param {ViewerOutputReport} viewerOutputReport
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof TerminalsApiInterface
+     */
+    terminalsViewersOutputCreateRaw(requestParameters: TerminalsViewersOutputCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ViewerOutputReportResult>>;
+
+    /**
+     */
+    terminalsViewersOutputCreate(requestParameters: TerminalsViewersOutputCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerOutputReportResult>;
 
 }
 
@@ -688,6 +785,109 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Creates request options for terminalsShellsCreate without sending the request
+     */
+    async terminalsShellsCreateRequestOpts(requestParameters: TerminalsShellsCreateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['createModuleShell'] == null) {
+            throw new runtime.RequiredError(
+                'createModuleShell',
+                'Required parameter "createModuleShell" was null or undefined when calling terminalsShellsCreate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/terminals/shells`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateModuleShellToJSON(requestParameters['createModuleShell']),
+        };
+    }
+
+    /**
+     * A module\'s durable login shells, which are runs with no agent.
+     */
+    async terminalsShellsCreateRaw(requestParameters: TerminalsShellsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentRunId>> {
+        const requestOptions = await this.terminalsShellsCreateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AgentRunIdFromJSON(jsonValue));
+    }
+
+    /**
+     * A module\'s durable login shells, which are runs with no agent.
+     */
+    async terminalsShellsCreate(requestParameters: TerminalsShellsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentRunId> {
+        const response = await this.terminalsShellsCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for terminalsShellsList without sending the request
+     */
+    async terminalsShellsListRequestOpts(requestParameters: TerminalsShellsListRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['moduleId'] == null) {
+            throw new runtime.RequiredError(
+                'moduleId',
+                'Required parameter "moduleId" was null or undefined when calling terminalsShellsList().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['moduleId'] != null) {
+            queryParameters['module_id'] = requestParameters['moduleId'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/terminals/shells`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * A module\'s durable login shells, which are runs with no agent.
+     */
+    async terminalsShellsListRaw(requestParameters: TerminalsShellsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ModuleShell>>> {
+        const requestOptions = await this.terminalsShellsListRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(ModuleShellFromJSON));
+    }
+
+    /**
+     * A module\'s durable login shells, which are runs with no agent.
+     */
+    async terminalsShellsList(requestParameters: TerminalsShellsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ModuleShell>> {
+        const response = await this.terminalsShellsListRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for terminalsViewersLeaseCreate without sending the request
      */
     async terminalsViewersLeaseCreateRequestOpts(requestParameters: TerminalsViewersLeaseCreateRequest): Promise<runtime.RequestOpts> {
@@ -831,6 +1031,55 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
      */
     async terminalsViewersLeaseRenewCreate(requestParameters: TerminalsViewersLeaseRenewCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerLeaseResult> {
         const response = await this.terminalsViewersLeaseRenewCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for terminalsViewersOutputCreate without sending the request
+     */
+    async terminalsViewersOutputCreateRequestOpts(requestParameters: TerminalsViewersOutputCreateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['viewerOutputReport'] == null) {
+            throw new runtime.RequiredError(
+                'viewerOutputReport',
+                'Required parameter "viewerOutputReport" was null or undefined when calling terminalsViewersOutputCreate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/terminals/viewers/output`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ViewerOutputReportToJSON(requestParameters['viewerOutputReport']),
+        };
+    }
+
+    /**
+     */
+    async terminalsViewersOutputCreateRaw(requestParameters: TerminalsViewersOutputCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ViewerOutputReportResult>> {
+        const requestOptions = await this.terminalsViewersOutputCreateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ViewerOutputReportResultFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async terminalsViewersOutputCreate(requestParameters: TerminalsViewersOutputCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerOutputReportResult> {
+        const response = await this.terminalsViewersOutputCreateRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

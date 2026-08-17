@@ -21,6 +21,7 @@ from apps.execution.tests.graph_scenarios import (
     _task,
     _terminal_session,
 )
+from apps.runs.models import AgentRun
 from worktracker.models import IssueType, Project, State
 
 
@@ -284,18 +285,132 @@ def test_serial_revival_retries_a_stalled_child_without_skipping_ahead(graph_pro
     assert not LaunchedTask.objects.filter(task=later).exists()
 
 
-def test_serial_repeat_request_is_refused_while_its_child_is_live(graph_project):
+def test_serial_repeat_press_never_starts_a_second_agent_beside_a_live_child(
+    graph_project,
+):
+    """An extra press cannot disturb a serial campaign that is progressing.
+
+    The live child is not restarted — and neither is any sibling. Serial
+    ordering comes from the sequence number rather than from ``blocked_by``
+    edges, so the later children carry no blocker and would otherwise look
+    startable; the campaign's one-at-a-time bound is what holds them.
+    """
+
     _successful_spawn.calls.clear()
     project, _, root, states, story_type = graph_project
     child = _task(project, story_type, root, "Child", 4, states["started"])
-    _task(project, story_type, root, "Later", 5, states["todo"])
+    later = _task(project, story_type, root, "Later", 5, states["todo"])
+    last = _task(project, story_type, root, "Last", 6, states["todo"])
 
     assert _execute_serially(root) == [str(child.id)]
     _agent_run(child, "run-1", active=True)
 
-    with pytest.raises(ValueError, match="^graph_run_exists$"):
-        _execute_serially(root)
-    assert len(_successful_spawn.calls) == 1
+    assert _execute_serially(root) == []
+    assert _execute_serially(root) == []
+    assert [call["task_id"] for call in _successful_spawn.calls] == [str(child.id)]
+    assert LaunchedTask.objects.get(task=child).agent_run_id == "run-1"
+    assert not LaunchedTask.objects.filter(task=later).exists()
+    assert not LaunchedTask.objects.filter(task=last).exists()
+
+    # Once that child finishes, the very next press resumes the campaign.
+    child.state = states["review"]
+    child.save(update_fields=["state"])
+
+    assert _execute_serially(root) == [str(later.id)]
+
+
+def test_serial_press_ignores_a_stale_fact_on_a_satisfied_child(graph_project):
+    """Campaign-wide liveness no longer holds a serial press.
+
+    ``First`` reached Review but its agent run was never recorded as ended, so
+    the campaign's own frontier is still pending. The press reads the work
+    instead and starts the next child.
+    """
+
+    _successful_spawn.calls.clear()
+    project, _, root, states, story_type = graph_project
+    first = _task(project, story_type, root, "First", 4, states["todo"])
+    second = _task(project, story_type, root, "Second", 5, states["todo"])
+
+    assert _execute_serially(root) == [str(first.id)]
+    _agent_run(first, "run-1", active=True)
+    first.state = states["review"]
+    first.save(update_fields=["state"])
+
+    # The automatic frontier is still held by that stale record...
+    assert driver.advance(str(root.id), spawn=_successful_spawn) == []
+    # ...but the press starts the work that is plainly waiting.
+    assert _execute_serially(root) == [str(second.id)]
+    assert LaunchedTask.objects.get(task=first).agent_run_id == "run-1"
+
+
+def test_a_press_racing_a_lifecycle_advancement_launches_exactly_once(graph_project):
+    """Manual and automatic advancement on one root produce one launch.
+
+    The spawn records the agent run the real launch seam records, so the loser
+    of the race sees either the launch fact (automatic) or the live work item
+    (manual) and starts nothing.
+    """
+
+    project, module, root, states, story_type = graph_project
+    gate = _task(project, story_type, module, "Gate", 4, states["todo"])
+    only = _task(project, story_type, root, "Only", 5, states["todo"])
+    only.blocked_by.add(gate)
+    calls: list[str] = []
+    calls_guard = threading.Lock()
+    overlap = threading.Barrier(2, timeout=0.5)
+
+    async def overlapping_spawn(**kwargs):
+        with calls_guard:
+            calls.append(kwargs["task_id"])
+            run_id = f"run-{len(calls)}"
+        await AgentRun.objects.acreate(
+            id=run_id,
+            issue_id=kwargs["task_id"],
+            ticket_seq=only.sequence_id,
+            agent="codex",
+            status="running",
+            started_at="2026-08-08T10:00:00+00:00",
+            scope="task",
+        )
+        try:
+            # Without per-root serialization both threads reach this point and
+            # select the same child; with it, the barrier simply times out.
+            overlap.wait()
+        except threading.BrokenBarrierError:
+            pass
+        return run_id
+
+    assert _execute_serially(root, spawn=overlapping_spawn) == []
+
+    gate.state = states["review"]
+    gate.save(update_fields=["state"])
+
+    launched: list[list[str]] = []
+    errors: list[BaseException] = []
+
+    def press():
+        try:
+            launched.append(_execute_serially(root, spawn=overlapping_spawn))
+        except BaseException as exc:  # pragma: no cover - surfaced by assertion
+            errors.append(exc)
+
+    def advance_once():
+        try:
+            launched.append(driver.advance(str(root.id), spawn=overlapping_spawn))
+        except BaseException as exc:  # pragma: no cover - surfaced by assertion
+            errors.append(exc)
+
+    threads = [threading.Thread(target=press), threading.Thread(target=advance_once)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert errors == []
+    assert sorted(launched, reverse=True) == [[str(only.id)], []]
+    assert calls == [str(only.id)]
+    assert list(LaunchedTask.objects.values_list("task_id", flat=True)) == [only.id]
 
 
 def test_serial_reset_clears_the_campaign_without_launching(graph_project):

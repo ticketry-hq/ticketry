@@ -4,7 +4,9 @@ import type { SessionMeta } from "../../../../../features/agents/terminal";
 import { providerListPlaceholder } from "../../../../../features/workflows/launchProviderCatalog";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
 
-const AVAILABLE_AGENTS: SessionMeta["agent"][] = [
+// Providers only: this menu launches agent runs, and a session with no
+// provider is a shell that never appears here (#667).
+const AVAILABLE_AGENTS: NonNullable<SessionMeta["agent"]>[] = [
   "claude",
   "agy",
   "codex",
@@ -20,7 +22,6 @@ export interface TicketLaunchContext {
   taskId: string;
   taskKey: string;
   taskName: string;
-  ticketSeq: number | null;
   profileReady: boolean;
   profile: Profile | null;
 }
@@ -70,7 +71,6 @@ export function WorkspaceLauncher({
           launchContext.projectId,
           launchContext.moduleId ?? "",
           launchContext.taskId,
-          launchContext.ticketSeq ?? "",
         ].join("\u0000")
       : [bucket, launchContext.kind].join("\u0000");
   const currentLauncherIdentityRef = useRef(launcherIdentity);

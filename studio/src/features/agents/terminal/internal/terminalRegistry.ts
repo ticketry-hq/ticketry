@@ -2,6 +2,8 @@
  * Live terminal capabilities. Renderer objects and focus callbacks are runtime
  * resources, not application state, so they live in this module registry.
  */
+import { modalOcclusionActive, onModalOcclusionBegin } from "./modalOcclusion";
+
 type FocusTerminal = () => void;
 
 const focusers = new Map<string, FocusTerminal>();
@@ -9,6 +11,23 @@ const focusers = new Map<string, FocusTerminal>();
 // has become visible and registered a focuser. The request is held for exactly
 // one session — a later selection supersedes it — and delivered on registration.
 let pendingFocus: string | null = null;
+let releaseOcclusionWatch: (() => void) | null = null;
+
+/**
+ * Hold (or drop, with `null`) the single banked focus request.
+ *
+ * A held request only survives while the window stays unoccluded. A modal
+ * opening ends the episode the request belongs to: the dialog's focus trap owns
+ * the foreground, and the reveal that follows its close would otherwise deliver
+ * the request late and pull focus out of whatever the modal restored it to.
+ */
+function bankFocus(sessionId: string | null): void {
+  pendingFocus = sessionId;
+  releaseOcclusionWatch?.();
+  releaseOcclusionWatch = sessionId
+    ? onModalOcclusionBegin(() => bankFocus(null))
+    : null;
+}
 
 export function registerTerminalFocus(
   sessionId: string,
@@ -16,7 +35,7 @@ export function registerTerminalFocus(
 ): () => void {
   focusers.set(sessionId, focus);
   if (pendingFocus === sessionId) {
-    pendingFocus = null;
+    bankFocus(null);
     focus();
   }
   return () => {
@@ -25,8 +44,13 @@ export function registerTerminalFocus(
 }
 
 export function focusTerminal(sessionId: string): void {
+  // A modal owns the window foreground, so its focus trap — not a terminal —
+  // is entitled to focus. Drop the request instead of banking it: holding it
+  // would let the reveal that follows the modal's close pull focus back out of
+  // whatever the modal restored it to.
+  if (modalOcclusionActive()) return;
   const focus = focusers.get(sessionId);
-  pendingFocus = focus ? null : sessionId;
+  bankFocus(focus ? null : sessionId);
   focus?.();
 }
 

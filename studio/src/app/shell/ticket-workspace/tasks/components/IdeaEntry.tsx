@@ -127,7 +127,7 @@ export function IdeaEntry() {
       <div
         data-idea-entry-field="true"
         data-focused={focused}
-        className="rounded border border-pane-border bg-pane-bg transition-[border-color,box-shadow] duration-150 data-[focused=true]:border-focus-accent data-[focused=true]:shadow-[0_0_0_2px_rgba(122,162,247,0.25)]"
+        className="border border-pane-border bg-pane-bg transition-[border-color,box-shadow] duration-150 data-[focused=true]:border-focus-accent data-[focused=true]:shadow-[0_0_0_2px_rgba(122,162,247,0.25)]"
       >
         <textarea
           ref={inputRef}
@@ -143,7 +143,7 @@ export function IdeaEntry() {
           onKeyDown={handleKeyDown}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          className="block min-h-7 w-full resize-none overflow-hidden rounded bg-transparent px-2 py-1 text-sm leading-5 text-text-primary caret-focus-accent outline-none placeholder:text-text-muted"
+          className="block min-h-7 w-full resize-none overflow-hidden bg-transparent px-2 py-1 text-sm leading-5 text-text-primary caret-focus-accent outline-none placeholder:text-text-muted"
         />
       </div>
     </div>

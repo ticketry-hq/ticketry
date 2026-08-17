@@ -5,6 +5,7 @@ export const PANEL_LAYOUT_KEY = "studio.panelLayout:v1";
 export const EXPANDED_IDS_KEY = "studio.expandedSubtasks:v1";
 export const COLLAPSED_STATE_IDS_KEY = "studio.collapsedStates:v2";
 export const TASK_SELECTIONS_KEY = "studio.selectedTaskByModule:v1";
+export const TERMINAL_PANEL_KEY = "studio.terminalPanel:v1";
 
 const LEGACY_SIDEBAR_KEYS = ["plane-tui:sidebar-visible"];
 const LEGACY_PANEL_LAYOUT_KEYS = ["plane-tui:panel-layout"];
@@ -20,8 +21,10 @@ const LEGACY_TASK_SELECTIONS_KEYS = [
 const MAX_TASK_SELECTION_ENTRIES = 100;
 
 export const PANEL_LAYOUT_SAVE_DELAY_MS = 400;
+export const TERMINAL_PANEL_SAVE_DELAY_MS = PANEL_LAYOUT_SAVE_DELAY_MS;
 
 let panelLayoutSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let terminalPanelSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -68,6 +71,68 @@ export function persistPanelLayout(sizes: number[]): void {
       /* unavailable storage leaves the in-memory preference intact */
     }
   }, PANEL_LAYOUT_SAVE_DELAY_MS);
+}
+
+/**
+ * The terminal panel's *furniture*: how tall it is (#669). Height belongs to
+ * the window, so it lives under a global key beside sidebar visibility and the
+ * pane layout.
+ *
+ * Whether the panel is showing is deliberately not here — it belongs to the
+ * module the panel opens onto (#730) — and neither are the shells a module owns
+ * or which of them is active. All three are module-scoped content, keyed per
+ * module elsewhere, so moving across module tabs never twitches the window's
+ * own geometry.
+ */
+export interface TerminalPanelFurniture {
+  /** The person's ordinary height, never a viewport-derived maximized one. */
+  height: number;
+  /** Whether the panel renders at the geometry policy's current bound (#726). */
+  maximized: boolean;
+}
+
+export function readTerminalPanelFurniture(): Partial<TerminalPanelFurniture> {
+  try {
+    const raw = readVersionedItem(TERMINAL_PANEL_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const record = parsed as Record<string, unknown>;
+    // A record written before the open flag moved to the module still holds
+    // one, and one written while the restore height was a separate field still
+    // holds that; the height beside them is read and the stale fields are
+    // simply dropped. The restore height only ever equalled the height, so
+    // ignoring it loses nothing.
+    const height = finiteNumber(record.height);
+    if (height === null) return {};
+    // A legacy record has a height and no size mode: it is ordinary at that
+    // height, which is exactly what leaving the mode out produces.
+    return {
+      height,
+      ...(record.maximized === true ? { maximized: true } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Debounced like the pane layout: a drag writes once it settles, not per frame. */
+export function persistTerminalPanelFurniture(
+  furniture: TerminalPanelFurniture,
+): void {
+  if (terminalPanelSaveTimer !== null) clearTimeout(terminalPanelSaveTimer);
+  terminalPanelSaveTimer = setTimeout(() => {
+    terminalPanelSaveTimer = null;
+    try {
+      localStorage.setItem(TERMINAL_PANEL_KEY, JSON.stringify(furniture));
+    } catch {
+      /* unavailable storage leaves the in-memory preference intact */
+    }
+  }, TERMINAL_PANEL_SAVE_DELAY_MS);
 }
 
 export function readExpandedIdsByModule(): Record<string, string[]> {

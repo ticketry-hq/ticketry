@@ -221,8 +221,8 @@ function StateLaunchBindingEditor({
               aria-selected={type.id === selectedTypeId}
               onClick={() => onSelectType(type.id)}
               className={type.id === selectedTypeId
-                ? "rounded-full border border-focus-accent bg-pane-title px-3 py-1.5 text-sm font-medium text-text-primary"
-                : "rounded-full border border-pane-border px-3 py-1.5 text-sm text-text-muted hover:border-text-muted hover:text-text-primary"}
+                ? "border border-focus-accent bg-pane-title px-3 py-1.5 text-sm font-medium text-text-primary"
+                : "border border-pane-border px-3 py-1.5 text-sm text-text-muted hover:border-text-muted hover:text-text-primary"}
             >
               {type.name}
             </button>
@@ -379,7 +379,7 @@ function StateTransitions({
               <li
                 key={`${edge.from_state_id}:${edge.to_state_id}`}
                 aria-label={`${direction} ${fromName} to ${toName}`}
-                className="space-y-2 rounded border border-pane-border p-3"
+                className="space-y-2 border border-pane-border p-3"
               >
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-xs font-bold tracking-wider text-text-muted uppercase">

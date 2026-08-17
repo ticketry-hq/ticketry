@@ -98,6 +98,11 @@ command after native changes. `npm run desktop:build` builds the production shel
 with the compiled Studio assets, and `npm run desktop:smoke` runs its lifecycle
 checks.
 
+On macOS, `pnpm run deploy` builds an ad-hoc-signed application and replaces
+`/Applications/Ticketry.app`. The replacement is staged beside the installed
+app, and the previous bundle is restored if the final move fails. Quit Ticketry
+before deploying so the next launch uses the new bundle.
+
 To attach the desktop shell to separately running development services instead,
 run `npm run desktop:dev -- --connect`. Attach mode reuses the `5174` frontend,
 `8787` backend, and established data directory without rebuilding or launching

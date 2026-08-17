@@ -11,6 +11,7 @@ import {
   type SessionMeta,
 } from "../features/agents/terminal";
 import { deriveTaskSessions } from "../features/agents/terminal/hooks";
+import { reduceLifecycle } from "../features/agents/terminal/lifecycle";
 import { seedConfig } from "../features/studio/stores/configStore";
 import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
@@ -48,7 +49,6 @@ function session(
     projectId: "project-1",
     moduleId: "module-1",
     agent: "codex",
-    ticketSeq: 1,
     status,
     transport: status === "ready" ? "ready" : "closed",
     isPlanning: false,
@@ -203,14 +203,13 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={1}
           owner="studio"
           details={<div>Issue details</div>}
         />
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("tab", { name: "T-1 · codex" }))
+    expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toContainElement(screen.getByLabelText("Agent session has exited"));
     expect(screen.queryByTestId("agent-state-badge")).not.toBeInTheDocument();
 
@@ -247,7 +246,7 @@ describe("overhaul acceptance — terminals", () => {
     await waitFor(() => {
       expect(screen.queryByLabelText("Agent session has exited"))
         .not.toBeInTheDocument();
-      expect(within(screen.getByRole("tab", { name: "T-1 · codex" }))
+      expect(within(screen.getByRole("tab", { name: "codex terminal" }))
         .getByLabelText("Agent is actively working")).toBeInTheDocument();
       const workItemLifecycle = screen.getByTestId("agent-state-badge");
       expect(workItemLifecycle).toHaveAttribute("data-state", "active");
@@ -257,6 +256,139 @@ describe("overhaul acceptance — terminals", () => {
     expect(useTerminalStore.getState().sessions["session-1"]?.status).toBe(
       "ready",
     );
+  });
+
+  it("[overhaul-83] presents a stopped Codex run as needing input on its tab and work-item status", async () => {
+    // Codex's `Stop` hook normalizes to `awaiting_input` (#660): an open Codex
+    // terminal has stopped because Codex is waiting for the user. Studio holds
+    // no Codex-specific display rule — the shared reducer turns that kind into
+    // `needs_input`, and the one projection drives both the terminal tab and
+    // the aggregate work-item status.
+    const projected = reduceLifecycle("working", "awaiting_input");
+    expect(projected).toBe("needs_input");
+
+    const meta = session("session-1", "story-1", "run-1");
+    const workingRun = {
+      ...run("run-1", "story-1", "working"),
+      project_id: "project-1",
+      agent: "codex" as const,
+    };
+    useTerminalStore.setState({
+      sessions: { "session-1": meta },
+      sessionByRun: { "run-1": "session-1" },
+    });
+    useAgentStatusStore.setState({ runs: { "run-1": workingRun } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AgentStateBadge issueId="story-1" />
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      within(screen.getByRole("tab", { name: "codex terminal" })).getByLabelText(
+        "Agent is actively working",
+      ),
+    ).toBeInTheDocument();
+
+    act(() => {
+      dispatchStatusFrame({
+        v: 1,
+        type: "agent_lifecycle",
+        at: "2026-08-07T12:05:00Z",
+        run: {
+          ...workingRun,
+          state: projected,
+          updated_at: "2026-08-07T12:05:00Z",
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("tab", { name: "codex terminal" })).getByLabelText(
+          "Agent is waiting for your input",
+        ),
+      ).toBeInTheDocument();
+      const workItemLifecycle = screen.getByTestId("agent-state-badge");
+      expect(workItemLifecycle).toHaveAttribute("data-state", "attention");
+      expect(
+        within(workItemLifecycle).getByLabelText(
+          "Agent is waiting for your input",
+        ),
+      ).toBeInTheDocument();
+    });
+    // The correction stays a provider-adapter fix: the run is not treated as a
+    // completed turn or an exited session.
+    expect(screen.queryByLabelText("Agent session has exited")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Agent finished its turn and is awaiting you"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("[overhaul-84] moves a gracefully exited terminal from live tabs to resumable sessions", async () => {
+    const meta = session("session-1", "story-1", "run-1");
+    const workingRun = {
+      ...run("run-1", "story-1", "working"),
+      project_id: "project-1",
+      agent: "codex" as const,
+    };
+    useTerminalStore.setState({
+      sessions: { "session-1": meta },
+      sessionByRun: { "run-1": "session-1" },
+    });
+    useAgentStatusStore.setState({ runs: { "run-1": workingRun } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("tab", { name: "codex terminal" })).toBeInTheDocument();
+    await waitFor(() => expect(terminalApi.listResumableTerminals).toHaveBeenCalled());
+
+    terminalApi.listResumableTerminals.mockResolvedValue([
+      {
+        agent_run_id: "run-1",
+        agent: "codex",
+        status: "terminated",
+        started_at: "2026-08-07T12:00:00Z",
+        provider_session_id: "provider-session-1",
+        resumed_from: null,
+        scope: "task",
+      },
+    ]);
+    act(() => {
+      dispatchStatusFrame({
+        v: 1,
+        type: "backend_session",
+        agent_run_id: "run-1",
+        status: "exited",
+        at: "2026-08-07T12:05:00Z",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("tab", { name: "codex terminal" }))
+        .not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Resume codex terminal" }))
+        .toBeInTheDocument();
+    });
+    expect(useTerminalStore.getState().sessions).toEqual({});
+    expect(screen.queryByText("Session lost")).not.toBeInTheDocument();
   });
 
 });

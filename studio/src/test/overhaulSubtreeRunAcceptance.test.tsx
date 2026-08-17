@@ -97,6 +97,23 @@ describe("overhaul acceptance — subtree execution", () => {
     fireEvent.click(runSubtree);
     await waitFor(() => expect(http.graphRunCount("story-1")).toBe(2));
     expect(http.graphRunModes("story-1")).toEqual(["serial", null]);
+    await waitFor(() =>
+      expect(hasToast("success", "Subtree run started.")).toBe(true),
+    );
+
+    // An accepted press that launches nothing says so from either control
+    // instead of claiming a run started.
+    http.nextGraphRunLaunchesNothing();
+    fireEvent.click(runSubtree);
+    await waitFor(() =>
+      expect(hasToast("error", "Subtree run started nothing")).toBe(true),
+    );
+
+    http.nextGraphRunLaunchesNothing();
+    fireEvent.click(runSerially);
+    await waitFor(() =>
+      expect(hasToast("error", "Serial subtree run started nothing")).toBe(true),
+    );
 
     // A refused serial request reports the backend failure rather than
     // claiming that work launched.

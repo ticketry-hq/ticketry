@@ -106,8 +106,11 @@ async def get_run_routing(run_id: str) -> Optional[tuple[Optional[str], str]]:
 
 async def get_status_routing(
     run_id: str,
-) -> Optional[tuple[str, Optional[str], str, str, str, str]]:
-    """Return the immutable identity and routing fields owned by a run."""
+) -> Optional[tuple[str, Optional[str], str, str, Optional[str], str]]:
+    """Return the immutable identity and routing fields owned by a run.
+
+    The agent slug is optional: a shell run has no provider (#665).
+    """
 
     routing = (
         await AgentRun.objects.filter(id=run_id).exclude(scope="docchat")

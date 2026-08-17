@@ -8,7 +8,7 @@ from asgiref.sync import async_to_sync
 
 from apps.runs import dao
 from apps.runs.bus import publish_status
-from studio_server.contracts import AgentLifecycleFrame, RunRecord
+from studio_server.contracts import AgentLifecycleFrame
 
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ def publish_runtime_recovery(agent_run_id: str, *, recovered_at: str) -> None:
     """Publish a newer live record after a tombstone is durably repaired."""
 
     try:
-        routing = async_to_sync(dao.get_status_routing)(agent_run_id)
+        record = async_to_sync(dao.agent_status_record)(agent_run_id)
     except Exception:
         logger.warning(
             "terminal recovery status routing unavailable agent_run_id=%s",
@@ -26,24 +26,12 @@ def publish_runtime_recovery(agent_run_id: str, *, recovered_at: str) -> None:
             exc_info=True,
         )
         return
-    if routing is None:
+    if record is None or record.scope == "docchat":
         return
 
-    project_id, task_id, module_id, scope, agent, started_at = routing
+    # The repaired row is authoritative for both axes; publishing its own
+    # projection keeps the recovery frame from resetting output activity.
     async_to_sync(publish_status)(
-        project_id,
-        AgentLifecycleFrame(
-            at=recovered_at,
-            run=RunRecord(
-                agent_run_id=agent_run_id,
-                project_id=project_id,
-                task_id=task_id,
-                module_id=module_id,
-                agent=agent,
-                scope=scope,
-                started_at=started_at,
-                state="working",
-                updated_at=recovered_at,
-            ),
-        ).model_dump(),
+        record.project_id,
+        AgentLifecycleFrame(at=recovered_at, run=record).model_dump(),
     )

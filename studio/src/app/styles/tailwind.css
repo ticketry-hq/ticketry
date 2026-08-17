@@ -18,6 +18,17 @@
 }
 
 @layer base {
+  /* T664: Studio is a terminal, and terminals have corners. Every surface is
+     square — including the third-party stylesheets we do not own (MDXEditor,
+     xterm), which is why this is a global, unconditional flatten rather than a
+     token override. Studio's own source declares no radius at all; the square
+     corners acceptance spec keeps it that way. */
+  *,
+  *::before,
+  *::after {
+    border-radius: 0 !important;
+  }
+
   html,
   body,
   #root {
@@ -82,7 +93,6 @@
     --task-frame-outline: rgb(255 255 255 / 0.15);
     --task-frame-corner: rgb(255 255 255 / 0.6);
     border: 1px solid var(--task-frame-outline);
-    border-radius: 0.5rem;
     opacity: 0;
     transition:
       left 300ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -109,7 +119,6 @@
     left: -1px;
     border-top-width: 1px;
     border-left-width: 1px;
-    border-top-left-radius: inherit;
   }
 
   .task-focus-frame > [data-corner="top-right"] {
@@ -117,7 +126,6 @@
     right: -1px;
     border-top-width: 1px;
     border-right-width: 1px;
-    border-top-right-radius: inherit;
   }
 
   .task-focus-frame > [data-corner="bottom-right"] {
@@ -125,7 +133,6 @@
     bottom: -1px;
     border-right-width: 1px;
     border-bottom-width: 1px;
-    border-bottom-right-radius: inherit;
   }
 
   .task-focus-frame > [data-corner="bottom-left"] {
@@ -133,7 +140,6 @@
     left: -1px;
     border-bottom-width: 1px;
     border-left-width: 1px;
-    border-bottom-left-radius: inherit;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -173,10 +179,10 @@
     @apply text-focus-accent hover:underline;
   }
   .md-body code {
-    @apply rounded bg-pane-title px-1 py-0.5 font-mono text-sm;
+    @apply bg-pane-title px-1 py-0.5 font-mono text-sm;
   }
   .md-body pre {
-    @apply overflow-x-auto rounded-md bg-pane-title p-2;
+    @apply overflow-x-auto bg-pane-title p-2;
   }
   .md-body pre code {
     @apply bg-transparent p-0;

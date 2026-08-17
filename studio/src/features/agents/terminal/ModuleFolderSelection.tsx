@@ -126,7 +126,7 @@ export function ModuleFolderSelection({
         <button
           type="button"
           onClick={() => void selection.pickFolder()}
-          className="mt-3 rounded border border-pane-border bg-pane-bg px-3 py-1"
+          className="mt-3 border border-pane-border bg-pane-bg px-3 py-1"
         >
           Pick Folder
         </button>

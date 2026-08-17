@@ -26,6 +26,7 @@ import {
   type SettingsChangeLedger,
   type SettingsLedgerEntry,
 } from "../../settings/changeLedger";
+import { KeyboardShortcutsPanel } from "./KeyboardShortcutsModal";
 
 const ModelConfigurationPanel = lazy(async () => ({
   default: (await import("../../workflows/ModelConfigurationPanel"))
@@ -34,6 +35,8 @@ const ModelConfigurationPanel = lazy(async () => ({
 
 const MODELS_LEDE =
   "Which providers are available to launch, and what runs when a configuration leaves it unset.";
+
+type SettingsSection = "models" | "keyboard-shortcuts";
 
 type SettingsStatus = {
   tone: "success" | "attention" | "danger";
@@ -45,6 +48,15 @@ const FOCUSABLE =
 
 export function SettingsModal() {
   const popModal = useModalStore((state) => state.popModal);
+  const requestedSection = useModalStore((state) => {
+    const top = state.modalStack.at(-1);
+    return top?.type === "settings" &&
+      top.payload?.section === "keyboard-shortcuts"
+      ? "keyboard-shortcuts"
+      : "models";
+  });
+  const [activeSection, setActiveSection] =
+    useState<SettingsSection>(requestedSection);
   const [ledger, setLedger] = useState<SettingsChangeLedger>(
     createSettingsChangeLedger,
   );
@@ -84,8 +96,14 @@ export function SettingsModal() {
           >
             <RailGroup label="Configuration" first>
               <RailItem
-                active
+                active={activeSection === "models"}
                 label="Models"
+                onClick={() => setActiveSection("models")}
+              />
+              <RailItem
+                active={activeSection === "keyboard-shortcuts"}
+                label="Keyboard shortcuts"
+                onClick={() => setActiveSection("keyboard-shortcuts")}
               />
             </RailGroup>
           </div>
@@ -93,7 +111,7 @@ export function SettingsModal() {
         </aside>
 
         <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] bg-pane-panel">
-          {modelStatus ? (
+          {activeSection === "models" && modelStatus ? (
             <SettingsStatusLine
               tone={modelStatus.tone}
               className="mx-5 mb-0.5 mt-3"
@@ -104,7 +122,9 @@ export function SettingsModal() {
 
           <div
             data-testid="settings-scroll-container"
-            className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
+            className={`row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto ${
+              activeSection === "models" ? "" : "hidden"
+            }`}
           >
             <header className="border-b border-pane-border px-5 py-4">
               <h2 className={SETTINGS_SECTION_HEADING_CLASS}>
@@ -126,10 +146,18 @@ export function SettingsModal() {
             </div>
           </div>
 
+          {activeSection === "keyboard-shortcuts" ? (
+            <div className="row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-4">
+              <KeyboardShortcutsPanel />
+            </div>
+          ) : null}
+
           <div
             role="region"
             aria-label="Settings commit actions"
-            className="flex items-center justify-between gap-4 border-t border-pane-border bg-pane-panel px-5 py-3"
+            className={`row-start-3 items-center justify-between gap-4 border-t border-pane-border bg-pane-panel px-5 py-3 ${
+              activeSection === "models" ? "flex" : "hidden"
+            }`}
           >
             <span
               className={
@@ -216,7 +244,7 @@ function AppliedChangesLedger({
               >
                 <span
                   aria-hidden="true"
-                  className={`settings-ledger-marker absolute -left-[14px] top-[5px] size-[5px] rounded-full ${
+                  className={`settings-ledger-marker absolute -left-[14px] top-[5px] size-[5px] ${
                     entry.tone === "pending"
                       ? "border border-lifecycle-attention bg-transparent"
                       : "bg-lifecycle-success"
@@ -286,19 +314,22 @@ function RailGroup({
 function RailItem({
   active,
   label,
+  onClick,
 }: {
   active: boolean;
   label: string;
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
+      onClick={onClick}
       className={
         active
-          ? "rounded border-l-2 border-focus-accent bg-pane-title px-2 py-1.5 text-left text-sm font-medium text-text-primary"
-          : "rounded border-l-2 border-transparent px-2 py-1.5 text-left text-sm text-text-secondary hover:text-text-primary"
+          ? "border-l-2 border-focus-accent bg-pane-title px-2 py-1.5 text-left text-sm font-medium text-text-primary"
+          : "border-l-2 border-transparent px-2 py-1.5 text-left text-sm text-text-secondary hover:text-text-primary"
       }
     >
       {label}
@@ -364,7 +395,7 @@ function SettingsFrame({
             onClose();
           }
         }}
-        className="grid h-[min(42rem,calc(100vh-3rem))] w-[min(64rem,calc(100vw-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded border border-pane-border bg-pane-panel text-text-primary outline-none max-md:h-[calc(100vh-1.5rem)] max-md:w-[calc(100vw-1.5rem)]"
+        className="grid h-[min(42rem,calc(100vh-3rem))] w-[min(64rem,calc(100vw-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden border border-pane-border bg-pane-panel text-text-primary outline-none max-md:h-[calc(100vh-1.5rem)] max-md:w-[calc(100vw-1.5rem)]"
       >
         <div className="flex items-center justify-between gap-3 border-b border-pane-border px-4 py-3">
           <h1 className="text-lg font-semibold text-text-primary">Settings</h1>
@@ -372,7 +403,7 @@ function SettingsFrame({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded px-2 py-1 text-lg leading-none text-text-muted hover:bg-pane-title hover:text-text-primary"
+            className="px-2 py-1 text-lg leading-none text-text-muted hover:bg-pane-title hover:text-text-primary"
           >
             ×
           </button>

@@ -56,8 +56,11 @@ class RecordingAttachment:
 
 
 class RecordingViewer:
-    def __init__(self, attachment: RecordingAttachment) -> None:
+    def __init__(
+        self, attachment: RecordingAttachment, agent_run_id: str = "run-1"
+    ) -> None:
         self.attachment = attachment
+        self.agent_run_id = agent_run_id
         self.released = False
 
     def release(self) -> None:

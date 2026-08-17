@@ -1,6 +1,7 @@
+from datetime import datetime, timezone
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ModuleSummary(BaseModel):
@@ -132,18 +133,132 @@ class LifecycleEvent(BaseModel):
     provider_session_id: Optional[str] = None
 
 
+# The render-facing vocabulary. ``stalled`` is an effective presentation of a
+# still-live run whose terminal output has not changed, never a provider
+# lifecycle event kind and never persisted as ``lifecycle_state``.
+RunPresentationState = Literal[
+    "starting",
+    "working",
+    "needs_input",
+    "permission_required",
+    "turn_complete",
+    "quiet",
+    "reconnecting",
+    "stalled",
+    "exited",
+    "error",
+    "unknown",
+]
+
+# Fixed in this release: a live run whose terminal output identity has not
+# changed for this long presents as ``stalled``. The boundary is inclusive.
+STALL_AFTER_SECONDS = 60
+
+# A run that already reached one of these can never be overlaid with the
+# output-inactivity heuristic — runtime truth outranks it.
+_TERMINAL_STATES = frozenset({"exited", "lost", "error"})
+
+# A run waiting on the person at the keyboard is exempt for the opposite
+# reason: it already explains its own silence. A waiting terminal produces no
+# output by definition, so overlaying it would trade an attention signal for an
+# idle one sixty seconds after the agent asked, and never give it back —
+# only changed output clears ``stalled``.
+_AWAITING_USER_STATES = frozenset({"needs_input", "permission_required"})
+
+
+def project_effective_state(
+    *,
+    state: str,
+    last_output_at: Optional[str],
+    now: Optional[datetime] = None,
+) -> str:
+    """Overlay the output-inactivity heuristic on one provider lifecycle state.
+
+    The Python mirror of ``projectRunPresentation`` in
+    ``studio/src/features/agents/status/runPresentation.ts``. Precedence is
+    explicit: a terminal outcome is authoritative, a run waiting on the user
+    keeps that attention state, otherwise a live run whose terminal output
+    identity has not changed for :data:`STALL_AFTER_SECONDS` projects
+    ``stalled``, otherwise the provider lifecycle state is presented.
+
+    :param state: the persisted provider-derived lifecycle state.
+    :param last_output_at: backend-owned stamp of the newest changed output,
+        or the session creation baseline until real output is observed.
+    :param now: reference clock, injectable so the boundary is testable.
+    :return: the effective :data:`RunPresentationState`.
+    """
+
+    if state in _TERMINAL_STATES or state in _AWAITING_USER_STATES:
+        return state
+    if not last_output_at:
+        return state
+    try:
+        observed = datetime.fromisoformat(last_output_at.replace("Z", "+00:00"))
+    except ValueError:
+        return state
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    reference = now or datetime.now(timezone.utc)
+    if (reference - observed).total_seconds() >= STALL_AFTER_SECONDS:
+        return "stalled"
+    return state
+
+
 class RunRecord(BaseModel):
-    """Transport-neutral latest lifecycle state for one durable agent run."""
+    """Transport-neutral status facts for one durable agent run.
+
+    Two axes travel together but are ordered independently: the provider
+    lifecycle (``state``/``updated_at``, ordered by lifecycle timestamp) and
+    terminal output activity (``output_sequence``/``last_output_at``, ordered
+    by the monotonic per-session sequence). Neither timestamp may be used to
+    decide the validity of the other axis.
+    """
 
     agent_run_id: str
     project_id: str
     task_id: Optional[str]
     module_id: str
-    agent: str
-    scope: Literal["task", "plan", "instant", "docchat"]
+    # Null for a run with no provider — a shell run. Readers must branch on the
+    # absence rather than substituting a provider slug (#665).
+    agent: Optional[str] = None
+    scope: Literal["task", "plan", "instant", "docchat", "shell"]
     started_at: str
     state: LifecycleState
     updated_at: str
+    # The hosted command's own result, once one has been observed. Null while
+    # the run is live, and null on an ending that recorded no mechanical code
+    # (an explicit termination, a missing runtime). A shell run's surface reads
+    # it to tell a shell the person exited from one that failed (#670).
+    exit_code: Optional[int] = None
+    # Write-once launch snapshots (#693): the workflow state this run was
+    # launched in and the model its launch configuration actually resolved.
+    # Null means "not recorded" — a run created before these were captured, or
+    # a scope that has no workflow state or resolved model. Readers must render
+    # the absence rather than falling back to the work item's current state or
+    # a provider's default model.
+    launch_state: Optional[str] = None
+    launch_model: Optional[str] = None
+    # Terminal output activity axis.
+    output_sequence: int = 0
+    last_output_at: Optional[str] = None
+    # Read-time projection of both axes; clients may recompute it as their own
+    # clock passes the inactivity boundary without another server message.
+    effective_state: Optional[RunPresentationState] = None
+
+    @model_validator(mode="after")
+    def _project_effective_state(self) -> "RunRecord":
+        """Fill the read-time projection so every producer agrees on it."""
+
+        if self.effective_state is None:
+            object.__setattr__(
+                self,
+                "effective_state",
+                project_effective_state(
+                    state=self.state,
+                    last_output_at=self.last_output_at,
+                ),
+            )
+        return self
 
 
 class AgentStatusScope(BaseModel):
@@ -198,6 +313,20 @@ class AgentLifecycleFrame(BaseModel):
     run: RunRecord
 
 
+class TerminalActivityFrame(BaseModel):
+    """Versioned terminal-output-activity delta on the project status feed.
+
+    Self-sufficient: it carries the whole run record so a client that missed
+    earlier frames can merge it, and mergeable by ``run.output_sequence`` so a
+    reordered delivery cannot rewind the activity axis.
+    """
+
+    v: Literal[1] = 1
+    type: Literal["terminal_activity"] = "terminal_activity"
+    at: str
+    run: RunRecord
+
+
 class BackendSessionFrame(BaseModel):
     """Versioned explicit server-to-tmux terminal outcome."""
 
@@ -206,6 +335,10 @@ class BackendSessionFrame(BaseModel):
     agent_run_id: str
     status: Literal["exited", "lost"]
     at: str
+    # The hosted command's exit code when the ending recorded one. A ``lost``
+    # runtime and an explicit termination both carry ``None``: neither observed
+    # a process result (#670).
+    exit_code: Optional[int] = None
 
 
 class WorkItemState(BaseModel):

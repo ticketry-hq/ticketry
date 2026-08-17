@@ -44,19 +44,24 @@ interface SubtreeRunLaunchOptions {
   /** The action's accessible name, reused in stale-capability feedback. */
   actionName: string;
   successMessage: string;
+  /** Reported when the press was accepted but launched no work item. */
+  inertMessage: string;
   failureMessage: string;
 }
 
 /**
  * Arms one graph-run campaign for a single control. Each control owns its own
  * in-flight guard so a submitted request cannot be duplicated from it, and
- * neither control blocks the other.
+ * neither control blocks the other. Both controls share this reading of the
+ * response, so an accepted press that started nothing reads the same either
+ * way.
  */
 export function useSubtreeRunLaunch({
   item,
   mode,
   actionName,
   successMessage,
+  inertMessage,
   failureMessage,
 }: SubtreeRunLaunchOptions): SubtreeRunLaunch {
   const states = useCachedStates(item.project_id);
@@ -69,8 +74,14 @@ export function useSubtreeRunLaunch({
     inFlightRef.current = true;
     setPending(true);
     try {
-      await executeTaskSubtree(item.id, mode);
-      toast.success(successMessage);
+      // The campaign accepts the press either way; only the launched list says
+      // whether any work actually started.
+      const result = await executeTaskSubtree(item.id, mode);
+      if (result.launched.length > 0) {
+        toast.success(successMessage);
+      } else {
+        toast.error(inertMessage);
+      }
     } catch (error) {
       if (
         error instanceof ApiError &&

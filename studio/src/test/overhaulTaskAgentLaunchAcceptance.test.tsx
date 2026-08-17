@@ -22,7 +22,6 @@ describe("overhaul acceptance — task agent launch", () => {
           moduleId: "module-570",
           taskKey: "CODING-570",
           taskName: "Launch a fresh task-scoped agent",
-          ticketSeq: 570,
           profileReady: true,
           profile: null,
         },
@@ -48,7 +47,7 @@ describe("overhaul acceptance — task agent launch", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     const terminalTab = await screen.findByRole("tab", {
-      name: "T-570 · codex",
+      name: "codex terminal",
     });
     expect(terminalTab).toHaveAttribute("aria-selected", "true");
     expect(useTerminalStore.getState().sessions["terminal-570"]).toMatchObject({
@@ -56,7 +55,6 @@ describe("overhaul acceptance — task agent launch", () => {
       taskId: "task-570",
       projectId: "project-570",
       moduleId: "module-570",
-      ticketSeq: 570,
       agent: "codex",
       agentRunId: "run-570",
       status: "ready",
@@ -74,7 +72,6 @@ describe("overhaul acceptance — task agent launch", () => {
       moduleId: "module-571",
       taskKey: "CODING-571",
       taskName: "Honor provider availability in task agent launches",
-      ticketSeq: 571,
       profileReady: true,
       profile: null,
     };
@@ -85,7 +82,6 @@ describe("overhaul acceptance — task agent launch", () => {
           bucket: "task-571",
           projectId: "project-571",
           moduleId: "module-571",
-          ticketSeq: 571,
         }),
       );
 

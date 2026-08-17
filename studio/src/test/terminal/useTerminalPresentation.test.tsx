@@ -42,7 +42,6 @@ function session(sessionId: string): SessionMeta {
     projectId: "project-1",
     moduleId: "module-1",
     agent: "codex",
-    ticketSeq: 263,
     status: sessionId.startsWith("tmp_") ? "connecting" : "ready",
     transport: sessionId.startsWith("tmp_") ? "connecting" : "ready",
     isPlanning: false,

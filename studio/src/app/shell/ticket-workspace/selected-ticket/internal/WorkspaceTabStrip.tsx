@@ -1,13 +1,15 @@
 import type { RefObject } from "react";
 import type { DesignDoc, TabKind } from "../../../../../features/agents/types";
 import {
+  isLiveTerminalState,
   LifecycleBadge,
-  type LifecycleState,
+  presentTerminalRuns,
+  providerToneClasses,
   type SessionMeta,
   type SessionTab,
 } from "../../../../../features/agents/terminal";
 import type { EditViewZone } from "../../../../../state/clientStore";
-import { terminalLabel } from "./terminalLabel";
+import { WorkspaceTab } from "./WorkspaceTab";
 import type { TaskWorkspaceTabIdentity } from "./useTaskWorkspaceTabNavigation";
 import {
   WorkspaceLauncher,
@@ -15,62 +17,11 @@ import {
   type WorkspaceLauncherContext,
 } from "./WorkspaceLauncher";
 
-function WorkspaceTab({
-  label,
-  active,
-  highlighted,
-  allowHoverEmphasis,
-  dim,
-  lifecycle,
-  onClick,
-  onClose,
-  closeLabel,
-}: {
-  label: string;
-  active: boolean;
-  highlighted?: boolean;
-  allowHoverEmphasis: boolean;
-  dim?: boolean;
-  lifecycle?: LifecycleState;
-  onClick: () => void;
-  onClose?: () => void;
-  closeLabel?: string;
-}) {
-  return (
-    <div
-      role="tab"
-      aria-selected={active}
-      aria-label={label}
-      data-highlighted={highlighted || undefined}
-      onClick={onClick}
-      className={`flex shrink-0 cursor-pointer items-center gap-2 border px-2 py-0.5 text-xs ${
-        active
-          ? "border-focus-accent bg-pane-title text-text-primary"
-          : `border-pane-border bg-pane-bg text-text-muted ${
-              allowHoverEmphasis ? "hover:bg-pane-title" : ""
-            }`
-      } ${highlighted ? "ring-1 ring-focus-accent ring-inset" : ""} ${
-        dim ? "opacity-60" : ""
-      }`}
-    >
-      <span>{label}</span>
-      {/* Attention axis — distinct from the tab's selected/dim transport cues. */}
-      {lifecycle && <LifecycleBadge state={lifecycle} />}
-      {onClose && (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-          className="text-text-muted hover:text-text-primary"
-          aria-label={closeLabel ?? `Close ${label}`}
-        >
-          ×
-        </button>
-      )}
-    </div>
-  );
+// A run stops being live when it ends; from then on colour is neutral grey
+// rather than a faded provider hue, which no one can identify anyway. The rule
+// itself is shared with the dormant chips so the two rows cannot disagree.
+function isLiveTerminal(tab: SessionTab): boolean {
+  return isLiveTerminalState(tab.lifecycle);
 }
 
 export function WorkspaceTabStrip({
@@ -86,7 +37,6 @@ export function WorkspaceTabStrip({
   activeTerminalId,
   documents,
   terminalTabs,
-  ticketSeq,
   bucket,
   launchContext,
   activatedProviders,
@@ -111,7 +61,6 @@ export function WorkspaceTabStrip({
   activeTerminalId: string | null;
   documents: readonly DesignDoc[];
   terminalTabs: readonly SessionTab[];
-  ticketSeq?: number | null;
   bucket: string;
   launchContext: WorkspaceLauncherContext | null;
   activatedProviders: ReadonlySet<string>;
@@ -171,28 +120,47 @@ export function WorkspaceTabStrip({
           onClose={() => onCloseDocument(document.id)}
         />
       ))}
-      {terminalTabs.map(({ id, meta, lifecycle }) => (
-        <WorkspaceTab
-          key={id}
-          label={terminalLabel(meta, ticketSeq)}
-          active={activeKind === "terminal" && activeTerminalId === id}
-          highlighted={
-            showTabHighlight &&
-            highlightedTab.kind === "terminal" &&
-            highlightedTab.id === id
-          }
-          allowHoverEmphasis={allowTabHoverEmphasis}
-          dim={
-            lifecycle === "exited" ||
-            lifecycle === "lost" ||
-            lifecycle === "error"
-          }
-          lifecycle={lifecycle}
-          onClick={() => onSelectTab({ kind: "terminal", id })}
-          onClose={() => onCloseTerminal(id)}
-          closeLabel={`Close terminal ${terminalLabel(meta, ticketSeq)}`}
-        />
-      ))}
+      {presentTerminalRuns(
+        // Tabs arrive in launch order, which is the order duplicate ordinals
+        // follow.
+        terminalTabs.map((tab) => ({
+          key: tab.id,
+          agent: tab.meta.agent,
+          launchState: tab.launchState,
+          launchModel: tab.launchModel,
+          isPlanning: tab.meta.isPlanning,
+          isInstant: tab.meta.isInstant,
+          live: isLiveTerminal(tab),
+        })),
+      ).map((presentation, index) => {
+        const tab = terminalTabs[index];
+        const active = activeKind === "terminal" && activeTerminalId === tab.id;
+        return (
+          <WorkspaceTab
+            key={tab.id}
+            label={presentation.label}
+            accessibleName={presentation.accessibleName}
+            title={presentation.hoverTitle || undefined}
+            active={active}
+            highlighted={
+              showTabHighlight &&
+              highlightedTab.kind === "terminal" &&
+              highlightedTab.id === tab.id
+            }
+            allowHoverEmphasis={allowTabHoverEmphasis}
+            tone={providerToneClasses({
+              agent: tab.meta.agent,
+              live: isLiveTerminal(tab),
+              selected: active,
+            })}
+            /* Attention axis — its own palette, independent of provider tone. */
+            badge={<LifecycleBadge state={tab.lifecycle} />}
+            onClick={() => onSelectTab({ kind: "terminal", id: tab.id })}
+            onClose={() => onCloseTerminal(tab.id)}
+            closeLabel={presentation.closeName}
+          />
+        );
+      })}
       {launchContext && (
         <WorkspaceLauncher
           bucket={bucket}

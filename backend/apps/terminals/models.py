@@ -17,7 +17,9 @@ class AgentTerminalSession(models.Model):
     task_id = models.CharField()
     module_id = models.CharField()
     project_id = models.CharField()
-    agent = models.CharField()
+    # Mirrors the run's provider slug, and is null for the same reason the
+    # run's is: a shell run has no provider (#665).
+    agent = models.CharField(null=True)
     created_at = models.CharField()
     terminated_at = models.CharField(null=True)
     runtime_namespace = models.CharField(max_length=64, null=True, db_index=True)
@@ -27,6 +29,15 @@ class AgentTerminalSession(models.Model):
     # Null for every non-doc-chat row; lets a reload re-associate the restored
     # overlay with its document.
     doc_rel_path = models.CharField(null=True)
+    # #661 terminal output activity: a compact digest of the newest observed
+    # output, a monotonic per-session sequence, and the backend-owned stamp of
+    # the newest *changed* observation. Deliberately no screen or scrollback
+    # copy — this axis only answers "did the rendered output change, and when".
+    # ``last_output_at`` is seeded with ``created_at`` so a session that never
+    # produces output still has a bounded inactivity origin.
+    output_identity = models.CharField(max_length=64, null=True)
+    output_sequence = models.BigIntegerField(default=0)
+    last_output_at = models.CharField(null=True)
 
     class Meta:
         db_table = "agent_terminal_sessions"

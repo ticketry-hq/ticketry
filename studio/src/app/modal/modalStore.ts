@@ -67,7 +67,11 @@ export const useModalStore = create<ModalState>((set) => ({
     set((state) =>
       state.modalStack.length > 0
         ? state
-        : { modalStack: [{ type: "keyboard-shortcuts" }] },
+        : {
+            modalStack: [
+              { type: "settings", payload: { section: "keyboard-shortcuts" } },
+            ],
+          },
     ),
   // Settings is a singleton overlay: pointer activation can repeat before the
   // UI rerenders, so make its open path idempotent at the store boundary.

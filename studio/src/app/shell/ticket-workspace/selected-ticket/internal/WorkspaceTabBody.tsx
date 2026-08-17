@@ -207,7 +207,7 @@ export function WorkspaceTabBody({
         {showZoneChrome && terminalEngaged && activeKind === "terminal" && (
           <div
             data-testid="terminal-mode-tag"
-            className="pointer-events-none absolute left-0 top-5 z-50 flex items-center gap-2 rounded-r border border-l-0 border-lifecycle-success/40 bg-pane-bg/90 px-3 py-1.5 text-sm shadow-sm"
+            className="pointer-events-none absolute left-0 top-5 z-50 flex items-center gap-2 border border-l-0 border-lifecycle-success/40 bg-pane-bg/90 px-3 py-1.5 text-sm shadow-sm"
           >
             <span className="font-bold text-lifecycle-success">
               {formatChordSymbols(EDIT_VIEW_BODY_DISENGAGE_CHORD)}

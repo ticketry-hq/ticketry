@@ -10,6 +10,7 @@ const PRODUCT_ROOTS = [
   "features/settings",
   "features/work-items",
   "features/workflows",
+  "features/terminal-panel",
 ] as const;
 
 // Deliberately small product interfaces. Heavy UI files are also explicit
@@ -61,6 +62,10 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/workflows/StateConfigurationPanel",
   "features/workflows/WorkflowSettingsPanel",
   "features/workflows/workflowEditorStore",
+  "features/terminal-panel",
+  // The panel's furniture (open state, height, shell focus) is what the edit
+  // view's zone cycle needs; the panel's UI is deliberately not on that path.
+  "features/terminal-panel/panelStore",
 ]);
 
 function walk(dir: string, out: string[] = []): string[] {

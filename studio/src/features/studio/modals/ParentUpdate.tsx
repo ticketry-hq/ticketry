@@ -128,7 +128,7 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
           setFilter(e.target.value);
           setCursor(0);
         }}
-        className="mb-2 w-full rounded border border-pane-border bg-pane-bg px-2 py-1 text-text-primary outline-none focus:border-focus-accent"
+        className="mb-2 w-full border border-pane-border bg-pane-bg px-2 py-1 text-text-primary outline-none focus:border-focus-accent"
       />
       {visible.length === 0 ? (
         <div className="text-text-muted">
@@ -143,7 +143,7 @@ export function ParentUpdate({ payload }: { payload?: ParentUpdatePayload }) {
                 setCursor(i);
                 void commit(c);
               }}
-              className={`flex cursor-pointer items-center justify-between rounded px-2 py-1 ${
+              className={`flex cursor-pointer items-center justify-between px-2 py-1 ${
                 i === cursor
                   ? "bg-selection-bg text-text-primary"
                   : "hover:bg-pane-title"

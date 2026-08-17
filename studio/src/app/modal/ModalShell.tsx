@@ -119,7 +119,7 @@ export function ModalShell({
         }
         tabIndex={-1}
         onKeyDownCapture={handleKey}
-        className={`${width} max-h-[85vh] overflow-auto rounded border border-pane-border bg-pane-panel p-4 text-text-primary outline-none`}
+        className={`${width} max-h-[85vh] overflow-auto border border-pane-border bg-pane-panel p-4 text-text-primary outline-none`}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           {title ? (
@@ -131,7 +131,7 @@ export function ModalShell({
             type="button"
             onClick={() => (onClose ?? popModal)()}
             aria-label="Close dialog"
-            className="rounded px-2 py-1 text-lg leading-none text-text-muted hover:bg-pane-title hover:text-text-primary"
+            className="px-2 py-1 text-lg leading-none text-text-muted hover:bg-pane-title hover:text-text-primary"
           >
             ×
           </button>

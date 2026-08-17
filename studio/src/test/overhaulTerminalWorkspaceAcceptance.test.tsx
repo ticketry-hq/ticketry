@@ -53,7 +53,6 @@ function session(
     projectId: "project-1",
     moduleId: "module-1",
     agent: "codex",
-    ticketSeq: 1,
     status,
     transport: status === "ready" ? "ready" : "closed",
     isPlanning: false,
@@ -124,7 +123,6 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={1}
           owner="studio"
           details={<div>Issue details</div>}
         />
@@ -165,7 +163,6 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={1}
           owner="studio"
           details={<div>Issue details</div>}
         />
@@ -175,7 +172,7 @@ describe("overhaul acceptance — terminals", () => {
     const terminal = await screen.findByTestId("selected-ticket-terminal");
     expect(terminal).toHaveAttribute("data-active", "false");
 
-    fireEvent.click(screen.getByRole("tab", { name: "T-1 · codex" }));
+    fireEvent.click(screen.getByRole("tab", { name: "codex terminal" }));
     expect(terminal).toHaveAttribute("data-active", "true");
 
     fireEvent.click(screen.getByRole("tab", { name: "Details" }));
@@ -185,7 +182,7 @@ describe("overhaul acceptance — terminals", () => {
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(terminal);
     expect(terminal).toHaveAttribute("data-active", "false");
 
-    fireEvent.click(screen.getByRole("tab", { name: "T-1 · codex" }));
+    fireEvent.click(screen.getByRole("tab", { name: "codex terminal" }));
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(terminal);
     expect(terminal).toHaveAttribute("data-active", "true");
   });
@@ -198,29 +195,28 @@ describe("overhaul acceptance — terminals", () => {
     useAgentStatusStore.setState({ runs: { "run-1": run("run-1", "story-1") } });
     useClientStore.setState({ activeByTask: { "story-1": "session-1" } });
 
-    const workspace = (bucket: string, ticketSeq: number) => (
+    const workspace = (bucket: string) => (
       <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket={bucket}
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={ticketSeq}
           owner="studio"
           details={<div>Issue details</div>}
         />
       </QueryClientProvider>
     );
-    const view = render(workspace("story-1", 1));
+    const view = render(workspace("story-1"));
 
     const retainedHost = await screen.findByTestId("selected-ticket-terminal");
     expect(retainedHost).toHaveTextContent("story-1");
 
-    view.rerender(workspace("story-empty", 2));
+    view.rerender(workspace("story-empty"));
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(retainedHost);
     expect(retainedHost).toHaveTextContent("story-empty");
     expect(retainedHost).toHaveAttribute("data-active", "false");
 
-    view.rerender(workspace("story-1", 1));
+    view.rerender(workspace("story-1"));
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(retainedHost);
     expect(retainedHost).toHaveTextContent("story-1");
   });
@@ -236,7 +232,6 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={1}
           owner="studio"
           details={<div>Issue details</div>}
         />
@@ -244,7 +239,7 @@ describe("overhaul acceptance — terminals", () => {
     );
 
     await waitFor(() => expect(terminalApi.getTerminals).toHaveBeenCalled());
-    expect(screen.queryByRole("tab", { name: "T-1 · codex" }))
+    expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
     expect(useTerminalStore.getState().sessions).toEqual({});
   });

@@ -71,7 +71,7 @@ export default function CoachMark({
       style={placement ? { position: "fixed", top: placement.top, left: placement.left } : undefined}
       className={`${
         placement ? "z-[70]" : "relative z-10 mx-4 my-3"
-      } w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-focus-accent bg-pane-panel p-4 text-left shadow-2xl outline-none focus:ring-2 focus:ring-focus-accent`}
+      } w-[min(22rem,calc(100vw-2rem))] border border-focus-accent bg-pane-panel p-4 text-left shadow-2xl outline-none focus:ring-2 focus:ring-focus-accent`}
     >
       <h2 id={titleId} className="text-base font-semibold text-text-primary">
         {title}

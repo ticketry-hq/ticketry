@@ -19,7 +19,7 @@ interface Props {
 }
 
 const buttonClass =
-  "rounded-md bg-focus-accent px-3 py-1.5 text-sm font-semibold text-pane-bg disabled:opacity-50";
+  "bg-focus-accent px-3 py-1.5 text-sm font-semibold text-pane-bg disabled:opacity-50";
 
 export default function OnboardingTour({ onSelectStory }: Props) {
   const step = useOnboardingTourStore((state) => state.step);
@@ -107,7 +107,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
         data-testid="onboarding-skip-tour"
         disabled={busy}
         onClick={() => void dismiss()}
-        className="rounded-md px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-text-primary disabled:opacity-50"
+        className="px-2 py-1.5 text-sm font-semibold text-text-muted hover:text-text-primary disabled:opacity-50"
       >
         {busy ? "Working…" : "Skip tour"}
       </button>
@@ -154,7 +154,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
               value={moduleName}
               onChange={(event) => setModuleName(event.target.value)}
               data-testid="onboarding-module-name"
-              className="mt-2 block w-full rounded-md border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
+              className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
             />
           </label>
           <div className="mt-3">

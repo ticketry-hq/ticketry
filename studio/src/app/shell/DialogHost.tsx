@@ -6,7 +6,7 @@ import {
 } from "../../state/clientStore";
 
 const buttonClass =
-  "rounded border border-pane-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-pane-title disabled:cursor-not-allowed disabled:opacity-50";
+  "border border-pane-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-pane-title disabled:cursor-not-allowed disabled:opacity-50";
 const primaryButtonClass = `${buttonClass} bg-accent-primary text-white hover:bg-accent-primary/80`;
 const dangerButtonClass = `${buttonClass} border-lifecycle-danger/60 bg-lifecycle-danger/15 text-lifecycle-danger hover:bg-lifecycle-danger/25`;
 
@@ -78,7 +78,7 @@ function ConfirmTypedDialog({
           ref={inputRef}
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          className="mt-2 block w-full rounded border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm text-text-primary outline-none focus:border-accent-primary"
+          className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm text-text-primary outline-none focus:border-accent-primary"
         />
       </label>
       <div className="mt-5 flex justify-end gap-2">
@@ -137,7 +137,7 @@ function ReassignDialog({
             ref={selectRef}
             value={selectedId}
             onChange={(event) => setSelectedId(event.target.value)}
-            className="mt-2 block w-full rounded border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-primary"
+            className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-primary"
           >
             {opts.candidates.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>

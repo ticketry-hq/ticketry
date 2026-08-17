@@ -130,7 +130,6 @@ type WorkspaceViewOptions = {
   bucket?: string;
   projectId?: string;
   moduleId?: string | null;
-  ticketSeq?: number | null;
   children?: ReactNode;
 };
 
@@ -139,7 +138,6 @@ function workspaceView({
   bucket = "task-570",
   projectId = "project-570",
   moduleId = "module-570",
-  ticketSeq = 570,
   children,
 }: WorkspaceViewOptions) {
   return (
@@ -149,7 +147,6 @@ function workspaceView({
         bucket={bucket}
         projectId={projectId}
         moduleId={moduleId}
-        ticketSeq={ticketSeq}
         owner="studio"
         details={<div>Task details</div>}
         launchContext={launchContext}

@@ -15,18 +15,61 @@ export type RawLifecycleState =
   | "error"
   | "unknown";
 
-export type AgentRunScope = "task" | "plan" | "instant" | "docchat";
+/**
+ * The render-facing vocabulary. `stalled` is the effective presentation of a
+ * still-live run whose terminal output has not changed for the inactivity
+ * threshold; it is never a provider lifecycle event kind and is never
+ * persisted as a run's lifecycle state.
+ */
+export type RunPresentationState = RawLifecycleState | "stalled";
 
+/**
+ * A run's durable routing discriminator. `shell` is the one scope whose runs
+ * have no provider at all — a shell run's `agent` is null.
+ */
+export type AgentRunScope = "task" | "plan" | "instant" | "docchat" | "shell";
+
+/**
+ * Two independently ordered axes for one durable run: the provider lifecycle
+ * (`state`/`updated_at`, ordered by lifecycle timestamp) and terminal output
+ * activity (`output_sequence`/`last_output_at`, ordered by the monotonic
+ * per-session sequence). Neither timestamp decides the other axis's validity.
+ */
 export interface RunRecord {
   agent_run_id: string;
   project_id?: string;
   task_id: string | null;
   module_id: string;
-  agent?: string;
+  /** The provider slug, or `null` on a run that has no provider (`shell`). */
+  agent?: string | null;
   scope: AgentRunScope;
+  /**
+   * The display name of the workflow state this run was launched in, captured
+   * once at spawn. `null` on a run that recorded none — a run predating the
+   * snapshot, or a scope with no workflow state. Never substitute the work
+   * item's current state for it.
+   */
+  launch_state?: string | null;
+  /** The model this run's launch configuration actually resolved, or `null`. */
+  launch_model?: string | null;
   started_at?: string;
   state: RawLifecycleState;
   updated_at: string;
+  /**
+   * The hosted command's own result, once one has been observed. Null while the
+   * run is live, and null on an ending that recorded no mechanical code (an
+   * explicit termination, a missing runtime).
+   */
+  exit_code?: number | null;
+  /** Monotonic per-session count of *changed* terminal output observations. */
+  output_sequence?: number;
+  /**
+   * Backend-owned stamp of the newest changed output, or the session's
+   * creation time until real output is observed.
+   */
+  last_output_at?: string | null;
+  /** The backend's read-time projection of both axes. */
+  effective_state?: RunPresentationState;
 }
 
 export interface AgentStatusScope {
@@ -87,12 +130,29 @@ export interface AgentLifecycleFrame {
   run: RunRecord;
 }
 
+/**
+ * One terminal-output-activity delta. Self-sufficient (it carries the whole
+ * run record) and mergeable by `run.output_sequence`, so a reordered delivery
+ * cannot rewind the activity axis.
+ */
+export interface TerminalActivityFrame {
+  v: 1;
+  type: "terminal_activity";
+  at: string;
+  run: RunRecord;
+}
+
 export interface BackendSessionFrame {
   v: 1;
   type: "backend_session";
   agent_run_id: string;
   status: "exited" | "lost";
   at: string;
+  /**
+   * The hosted command's exit code when the ending recorded one. A `lost`
+   * runtime and an explicit termination both carry `null`.
+   */
+  exit_code?: number | null;
 }
 
 export type WorkItemState = Omit<State, "id" | "group" | "color"> & {
@@ -146,6 +206,7 @@ export interface StatusDocumentFrame {
 export type AgentStatusFrame =
   | StatusSnapshotFrame
   | AgentLifecycleFrame
+  | TerminalActivityFrame
   | BackendSessionFrame
   | AutomationAttemptFrame
   | WorkItemStateFrame

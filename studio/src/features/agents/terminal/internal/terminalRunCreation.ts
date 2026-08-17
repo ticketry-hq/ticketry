@@ -8,7 +8,11 @@ export function ensureTerminalRunCreated(
   sessionId: string,
   session: SessionMeta,
 ): void {
-  if (session.agentRunId || pendingCreations.has(sessionId)) return;
+  // A session with no provider never spawns here: a shell run is launched by
+  // its own entry point and arrives with its run already bound (#667).
+  if (session.agentRunId || !session.agent || pendingCreations.has(sessionId)) {
+    return;
+  }
 
   const creation = createTerminalRun({
     agent: session.agent,

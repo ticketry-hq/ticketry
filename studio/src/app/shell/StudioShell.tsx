@@ -1,4 +1,8 @@
 import { useCallback, useEffect } from "react";
+import {
+  startStallDeadlines,
+  stopStallDeadlines,
+} from "../../features/agents/status";
 import { statusFeed } from "../../features/agents/status/statusFeed";
 import { useStudioStore } from "../../features/projects/store";
 import { useClientStore } from "../../state/clientStore";
@@ -24,7 +28,14 @@ export function StudioShell() {
     statusFeed.start(selectedProjectId, {
       refreshSnapshotOnSocketOpen: true,
     });
-    return () => statusFeed.stop();
+    // The unchanged-output deadline lives with the status holding the feed
+    // writes into, so a connected UI reaches Stalled at the boundary without
+    // waiting for another server message.
+    startStallDeadlines();
+    return () => {
+      statusFeed.stop();
+      stopStallDeadlines();
+    };
   }, [selectedProjectId]);
 
   return (

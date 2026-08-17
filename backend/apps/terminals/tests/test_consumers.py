@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import queue
 
 import pytest
 from channels.testing.websocket import WebsocketCommunicator
 
+from apps.runs.models import AgentRun
 from apps.terminals import viewer_attachments
 from apps.terminals.runtime import TerminalDimensions, TerminalNotFound
 from studio_server.asgi import application
+from worktracker.tests.factories import ensure_issue
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -48,8 +51,11 @@ class Attachment:
 
 
 class Viewer:
-    def __init__(self, attachment: Attachment) -> None:
+    def __init__(
+        self, attachment: Attachment, agent_run_id: str = "run-attach"
+    ) -> None:
         self.attachment = attachment
+        self.agent_run_id = agent_run_id
         self.released = False
 
     def release(self) -> None:
@@ -111,6 +117,40 @@ async def test_missing_runtime_is_a_stable_attach_error(monkeypatch):
     assert json.loads(await communicator.receive_from(timeout=2)) == {
         "type": "error",
         "message": "session_not_found",
+    }
+    await communicator.wait(timeout=2)
+
+
+@pytest.mark.asyncio
+async def test_ended_runtime_is_a_graceful_attach_outcome(monkeypatch):
+    issue = await asyncio.to_thread(
+        ensure_issue,
+        project_id="project-1",
+        module_id="module-1",
+        task_id="task-1",
+    )
+    await AgentRun.objects.acreate(
+        id="ended-run",
+        issue=issue,
+        agent="codex",
+        status="terminated",
+        started_at="2026-08-15T10:00:00+00:00",
+        ended_at="2026-08-15T10:30:00+00:00",
+        scope="task",
+    )
+
+    def missing(**kwargs):
+        raise TerminalNotFound(str(kwargs["agent_run_id"]))
+
+    monkeypatch.setattr(viewer_attachments, "acquire", missing)
+    communicator = WebsocketCommunicator(application, "/ws/terminal")
+    connected, _ = await communicator.connect()
+    assert connected
+    await communicator.send_to(text_data=_attach_frame("ended-run"))
+
+    assert json.loads(await communicator.receive_from(timeout=2)) == {
+        "type": "error",
+        "message": "session_ended",
     }
     await communicator.wait(timeout=2)
 

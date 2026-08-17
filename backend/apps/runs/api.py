@@ -10,7 +10,6 @@ from studio_server.contracts import (
     AgentStatusSnapshot,
     AgentLifecycleFrame,
     LifecycleEvent,
-    RunRecord,
     reduce_lifecycle,
 )
 
@@ -96,37 +95,28 @@ async def ingest_lifecycle_event(event: LifecycleEvent):
         # Persist the state and read the run's routing keys, so the relayed
         # frame can be placed under the right task (#512).
 
-        routing = None
+        record = None
         try:
             event_at = dao.normalize_utc_timestamp(event.ts)
             persisted = await dao.set_lifecycle_state(
                 event.agent_run_id, state, updated_at=event_at
             )
             if persisted:
-                routing = await dao.get_status_routing(event.agent_run_id)
+                # The authoritative record carries the run's routing, its
+                # persisted lifecycle fact, and its terminal-output activity,
+                # so a lifecycle delta never publishes a record that would
+                # reset the independently ordered activity axis.
+                record = await dao.agent_status_record(event.agent_run_id)
         except Exception as exc:
             logger.warning("failed to persist lifecycle_state: %s", exc)
 
-        # Relay to the run's module bus. The frame carries the resolved task_id
-        # so the client places it without a lookup; missing routing is skipped.
+        # Relay to the run's project feed. The frame carries the resolved
+        # task_id so the client places it without a lookup; an unresolvable or
+        # doc-chat run is skipped.
 
-        if routing is not None:
-            project_id, task_id, module_id, scope, agent, started_at = routing
-            frame = AgentLifecycleFrame(
-                at=event_at,
-                run=RunRecord(
-                    agent_run_id=event.agent_run_id,
-                    project_id=project_id,
-                    task_id=task_id,
-                    module_id=module_id,
-                    agent=agent,
-                    scope=scope,
-                    started_at=started_at,
-                    state=state,
-                    updated_at=event_at,
-                ),
-            )
-            await publish_status(project_id, frame.model_dump())
+        if record is not None and record.scope != "docchat":
+            frame = AgentLifecycleFrame(at=event_at, run=record)
+            await publish_status(record.project_id, frame.model_dump())
 
     return 202, {"accepted": event.model_dump(), "received_at": received_at}
 

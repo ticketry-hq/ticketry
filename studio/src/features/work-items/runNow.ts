@@ -134,7 +134,6 @@ function activateRunTerminal(
     projectId: item.project_id,
     moduleId: moduleId ?? undefined,
     agent: response.run.agent as SessionMeta["agent"],
-    ticketSeq: item.sequence_id,
     agentRunId: response.run.agent_run_id,
     select: true,
   });

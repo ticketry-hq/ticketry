@@ -187,33 +187,40 @@ def test_invalid_mode_is_refused_with_a_structured_error(
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_reviving_an_inactive_campaign_refreshes_its_stored_mode(
+def test_pressing_again_on_an_ended_campaign_refreshes_its_stored_mode(
     client, root, child, spawn
 ):
     armed = _post(client, root, {"agent": "codex"})
     _agent_run(child, "run-1", active=False)
 
-    revived = _post(client, root, {"agent": "codex", "mode": "serial"})
+    pressed_again = _post(client, root, {"agent": "codex", "mode": "serial"})
 
     assert armed.status_code == 201
     assert GraphRun.objects.get(root=root).execution_mode == "serial"
-    assert revived.status_code == 201
-    assert revived.json()["launched"] == [str(child.id)]
+    assert pressed_again.status_code == 201
+    assert pressed_again.json()["launched"] == [str(child.id)]
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_a_live_campaign_still_refuses_a_repeat_request_and_keeps_its_mode(
+def test_a_live_campaign_accepts_a_repeat_request_and_refreshes_its_mode(
     client, root, child, spawn
 ):
+    """A healthy campaign is not disturbed, but the press is not a conflict.
+
+    Its one child is live, so nothing starts; the request still succeeds and
+    the stored mode follows the button that was pressed.
+    """
+
     armed = _post(client, root, {"agent": "codex", "mode": "serial"})
     _agent_run(child, "run-1", active=True)
 
     repeated = _post(client, root, {"agent": "codex", "mode": "parallel"})
 
     assert armed.status_code == 201
-    assert repeated.status_code == 409
-    assert repeated.json()["code"] == "graph_run_exists"
-    assert GraphRun.objects.get(root=root).execution_mode == "serial"
+    assert repeated.status_code == 201
+    assert repeated.json() == {"root_id": str(root.id), "launched": []}
+    assert GraphRun.objects.get(root=root).execution_mode == "parallel"
+    assert len(spawn) == 1
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)

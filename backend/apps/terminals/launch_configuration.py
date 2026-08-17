@@ -23,6 +23,11 @@ class ResolvedLaunchConfiguration:
     model: str | None
     reasoning: str | None
     required_skills: tuple[str, ...] = ()
+    # Display name of the workflow state whose binding produced this
+    # configuration — the current state for an interactive launch, the frozen
+    # destination state for an automated one. Persisted verbatim as the run's
+    # launch snapshot (#693); a later rename of that state does not rewrite it.
+    state_name: str | None = None
 
 
 class LaunchConfigurationError(ValueError):
@@ -114,4 +119,7 @@ def resolve_task_launch_configuration(
         model=model,
         reasoning=reasoning,
         required_skills=tuple(binding.required_skills),
+        # The binding is keyed by the state this launch resolved against, so
+        # its own state row is the one the run is launching in.
+        state_name=binding.state.name,
     )

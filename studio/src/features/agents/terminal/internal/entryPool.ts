@@ -261,7 +261,17 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
       }
       if (
         event.type === "reattachment_required" &&
-        (event.reason === "session_not_found" || event.reason === "session_ended")
+        event.reason === "session_ended"
+      ) {
+        // The durable run ended normally (including through the MCP exit
+        // tool). Remove its live viewer tab; the backend run remains available
+        // to the resumable/history queries.
+        store().closeTab(liveId, { dismiss: false });
+        return;
+      }
+      if (
+        event.type === "reattachment_required" &&
+        event.reason === "session_not_found"
       ) {
         entry.term.write("\r\n[session lost]\r\n");
         store().setSessionLost(liveId);

@@ -10,6 +10,7 @@ import apps.terminals.dao as terminals_dao
 import apps.terminals.launch as launch_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
+from apps.runs.run_scopes import SHELL_SCOPE
 from apps.terminals.tests.fakes import FakeAdapter, patch_terminal_runtime
 from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id
@@ -44,6 +45,8 @@ def _run(
         cwd=cwd,
         provider_session_id=provider_session_id,
         design_dir="/repo/design",
+        launch_state="Grill",
+        launch_model="sonnet",
         scope="docchat",
     )
 
@@ -173,6 +176,10 @@ def test_resume_persists_fresh_run_and_terminal_with_provider_continuity(
     assert resumed.lifecycle_state == "starting"
     assert resumed.provider_session_id == PROVIDER_SESSION_ID
     assert resumed.resumed_from is None
+    # A resume continues one conversation, so it reports the state and model
+    # that conversation began in rather than re-reading current policy (#693).
+    assert (resumed.launch_state, resumed.launch_model) == ("Grill", "sonnet")
+    assert (historical.launch_state, historical.launch_model) == ("Grill", "sonnet")
     assert new_session.agent_run_id == new_run_id
     assert new_session.tmux_session_name != old_session.tmux_session_name
     assert len(runtime.requests) == 1
@@ -239,3 +246,31 @@ async def test_resume_unsupported_propagates(tmp_path, monkeypatch) -> None:
         await launch_module.resume_provider_conversation(OLD_RUN_ID)
 
     assert captured == {}
+
+
+async def test_resume_of_an_agentless_run_is_refused_on_its_own_terms(
+    tmp_path, monkeypatch
+) -> None:
+    """A run with no provider has no conversation to continue (#665).
+
+    It is refused for the absent agent rather than incidentally, so widening
+    the provider-session rules can never make a shell run resumable.
+    """
+
+    cwd = tmp_path / "repo"
+    cwd.mkdir()
+    run = _run(
+        cwd=str(cwd),
+        provider_session_id=PROVIDER_SESSION_ID,
+        ended_at="2026-05-29T10:05:00",
+    )
+    run.agent = None
+    run.scope = SHELL_SCOPE
+    await runs_dao.insert_agent_run(run)
+    await terminals_dao.insert_terminal_session(_session(scope=SHELL_SCOPE))
+    _patch_resume_adapter(monkeypatch, resume_fn=lambda sid: ["claude", "--resume", sid])
+
+    with pytest.raises(launch_module.ResumeUnavailable) as excinfo:
+        await launch_module.resume_provider_conversation(OLD_RUN_ID)
+
+    assert excinfo.value.reason == "run_has_no_agent"

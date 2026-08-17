@@ -3,6 +3,11 @@
 static const double kMuxedScrollPixelsPerLine = 24.0;
 static const uint16_t kMuxedScrollMaxLines = 20;
 
+// AppKit virtual key codes for the two chords the view refuses to forward.
+static const uint16_t kMuxedEscapeKeyCode = 0x35;
+static const uint16_t kMuxedGraveKeyCode = 0x32;
+static const uint16_t kMuxedEKeyCode = 0x0E;
+
 @interface MuxedGhosttyView : NSView {
  @public
   ghostty_surface_t _surface;
@@ -17,6 +22,8 @@ static const uint16_t kMuxedScrollMaxLines = 20;
   uint16_t _reportedRows;
   muxed_ghostty_process_exit_cb _processExitCallback;
   void *_processExitContext;
+  muxed_ghostty_chord_cb _chordCallback;
+  void *_chordContext;
   BOOL _acceptsInput;
   BOOL _reportsGridResize;
 }
@@ -29,6 +36,22 @@ static const uint16_t kMuxedScrollMaxLines = 20;
 - (void)reportGridResize;
 - (void)recordRedraw;
 @end
+
+uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
+  NSEventModifierFlags chord =
+      modifier_flags & (NSEventModifierFlagControl | NSEventModifierFlagCommand |
+                        NSEventModifierFlagOption | NSEventModifierFlagShift);
+  // Exact modifier match, like the Studio keymap. Ctrl+Shift+grave is a
+  // different chord and still belongs to the terminal, and so does a bare
+  // letter: only a modified chord can be taken from someone who is typing.
+  if (key_code == kMuxedGraveKeyCode && chord == NSEventModifierFlagControl) {
+    return MUXED_GHOSTTY_CHORD_PANEL_TOGGLE;
+  }
+  if (key_code == kMuxedEKeyCode && chord == NSEventModifierFlagCommand) {
+    return MUXED_GHOSTTY_CHORD_SETTINGS;
+  }
+  return MUXED_GHOSTTY_CHORD_NONE;
+}
 
 @implementation MuxedGhosttyView
 
@@ -158,9 +181,21 @@ static const uint16_t kMuxedScrollMaxLines = 20;
 - (void)keyDown:(NSEvent *)event {
   if (!_acceptsInput || _surface == NULL) return;
   if ((event.modifierFlags & NSEventModifierFlagCommand) &&
-      event.keyCode == 0x35) {
+      event.keyCode == kMuxedEscapeKeyCode) {
     muxed_focus_trace(self, "disengaged by cmd-escape", _acceptsInput);
     [self.window makeFirstResponder:self.superview];
+    return;
+  }
+  // Studio chords must survive an engaged terminal (#667, #735): the WebView
+  // never sees a key while this view is first responder, so each chord is
+  // recognised here, hands the keyboard back, and is reported to Studio.
+  // Only the chord is native; what it *means* stays owned by the JavaScript
+  // binding, which is why this reports instead of acting.
+  uint8_t chord = muxed_ghostty_studio_chord(event.modifierFlags, event.keyCode);
+  if (chord != MUXED_GHOSTTY_CHORD_NONE) {
+    muxed_focus_trace(self, "disengaged by studio chord", _acceptsInput);
+    [self.window makeFirstResponder:self.superview];
+    if (_chordCallback != NULL) _chordCallback(_chordContext, chord);
     return;
   }
 

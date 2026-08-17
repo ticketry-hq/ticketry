@@ -38,7 +38,7 @@ export function StoriesSearchInput() {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={handleKeyDown}
-        className="h-7 w-full rounded-md border border-transparent bg-pane-title/50 pl-7 pr-6 text-[13px] font-medium text-text-primary outline-none transition-all placeholder:text-text-muted hover:bg-pane-title focus:border-focus-accent focus:bg-pane-title"
+        className="h-7 w-full border border-transparent bg-pane-title/50 pl-7 pr-6 text-[13px] font-medium text-text-primary outline-none transition-all placeholder:text-text-muted hover:bg-pane-title focus:border-focus-accent focus:bg-pane-title"
       />
       {query ? (
         <button

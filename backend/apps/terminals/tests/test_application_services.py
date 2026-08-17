@@ -107,6 +107,8 @@ def _persist_active_run(
     *,
     exit_code: int | None = None,
     runtime_namespace: str | None = "memory",
+    launch_state: str | None = None,
+    launch_model: str | None = None,
 ) -> None:
     issue_id = str(
         ensure_issue(project_id="p1", module_id="m1", task_id=run_id).id
@@ -123,6 +125,8 @@ def _persist_active_run(
             scope="task",
             doc_rel_path=None,
             runtime_namespace=runtime_namespace,
+            launch_state=launch_state,
+            launch_model=launch_model,
         )
     )
     if exit_code is not None:
@@ -260,7 +264,12 @@ def test_reconciliation_recovers_live_tombstone_from_legacy_runtime_identity():
 def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity(
     monkeypatch,
 ):
-    _persist_active_run("run-current-tombstone", runtime_namespace="profile-a")
+    _persist_active_run(
+        "run-current-tombstone",
+        runtime_namespace="profile-a",
+        launch_state="Implement",
+        launch_model="gpt-5-codex",
+    )
     AgentRun.objects.filter(id="run-current-tombstone").update(
         status="exited",
         ended_at="2026-08-09T12:05:00+00:00",
@@ -315,9 +324,23 @@ def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity(
                     "module_id": str(run.issue.module_id),
                     "agent": "codex",
                     "scope": "task",
+                    # Reconciliation repairs liveness and nothing else: the
+                    # run still reports the state and model it launched with
+                    # (#693).
+                    "launch_state": "Implement",
+                    "launch_model": "gpt-5-codex",
                     "started_at": "2026-08-09T12:00:00+00:00",
                     "state": "working",
                     "updated_at": run.lifecycle_updated_at,
+                    # Recovery clears any recorded result with the tombstone.
+                    "exit_code": None,
+                    # The repaired session's activity axis is untouched by
+                    # recovery: its output has not changed since creation, so
+                    # the effective presentation is the inactivity overlay
+                    # rather than a manufactured `working` (#661).
+                    "output_sequence": 0,
+                    "last_output_at": "2026-08-09T12:00:00+00:00",
+                    "effective_state": "stalled",
                 },
             },
         )

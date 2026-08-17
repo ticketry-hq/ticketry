@@ -5,6 +5,7 @@ import { ModuleTabStrip } from "./ModuleTabStrip";
 import { TasksPane } from "./tasks/TasksPane";
 import { SelectedTicket } from "./selected-ticket/SelectedTicket";
 import { PaneResizeHandle } from "../layout/PaneResizeHandle";
+import { TerminalPanel } from "../../../features/terminal-panel";
 
 interface TicketWorkspaceProps {
   tasksSize: number;
@@ -42,6 +43,9 @@ export function TicketWorkspace({
           </Panel>
         </PanelGroup>
       </div>
+      {/* Spans the Stories and work-item panes and stops here, so the panel's
+          extent matches its module scope; the sidebar stays full height. */}
+      <TerminalPanel />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 # Studio overhaul acceptance gate
 
-The eighty checks that were once a manual pre-merge walk are automated by
+Every numbered check in the matrix below was once a manual pre-merge walk; all
+of them are now automated by
 `npm run test:overhaul --workspace @worktracker/studio`. Desktop CI runs that
 named gate before the full Studio suite, typecheck, and build.
 
@@ -38,9 +39,9 @@ named gate before the full Studio suite, typecheck, and build.
 | 30 | Ordinary module creation stays open through folder-link failure and closes only after a successful retry. |
 | 31 | Pathless module selection preserves the prior selection on cancel or save failure and resumes after a valid link. |
 | 32 | A native attachment-process exit closes its viewer and releases outside viewer ownership without ending the durable terminal. |
-| 33 | Story-tree rows keep state-colored compact ticket identifiers at the leading edge, followed by flexible titles, while canonical-key, sequence, and title search remain available. |
+| 33 | Story-tree rows read as one left-aligned, truncating `identifier · name` label with state color on the identifier alone, keep trailing operational indicators separate, omit the separator when no compact identifier resolves, and leave canonical-key, sequence, and title search available. |
 | 34 | The Task workspace names child issues, review findings and their cancel labels, dependency chips and blocker candidates, the parent picker and Module link, and deletion confirmation copy as compact ticket identifiers without leaking canonical keys. |
-| 35 | Live and restored task-bound terminal tabs and their close affordances read as the compact ticket identifier, while scratch and taskless sessions keep identifier-free labels. |
+| 35 | Live and restored task-bound terminal tabs and their close affordances read the launch state their own durable run captured, with no ticket identifier, while scratch plan/instant runs keep their lowercase modes and an unrecorded state stays blank. |
 | 36 | A live terminal falsely tombstoned by legacy runtime reconciliation returns to its active lifecycle when the repaired status snapshot arrives. |
 | 37 | The sidebar, Module tab strip, keyboard position shortcuts, and backlog grouping all render the one Canonical module order. |
 | 38 | Agent activity reorders an automatic project's modules but leaves a project in Manual module order on its persisted order. |
@@ -62,7 +63,7 @@ named gate before the full Studio suite, typecheck, and build.
 | 54 | A failed project read retains the last known module ordering mode. |
 | 55 | A newly created module returns to activity-based recency once it receives activity of its own. |
 | 56 | Native first attach and reattach remain pending until exact clipped-frame presentation, while preparation failure retains fallback behavior. |
-| 57 | Run serially sits beside Run subtree under one capability, sends serial mode with independent pending and feedback, and both actions disappear together after a stale capability refresh. |
+| 57 | Run serially sits beside Run subtree under one capability, sends serial mode with independent pending and feedback, reports launched work as success and a press that launches nothing as nothing started, and both actions disappear together after a stale capability refresh. |
 | 58 | A native viewer resized while it prepares is presented at the pane's live geometry, and the pooled fallback is retired only once that grid is applied. |
 | 59 | A projects read started before an accepted first Module drag cannot restore recency over the resulting Manual module order. |
 | 60 | State transitions consume the authoritative landing rank, while cross-state drag finishes at its explicit drop seam. |
@@ -87,6 +88,49 @@ named gate before the full Studio suite, typecheck, and build.
 | 79 | A person can move a Story directly from Ideas to Implement through the ordinary state picker. |
 | 80 | An eligible Story in Ideas can Run now from Details or global `r`, with guarded pending/refusal behavior, terminal activation, and live workflow eligibility. |
 | 81 | A document discovered by the backend file watcher appears immediately as the active workspace tab. |
+| 82 | Edit-view ArrowRight expands a collapsed Story first, then dives straight into that Story's remembered Active tab body where Enter lands, never stopping at the workspace tab strip. |
+| 83 | A stopped Codex run projects Needs input, and its terminal tab and aggregate work-item status read that one projection. |
+| 84 | A gracefully exited agent run leaves the live terminal tabs without a Session lost error and appears in the resumable terminal row. |
+| 85 | A live terminal whose output has not changed for 60 seconds presents as Stalled on its tab and in the aggregate work-item status, and changed output restores the latest provider lifecycle state; a run waiting on the user keeps Needs input or Permission required however long it waits. |
+| 86 | The terminal tab's X terminates through the backend and the run stays Exited on every surface against later timer advancement, a late output observation, and a reconnect snapshot. |
+| 87 | A stalled but still-live terminal returns to the provider's own last lifecycle state as soon as its output changes again. |
+| 88 | A native terminal viewer reports terminal output through the shared backend activity operation exactly once, when it takes the run, and then never polls — visible, hidden, or detached — leaving ongoing observation to the backend's live-session sweep. |
+| 89 | Studio reads as a terminal with square corners everywhere: no Studio source file declares a rounded-corner utility or a non-zero corner radius, and the global stylesheet flattens every element so third-party CSS cannot round a surface. |
+| 90 | The panel toggle opens a bottom panel holding one agentless shell rooted in the selected module, focuses it, and closes the panel again from any focus position. |
+| 91 | The panel toggle resolves while an agent terminal holds terminal typing mode, which ordinary navigation keys cannot escape, and closing the panel restores that terminal's typing focus. |
+| 92 | A module whose folder is missing or invalid gets the module-folder selection affordance where its terminal would be, and no shell viewer is left behind. |
+| 93 | Neither entering a module nor keeping the panel closed launches a shell or attaches a viewer; opening the panel is what creates the module's first shell. |
+| 94 | An agent terminal and the panel shell are presented together, with the keyboard reaching only the chosen one and their foreground claims unable to collide. |
+| 95 | The panel's shell renders through the existing native renderer when it is available and the existing browser fallback otherwise. |
+| 96 | A module holds several panel shell tabs with exactly one of them showing, and choosing a tab presents that shell alone. |
+| 97 | The panel stops at the shell cap with its create action visibly refused rather than launching a further durable session. |
+| 98 | Switching modules swaps the shell strip and returns to that module's own active tab without creating shells for modules never shown. |
+| 99 | A restart or sidecar rebuild rediscovers the shells that survived, in creation order and with the shell that was last in front active again, instead of launching more. |
+| 100 | Explicitly closing a panel shell tab terminates its durable session and lands the panel on a determinate remaining tab, or on a stated empty strip when the last one goes. |
+| 101 | Only the shell showing in an open panel owns a viewer; background tabs and a closed panel hold none, and neither ends a shell. |
+| 102 | The terminal panel resizes within bounds that keep it usable, writes its height alone once the drag settles, and returns at that height after a restart while closing it leaves the height untouched. |
+| 103 | The showing terminal panel is the edit view's fourth navigation zone: the cycle reaches it only while it shows, and arriving in it is already typing in its shell. |
+| 104 | The established typing-mode exit chord leaves the panel's shell without closing the panel or giving up its zone, and closing the panel hands the zone back. |
+| 105 | A panel shell the person exits cleanly is disposed from its module's strip under either renderer, leaving the other shells and their terminals untouched and minting no replacement. |
+| 106 | A panel shell that ends non-zero keeps its tab with the code it ended on, and its restart action mints a new shell run in the same slot without ever reviving the dead one. |
+| 107 | A shell run moves no module badge, work-item rollup, subtree chicklet or scratch chicklet, and is no stop in the live-terminal cycle, even when shaped to slip past the scope and task filters. |
+| 108 | A task terminal tab names the workflow state its run launched in, keeps that word after the Story moves on while a later run reads its own, shows no ticket identifier or provider slug, and hovers the launch facts that were actually recorded. |
+| 109 | Live terminal tabs read in their provider's colour and invert to a provider fill with near-black ink when selected, while an exited, lost, or errored terminal goes neutral grey with no provider hue and its lifecycle badge keeps its own palette. |
+| 110 | Two live terminals sharing a provider and launch state take launch-order ordinals, the numerals disappear once no live collision remains, and the ended tab left in the strip is still addressable by an accessible name that says it ended. |
+| 111 | Dormant resume and terminated-history chips name the phase their run launched in exactly as the tab for the same run does, carry the same hover facts and neutral ended treatment, show no ticket identifier, and leave an unrecorded phase blank. |
+| 112 | A reload with no client session state rebuilds each terminal tab's captured launch state and model, provider colour, live-collision ordinals, and the ended runs' neutral history chips from the authoritative run records alone. |
+| 113 | A live desktop terminal whose native viewer reports a render failure keeps the compatibility renderer and its native-failure notice, and one window-scoped campaign requests exactly one full Studio refresh 500 ms later. |
+| 114 | Two live terminals whose runs recorded no launch state get distinct accessible tab names from their launch-order ordinals, while the visible tab label stays blank. |
+| 115 | Native rendering that keeps failing across refreshes waits 500 ms, 1 s, 2 s, 4 s, 8 s and then 10 s per attempt from a window-session campaign, each refresh detaches and releases its temporary viewer exactly once while the durable run is restored under the same foreground owner, and one native presentation clears the campaign so the next incident waits 500 ms again. |
+| 116 | A second terminal presenting a non-empty native grid recovers only its own run: a terminal still stranded on the compatibility renderer keeps its notice, its booked refresh still fires, and the consumed attempt is not reset to the initial delay. |
+| 117 | Opening Settings from the real footer action or its global binding over a presented native terminal hides that viewer without detaching it, releasing its lease, closing the terminal, or ending the run, and closing the dialog reveals the same handle against the host's current measurement. |
+| 118 | Every presentable native viewer, across concurrent Studio surfaces, hides for an open modal and only viewers still active and owned are revealed against a fresh measurement when it closes; attachment that completes while the stack is non-empty commits no reveal, out-of-order native hide/show promises settle on the latest modal intent, hidden viewers take no focus while a pointer-opened dialog returns focus to its opener, and a native visibility failure leaves Settings visible and interactive behind the compatibility fallback. The same window-level rule covers the client store's confirm dialogs: a `DialogHost` confirm raised with an empty modal stack hides a presented panel viewer, takes no focus from it, and reveals the same handle once it is answered. |
+| 119 | The footer's always-available Terminal control opens a hidden panel and the panel's own Minimize control hides it again, through the same action the shortcut uses: both are real buttons named for the action they perform and sit outside the shell tab list, and hiding leaves the shell alive, its tab active and no viewer presented under either renderer. |
+| 120 | Whether the terminal panel is showing belongs to the module it opens onto: opening it in one module leaves another module's closed, each module keeps its own answer across a switch, and a restart returns every module to the state it was left in while the window keeps only the height. |
+| 121 | The panel header's maximize control renders the panel at the geometry policy's current upper bound and restores the exact ordinary height without drift, keeps its size mode across hiding and a restart in one debounced furniture record, restores legacy and corrupt records as ordinary, recomputes the maximized height when the window changes without overwriting the ordinary preference, leaves maximized mode on a drag or separator nudge with the resulting height as the new ordinary one, and resizes the mounted browser and native viewers in place with no attach, detach, run, shell close or terminal input. |
+| 122 | The footer no longer carries a Keyboard Shortcuts control; Settings contains the searchable keyboard-shortcut reference, and the global `?` binding opens that Settings section directly. |
+| 123 | Opening Settings from the footer over the selected terminal in a mounted Task workspace hides the retained native viewer without detaching, releasing its lease, closing its session, or replacing its handle, and closing Settings remeasures and reveals that same handle; the browser compatibility renderer stays mounted in the WebView without native visibility traffic. |
+| 124 | Task workspace Settings occlusion converges on the newest navigation and presentation intent: a pending modal hide shields a newer Details destination until native completion, and a close/reopen/close sequence cannot accept an older reveal merely because the newest request uses the same retained handle. Together with the shared mounted Settings cases 117–118, the gate preserves native-chord singleton routing, hidden-viewer focus exclusion, late attachment suppression, owner/geometry convergence, compatibility fallback, and failure recovery. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

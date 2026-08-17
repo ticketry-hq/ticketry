@@ -1191,6 +1191,109 @@
                 }
             }
         },
+        "/terminals/shells": {
+            "get": {
+                "operationId": "terminals_shells_list",
+                "description": "A module's durable login shells, which are runs with no agent.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "terminals"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ModuleShell"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "terminals_shells_create",
+                "description": "A module's durable login shells, which are runs with no agent.",
+                "tags": [
+                    "terminals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateModuleShell"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateModuleShell"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateModuleShell"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentRunId"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/terminals/viewers/lease": {
             "post": {
                 "operationId": "terminals_viewers_lease_create",
@@ -1348,6 +1451,51 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/viewers/output": {
+            "post": {
+                "operationId": "terminals_viewers_output_create",
+                "tags": [
+                    "terminals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerOutputReport"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerOutputReport"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerOutputReport"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ViewerOutputReportResult"
                                 }
                             }
                         },
@@ -4022,10 +4170,19 @@
                         "type": "string"
                     },
                     "agent": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "scope": {
                         "$ref": "#/components/schemas/ScopeEnum"
+                    },
+                    "launch_state": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "launch_model": {
+                        "type": "string",
+                        "nullable": true
                     },
                     "started_at": {
                         "type": "string"
@@ -4035,12 +4192,27 @@
                     },
                     "updated_at": {
                         "type": "string"
+                    },
+                    "output_sequence": {
+                        "type": "integer"
+                    },
+                    "last_output_at": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "effective_state": {
+                        "type": "string"
                     }
                 },
                 "required": [
                     "agent",
                     "agent_run_id",
+                    "effective_state",
+                    "last_output_at",
+                    "launch_model",
+                    "launch_state",
                     "module_id",
+                    "output_sequence",
                     "project_id",
                     "scope",
                     "started_at",
@@ -4243,6 +4415,17 @@
                 },
                 "required": [
                     "ordered_ids"
+                ]
+            },
+            "CreateModuleShell": {
+                "type": "object",
+                "properties": {
+                    "module_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "module_id"
                 ]
             },
             "CreateTerminal": {
@@ -4921,6 +5104,25 @@
                     "path"
                 ]
             },
+            "ModuleShell": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "created_at",
+                    "module_id"
+                ]
+            },
             "Open": {
                 "type": "object",
                 "description": "Named JSON object used where the established payload is intentionally open.",
@@ -5396,6 +5598,17 @@
                     "started_at": {
                         "type": "string"
                     },
+                    "launch_state": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "launch_model": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scope": {
+                        "$ref": "#/components/schemas/ScopeEnum"
+                    },
                     "provider_session_id": {
                         "type": "string"
                     },
@@ -5407,8 +5620,11 @@
                 "required": [
                     "agent",
                     "agent_run_id",
+                    "launch_model",
+                    "launch_state",
                     "provider_session_id",
                     "resumed_from",
+                    "scope",
                     "started_at",
                     "status"
                 ]
@@ -5512,10 +5728,11 @@
                     "task",
                     "plan",
                     "instant",
-                    "docchat"
+                    "docchat",
+                    "shell"
                 ],
                 "type": "string",
-                "description": "* `task` - task\n* `plan` - plan\n* `instant` - instant\n* `docchat` - docchat"
+                "description": "* `task` - task\n* `plan` - plan\n* `instant` - instant\n* `docchat` - docchat\n* `shell` - shell"
             },
             "SelfTerminateResult": {
                 "type": "object",
@@ -5729,6 +5946,32 @@
                     "replaced",
                     "transport",
                     "viewer_id"
+                ]
+            },
+            "ViewerOutputReport": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id"
+                ]
+            },
+            "ViewerOutputReportResult": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "observed": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "observed"
                 ]
             },
             "WorkItem": {

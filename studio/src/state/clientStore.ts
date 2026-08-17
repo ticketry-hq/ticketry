@@ -16,6 +16,10 @@ import type {
 import { TEMP_TASK_ID } from "../features/agents/types";
 import { focusTerminal } from "../features/agents/terminal";
 import {
+  isTerminalPanelOpen,
+  useTerminalPanelStore,
+} from "../features/terminal-panel/panelStore";
+import {
   finishCollapsedStateMigration,
   isPanelLayout,
   persistPanelLayout,
@@ -36,7 +40,16 @@ export type FocusedPane =
   | "tasks"
   | "details-or-terminal";
 
-export type EditViewZone = "stories" | "tab-strip" | "active-tab-body";
+/**
+ * The edit view's navigation zones. `terminal-panel` is only reachable while
+ * the panel is showing: a closed panel is not a place the zone cycle can stop
+ * (#669).
+ */
+export type EditViewZone =
+  | "stories"
+  | "tab-strip"
+  | "active-tab-body"
+  | "terminal-panel";
 export type NavigationModality = "keyboard" | "pointer";
 export type SelectionSurface = "backlog";
 
@@ -236,6 +249,40 @@ const ERROR_TTL_MS = 8_000;
 let toastSequence = 0;
 const collapsedStorage = readCollapsedStateStorage();
 let pendingCollapsedStateNames = collapsedStorage.legacyNames;
+
+const BASE_EDIT_VIEW_ZONES: EditViewZone[] = [
+  "stories",
+  "tab-strip",
+  "active-tab-body",
+];
+
+/**
+ * The zones `Shift+Tab` walks. The terminal panel joins as a fourth zone only
+ * while it is showing, so the cycle never stops on a surface nobody can see.
+ */
+export function editViewZoneOrder(): EditViewZone[] {
+  return isTerminalPanelOpen()
+    ? [...BASE_EDIT_VIEW_ZONES, "terminal-panel"]
+    : BASE_EDIT_VIEW_ZONES;
+}
+
+/** Zones whose contents can take the keyboard outright (terminal typing mode). */
+export function isEngageableZone(zone: EditViewZone): boolean {
+  return zone === "active-tab-body" || zone === "terminal-panel";
+}
+
+function zoneEntryEngagement(
+  state: { editViewZone: EditViewZone; editViewBodyEngaged: boolean; sidebarVisible: boolean },
+  entering: EditViewZone,
+): boolean {
+  const inEditView = !isSidebarEnabled() || !state.sidebarVisible;
+  // The panel holds nothing but a shell, so entering it commits to typing.
+  if (entering === "terminal-panel") return inEditView;
+  if (entering === "active-tab-body" && state.editViewZone === entering) {
+    return state.editViewBodyEngaged;
+  }
+  return false;
+}
 
 export function visiblePaneOrder(
   sidebarVisible: boolean,
@@ -526,15 +573,18 @@ export const useClientStore = create<ClientState>((set, get) => ({
   },
 
   setEditViewZone(editViewZone) {
-    set((state) => ({
+    const editViewBodyEngaged = zoneEntryEngagement(get(), editViewZone);
+    set({
       editViewZone,
-      editViewBodyEngaged:
-        editViewZone === "active-tab-body" && state.editViewZone === editViewZone
-          ? state.editViewBodyEngaged
-          : false,
+      editViewBodyEngaged,
       focusedPane:
         editViewZone === "stories" ? "tasks" : "details-or-terminal",
-    }));
+    });
+    // Reaching the panel puts the keyboard in its shell, because typing is the
+    // only thing the panel is for.
+    if (editViewZone === "terminal-panel" && editViewBodyEngaged) {
+      useTerminalPanelStore.getState().focusShell();
+    }
   },
 
   setEditViewBodyEngaged(engaged) {
@@ -543,7 +593,7 @@ export const useClientStore = create<ClientState>((set, get) => ({
       editViewBodyEngaged:
         engaged &&
         (!isSidebarEnabled() || !state.sidebarVisible) &&
-        state.editViewZone === "active-tab-body",
+        isEngageableZone(state.editViewZone),
     });
   },
 
@@ -552,14 +602,9 @@ export const useClientStore = create<ClientState>((set, get) => ({
   },
 
   cycleEditViewZone() {
-    const order: EditViewZone[] = ["stories", "tab-strip", "active-tab-body"];
-    const editViewZone = order[(order.indexOf(get().editViewZone) + 1) % order.length];
-    set({
-      editViewZone,
-      editViewBodyEngaged: false,
-      focusedPane:
-        editViewZone === "stories" ? "tasks" : "details-or-terminal",
-    });
+    const order = editViewZoneOrder();
+    const next = (order.indexOf(get().editViewZone) + 1) % order.length;
+    get().setEditViewZone(order[next]);
   },
 
   moveProjectsCursor(delta, orderedIds) {

@@ -454,7 +454,7 @@ PUBLIC_ROUTE_REASONS = {
     (
         "POST",
         "/api/lifecycle/events",
-    ): "Provider hook subprocesses report best-effort loopback lifecycle events without the desktop API key.",
+    ): "Provider hook subprocesses lack the desktop API key; the handler verifies a run-scoped Authorization token injected at launch.",
     (
         "POST",
         "/api/terminals/self-terminate",

@@ -4,7 +4,7 @@ from django.utils import timezone
 
 def dismiss_historical_failures(apps, schema_editor):
     AutomationAttempt = apps.get_model("runs", "AutomationAttempt")
-    AutomationAttempt.objects.filter(
+    AutomationAttempt.objects.using(schema_editor.connection.alias).filter(
         status="failed",
         dismissed_at__isnull=True,
     ).update(dismissed_at=timezone.now())

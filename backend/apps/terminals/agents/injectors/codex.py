@@ -57,6 +57,7 @@ def build_codex_lifecycle_hooks(agent_run_id: str, lifecycle_url: str) -> dict:
             agent_run_id,
             "--lifecycle-url",
             lifecycle_url,
+            lifecycle_token=issue_run_authorization(agent_run_id),
         )
     )
     hook_entry = {"hooks": [{"type": "command", "command": command, "timeout": 5}]}

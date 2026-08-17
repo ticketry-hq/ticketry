@@ -15,6 +15,23 @@ async function text(relativePath: string): Promise<string> {
   return readFile(new URL(relativePath, import.meta.url), "utf8");
 }
 
+const NATIVE_TERMINAL_MODULES = [
+  "../../src-tauri/src/native_terminal.rs",
+  "../../src-tauri/src/native_terminal/macos/mod.rs",
+  "../../src-tauri/src/native_terminal/macos/state.rs",
+  "../../src-tauri/src/native_terminal/macos/lifecycle.rs",
+  "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
+  "../../src-tauri/src/native_terminal/macos/presentation_commands.rs",
+  "../../src-tauri/src/native_terminal/macos/platform_bridge.rs",
+];
+
+async function nativeTerminalSources(): Promise<string> {
+  const sources = await Promise.all(
+    NATIVE_TERMINAL_MODULES.map((module) => text(module)),
+  );
+  return sources.join("\n");
+}
+
 function snakeCase(value: string): string {
   return value.replace(/[A-Z]/g, (character, index) =>
     `${index === 0 ? "" : "_"}${character.toLowerCase()}`
@@ -112,17 +129,17 @@ describe("desktop shell security contract", () => {
   });
 
   it("initializes packaged libghostty from Ticketry's bundled resources", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const runtime = await text("../../src-tauri/native/libghostty_runtime.m");
 
-    expect(host).toContain('setenv("GHOSTTY_RESOURCES_DIR"');
-    expect(host).toContain('setenv("TERMINFO"');
-    expect(host.indexOf("configure_bundled_ghostty_environment();")).toBeLessThan(
-      host.indexOf("ghostty_init(2, argv)"),
-    );
+    expect(runtime).toContain('setenv("GHOSTTY_RESOURCES_DIR"');
+    expect(runtime).toContain('setenv("TERMINFO"');
+    expect(
+      runtime.indexOf("configure_bundled_ghostty_environment();"),
+    ).toBeLessThan(runtime.indexOf("ghostty_init(1, argv)"));
   });
 
   it("launches tmux directly in libghostty without a Ticketry byte bridge", async () => {
-    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+    const nativeTerminal = await nativeTerminalSources();
     const tmuxViewer = await text("../../src-tauri/src/tmux_viewer.rs");
     const main = await text("../../src-tauri/src/main.rs");
 
@@ -135,7 +152,7 @@ describe("desktop shell security contract", () => {
   });
 
   it("positions the native terminal in the webview coordinate space", async () => {
-    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+    const nativeTerminal = await nativeTerminalSources();
 
     expect(nativeTerminal).toContain("webview_ns_view(&window)");
     expect(nativeTerminal).toContain("webview.inner() as usize");
@@ -143,25 +160,30 @@ describe("desktop shell security contract", () => {
   });
 
   it("prepares libghostty hidden at the target window's Retina scale and keeps later scale updates", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const view = await text("../../src-tauri/native/libghostty_view.m");
+    const bridge = await text("../../src-tauri/native/libghostty_view_bridge.m");
 
-    expect(host).not.toContain("NSScreen.mainScreen.backingScaleFactor");
-    expect(host).toContain("self.window.backingScaleFactor ?: 1.0");
-    expect(host).toContain("self.layer.contentsScale = scale");
-    expect(host).toContain("ghostty_surface_set_content_scale(_surface, scale, scale)");
-    expect(host.indexOf("self.hidden = YES")).toBeLessThan(
-      host.indexOf("ghostty_surface_new(runtime->app, &config)"),
+    expect(view).not.toContain("NSScreen.mainScreen.backingScaleFactor");
+    expect(view).toContain("self.window.backingScaleFactor ?: 1.0");
+    expect(view).toContain("self.layer.contentsScale = scale");
+    expect(view).toContain("ghostty_surface_set_content_scale(_surface, scale, scale)");
+    expect(view.indexOf("self.hidden = YES")).toBeLessThan(
+      view.indexOf("ghostty_surface_new(runtime->app, &config)"),
     );
-    expect(host.indexOf("[parent addSubview:self")).toBeLessThan(
-      host.indexOf("CGFloat scale = self.window.backingScaleFactor"),
+    expect(view.indexOf("[parent addSubview:self")).toBeLessThan(
+      view.indexOf("CGFloat scale = self.window.backingScaleFactor"),
     );
-    expect(host).toContain("- (void)viewDidChangeBackingProperties");
-    expect(host).toContain("muxed_ghostty_view_present");
+    expect(view).toContain("- (void)viewDidChangeBackingProperties");
+    expect(bridge).toContain("muxed_ghostty_view_present");
   });
 
   it("keeps native viewer visibility reversible and hidden viewers non-interactive", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
-    const nativeTerminal = await text("../../src-tauri/src/native_terminal.rs");
+    const view = await text("../../src-tauri/native/libghostty_view.m");
+    const bridge = await text("../../src-tauri/native/libghostty_view_bridge.m");
+    const nativeTerminal = await nativeTerminalSources();
+    const attachCommands = await text(
+      "../../src-tauri/src/native_terminal/macos/attach_commands.rs",
+    );
     const desktop = await text("../../src-tauri/src/lib.rs");
     const build = await text("../../src-tauri/build.rs");
 
@@ -172,23 +194,23 @@ describe("desktop shell security contract", () => {
     expect(desktop).toContain("native_terminal::native_terminal_hide");
     expect(desktop).toContain("native_terminal::native_terminal_show");
     expect(nativeTerminal).toContain("hidden native terminal cannot receive focus");
-    expect(host).toContain("view->_acceptsInput = NO");
-    expect(host).toContain("if (!_acceptsInput) return");
-    expect(host).toContain("if (size.columns == 0 || size.rows == 0) return size");
-    expect(host.indexOf("muxed_ghostty_view_set_frame(")).toBeLessThan(
-      host.indexOf("muxed_ghostty_view_present(opaque)"),
+    expect(bridge).toContain("view->_acceptsInput = NO");
+    expect(view).toContain("if (!_acceptsInput) return");
+    expect(bridge).toContain("if (size.columns == 0 || size.rows == 0) return size");
+    expect(bridge.indexOf("muxed_ghostty_view_set_frame(")).toBeLessThan(
+      bridge.indexOf("muxed_ghostty_view_present(opaque)"),
     );
-    const attach = nativeTerminal.match(
+    const attach = attachCommands.match(
       /pub fn native_terminal_attach[\s\S]*?pub fn native_terminal_reconcile_frame/,
     )?.[0];
-    expect(attach).toContain("visibility: NativeTerminalVisibility::Hidden");
+    expect(attach).toContain("visibility: NativeTerminalVisibility::hidden()");
     expect(attach).not.toContain("muxed_ghostty_view_present");
   });
 
   it("keeps steady-state libghostty render actions off AppKit's input path", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
-    const runtimeAction = host.match(
-      /static bool runtime_action[\s\S]*?\n}/,
+    const view = await text("../../src-tauri/native/libghostty_view.m");
+    const runtimeAction = view.match(
+      /static bool runtime_action\(ghostty_app_t[\s\S]*?\n}/,
     )?.[0];
 
     expect(runtimeAction).toContain("return false");
@@ -196,7 +218,7 @@ describe("desktop shell security contract", () => {
   });
 
   it("forces and acknowledges the hidden Metal frame before presenting libghostty", async () => {
-    const host = await text("../../src-tauri/native/libghostty_host.m");
+    const host = await text("../../src-tauri/native/libghostty_view_bridge.m");
     const armRedraw = host.match(
       /uint64_t muxed_ghostty_view_arm_redraw[\s\S]*?\n}/,
     )?.[0];
@@ -259,6 +281,7 @@ describe("desktop shell security contract", () => {
       targets: ["app", "dmg"],
       icon: ["icons/icon.icns", "icons/icon.png"],
       resources: {
+        "native/ticketry-ghostty.conf": "ticketry-ghostty.conf",
         "vendor/libghostty/resources/": "",
       },
       externalBin: ["binaries/muxed-backend", "binaries/ticketry-hook"],

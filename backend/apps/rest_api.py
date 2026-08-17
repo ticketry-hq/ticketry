@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from asgiref.sync import async_to_sync
+from django.conf import settings as django_settings
 from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
@@ -14,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.documents import api as documents
+from apps.errors import ApplicationError
 from apps.execution import api as execution
 from apps.execution.execution_mode import EXECUTION_MODE_CHOICES
 from apps.runs import api as runs
@@ -468,9 +470,32 @@ class AutomationRetryView(AuthenticatedAPIView):
 
 
 class LifecycleEventView(PublicAPIView):
-    @extend_schema(tags=["runs"], request=LifecycleEventSerializer, responses={202: LifecycleAcceptedSerializer})
+    """Lifecycle ingress for agent hooks, guarded by run-scoped authorization.
+
+    The view skips DRF's static-API-key authentication because its callers are
+    hook subprocesses that never hold the desktop credential. Instead each
+    launch injects a Studio-signed Bearer credential bound to exactly one run
+    (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local
+    process cannot spoof lifecycle state or hijack another run's
+    ``provider_session_id``.
+    """
+
+    @extend_schema(tags=["runs"], request=LifecycleEventSerializer, responses={202: LifecycleAcceptedSerializer, 401: OpenSerializer})
     def post(self, request):
         event = _pydantic(LifecycleEvent, request.data)
+        if not getattr(django_settings, "WORKTRACKER_DISABLE_AUTH", False):
+            try:
+                authorized_run_id = verify_run_authorization(
+                    request.headers.get("Authorization")
+                )
+            except RunAuthorizationError as exc:
+                raise ApplicationError(
+                    401, str(exc), code="caller_run_unbound"
+                ) from exc
+            if authorized_run_id != event.agent_run_id:
+                raise ApplicationError(
+                    401, "authorization_run_mismatch", code="caller_run_mismatch"
+                )
         return _serialize_result(async_to_sync(runs.ingest_lifecycle_event)(event))
 
 

@@ -2,10 +2,12 @@
 
 ## Scope and reading note
 
-This review covers two local repositories as they exist on 2026-08-12:
+This review covers two local, unreleased repositories as they exist on
+2026-08-12 (neither checkout is published, so paths below refer to those local
+trees):
 
-- `/Users/karthik/merge_conflicts/coding/Rusty/ticketry-rust`
-- `/Users/karthik/merge_conflicts/coding/worktracker-rust`
+- `ticketry-rust` — the larger attempt
+- `worktracker-rust` — the smaller domain prototype
 
 Neither is a clean, released baseline. `ticketry-rust` is on branch
 `rust-gpui-migration` with both tracked modifications and substantial untracked

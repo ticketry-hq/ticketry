@@ -11,9 +11,9 @@ with a clean greenfield schema and attempt a late semantic import.
 This recommendation is supported by the strongest artifact in the larger prior
 attempt: its Django-schema manifest, 47 database fixtures, historical bridges,
 semantic preflight, snapshots, restore tests, and in-place adoption flow
-(`/Users/karthik/merge_conflicts/coding/Rusty/ticketry-rust/crates/muxed-adapter-sqlite/src/`;
-`/Users/karthik/merge_conflicts/coding/Rusty/ticketry-rust/tests/parity/databases/`;
-`/Users/karthik/merge_conflicts/coding/Rusty/ticketry-rust/docs/adr/0018-rust-adopts-the-existing-product-schema-in-place.md`).
+(in that attempt's local `ticketry-rust` checkout: `crates/muxed-adapter-sqlite/src/`,
+`tests/parity/databases/`, and
+`docs/adr/0018-rust-adopts-the-existing-product-schema-in-place.md`).
 Port and revalidate those artifacts rather than redesigning this part.
 
 The production migration strategy must still obey a hard rule: at any given app
@@ -104,7 +104,7 @@ Write reversible SeaORM migrations that reproduce the adopted physical schema,
 including existing Django table names and join tables. Generate entities from a
 clean application of those migrations, following the template's deterministic
 chain
-(`/Users/karthik/merge_conflicts/general/tauri-graphql-template/docs/adding-a-model.md`).
+(the `tauri-graphql-template` repository's `docs/adding-a-model.md`).
 
 When opening an adopted installation, record a Rust schema ledger without
 renaming or recreating product rows. Keep `django_migrations` inert as provenance;

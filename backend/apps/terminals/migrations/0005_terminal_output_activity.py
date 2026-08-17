@@ -14,7 +14,7 @@ def baseline_live_sessions(apps, schema_editor):
     """
 
     session_model = apps.get_model("terminals", "AgentTerminalSession")
-    session_model.objects.filter(
+    session_model.objects.using(schema_editor.connection.alias).filter(
         terminated_at__isnull=True,
         last_output_at__isnull=True,
     ).update(last_output_at=models.F("created_at"))

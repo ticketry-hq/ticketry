@@ -136,9 +136,11 @@ Implement in independently reviewable command slices:
 
 Primary behavior sources are [`../backend/worktracker/`](../backend/worktracker/),
 the pure algorithms/tests in
-`/Users/karthik/merge_conflicts/coding/worktracker-rust/src/domain/`, and the
+the prior `worktracker-rust` prototype's `src/domain/`, and the
 broader parity corpus in
-`/Users/karthik/merge_conflicts/coding/Rusty/ticketry-rust/crates/muxed-domain/src/worktracker/`.
+the prior `ticketry-rust` attempt's `crates/muxed-domain/src/worktracker/`
+(both are local, unreleased checkouts described in
+[prior-attempts-postmortem.md](prior-attempts-postmortem.md)).
 Current Django wins whenever older Rust semantics differ.
 
 Exit: every Work Management mutation and resulting row/revision/event matches

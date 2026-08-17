@@ -9,11 +9,12 @@ Ported from ``web/backend/tests/test_lifecycle_events.py``:
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from django.test import AsyncClient
+from django.test import AsyncClient, override_settings
 
 from apps.runs import dao
 from apps.runs.models import AgentRun
 from apps.terminals import launch as terminal_launch
+from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
@@ -237,6 +238,51 @@ async def test_non_attention_kind_still_persists_its_state() -> None:
 
     # idle maps to quiet: not attention-worthy, but still the run's latest state.
     assert await _state("run-quiet") == "quiet"
+
+
+# --- run-scoped ingress authorization ----------------------------------------
+
+
+async def test_ingest_requires_run_authorization_when_auth_enabled() -> None:
+    await _seed_run("run-auth-missing")
+
+    with override_settings(WORKTRACKER_DISABLE_AUTH=False):
+        response = await client.post(
+            "/lifecycle/events", json=_event("run-auth-missing")
+        )
+
+    assert response.status_code == 401
+    assert await _state("run-auth-missing") is None
+
+
+async def test_ingest_rejects_token_bound_to_another_run() -> None:
+    await _seed_run("run-auth-other")
+
+    foreign = issue_run_authorization("some-other-run")
+    with override_settings(WORKTRACKER_DISABLE_AUTH=False):
+        response = await client.post(
+            "/lifecycle/events",
+            json=_event("run-auth-other"),
+            headers={"Authorization": foreign},
+        )
+
+    assert response.status_code == 401
+    assert await _state("run-auth-other") is None
+
+
+async def test_ingest_accepts_matching_run_authorization() -> None:
+    await _seed_run("run-auth-ok")
+
+    credential = issue_run_authorization("run-auth-ok")
+    with override_settings(WORKTRACKER_DISABLE_AUTH=False):
+        response = await client.post(
+            "/lifecycle/events",
+            json=_event("run-auth-ok"),
+            headers={"Authorization": credential},
+        )
+
+    assert response.status_code == 202
+    assert await _state("run-auth-ok") == "starting"
 
 
 # --- GET /runs/agent-status (T962-S1) ---------------------------------------

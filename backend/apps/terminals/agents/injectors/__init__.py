@@ -56,8 +56,20 @@ class InjectedLaunch:
     environment: dict[str, str]
 
 
-def hook_argv(slug: str, script_path: str, *arguments: str) -> list[str]:
-    """Return the source-Python or packaged multi-call hook command."""
+def hook_argv(
+    slug: str,
+    script_path: str,
+    *arguments: str,
+    lifecycle_token: str | None = None,
+) -> list[str]:
+    """Return the source-Python or packaged multi-call hook command.
+
+    :param lifecycle_token: Run-scoped Bearer credential the source-Python
+        reporter presents to the lifecycle ingress. Deliberately omitted from
+        the packaged runner's argv: its spool transport never POSTs (the
+        backend drains the spool in-process), and the native runner rejects
+        flags it does not know.
+    """
 
     packaged_runner = os.getenv(PACKAGED_HOOK_RUNNER_ENV)
     if packaged_runner:
@@ -66,4 +78,7 @@ def hook_argv(slug: str, script_path: str, *arguments: str) -> list[str]:
         if hook_spool_dir:
             command.extend(["--spool-dir", hook_spool_dir])
         return [*command, *arguments]
-    return [sys.executable, script_path, *arguments]
+    token_arguments = (
+        ["--lifecycle-token", lifecycle_token] if lifecycle_token else []
+    )
+    return [sys.executable, script_path, *arguments, *token_arguments]

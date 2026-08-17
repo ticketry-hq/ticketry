@@ -78,6 +78,7 @@ def build_lifecycle_settings(
             agent_run_id,
             "--lifecycle-url",
             lifecycle_url,
+            lifecycle_token=issue_run_authorization(agent_run_id),
         )
     )
     hook_group = {

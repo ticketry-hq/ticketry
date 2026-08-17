@@ -103,6 +103,12 @@ On macOS, `pnpm run deploy` builds an ad-hoc-signed application and replaces
 app, and the previous bundle is restored if the final move fails. Quit Ticketry
 before deploying so the next launch uses the new bundle.
 
+macOS desktop builds are currently **unsigned and not notarized**, and no
+binary releases are published yet — build from source with the commands above.
+Gatekeeper will block a copied unsigned build; see
+[`studio/release/OPERATIONS.md`](studio/release/OPERATIONS.md) for the
+quarantine workaround and the full release policy.
+
 To attach the desktop shell to separately running development services instead,
 run `npm run desktop:dev -- --connect`. Attach mode reuses the `5174` frontend,
 `8787` backend, and established data directory without rebuilding or launching
@@ -145,3 +151,7 @@ The existing public configuration remains unchanged:
 | `MUXED_WEB_MCP_PORT`, `MUXED_DESKTOP_MCP_PORT` | Explicit development override for the pinned MCP port (`8123` by default). |
 | `MUXED_SECRET_KEY`, `MUXED_DEBUG`, `MUXED_ALLOWED_HOSTS` | Django runtime settings. |
 | `MUXED_DESKTOP_*` | Optional desktop endpoint and smoke-test overrides. |
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).

@@ -363,8 +363,10 @@ def test_patch_state_bad_group_400(client, project, auth):
 @pytest.mark.django_db
 def test_delete_last_state_in_group_409(client, project, auth):
     _seed(project)
-    backlog = State.objects.get(project=project, group="backlog")
-    r = client.delete(f"{BASE}/states/{backlog.id}", headers=auth)
+    # "cancelled" holds exactly one seeded state, and this _seed leaves states
+    # unprotected, so the 409 can only come from the last-in-group guard.
+    cancelled = State.objects.get(project=project, group="cancelled")
+    r = client.delete(f"{BASE}/states/{cancelled.id}", headers=auth)
     assert r.status_code == 409
 
 

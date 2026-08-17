@@ -3,7 +3,8 @@ from django.db import migrations
 
 def make_required_skill_failures_retryable(apps, schema_editor):
     AutomationAttempt = apps.get_model("runs", "AutomationAttempt")
-    unresolved = AutomationAttempt.objects.filter(
+    alias = schema_editor.connection.alias
+    unresolved = AutomationAttempt.objects.using(alias).filter(
         status="failed",
         retryable=False,
     ).only("id", "error", "error_details")
@@ -18,7 +19,9 @@ def make_required_skill_failures_retryable(apps, schema_editor):
         if structured or legacy:
             retryable_ids.append(attempt.id)
     if retryable_ids:
-        AutomationAttempt.objects.filter(id__in=retryable_ids).update(retryable=True)
+        AutomationAttempt.objects.using(alias).filter(id__in=retryable_ids).update(
+            retryable=True
+        )
 
 
 class Migration(migrations.Migration):

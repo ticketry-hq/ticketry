@@ -36,6 +36,7 @@ from urllib import request as urllib_request
 
 ENV_AGENT_RUN_ID = "MUXED_AGENT_RUN_ID"
 ENV_LIFECYCLE_URL = "MUXED_LIFECYCLE_URL"
+ENV_LIFECYCLE_TOKEN = "MUXED_LIFECYCLE_TOKEN"
 
 # Loopback ingress used when the launcher does not override the URL.
 #
@@ -215,6 +216,7 @@ def post_event(
     url: str,
     payload: dict,
     timeout: float = POST_TIMEOUT_SECONDS,
+    authorization: Optional[str] = None,
 ) -> None:
     """POST one event to the ingress, swallowing every error.
 
@@ -224,14 +226,19 @@ def post_event(
     :param url: Lifecycle ingress URL to POST to.
     :param payload: The event payload to serialize and send.
     :param timeout: Per-request timeout in seconds.
+    :param authorization: Studio-issued run-scoped Bearer credential the
+        ingress verifies; sent verbatim as the ``Authorization`` header.
     """
 
     data = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if authorization:
+        headers["Authorization"] = authorization
     req = urllib_request.Request(
         url,
         data=data,
         method="POST",
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
 
     try:
@@ -252,6 +259,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--agent-run-id", default=None)
     parser.add_argument("--lifecycle-url", default=DEFAULT_LIFECYCLE_URL)
+    parser.add_argument("--lifecycle-token", default=None)
 
     # Ignore any stray args so an unexpected token never aborts the hook.
 
@@ -279,17 +287,19 @@ def run(spec: HookSpec) -> None:
         if spec.identity == "env":
             agent_run_id = os.environ.get(ENV_AGENT_RUN_ID)
             url = os.environ.get(ENV_LIFECYCLE_URL) or DEFAULT_LIFECYCLE_URL
+            authorization = os.environ.get(ENV_LIFECYCLE_TOKEN)
         else:
             args = parse_args()
             agent_run_id = args.agent_run_id
             url = args.lifecycle_url
+            authorization = args.lifecycle_token
 
         payload = build_event_from_hook(spec, hook_input, agent_run_id, now_iso)
 
         # Send only when we have a recognized, tracked event.
 
         if payload is not None:
-            post_event(url, payload)
+            post_event(url, payload, authorization=authorization)
     except Exception:
         # Swallow anything; a hook error must not break the session.
         pass

@@ -1,5 +1,6 @@
 """DRF authentication for the owned WorkTracker HTTP surface."""
 
+import hmac
 from dataclasses import dataclass
 
 from django.conf import settings
@@ -29,7 +30,7 @@ class ApiKeyAuthentication(BaseAuthentication):
 
         supplied = request.headers.get(self.header)
         expected = getattr(settings, "WORKTRACKER_API_TOKEN", "")
-        if expected and supplied == expected:
+        if expected and supplied is not None and hmac.compare_digest(supplied, expected):
             return _PRINCIPAL, supplied
 
         raise AuthenticationFailed("Invalid or missing API key.")

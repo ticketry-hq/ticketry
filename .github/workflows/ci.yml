@@ -8,6 +8,11 @@ on:
 jobs:
   desktop:
     name: Desktop and sidecar
+    # macOS runners are expensive: run only on push to main or on pull
+    # requests whose head branch lives in this repository (not forks).
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4

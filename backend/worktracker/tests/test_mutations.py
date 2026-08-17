@@ -262,9 +262,11 @@ def test_cancel_archives_and_cascades_descendants(client, project, auth):
     assert r.status_code == 200
     assert r.json()["is_archived"] is True
 
-    # Story + its sub-task both drop from the active list (cascade archive).
-    active = client.get(f"{BASE}/work-items?project={project.id}", headers=auth).json()
-    assert [t["id"] for t in active] == []
+    # The collection read hides nothing (clients filter on is_archived); the
+    # cascade shows as both the story and its sub-task carrying the flag.
+    listed = client.get(f"{BASE}/work-items?project={project.id}", headers=auth).json()
+    archived = {t["id"]: t["is_archived"] for t in listed}
+    assert archived == {story["id"]: True, subtask["id"]: True}
 
     sub = client.get(f"{BASE}/work-items/{subtask['id']}", headers=auth).json()
     assert sub["is_archived"] is True

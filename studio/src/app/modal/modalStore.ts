@@ -3,6 +3,10 @@ import {
   validateUserNotice,
   type UserNotice,
 } from "../../runtime/userNotice";
+import {
+  readPresentedNoticeIds,
+  recordPresentedNoticeId,
+} from "./presentedNoticeStore";
 
 export type StandardModalType =
     | "agent-picker"
@@ -46,13 +50,16 @@ interface ModalState {
 
 export const useModalStore = create<ModalState>((set) => ({
   modalStack: [],
-  presentedNoticeIds: new Set(),
+  // Seeded from window-session storage so notices already presented before an
+  // in-app recovery refresh stay silent in the document that replaces it.
+  presentedNoticeIds: new Set(readPresentedNoticeIds()),
   pushModal: (modal) =>
     set((state) => ({ modalStack: [...state.modalStack, modal] })),
   notifyUser: (candidate) =>
     set((state) => {
       const notice = validateUserNotice(candidate);
       if (!notice || state.presentedNoticeIds.has(notice.id)) return state;
+      recordPresentedNoticeId(notice.id);
       const presentedNoticeIds = new Set(state.presentedNoticeIds);
       presentedNoticeIds.add(notice.id);
       return {

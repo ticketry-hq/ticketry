@@ -2,6 +2,7 @@
 name = "ticketry"
 version = "0.1.0"
 description = "Least-privilege desktop shell for Ticketry"
+license = "MIT"
 edition = "2021"
 
 [lib]

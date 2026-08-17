@@ -44,7 +44,8 @@ def test_new_project_seeds_known_bindings_as_explicit_rows_and_nothing_wildcard(
     assert ideas.required_skills == []
     assert ideas.auto_start is True
     assert ideas.subtree_run_enabled is False
-    assert "interactive grill session" in ideas.prompt
+    assert "choose its delivery route" in ideas.prompt
+    assert "`run_now`" in ideas.prompt
     assert "`Grill`" in ideas.prompt
     assert "`Spec`" in ideas.prompt
     assert grill.required_skills == ["grill-with-docs"]

@@ -550,6 +550,7 @@
         "/lifecycle/events": {
             "post": {
                 "operationId": "lifecycle_events_create",
+                "description": "Lifecycle ingress for agent hooks, guarded by run-scoped authorization.\n\nThe view skips DRF's static-API-key authentication because its callers are\nhook subprocesses that never hold the desktop credential. Instead each\nlaunch injects a Studio-signed Bearer credential bound to exactly one run\n(the same scheme :class:`SelfTerminateView` uses), so an arbitrary local\nprocess cannot spoof lifecycle state or hijack another run's\n``provider_session_id``.",
                 "tags": [
                     "runs"
                 ],
@@ -582,6 +583,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/LifecycleAccepted"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
                                 }
                             }
                         },

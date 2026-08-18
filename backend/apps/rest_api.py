@@ -67,6 +67,22 @@ class ModuleLinkSerializer(serializers.Serializer):
     path = serializers.CharField()
 
 
+class ModuleFolderValidationSerializer(serializers.Serializer):
+    path = serializers.CharField()
+
+
+class ModuleFolderValidationResultSerializer(serializers.Serializer):
+    valid = serializers.BooleanField()
+    reason = serializers.ChoiceField(
+        choices=(
+            "module_folder_not_absolute",
+            "module_folder_missing",
+            "module_folder_not_a_directory",
+        ),
+        allow_null=True,
+    )
+
+
 class ProfileSerializer(serializers.Serializer):
     name = serializers.CharField()
     workspace_slug = serializers.CharField()
@@ -461,6 +477,20 @@ class ProfileDetailView(AuthenticatedAPIView):
     @extend_schema(tags=["configuration"], responses={200: ConfigSerializer, 400: ErrorEnvelopeSerializer})
     def delete(self, request, index):
         return _serialize_result(async_to_sync(settings.delete_profile)(index))
+
+
+class ModuleFolderValidationView(AuthenticatedAPIView):
+    @extend_schema(
+        tags=["settings"],
+        request=ModuleFolderValidationSerializer,
+        responses=ModuleFolderValidationResultSerializer,
+    )
+    def post(self, request):
+        return _serialize_result(
+            async_to_sync(settings.validate_folder)(
+                _pydantic(settings.ModuleFolderValidationBody, request.data)
+            )
+        )
 
 
 class AutomationRetryView(AuthenticatedAPIView):

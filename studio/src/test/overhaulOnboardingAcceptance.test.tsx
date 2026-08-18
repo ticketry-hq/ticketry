@@ -56,6 +56,7 @@ describe("onboarding acceptance", () => {
   it("[overhaul-26] selects the first project before its guided tour starts", async () => {
     render(<OnboardingWelcome />);
 
+    expect(screen.queryByRole("button", { name: "Skip" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("checkbox", { name: "I use codex" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Your first project" });

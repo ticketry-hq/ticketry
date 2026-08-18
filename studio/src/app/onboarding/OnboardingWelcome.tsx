@@ -1,24 +1,12 @@
 import { type FormEvent, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
-import type { ProviderCatalog } from "../../shared/api/types";
-import * as api from "../../shared/api/client";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { getConfigSnapshot } from "../../features/studio/stores/configStore";
 import { useStudioStore } from "../../features/projects/store";
-import {
-  setProviderCapabilities,
-  setProviderCatalog,
-} from "../../features/workflows/providerQueries";
-import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 import { OnboardingProviders } from "./OnboardingProviders";
 
 type WelcomePane = "providers" | "project";
-
-const EMPTY_CATALOG: ProviderCatalog = {
-  activated_providers: [],
-  global_default: null,
-};
 
 export default function OnboardingWelcome() {
   const projectsEnabled = getConfigSnapshot().features.projects;
@@ -28,9 +16,7 @@ export default function OnboardingWelcome() {
   const [name, setName] = useState("Coding");
   const [slug, setSlug] = useState("CDN");
   const [creating, setCreating] = useState(false);
-  const [skipping, setSkipping] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [skipError, setSkipError] = useState<string | null>(null);
 
   const continueFromProviders = async () => {
     if (projectsEnabled) {
@@ -49,7 +35,7 @@ export default function OnboardingWelcome() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (creating || skipping || !name.trim() || !slug.trim()) return;
+    if (creating || !name.trim() || !slug.trim()) return;
     setCreating(true);
     setCreateError(null);
     try {
@@ -64,21 +50,6 @@ export default function OnboardingWelcome() {
     } catch (cause) {
       setCreateError(apiErrorMessage(cause));
       setCreating(false);
-    }
-  };
-
-  const skip = async () => {
-    if (skipping) return;
-    setSkipping(true);
-    setSkipError(null);
-    try {
-      const { value } = await api.putProviderCatalog(EMPTY_CATALOG);
-      setProviderCatalog(value);
-      setProviderCapabilities([]);
-      await acknowledgeOnboarding();
-    } catch (cause) {
-      setSkipError(apiErrorMessage(cause));
-      setSkipping(false);
     }
   };
 
@@ -146,7 +117,7 @@ export default function OnboardingWelcome() {
                 <button
                   type="submit"
                   disabled={
-                    creating || skipping || !name.trim() || !slug.trim()
+                    creating || !name.trim() || !slug.trim()
                   }
                   data-testid="onboarding-create-project"
                   className="bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
@@ -158,26 +129,6 @@ export default function OnboardingWelcome() {
           </>
         )}
 
-        {skipError ? (
-          <p
-            data-testid="onboarding-skip-error"
-            role="alert"
-            className="mt-4 text-sm text-lifecycle-danger"
-          >
-            {skipError}
-          </p>
-        ) : null}
-        <div className="mt-4">
-          <button
-            type="button"
-            disabled={skipping}
-            onClick={() => void skip()}
-            data-testid="onboarding-skip"
-            className="px-3 py-2 text-sm font-semibold text-text-muted hover:text-text-primary disabled:opacity-50"
-          >
-            {skipping ? "Skipping…" : skipError ? "Retry skip" : "Skip"}
-          </button>
-        </div>
       </main>
     </div>
   );

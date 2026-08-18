@@ -12,6 +12,7 @@ urlpatterns = [
     path("config", rest_api.ConfigView.as_view(), name="config"),
     path("config/profiles", rest_api.ProfileCollectionView.as_view(), name="profile-list"),
     path("config/profiles/<int:index>", rest_api.ProfileDetailView.as_view(), name="profile-detail"),
+    path("config/folders/validate", rest_api.ModuleFolderValidationView.as_view(), name="module-folder-validate"),
     path("automation-attempts/<str:attempt_id>/retry", rest_api.AutomationRetryView.as_view(), name="automation-retry"),
     path("lifecycle/events", rest_api.LifecycleEventView.as_view(), name="lifecycle-events"),
     path("runs/module-activity", rest_api.ModuleActivityView.as_view(), name="module-activity"),

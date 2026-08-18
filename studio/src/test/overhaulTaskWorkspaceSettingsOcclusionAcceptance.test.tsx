@@ -387,6 +387,35 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     view.unmount();
   });
 
+  it("[overhaul-126] hides and restores the retained Task viewer through state configuration", async () => {
+    seedTaskWorkspace("session-792", "run-792");
+    const view = mountTaskWorkspace();
+    await waitFor(() =>
+      expect(invocations("native_terminal_show")).toHaveLength(1),
+    );
+
+    act(() =>
+      useClientStore
+        .getState()
+        .toggleStateConfiguration("project-1", "state-1"),
+    );
+    await waitFor(() =>
+      expect(invocations("native_terminal_hide")).toEqual([[{ handle: HANDLE }]]),
+    );
+    expect(invocations("native_terminal_detach")).toHaveLength(0);
+
+    act(() => useClientStore.getState().dismissStateConfiguration());
+    await waitFor(() =>
+      expect(invocations("native_terminal_show")).toHaveLength(2),
+    );
+    expect(invocations("native_terminal_show").at(-1)).toEqual([
+      { handle: HANDLE, frame: FRAME },
+    ]);
+    expect(invocations("native_terminal_attach")).toHaveLength(1);
+
+    view.unmount();
+  });
+
   it("suppresses an older same-handle reveal across a close-reopen-close Settings sequence", async () => {
     seedTaskWorkspace("session-792", "run-792");
     let deferShows = false;

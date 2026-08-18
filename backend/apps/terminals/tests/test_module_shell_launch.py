@@ -118,6 +118,7 @@ def test_shell_hosts_a_login_shell_in_the_module_folder_with_no_agent_environmen
     "arrange, reason",
     [
         (lambda folder: None, "module_folder_unset"),
+        (lambda folder: "relative/folder", "module_folder_not_absolute"),
         (lambda folder: str(folder / "gone"), "module_folder_missing"),
         (lambda folder: str(folder / "file"), "module_folder_not_a_directory"),
     ],
@@ -397,5 +398,4 @@ def test_shell_launch_service_depends_on_the_public_runtime_protocol():
         }
         for name in imported
     )
-
 

@@ -40,6 +40,7 @@ export function ModulesPane() {
   const addButton = (
     <button
       type="button"
+      data-coach-anchor="module-add"
       onClick={() => pushModal({ type: "add-module" })}
       className="mt-1 w-full px-1 py-0.5 text-center text-text-muted hover:bg-pane-title hover:text-text-primary"
     >

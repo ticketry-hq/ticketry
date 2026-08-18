@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
+import { isAbsoluteFolderPath } from "../../studio/lib/moduleFolderPath";
 
 interface FolderProfile {
   module_links?: Array<{ module_id: string; path: string }>;
@@ -23,11 +24,12 @@ export function useModuleFolderSelection({
       (profile?.module_links ?? [])
         .map((link) => link.path)
         .reverse()
-        .filter((path) => path.trim().length > 0),
+        .filter(isAbsoluteFolderPath),
     ),
   );
   const [value, setValue] = useState(initialValue);
   const [highlight, setHighlight] = useState(-1);
+  const isValid = isAbsoluteFolderPath(value);
 
   function moveNext(): void {
     if (recentFolders.length === 0) return;
@@ -58,6 +60,7 @@ export function useModuleFolderSelection({
 
   return {
     value,
+    isValid,
     setValue,
     recentFolders,
     highlight,
@@ -76,24 +79,61 @@ export function ModuleFolderSelection({
   selection,
   autoFocus = false,
   ariaLabel,
+  ariaDescribedBy,
+  ariaInvalid = false,
+  disabled = false,
+  inputId,
+  pickerInline = false,
   placeholder = "Local folder (optional)",
 }: {
   selection: ModuleFolderSelectionState;
   autoFocus?: boolean;
   ariaLabel?: string;
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
+  disabled?: boolean;
+  inputId?: string;
+  pickerInline?: boolean;
   placeholder?: string;
 }) {
+  const showPathError =
+    selection.value.trim().length > 0 && !selection.isValid;
+  const picker = selection.runtime.capabilities.nativeFolderPicker ? (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => void selection.pickFolder()}
+      className={`border border-pane-border bg-pane-bg px-3 py-1 ${
+        pickerInline ? "shrink-0" : "mt-3"
+      }`}
+    >
+      Pick Folder
+    </button>
+  ) : null;
+
   return (
     <>
-      <input
-        autoFocus={autoFocus}
-        aria-label={ariaLabel}
-        value={selection.value}
-        onChange={(event) => selection.setValue(event.target.value)}
-        placeholder={placeholder}
-        spellCheck={false}
-        className="w-full bg-pane-bg px-2 py-1 font-mono text-sm outline-none ring-1 ring-pane-border focus:ring-focus-accent"
-      />
+      <div className={pickerInline ? "flex items-stretch gap-2" : undefined}>
+        <input
+          id={inputId}
+          autoFocus={autoFocus}
+          disabled={disabled}
+          aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          value={selection.value}
+          onChange={(event) => selection.setValue(event.target.value)}
+          placeholder={placeholder}
+          spellCheck={false}
+          aria-invalid={showPathError || ariaInvalid || undefined}
+          className={`${pickerInline ? "min-w-0 flex-1" : "w-full"} bg-pane-bg px-2 py-1 font-mono text-sm outline-none ring-1 ring-pane-border focus:ring-focus-accent`}
+        />
+        {pickerInline ? picker : null}
+      </div>
+      {showPathError ? (
+        <p className="mt-2 text-xs text-lifecycle-danger" role="alert">
+          Enter the full folder path, starting from the filesystem root.
+        </p>
+      ) : null}
       {selection.recentFolders.length > 0 && (
         <div className="mt-3">
           <div className="mb-1 text-xs font-bold uppercase tracking-wider text-text-muted">
@@ -122,15 +162,7 @@ export function ModuleFolderSelection({
           </ul>
         </div>
       )}
-      {selection.runtime.capabilities.nativeFolderPicker && (
-        <button
-          type="button"
-          onClick={() => void selection.pickFolder()}
-          className="mt-3 border border-pane-border bg-pane-bg px-3 py-1"
-        >
-          Pick Folder
-        </button>
-      )}
+      {!pickerInline ? picker : null}
     </>
   );
 }

@@ -363,6 +363,11 @@ HOST_ROUTES = (
         "GET", "/api/config", "Read local profiles and feature configuration."
     ),
     RouteDeclaration("PATCH", "/api/config", "Select the recent local profile."),
+    RouteDeclaration(
+        "POST",
+        "/api/config/folders/validate",
+        "Validate a local module working directory.",
+    ),
     RouteDeclaration("POST", "/api/config/profiles", "Create a local profile."),
     RouteDeclaration("PUT", "/api/config/profiles/{index}", "Replace a local profile."),
     RouteDeclaration(

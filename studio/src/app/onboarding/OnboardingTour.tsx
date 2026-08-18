@@ -1,15 +1,6 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
-import {
-  setModuleFolder,
-  useConfig,
-} from "../../features/studio/stores/configStore";
-import { useStudioStore } from "../../features/projects/store";
-import { useClientStore } from "../../state/clientStore";
-import {
-  ModuleFolderSelection,
-  useModuleFolderSelection,
-} from "../../features/agents/terminal/ModuleFolderSelection";
+import { useModalStore } from "../modal/modalStore";
 import CoachMark from "./CoachMark";
 import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
@@ -23,27 +14,25 @@ const buttonClass =
 
 export default function OnboardingTour({ onSelectStory }: Props) {
   const step = useOnboardingTourStore((state) => state.step);
-  const projectId = useOnboardingTourStore((state) => state.projectId);
   const storyId = useOnboardingTourStore((state) => state.storyId);
   const showModuleCreate = useOnboardingTourStore((state) => state.showModuleCreate);
-  const moduleCreated = useOnboardingTourStore((state) => state.moduleCreated);
   const reset = useOnboardingTourStore((state) => state.reset);
-  const createModule = useStudioStore((state) => state.createModuleForProjectWithError);
-  const { profiles, recentProfileIndex } = useConfig();
-  const [moduleName, setModuleName] = useState("General");
-  const [createdModuleId, setCreatedModuleId] = useState<string | null>(null);
+  const addModuleOpen = useModalStore(
+    (state) => state.modalStack.at(-1)?.type === "add-module",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const moduleInput = useRef<HTMLInputElement>(null);
-  const createdModuleIdRef = useRef<string | null>(null);
-  const folderSelection = useModuleFolderSelection({
-    profiles,
-    recentProfileIndex,
-  });
+  const [moduleGuide, setModuleGuide] = useState<"name" | "folder" | "done">(
+    "name",
+  );
 
   useEffect(() => {
     if (step === "handoff" && storyId) onSelectStory(storyId);
   }, [onSelectStory, step, storyId]);
+
+  useEffect(() => {
+    if (!addModuleOpen) setModuleGuide("name");
+  }, [addModuleOpen]);
 
   if (step === "inactive") return null;
 
@@ -60,47 +49,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
     }
   };
 
-  const createGuidedModule = async (event: FormEvent) => {
-    event.preventDefault();
-    if (
-      busy ||
-      !moduleName.trim() ||
-      !folderSelection.value.trim() ||
-      !projectId
-    ) return;
-    setBusy(true);
-    setError(null);
-    try {
-      let moduleId = createdModuleIdRef.current;
-      if (!moduleId) {
-        moduleId = (await createModule(projectId, moduleName.trim())).id;
-        if (!moduleId) throw new Error("The created module has no id.");
-        createdModuleIdRef.current = moduleId;
-        setCreatedModuleId(moduleId);
-      }
-      const resolvedModuleId = moduleId;
-      try {
-        await setModuleFolder(resolvedModuleId, folderSelection.value.trim());
-      } catch {
-        setError(
-          "Module created, but its folder could not be saved. Retry to save the folder.",
-        );
-        setBusy(false);
-        return;
-      }
-      if (useClientStore.getState().selectedModuleId !== resolvedModuleId) {
-        await useClientStore.getState().selectModule(resolvedModuleId);
-      }
-      moduleCreated(resolvedModuleId);
-      setBusy(false);
-    } catch (cause) {
-      setError(apiErrorMessage(cause));
-      setBusy(false);
-      requestAnimationFrame(() => moduleInput.current?.focus());
-    }
-  };
-
-  const footer = (
+  const skipTour = (
     <div className="mt-4 flex items-center justify-between gap-3">
       <button
         type="button"
@@ -131,60 +80,58 @@ export default function OnboardingTour({ onSelectStory }: Props) {
           Continue
         </button>
         {errorNode}
-        {footer}
       </CoachMark>
     );
   }
 
   if (step === "module-create") {
+    if (addModuleOpen && moduleGuide === "name") {
+      return (
+        <CoachMark
+          anchor="module-name"
+          title="Name the module"
+          description="This is the label for a set of related stories. Use a name that describes the work you want to track; it does not have to match the folder or repository name."
+          focusDialog={false}
+        >
+          <button
+            type="button"
+            data-testid="onboarding-module-name-next"
+            className={buttonClass}
+            onClick={() => setModuleGuide("folder")}
+          >
+            Next
+          </button>
+        </CoachMark>
+      );
+    }
+    if (addModuleOpen && moduleGuide === "folder") {
+      return (
+        <CoachMark
+          anchor="module-folder"
+          title="Choose where work runs"
+          description="This is the project's working directory (CWD): the folder containing the code this module works on. Ticketry opens terminals and starts coding agents here. Multiple modules can share the same folder."
+          focusDialog={false}
+        >
+          <button
+            type="button"
+            data-testid="onboarding-module-folder-done"
+            className={buttonClass}
+            onClick={() => setModuleGuide("done")}
+          >
+            Got it
+          </button>
+        </CoachMark>
+      );
+    }
+    if (addModuleOpen) return null;
     return (
       <CoachMark
         anchor="module-add"
-        title="Create your first module"
-        description="Modules group related stories. Name it and choose its local folder."
+        title="Add your first module"
+        description="A module groups related stories and sets where their work runs. Select + Add Module to choose its working directory (CWD). Multiple modules can use the same folder."
         focusDialog={false}
       >
-        <form onSubmit={(event) => void createGuidedModule(event)}>
-          <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary">
-            Module name
-            <input
-              ref={moduleInput}
-              autoFocus
-              disabled={createdModuleId !== null}
-              value={moduleName}
-              onChange={(event) => setModuleName(event.target.value)}
-              data-testid="onboarding-module-name"
-              className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
-            />
-          </label>
-          <div className="mt-3">
-            <ModuleFolderSelection
-              selection={folderSelection}
-              ariaLabel="Module folder"
-              placeholder="Local folder"
-            />
-          </div>
-          {errorNode}
-          <button
-            type="submit"
-            data-testid="onboarding-create-module"
-            disabled={
-              busy ||
-              !moduleName.trim() ||
-              !folderSelection.value.trim()
-            }
-            className={`${buttonClass} mt-4`}
-          >
-            {busy
-              ? createdModuleId
-                ? "Saving…"
-                : "Creating…"
-              : createdModuleId
-                ? "Save folder"
-                : "Create module"}
-          </button>
-        </form>
-        {footer}
+        {errorNode}
       </CoachMark>
     );
   }
@@ -198,7 +145,7 @@ export default function OnboardingTour({ onSelectStory }: Props) {
         focusDialog={false}
       >
         {errorNode}
-        {footer}
+        {skipTour}
       </CoachMark>
     );
   }
@@ -218,7 +165,6 @@ export default function OnboardingTour({ onSelectStory }: Props) {
         {busy ? "Finishing…" : "Finish tour"}
       </button>
       {errorNode}
-      {footer}
     </CoachMark>
   );
 }

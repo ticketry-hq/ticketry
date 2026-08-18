@@ -19,6 +19,8 @@ import { setModuleFolder, useConfig } from "../studio/stores/configStore";
 
 const REFUSAL_MESSAGE: Record<string, string> = {
   module_folder_unset: "This module has no folder yet.",
+  module_folder_not_absolute:
+    "This module's folder is not a complete filesystem path.",
   module_folder_missing: "This module's folder no longer exists.",
   module_folder_not_a_directory: "This module's folder is not a directory.",
   no_profile_selected: "No profile is selected, so no folder is configured.",
@@ -40,7 +42,7 @@ export function ModuleFolderRequired({
   const path = selection.value.trim();
 
   async function link(): Promise<void> {
-    if (!path || busy) return;
+    if (!selection.isValid || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -76,7 +78,7 @@ export function ModuleFolderRequired({
       <button
         type="button"
         data-testid="terminal-panel-link-folder"
-        disabled={busy || !path}
+        disabled={busy || !selection.isValid}
         onClick={() => void link()}
         className="mt-3 border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent"
       >

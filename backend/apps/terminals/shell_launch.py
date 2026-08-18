@@ -66,6 +66,8 @@ def resolve_module_shell_directory(module_id: str) -> str:
     module_folder = module_link_path(profile, module_id)
     if not module_folder:
         raise ShellLaunchRefused("module_folder_unset")
+    if not os.path.isabs(module_folder):
+        raise ShellLaunchRefused("module_folder_not_absolute")
     if not os.path.exists(module_folder):
         raise ShellLaunchRefused("module_folder_missing")
     if not os.path.isdir(module_folder):

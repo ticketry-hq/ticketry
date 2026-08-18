@@ -138,6 +138,51 @@
                 }
             }
         },
+        "/config/folders/validate": {
+            "post": {
+                "operationId": "config_folders_validate_create",
+                "tags": [
+                    "settings"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleFolderValidation"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleFolderValidation"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleFolderValidation"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModuleFolderValidationResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/config/profiles": {
             "post": {
                 "operationId": "config_profiles_create",
@@ -5100,6 +5145,40 @@
                     "name"
                 ]
             },
+            "ModuleFolderValidation": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "path"
+                ]
+            },
+            "ModuleFolderValidationResult": {
+                "type": "object",
+                "properties": {
+                    "valid": {
+                        "type": "boolean"
+                    },
+                    "reason": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/ReasonEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "reason",
+                    "valid"
+                ]
+            },
             "ModuleLink": {
                 "type": "object",
                 "properties": {
@@ -5132,6 +5211,11 @@
                     "agent_run_id",
                     "created_at",
                     "module_id"
+                ]
+            },
+            "NullEnum": {
+                "enum": [
+                    null
                 ]
             },
             "Open": {
@@ -5549,6 +5633,15 @@
                 "required": [
                     "value"
                 ]
+            },
+            "ReasonEnum": {
+                "enum": [
+                    "module_folder_not_absolute",
+                    "module_folder_missing",
+                    "module_folder_not_a_directory"
+                ],
+                "type": "string",
+                "description": "* `module_folder_not_absolute` - module_folder_not_absolute\n* `module_folder_missing` - module_folder_missing\n* `module_folder_not_a_directory` - module_folder_not_a_directory"
             },
             "ReasoningLevel": {
                 "type": "object",

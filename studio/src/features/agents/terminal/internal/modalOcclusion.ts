@@ -4,19 +4,17 @@ import { useClientStore } from "../../../../state/clientStore";
 /**
  * The single window-level occlusion condition (CODING-718, CODING-733).
  *
- * Studio raises window-level overlays from two independent surfaces: the modal
- * stack `ModalHost` renders, and the confirm dialogs `DialogHost` renders from
- * `useClientStore.dialogs`. Either one owns the window foreground, so the
- * condition is the OR over both rather than a second per-surface rule bolted
- * onto each terminal gate. While it holds, no terminal may be presented and
- * none may hold the window's focus. Reading it through one named predicate
- * keeps every terminal-side gate on the same source of intent instead of each
- * surface re-deriving its own notion of "a dialog is up".
+ * Studio raises WebView surfaces that must cover the native terminal from the
+ * modal stack, `DialogHost`, and the state-configuration workspace overlay.
+ * Any one of them owns the foreground, so the condition is centralized here
+ * rather than bolted onto each terminal gate. While it holds, no terminal may
+ * be presented and none may hold the window's focus.
  */
 export function modalOcclusionActive(): boolean {
   return (
     useModalStore.getState().modalStack.length > 0 ||
-    useClientStore.getState().dialogs.length > 0
+    useClientStore.getState().dialogs.length > 0 ||
+    useClientStore.getState().workspaceSelection.kind === "state-configuration"
   );
 }
 
@@ -26,8 +24,12 @@ export function modalOcclusionActive(): boolean {
  */
 export function useModalOcclusionActive(): boolean {
   const modalOpen = useModalStore((state) => state.modalStack.length > 0);
-  const dialogOpen = useClientStore((state) => state.dialogs.length > 0);
-  return modalOpen || dialogOpen;
+  const clientOverlayOpen = useClientStore(
+    (state) =>
+      state.dialogs.length > 0 ||
+      state.workspaceSelection.kind === "state-configuration",
+  );
+  return modalOpen || clientOverlayOpen;
 }
 
 /**

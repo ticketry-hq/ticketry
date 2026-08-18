@@ -77,6 +77,7 @@ describe("ModuleFolder modal", () => {
             { module_id: "mod-2", path: "" },
             { module_id: "mod-3", path: "/repos/shared" },
             { module_id: "mod-4", path: "/repos/old" },
+            { module_id: "mod-5", path: "relative-folder" },
           ],
           recent_project_id: null,
         },

@@ -45,13 +45,15 @@ function runtimeHealthHarness() {
       routes.graphQl(async () => {
         throw new Error("GraphQL is not used by this test.");
       }),
+    statusStream: () => null,
+    documentUrl: (documentId: string, relPath: string) =>
+      `/api/docs/${documentId}/${relPath}`,
     pickFolder: async () => null,
     startup: () => ({
       endpoints: {
         workTrackerApi: "/api/work-tracker",
         agentApi: "/api",
         statusApi: "/api",
-        statusWebSocket: "/ws/status",
         terminalWebSocket: "/ws/terminal",
       },
       values: { workTrackerApiKey: "" },

@@ -1,5 +1,11 @@
 # Spec — Slice 0: In-process GraphQL foundation over TauRPC
 
+> Recovery note (2026-08-13): the authored migration-probe mutation described
+> below was an early blanket override, not a product-domain requirement. The
+> live foundation now keeps SeaORM's generated entity registration unchanged
+> and exercises Seaography's generated query and mutation surface. This file
+> remains the historical specification for the original slice.
+
 This specification records the agreed foundation slice for CODING-534. It is
 the composition proof for the ratified vertical-slice Rust migration, not a
 production domain migration or a replacement for the supervised Python

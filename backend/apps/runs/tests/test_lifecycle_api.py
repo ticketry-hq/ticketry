@@ -12,6 +12,7 @@ import pytest
 from django.test import AsyncClient
 
 from apps.runs import dao
+from apps.runs.tests.seeding import aseed_agent_run, seed_agent_run
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
@@ -54,7 +55,7 @@ async def _seed_run(
 ) -> None:
     """Insert a minimal running agent run."""
 
-    await dao.insert_agent_run(
+    await aseed_agent_run(
         AgentRun(
             id=run_id,
             issue_id=fixture_issue_id(
@@ -252,7 +253,7 @@ async def _seed_status_run(
     ended_at: str | None = None,
     scope: str = "task",
 ) -> None:
-    await dao.insert_agent_run(
+    await aseed_agent_run(
         AgentRun(
             id=run_id,
             issue_id=fixture_issue_id(

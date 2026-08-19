@@ -361,7 +361,7 @@ HOST_ROUTES = (
     RouteDeclaration(
         "POST",
         "/api/automation-attempts/{attempt_id}/retry",
-        "Create an idempotent retry attempt.",
+        "Retired: retry is an authored Rust command; this route refuses.",
     ),
     RouteDeclaration(
         "POST", "/api/lifecycle/events", "Ingest and publish one lifecycle event."
@@ -409,6 +409,21 @@ HOST_ROUTES = (
     ),
     RouteDeclaration(
         "GET",
+        "/api/terminals/runs-effects",
+        "Publish the terminal executor's Slice 3 Runs health record.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/terminals/runs-effects/observe",
+        "Report what exists under one deterministic runtime identity.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/terminals/runs-effects/execute",
+        "Perform one already-durable launch effect and report its outcome.",
+    ),
+    RouteDeclaration(
+        "GET",
         "/api/execution/launch-policy-effects",
         "Publish the Django effect port's Slice 2 readiness contract.",
     ),
@@ -417,22 +432,45 @@ HOST_ROUTES = (
         "/api/execution/launch-policy-effects",
         "Perform one immutable Rust-authored launch decision idempotently.",
     ),
+    # The workspace routes below were retired at the Slice 4 handoff. Every one of
+    # them writes — listing documents rescans and prunes, live worktree status
+    # prunes checkouts Git no longer knows, saving replaces a file — so none could
+    # stay open as a read. Production Studio uses TauRPC GraphQL and the desktop
+    # document protocol; these paths refuse.
     RouteDeclaration(
-        "GET", "/api/documents", "List and rescan registered design documents."
+        "GET",
+        "/api/documents",
+        "Retired: the document registry is an authored Rust command; this route refuses.",
     ),
     RouteDeclaration(
-        "GET", "/api/docs/{doc_id}/{asset_path}", "Read a registered document asset."
+        "GET",
+        "/api/docs/{doc_id}/{asset_path}",
+        "Retired: document bytes come from the desktop document protocol; this route refuses.",
     ),
     RouteDeclaration(
-        "PUT", "/api/docs/{doc_id}", "Save a digest-guarded Markdown document."
-    ),
-    RouteDeclaration("GET", "/api/fs/complete", "Complete local directory names."),
-    RouteDeclaration("GET", "/api/worktrees", "Read live worktree status."),
-    RouteDeclaration(
-        "POST", "/api/worktrees/{task_id}/create", "Create an opt-in worktree."
+        "PUT",
+        "/api/docs/{doc_id}",
+        "Retired: saving is an authored Rust command; this route refuses.",
     ),
     RouteDeclaration(
-        "POST", "/api/worktrees/{task_id}/discard", "Discard an opt-in worktree."
+        "GET",
+        "/api/fs/complete",
+        "Retired: directory completion is a Rust desktop read; this route refuses.",
+    ),
+    RouteDeclaration(
+        "GET",
+        "/api/worktrees",
+        "Retired: live worktree status is an authored Rust query; this route refuses.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/{task_id}/create",
+        "Retired: worktree creation is an authored Rust command; this route refuses.",
+    ),
+    RouteDeclaration(
+        "POST",
+        "/api/worktrees/{task_id}/discard",
+        "Retired: worktree discard is an authored Rust command; this route refuses.",
     ),
 )
 

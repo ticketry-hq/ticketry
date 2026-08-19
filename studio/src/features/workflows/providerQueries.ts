@@ -35,8 +35,8 @@ function holdingFromGraphQl(payload: ProviderCatalogPayload): ProviderHolding {
     );
     const modelReasoningLevels = Object.fromEntries(models.map((model) => [
       model.name,
-      model.permitted_reasoning_levels.map(
-        (level) => reasoningNames.get(level) ?? level,
+      model.reasoning_levels.nodes.map(
+        ({ reasoning_level_id: level }) => reasoningNames.get(level) ?? level,
       ),
     ]));
     return {

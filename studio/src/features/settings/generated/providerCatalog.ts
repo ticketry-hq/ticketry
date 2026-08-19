@@ -12,7 +12,9 @@ export interface CatalogAgentModel {
   readonly id: string;
   readonly provider: string;
   readonly name: string;
-  readonly permitted_reasoning_levels: ReadonlyArray<string>;
+  readonly reasoning_levels: {
+    readonly nodes: ReadonlyArray<{ readonly reasoning_level_id: string }>;
+  };
 }
 export interface CatalogReasoningLevel { readonly id: string; readonly name: string; }
 export interface CatalogGlobalDefault {
@@ -36,7 +38,7 @@ export interface UpdateProviderCatalogVariables {
   readonly defaultReasoning?: string | null;
 }
 
-const source = "query LoadProviderCatalog {\n  provider_catalog {\n    configurable_providers { id slug activated supports_unattended }\n    providers { id slug activated supports_unattended }\n    agent_models { id provider name permitted_reasoning_levels }\n    reasoning_levels { id name }\n    global_default { provider model reasoning }\n  }\n}\n\nmutation UpdateProviderCatalog(\n  $activatedProviders: [String!]!\n  $defaultProvider: String\n  $defaultModel: String\n  $defaultReasoning: String\n) {\n  update_provider_catalog(\n    activated_providers: $activatedProviders\n    default_provider: $defaultProvider\n    default_model: $defaultModel\n    default_reasoning: $defaultReasoning\n  ) {\n    configurable_providers { id slug activated supports_unattended }\n    providers { id slug activated supports_unattended }\n    agent_models { id provider name permitted_reasoning_levels }\n    reasoning_levels { id name }\n    global_default { provider model reasoning }\n  }\n}";
+const source = "query LoadProviderCatalog {\n  provider_catalog {\n    configurable_providers { id slug activated supports_unattended: supportsUnattended }\n    providers { id slug activated supports_unattended: supportsUnattended }\n    agent_models {\n      id\n      provider: providerId\n      name\n      reasoning_levels: agentModelReasoningLevel {\n        nodes { reasoning_level_id: reasoningLevelId }\n      }\n    }\n    reasoning_levels { id name }\n    global_default { provider model reasoning }\n  }\n}\n\nmutation UpdateProviderCatalog(\n  $activatedProviders: [String!]!\n  $defaultProvider: String\n  $defaultModel: String\n  $defaultReasoning: String\n) {\n  update_provider_catalog(\n    activated_providers: $activatedProviders\n    default_provider: $defaultProvider\n    default_model: $defaultModel\n    default_reasoning: $defaultReasoning\n  ) {\n    configurable_providers { id slug activated supports_unattended: supportsUnattended }\n    providers { id slug activated supports_unattended: supportsUnattended }\n    agent_models {\n      id\n      provider: providerId\n      name\n      reasoning_levels: agentModelReasoningLevel {\n        nodes { reasoning_level_id: reasoningLevelId }\n      }\n    }\n    reasoning_levels { id name }\n    global_default { provider model reasoning }\n  }\n}";
 const document = <TResult, TVariables>(operationName: string): TypedDocumentNode<TResult, TVariables> => ({
   kind: "Document", operationName, source,
 });

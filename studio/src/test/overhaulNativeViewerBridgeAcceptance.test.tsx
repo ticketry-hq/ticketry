@@ -199,8 +199,11 @@ describe("native viewer attachment acceptance", () => {
 
   it("[overhaul-64] discards native surfaces before a WebView reload remeasures the pane", async () => {
     const [shellSource, nativeTerminalSource] = await Promise.all([
-      import("node:fs/promises").then(({ readFile }) =>
-        readFile(`${process.cwd()}/src-tauri/src/lib.rs`, "utf8"),
+      import("node:fs/promises").then(async ({ readFile }) =>
+        [
+          await readFile(`${process.cwd()}/src-tauri/src/desktop/run.rs`, "utf8"),
+          await readFile(`${process.cwd()}/src-tauri/src/desktop/lifecycle.rs`, "utf8"),
+        ].join("\n"),
       ),
       import("node:fs/promises").then(({ readFile }) =>
         readFile(`${process.cwd()}/src-tauri/src/native_terminal/macos/state.rs`, "utf8"),

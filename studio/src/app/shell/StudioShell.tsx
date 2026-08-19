@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { statusFeed } from "../../features/agents/status/statusFeed";
+import { statusStreamFeed } from "../../features/agents/status/stream/statusStreamFeed";
 import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
 import OnboardingTour from "../onboarding/OnboardingTour";
@@ -7,6 +7,7 @@ import { useGlobalKeymap } from "../navigation/useGlobalKeymap";
 import { StudioFooter } from "./StudioFooter";
 import { StudioLayout } from "./StudioLayout";
 import { useStoriesTree } from "../../features/work-items";
+import { statusStreamTransport } from "../../runtime";
 
 export function StudioShell() {
   const { rows } = useStoriesTree();
@@ -21,10 +22,13 @@ export function StudioShell() {
 
   useEffect(() => {
     if (!selectedProjectId) return;
-    statusFeed.start(selectedProjectId, {
-      refreshSnapshotOnSocketOpen: true,
-    });
-    return () => statusFeed.stop();
+    // The durable GraphQL subscription is the only status authority. A
+    // platform without the in-process transport has no status feed at all —
+    // there is deliberately no second source to fall back to.
+    const createProxy = statusStreamTransport();
+    if (!createProxy) return;
+    statusStreamFeed.start(selectedProjectId, { createProxy });
+    return () => statusStreamFeed.stop();
   }, [selectedProjectId]);
 
   return (

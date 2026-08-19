@@ -1,0 +1,99 @@
+---
+id: workspace-operation
+name: Workspace Operation
+version: 1.0.0
+summary: Durable bridge across the SQLite-to-filesystem/Git commit gap, used to recover an interrupted effect.
+owners:
+  - ticketry
+aggregateRoot: true
+identifier: operationId
+properties:
+  - name: operationId
+    type: UUID
+    required: true
+    description: Stable identity. Studio mints one per user intent and reuses it for transport retries; internal callers derive a deterministic identity.
+  - name: kind
+    type: string
+    required: true
+    description: Closed registry of typed kinds; the kind selects the reconciliation code.
+    enum:
+      - document_save
+      - document_registry_refresh
+      - worktree_create
+      - worktree_discard
+      - worktree_integrate
+  - name: intentVersion
+    type: integer
+    required: true
+    description: Schema version of the immutable intent, validated against its kind's typed decoders.
+  - name: resourceKind
+    type: string
+    required: true
+    enum:
+      - document
+      - document_root
+      - worktree
+  - name: resourceKey
+    type: string
+    required: true
+    description: Canonical relative identity of the subject. Never a caller-selected absolute path.
+  - name: intent
+    type: JSON
+    required: true
+    description: Immutable, sanitized intent. Never holds file bodies, prompts, credentials, environment values, or commands.
+  - name: intentFingerprint
+    type: string
+    required: true
+    description: Digest over the canonical intent. Same fingerprint means replay; different means typed conflict.
+  - name: state
+    type: string
+    required: true
+    enum:
+      - prepared
+      - leased
+      - applied
+      - conflicted
+      - failed
+      - cleanup_pending
+  - name: leaseOwner
+    type: string
+    required: false
+    description: Concurrency control only. Lease expiry makes the operation eligible again, never permission to act.
+  - name: leaseExpiresAt
+    type: datetime
+    required: false
+  - name: attemptCount
+    type: integer
+    required: true
+  - name: lastErrorCode
+    type: string
+    required: false
+  - name: evidence
+    type: JSON
+    required: false
+    description: Sanitized external observation retained across restarts.
+  - name: resultSummary
+    type: JSON
+    required: false
+    description: Replayable durable result returned when an identity is reused.
+---
+
+SQLite and the local filesystem or Git cannot commit together. A Workspace
+Operation is the record that closes that gap: it is prepared and committed
+*before* the external mutation, claimed under a bounded lease while one worker
+acts, and settled in the same transaction as the affected
+[Document](/docs/entities/document) or [Worktree](/docs/entities/worktree) row
+and its durable status fact.
+
+Recovery never guesses. Startup reconciliation is bounded and repeatable: it
+probes the re-resolved external subject before retrying, adopts an effect that
+is already durable, executes again only what is provably absent, retains typed
+conflict evidence rather than overwriting, and keeps a cleanup-pending
+operation until its remnant is proven gone. An undecidable subject is isolated
+by resource, so one stuck checkout cannot make the rest of the workspace
+unusable.
+
+The journal is an internal entity. It has generated SeaORM code but no public
+GraphQL query or mutation bundle.
+
+<EntityPropertiesTable />

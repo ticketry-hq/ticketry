@@ -350,7 +350,7 @@ async fn compatibility_failure_and_restart_keep_one_pending_identity() {
 }
 
 #[tokio::test]
-async fn auto_start_occurrences_become_decisions_or_inert_rejections() {
+async fn auto_start_occurrences_become_decisions_or_recoverable_rejections() {
     let (_directory, database, resolver) = fixture().await;
     database
         .execute_unprepared(&format!(
@@ -412,5 +412,196 @@ async fn auto_start_occurrences_become_decisions_or_inert_rejections() {
     assert_eq!(
         row.try_get::<String>("", "code").unwrap(),
         "auto_start_not_enabled"
+    );
+
+    // The rejection is a diagnosis, not a verdict: it is readable against the
+    // work item it blocks, and repairing the binding re-queues the occurrence
+    // instead of leaving it filtered out forever.
+    let rejections = launch_policy::rejections_for_work_item(&database, TASK)
+        .await
+        .unwrap();
+    assert_eq!(rejections.len(), 1);
+    assert_eq!(rejections[0].code, "auto_start_not_enabled");
+    assert!(rejections[0].recoverable);
+    assert_eq!(
+        rejections[0].occurrence_id,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    );
+
+    database
+        .execute_unprepared(
+            r#"
+            UPDATE worktracker_launchbinding SET auto_start = 1;
+            UPDATE ticketry_launchpolicyrejection
+                SET rejected_at = datetime('now', '-1 hour');
+            "#,
+        )
+        .await
+        .unwrap();
+    let recovered = launch_policy::prepare_pending_auto_starts(&database, &resolver, 10)
+        .await
+        .unwrap();
+    assert_eq!(recovered.len(), 1);
+    assert_eq!(
+        recovered[0].idempotency_key,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    );
+    assert!(launch_policy::rejections_for_work_item(&database, TASK)
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+/// The retry command only appends a pending child; the launch it is still owed
+/// is a policy decision. That decision must be minted exactly once per retry
+/// attempt, must carry the attempt as its idempotency key, and must never be
+/// minted for a root attempt the auto-start door already owns.
+#[tokio::test]
+async fn a_pending_retry_child_becomes_exactly_one_launch_decision() {
+    let (_directory, database, resolver) = fixture().await;
+    seed_attempts(&database).await;
+
+    let decisions = launch_policy::prepare_pending_retries(&database, &resolver, 10)
+        .await
+        .unwrap();
+
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0].caller_scope, CallerScope::Retry);
+    assert_eq!(decisions[0].idempotency_key, RETRY_ATTEMPT);
+    assert_eq!(
+        decisions[0].state_id,
+        uuid::Uuid::parse_str(STATE).unwrap().to_string()
+    );
+    assert_eq!(decisions[0].prompt, "Implement it.");
+
+    // A second pass owes nothing: the recorded decision is what makes the
+    // retry launch exactly once, however often the reconciler runs.
+    assert!(
+        launch_policy::prepare_pending_retries(&database, &resolver, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        launch_policy::pending(&database, 10).await.unwrap().len(),
+        1
+    );
+}
+
+/// A retry whose configuration is broken is diagnosed, not retired: repairing
+/// the configuration re-queues the retry the user already asked for.
+#[tokio::test]
+async fn a_rejected_retry_is_re_resolved_once_its_configuration_is_repaired() {
+    let (_directory, database, resolver) = fixture().await;
+    seed_attempts(&database).await;
+    database
+        .execute_unprepared("UPDATE worktracker_launchbinding SET prompt = ''")
+        .await
+        .unwrap();
+
+    assert!(
+        launch_policy::prepare_pending_retries(&database, &resolver, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    database
+        .execute_unprepared(
+            r#"
+            UPDATE worktracker_launchbinding SET prompt = 'Implement it.';
+            UPDATE ticketry_launchpolicyrejection
+                SET rejected_at = datetime('now', '-1 hour');
+            "#,
+        )
+        .await
+        .unwrap();
+    let recovered = launch_policy::prepare_pending_retries(&database, &resolver, 10)
+        .await
+        .unwrap();
+
+    assert_eq!(recovered.len(), 1);
+    assert_eq!(recovered[0].idempotency_key, RETRY_ATTEMPT);
+}
+
+const ROOT_ATTEMPT: &str = "a0000000000000000000000000000001";
+const RETRY_ATTEMPT: &str = "a0000000000000000000000000000002";
+const PENDING_ROOT_ATTEMPT: &str = "a0000000000000000000000000000003";
+
+/// A failed root with the pending retry child the retry command appends, plus
+/// an unrelated pending root the auto-start door owns.
+async fn seed_attempts(database: &DatabaseConnection) {
+    database
+        .execute_unprepared(&format!(
+            r#"
+            CREATE TABLE automation_attempts (
+                id char(32) PRIMARY KEY, transition_id char(32) NOT NULL,
+                issue_id char(32) NOT NULL, from_state_id char(32) NOT NULL,
+                to_state_id char(32) NOT NULL, workflow_revision integer NOT NULL,
+                status varchar(16) NOT NULL, agent varchar(64),
+                agent_run_id varchar(255), error text, error_details text,
+                retryable bool NOT NULL, dismissed_at datetime,
+                retry_of_id char(32), root_attempt_id char(32),
+                created_at datetime NOT NULL, updated_at datetime NOT NULL
+            );
+            INSERT INTO automation_attempts (
+                id, transition_id, issue_id, from_state_id, to_state_id,
+                workflow_revision, status, retryable, retry_of_id, root_attempt_id,
+                created_at, updated_at
+            ) VALUES
+                ('{ROOT_ATTEMPT}', 'cccccccccccccccccccccccccccccccc', '{TASK}',
+                 '{STATE}', '{STATE}', 17, 'failed', 1, NULL, NULL,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('{RETRY_ATTEMPT}', 'cccccccccccccccccccccccccccccccc', '{TASK}',
+                 '{STATE}', '{STATE}', 17, 'pending', 1, '{ROOT_ATTEMPT}', '{ROOT_ATTEMPT}',
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('{PENDING_ROOT_ATTEMPT}', 'dddddddddddddddddddddddddddddddd', '{TASK}',
+                 '{STATE}', '{STATE}', 17, 'pending', 1, NULL, NULL,
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            "#
+        ))
+        .await
+        .unwrap();
+}
+
+async fn store_catalog(database: &DatabaseConnection, value: &str) {
+    database
+        .execute_unprepared(&format!(
+            r#"UPDATE app_settings SET value = '{value}' WHERE scope = 'host' AND "key" = 'provider_catalog'"#
+        ))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn resolution_reads_the_stored_default_exactly_as_the_catalogue_query_does() {
+    let (_directory, database, resolver) = fixture().await;
+
+    // A default carrying a key this build does not understand is no default at
+    // all — the resolver must not silently launch on the provider it names.
+    store_catalog(
+        &database,
+        r#"{"global_default":{"provider":"codex","future":true}}"#,
+    )
+    .await;
+    assert_eq!(
+        resolver
+            .resolve(request(CallerScope::Interactive, "unknown-key"))
+            .await
+            .unwrap_err()
+            .code(),
+        "agent_not_configured"
+    );
+
+    // An un-normalized provider slug is trimmed before lookup, so the resolver
+    // agrees with the catalogue query instead of rejecting every launch.
+    store_catalog(&database, r#"{"global_default":{"provider":" codex "}}"#).await;
+    let decision = resolver
+        .resolve(request(CallerScope::Interactive, "untrimmed"))
+        .await
+        .unwrap();
+    assert_eq!(
+        (decision.provider.as_str(), decision.model.as_deref()),
+        ("codex", None)
     );
 }

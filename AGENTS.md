@@ -1,5 +1,8 @@
 # Ticketry desktop application
 
+Keep user-facing responses very concise. Lead with the direct answer or blocker;
+add detail only when the user asks for it.
+
 This repository owns the complete Ticketry desktop application: the React
 frontend, Tauri shell, supervised Python backend sidecar, MCP service, and
 generated SDKs required by that application.

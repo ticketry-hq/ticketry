@@ -311,6 +311,36 @@ describe("DocViewer", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("enters the external-change flow when the registry's content digest moves", async () => {
+    // This is how a live document change reaches an open tab: the watcher
+    // settles the rewrite, the registry row's digest moves, and the row the
+    // workspace holds is no longer the row it rendered.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("# Original", { headers: { ETag: '"revision-1"' } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const registered = { ...markdownDoc, content_digest: "digest-1" };
+
+    const { rerender } = render(<DocViewer doc={registered} editable />);
+    fireEvent.change(await screen.findByLabelText("Document content"), {
+      target: { value: "# Mine" },
+    });
+
+    // An unchanged rescan hands back the identical row, so nothing happens.
+    rerender(<DocViewer doc={registered} editable />);
+    expect(screen.queryByText("This document changed on disk")).not.toBeInTheDocument();
+
+    rerender(
+      <DocViewer doc={{ ...markdownDoc, content_digest: "digest-2" }} editable />,
+    );
+
+    expect(screen.getByLabelText("Document content")).toHaveValue("# Mine");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This document changed on disk",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to the intact Markdown source when rich parsing fails", async () => {
     const invalidMarkdown = "# Original\n\n:::custom-directive\nkeep me\n:::";
     vi.stubGlobal(

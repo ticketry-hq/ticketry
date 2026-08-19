@@ -6,7 +6,7 @@ use sea_orm::{
     DatabaseConnection, EntityTrait, QueryFilter,
 };
 
-use super::entities::app_setting;
+use super::entities::app_settings as app_setting;
 use super::SettingsPersistenceError;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

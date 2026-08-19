@@ -49,16 +49,26 @@ describe("WorkTracker read runtime acceptance", () => {
     fetchMock.mockClear();
 
     const graphqlExecute = vi.fn(async (requestJson: string) => {
-      const request = JSON.parse(requestJson) as { operationName: string };
+      const request = JSON.parse(requestJson) as { operationName: string; query: string };
       expect(request.operationName).toBe("WorkTrackerProjects");
-      return JSON.stringify({ data: { projects: [project] } });
+      expect(request.query).toContain("worktrackerProject");
+      return JSON.stringify({
+        data: {
+          projects: {
+            nodes: [{
+              ...project,
+              id: "10000000000000000000000000000000",
+              created_at: "2026-08-12T00:00:00",
+            }],
+          },
+        },
+      });
     });
     const startupInvoke = vi.fn().mockResolvedValue({
       endpoints: {
         workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
         agentApi: "http://127.0.0.1:8787/api",
         statusApi: "http://127.0.0.1:8787/api",
-        statusWebSocket: "ws://127.0.0.1:8787/ws/status",
         terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
       },
       values: { workTrackerApiKey: "" },

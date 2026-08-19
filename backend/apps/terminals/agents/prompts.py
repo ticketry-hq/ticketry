@@ -9,7 +9,6 @@ injection — those live in :mod:`terminals.agents.commands` and
 import re
 from typing import Optional
 
-from apps.documents.design_docs import module_dir_name
 from apps.settings_store.compatibility import read_profile
 from apps.settings_store.config import NoConfigurationSelected, Profile, module_link_path
 from studio_server.contracts import ModuleSummary, TaskSummary
@@ -116,8 +115,14 @@ def build_planning_context_prompt(
     project_id: str,
     folder: Optional[str],
     design_dir: Optional[str] = None,
+    module_dir_name: Optional[str] = None,
 ) -> str:
-    """Build a planning context prompt that instructs the agent to lead a feature planning session."""
+    """Build a planning context prompt that instructs the agent to lead a feature planning session.
+
+    ``module_dir_name`` is the module's canonical directory name, supplied by
+    the caller because the design-directory layout contract belongs to the Rust
+    Documents capability rather than to prompt text.
+    """
     task_lines = []
     for t in tasks:
         state_name = t.state.name if t.state else "Unknown"
@@ -129,12 +134,12 @@ def build_planning_context_prompt(
     # only the agent knows the key of the task it creates.
 
     design_block = ""
-    if design_dir:
+    if design_dir and module_dir_name:
         design_block = (
             f"\n\n{_design_dir_block(design_dir).rstrip()}\n"
             f"After you create a WorkTracker task for the planned feature, move "
             f"this directory's contents to the task's canonical design "
-            f"directory spec/{module_dir_name(module)}/T<sequence>--<short-"
+            f"directory spec/{module_dir_name}/T<sequence>--<short-"
             f"task-slug>/ (sequence = the new task's ticket number, slug = "
             f"lowercase dashed words from its name) so the documents follow "
             f"the task."

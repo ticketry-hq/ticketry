@@ -3,9 +3,8 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::native_terminal_scroll::{
-        MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_NONE,
-        SCROLL_DIRECTION_UP,
+    use crate::native_terminal::scroll::{
+        MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_NONE, SCROLL_DIRECTION_UP,
     };
     use crate::terminal_runtime::TerminalScrollDirection;
 
@@ -225,4 +224,3 @@ mod tests {
         assert!(entries.lock().expect("registry").is_empty());
     }
 }
-

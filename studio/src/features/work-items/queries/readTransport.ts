@@ -5,29 +5,35 @@ import type {
   State,
   WorkItem,
 } from "../../../shared/api/types";
+import {
+  compactWorktrackerId,
+  publicWorktrackerId,
+} from "../../../shared/api/generatedWorktracker";
 import { createWorkItemBatcher } from "../../../shared/api/workItemBatcher";
 import {
   WorkTrackerWorkItemDocument,
+  WorkTrackerWorkItemByKeyDocument,
   WorkTrackerModuleTreeDocument,
   WorkTrackerWorkItemsByIdsDocument,
   WorkTrackerWorkItemsDocument,
-  type WorkTrackerWorkItem,
 } from "../generated/operations";
-
-function mutableWorkItem(item: WorkTrackerWorkItem): WorkItem {
-  return {
-    ...item,
-    blocked_by_ids: [...item.blocked_by_ids],
-    blocks_ids: [...item.blocks_ids],
-  };
-}
+import { orderedWorkItems, workItemFromIssue } from "../issueAdapter";
 
 export function readWorkItemsByIds(ids: readonly string[]): Promise<WorkItem[]> {
   return studioRuntime().readWorkTracker({
     rest: () => rest.listWorkItemsByIds(ids),
-    graphQl: async (execute) => (
-      await execute(WorkTrackerWorkItemsByIdsDocument, { ids: [...ids] })
-    ).work_items_by_ids.map(mutableWorkItem),
+    graphQl: async (execute) => {
+      const rows = (
+        await execute(WorkTrackerWorkItemsByIdsDocument, {
+          ids: ids.map(compactWorktrackerId),
+        })
+      ).work_items_by_ids.nodes.map(workItemFromIssue);
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      return ids.flatMap((id) => {
+        const row = byId.get(publicWorktrackerId(id));
+        return row ? [row] : [];
+      });
+    },
   });
 }
 
@@ -35,9 +41,18 @@ export function readWorkItem(id: string): Promise<WorkItem> {
   return studioRuntime().readWorkTracker({
     rest: async () => (await rest.getWorkItem(id)).task,
     graphQl: async (execute) => {
-      const item = (await execute(WorkTrackerWorkItemDocument, { id })).work_item;
+      const key = /^(.*)-(\d+)$/.exec(id);
+      const result = key
+        ? await execute(WorkTrackerWorkItemByKeyDocument, {
+            projectSlug: key[1]!.toUpperCase(),
+            sequenceId: Number(key[2]),
+          })
+        : await execute(WorkTrackerWorkItemDocument, {
+            id: compactWorktrackerId(id),
+          });
+      const item = result.work_item.nodes[0];
       if (!item) throw new Error(`Work item ${id} was not found.`);
-      return mutableWorkItem(item);
+      return workItemFromIssue(item);
     },
   });
 }
@@ -50,14 +65,17 @@ export function readModuleTreeRecords(
     rest: () => rest.getTasks(projectId, moduleId),
     graphQl: async (execute) => {
       const result = await execute(WorkTrackerModuleTreeDocument, {
-        projectId,
-        moduleId,
+        projectId: compactWorktrackerId(projectId),
+        moduleId: compactWorktrackerId(moduleId),
       });
-      const workItems = result.work_items.map(mutableWorkItem);
+      const workItems = orderedWorkItems(result.work_items.nodes);
       return {
         ...rest.moduleTreeFromWorkItems(moduleId, workItems),
         workItems,
-        states: result.states.map((state) => ({ ...state })),
+        states: result.states.nodes.map((state) => ({
+          ...state,
+          id: publicWorktrackerId(state.id),
+        })),
       };
     },
   });
@@ -66,9 +84,11 @@ export function readModuleTreeRecords(
 export function readProjectWorkItems(projectId: string): Promise<WorkItem[]> {
   return studioRuntime().readWorkTracker({
     rest: () => rest.getProjectWorkItems(projectId),
-    graphQl: async (execute) => (
-      await execute(WorkTrackerWorkItemsDocument, { projectId })
-    ).work_items.map(mutableWorkItem),
+    graphQl: async (execute) => orderedWorkItems((
+      await execute(WorkTrackerWorkItemsDocument, {
+        projectId: compactWorktrackerId(projectId),
+      })
+    ).work_items.nodes),
   });
 }
 

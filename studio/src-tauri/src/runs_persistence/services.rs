@@ -1,5 +1,7 @@
 use sea_orm::DatabaseConnection;
 
+use super::status_compaction::StatusCompactionService;
+use super::status_wakeup::StatusWakeup;
 use super::{
     attempt_commands, attempt_queries, AgentRunRepository, AttemptOutcome,
     AutomationAttemptProjection, AutomationAttemptRepository, CompactionWatermarkRepository,
@@ -17,42 +19,62 @@ pub struct RunsServices {
     effects: EffectService,
     queries: QueryProjectionService,
     compatibility: CompatibilityService,
+    stream: StatusStreamService,
+    compaction: StatusCompactionService,
 }
 
 impl RunsServices {
     pub fn new(database: DatabaseConnection) -> Self {
+        let wakeup = StatusWakeup::new();
         let runs = AgentRunRepository::new(database.clone());
         let attempts = AutomationAttemptRepository::new(database.clone());
-        let events = StatusEventRepository::new(database.clone());
+        let events = StatusEventRepository::new(database.clone(), wakeup.clone());
         let watermarks = CompactionWatermarkRepository::new(database.clone());
         let effects = LaunchEffectRepository::new(database.clone());
+        let attempt_service = AttemptService {
+            database: database.clone(),
+            attempts: attempts.clone(),
+            events: events.clone(),
+        };
+        let query_service = QueryProjectionService {
+            database: database.clone(),
+            runs: runs.clone(),
+            attempts: attempts.clone(),
+            events: events.clone(),
+            watermarks: watermarks.clone(),
+            effects: effects.clone(),
+        };
         Self {
             lifecycle: LifecycleService {
                 database: database.clone(),
                 runs: runs.clone(),
                 events: events.clone(),
             },
-            attempts: AttemptService {
-                database: database.clone(),
-                attempts: attempts.clone(),
-                events: events.clone(),
-            },
+            attempts: attempt_service.clone(),
             outbox: OutboxService {
                 events: events.clone(),
                 watermarks: watermarks.clone(),
             },
             effects: EffectService {
-                effects: effects.clone(),
-            },
-            queries: QueryProjectionService {
                 database: database.clone(),
-                runs,
-                attempts,
+                effects: effects.clone(),
+                events: events.clone(),
+                lifecycle: LifecycleService {
+                    database: database.clone(),
+                    runs: runs.clone(),
+                    events: events.clone(),
+                },
+            },
+            queries: query_service.clone(),
+            compatibility: CompatibilityService { effects },
+            compaction: StatusCompactionService::new(database, events.clone(), watermarks.clone()),
+            stream: StatusStreamService {
+                queries: query_service,
+                attempts: attempt_service,
                 events,
                 watermarks,
-                effects: effects.clone(),
+                wakeup,
             },
-            compatibility: CompatibilityService { effects },
         }
     }
 
@@ -73,6 +95,42 @@ impl RunsServices {
     }
     pub fn compatibility(&self) -> &CompatibilityService {
         &self.compatibility
+    }
+    pub fn stream(&self) -> &StatusStreamService {
+        &self.stream
+    }
+    pub fn compaction(&self) -> &StatusCompactionService {
+        &self.compaction
+    }
+}
+
+/// Everything one project status subscription reads, and nothing it could
+/// write with. It is installed in the schema as its own datum so the
+/// subscription cannot reach a command service by accident.
+#[derive(Clone)]
+pub struct StatusStreamService {
+    queries: QueryProjectionService,
+    attempts: AttemptService,
+    events: StatusEventRepository,
+    watermarks: CompactionWatermarkRepository,
+    wakeup: StatusWakeup,
+}
+
+impl StatusStreamService {
+    pub(crate) fn queries(&self) -> &QueryProjectionService {
+        &self.queries
+    }
+    pub(crate) fn attempts(&self) -> &AttemptService {
+        &self.attempts
+    }
+    pub(crate) fn events(&self) -> &StatusEventRepository {
+        &self.events
+    }
+    pub(crate) fn watermarks(&self) -> &CompactionWatermarkRepository {
+        &self.watermarks
+    }
+    pub(crate) fn wakeup(&self) -> &StatusWakeup {
+        &self.wakeup
     }
 }
 
@@ -165,12 +223,45 @@ impl OutboxService {
 
 #[derive(Clone)]
 pub struct EffectService {
+    database: DatabaseConnection,
     effects: LaunchEffectRepository,
+    events: StatusEventRepository,
+    lifecycle: LifecycleService,
 }
 
 impl EffectService {
+    pub(crate) fn database(&self) -> &DatabaseConnection {
+        &self.database
+    }
     pub fn effects(&self) -> &LaunchEffectRepository {
         &self.effects
+    }
+    pub(crate) fn events(&self) -> &StatusEventRepository {
+        &self.events
+    }
+    pub(crate) fn lifecycle(&self) -> &LifecycleService {
+        &self.lifecycle
+    }
+
+    /// Bind the temporary terminal compatibility executor to this launch
+    /// surface. The executor is supplied by the transport that owns it and is
+    /// never stored on the shared service graph.
+    pub fn dispatch_with(
+        &self,
+        executor: std::sync::Arc<dyn super::LaunchExecutor>,
+    ) -> super::LaunchDispatchService {
+        super::LaunchDispatchService::new(self.clone(), executor)
+    }
+
+    /// Bind the runtime probe and terminal executor that startup reconciliation
+    /// needs. The probe observes the deterministic runtime identity; the
+    /// executor performs only effects the probe proved absent.
+    pub fn reconcile_with(
+        &self,
+        probe: std::sync::Arc<dyn super::LaunchRuntimeProbe>,
+        executor: std::sync::Arc<dyn super::LaunchExecutor>,
+    ) -> super::LaunchReconciliationService {
+        super::LaunchReconciliationService::new(self.clone(), probe, executor)
     }
 }
 

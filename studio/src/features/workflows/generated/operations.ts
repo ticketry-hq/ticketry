@@ -33,26 +33,15 @@ export interface WorkTrackerLaunchBinding {
   readonly issue_type: string;
   readonly state: string;
   readonly prompt: string;
-  readonly required_skills: ReadonlyArray<string>;
+  readonly required_skills: unknown;
   readonly model: string | null;
   readonly reasoning: string | null;
   readonly auto_start: boolean;
   readonly subtree_run_enabled: boolean;
   readonly created_at: string;
   readonly updated_at: string;
-}
-
-export interface WorkTrackerWorkflowCatalogQuery {
-  readonly states: ReadonlyArray<WorkTrackerState>;
-  readonly issue_types: ReadonlyArray<WorkTrackerIssueType>;
-  readonly launch_bindings: ReadonlyArray<WorkTrackerLaunchBinding>;
-  readonly providers: ReadonlyArray<WorkTrackerProvider>;
-  readonly agent_models: ReadonlyArray<WorkTrackerAgentModel>;
-  readonly reasoning_levels: ReadonlyArray<WorkTrackerReasoningLevel>;
-}
-
-export interface WorkTrackerWorkflowCatalogVariables {
-  readonly projectId: string;
+  readonly issueType: { readonly sort_order: number } | null;
+  readonly state_record: { readonly sort_order: number } | null;
 }
 
 export interface WorkTrackerProvider {
@@ -66,12 +55,28 @@ export interface WorkTrackerAgentModel {
   readonly id: string;
   readonly provider: string;
   readonly name: string;
-  readonly permitted_reasoning_levels: ReadonlyArray<string>;
+  readonly provider_record: { readonly slug: string } | null;
+  readonly reasoning_levels: {
+    readonly nodes: ReadonlyArray<{ readonly reasoning_level_id: string }>;
+  };
 }
 
 export interface WorkTrackerReasoningLevel {
   readonly id: string;
   readonly name: string;
+}
+
+export interface WorkTrackerWorkflowCatalogQuery {
+  readonly states: { readonly nodes: ReadonlyArray<WorkTrackerState> };
+  readonly issue_types: { readonly nodes: ReadonlyArray<WorkTrackerIssueType> };
+  readonly launch_bindings: { readonly nodes: ReadonlyArray<WorkTrackerLaunchBinding> };
+  readonly providers: { readonly nodes: ReadonlyArray<WorkTrackerProvider> };
+  readonly agent_models: { readonly nodes: ReadonlyArray<WorkTrackerAgentModel> };
+  readonly reasoning_levels: { readonly nodes: ReadonlyArray<WorkTrackerReasoningLevel> };
+}
+
+export interface WorkTrackerWorkflowCatalogVariables {
+  readonly projectId: string;
 }
 
 export interface WorkTrackerIssueTypeTransition {
@@ -80,10 +85,14 @@ export interface WorkTrackerIssueTypeTransition {
   readonly from_state: string;
   readonly to_state: string;
   readonly agent_allowed: boolean;
+  readonly fromState: { readonly sort_order: number } | null;
+  readonly toState: { readonly sort_order: number } | null;
 }
 
 export interface WorkTrackerIssueTypeTransitionsQuery {
-  readonly issue_type_transitions: ReadonlyArray<WorkTrackerIssueTypeTransition>;
+  readonly issue_type_transitions: {
+    readonly nodes: ReadonlyArray<WorkTrackerIssueTypeTransition>;
+  };
 }
 
 export interface WorkTrackerIssueTypeTransitionsVariables {
@@ -96,7 +105,14 @@ export const WorkTrackerWorkflowCatalogDocument: TypedDocumentNode<
 > = {
   kind: "Document",
   operationName: "WorkTrackerWorkflowCatalog",
-  source: "query WorkTrackerWorkflowCatalog($projectId: String!) {\n  states(project_id: $projectId) {\n    id\n    project\n    name\n    group\n    color\n    sort_order\n    is_protected\n    created_at\n    updated_at\n  }\n  issue_types(project_id: $projectId) {\n    id\n    project\n    name\n    level\n    color\n    sort_order\n    start_state\n    workflow_revision\n    is_pathfind\n    created_at\n    updated_at\n  }\n  launch_bindings(project_id: $projectId) {\n    id\n    issue_type\n    state\n    prompt\n    required_skills\n    model\n    reasoning\n    auto_start\n    subtree_run_enabled\n    created_at\n    updated_at\n  }\n  providers {\n    id\n    slug\n    activated\n    supports_unattended\n  }\n  agent_models {\n    id\n    provider\n    name\n    permitted_reasoning_levels\n  }\n  reasoning_levels {\n    id\n    name\n  }\n}",
+  source: `query WorkTrackerWorkflowCatalog($projectId: String!) {
+    states: worktrackerState(filters: { projectId: { eq: $projectId } }) { nodes { id project: projectId name group color sort_order: sortOrder is_protected: isProtected created_at: createdAt updated_at: updatedAt } }
+    issue_types: worktrackerIssuetype(filters: { projectId: { eq: $projectId } }) { nodes { id project: projectId name level color sort_order: sortOrder start_state: startStateId workflow_revision: workflowRevision is_pathfind: isPathfind created_at: createdAt updated_at: updatedAt } }
+    launch_bindings: worktrackerLaunchbinding(having: { issueType: { projectId: { eq: $projectId } } }) { nodes { id issue_type: issueTypeId state: stateId prompt required_skills: requiredSkills model: modelId reasoning: reasoningId auto_start: autoStart subtree_run_enabled: subtreeRunEnabled created_at: createdAt updated_at: updatedAt issueType { sort_order: sortOrder } state_record: state { sort_order: sortOrder } } }
+    providers: worktrackerProvider { nodes { id slug activated supports_unattended: supportsUnattended } }
+    agent_models: worktrackerAgentmodel { nodes { id provider: providerId name provider_record: provider { slug } reasoning_levels: agentModelReasoningLevel { nodes { reasoning_level_id: reasoningLevelId } } } }
+    reasoning_levels: worktrackerReasoninglevel { nodes { id name } }
+  }`,
 };
 
 export const WorkTrackerIssueTypeTransitionsDocument: TypedDocumentNode<
@@ -105,5 +121,5 @@ export const WorkTrackerIssueTypeTransitionsDocument: TypedDocumentNode<
 > = {
   kind: "Document",
   operationName: "WorkTrackerIssueTypeTransitions",
-  source: "query WorkTrackerIssueTypeTransitions($issueTypeId: String!) {\n  issue_type_transitions(issue_type_id: $issueTypeId) {\n    id\n    issue_type\n    from_state\n    to_state\n    agent_allowed\n  }\n}",
+  source: `query WorkTrackerIssueTypeTransitions($issueTypeId: String!) { issue_type_transitions: worktrackerIssuetypetransition(filters: { issueTypeId: { eq: $issueTypeId } }) { nodes { id issue_type: issueTypeId from_state: fromStateId to_state: toStateId agent_allowed: agentAllowed fromState { sort_order: sortOrder } toState { sort_order: sortOrder } } } }`,
 };

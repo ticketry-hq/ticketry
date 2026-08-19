@@ -4,7 +4,7 @@ import { ModuleFolder } from "../features/agents/terminal/ModuleFolder";
 import { ModalHost } from "../app/modal";
 import { getConfigSnapshot, seedConfig } from "../features/studio/stores/configStore";
 import { useModalStore } from "../app/modal";
-import * as agentApi from "../features/agents/api/agentApi";
+import * as documentRegistry from "../features/documents/documentRegistry";
 import * as studioApi from "../shared/api/client";
 import type { StudioRuntime } from "../runtime";
 
@@ -33,6 +33,9 @@ function folderPickerRuntime(
     writeSettings: (routes) => routes.graphQl(async () => {
       throw new Error("GraphQL is not used by this test.");
     }),
+    statusStream: () => null,
+    documentUrl: (documentId: string, relPath: string) =>
+      `/api/docs/${documentId}/${relPath}`,
     pickFolder,
     retryServices: async () => {},
     startup: () => ({
@@ -40,7 +43,6 @@ function folderPickerRuntime(
         workTrackerApi: "/api/work-tracker",
         agentApi: "/api",
         statusApi: "/api",
-        statusWebSocket: "/ws/status",
         terminalWebSocket: "/ws/terminal",
       },
       values: { workTrackerApiKey: "" },
@@ -231,9 +233,9 @@ describe("ModuleFolder modal", () => {
         },
       ],
     }));
-    const completeSpy = vi.spyOn(agentApi, "fsComplete").mockResolvedValue({
-      entries: ["/repos/suggested"],
-    });
+    const completeSpy = vi.spyOn(documentRegistry, "completeDirectories").mockResolvedValue([
+      "/repos/suggested",
+    ]);
 
     // Type a path and pass the old debounce window.
 

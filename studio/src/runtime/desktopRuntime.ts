@@ -10,6 +10,7 @@ import {
   type CreateGraphQlTransportProxy,
 } from "../graphql-foundation/foundationClient";
 import { createTauRPCProxy } from "../graphql-foundation/generated/taurpc";
+import { desktopDocumentUrl } from "./documentAssetUrl";
 import {
   validateUserNotice,
   validateUserNotices,
@@ -109,12 +110,6 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
     ["http:", "https:"],
     "must be a loopback HTTP(S) URL",
   );
-  const statusWebSocket = endpoint(
-    endpoints,
-    "statusWebSocket",
-    ["ws:", "wss:"],
-    "must be a loopback WebSocket URL",
-  );
   const terminalWebSocket = endpoint(
     endpoints,
     "terminalWebSocket",
@@ -147,7 +142,6 @@ function validateConfiguration(value: unknown): RuntimeStartupConfiguration {
       workTrackerApi,
       agentApi,
       statusApi,
-      statusWebSocket,
       terminalWebSocket,
     }),
     values: Object.freeze({ workTrackerApiKey }),
@@ -170,7 +164,6 @@ function serviceHealth(value: unknown): ServiceHealth | null {
         workTrackerApi: "http://127.0.0.1:1/api/work-tracker",
         agentApi: "http://127.0.0.1:1/api",
         statusApi: "http://127.0.0.1:1/api",
-        statusWebSocket: "ws://127.0.0.1:1/ws/status",
         terminalWebSocket: "ws://127.0.0.1:1/ws/terminal",
       },
       values: { workTrackerApiKey: "" },
@@ -214,6 +207,9 @@ export async function createDesktopRuntime({
     writeWorkTracker: readWorkTracker,
     readSettings: readWorkTracker,
     writeSettings: readWorkTracker,
+    statusStream: () => createGraphQlProxy,
+    documentUrl: (documentId: string, relPath: string) =>
+      desktopDocumentUrl(documentId, relPath),
     pickFolder: async () =>
       validatePickedFolder(await invoke<unknown>("desktop_pick_folder")),
     retryServices: async () => {

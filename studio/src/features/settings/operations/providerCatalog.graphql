@@ -1,8 +1,15 @@
 query LoadProviderCatalog {
   provider_catalog {
-    configurable_providers { id slug activated supports_unattended }
-    providers { id slug activated supports_unattended }
-    agent_models { id provider name permitted_reasoning_levels }
+    configurable_providers { id slug activated supports_unattended: supportsUnattended }
+    providers { id slug activated supports_unattended: supportsUnattended }
+    agent_models {
+      id
+      provider: providerId
+      name
+      reasoning_levels: agentModelReasoningLevel {
+        nodes { reasoning_level_id: reasoningLevelId }
+      }
+    }
     reasoning_levels { id name }
     global_default { provider model reasoning }
   }
@@ -20,9 +27,16 @@ mutation UpdateProviderCatalog(
     default_model: $defaultModel
     default_reasoning: $defaultReasoning
   ) {
-    configurable_providers { id slug activated supports_unattended }
-    providers { id slug activated supports_unattended }
-    agent_models { id provider name permitted_reasoning_levels }
+    configurable_providers { id slug activated supports_unattended: supportsUnattended }
+    providers { id slug activated supports_unattended: supportsUnattended }
+    agent_models {
+      id
+      provider: providerId
+      name
+      reasoning_levels: agentModelReasoningLevel {
+        nodes { reasoning_level_id: reasoningLevelId }
+      }
+    }
     reasoning_levels { id name }
     global_default { provider model reasoning }
   }

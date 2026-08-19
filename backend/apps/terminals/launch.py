@@ -50,8 +50,6 @@ from apps.terminals.agents.skills.preflight import (
     resolve_required_skills,
     skill_prompt_envelope,
 )
-from apps.documents import watch as documents_watch
-from apps.runs.bus import publish_backend_session_sync, publish_document, publish_status
 from apps.settings_store.compatibility import read_config
 from apps.settings_store.config import NoConfigurationSelected, module_link_path
 from apps.terminals.launch_configuration import (
@@ -61,10 +59,12 @@ from apps.terminals.launch_configuration import (
 )
 from apps.terminals.persistence import (
     LaunchRecords,
-    compensate_launch,
+    discard_launch_request,
     load_resume_launch,
-    mark_launch_cleanup_pending,
-    persist_launch_once,
+    prepare_launch,
+    PreparedCommand,
+    record_terminal_mirror,
+    settle_launch,
     persist_termination,
     termination_context,
 )
@@ -77,7 +77,6 @@ from apps.terminals.runtime import (
     TmuxTerminalRuntime,
 )
 from studio_server.atomic_files import atomic_write_bytes
-from studio_server.contracts import AgentLifecycleFrame, RunRecord
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +246,8 @@ async def _launch(
     agent_run_id: str,
     resumed_from: Optional[str] = None,
     provider_session_id: Optional[str] = None,
+    model: Optional[str] = None,
+    reasoning: Optional[str] = None,
     resolved_skills: ResolvedSkills | None = None,
 ) -> str:
     """Persist and start one agent run inside a detached terminal runtime.
@@ -323,15 +324,19 @@ async def _launch(
         *command_artifacts,
     )
 
-    launch_persisted = False
-    launch_created = False
+    # Durable fact first: Rust persists the Agent Run, immutable launch intent,
+    # prepared Launch Effect, initial lifecycle fact, and status event in one
+    # transaction. Nothing external exists yet, so a rollback here leaks no
+    # terminal. Only after it commits may the runtime be created.
     try:
-        routing, launch_created = await asyncio.to_thread(
-            persist_launch_once,
+        prepared = await asyncio.to_thread(
+            prepare_launch,
             LaunchRecords(
                 agent_run_id=agent_run_id,
                 issue_id=issue_id,
                 agent=agent,
+                model=model,
+                reasoning=reasoning,
                 started_at=started_at,
                 cwd=cwd,
                 design_dir=design_dir,
@@ -341,8 +346,21 @@ async def _launch(
                 runtime_namespace=terminal_runtime.namespace,
                 provider_session_id=provider_session_id,
             ),
+            PreparedCommand(
+                command=command,
+                environment=dict(augmentation.environment),
+                columns=_INITIAL_TERMINAL_DIMENSIONS.columns,
+                rows=_INITIAL_TERMINAL_DIMENSIONS.rows,
+            ),
         )
-        launch_persisted = True
+    except Exception as exc:
+        cleanup_temporary_artifacts(temporary_artifacts)
+        logger.exception("durable launch preparation failed run=%s", agent_run_id)
+        raise LaunchUnavailable(str(exc)) from exc
+
+    routing = prepared.routing
+    adopted = False
+    try:
         try:
             await asyncio.to_thread(
                 terminal_runtime.create,
@@ -355,77 +373,73 @@ async def _launch(
                 ),
             )
         except TerminalAlreadyExists:
-            # Another consumer may have completed runtime creation for this
-            # same durable run identity after our persistence step. Adoption
-            # is the idempotent success path, regardless of which caller
-            # originally inserted the ledger row.
-            pass
+            # A crash or a retried transport request between preparation and
+            # acknowledgement leaves exactly this state. Adoption is the
+            # idempotent success path: one durable effect, one runtime.
+            adopted = True
     except Exception as exc:
-        # Runtime creation can fail after making a partial terminal. Explicitly
-        # compensate both sides; terminate is idempotent when nothing exists.
         logger.exception("terminal launch failed run=%s", agent_run_id)
-        cleanup_confirmed = not launch_persisted
-        if launch_persisted and launch_created:
-            try:
-                await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
-                cleanup_confirmed = True
-            except Exception:
-                logger.warning(
-                    "terminal launch compensation failed run=%s",
-                    agent_run_id,
-                    exc_info=True,
-                )
-                try:
-                    await asyncio.to_thread(mark_launch_cleanup_pending, agent_run_id)
-                except Exception:
-                    logger.exception(
-                        "could not mark terminal launch cleanup pending run=%s",
-                        agent_run_id,
-                    )
-        if cleanup_confirmed and launch_created:
-            try:
-                await asyncio.to_thread(compensate_launch, agent_run_id)
-            except Exception:
-                pass
+        cleanup_confirmed = False
+        try:
+            await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
+            cleanup_confirmed = True
+        except Exception:
+            # An unproven cleanup keeps the effect cleanup-pending rather than
+            # closing it: an external runtime may still exist.
+            logger.warning(
+                "terminal launch compensation failed run=%s",
+                agent_run_id,
+                exc_info=True,
+            )
+        try:
+            await asyncio.to_thread(
+                settle_launch,
+                prepared.effect_id,
+                applied=False,
+                code="terminal_runtime_unavailable",
+                retryable=True,
+                cleanup_confirmed=cleanup_confirmed,
+            )
+            if cleanup_confirmed:
+                await asyncio.to_thread(discard_launch_request, prepared.effect_id)
+        except Exception:
+            logger.exception(
+                "durable launch outcome could not be recorded run=%s", agent_run_id
+            )
+        if cleanup_confirmed:
             cleanup_temporary_artifacts(temporary_artifacts)
         raise LaunchUnavailable(str(exc)) from exc
 
-    # The run row exists and the agent is live inside tmux: tell connected
-    # /ws/status clients about the spawn (or resume — it shares this path)
-    # NOW, instead of leaving them blind until the first hook event (#979).
-    # The same state is persisted above so a snapshot or page reload cannot
-    # regress this live run to the deliberately hidden `unknown` state.
-    await publish_status(
-        routing.project_id,
-        AgentLifecycleFrame(
-            at=started_at,
-            run=RunRecord(
-                agent_run_id=agent_run_id,
-                project_id=routing.project_id,
-                task_id=routing.task_id,
-                module_id=routing.module_id,
-                agent=agent,
-                scope=scope,
-                started_at=started_at,
-                state="starting",
-                updated_at=started_at,
-            ),
-        ).model_dump(),
-    )
-
-    # Watch the run's design directory for generated HTML for the rest of the
-    # run (#521).
-    async def publish_document_frame(frame: dict) -> None:
-        await publish_document(routing.project_id, frame)
-
-    documents_watch.start_watch(
+    # The runtime exists. Record this capability's own mirror, then the durable
+    # outcome. The status event Rust appends here is what tells every connected
+    # Studio about the spawn, so no in-memory notification is load-bearing.
+    await asyncio.to_thread(record_terminal_mirror, LaunchRecords(
         agent_run_id=agent_run_id,
+        issue_id=issue_id,
+        agent=agent,
+        model=model,
+        reasoning=reasoning,
+        started_at=started_at,
+        cwd=cwd,
         design_dir=design_dir,
-        module_id=routing.module_id,
-        task_id=routing.task_id,
+        resumed_from=resumed_from,
         scope=scope,
-        publish=publish_document_frame,
+        doc_rel_path=doc_rel_path,
+        runtime_namespace=terminal_runtime.namespace,
+        provider_session_id=provider_session_id,
+    ), routing)
+    await asyncio.to_thread(
+        settle_launch,
+        prepared.effect_id,
+        applied=True,
+        runtime_id=agent_run_id,
+        adopted=adopted,
     )
+
+    # Live document discovery is not started here. The Rust watcher supervisor
+    # owns it: it derives its eligible runs from the durable Agent Run state this
+    # launch just recorded, so a run becomes watched without Python asking, and a
+    # crash between the two cannot leave an unwatched run.
 
     return agent_run_id
 
@@ -496,11 +510,9 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         task_id=None if intent.scope in {"plan", "instant"} else intent.task_id,
         initial_prompt=None if intent.scope == "instant" else intent.initial_prompt,
         agent_run_id=agent_run_id,
-        module_folder=module_folder,
         is_doc_chat=intent.scope == "docchat",
         doc_rel_path=intent.doc_rel_path,
         doc_id=intent.doc_id,
-        persist_task_id=intent.task_id,
         workflow_prompt=(
             launch_configuration.prompt
             if launch_configuration is not None
@@ -547,6 +559,10 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         scope=intent.scope,
         doc_rel_path=intent.doc_rel_path,
         agent_run_id=agent_run_id,
+        model=launch_configuration.model if launch_configuration is not None else None,
+        reasoning=(
+            launch_configuration.reasoning if launch_configuration is not None else None
+        ),
         resolved_skills=resolved_skills,
     )
 
@@ -560,12 +576,10 @@ def terminate_agent_run(agent_run_id: str) -> None:
     cleanup_temporary_artifacts_for_run(agent_run_id)
     if not context.was_active:
         return
-    documents_watch.stop_watch(agent_run_id)
+    # The durable terminal fact Rust records here is what reaches every
+    # connected Studio, through the same ordered event history a reconnect
+    # replays. There is no separate live notification to keep in step.
     persist_termination(agent_run_id, ended_at=ended_at)
-    if context.project_id:
-        publish_backend_session_sync(
-            context.project_id, agent_run_id, "exited", at=ended_at
-        )
 
 
 async def resume_provider_conversation(agent_run_id: str) -> str:
@@ -599,8 +613,9 @@ async def resume_provider_conversation(agent_run_id: str) -> str:
         scope=facts.scope,
         doc_rel_path=None,
         agent_run_id=new_run_id,
-        # Provider identity is the sole resume continuity persisted onto the
-        # new run. The old AgentRun and terminal session remain historical.
+        model=facts.model,
+        reasoning=facts.reasoning,
+        # Carry the immutable resolved launch snapshot onto the resumed run.
         provider_session_id=facts.provider_session_id,
         resolved_skills=ResolvedSkills((), (), frozenset(), ""),
     )

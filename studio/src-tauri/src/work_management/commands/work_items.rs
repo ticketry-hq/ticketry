@@ -5,6 +5,9 @@ use sea_orm::{
 
 use super::fractional_rank;
 use super::identifiers::{database_uuid, new_database_uuid};
+use super::status_facts::{
+    record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
+};
 use super::CommandError;
 use crate::work_management::entities::{issue, issue_type, project, state};
 
@@ -32,6 +35,7 @@ pub struct UpdateWorkItem {
 pub async fn create(
     database: &DatabaseConnection,
     input: CreateWorkItem,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let project_id = database_uuid(&input.project_id, "project_id")?;
     let issue_type_id = database_uuid(&input.issue_type_id, "issue_type_id")?;
@@ -73,14 +77,15 @@ pub async fn create(
         .map_err(|_| CommandError::validation("An existing work-item rank is invalid."))?;
     let id = new_database_uuid();
     let now = super::timestamp::now();
+    let occurred_at = stamp(now);
     issue::ActiveModel {
         id: Set(id.clone()),
-        project_id: Set(project_id),
+        project_id: Set(project_id.clone()),
         r#type: Set("task".to_owned()),
         issue_type_id: Set(issue_type_id),
-        parent_id: Set(parent_id),
-        module_id: Set(module_id),
-        state_id: Set(state_id),
+        parent_id: Set(parent_id.clone()),
+        module_id: Set(module_id.clone()),
+        state_id: Set(state_id.clone()),
         state_revision: Set(state_revision),
         name: Set(name),
         sequence_id: Set(sequence_id),
@@ -92,13 +97,33 @@ pub async fn create(
     }
     .insert(&transaction)
     .await?;
+    record_work_item(
+        facts,
+        &transaction,
+        WorkItemFact {
+            project_id: &project_id,
+            work_item_id: &id,
+            change: WorkItemChange::Created,
+            revision: state_revision,
+            occurred_at: &occurred_at,
+            parent_id: parent_id.as_deref(),
+            module_id: module_id.as_deref(),
+            state_id: state_id.as_deref(),
+            is_archived: false,
+        },
+    )
+    .await?;
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 
 pub async fn update(
     database: &DatabaseConnection,
     input: UpdateWorkItem,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     if input.name.is_none() && input.description.is_none() && input.issue_type_id.is_none() {
         return Err(CommandError::validation(
@@ -134,6 +159,9 @@ pub async fn update(
 
     let transaction = database.begin().await?;
     let revision = next_revision(&transaction, &existing.project_id).await?;
+    let identity = WorkItemIdentity::of(&existing);
+    let now = super::timestamp::now();
+    let occurred_at = stamp(now);
     let mut active: issue::ActiveModel = existing.into();
     if let Some(value) = name {
         active.name = Set(value);
@@ -145,13 +173,26 @@ pub async fn update(
         active.issue_type_id = Set(value.id);
     }
     active.state_revision = Set(revision);
-    active.updated_at = Set(super::timestamp::now());
+    active.updated_at = Set(now.clone());
     active.update(&transaction).await?;
+    record_work_item(
+        facts,
+        &transaction,
+        identity.fact(WorkItemChange::Updated, revision, &occurred_at),
+    )
+    .await?;
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 
-pub async fn archive(database: &DatabaseConnection, id: &str) -> Result<String, CommandError> {
+pub async fn archive(
+    database: &DatabaseConnection,
+    id: &str,
+    facts: Option<&WorkFactRecorder>,
+) -> Result<String, CommandError> {
     let id = database_uuid(id, "id")?;
     let existing = issue::Entity::find_by_id(&id)
         .one(database)
@@ -163,6 +204,7 @@ pub async fn archive(database: &DatabaseConnection, id: &str) -> Result<String, 
     let transaction = database.begin().await?;
     let revision = next_revision(&transaction, &existing.project_id).await?;
     let mut frontier = vec![id.clone()];
+    let mut archived: Vec<String> = Vec::new();
     while !frontier.is_empty() {
         let children = issue::Entity::find()
             .filter(issue::Column::ParentId.is_in(frontier.clone()))
@@ -178,18 +220,57 @@ pub async fn archive(database: &DatabaseConnection, id: &str) -> Result<String, 
                 .filter(issue::Column::Id.is_in(frontier.clone()))
                 .exec(&transaction)
                 .await?;
+            archived.extend(frontier.iter().cloned());
         }
     }
+    let mut identity = WorkItemIdentity::of(&existing);
+    identity.is_archived = true;
+    let now = super::timestamp::now();
+    let occurred_at = stamp(now);
     let mut active: issue::ActiveModel = existing.into();
     active.is_archived = Set(true);
     active.state_revision = Set(revision);
-    active.updated_at = Set(super::timestamp::now());
+    active.updated_at = Set(now.clone());
     active.update(&transaction).await?;
+    // Archiving cascades to the whole subtree, so every descendant leaves the
+    // collections it was displayed in. One fact per affected item keeps the
+    // consumer's refresh proportional to what actually changed.
+    for descendant in &archived {
+        record_work_item(
+            facts,
+            &transaction,
+            WorkItemFact {
+                project_id: &identity.project_id,
+                work_item_id: descendant,
+                change: WorkItemChange::Archived,
+                revision,
+                occurred_at: &occurred_at,
+                parent_id: None,
+                module_id: None,
+                state_id: None,
+                is_archived: true,
+            },
+        )
+        .await?;
+    }
+    record_work_item(
+        facts,
+        &transaction,
+        identity.fact(WorkItemChange::Archived, revision, &occurred_at),
+    )
+    .await?;
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 
-pub async fn delete(database: &DatabaseConnection, id: &str) -> Result<(), CommandError> {
+pub async fn delete(
+    database: &DatabaseConnection,
+    id: &str,
+    facts: Option<&WorkFactRecorder>,
+) -> Result<(), CommandError> {
     let id = database_uuid(id, "id")?;
     let existing = issue::Entity::find_by_id(&id)
         .one(database)
@@ -206,9 +287,21 @@ pub async fn delete(database: &DatabaseConnection, id: &str) -> Result<(), Comma
         ));
     }
     let transaction = database.begin().await?;
-    next_revision(&transaction, &existing.project_id).await?;
+    let revision = next_revision(&transaction, &existing.project_id).await?;
+    let identity = WorkItemIdentity::of(&existing);
+    let now = super::timestamp::now();
+    let occurred_at = stamp(now);
     issue::Entity::delete_by_id(id).exec(&transaction).await?;
+    record_work_item(
+        facts,
+        &transaction,
+        identity.fact(WorkItemChange::Deleted, revision, &occurred_at),
+    )
+    .await?;
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(())
 }
 

@@ -110,7 +110,9 @@ export interface CatalogAgentModel {
   readonly id: string;
   readonly provider: string;
   readonly name: string;
-  readonly permitted_reasoning_levels: ReadonlyArray<string>;
+  readonly reasoning_levels: {
+    readonly nodes: ReadonlyArray<{ readonly reasoning_level_id: string }>;
+  };
 }
 export interface CatalogReasoningLevel { readonly id: string; readonly name: string; }
 export interface CatalogGlobalDefault {

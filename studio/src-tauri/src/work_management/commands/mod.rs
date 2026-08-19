@@ -9,6 +9,7 @@ mod identifiers;
 pub mod reorder;
 mod review_findings;
 pub mod state_configuration;
+pub mod status_facts;
 mod timestamp;
 pub mod work_items;
 pub mod workflow;

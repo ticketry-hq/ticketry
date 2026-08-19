@@ -34,5 +34,8 @@ urlpatterns = [
     path("worktrees/<str:task_id>/discard", rest_api.WorktreeDiscardView.as_view(), name="worktree-discard"),
     path("work-tracker/work-items/<str:issue_id>/graph-run", rest_api.GraphRunView.as_view(), name="graph-run"),
     path("work-tracker/work-items/<str:issue_id>/launch-agent", rest_api.LaunchAgentView.as_view(), name="launch-agent"),
+    path("terminals/runs-effects", rest_api.RunsEffectReadinessView.as_view(), name="runs-effect-readiness"),
+    path("terminals/runs-effects/observe", rest_api.RunsEffectObserveView.as_view(), name="runs-effect-observe"),
+    path("terminals/runs-effects/execute", rest_api.RunsEffectExecuteView.as_view(), name="runs-effect-execute"),
     path("execution/launch-policy-effects", rest_api.LaunchPolicyEffectView.as_view(), name="launch-policy-effect"),
 ]

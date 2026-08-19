@@ -1,0 +1,27 @@
+mutation RefreshTaskDocumentRegistry(
+  $taskId: String!
+  $projectId: String
+  $moduleId: String
+) {
+  refresh_task_document_registry(
+    task_id: $taskId
+    project_id: $projectId
+    module_id: $moduleId
+  ) {
+    id
+    relPath
+    contentDigest
+  }
+}
+
+mutation RefreshScratchDocumentRegistry($moduleId: String!) {
+  refresh_scratch_document_registry(module_id: $moduleId) {
+    id
+    relPath
+    contentDigest
+  }
+}
+
+query CompleteDirectories($path: String!) {
+  directory_completions(path: $path)
+}

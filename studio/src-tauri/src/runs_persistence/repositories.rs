@@ -1,7 +1,7 @@
 use sea_orm::{
     sea_query::OnConflict, ActiveModelTrait, ActiveValue::NotSet, ActiveValue::Set, ColumnTrait,
-    ConnectionTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect,
+    ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect,
 };
 use serde_json::Value;
 
@@ -11,10 +11,9 @@ use super::entities::{
     project_compaction_watermark as compaction_watermark_entity,
     status_event as status_event_entity,
 };
-use super::work_item_scope;
 use super::{
-    AgentRunRecord, AutomationAttemptRecord, LaunchEffectRecord, LaunchIntent,
-    RunsPersistenceError, RunsPersistenceErrorCode, StatusEventRecord,
+    AgentRunRecord, AutomationAttemptRecord, LaunchEffectRecord, RunsPersistenceError,
+    RunsPersistenceErrorCode, StatusEventRecord,
 };
 
 #[derive(Clone)]
@@ -76,11 +75,24 @@ pub struct NewStatusEvent<'a> {
 }
 
 #[derive(Clone)]
-pub struct StatusEventRepository(DatabaseConnection);
+pub struct StatusEventRepository {
+    database: DatabaseConnection,
+    wakeup: super::status_wakeup::StatusWakeup,
+}
 
 impl StatusEventRepository {
-    pub(crate) fn new(database: DatabaseConnection) -> Self {
-        Self(database)
+    pub(crate) fn new(
+        database: DatabaseConnection,
+        wakeup: super::status_wakeup::StatusWakeup,
+    ) -> Self {
+        Self { database, wakeup }
+    }
+
+    /// Wake registered subscribers. Callers invoke this only after their
+    /// transaction commits, so a rolled-back command publishes nothing and a
+    /// failed publication cannot roll back committed truth.
+    pub(crate) fn wake_committed(&self) {
+        self.wakeup.publish();
     }
 
     pub async fn append(
@@ -116,7 +128,7 @@ impl StatusEventRepository {
     pub async fn high_water(&self) -> Result<i64, RunsPersistenceError> {
         Ok(status_event_entity::Entity::find()
             .order_by_desc(status_event_entity::Column::Cursor)
-            .one(&self.0)
+            .one(&self.database)
             .await?
             .map(|row| row.cursor)
             .unwrap_or(0))
@@ -135,11 +147,102 @@ impl StatusEventRepository {
             .filter(status_event_entity::Column::Cursor.lte(through))
             .order_by_asc(status_event_entity::Column::Cursor)
             .limit(limit)
-            .all(&self.0)
+            .all(&self.database)
             .await?
             .into_iter()
             .map(status_event)
             .collect())
+    }
+
+    /// Every project that still holds retained history. Compaction is
+    /// project-aware, so it walks these rather than the global cursor space.
+    pub async fn projects_with_events(&self) -> Result<Vec<String>, RunsPersistenceError> {
+        Ok(status_event_entity::Entity::find()
+            .select_only()
+            .column(status_event_entity::Column::ProjectId)
+            .group_by(status_event_entity::Column::ProjectId)
+            .into_tuple::<String>()
+            .all(&self.database)
+            .await?)
+    }
+
+    /// The newest cursor for one project that is outside the newest
+    /// `keep_newest` rows. Everything at or below it has lost the count
+    /// protection; `None` means the project has not accumulated enough history
+    /// for any row to lose it.
+    pub async fn count_retention_floor(
+        &self,
+        project_id: &str,
+        keep_newest: u64,
+    ) -> Result<Option<i64>, RunsPersistenceError> {
+        Ok(status_event_entity::Entity::find()
+            .select_only()
+            .column(status_event_entity::Column::Cursor)
+            .filter(status_event_entity::Column::ProjectId.eq(project_id))
+            .order_by_desc(status_event_entity::Column::Cursor)
+            .offset(keep_newest)
+            .limit(1)
+            .into_tuple::<i64>()
+            .one(&self.database)
+            .await?)
+    }
+
+    /// The newest cursor for one project committed strictly before `before`.
+    /// Everything at or below it has lost the age protection.
+    pub async fn age_retention_floor(
+        &self,
+        project_id: &str,
+        before: &str,
+    ) -> Result<Option<i64>, RunsPersistenceError> {
+        Ok(status_event_entity::Entity::find()
+            .select_only()
+            .column(status_event_entity::Column::Cursor)
+            .filter(status_event_entity::Column::ProjectId.eq(project_id))
+            .filter(status_event_entity::Column::CommittedAt.lt(before))
+            .order_by_desc(status_event_entity::Column::Cursor)
+            .limit(1)
+            .into_tuple::<i64>()
+            .one(&self.database)
+            .await?)
+    }
+
+    /// Delete at most `batch` of one project's rows at or below `through`, in
+    /// cursor order. Compaction repeats this so a large backlog never holds one
+    /// long transaction open against live writers.
+    pub async fn delete_through(
+        &self,
+        project_id: &str,
+        through: i64,
+        batch: u64,
+    ) -> Result<u64, RunsPersistenceError> {
+        let cursors: Vec<i64> = status_event_entity::Entity::find()
+            .select_only()
+            .column(status_event_entity::Column::Cursor)
+            .filter(status_event_entity::Column::ProjectId.eq(project_id))
+            .filter(status_event_entity::Column::Cursor.lte(through))
+            .order_by_asc(status_event_entity::Column::Cursor)
+            .limit(batch)
+            .into_tuple::<i64>()
+            .all(&self.database)
+            .await?;
+        if cursors.is_empty() {
+            return Ok(0);
+        }
+        let deleted = status_event_entity::Entity::delete_many()
+            .filter(status_event_entity::Column::ProjectId.eq(project_id))
+            .filter(status_event_entity::Column::Cursor.is_in(cursors))
+            .exec(&self.database)
+            .await?;
+        Ok(deleted.rows_affected)
+    }
+
+    /// How many rows one project still retains. Used by compaction evidence and
+    /// by the bounded-memory tests.
+    pub async fn count_for_project(&self, project_id: &str) -> Result<u64, RunsPersistenceError> {
+        Ok(status_event_entity::Entity::find()
+            .filter(status_event_entity::Column::ProjectId.eq(project_id))
+            .count(&self.database)
+            .await?)
     }
 }
 
@@ -171,18 +274,29 @@ impl CompactionWatermarkRepository {
                 "compaction watermark cannot be negative",
             ));
         }
-        compaction_watermark_entity::Entity::insert(compaction_watermark_entity::ActiveModel {
-            project_id: Set(project_id.to_owned()),
-            compacted_through_cursor: Set(through),
-            updated_at: NotSet,
-        })
+        // The insert seeds a project's first watermark; the conditional update
+        // below is what advances an existing one. A conflict is therefore the
+        // ordinary path for every pass after the first, and SeaORM reports a
+        // `do_nothing` conflict as `RecordNotInserted` rather than as a row
+        // count, so it is not an error here.
+        match compaction_watermark_entity::Entity::insert(
+            compaction_watermark_entity::ActiveModel {
+                project_id: Set(project_id.to_owned()),
+                compacted_through_cursor: Set(through),
+                updated_at: NotSet,
+            },
+        )
         .on_conflict(
             OnConflict::column(compaction_watermark_entity::Column::ProjectId)
                 .do_nothing()
                 .to_owned(),
         )
         .exec(transaction)
-        .await?;
+        .await
+        {
+            Ok(_) | Err(DbErr::RecordNotInserted) => {}
+            Err(error) => return Err(error.into()),
+        }
         compaction_watermark_entity::Entity::update_many()
             .col_expr(
                 compaction_watermark_entity::Column::CompactedThroughCursor,
@@ -217,71 +331,6 @@ impl LaunchEffectRepository {
             .await?
             .map(launch_effect))
     }
-
-    pub async fn prepare(
-        &self,
-        transaction: &DatabaseTransaction,
-        intent: &LaunchIntent,
-    ) -> Result<(), RunsPersistenceError> {
-        intent.validate()?;
-        validate_intent_scope(transaction, intent).await?;
-        launch_effect_entity::ActiveModel {
-            effect_id: Set(intent.effect_id.clone()),
-            intent_version: NotSet,
-            agent_run_id: Set(intent.agent_run_id.clone()),
-            automation_attempt_id: Set(intent.automation_attempt_id.clone()),
-            request_id: Set(intent.request_id.clone()),
-            project_id: Set(intent.project_id.clone()),
-            issue_id: Set(intent.issue_id.clone()),
-            scope: Set(intent.scope.clone()),
-            provider: Set(intent.provider.clone()),
-            target_kind: Set(intent.target_kind.clone()),
-            target_id: Set(intent.target_id.clone()),
-            policy_reference: Set(intent.policy_reference.clone()),
-            state: NotSet,
-            lease_owner: NotSet,
-            lease_expires_at: NotSet,
-            attempt_count: NotSet,
-            last_error_code: NotSet,
-            last_error_message: NotSet,
-            runtime_evidence: NotSet,
-            created_at: NotSet,
-            updated_at: NotSet,
-            applied_at: NotSet,
-        }
-        .insert(transaction)
-        .await
-        .map_err(|error| {
-            RunsPersistenceError::storage(
-                "launch effect conflicts with existing durable identity",
-                error,
-            )
-        })?;
-        Ok(())
-    }
-}
-
-async fn validate_intent_scope(
-    transaction: &DatabaseTransaction,
-    intent: &LaunchIntent,
-) -> Result<(), RunsPersistenceError> {
-    let run = agent_run_entity::Entity::find_by_id(&intent.agent_run_id)
-        .one(transaction)
-        .await?;
-    let Some(run) = run else {
-        return Err(RunsPersistenceError::new(
-            RunsPersistenceErrorCode::Conflict,
-            "launch effect requires its predetermined Agent Run",
-        ));
-    };
-    let project_id = work_item_scope::project_id(transaction, &run.issue_id).await?;
-    if run.issue_id != intent.issue_id || project_id.as_deref() != Some(&intent.project_id) {
-        return Err(RunsPersistenceError::new(
-            RunsPersistenceErrorCode::Conflict,
-            "launch effect scope does not match its predetermined Agent Run",
-        ));
-    }
-    Ok(())
 }
 
 fn agent_run(row: agent_run_entity::Model) -> AgentRunRecord {
@@ -290,6 +339,8 @@ fn agent_run(row: agent_run_entity::Model) -> AgentRunRecord {
         issue_id: row.issue_id,
         ticket_seq: row.ticket_seq,
         agent: row.agent,
+        model: row.model,
+        reasoning: row.reasoning,
         status: row.status,
         started_at: row.started_at,
         ended_at: row.ended_at,
@@ -344,7 +395,7 @@ fn status_event(row: status_event_entity::Model) -> StatusEventRecord {
     }
 }
 
-fn launch_effect(row: launch_effect_entity::Model) -> LaunchEffectRecord {
+pub(crate) fn launch_effect(row: launch_effect_entity::Model) -> LaunchEffectRecord {
     LaunchEffectRecord {
         effect_id: row.effect_id,
         agent_run_id: row.agent_run_id,

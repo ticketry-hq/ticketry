@@ -1,0 +1,20 @@
+query WorktreeStatus($taskId: String!) {
+  worktree_status(task_id: $taskId) {
+    kind
+    task_id
+    top_level_task_id
+    is_shared
+    branch
+    base_branch
+    path
+    state
+    clean
+    dirty
+    ahead
+    behind
+    conflict
+    checkout_present
+    ephemeral
+    reason
+  }
+}

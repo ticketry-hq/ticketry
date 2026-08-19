@@ -5,7 +5,7 @@ import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ti
 import { useStudioStore } from "../features/projects/store";
 import { AgentStateBadge } from "../features/agents/lifecycle";
 import { useAgentStatusStore } from "../features/agents/status";
-import { dispatchStatusFrame } from "../features/agents/status/statusFeed";
+import { applySnapshotFrame } from "../features/agents/status/stream/statusSnapshot";
 import {
   useTerminalStore,
   type SessionMeta,
@@ -16,10 +16,19 @@ import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 
 const terminalApi = vi.hoisted(() => ({
-  getDocuments: vi.fn(),
   getTerminals: vi.fn(),
   listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
+}));
+
+const documentRegistry = vi.hoisted(() => ({
+  listTaskDocuments: vi.fn(),
+  listScratchDocuments: vi.fn(),
+}));
+
+vi.mock("../features/documents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../features/documents")>()),
+  ...documentRegistry,
 }));
 
 vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
@@ -99,7 +108,8 @@ describe("overhaul acceptance — terminals", () => {
       automationAttempts: {},
       automationByTask: {},
     });
-    terminalApi.getDocuments.mockResolvedValue({ documents: [] });
+    documentRegistry.listTaskDocuments.mockResolvedValue([]);
+    documentRegistry.listScratchDocuments.mockResolvedValue([]);
     terminalApi.getTerminals.mockResolvedValue([]);
     terminalApi.listResumableTerminals.mockResolvedValue([]);
   });
@@ -164,13 +174,16 @@ describe("overhaul acceptance — terminals", () => {
     });
     useAgentStatusStore.setState({ runs: { "run-1": liveRun } });
 
-    dispatchStatusFrame({
-      v: 1,
-      type: "snapshot",
-      scope: { project_id: "previous-project", task_id: null },
+    // A project switch tears the subscription down asynchronously, so a
+    // queued snapshot from the previous project can still arrive. The feed
+    // refuses it rather than reconciling this project's runs as absent.
+    applySnapshotFrame({
+      __typename: "RunStatusSnapshot",
+      project_id: "previous-project",
+      cursor: 12,
+      at: "2026-08-07T12:01:00Z",
       runs: [],
       automation_attempts: [],
-      at: "2026-08-07T12:01:00Z",
     });
 
     const tabs = deriveTaskSessions(
@@ -214,24 +227,27 @@ describe("overhaul acceptance — terminals", () => {
       .toContainElement(screen.getByLabelText("Agent session has exited"));
     expect(screen.queryByTestId("agent-state-badge")).not.toBeInTheDocument();
 
-    const workingSnapshot = (updatedAt: string) => ({
-      v: 1 as const,
-      type: "snapshot" as const,
-      scope: { project_id: "project-1", task_id: null },
-      runs: [{ ...exitedRun, state: "working" as const, updated_at: updatedAt }],
-      automation_attempts: [],
-      at: updatedAt,
-    });
+    const applyWorkingSnapshot = (updatedAt: string) =>
+      applySnapshotFrame({
+        __typename: "RunStatusSnapshot",
+        project_id: "project-1",
+        cursor: 21,
+        at: updatedAt,
+        runs: [{
+          ...exitedRun,
+          state: "working",
+          updated_at: updatedAt,
+          provider_session_id: null,
+        }],
+        automation_attempts: [],
+      });
 
     act(() => {
       // A replayed active *delta* cannot revive a run after a real terminal
       // event: at equal timestamps the terminal record retains precedence.
-      dispatchStatusFrame({
-        v: 1,
-        type: "agent_lifecycle",
-        at: exitedRun.updated_at,
-        run: { ...exitedRun, state: "working" },
-      });
+      useAgentStatusStore
+        .getState()
+        .upsertRun({ ...exitedRun, state: "working" });
     });
     expect(screen.getByLabelText("Agent session has exited")).toBeInTheDocument();
     expect(screen.queryByTestId("agent-state-badge")).not.toBeInTheDocument();
@@ -241,7 +257,7 @@ describe("overhaul acceptance — terminals", () => {
       // a quiet run keeps its last hook timestamp, so a repaired snapshot
       // must recover every presentation derived from the shared status-feed
       // holding without recreating the tab.
-      dispatchStatusFrame(workingSnapshot(exitedRun.updated_at));
+      applyWorkingSnapshot(exitedRun.updated_at);
     });
 
     await waitFor(() => {

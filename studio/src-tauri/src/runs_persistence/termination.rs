@@ -76,10 +76,7 @@ impl RunTerminationService {
             .one(&self.database)
             .await?
             .ok_or_else(|| {
-                RunsPersistenceError::new(
-                    RunsPersistenceErrorCode::NotFound,
-                    "The authenticated Agent Run does not exist.",
-                )
+                RunsPersistenceError::not_found("The authenticated Agent Run does not exist.")
             })?;
         let project_id = work_item_scope::project_id(&self.database, &run.issue_id)
             .await?
@@ -93,10 +90,20 @@ impl RunTerminationService {
             || database_uuid(&principal.project_id) != database_uuid(&project_id)
             || principal.scope != run.scope
         {
-            return Err(RunsPersistenceError::new(
-                RunsPersistenceErrorCode::Unauthorized,
+            return Err(RunsPersistenceError::unauthorized(
                 "The authenticated run scope does not match the requested operation.",
             ));
+        }
+
+        // An ended run already holds its terminal outcome. Report the settled
+        // state rather than spending a real terminal side effect on it.
+        if run.ended_at.is_some() {
+            return Ok(TerminationResult {
+                agent_run_id: principal.agent_run_id.clone(),
+                terminated: true,
+                already_terminated: true,
+                durable_fact_applied: false,
+            });
         }
 
         self.executor
@@ -105,8 +112,7 @@ impl RunTerminationService {
             })
             .await
             .map_err(|_| {
-                RunsPersistenceError::new(
-                    RunsPersistenceErrorCode::ExecutorUnavailable,
+                RunsPersistenceError::executor_unavailable(
                     "The terminal compatibility executor could not terminate the current run.",
                 )
             })?;
@@ -122,7 +128,7 @@ impl RunTerminationService {
         Ok(TerminationResult {
             agent_run_id: principal.agent_run_id.clone(),
             terminated: true,
-            already_terminated: run.ended_at.is_some(),
+            already_terminated: false,
             durable_fact_applied: terminal.applied,
         })
     }

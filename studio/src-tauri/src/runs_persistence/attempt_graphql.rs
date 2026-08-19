@@ -59,6 +59,9 @@ pub fn register(mut builder: seaography::Builder) -> seaography::Builder {
 }
 
 fn services<'a>(ctx: &'a Context<'a>) -> Result<&'a RunsServices> {
+    if !super::readiness_gate::open(ctx) {
+        return Err(super::readiness_gate::unavailable());
+    }
     ctx.data::<RunsServices>().map_err(|_| {
         Error::new("Automation Attempts are unavailable.")
             .extend_with(|_, extension| extension.set("code", "runs_persistence_unavailable"))

@@ -2,16 +2,48 @@
 
 ## Strategy in one sentence
 
-Port Ticketry **as is, in place, one vertical slice at a time** inside the
-existing Tauri application on the `rust-migration` branch; keep exactly one
-writer for each table, dogfood each slice in the real product, and decide
-whether to continue the migration after Rust owns WorkTracker writes.
+Recover the migration **in place and generator first**, then port Ticketry one
+vertical slice at a time inside the existing Tauri application on the
+`rust-migration` branch; keep exactly one writer for each table, dogfood each
+slice in the real product, and decide whether to continue after Rust owns
+WorkTracker writes.
 
-This is deliberately not a redesign. During migration, Rust mirrors the Django
-domains, GraphQL types reproduce the current DRF serializer semantics, and
-existing service functions become authored commands. Schema cleanup, richer
-nested GraphQL queries, subscription-driven rendering, and other GraphQL-native
-improvements wait for a final post-migration optimization phase.
+This is deliberately not a domain redesign, but it is a correction to the
+implementation approach. Database structure comes from migrations and
+generation rather than handwritten Rust mirrors. Generated Seaography model
+CRUD is the starting surface; existing service behavior is ported behind a
+restricted create/update/delete seam only where unrestricted CRUD would violate
+an invariant. DRF compatibility may remain as a temporary caller adapter, not
+as the permanent model and query architecture.
+
+## Recovery gate before further feature migration
+
+No later persistence slice expands until the generated foundation is restored.
+The recovery proceeds in this order:
+
+1. keep the Seaography-recommended top-level boundaries: `src/entities/` and
+   `src/query_root/{queries,mutations,types}`;
+2. create a clean scratch SQLite database at the current Django migration leaf;
+3. generate Seaography-compatible SeaORM entities into scratch space;
+4. normalize SQLite introspection deterministically where Django-declared
+   `bool`, `datetime`, or JSON columns would otherwise generate as ignored
+   strings, and test that normalization as part of drift verification;
+5. compare generated and current entities by table name, column name, Rust type,
+   nullability, primary/unique key, foreign key, and relationship;
+6. replace mutually-referential entities as one cohort, never by blind
+   overwrite or isolated file swapping;
+7. register the generated Seaography query/CRUD surface and retain custom
+   projections only for proven caller compatibility or missing framework
+   behavior; and
+8. delete the corresponding handwritten entities, mirrored output/input types,
+   ordinary read resolvers, and pass-through repositories after parity tests
+   pass.
+
+For tables still owned by Django, Django migrations remain the temporary schema
+source of truth. For new Rust-owned tables, and for all schema changes after the
+writer handoff, SeaORM migrations become the source of truth. Generated
+artifacts are committed and reproduced byte-for-byte from the appropriate clean
+migration database.
 
 ## Work location and integration rule
 
@@ -35,8 +67,12 @@ transports; a feature has one server-state authority at a time.
   sidecar or standalone server.
 - Studio uses generated GraphQL operations over TauRPC for migrated features;
   unmigrated features continue to use the Django sidecar.
-- Domain writes call authored application commands. Generated CRUD mutations
-  cannot bypass workflow, hierarchy, ranking, revision, or effect invariants.
+- Generated SeaORM entities and Seaography model CRUD are the default database
+  and GraphQL surface. Public writes bind identity and allowlist fields.
+- When generated CRUD would bypass workflow, hierarchy, ranking, revision, or
+  effect invariants, keep the unrestricted mutator private and expose one
+  restricted model-shaped create/update/delete seam over the same application
+  behavior.
 - GraphQL, the eventual Rust MCP listener, and native commands call the same
   application services.
 - Every table has exactly one production writer. There is no production
@@ -59,7 +95,7 @@ Deliver:
 1. the pinned Rust/SeaORM/Seaography/GraphQL/TauRPC transport and deterministic
    generation chain under [`../studio/src-tauri/`](../studio/src-tauri/);
 2. one small Rust-owned SQLite database beside `state.db`, with a trivial
-   migration/entity, generated SDL, and an authored command;
+   migration/entity, generated SDL, and a restricted model-shaped mutation;
 3. a GraphQL query over TauRPC that coexists with all current Tauri commands;
 4. structured unavailable and initialization failures, safe restart/reopen,
    deterministic drift checks, and typed Rust -> GraphQL -> TypeScript domain
@@ -83,10 +119,12 @@ Rust opens the same SQLite `state.db` read-only alongside the sidecar. Django's
 WAL configuration permits concurrent readers; Rust must not run migrations,
 write a ledger, repair rows, or otherwise mutate this database in slice 1a.
 
-Port the current read semantics for projects, modules/work items, issue types,
-states, transitions, launch bindings, hierarchy, ranks, revisions, and workflow
-views. GraphQL types initially reproduce the current DRF serializer outputs,
-including nullability, identifiers, field naming, filtering, and ordering
+Generate the WorkTracker entity cohort from a clean database at the current
+Django migration leaf and expose generated Seaography reads for projects,
+modules/work items, issue types, states, transitions, launch bindings,
+hierarchy, ranks, and revisions. Preserve current DRF serializer semantics only
+at caller boundaries that require them, including nullability, identifiers,
+field naming, filtering, and ordering
 ([`../backend/worktracker/rest/`](../backend/worktracker/rest/),
 [`../backend/worktracker/models/`](../backend/worktracker/models/)).
 
@@ -104,21 +142,25 @@ only to Django.
 Goal: transfer ownership of WorkTracker tables and prove that the migration is
 worth continuing.
 
-Port [`../backend/worktracker/services/`](../backend/worktracker/services/) as
-authored Rust commands, preserving the functions' current semantics rather than
-redesigning the model. Cover project/catalogue creation, work-item lifecycle,
-hierarchy/reparenting, fractional ranking, blocker graphs, workflow transitions,
-revision compare-and-set, attachments, and deletion/archive rules.
+Port the invariant-bearing behavior in
+[`../backend/worktracker/services/`](../backend/worktracker/services/) behind
+restricted model-shaped mutations, preserving current semantics rather than
+redesigning the model. Use generated CRUD directly where database constraints
+and caller field allowlists are sufficient. Cover project/catalogue creation,
+work-item lifecycle, hierarchy/reparenting, fractional ranking, blocker graphs,
+workflow transitions, revision compare-and-set, attachments, and
+deletion/archive rules.
 
 The cutover for this slice is one explicit writer handoff:
 
 1. run the complete data-adoption preflight, snapshot, classification, bridge,
    validation, and recovery process from [data-migration.md](data-migration.md);
 2. stop Django writes to the WorkTracker tables and make Rust their sole writer;
-3. re-point Studio mutations to authored GraphQL commands;
+3. re-point Studio mutations to generated or restricted model-shaped GraphQL
+   CRUD as appropriate;
 4. re-point the WorkTracker MCP tools to an in-process Rust MCP listener and the
-   same authored commands; the current Python FastMCP -> Django REST write path
-   cannot remain because it would violate one-writer; and
+   same application behavior used by GraphQL; the current Python FastMCP ->
+   Django REST write path cannot remain because it would violate one-writer; and
 5. commit a durable transition-to-automation fact in the Rust transaction so
    Django-owned execution can continue reacting to status transitions until its
    own later slice. Delivery is resumable and idempotent; realtime notification

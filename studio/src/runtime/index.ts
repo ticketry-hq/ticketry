@@ -70,8 +70,9 @@ export function agentApiUrl(path: string): string {
   return `${base}${suffix}`;
 }
 
-export function statusWebSocketUrl(): string {
-  return runtimeConfiguration().endpoints.statusWebSocket;
+/** The transport the project status subscription opens on, if any. */
+export function statusStreamTransport() {
+  return studioRuntime().statusStream();
 }
 
 export function terminalWebSocketUrl(): string {

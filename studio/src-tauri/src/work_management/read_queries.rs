@@ -225,20 +225,6 @@ pub async fn work_item(
     Ok(project_work_items(database, vec![row]).await?.pop())
 }
 
-/// Read the authoritative result of an authored command for either task level.
-pub async fn authored_issue(
-    database: &DatabaseConnection,
-    id: &str,
-) -> Result<Option<output::WorkItem>, DbErr> {
-    let Some(row) = issue::Entity::find_by_id(database_uuid(id))
-        .one(database)
-        .await?
-    else {
-        return Ok(None);
-    };
-    Ok(project_work_items(database, vec![row]).await?.pop())
-}
-
 async fn project_work_items(
     database: &DatabaseConnection,
     rows: Vec<issue::Model>,

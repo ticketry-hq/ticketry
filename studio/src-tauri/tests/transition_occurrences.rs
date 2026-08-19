@@ -109,6 +109,7 @@ async fn committed_transition_appends_one_durable_frozen_occurrence() {
             target_state_id: TO.to_owned(),
             origin: TransitionOrigin::Agent,
         },
+        None,
     )
     .await
     .unwrap();
@@ -169,6 +170,7 @@ async fn rejected_or_rolled_back_transition_publishes_no_occurrence() {
             target_state_id: FROM.to_owned(),
             origin: TransitionOrigin::Agent,
         },
+        None,
     )
     .await;
     assert!(no_op.is_ok());
@@ -198,6 +200,7 @@ async fn rejected_or_rolled_back_transition_publishes_no_occurrence() {
             target_state_id: TO.to_owned(),
             origin: TransitionOrigin::Agent,
         },
+        None,
     )
     .await;
     assert!(rolled_back.is_err());

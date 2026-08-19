@@ -3,16 +3,36 @@ use std::path::Path;
 use sea_orm::DatabaseConnection;
 use serde_json::{json, Map, Value};
 
-use crate::work_management::commands::{attachments, work_items, workflow, CommandError};
+use crate::work_management::commands::{
+    attachments, status_facts::WorkFactRecorder, work_items, workflow, CommandError,
+};
 use crate::work_management::launch_policy::{
     self, CallerScope, LaunchPolicyRequest, LaunchPolicyResolver,
 };
 
 use super::{
     backend_port::{BackendPort, RunPrincipal},
-    dependency_tools, projection, scope,
+    dependency_tools, projection, run_termination, scope,
     workflow_tools::{self, optional_string, string},
 };
+
+/// The MCP transport publishes through the same durable outbox as the GraphQL
+/// surface. It composes its own recorder over its own connection: the committed
+/// outbox row is the ordering authority, so a wake-up that does not reach the
+/// other publisher's subscribers delays delivery to the next reread rather than
+/// losing the fact.
+pub(super) async fn work_facts(database: &DatabaseConnection) -> Option<WorkFactRecorder> {
+    crate::runs_persistence::outbox_adopted(database)
+        .await
+        .then(|| {
+            WorkFactRecorder::new(
+                crate::runs_persistence::RunsServices::new(database.clone())
+                    .outbox()
+                    .events()
+                    .clone(),
+            )
+        })
+}
 
 pub struct DispatchOutput {
     pub value: Value,
@@ -74,7 +94,8 @@ async fn dispatch_checked(
 ) -> Result<DispatchOutput, CommandError> {
     if name == "terminate_current_run" {
         return Ok(DispatchOutput::direct(
-            backend.terminate(authorization).await,
+            run_termination::terminate_current_run(database, backend, principal, authorization)
+                .await,
         ));
     }
     if name.starts_with("add_issue_type_workflow_")
@@ -307,6 +328,7 @@ async fn create_task(
             state_id,
             parent_id: parent_id.map(str::to_owned),
         },
+        work_facts(database).await.as_ref(),
     )
     .await?;
     Ok(DispatchOutput::result(Value::String(hyphenate(&id))))
@@ -335,6 +357,7 @@ async fn update_task(
             description,
             issue_type_id: None,
         },
+        work_facts(database).await.as_ref(),
     )
     .await?;
     Ok(DispatchOutput::direct(
@@ -380,6 +403,7 @@ async fn update_status(
             target_state_id: state.id,
             origin: workflow::TransitionOrigin::Agent,
         },
+        work_facts(database).await.as_ref(),
     )
     .await
     {

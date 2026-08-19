@@ -38,6 +38,42 @@ class AgentTerminalSession(models.Model):
         ]
 
 
+class TerminalLaunchRequest(models.Model):
+    """This capability's own execution material for one durable Launch Effect.
+
+    Rust's Launch Effect deliberately stores no command, path, environment, or
+    credential. The terminal capability still needs those to create a runtime,
+    so it keeps them here, in a table it owns, keyed by the effect identity
+    Rust predetermined. A crash between preparation and execution therefore
+    leaves the executor able to finish the effect it was asked to perform,
+    without any of that material ever crossing the ownership boundary.
+    """
+
+    effect_id = models.CharField(primary_key=True, max_length=64)
+    agent_run_id = models.CharField(max_length=255, unique=True)
+    issue_id = models.CharField(max_length=64)
+    project_id = models.CharField(max_length=64)
+    module_id = models.CharField(max_length=64)
+    task_id = models.CharField(max_length=64)
+    agent = models.CharField(max_length=64)
+    scope = models.CharField(max_length=32)
+    doc_rel_path = models.CharField(null=True)
+    command = models.TextField()
+    working_directory = models.CharField()
+    environment = models.JSONField(default=dict)
+    columns = models.PositiveIntegerField(default=80)
+    rows = models.PositiveIntegerField(default=24)
+    created_at = models.CharField()
+
+    class Meta:
+        db_table = "terminal_launch_requests"
+
+    def dimensions_tuple(self):
+        from apps.terminals.runtime import TerminalDimensions
+
+        return TerminalDimensions(columns=self.columns, rows=self.rows)
+
+
 class AgentRunViewerLease(models.Model):
     """The control-plane owner of a currently attached terminal viewer."""
 

@@ -1,6 +1,7 @@
 import { studioRuntime } from "../../runtime";
 import * as rest from "../../shared/api/client";
 import { graphQlMutationError } from "../../shared/api/graphqlError";
+import { compactWorktrackerId } from "../../shared/api/generatedWorktracker";
 import type {
   IssueType, IssueTypeCreate, IssueTypePatch, LaunchBindingInput,
   State, StateCreate, StatePatch,
@@ -122,10 +123,12 @@ export function upsertIssueTypeWorkflowLaunchBinding(
   return studioRuntime().writeWorkTracker({
     rest: () => rest.upsertIssueTypeWorkflowLaunchBinding(typeId, stateId, binding, workflowRevision),
     graphQl: (execute) => graphQl(async () => {
-      const catalog = await execute(WorkTrackerWorkflowCatalogDocument, { projectId });
-      const provider = binding.agent ? catalog.providers.find((row) => row.slug === binding.agent) : undefined;
-      const model = binding.model ? catalog.agent_models.find((row) => row.name === binding.model && (!provider || row.provider === provider.id || row.provider === provider.slug)) : undefined;
-      const reasoning = binding.reasoning ? catalog.reasoning_levels.find((row) => row.name === binding.reasoning) : undefined;
+      const catalog = await execute(WorkTrackerWorkflowCatalogDocument, {
+        projectId: compactWorktrackerId(projectId),
+      });
+      const provider = binding.agent ? catalog.providers.nodes.find((row) => row.slug === binding.agent) : undefined;
+      const model = binding.model ? catalog.agent_models.nodes.find((row) => row.name === binding.model && (!provider || row.provider === provider.id || row.provider === provider.slug)) : undefined;
+      const reasoning = binding.reasoning ? catalog.reasoning_levels.nodes.find((row) => row.name === binding.reasoning) : undefined;
       if (binding.agent && !provider) throw new Error(`Agent/provider '${binding.agent}' is not in the catalog.`);
       if (binding.model && !model) throw new Error(`Model '${binding.model}' is not in the catalog for agent/provider '${binding.agent ?? ""}'.`);
       if (binding.reasoning && !reasoning) throw new Error(`Reasoning '${binding.reasoning}' is not in the catalog.`);

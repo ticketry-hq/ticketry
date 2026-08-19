@@ -6,6 +6,7 @@ from typing import Optional, Union
 
 from apps.worktrees import dao, naming
 from apps.worktrees.models import Worktree
+from apps.workspace_write_ownership import assert_django_workspace_write_allowed
 from apps.worktrees.service.types import (
     NoWorktree,
     WorktreeStatus,
@@ -58,7 +59,14 @@ def create(
     HEAD and records the base branch + base commit. Idempotent: a live record
     for the task is returned as-is. A path with no enclosing repo yields a
     :class:`NoWorktree` with a reason — never an exception.
+
+    Refused after the Slice 4 handoff. Rust derives the branch and checkout path,
+    holds the per-repository lock, prepares a durable Workspace Operation before
+    running Git, and inserts the row only once Git proves the expected tree. A
+    second creator without that journal can leave a real checkout with no row.
     """
+
+    assert_django_workspace_write_allowed("worktrees")
 
     existing = dao.get_by_task(task_id)
     if existing is not None:
@@ -173,8 +181,13 @@ def integrate(task_id: str) -> IntegrateResult:
     fast-forward base to the task branch → remove the worktree + delete the
     branch → delete the row. The merge always happens in the isolated tree, so
     the primary checkout is never left in a half-merged state.
+
+    Refused after the Slice 4 handoff. Rust owns integration, checkpoints Git
+    evidence at every boundary, and is driven by committed transition
+    occurrences rather than a best-effort daemon thread.
     """
 
+    assert_django_workspace_write_allowed("worktrees")
     record = dao.get_by_task(task_id)
     if record is None:
         return IntegrateResult(task_id, "no_worktree", "no worktree for task")
@@ -226,8 +239,13 @@ def integrate(task_id: str) -> IntegrateResult:
 
 
 def discard(task_id: str) -> DiscardResult:
-    """Remove a worktree without integrating (also the scratch/ephemeral path)."""
+    """Remove a worktree without integrating (also the scratch/ephemeral path).
 
+    Refused after the Slice 4 handoff. Rust removes only the journaled identity
+    and retains conflict evidence when a path or ref no longer matches.
+    """
+
+    assert_django_workspace_write_allowed("worktrees")
     record = dao.get_by_task(task_id)
     if record is None:
         return DiscardResult(task_id, removed=False, reason="no worktree for task")
@@ -249,8 +267,13 @@ def reconcile() -> ReconcileResult:
     Best-effort startup cleanup so records re-attach to real trees after a
     restart. Never recreates trees. A row whose ``path`` is absent from its
     repo's ``git worktree list`` (manually removed) is deleted.
+
+    Refused after the Slice 4 handoff. This pass can only prune, so it cannot
+    tell a checkout that was never created from one that was created and not
+    acknowledged. Rust reconciles from the durable journal plus Git's evidence.
     """
 
+    assert_django_workspace_write_allowed("worktrees")
     pruned: list[str] = []
     kept = 0
     known_by_repo: dict[str, set[str]] = {}

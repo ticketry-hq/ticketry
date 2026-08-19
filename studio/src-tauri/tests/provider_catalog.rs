@@ -141,10 +141,7 @@ async fn existing_rows_keep_stable_ids_compatibility_and_deterministic_order() {
             .collect::<Vec<_>>(),
         vec!["claude", "codex", "gemini"]
     );
-    assert_eq!(
-        catalog.providers[1].id,
-        "10000000-0000-0000-0000-000000000003"
-    );
+    assert_eq!(catalog.providers[1].id, CODEX);
     assert_eq!(
         catalog
             .agent_models
@@ -153,17 +150,7 @@ async fn existing_rows_keep_stable_ids_compatibility_and_deterministic_order() {
             .collect::<Vec<_>>(),
         vec!["opus", "gpt-5.4", "gpt-mini", "gemini-pro"]
     );
-    assert_eq!(
-        catalog.agent_models[1].id,
-        "20000000-0000-0000-0000-000000000002"
-    );
-    assert_eq!(
-        catalog.agent_models[0].permitted_reasoning_levels.0,
-        vec![
-            "30000000-0000-0000-0000-000000000001",
-            "30000000-0000-0000-0000-000000000002",
-        ]
-    );
+    assert_eq!(catalog.agent_models[1].id, GPT);
     assert_eq!(
         catalog
             .reasoning_levels
@@ -341,6 +328,12 @@ async fn generated_graphql_query_and_restricted_mutation_use_the_catalog_service
                         default_reasoning: $defaultReasoning
                       ) {
                         providers { slug activated }
+                        agent_models {
+                          name
+                          reasoning_levels: agentModelReasoningLevel {
+                            nodes { reasoning_level_id: reasoningLevelId }
+                          }
+                        }
                         global_default { provider model reasoning }
                       }
                     }
@@ -370,5 +363,10 @@ async fn generated_graphql_query_and_restricted_mutation_use_the_catalog_service
             "model": "gpt-5.4",
             "reasoning": "high"
         })
+    );
+    assert_eq!(
+        response["data"]["update_provider_catalog"]["agent_models"][1]["reasoning_levels"]["nodes"]
+            [0]["reasoning_level_id"],
+        "30000000-0000-0000-0000-000000000001"
     );
 }

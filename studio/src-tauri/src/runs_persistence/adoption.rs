@@ -22,6 +22,7 @@ pub enum DjangoGeneration {
     LaunchRejection,
     RequiredSkillRetry,
     HistoricalFailuresDismissed,
+    RunKindRemoved,
     Current,
 }
 
@@ -32,7 +33,8 @@ impl DjangoGeneration {
             Self::LaunchRejection => 9,
             Self::RequiredSkillRetry => 10,
             Self::HistoricalFailuresDismissed => 11,
-            Self::Current => 12,
+            Self::RunKindRemoved => 12,
+            Self::Current => 13,
         }
     }
 
@@ -184,6 +186,7 @@ async fn classify(
         Some("0011_dismiss_historical_automation_failures") => {
             DjangoGeneration::HistoricalFailuresDismissed
         }
+        Some("0012_remove_legacy_agentrun_run_kind") => DjangoGeneration::RunKindRemoved,
         Some(schema::CURRENT_DJANGO_LEAF) => DjangoGeneration::Current,
         _ => {
             return Err(incompatible(
@@ -208,6 +211,10 @@ async fn validate_manifest(
         .iter()
         .map(|value| (*value).to_owned())
         .collect::<BTreeSet<_>>();
+    if matches!(source, SourceClassification::Django(generation) if generation.number() < 13) {
+        expected_agent.remove("model");
+        expected_agent.remove("reasoning");
+    }
     if matches!(source, SourceClassification::Django(generation) if generation != DjangoGeneration::Current)
         && agent.contains("run_kind")
     {
@@ -277,7 +284,11 @@ async fn stable_digest(
     generation: DjangoGeneration,
 ) -> Result<String, RunsPersistenceError> {
     let mut hasher = Sha256::new();
-    digest_table(database, "agent_runs", AGENT_RUN_COLUMNS, &mut hasher).await?;
+    let mut agent_columns = AGENT_RUN_COLUMNS.to_vec();
+    if generation.number() < 13 {
+        agent_columns.retain(|column| !matches!(*column, "model" | "reasoning"));
+    }
+    digest_table(database, "agent_runs", &agent_columns, &mut hasher).await?;
     let mut attempt_columns = ATTEMPT_BASE_COLUMNS.to_vec();
     if generation.number() >= 9 {
         attempt_columns.extend(["error_details", "retryable"]);
@@ -371,6 +382,18 @@ async fn integrity(database: &impl ConnectionTrait) -> Result<(), RunsPersistenc
         return Err(invalid("Runs database has foreign-key violations"));
     }
     Ok(())
+}
+
+/// Whether the durable status outbox has been adopted in this database.
+///
+/// A composition without it is a pre-adoption or probe schema: it still serves
+/// every authored command, it simply publishes no durable fact. Callers use
+/// this to decide whether to compose a fact recorder at all, rather than
+/// discovering a missing table when a person's write is already in flight.
+pub async fn outbox_adopted(database: &impl ConnectionTrait) -> bool {
+    table_exists(database, "runs_status_events")
+        .await
+        .unwrap_or(false)
 }
 
 async fn table_exists(

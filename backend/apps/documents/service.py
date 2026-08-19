@@ -27,6 +27,7 @@ from apps.terminals.dao import SCRATCH_TASK_ID
 from apps import worktracker_queries
 from apps.settings_store.compatibility import read_profile
 from apps.settings_store.config import module_link_path
+from apps.workspace_write_ownership import assert_django_workspace_write_allowed
 from studio_server.atomic_files import atomic_write_bytes
 
 
@@ -242,8 +243,14 @@ async def save_primary_markdown(
 
     The registered ``rel_path`` is the only possible target. Resolution uses
     the same containment, symlink and extension checks as the read path.
+
+    Refused after the Slice 4 handoff: replacing a document's bytes and recording
+    its new digest cannot be committed together, and Rust owns the durable
+    operation that makes an interrupted save converge. A second writer without
+    that journal could lose a completed save or replay one over newer content.
     """
 
+    assert_django_workspace_write_allowed("design_documents")
     row = await documents_dao.get_document(doc_id)
     if row is None:
         return None

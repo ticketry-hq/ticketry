@@ -2,8 +2,6 @@ import type { GraphQlTransportProxy } from "./generated/taurpc";
 import type { TypedDocumentNode } from "./typedDocument";
 
 export type FoundationDomainErrorCode =
-  | "migration_probe_rejected"
-  | "foundation_storage_failed"
   | "service_unavailable"
   | "worktracker_read_unavailable"
   | "worktracker_read_failed"
@@ -39,6 +37,9 @@ export type FoundationDomainErrorCode =
   | "binding_not_configured"
   | "agent_not_configured"
   | "unattended_launch_unsupported"
+  | "automation_attempt_not_found"
+  | "automation_attempt_not_failed"
+  | "automation_attempt_not_retryable"
   | "unknown";
 
 interface GraphQlErrorPayload {
@@ -53,8 +54,6 @@ interface GraphQlResponse<TResult> {
 
 const knownCode = (value: unknown): FoundationDomainErrorCode => {
   switch (value) {
-    case "migration_probe_rejected":
-    case "foundation_storage_failed":
     case "service_unavailable":
     case "worktracker_read_unavailable":
     case "worktracker_read_failed":
@@ -90,6 +89,9 @@ const knownCode = (value: unknown): FoundationDomainErrorCode => {
     case "binding_not_configured":
     case "agent_not_configured":
     case "unattended_launch_unsupported":
+    case "automation_attempt_not_found":
+    case "automation_attempt_not_failed":
+    case "automation_attempt_not_retryable":
       return value;
     default:
       return "unknown";

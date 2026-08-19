@@ -111,8 +111,9 @@ Any tmux sessions created by that disposable launch are stopped during cleanup.
 The packaged executable accepts the same flag, for example
 `/Applications/Ticketry.app/Contents/MacOS/ticketry --temp-sqlite`.
 The browser development stack supports the same behavior with
-`npm run web -- --temp-sqlite`. Disposable launches attempt to expose MCP on
-port `8123`; when that port is occupied they continue without MCP.
+`npm run web -- --temp-sqlite`. Disposable desktop launches use isolated port
+ranges starting at `8877` for the backend and `8223` for MCP, so they can retain
+full functionality while another Ticketry instance is running.
 
 ## Validation
 

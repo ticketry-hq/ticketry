@@ -1,10 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { generateWorkTrackerOperationManifests } from "./worktracker-operation-generation.mjs";
 import { generateSettingsOperations } from "./settings-operation-generation.mjs";
 import { generateAgentStatusOperations } from "./agent-status-operation-generation.mjs";
+import { generateWorktreeOperations } from "./worktree-operation-generation.mjs";
+import { generateDocumentOperations } from "./documents-operation-generation.mjs";
 
 export const studioRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -24,29 +26,6 @@ function run(command, args, cwd) {
       `${command} ${args.join(" ")} failed\n${result.stdout}${result.stderr}`,
     );
   }
-}
-
-async function pinReadOnlyEntityRegistration(entitiesDirectory) {
-  const generated = await readFile(join(entitiesDirectory, "mod.rs"), "utf8");
-  if (!generated.includes("seaography::register_entity_modules!([migration_probes,]);")) {
-    throw new Error("generated foundation entity registration has an unknown shape");
-  }
-  await writeFile(
-    join(entitiesDirectory, "mod.rs"),
-    `//! \`SeaORM\` Entity registration adapted from sea-orm-codegen 2.0.
-
-pub mod migration_probes;
-pub mod prelude;
-
-pub fn register_entity_modules(mut builder: seaography::Builder) -> seaography::Builder {
-    // The probe demonstrates Ticketry's governing exception: generated reads
-    // are useful, but writes go through an authored domain command.
-    seaography::register_entity!(builder, migration_probes, mutation: false);
-    builder
-}
-`,
-    "utf8",
-  );
 }
 
 export async function generateFoundationArtifacts(outputRoot) {
@@ -75,8 +54,6 @@ export async function generateFoundationArtifacts(outputRoot) {
     ],
     tauriRoot,
   );
-  await pinReadOnlyEntityRegistration(entitiesDirectory);
-
   const schemaPath = join(outputRoot, "schema.graphql");
   const bindingsPath = join(outputRoot, "taurpc.ts");
   const operationsPath = join(outputRoot, "operations.ts");
@@ -111,6 +88,16 @@ export async function generateFoundationArtifacts(outputRoot) {
     outputRoot,
   });
   await generateAgentStatusOperations({
+    schemaPath,
+    sourceRoot: join(studioRoot, "src"),
+    outputRoot,
+  });
+  await generateWorktreeOperations({
+    schemaPath,
+    sourceRoot: join(studioRoot, "src"),
+    outputRoot,
+  });
+  await generateDocumentOperations({
     schemaPath,
     sourceRoot: join(studioRoot, "src"),
     outputRoot,

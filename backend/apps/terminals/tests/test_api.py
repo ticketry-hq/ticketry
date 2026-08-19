@@ -1036,16 +1036,6 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(
         agent="claude",
     )
     terminal_runtime.present.add("run-e2e")
-    stopped_watches = []
-    published = []
-    monkeypatch.setattr(
-        launch_module.documents_watch, "stop_watch", stopped_watches.append
-    )
-    monkeypatch.setattr(
-        launch_module,
-        "publish_backend_session_sync",
-        lambda *args, **kwargs: published.append((args, kwargs)),
-    )
 
     def studio_endpoint(request):
         response = client.post(
@@ -1075,10 +1065,10 @@ def test_mcp_tool_crosses_studio_and_uses_terminal_authority(
         "already_terminated": False,
         "agent_run_id": "run-e2e",
     }
-    assert AgentRun.objects.get(id="run-e2e").status == "terminated"
-    assert stopped_watches == ["run-e2e"]
-    assert published[0][0][:3] == (
-        fixture_uuid("proj-1"),
-        "run-e2e",
-        "exited",
-    )
+    # The durable terminal outcome is what every connected Studio sees, and
+    # it is terminal authority: the next snapshot cannot repaint this run as
+    # active. There is no separate live notification to keep in step.
+    run = AgentRun.objects.get(id="run-e2e")
+    assert run.status == "terminated"
+    assert run.lifecycle_state == "exited"
+    assert run.ended_at is not None

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+
+from apps.runs.tests.seeding import aseed_agent_run
 from asgiref.sync import async_to_sync
 
 import apps.runs.dao as runs_dao
@@ -73,7 +75,7 @@ def _session(
 async def _seed_run_and_session(
     *, cwd: str, provider_session_id: str | None, ended_at: str | None = "2026-05-29T10:05:00"
 ) -> None:
-    await runs_dao.insert_agent_run(
+    await aseed_agent_run(
         _run(cwd=cwd, provider_session_id=provider_session_id, ended_at=ended_at)
     )
     await terminals_dao.insert_terminal_session(_session())
@@ -145,16 +147,6 @@ def test_resume_persists_fresh_run_and_terminal_with_provider_continuity(
         resume_fn=lambda sid: ["claude", "--resume", sid],
     )
     runtime = patch_terminal_runtime(monkeypatch)
-
-    async def ignore_status(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(launch_module, "publish_status", ignore_status)
-    monkeypatch.setattr(
-        launch_module.documents_watch,
-        "start_watch",
-        lambda **kwargs: None,
-    )
 
     new_run_id = async_to_sync(launch_module.resume_provider_conversation)(
         OLD_RUN_ID

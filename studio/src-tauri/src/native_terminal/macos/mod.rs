@@ -1,11 +1,11 @@
 //! macOS native Terminal implementation, split by lifecycle concern.
 
+use super::frames::{validate_frame, validate_native_frame, PendingFrames};
+use super::preparation::{PreparationGate, TerminalGrid};
+use super::scroll::ScrollGestureSink;
+use super::visibility::NativeTerminalVisibility;
+use super::worker::{run_native_worker, NativeViewerCommand, NativeWorkerExit};
 use super::NativeTerminalFrame;
-use crate::native_terminal_frames::{validate_frame, validate_native_frame, PendingFrames};
-use crate::native_terminal_preparation::{PreparationGate, TerminalGrid};
-use crate::native_terminal_scroll::ScrollGestureSink;
-use crate::native_terminal_visibility::NativeTerminalVisibility;
-use crate::native_terminal_worker::{run_native_worker, NativeViewerCommand, NativeWorkerExit};
 use crate::terminal_runtime::{TerminalCommandAttachment, TerminalCommandAttachmentControl};
 use rand::Rng;
 use serde::Serialize;

@@ -19,7 +19,7 @@ const PUBLIC_ENTRYPOINTS = new Set([
   "features/agents/api/agentApi",
   "features/agents/lifecycle",
   "features/agents/status",
-  "features/agents/status/statusFeed",
+  "features/agents/status/stream/statusStreamFeed",
   "features/agents/terminal",
   "features/agents/terminal/appNavigation",
   "features/agents/terminal/create/launchTerminalCreate",

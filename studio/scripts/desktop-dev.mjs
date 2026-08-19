@@ -13,6 +13,8 @@ const defaultFrontendPort = 5174;
 const frontendPortCandidates = 10;
 const defaultBackendPort = 8787;
 const defaultMcpPort = 8123;
+const temporaryBackendPort = 8877;
+const temporaryMcpPort = 8223;
 const servicePortCandidates = 10;
 const connectMode = "connect";
 const isolatedMode = "isolated";
@@ -215,18 +217,13 @@ export async function selectDevelopmentServicePorts({
   const backend = await selectServicePort({
     name: "backend",
     requestedPort: environment.MUXED_DESKTOP_BACKEND_PORT,
-    firstPort: defaultBackendPort,
+    firstPort: temporarySqlite ? temporaryBackendPort : defaultBackendPort,
     isAvailable,
   });
-  if (temporarySqlite) {
-    // The desktop supervisor treats MCP as optional. Let it make exactly one
-    // attempt on the public endpoint; an occupied 8123 keeps the backend usable.
-    return { backend, mcp: defaultMcpPort };
-  }
   const mcp = await selectServicePort({
     name: "MCP",
     requestedPort: environment.MUXED_DESKTOP_MCP_PORT,
-    firstPort: defaultMcpPort,
+    firstPort: temporarySqlite ? temporaryMcpPort : defaultMcpPort,
     excluded: [backend],
     isAvailable,
   });
@@ -273,7 +270,6 @@ export function buildConnectLaunch({ environment = process.env } = {}) {
       MUXED_DESKTOP_WORKTRACKER_API: `${frontendOrigin}/api/work-tracker`,
       MUXED_DESKTOP_AGENT_API: `${frontendOrigin}/api`,
       MUXED_DESKTOP_STATUS_API: `${frontendOrigin}/api`,
-      MUXED_DESKTOP_STATUS_WEBSOCKET: `${frontendWebSocketOrigin}/ws/status`,
       MUXED_DESKTOP_TERMINAL_WEBSOCKET: `${frontendWebSocketOrigin}/ws/terminal`,
     },
   };
@@ -351,6 +347,7 @@ export function findRunningInstalledTicketry({
 }
 
 export function assertInstalledTicketryIsNotRunning(options) {
+  if (options?.allowConcurrentInstalledApp) return;
   const running = findRunningInstalledTicketry(options);
   if (running.length === 0) return;
 
@@ -364,8 +361,10 @@ export function assertInstalledTicketryIsNotRunning(options) {
 }
 
 export async function main() {
-  assertInstalledTicketryIsNotRunning();
   const options = parseDesktopDevOptions(process.argv.slice(2));
+  assertInstalledTicketryIsNotRunning({
+    allowConcurrentInstalledApp: options.temporarySqlite,
+  });
   if (options.mode === connectMode) {
     const launch = buildConnectLaunch();
     console.log(
@@ -388,38 +387,43 @@ export async function main() {
     return;
   }
 
-  const frontendPort = await selectFrontendPort({
-    requestedPort: process.env.MUXED_FRONTEND_PORT,
-  });
-  const { backend: backendPort, mcp: mcpPort } = await selectDevelopmentServicePorts({
-    temporarySqlite: options.temporarySqlite,
-  });
   const dataDirectory = options.temporarySqlite
     ? createTemporarySqliteProfile()
     : resolveDevelopmentDataDirectory();
   const tmuxSocket = resolveDevelopmentTmuxSocket(dataDirectory);
   const logPath = prepareDevelopmentLog();
-  const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
-  const environment = {
+  const buildEnvironment = {
     ...process.env,
     MUXED_DATA_DIR: dataDirectory,
     MUXED_DEVELOPMENT_LOG_PATH: logPath,
     MUXED_ENABLE_LOCAL_POSTGRES: "true",
     MUXED_TMUX_SOCKET: tmuxSocket,
-    MUXED_DESKTOP_ORIGIN: frontendOrigin,
-    MUXED_DESKTOP_BACKEND_PORT: String(backendPort),
-    MUXED_DESKTOP_MCP_PORT: String(mcpPort),
-    MUXED_VITE_BACKEND_ORIGIN: `http://127.0.0.1:${backendPort}`,
   };
   if (options.temporarySqlite) {
-    environment.MUXED_FORCE_SQLITE = "true";
+    buildEnvironment.MUXED_FORCE_SQLITE = "true";
   }
   try {
     await run(
       "bash",
       [path.join(studioRoot, "..", "backend", "packaging", "build-sidecar.sh")],
-      environment,
+      buildEnvironment,
     );
+    // Select ports after the comparatively slow sidecar build so another
+    // Ticketry instance cannot claim them during that build window.
+    const frontendPort = await selectFrontendPort({
+      requestedPort: process.env.MUXED_FRONTEND_PORT,
+    });
+    const { backend: backendPort, mcp: mcpPort } = await selectDevelopmentServicePorts({
+      temporarySqlite: options.temporarySqlite,
+    });
+    const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
+    const environment = {
+      ...buildEnvironment,
+      MUXED_DESKTOP_ORIGIN: frontendOrigin,
+      MUXED_DESKTOP_BACKEND_PORT: String(backendPort),
+      MUXED_DESKTOP_MCP_PORT: String(mcpPort),
+      MUXED_VITE_BACKEND_ORIGIN: `http://127.0.0.1:${backendPort}`,
+    };
     const config = JSON.stringify(buildTauriDevelopmentConfig(frontendPort));
     console.log(formatDevelopmentIdentity({
       frontendOrigin,

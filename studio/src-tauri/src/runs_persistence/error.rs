@@ -18,6 +18,9 @@ pub enum RunsPersistenceErrorCode {
     Unauthorized,
     ExecutorUnavailable,
     Conflict,
+    LaunchConflict,
+    LaunchEffectNotFound,
+    LaunchLeaseNotHeld,
     Storage,
 }
 
@@ -35,6 +38,18 @@ impl RunsPersistenceError {
             message: message.into(),
             source: None,
         }
+    }
+
+    pub(crate) fn not_found(message: impl Into<String>) -> Self {
+        Self::new(RunsPersistenceErrorCode::NotFound, message)
+    }
+
+    pub(crate) fn unauthorized(message: impl Into<String>) -> Self {
+        Self::new(RunsPersistenceErrorCode::Unauthorized, message)
+    }
+
+    pub(crate) fn executor_unavailable(message: impl Into<String>) -> Self {
+        Self::new(RunsPersistenceErrorCode::ExecutorUnavailable, message)
     }
 
     pub(crate) fn storage(context: &'static str, source: DbErr) -> Self {
@@ -66,6 +81,9 @@ impl RunsPersistenceError {
             RunsPersistenceErrorCode::Unauthorized => "caller_run_unbound",
             RunsPersistenceErrorCode::ExecutorUnavailable => "termination_executor_unavailable",
             RunsPersistenceErrorCode::Conflict => "runs_conflict",
+            RunsPersistenceErrorCode::LaunchConflict => "launch_conflict",
+            RunsPersistenceErrorCode::LaunchEffectNotFound => "launch_effect_not_found",
+            RunsPersistenceErrorCode::LaunchLeaseNotHeld => "launch_lease_not_held",
             RunsPersistenceErrorCode::Storage => "runs_storage_failed",
         }
     }

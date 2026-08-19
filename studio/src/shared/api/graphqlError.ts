@@ -4,11 +4,15 @@ import { ApiError } from "./client";
 /** Preserve the established REST-shaped mutation failure contract at the UI seam. */
 export function graphQlMutationError(error: unknown): never {
   if (!(error instanceof FoundationGraphQlError)) throw error;
-  const status = error.code === "not_found"
+  const status = error.code === "not_found" ||
+      error.code === "automation_attempt_not_found"
     ? 404
     : error.code === "index_out_of_range"
       ? 400
-    : error.code === "conflict" || error.code === "stale_revision"
+    : error.code === "conflict" ||
+        error.code === "stale_revision" ||
+        error.code === "automation_attempt_not_failed" ||
+        error.code === "automation_attempt_not_retryable"
       ? 409
       : error.code === "unauthorized"
         ? 401

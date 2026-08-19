@@ -77,6 +77,14 @@ persistence handoff, not a big-bang implementation.
 
 ## Schema adoption sequence
 
+Entity recovery and migration ownership are separate steps. Before cutover,
+build a clean database from the current Django migration chain and generate the
+Django-owned entity cohort from it; this prevents handwritten Rust structure
+from becoming a competing schema source. After parity and the writer handoff,
+establish the equivalent SeaORM migration baseline below and generate all
+future entity changes from SeaORM migrations. Both paths must produce the same
+accepted entity and schema artifacts at the handoff boundary.
+
 ### 1. Freeze and classify supported inputs
 
 Create a checked manifest for every product table, column, index, foreign key,

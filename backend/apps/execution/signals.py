@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from asgiref.sync import async_to_sync
 from django.dispatch import receiver
 
 from worktracker.signals import issue_state_changed
 
 from apps.execution import driver
-from apps.runs.bus import publish_automation_attempt
+from apps.runs import rust_port
 from apps.runs.models import AutomationAttempt
-from apps.runs.projections import automation_attempt_record
 from apps.terminals.launch_configuration import resolve_task_launch_configuration
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.termination_seam import agent_run_terminated
@@ -19,13 +17,14 @@ from worktracker.models import Issue
 logger = logging.getLogger(__name__)
 
 
-def publish_automation_attempt_sync(attempt: AutomationAttempt) -> None:
-    """Project one saved attempt onto the existing project status feed."""
+def _predetermined_agent_run_id(attempt: AutomationAttempt) -> str:
+    """Name the Agent Run this attempt will launch, before it launches."""
 
-    async_to_sync(publish_automation_attempt)(
-        str(attempt.issue.project_id),
-        automation_attempt_record(attempt),
-    )
+    if attempt.agent_run_id:
+        return attempt.agent_run_id
+    if attempt.retry_of_id is not None:
+        return attempt.id.hex
+    return attempt.transition_id.hex
 
 
 def run_automation_attempt(
@@ -41,51 +40,44 @@ def run_automation_attempt(
             launch_configuration = resolve_task_launch_configuration(
                 str(attempt.issue_id), destination_state_id=destination_state_id
             )
+        # The Agent Run identity is predetermined before the launch, and the
+        # committed transition occurrence is what determines it. Re-delivery of
+        # the same occurrence therefore reaches the same run rather than
+        # starting a second session. A retry child shares that occurrence but
+        # is a second launch of it, so it is predetermined by its own attempt
+        # identity — reusing the failed attempt's run identity would collide
+        # with the Agent Run and Launch Effect that attempt already minted.
         result = driver.launch_task_agent(
             str(attempt.issue_id),
             agent=None,
-            agent_run_id=attempt.agent_run_id,
+            agent_run_id=_predetermined_agent_run_id(attempt),
             launch_configuration=launch_configuration,
         )
     except Exception as exc:
-        attempt.status = AutomationAttempt.Status.FAILED
-        attempt.error = str(exc) or exc.__class__.__name__
-        if isinstance(exc, RequiredSkillUnavailable):
-            attempt.error_details = exc.as_payload()
-            attempt.retryable = True
-        else:
-            attempt.error_details = None
-            attempt.retryable = True
-        attempt.save(
-            update_fields=[
-                "status",
-                "error",
-                "error_details",
-                "retryable",
-                "updated_at",
-            ]
+        # Rust owns automation_attempts. Recording the outcome there is what
+        # both settles the row and appends the durable status event, so an
+        # unresolved failure survives a reconnect and stays retryable.
+        rust_port.record_attempt_outcome(
+            str(attempt.id),
+            succeeded=False,
+            error=str(exc) or exc.__class__.__name__,
+            failure=(
+                exc.as_payload()
+                if isinstance(exc, RequiredSkillUnavailable)
+                else None
+            ),
+            retryable=True,
         )
-        publish_automation_attempt_sync(attempt)
+        attempt.refresh_from_db()
         logger.exception("automated launch failed issue=%s", attempt.issue_id)
         return attempt
-    attempt.status = AutomationAttempt.Status.SUCCEEDED
-    attempt.agent = result.agent
-    attempt.agent_run_id = result.agent_run_id
-    attempt.error = None
-    attempt.error_details = None
-    attempt.retryable = False
-    attempt.save(
-        update_fields=[
-            "status",
-            "agent",
-            "agent_run_id",
-            "error",
-            "error_details",
-            "retryable",
-            "updated_at",
-        ]
+    rust_port.record_attempt_outcome(
+        str(attempt.id),
+        succeeded=True,
+        agent=result.agent,
+        agent_run_id=result.agent_run_id,
     )
-    publish_automation_attempt_sync(attempt)
+    attempt.refresh_from_db()
     return attempt
 
 
@@ -119,18 +111,20 @@ def launch_workflow_automation(
         )
         if issue is None:
             return
-        attempt, created = AutomationAttempt.objects.get_or_create(
-            transition_id=transition_id,
-            retry_of__isnull=True,
-            defaults={
-                "issue": issue,
-                "from_state_id": from_state_id,
-                "to_state_id": to_state_id,
-                "workflow_revision": transition_snapshot["workflow_revision"],
-            },
+        # Rust owns automation_attempts, and materialization is idempotent by
+        # committed occurrence: a re-delivered transition returns the same root
+        # attempt rather than starting a second session.
+        materialized = rust_port.materialize_attempt(
+            occurrence_id=str(transition_id),
+            issue_id=str(issue.pk),
+            project_id=str(project_id),
+            from_state_id=str(from_state_id),
+            to_state_id=str(to_state_id),
+            workflow_revision=int(transition_snapshot["workflow_revision"]),
         )
-        if not created:
+        if materialized["status"] != AutomationAttempt.Status.PENDING:
             return
+        attempt = AutomationAttempt.objects.get(pk=materialized["attempt_id"])
         run_automation_attempt(attempt, destination_state_id=to_state_id)
     except Exception:
         logger.exception("workflow automation receiver failed issue=%s", issue_id)

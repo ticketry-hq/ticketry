@@ -6,12 +6,16 @@ from pathlib import Path
 import pytest
 
 from apps.runs.models import AgentRun
-from apps.terminals import launch, reconciliation
-from apps.terminals.models import AgentTerminalSession
+from apps.terminals import launch, persistence, reconciliation, runs_effect_port
+from apps.terminals.models import AgentTerminalSession, TerminalLaunchRequest
 from apps.terminals.persistence import (
     LaunchRecords,
-    compensate_launch,
-    persist_launch,
+    PreparedCommand,
+    discard_launch_request,
+    launch_effect_id,
+    prepare_launch,
+    record_terminal_mirror,
+    settle_launch,
 )
 from apps.terminals.reconciliation import TerminalReconciler
 from apps.terminals.runtime import (
@@ -27,38 +31,164 @@ from worktracker.tests.factories import ensure_issue, fixture_issue_id
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-def test_launch_persistence_owns_run_and_terminal_records_together():
+def _records(issue_id: str) -> LaunchRecords:
+    return LaunchRecords(
+        agent_run_id="run-persisted",
+        issue_id=issue_id,
+        agent="codex",
+        model="gpt-5.6",
+        reasoning="high",
+        started_at="2026-08-09T12:00:00+00:00",
+        cwd="/tmp",
+        design_dir=None,
+        resumed_from=None,
+        scope="task",
+        doc_rel_path=None,
+        runtime_namespace="memory",
+    )
+
+
+def test_a_prepared_launch_is_durable_before_any_runtime_exists():
+    """Durable fact first: the run exists before an external effect could."""
+
     issue_id = fixture_issue_id(project_id="p1", module_id="m1", task_id="t1")
 
-    routing = persist_launch(
-        LaunchRecords(
-            agent_run_id="run-persisted",
-            issue_id=issue_id,
-            agent="codex",
-            started_at="2026-08-09T12:00:00+00:00",
-            cwd="/tmp",
-            design_dir=None,
-            resumed_from=None,
-            scope="task",
-            doc_rel_path=None,
-            runtime_namespace="memory",
-        )
+    prepared = prepare_launch(
+        _records(issue_id),
+        PreparedCommand(command="agent", environment={}, columns=80, rows=24),
     )
 
     run = AgentRun.objects.get(id="run-persisted")
-    terminal = AgentTerminalSession.objects.get(agent_run_id="run-persisted")
     assert str(run.issue_id) == issue_id
     assert run.lifecycle_state == "starting"
-    assert terminal.task_id == issue_id
-    assert terminal.project_id == routing.project_id
-    assert terminal.module_id == routing.module_id
-    assert terminal.runtime_namespace == "memory"
-
-    compensate_launch("run-persisted")
-    assert not AgentRun.objects.filter(id="run-persisted").exists()
+    assert (run.agent, run.model, run.reasoning) == ("codex", "gpt-5.6", "high")
+    assert prepared.reused is False
+    # No terminal mirror yet: nothing external has happened.
     assert not AgentTerminalSession.objects.filter(
         agent_run_id="run-persisted"
     ).exists()
+
+    record_terminal_mirror(_records(issue_id), prepared.routing)
+    terminal = AgentTerminalSession.objects.get(agent_run_id="run-persisted")
+    assert terminal.task_id == issue_id
+    assert terminal.project_id == prepared.routing.project_id
+    assert terminal.module_id == prepared.routing.module_id
+    assert terminal.runtime_namespace == "memory"
+
+
+def test_a_repeated_preparation_reuses_its_effect_instead_of_a_second_run():
+    issue_id = fixture_issue_id(project_id="p1", module_id="m1", task_id="t1")
+    command = PreparedCommand(command="agent", environment={}, columns=80, rows=24)
+
+    first = prepare_launch(_records(issue_id), command)
+    second = prepare_launch(_records(issue_id), command)
+
+    assert first.effect_id == second.effect_id
+    assert second.reused is True
+    assert AgentRun.objects.filter(id="run-persisted").count() == 1
+
+
+def test_a_failure_with_confirmed_cleanup_leaves_no_launch_behind():
+    issue_id = fixture_issue_id(project_id="p1", module_id="m1", task_id="t1")
+
+    prepared = prepare_launch(
+        _records(issue_id),
+        PreparedCommand(command="agent", environment={}, columns=80, rows=24),
+    )
+    settle_launch(
+        prepared.effect_id,
+        applied=False,
+        code="terminal_runtime_unavailable",
+        retryable=True,
+        cleanup_confirmed=True,
+    )
+    discard_launch_request(prepared.effect_id)
+
+    assert not AgentRun.objects.filter(id="run-persisted").exists()
+
+
+def test_a_failure_without_proven_cleanup_keeps_a_durable_handle():
+    """An unproven cleanup must not delete rows an external runtime matches."""
+
+    issue_id = fixture_issue_id(project_id="p1", module_id="m1", task_id="t1")
+
+    prepared = prepare_launch(
+        _records(issue_id),
+        PreparedCommand(command="agent", environment={}, columns=80, rows=24),
+    )
+    settle_launch(
+        prepared.effect_id,
+        applied=False,
+        code="terminal_runtime_unavailable",
+        retryable=True,
+        cleanup_confirmed=False,
+    )
+
+    assert AgentRun.objects.get(id="run-persisted").status == "cleanup_pending"
+
+
+def test_a_crash_at_the_rust_boundary_leaves_only_an_inert_launch_request(monkeypatch):
+    """The two writes straddle an ownership boundary; only one orphan is safe.
+
+    A crash, sidecar restart, or transport failure between this capability's
+    launch request and Rust's durable effect will sometimes leave exactly one
+    of them committed. The survivable orphan is the launch request: no effect
+    exists, so reconciliation never sees it and nothing can turn it into a
+    failure. The fatal orphan — a prepared effect whose execution material was
+    never written — must not be reachable from here.
+    """
+
+    issue_id = fixture_issue_id(project_id="p1", module_id="m1", task_id="t1")
+
+    def crash_after_the_boundary(intent, snapshot):
+        raise RuntimeError("sidecar restarted mid-preparation")
+
+    monkeypatch.setattr(
+        persistence.rust_port, "prepare_launch", crash_after_the_boundary
+    )
+
+    with pytest.raises(RuntimeError):
+        prepare_launch(
+            _records(issue_id),
+            PreparedCommand(command="agent", environment={}, columns=80, rows=24),
+        )
+
+    effect_id = launch_effect_id("run-persisted")
+    assert not AgentRun.objects.filter(id="run-persisted").exists()
+    request = TerminalLaunchRequest.objects.get(effect_id=effect_id)
+    assert request.agent_run_id == "run-persisted"
+
+
+def test_re_preparing_after_that_crash_leaves_an_executable_effect(monkeypatch):
+    """The launch the crash interrupted is re-preparable, not permanently lost."""
+
+    issue_id = fixture_issue_id(project_id="p1", module_id="m1", task_id="t1")
+    command = PreparedCommand(command="agent", environment={}, columns=80, rows=24)
+
+    durable = persistence.rust_port.prepare_launch
+    crashes = {"remaining": 1}
+
+    def crash_once_then_prepare(intent, snapshot):
+        if crashes["remaining"]:
+            crashes["remaining"] -= 1
+            raise RuntimeError("sidecar restarted mid-preparation")
+        return durable(intent, snapshot)
+
+    monkeypatch.setattr(
+        persistence.rust_port, "prepare_launch", crash_once_then_prepare
+    )
+    with pytest.raises(RuntimeError):
+        prepare_launch(_records(issue_id), command)
+
+    prepared = prepare_launch(_records(issue_id), command)
+
+    # The executor Rust reaches on the next pass finds its material, so the
+    # effect is executable rather than settling as `launch_request_unavailable`.
+    monkeypatch.setattr(launch, "terminal_runtime", InMemoryTerminalRuntime())
+    outcome = runs_effect_port.execute(
+        {"effect_id": prepared.effect_id, "agent_run_id": "run-persisted"}
+    )
+    assert outcome == {"ok": True, "runtime_id": "run-persisted", "adopted": False}
 
 
 def test_launch_service_depends_on_public_runtime_not_tmux_or_models():
@@ -111,20 +241,24 @@ def _persist_active_run(
     issue_id = str(
         ensure_issue(project_id="p1", module_id="m1", task_id=run_id).id
     )
-    persist_launch(
-        LaunchRecords(
-            agent_run_id=run_id,
-            issue_id=issue_id,
-            agent="codex",
-            started_at="2026-08-09T12:00:00+00:00",
-            cwd="/tmp",
-            design_dir=None,
-            resumed_from=None,
-            scope="task",
-            doc_rel_path=None,
-            runtime_namespace=runtime_namespace,
-        )
+    records = LaunchRecords(
+        agent_run_id=run_id,
+        issue_id=issue_id,
+        agent="codex",
+        started_at="2026-08-09T12:00:00+00:00",
+        cwd="/tmp",
+        design_dir=None,
+        resumed_from=None,
+        scope="task",
+        doc_rel_path=None,
+        runtime_namespace=runtime_namespace,
     )
+    prepared = prepare_launch(
+        records,
+        PreparedCommand(command="agent", environment={}, columns=80, rows=24),
+    )
+    record_terminal_mirror(records, prepared.routing)
+    settle_launch(prepared.effect_id, applied=True, runtime_id=run_id)
     if exit_code is not None:
         AgentRun.objects.filter(id=run_id).update(exit_code=exit_code)
 
@@ -249,17 +383,17 @@ def test_reconciliation_recovers_live_tombstone_from_legacy_runtime_identity():
     terminal = AgentTerminalSession.objects.get(agent_run_id="run-legacy-tombstone")
     assert result.recovered == ["run-legacy-tombstone"]
     assert result.running == ["run-legacy-tombstone"]
-    assert run.status == "running"
-    assert run.ended_at is None
-    assert run.exit_code is None
-    assert run.lifecycle_state == "working"
+    # The terminal mirror is this capability's own row and is repaired. The
+    # Agent Run is not: an explicit terminal outcome is terminal authority
+    # under the Runs contract, so a run that ended stays ended rather than
+    # being presented as active again.
     assert terminal.terminated_at is None
     assert terminal.runtime_namespace == "tmux-endpoint-hash"
+    assert run.ended_at == "2026-08-09T12:05:00+00:00"
+    assert run.lifecycle_state == "exited"
 
 
-def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity(
-    monkeypatch,
-):
+def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity():
     _persist_active_run("run-current-tombstone", runtime_namespace="profile-a")
     AgentRun.objects.filter(id="run-current-tombstone").update(
         status="exited",
@@ -280,48 +414,18 @@ def test_reconciliation_recovers_live_tombstone_from_current_runtime_identity(
             dimensions=TerminalDimensions(columns=80, rows=24),
         )
     )
-    published = []
-
-    async def capture_status(project_id: str, frame: dict) -> None:
-        published.append((project_id, frame))
-
-    monkeypatch.setattr(
-        "apps.terminals.recovery_status.publish_status",
-        capture_status,
-    )
-
     result = TerminalReconciler(runtime).reconcile()
 
     run = AgentRun.objects.get(id="run-current-tombstone")
     terminal = AgentTerminalSession.objects.get(agent_run_id="run-current-tombstone")
     assert result.recovered == ["run-current-tombstone"]
     assert result.running == ["run-current-tombstone"]
-    assert run.status == "running"
-    assert run.ended_at is None
-    assert run.lifecycle_state == "working"
     assert terminal.terminated_at is None
     assert terminal.runtime_namespace == "profile-a"
-    assert published == [
-        (
-            str(run.issue.project_id),
-            {
-                "v": 1,
-                "type": "agent_lifecycle",
-                "at": run.lifecycle_updated_at,
-                "run": {
-                    "agent_run_id": "run-current-tombstone",
-                    "project_id": str(run.issue.project_id),
-                    "task_id": str(run.issue_id),
-                    "module_id": str(run.issue.module_id),
-                    "agent": "codex",
-                    "scope": "task",
-                    "started_at": "2026-08-09T12:00:00+00:00",
-                    "state": "working",
-                    "updated_at": run.lifecycle_updated_at,
-                },
-            },
-        )
-    ]
+    # The ended Agent Run is untouched: a dead session must never be presented
+    # as active again, and only the Runs owner may say a run ended.
+    assert run.ended_at == "2026-08-09T12:05:00+00:00"
+    assert run.lifecycle_state == "exited"
 
 
 def test_reconciliation_persists_exit_code_before_retained_runtime_cleanup():
@@ -410,7 +514,9 @@ def test_reconciliation_missing_runtime_records_disappearance_without_exit_code(
 
     run = AgentRun.objects.get(id="run-missing")
     assert result.soft_deleted == ["run-missing"]
-    assert run.status == "exited"
+    # A runtime that simply vanished is `lost`, not a clean exit, and it
+    # supplies no exit code — so a previously recorded process result stands.
+    assert run.status == "lost"
     assert run.exit_code == 23
 
 

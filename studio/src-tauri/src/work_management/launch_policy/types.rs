@@ -9,6 +9,10 @@ pub enum CallerScope {
     Interactive,
     AutoStart,
     Subtree,
+    /// One explicitly requested retry of a failed Automation Attempt. The
+    /// attempt itself is the idempotency key, so a retry is performed exactly
+    /// once no matter how often the decision is re-read or re-delivered.
+    Retry,
 }
 
 impl CallerScope {
@@ -17,6 +21,7 @@ impl CallerScope {
             Self::Interactive => "interactive",
             Self::AutoStart => "auto_start",
             Self::Subtree => "subtree",
+            Self::Retry => "retry",
         }
     }
 

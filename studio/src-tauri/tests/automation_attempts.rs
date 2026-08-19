@@ -77,6 +77,88 @@ async fn event_count(database: &sea_orm::DatabaseConnection) -> i64 {
         .unwrap()
 }
 
+/// Retryability is a published decision about a failure, and the projection
+/// that Studio consumes must say so for every attempt state — not echo the
+/// stored column, which stays `true` on a freshly materialized attempt so a
+/// later failure can lower it.
+#[tokio::test]
+async fn projections_publish_retryability_only_for_failures_and_list_newest_first() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.db");
+    fixture(&path);
+    adopt(directory.path()).await.unwrap();
+    let services = RunsServices::new(open(&path).await);
+
+    let first = services
+        .attempts()
+        .materialize_root(&occurrence(900, 800))
+        .await
+        .unwrap();
+    assert_eq!(first.status, "pending");
+    assert!(!first.retryable, "a pending attempt is not retryable");
+
+    let second = services
+        .attempts()
+        .materialize_root(&occurrence(901, 800))
+        .await
+        .unwrap();
+    assert_eq!(
+        services
+            .attempts()
+            .latest(&id(801), None)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|attempt| attempt.attempt_id)
+            .collect::<Vec<_>>(),
+        vec![second.attempt_id.clone(), first.attempt_id.clone()],
+        "unresolved lineages are listed newest first"
+    );
+
+    let failed = services
+        .attempts()
+        .record_outcome(
+            &first.attempt_id,
+            AttemptOutcome::Failed {
+                error: "Provider timed out".to_owned(),
+                failure: serde_json::json!({"code": "provider_timeout"}),
+                retryable: true,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        failed.retryable,
+        "a retryable failure publishes its decision"
+    );
+
+    let succeeded = services
+        .attempts()
+        .record_outcome(
+            &second.attempt_id,
+            AttemptOutcome::Succeeded {
+                agent: "codex".to_owned(),
+                agent_run_id: "run-901".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(succeeded.status, "succeeded");
+    assert!(!succeeded.retryable, "a succeeded attempt is not retryable");
+    assert_eq!(
+        services.attempts().latest(&id(801), None).await.unwrap(),
+        vec![failed.clone()],
+        "a succeeded lineage resolves and only the failed lineage stays visible"
+    );
+
+    let retry = services.attempts().retry(&failed.attempt_id).await.unwrap();
+    assert_eq!(retry.status, "pending");
+    assert!(
+        !retry.retryable,
+        "a pending retry child is not itself retryable yet"
+    );
+}
+
 #[tokio::test]
 async fn attempts_are_idempotent_durable_scoped_and_event_atomic() {
     let directory = tempfile::tempdir().unwrap();

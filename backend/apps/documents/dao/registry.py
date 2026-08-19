@@ -5,6 +5,7 @@ from typing import Optional
 from django.db import IntegrityError
 
 from apps.documents.models import DesignDocument
+from apps.workspace_write_ownership import assert_django_workspace_write_allowed
 
 
 async def upsert_document(
@@ -20,6 +21,8 @@ async def upsert_document(
 ) -> tuple[DesignDocument, bool]:
     """Register a document or refresh only its update timestamp."""
 
+    # Queryset writes bypass the model's own refusal, so the DAO repeats it.
+    assert_django_workspace_write_allowed("design_documents")
     defaults = {
         "id": doc_id,
         "module_id": module_id,
@@ -83,6 +86,7 @@ async def get_document_root(
 async def delete_documents(ids: list[str]) -> int:
     """Delete stale document rows by id."""
 
+    assert_django_workspace_write_allowed("design_documents")
     if not ids:
         return 0
     deleted, _ = await DesignDocument.objects.filter(id__in=ids).adelete()

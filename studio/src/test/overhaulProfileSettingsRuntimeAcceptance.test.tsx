@@ -14,7 +14,6 @@ const startup = {
     workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
     agentApi: "http://127.0.0.1:8787/api",
     statusApi: "http://127.0.0.1:8787/api",
-    statusWebSocket: "ws://127.0.0.1:8787/ws/status",
     terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
   },
   values: { workTrackerApiKey: "" },
@@ -70,7 +69,7 @@ describe("profile settings desktop runtime acceptance", () => {
         return JSON.stringify({ data: { select_local_profile: settings } });
       }
       if (request.operationName === "WorkTrackerProjects") {
-        return JSON.stringify({ data: { projects: [] } });
+        return JSON.stringify({ data: { projects: { nodes: [] } } });
       }
       if (request.operationName === "ReplaceLocalProfile") {
         const index = request.variables.index ?? 0;

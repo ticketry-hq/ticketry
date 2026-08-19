@@ -18,6 +18,10 @@ pub enum PatchValue<T> {
 }
 
 impl<T> PatchValue<T> {
+    pub fn is_unset(&self) -> bool {
+        matches!(self, Self::Unset)
+    }
+
     pub fn map<U>(self, transform: impl FnOnce(T) -> U) -> PatchValue<U> {
         match self {
             Self::Unset => PatchValue::Unset,

@@ -3,11 +3,15 @@
 mod backend_port;
 mod dependency_tools;
 mod dispatch;
+mod launch_paths;
 mod projection;
 mod registry;
+mod run_termination;
+mod runs_lifecycle;
 mod scope;
 mod service;
 mod workflow_tools;
+mod worktree_integrations;
 
 use std::{io, net::SocketAddr, path::PathBuf};
 
@@ -45,6 +49,8 @@ impl McpRuntime {
         if !configuration.address.ip().is_loopback() {
             return Err("WorkTracker MCP must bind to a loopback address.".to_owned());
         }
+        let ingress_credential = configuration.backend_api_key.clone();
+        let ingress_backend_base_url = configuration.backend_base_url.clone();
         let backend = BackendPort::new(
             configuration.backend_base_url,
             configuration.backend_api_key,
@@ -60,20 +66,32 @@ impl McpRuntime {
             .local_addr()
             .map_err(|error| format!("could not inspect WorkTracker MCP listener: {error}"))?;
         let cancellation = CancellationToken::new();
+        let ingress_database = database.clone();
+        // One profile store for every capability on this listener, so a launch
+        // policy decision and the directories that launch runs in are always
+        // read from the same selected profile.
+        let profiles = crate::settings_persistence::ProfileStore::new(
+            configuration
+                .database_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join("profiles.json"),
+        );
+        let launch_paths_state = launch_paths::LaunchPathsIngressState::new(
+            database.clone(),
+            profiles.clone(),
+            ingress_credential.clone(),
+        );
+        let integrations = worktree_integrations::compose(&database, &profiles).await;
         let service_state = WorktrackerMcpService::new(
             database.clone(),
             AttachmentStorage::new(configuration.media_root),
             backend,
             crate::work_management::launch_policy::LaunchPolicyResolver::new(
                 database,
-                crate::settings_persistence::ProfileStore::new(
-                    configuration
-                        .database_path
-                        .parent()
-                        .unwrap_or_else(|| std::path::Path::new("."))
-                        .join("profiles.json"),
-                ),
+                profiles.clone(),
             ),
+            integrations,
         );
         let reconciliation_state = service_state.clone();
         let service: StreamableHttpService<WorktrackerMcpService, LocalSessionManager> =
@@ -86,11 +104,58 @@ impl McpRuntime {
                     .with_sse_keep_alive(None)
                     .with_cancellation_token(cancellation.child_token()),
             );
-        let router = Router::new().nest_service("/mcp", service);
+        // The lifecycle ingress shares this loopback listener rather than
+        // opening a second one. It is not an MCP tool: it is the seam the
+        // Python hook adapter forwards a normalized fact through, so the
+        // durable write happens before its caller is acknowledged.
+        let router = Router::new()
+            .nest_service("/mcp", service)
+            .route(
+                "/runs/lifecycle",
+                axum::routing::post(runs_lifecycle::ingest),
+            )
+            .route("/runs/launch", axum::routing::post(runs_lifecycle::launch))
+            .route(
+                "/runs/terminal-outcome",
+                axum::routing::post(runs_lifecycle::terminal_outcome),
+            )
+            .route(
+                "/runs/prepare-launch",
+                axum::routing::post(runs_lifecycle::prepare_launch),
+            )
+            .route(
+                "/runs/settle-launch",
+                axum::routing::post(runs_lifecycle::settle_launch),
+            )
+            .route(
+                "/runs/attempt",
+                axum::routing::post(runs_lifecycle::materialize_attempt),
+            )
+            .route(
+                "/runs/attempt-outcome",
+                axum::routing::post(runs_lifecycle::record_attempt_outcome),
+            )
+            .with_state(runs_lifecycle::RunsIngressState::new(
+                ingress_database,
+                ingress_backend_base_url,
+                ingress_credential,
+            ))
+            // The launch-path boundary carries its own state, so it is merged
+            // rather than folded into the Runs ingress: nothing it can reach
+            // is a Runs write, and nothing the Runs ingress holds is a path.
+            .merge(
+                Router::new()
+                    .route(
+                        "/workspace/launch-paths",
+                        axum::routing::post(launch_paths::resolve),
+                    )
+                    .with_state(launch_paths_state),
+            );
         let reconciliation_shutdown = cancellation.clone();
         let reconciler = tokio::spawn(async move {
             loop {
                 reconciliation_state.reconcile_launch_policy().await;
+                reconciliation_state.reconcile_worktree_integrations().await;
                 tokio::select! {
                     _ = reconciliation_shutdown.cancelled() => break,
                     _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}

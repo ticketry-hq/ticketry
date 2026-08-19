@@ -13,7 +13,6 @@ describe("browser runtime contract", () => {
         workTrackerApi: "/api/work-tracker",
         agentApi: "/api",
         statusApi: "/api",
-        statusWebSocket: "/ws/status",
         terminalWebSocket: "/ws/terminal",
       },
       values: { workTrackerApiKey: "" },
@@ -33,7 +32,9 @@ describe("browser runtime contract", () => {
     });
 
     expect(runtime.capabilities).toEqual({
-      statusFeed: true,
+      // The status WebSocket was retired and the browser has no in-process
+      // GraphQL transport, so it honestly reports no status feed at all.
+      statusFeed: false,
       websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: false,
@@ -57,7 +58,6 @@ describe("browser runtime contract", () => {
         workTrackerApi: "https://tracker.example.test/work-tracker",
         agentApi: "https://runtime.example.test/api",
         statusApi: "https://runtime.example.test/api",
-        statusWebSocket: "wss://runtime.example.test/ws/status",
         terminalWebSocket: "wss://runtime.example.test/ws/terminal",
       },
       values: { workTrackerApiKey: "browser-token" },

@@ -6,8 +6,8 @@ import {
   type FoundationDomainErrorCode,
 } from "./foundationClient";
 import {
+  CreateMigrationProbeDocument,
   FoundationProbeDocument,
-  SetMigrationProbeDocument,
 } from "./generated/operations";
 import type { GraphQlTransportProxy } from "./generated/taurpc";
 
@@ -45,15 +45,15 @@ describe("GraphQL foundation client", () => {
     expect(JSON.parse(captured).query).toContain("query FoundationProbe");
   });
 
-  it("maps the authored command domain error to a typed TypeScript error", async () => {
+  it("maps a GraphQL domain error to a typed TypeScript error", async () => {
     const operation = executeFoundationOperation(
-      SetMigrationProbeDocument,
-      { value: "reject" },
+      CreateMigrationProbeDocument,
+      { data: { id: 1, value: "reject" } },
       () => proxy(async () => JSON.stringify({
         data: null,
         errors: [{
-          message: "The migration probe value is not accepted.",
-          extensions: { code: "migration_probe_rejected" },
+          message: "The value is not accepted.",
+          extensions: { code: "validation" },
         }],
       })),
     );
@@ -61,6 +61,6 @@ describe("GraphQL foundation client", () => {
     const error = await operation.catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(FoundationGraphQlError);
     const code: FoundationDomainErrorCode = (error as FoundationGraphQlError).code;
-    expect(code).toBe("migration_probe_rejected");
+    expect(code).toBe("validation");
   });
 });

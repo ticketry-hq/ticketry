@@ -7,6 +7,7 @@ import uuid
 import pytest
 
 from apps import worktracker_queries
+from apps.runs.models import AgentRun
 import apps.terminals.launch as launch
 import apps.terminals.launch as session_module
 from apps.terminals.agents.skills.preflight import ResolvedSkills
@@ -339,7 +340,6 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         unexpected_reresolution,
     )
     runtime = patch_terminal_runtime(monkeypatch)
-    monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kwargs: None)
     monkeypatch.setattr(
         session_module,
         "resolve_required_skills",
@@ -348,7 +348,7 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         ),
     )
 
-    await session_module.launch_agent_run(
+    run_id = await session_module.launch_agent_run(
         LaunchIntent(
             agent="claude",
             project_id=str(issue.project_id),
@@ -365,3 +365,5 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
     assert "LEGACY PROFILE PROMPT" not in command
     assert "--model sonnet" in command
     assert "--effort high" in command
+    run = await asyncio.to_thread(AgentRun.objects.get, id=run_id)
+    assert (run.agent, run.model, run.reasoning) == ("claude", "sonnet", "high")

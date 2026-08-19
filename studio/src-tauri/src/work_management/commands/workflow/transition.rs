@@ -7,6 +7,9 @@ use sea_orm::{
 
 use super::super::fractional_rank;
 use super::super::identifiers::database_uuid;
+use super::super::status_facts::{
+    record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemFact, WorkItemIdentity,
+};
 use super::super::CommandError;
 use crate::work_management::entities::{
     issue, issue_type, issue_type_transition, launch_binding, project, state,
@@ -29,6 +32,7 @@ pub struct TransitionWorkItem {
 pub async fn transition(
     database: &DatabaseConnection,
     input: TransitionWorkItem,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let id = database_uuid(&input.id, "id")?;
     let target_id = database_uuid(&input.target_state_id, "target_state_id")?;
@@ -158,15 +162,45 @@ pub async fn transition(
         .as_ref()
         .is_some_and(|state| state.group == "cancelled");
     let new_cancelled = target.group == "cancelled";
+    let now = super::super::timestamp::now();
+    let occurred_at = stamp(now);
+    let mut identity = WorkItemIdentity::of(&current);
+    identity.state_id = Some(target.id.clone());
+    identity.is_archived = new_cancelled;
     let mut active: issue::ActiveModel = current.clone().into();
     active.state_id = Set(Some(target.id.clone()));
     active.rank = Set(rank);
     active.state_revision = Set(revision);
     active.is_archived = Set(new_cancelled);
-    active.updated_at = Set(super::super::timestamp::now());
+    active.updated_at = Set(now.clone());
     active.update(&transaction).await?;
+    let mut cascaded: Vec<String> = Vec::new();
     if !old_cancelled && new_cancelled {
-        archive_descendants(&transaction, &id).await?;
+        cascaded = archive_descendants(&transaction, &id).await?;
+    }
+    record_work_item(
+        facts,
+        &transaction,
+        identity.fact(WorkItemChange::Transitioned, revision, &occurred_at),
+    )
+    .await?;
+    for descendant in &cascaded {
+        record_work_item(
+            facts,
+            &transaction,
+            WorkItemFact {
+                project_id: &current.project_id,
+                work_item_id: descendant,
+                change: WorkItemChange::Archived,
+                revision,
+                occurred_at: &occurred_at,
+                parent_id: None,
+                module_id: None,
+                state_id: None,
+                is_archived: true,
+            },
+        )
+        .await?;
     }
     let destination_auto_start = launch_binding::Entity::find()
         .filter(launch_binding::Column::IssueTypeId.eq(&kind.id))
@@ -197,6 +231,9 @@ pub async fn transition(
     )
     .await?;
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 
@@ -242,10 +279,12 @@ async fn next_project_revision(
     super::super::work_items::next_revision(transaction, project_id).await
 }
 
+/// Archive the whole subtree, returning every item that left its collections.
 async fn archive_descendants(
     transaction: &DatabaseTransaction,
     parent_id: &str,
-) -> Result<(), CommandError> {
+) -> Result<Vec<String>, CommandError> {
+    let mut archived = Vec::new();
     let mut frontier = vec![parent_id.to_owned()];
     while !frontier.is_empty() {
         let children = issue::Entity::find()
@@ -262,9 +301,10 @@ async fn archive_descendants(
                 .filter(issue::Column::Id.is_in(frontier.clone()))
                 .exec(transaction)
                 .await?;
+            archived.extend(frontier.iter().cloned());
         }
     }
-    Ok(())
+    Ok(archived)
 }
 
 fn invalid_transition(

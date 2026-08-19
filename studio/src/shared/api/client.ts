@@ -33,7 +33,6 @@ import type {
 import { runtimeConfiguration } from "../../runtime";
 import { authenticatedHostFetch } from "./authenticatedHostFetch";
 
-export { documentUrl as docUrl } from "./documentUrl";
 
 interface StudioProfile {
   name: string;

@@ -23,7 +23,8 @@ from asgiref.sync import async_to_sync, sync_to_async
 
 from apps import worktracker_queries
 import apps.terminals.launch as launch
-import apps.terminals.prompt_builder as prompt_builder
+from apps.terminals import launch_paths_port
+from apps.terminals.launch_paths_port import LaunchPaths
 import apps.terminals.launch as session_module
 import apps.terminals.agents.registry as registry
 from apps.runs.models import AgentRun
@@ -137,8 +138,6 @@ def _capture_create_session(monkeypatch) -> dict:
         )
 
     monkeypatch.setattr(runtime, "create", capture_request)
-    # Don't start a real design-dir watcher thread in tests.
-    monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
     return created
 
 
@@ -211,19 +210,20 @@ async def test_spawn_recovers_same_run_after_crash_between_ledger_and_runtime(
     _patch_worktracker(monkeypatch)
     _patch_argv(monkeypatch)
     runtime = patch_terminal_runtime(monkeypatch)
-    monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
     deterministic_id = "a" * 32
     runtime.create_error = KeyboardInterrupt("simulated process crash")
 
     with pytest.raises(KeyboardInterrupt, match="simulated process crash"):
         await session_module.launch_agent_run(_intent(agent_run_id=deterministic_id))
 
+    # Durable fact first, effect second: the run survives the crash, and the
+    # terminal mirror does not exist because no runtime was ever created.
     assert await AgentRun.objects.filter(id=deterministic_id).acount() == 1
     assert (
         await AgentTerminalSession.objects.filter(
             agent_run_id=deterministic_id
         ).acount()
-        == 1
+        == 0
     )
     runtime.create_error = None
 
@@ -312,8 +312,14 @@ async def test_spawn_resolves_the_active_profiles_module_link(
 async def test_spawn_publishes_a_starting_lifecycle_delta(
     tmp_config, tmp_path, monkeypatch
 ):
-    """#979: connected /ws/status clients learn about the spawn immediately —
-    a `starting` lifecycle frame rides the status bus at persist time."""
+    """#979: a spawn is visible immediately, and durably.
+
+    The status WebSocket is gone; what reaches connected Studios now is the
+    durable `starting` lifecycle fact the Runs owner records before the
+    terminal exists. Because it is durable, a reload or a reconnect sees the
+    same thing the live subscriber saw — there is no live-only notification
+    left to disagree with the snapshot.
+    """
 
     module_folder = tmp_path / "repo"
     module_folder.mkdir()
@@ -322,34 +328,17 @@ async def test_spawn_publishes_a_starting_lifecycle_delta(
     _capture_create_session(monkeypatch)
     _patch_argv(monkeypatch)
 
-    published: list[tuple[str, dict]] = []
-
-    async def fake_publish(project_id: str, frame: dict) -> None:
-        published.append((project_id, frame))
-
-    monkeypatch.setattr(launch, "publish_status", fake_publish)
-
     run_id = await session_module.launch_agent_run(_intent())
 
-    lifecycle = [f for _, f in published if f.get("type") == "agent_lifecycle"]
-    assert len(lifecycle) == 1
-    frame = lifecycle[0]
-    assert published[0][0] == fixture_uuid(PROJECT_ID)
-    assert frame["run"] == {
-        "agent_run_id": run_id,
-        "project_id": fixture_uuid(PROJECT_ID),
-        "task_id": fixture_issue_id(
-            project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
-        ),
-        "module_id": fixture_issue_id(
-            project_id=PROJECT_ID, module_id=MODULE_ID, task_id=None
-        ),
-        "agent": "claude",
-        "scope": "task",
-        "started_at": frame["at"],
-        "state": "starting",
-        "updated_at": frame["at"],
-    }
+    run = await AgentRun.objects.aget(id=run_id)
+    assert run.lifecycle_state == "starting"
+    assert run.lifecycle_updated_at == run.started_at
+    assert run.status == "running"
+    assert run.agent == "claude"
+    assert run.scope == "task"
+    assert str(run.issue_id) == fixture_issue_id(
+        project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
+    )
 
 
 async def test_spawn_threads_initial_prompt(tmp_config, tmp_path, monkeypatch):
@@ -384,7 +373,18 @@ async def test_spawn_roots_in_worktree_when_present(tmp_config, tmp_path, monkey
     _patch_argv(monkeypatch)
 
     # #587 use-if-exists: the task's live worktree wins over the module folder.
-    monkeypatch.setattr(prompt_builder, "_worktree_root", lambda **kw: str(worktree))
+    # Rust owns that decision now, so the spawn asserts that the launch honours
+    # the working directory the compatibility boundary resolved.
+    monkeypatch.setattr(
+        launch_paths_port,
+        "resolve",
+        lambda **kw: LaunchPaths(
+            working_directory=str(worktree),
+            worktree_used=True,
+            worktree_state="active",
+            worktree_reason="used",
+        ),
+    )
 
     run_id = await session_module.launch_agent_run(_intent())
 
@@ -403,7 +403,11 @@ async def test_spawn_no_worktree_falls_back_to_module_folder(
     created = _capture_create_session(monkeypatch)
     _patch_argv(monkeypatch)
 
-    monkeypatch.setattr(prompt_builder, "_worktree_root", lambda **kw: None)
+    monkeypatch.setattr(
+        launch_paths_port,
+        "resolve",
+        lambda **kw: LaunchPaths(worktree_reason="none"),
+    )
 
     await session_module.launch_agent_run(_intent())
 
@@ -428,7 +432,6 @@ async def test_spawn_tmux_failure_raises_and_no_orphan(
     runtime = patch_terminal_runtime(
         monkeypatch, create_error=TmuxSessionError("no tmux server")
     )
-    monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
 
     with pytest.raises(launch.LaunchUnavailable):
         await session_module.launch_agent_run(_intent())

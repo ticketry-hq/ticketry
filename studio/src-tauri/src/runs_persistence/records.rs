@@ -4,6 +4,8 @@ pub struct AgentRunRecord {
     pub issue_id: String,
     pub ticket_seq: Option<i32>,
     pub agent: String,
+    pub model: Option<String>,
+    pub reasoning: Option<String>,
     pub status: String,
     pub started_at: String,
     pub ended_at: Option<String>,

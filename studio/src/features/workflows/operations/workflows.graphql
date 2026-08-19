@@ -1,97 +1,119 @@
 query WorkTrackerWorkflowCatalog($projectId: String!) {
-  states(project_id: $projectId) {
-    id
-    project
-    name
-    group
-    color
-    sort_order
-    is_protected
-    created_at
-    updated_at
+  states: worktrackerState(filters: { projectId: { eq: $projectId } }) {
+    nodes {
+      id
+      project: projectId
+      name
+      group
+      color
+      sort_order: sortOrder
+      is_protected: isProtected
+      created_at: createdAt
+      updated_at: updatedAt
+    }
   }
-  issue_types(project_id: $projectId) {
-    id
-    project
-    name
-    level
-    color
-    sort_order
-    start_state
-    workflow_revision
-    is_pathfind
-    created_at
-    updated_at
+  issue_types: worktrackerIssuetype(filters: { projectId: { eq: $projectId } }) {
+    nodes {
+      id
+      project: projectId
+      name
+      level
+      color
+      sort_order: sortOrder
+      start_state: startStateId
+      workflow_revision: workflowRevision
+      is_pathfind: isPathfind
+      created_at: createdAt
+      updated_at: updatedAt
+    }
   }
-  launch_bindings(project_id: $projectId) {
-    id
-    issue_type
-    state
-    prompt
-    required_skills
-    model
-    reasoning
-    auto_start
-    subtree_run_enabled
-    created_at
-    updated_at
+  launch_bindings: worktrackerLaunchbinding(
+    having: { issueType: { projectId: { eq: $projectId } } }
+  ) {
+    nodes {
+      id
+      issue_type: issueTypeId
+      state: stateId
+      prompt
+      required_skills: requiredSkills
+      model: modelId
+      reasoning: reasoningId
+      auto_start: autoStart
+      subtree_run_enabled: subtreeRunEnabled
+      created_at: createdAt
+      updated_at: updatedAt
+      issueType { sort_order: sortOrder }
+      state_record: state { sort_order: sortOrder }
+    }
   }
-  providers {
-    id
-    slug
-    activated
-    supports_unattended
+  providers: worktrackerProvider {
+    nodes {
+      id
+      slug
+      activated
+      supports_unattended: supportsUnattended
+    }
   }
-  agent_models {
-    id
-    provider
-    name
-    permitted_reasoning_levels
+  agent_models: worktrackerAgentmodel {
+    nodes {
+      id
+      provider: providerId
+      name
+      provider_record: provider { slug }
+      reasoning_levels: agentModelReasoningLevel {
+        nodes { reasoning_level_id: reasoningLevelId }
+      }
+    }
   }
-  reasoning_levels {
-    id
-    name
+  reasoning_levels: worktrackerReasoninglevel {
+    nodes { id name }
   }
 }
 
 query WorkTrackerIssueTypeTransitions($issueTypeId: String!) {
-  issue_type_transitions(issue_type_id: $issueTypeId) {
-    id
-    issue_type
-    from_state
-    to_state
-    agent_allowed
+  issue_type_transitions: worktrackerIssuetypetransition(
+    filters: { issueTypeId: { eq: $issueTypeId } }
+  ) {
+    nodes {
+      id
+      issue_type: issueTypeId
+      from_state: fromStateId
+      to_state: toStateId
+      agent_allowed: agentAllowed
+      fromState { sort_order: sortOrder }
+      toState { sort_order: sortOrder }
+    }
   }
 }
 
 mutation CreateWorkTrackerState($projectId: String!, $name: String!, $group: String!, $color: String) {
   create_state(project_id: $projectId, name: $name, group: $group, color: $color) {
-    id project name group color sort_order is_protected created_at updated_at
+    id project: projectId name group color sort_order: sortOrder is_protected: isProtected created_at: createdAt updated_at: updatedAt
   }
 }
 
 mutation UpdateWorkTrackerState($id: String!, $name: String, $group: String, $color: String, $sortOrder: Int) {
   update_state(id: $id, name: $name, group: $group, color: $color, sort_order: $sortOrder) {
-    id project name group color sort_order is_protected created_at updated_at
+    id project: projectId name group color sort_order: sortOrder is_protected: isProtected created_at: createdAt updated_at: updatedAt
   }
 }
 
 mutation DeleteWorkTrackerState($id: String!) { delete_state(state_id: $id) }
 mutation ReorderWorkTrackerStates($projectId: String!, $orderedIds: [String!]!) {
   reorder_states(project_id: $projectId, ordered_ids: $orderedIds) {
-    id project name group color sort_order is_protected created_at updated_at
+    id project: projectId name group color sort_order: sortOrder is_protected: isProtected created_at: createdAt updated_at: updatedAt
   }
 }
 
 mutation CreateWorkTrackerIssueType($projectId: String!, $name: String!, $level: String!, $color: String) {
   create_issue_type(project_id: $projectId, name: $name, level: $level, color: $color) {
-    id project name level color sort_order start_state workflow_revision is_pathfind created_at updated_at
+    id project: projectId name level color sort_order: sortOrder start_state: startStateId workflow_revision: workflowRevision is_pathfind: isPathfind created_at: createdAt updated_at: updatedAt
   }
 }
 
 mutation UpdateWorkTrackerIssueType($id: String!, $name: String, $color: String, $sortOrder: Int) {
   update_issue_type(id: $id, name: $name, color: $color, sort_order: $sortOrder) {
-    id project name level color sort_order start_state workflow_revision is_pathfind created_at updated_at
+    id project: projectId name level color sort_order: sortOrder start_state: startStateId workflow_revision: workflowRevision is_pathfind: isPathfind created_at: createdAt updated_at: updatedAt
   }
 }
 
@@ -101,13 +123,13 @@ mutation DeleteWorkTrackerIssueType($id: String!, $reassignTo: String) {
 
 mutation ReorderWorkTrackerIssueTypes($projectId: String!, $orderedIds: [String!]!) {
   reorder_issue_types(project_id: $projectId, ordered_ids: $orderedIds) {
-    id project name level color sort_order start_state workflow_revision is_pathfind created_at updated_at
+    id project: projectId name level color sort_order: sortOrder start_state: startStateId workflow_revision: workflowRevision is_pathfind: isPathfind created_at: createdAt updated_at: updatedAt
   }
 }
 
 mutation SetWorkTrackerStartState($id: String!, $startStateId: String!, $workflowRevision: Int!) {
   update_issue_type(id: $id, start_state_id: $startStateId, workflow_revision: $workflowRevision) {
-    id workflow_revision
+    id workflow_revision: workflowRevision
   }
 }
 

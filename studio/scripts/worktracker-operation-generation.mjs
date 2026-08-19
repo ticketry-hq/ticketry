@@ -2,9 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const FEATURES = [
-  ["projects", "projects.graphql", ["workspace", "projects", "modules"]],
-  ["work-items", "workItems.graphql", ["work_items", "work_items_by_ids", "work_item"]],
-  ["workflows", "workflows.graphql", ["states", "issue_types", "issue_type_transitions", "launch_bindings", "providers", "agent_models", "reasoning_levels"]],
+  ["projects", "projects.graphql", ["worktrackerWorkspace", "worktrackerProject", "worktrackerIssue"]],
+  ["work-items", "workItems.graphql", ["worktrackerIssue", "worktrackerState"]],
+  ["workflows", "workflows.graphql", ["worktrackerState", "worktrackerIssuetype", "worktrackerIssuetypetransition", "worktrackerLaunchbinding", "worktrackerProvider", "worktrackerAgentmodel", "worktrackerReasoninglevel"]],
 ];
 
 export async function generateWorkTrackerOperationManifests({

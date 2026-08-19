@@ -29,7 +29,7 @@
     "boundary:check": "node scripts/check-boundary.mjs",
     "prototype:supabase": "node backend/prototypes/supabase-migration/tui.mjs",
     "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
-    "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio",
+    "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio --",
     "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",
     "desktop:smoke:concurrent": "npm run desktop:smoke:concurrent --workspace @worktracker/studio",
     "desktop:smoke:dev": "npm run desktop:smoke:dev --workspace @worktracker/studio",
@@ -40,6 +40,8 @@
     "logs:clear": "node scripts/dev-logs.mjs clear",
     "serve:dmg": "node scripts/serve-dmg.mjs",
     "test:sdk": "npm run test --workspace @worktracker/typescript-sdk",
+    "test:slice4": "node scripts/slice4-migration-gate.mjs",
+    "test:slice4:packaged": "node scripts/slice4-migration-gate.mjs --packaged",
     "typecheck": "npm run typecheck --workspace @worktracker/typescript-sdk && npm run typecheck --workspace @worktracker/studio",
     "build": "npm run build --workspace @worktracker/typescript-sdk && npm run build --workspace @worktracker/studio"
   },

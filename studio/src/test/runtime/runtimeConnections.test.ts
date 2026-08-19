@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { listProjects } from "../../shared/api/client";
-import { docUrl as agentDocUrl } from "../../features/agents/api/agentApi";
-import {
-  docUrl as studioDocUrl,
-} from "../../shared/api/client";
+import { documentUrl as featureDocUrl } from "../../features/documents";
 
 const fetchMock = vi.fn();
 
@@ -34,10 +31,7 @@ describe("runtime-routed connections", () => {
   it("routes document iframe URLs through the agent API endpoint", () => {
     vi.stubEnv("VITE_AGENT_API_BASE", "https://runtime.example.test/api");
 
-    expect(agentDocUrl("doc 1", "design/HLD.html")).toBe(
-      "https://runtime.example.test/api/docs/doc%201/design/HLD.html",
-    );
-    expect(studioDocUrl("doc 1", "design/HLD.html")).toBe(
+    expect(featureDocUrl("doc 1", "design/HLD.html")).toBe(
       "https://runtime.example.test/api/docs/doc%201/design/HLD.html",
     );
   });

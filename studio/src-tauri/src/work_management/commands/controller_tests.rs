@@ -153,13 +153,13 @@ fn create(name: &str) -> work_items::CreateWorkItem {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn blocker_change_serializes_additions_and_makes_repeat_add_a_noop() {
     let (_directory, database) = fixture().await;
-    let task = work_items::create(&database, create("Blocked"))
+    let task = work_items::create(&database, create("Blocked"), None)
         .await
         .unwrap();
-    let first = work_items::create(&database, create("First"))
+    let first = work_items::create(&database, create("First"), None)
         .await
         .unwrap();
-    let second = work_items::create(&database, create("Second"))
+    let second = work_items::create(&database, create("Second"), None)
         .await
         .unwrap();
     let additions = [first.clone(), second.clone()].map(|blocker_id| {
@@ -216,7 +216,7 @@ async fn append_description_serializes_read_modify_write() {
     let (_directory, database) = fixture().await;
     let mut input = create("Append target");
     input.description = Some("Original".to_owned());
-    let task = work_items::create(&database, input).await.unwrap();
+    let task = work_items::create(&database, input, None).await.unwrap();
     let appends = ["First", "Second"].map(|content| {
         let database = database.clone();
         let id = task.clone();
@@ -249,7 +249,7 @@ async fn append_description_serializes_read_modify_write() {
 #[tokio::test]
 async fn review_finding_policy_and_evidence_are_owned_by_creation() {
     let (_directory, database) = fixture().await;
-    let parent = work_items::create(&database, create("Reviewed story"))
+    let parent = work_items::create(&database, create("Reviewed story"), None)
         .await
         .unwrap();
     database

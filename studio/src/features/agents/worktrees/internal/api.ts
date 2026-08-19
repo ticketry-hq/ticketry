@@ -27,6 +27,8 @@ export interface WorktreeStatus {
   ahead?: number | null;
   behind?: number | null;
   conflict?: boolean | null;
+  /** Whether the recorded checkout is still on disk and answering git. */
+  checkout_present?: boolean | null;
   ephemeral?: boolean;
   reason?: string | null;
 }
@@ -34,6 +36,12 @@ export interface WorktreeStatus {
 export interface DiscardResult {
   removed: boolean;
   reason: string;
+  /**
+   * The authoritative status after the discard. The Rust runtime answers with
+   * it so the confirming window does not have to refetch; the legacy host
+   * route does not, and the caller refetches instead.
+   */
+  status?: WorktreeStatus;
 }
 
 export interface WorktreeContext {

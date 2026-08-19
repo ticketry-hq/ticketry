@@ -27,7 +27,8 @@
       "capabilities": ["studio-main"],
       "csp": {
         "default-src": "'self' customprotocol: asset:",
-        "connect-src": "ipc: http://ipc.localhost http://127.0.0.1:* https://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*",
+        "connect-src": "ipc: http://ipc.localhost ticketrydoc: http://ticketrydoc.localhost http://127.0.0.1:* https://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*",
+        "frame-src": "'self' ticketrydoc: http://ticketrydoc.localhost",
         "font-src": "'self' data:",
         "img-src": "'self' asset: http://asset.localhost data: blob:",
         "style-src": "'self' 'unsafe-inline'",

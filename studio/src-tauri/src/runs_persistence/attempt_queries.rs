@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
@@ -19,46 +19,37 @@ pub async fn latest_attempts(
     let task_id = task_id.map(database_uuid).transpose()?;
     let issue_ids =
         work_item_scope::ids_for_project(database, &project_id, task_id.as_deref()).await?;
-    let query = automation_attempt_entity::Entity::find()
-        .filter(automation_attempt_entity::Column::IssueId.is_in(issue_ids));
-    let mut latest = HashMap::<String, automation_attempt_entity::Model>::new();
-    for attempt in query.all(database).await? {
-        let lineage = attempt
-            .root_attempt_id
-            .clone()
-            .unwrap_or_else(|| attempt.id.clone());
-        let candidate_order = (
-            attempt.updated_at.as_str(),
-            attempt.created_at.as_str(),
-            attempt.id.as_str(),
-        );
-        let replace = latest.get(&lineage).is_none_or(|current| {
-            candidate_order
-                > (
-                    current.updated_at.as_str(),
-                    current.created_at.as_str(),
-                    current.id.as_str(),
-                )
-        });
-        if replace {
-            latest.insert(lineage, attempt);
-        }
-    }
-    let mut rows = latest
-        .into_values()
-        .filter(|attempt| attempt.status != "succeeded" && attempt.dismissed_at.is_none())
-        .collect::<Vec<_>>();
-    rows.sort_by(|left, right| {
-        (&left.updated_at, &left.created_at, &left.id).cmp(&(
-            &right.updated_at,
-            &right.created_at,
-            &right.id,
-        ))
-    });
+    let mut rows = automation_attempt_entity::Entity::find()
+        .filter(automation_attempt_entity::Column::IssueId.is_in(issue_ids))
+        .all(database)
+        .await?;
+    // Each lineage is represented by its newest attempt, and that attempt
+    // alone decides whether the lineage is still visible. Filtering succeeded
+    // or dismissed rows out of the candidate set first would resurface an
+    // older unresolved outcome that its own lineage has already settled.
+    rows.sort_by(|left, right| recency(right).cmp(&recency(left)));
+    let mut resolved = HashSet::<String>::new();
     rows.into_iter()
+        .filter(|attempt| resolved.insert(lineage(attempt)))
+        .filter(|attempt| attempt.status != "succeeded" && attempt.dismissed_at.is_none())
         .map(automation_attempt)
         .map(project)
         .collect()
+}
+
+fn lineage(attempt: &automation_attempt_entity::Model) -> String {
+    attempt
+        .root_attempt_id
+        .clone()
+        .unwrap_or_else(|| attempt.id.clone())
+}
+
+fn recency(attempt: &automation_attempt_entity::Model) -> (&str, &str, &str) {
+    (
+        attempt.updated_at.as_str(),
+        attempt.created_at.as_str(),
+        attempt.id.as_str(),
+    )
 }
 
 pub(crate) fn project(
@@ -77,10 +68,13 @@ pub(crate) fn project(
         root_attempt_id: public_uuid(root),
         retry_of_attempt_id: attempt.retry_of_id.as_deref().map(public_uuid),
         work_item_id: public_uuid(&attempt.issue_id),
+        // Retryability is a decision about a failure. The stored column keeps
+        // the typed decision for a later restart, but only a failed attempt
+        // publishes it — a pending or succeeded attempt is never retryable.
+        retryable: attempt.status == "failed" && attempt.retryable,
         status: attempt.status,
         error: attempt.error,
         failure,
-        retryable: attempt.retryable,
         agent_run_id: attempt.agent_run_id,
         updated_at: public_timestamp(&attempt.updated_at),
     })

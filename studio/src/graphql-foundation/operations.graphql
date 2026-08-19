@@ -7,6 +7,9 @@ query FoundationProbe {
   }
 }
 
-mutation SetMigrationProbe($value: String!) {
-  setMigrationProbe(value: $value)
+mutation CreateMigrationProbe($data: MigrationProbesInsertInput!) {
+  migrationProbesCreateOne(data: $data) {
+    id
+    value
+  }
 }

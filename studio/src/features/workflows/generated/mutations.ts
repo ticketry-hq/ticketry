@@ -3,8 +3,8 @@
 import type { TypedDocumentNode } from "../../../graphql-foundation/typedDocument";
 import type { WorkTrackerIssueType, WorkTrackerState } from "./operations";
 
-const stateFields = "id project name group color sort_order is_protected created_at updated_at";
-const typeFields = "id project name level color sort_order start_state workflow_revision is_pathfind created_at updated_at";
+const stateFields = "id project: projectId name group color sort_order: sortOrder is_protected: isProtected created_at: createdAt updated_at: updatedAt";
+const typeFields = "id project: projectId name level color sort_order: sortOrder start_state: startStateId workflow_revision: workflowRevision is_pathfind: isPathfind created_at: createdAt updated_at: updatedAt";
 const document = <TResult, TVariables>(operationName: string, source: string): TypedDocumentNode<TResult, TVariables> => ({ kind: "Document", operationName, source });
 
 export interface StateMutationVariables { id?: string; projectId?: string; name?: string; group?: string; color?: string | null; sortOrder?: number; }
@@ -21,7 +21,7 @@ export const ReorderWorkTrackerIssueTypesDocument = document<{ reorder_issue_typ
 
 export interface RevisionedStateVariables { issueTypeId: string; stateId: string; workflowRevision: number; }
 export interface RevisionedTransitionVariables { issueTypeId: string; fromStateId: string; toStateId: string; workflowRevision: number; agentAllowed?: boolean; }
-export const SetWorkTrackerStartStateDocument = document<{ update_issue_type: { id: string; workflow_revision: number } }, IssueTypeMutationVariables>("SetWorkTrackerStartState", "mutation SetWorkTrackerStartState($id: String!, $startStateId: String!, $workflowRevision: Int!) { update_issue_type(id: $id, start_state_id: $startStateId, workflow_revision: $workflowRevision) { id workflow_revision } }");
+export const SetWorkTrackerStartStateDocument = document<{ update_issue_type: { id: string; workflow_revision: number } }, IssueTypeMutationVariables>("SetWorkTrackerStartState", "mutation SetWorkTrackerStartState($id: String!, $startStateId: String!, $workflowRevision: Int!) { update_issue_type(id: $id, start_state_id: $startStateId, workflow_revision: $workflowRevision) { id workflow_revision: workflowRevision } }");
 export const CreateWorkTrackerTransitionDocument = document<{ create_issue_type_transition: { id: number } }, RevisionedTransitionVariables>("CreateWorkTrackerTransition", "mutation CreateWorkTrackerTransition($issueTypeId: String!, $fromStateId: String!, $toStateId: String!, $agentAllowed: Boolean!, $workflowRevision: Int!) { create_issue_type_transition(issue_type_id: $issueTypeId, from_state_id: $fromStateId, to_state_id: $toStateId, agent_allowed: $agentAllowed, workflow_revision: $workflowRevision) { id } }");
 export const DeleteWorkTrackerTransitionDocument = document<{ delete_issue_type_transition: boolean }, RevisionedTransitionVariables>("DeleteWorkTrackerTransition", "mutation DeleteWorkTrackerTransition($issueTypeId: String!, $fromStateId: String!, $toStateId: String!, $workflowRevision: Int!) { delete_issue_type_transition(issue_type_id: $issueTypeId, from_state_id: $fromStateId, to_state_id: $toStateId, workflow_revision: $workflowRevision) }");
 export const RemoveWorkTrackerWorkflowStateDocument = document<{ remove_state_from_issue_type_workflow: boolean }, RevisionedStateVariables>("RemoveWorkTrackerWorkflowState", "mutation RemoveWorkTrackerWorkflowState($issueTypeId: String!, $stateId: String!, $workflowRevision: Int!) { remove_state_from_issue_type_workflow(issue_type_id: $issueTypeId, state_id: $stateId, workflow_revision: $workflowRevision) }");

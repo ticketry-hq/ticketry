@@ -4,8 +4,10 @@ import type { ProxyOptions } from "vite";
 // /api forwards same-origin to the worktracker backend, so the x-api-key
 // client never triggers CORS and the backend needs no CORS header.
 //
-// Studio opens the terminal stream on `/ws/terminal` and the project status
-// feed on `/ws/status`; both are forwarded to this instance's selected backend.
+// Studio opens the terminal stream on `/ws/terminal`, which is forwarded to
+// this instance's selected backend. The project status WebSocket was retired
+// at the Slice 3 handoff: status is a GraphQL subscription over the desktop's
+// in-process transport, which no proxy is involved in.
 export function developmentProxy(
   backendOrigin = process.env.MUXED_VITE_BACKEND_ORIGIN ?? "http://127.0.0.1:8787",
 ): Record<string, ProxyOptions> {

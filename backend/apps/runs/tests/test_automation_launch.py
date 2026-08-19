@@ -10,6 +10,7 @@ from django.db import transaction
 from django.test import Client, override_settings
 
 from apps.execution import signals as execution_signals
+from apps.runs import rust_port
 from apps.runs.models import AutomationAttempt
 from apps.settings_store.models import AppSetting
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
@@ -117,10 +118,16 @@ def test_auto_start_state_launches_once_after_the_destination_commits(monkeypatc
         return "agent-run-1"
 
     monkeypatch.setattr("apps.execution.driver.spawn_run", spawn)
-    monkeypatch.setattr(
-        "apps.execution.signals.publish_automation_attempt_sync",
-        lambda attempt: published.append(attempt),
-    )
+    # The attempt outcome is a durable Rust command now; observing it there
+    # is what proves the outcome reached its authoritative owner.
+    record_outcome = rust_port.record_attempt_outcome
+
+    def observed_outcome(attempt_id, **outcome):
+        result = record_outcome(attempt_id, **outcome)
+        published.append(result)
+        return result
+
+    monkeypatch.setattr(rust_port, "record_attempt_outcome", observed_outcome)
 
     issue.state = after
     issue.save(update_fields=["state", "updated_at"])
@@ -130,7 +137,7 @@ def test_auto_start_state_launches_once_after_the_destination_commits(monkeypatc
     assert issue.state_id == after.id
     assert attempt.status == AutomationAttempt.Status.SUCCEEDED
     assert attempt.agent_run_id == "agent-run-1"
-    assert published == [attempt]
+    assert [entry["attempt_id"] for entry in published] == [str(attempt.id)]
     assert len(launches) == 1
     launch = launches[0]
     assert launch["agent"] == "codex"
@@ -352,10 +359,16 @@ def test_startup_failure_marks_attempt_failed_without_reverting_state(monkeypatc
         raise RuntimeError("tmux unavailable")
 
     monkeypatch.setattr("apps.execution.driver.spawn_run", fail_spawn)
-    monkeypatch.setattr(
-        "apps.execution.signals.publish_automation_attempt_sync",
-        lambda attempt: published.append(attempt),
-    )
+    # The attempt outcome is a durable Rust command now; observing it there
+    # is what proves the outcome reached its authoritative owner.
+    record_outcome = rust_port.record_attempt_outcome
+
+    def observed_outcome(attempt_id, **outcome):
+        result = record_outcome(attempt_id, **outcome)
+        published.append(result)
+        return result
+
+    monkeypatch.setattr(rust_port, "record_attempt_outcome", observed_outcome)
     issue.state = after
     issue.save(update_fields=["state", "updated_at"])
 
@@ -365,7 +378,7 @@ def test_startup_failure_marks_attempt_failed_without_reverting_state(monkeypatc
     assert attempt.status == AutomationAttempt.Status.FAILED
     assert attempt.error == "tmux unavailable"
     assert attempt.agent_run_id is None
-    assert published == [attempt]
+    assert [entry["attempt_id"] for entry in published] == [str(attempt.id)]
 
 
 def test_destination_binding_selects_the_automated_launch_configuration(monkeypatch):
@@ -473,67 +486,22 @@ def test_delayed_event_uses_frozen_historical_auto_start(monkeypatch):
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_failed_attempt_retry_is_user_initiated_and_idempotent(monkeypatch):
-    issue, after = _automation_policy()
-    launches = []
+def test_django_retry_route_is_retired_in_favour_of_the_rust_command():
+    """Retry has one authority, and it is not Django.
 
-    async def fail_spawn(**kwargs):
-        raise RuntimeError("tmux unavailable")
+    Automation Attempt retry is an authored Rust GraphQL command that Studio
+    calls directly. Its own idempotency — one retry child per source attempt,
+    repeated requests returning that same child — is proved against the table's
+    owner in the Rust suite. What must remain true here is that the legacy
+    Django route cannot become a second writer for the same lineage.
+    """
 
-    monkeypatch.setattr("apps.execution.driver.spawn_run", fail_spawn)
-    monkeypatch.setattr(
-        "apps.execution.signals.publish_automation_attempt_sync", lambda attempt: None
-    )
-    issue.state = after
-    issue.save(update_fields=["state", "updated_at"])
-    failed = AutomationAttempt.objects.get(issue=issue)
-
-    async def spawn(**kwargs):
-        launches.append(kwargs)
-        return "agent-run-retry"
-
-    monkeypatch.setattr("apps.execution.driver.spawn_run", spawn)
-    first = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
-    second = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
-    replay_errors = []
-    monkeypatch.setattr(
-        "apps.execution.signals.logger.exception",
-        lambda *args, **kwargs: replay_errors.append(args),
-    )
-    execution_signals.launch_workflow_automation(
-        issue_id=str(issue.id),
-        project_id=str(issue.project_id),
-        transition_id=str(failed.transition_id),
-        from_state_id=str(failed.from_state_id),
-        to_state_id=str(failed.to_state_id),
-        transition_snapshot={
-            "from": str(failed.from_state_id),
-            "to": str(failed.to_state_id),
-            "auto_start": True,
-            "workflow_revision": failed.workflow_revision,
-        },
+    response = runs_client.post(
+        f"/api/automation-attempts/{uuid.uuid4()}/retry"
     )
 
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert first.json() == second.json()
-    assert first.json() == {
-        "attempt_id": first.json()["attempt_id"],
-        "root_attempt_id": str(failed.id),
-        "retry_of_attempt_id": str(failed.id),
-        "work_item_id": str(issue.id),
-        "status": "succeeded",
-        "error": None,
-        "failure": None,
-        "retryable": False,
-        "agent_run_id": "agent-run-retry",
-        "updated_at": first.json()["updated_at"],
-    }
-    assert len(launches) == 1
-    assert replay_errors == []
-    assert AutomationAttempt.objects.filter(issue=issue).count() == 2
-    issue.refresh_from_db()
-    assert issue.state_id == after.id
+    assert response.status_code == 410
+    assert response.json()["detail"] == "django_slice3_write_disabled"
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -549,9 +517,6 @@ def test_required_skill_failure_is_actionable_and_retryable(monkeypatch):
         )
 
     monkeypatch.setattr("apps.execution.driver.spawn_run", rejected_spawn)
-    monkeypatch.setattr(
-        "apps.execution.signals.publish_automation_attempt_sync", lambda attempt: None
-    )
     issue.state = after
     issue.save(update_fields=["state", "updated_at"])
 
@@ -571,8 +536,6 @@ def test_required_skill_failure_is_actionable_and_retryable(monkeypatch):
         "retryable": True,
     }
 
-    response = runs_client.post(f"/api/automation-attempts/{failed.id}/retry")
-    assert response.status_code == 200
-    assert response.json()["status"] == "failed"
-    assert response.json()["retryable"] is True
-    assert AutomationAttempt.objects.filter(issue=issue).count() == 2
+    # The failure stays visible and retryable. Performing the retry is the
+    # Rust command's job, so this test stops at the durable, actionable state.
+    assert AutomationAttempt.objects.filter(issue=issue).count() == 1

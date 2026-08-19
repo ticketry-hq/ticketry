@@ -37,10 +37,8 @@ export interface ResumableTerminalSession {
 export const TEMP_TASK_ID = "__scratch__";
 export const SCRATCH_RUN_TASK_ID = "00000000-0000-0000-0000-000000000000";
 
-export interface DesignDoc {
-  id: string;
-  rel_path: string;
-  label: string;
-}
+/** Design documents are owned by the Documents feature; re-exported here so
+ * existing agent-workspace consumers keep one import site. */
+export type { DesignDoc } from "../documents/types";
 
 export type TabKind = "details" | "doc" | "terminal";

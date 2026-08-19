@@ -212,7 +212,6 @@ async def _launch_and_capture(monkeypatch, slug, argv):
     the registry-routed injection ``_launch`` runs.
     """
     runtime = patch_terminal_runtime(monkeypatch)
-    monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kw: None)
 
     await launch._launch(
         adapter=get_adapter(slug),
@@ -240,7 +239,6 @@ async def test_launch_injects_packaged_runtime_urls_from_the_sidecar_environment
             return LaunchAugmentation(tuple(argv))
 
     patch_terminal_runtime(monkeypatch)
-    monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kwargs: None)
     monkeypatch.setenv(
         "MUXED_LIFECYCLE_URL",
         "http://127.0.0.1:54321/api/lifecycle/events",

@@ -3,6 +3,7 @@ import type {
   ServiceHealthListener,
   StudioRuntime,
 } from "./contract";
+import { encodeDocumentPath } from "./documentAssetUrl";
 
 export interface BrowserRuntimeEnvironment {
   readonly VITE_WT_API_BASE?: string;
@@ -16,7 +17,6 @@ export interface BrowserRuntimeOptions {
 
 const DEFAULT_WORKTRACKER_API = "/api/work-tracker";
 const DEFAULT_AGENT_API = "/api";
-const DEFAULT_STATUS_WEBSOCKET = "/ws/status";
 const DEFAULT_TERMINAL_WEBSOCKET = "/ws/terminal";
 
 function invalid(field: string, expectation: string): never {
@@ -63,7 +63,6 @@ export function createBrowserRuntime({
       workTrackerApi,
       agentApi,
       statusApi: agentApi,
-      statusWebSocket: websocketEndpoint(agentApi, DEFAULT_STATUS_WEBSOCKET),
       terminalWebSocket: websocketEndpoint(agentApi, DEFAULT_TERMINAL_WEBSOCKET),
     }),
     values: Object.freeze({
@@ -83,7 +82,9 @@ export function createBrowserRuntime({
   return Object.freeze({
     platform: "browser" as const,
     capabilities: Object.freeze({
-      statusFeed: true,
+      // Browser development has no in-process GraphQL transport, and the
+      // status WebSocket it used to fall back to no longer exists.
+      statusFeed: false,
       websocketTerminal: true,
       nativeLifecycle: false,
       serviceSupervision: false,
@@ -96,6 +97,13 @@ export function createBrowserRuntime({
     writeWorkTracker: readWorkTracker,
     readSettings: readWorkTracker,
     writeSettings: readWorkTracker,
+    statusStream: () => null,
+    // Browser development has no desktop protocol, so document bytes keep
+    // coming from the legacy host route it already talks to.
+    documentUrl: (documentId: string, relPath: string) =>
+      `${agentApi.replace(/\/$/, "")}/docs/${encodeURIComponent(documentId)}/${
+        encodeDocumentPath(relPath)
+      }`,
     pickFolder: async () => null,
     retryServices: async () => {
       throw new Error("Service recovery is available only in desktop Studio");

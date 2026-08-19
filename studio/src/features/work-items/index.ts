@@ -84,7 +84,6 @@ export type {
   WorkTrackerModuleTreeQuery,
   WorkTrackerModuleTreeState,
   WorkTrackerModuleTreeVariables,
-  WorkTrackerWorkItem,
   WorkTrackerWorkItemQuery,
   WorkTrackerWorkItemVariables,
   WorkTrackerWorkItemsByIdsQuery,

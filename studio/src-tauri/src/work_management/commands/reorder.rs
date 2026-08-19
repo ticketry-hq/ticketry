@@ -7,6 +7,9 @@ use sea_orm::{
 
 use super::fractional_rank;
 use super::identifiers::database_uuid;
+use super::status_facts::{
+    record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemIdentity,
+};
 use super::CommandError;
 use crate::work_management::entities::{issue, project};
 
@@ -21,6 +24,7 @@ pub struct ReorderWorkItem {
 pub async fn reorder(
     database: &DatabaseConnection,
     input: ReorderWorkItem,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let id = database_uuid(&input.id, "id")?;
     let initial = input
@@ -90,13 +94,25 @@ pub async fn reorder(
 
     if rank != current.rank {
         let revision = next_revision(&transaction, &current.project_id).await?;
+        let identity = WorkItemIdentity::of(&current);
+        let now = super::timestamp::now();
+        let occurred_at = stamp(now);
         let mut active: issue::ActiveModel = current.into();
         active.rank = Set(rank);
         active.state_revision = Set(revision);
-        active.updated_at = Set(super::timestamp::now());
+        active.updated_at = Set(now.clone());
         active.update(&transaction).await?;
+        record_work_item(
+            facts,
+            &transaction,
+            identity.fact(WorkItemChange::Reordered, revision, &occurred_at),
+        )
+        .await?;
     }
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 

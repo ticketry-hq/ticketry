@@ -32,6 +32,20 @@ SeaORM migration
   -> one typed TauRPC GraphQL endpoint in the Tauri process
 ```
 
+During adoption, Ticketry substitutes the current Django migration chain for
+the first step while Django remains the schema owner. After a table cohort
+moves to sole Rust ownership, its next schema change must be a SeaORM migration.
+The rest of the chain remains unchanged in both periods.
+
+SQLite introspection is not semantically complete for Ticketry's Django schema.
+The current generator sees Django-declared `bool`, `datetime`, and JSON storage
+as custom SQLite types and may emit ignored `String` fields; it also defaults
+integers to `i64`. Generation therefore includes one deterministic,
+schema-driven normalization phase before artifacts are accepted. That phase
+may correct Rust types and stable relationship names, but it may not invent
+columns, patch business behavior into entities, or become a second handwritten
+model. Its output is byte-compared in the drift check.
+
 At runtime it opens `application.sqlite3` under Tauri's application-data
 directory, enables foreign keys, limits the SQLite pool to four connections,
 runs forward migrations, builds the schema, and installs the TauRPC endpoint
@@ -104,10 +118,11 @@ application behavior.
 
 ## Deliberate Ticketry deviations
 
-### Authored command services, generated query shape
+### Generated model surface, restricted model-shaped writes
 
-Seaography-generated queries are valuable for catalogue reads, filtering, and
-stable schema generation. Unrestricted generated mutations are unsafe for
+SeaORM-generated entities and Seaography-generated queries, filtering,
+ordering, pagination, inputs, outputs, and ordinary CRUD are the default—not an
+optional convenience. Unrestricted generated mutations are unsafe for
 `Issue`, `State`, `IssueTypeTransition`, `LaunchBinding`, `AgentRun`,
 `GraphRun`, terminal sessions, and worktrees. Those records have invariants and
 effects currently implemented in services, workflows, signals, and
@@ -116,10 +131,18 @@ reconciliation
 [`../backend/apps/execution/`](../backend/apps/execution/),
 [`../backend/apps/terminals/`](../backend/apps/terminals/)).
 
-For those aggregates, expose authored GraphQL commands that call one application
-service and return the updated entity/revision plus typed domain errors. Hide or
-omit generated mutators. Record the exception in the generated-schema policy so
-drift verification knows it is intentional.
+For those aggregates, keep the unrestricted generated mutator private and
+expose one identity-bound, field-allowlisted create/update/delete operation for
+the model. That operation calls the narrow validation, locking, revision,
+derived-field, cascade, or event-planning behavior it needs and returns the
+authoritative entity plus typed errors. Do not replace model CRUD with
+per-field or per-relationship RPCs. Record the smaller set of genuinely
+non-CRUD operations in the operation registry with their reason.
+
+DRF-shaped output is a migration compatibility concern. Prefer caller-specific
+GraphQL operations over the generated schema. A custom projection is justified
+only when the generated surface cannot reproduce required consumer-visible
+semantics; it stays visibly temporary and is deleted when its caller migrates.
 
 ### One application core, several adapters
 
@@ -167,7 +190,7 @@ If browser test/dev workflows remain necessary, build a thin development-only
 GraphQL adapter over the same schema/application state. Do not keep the Django
 REST server or make an HTTP server a production requirement.
 
-## Proposed Rust source shape
+## Rust source shape
 
 Do not add backend logic to the existing 1,648-line `src-tauri/src/lib.rs` or
 create another omnibus application crate. A practical starting structure is:
@@ -175,29 +198,30 @@ create another omnibus application crate. A practical starting structure is:
 ```text
 studio/src-tauri/
   src/
-    app/                       # Tauri composition and managed state
-    db/                        # pool, schema classifier, migrations, snapshots
-    interfaces/
-      graphql/                 # schema and resolver modules
-      mcp/                     # external MCP projection/listener
-      tauri/                   # native-only commands
-    features/
+    entities/                  # generated cohorts grouped by migration owner
+      foundation/
       work_management/
-      launch_policy/
-      events/
+      settings/
       runs/
-      documents/
-      worktrees/
-      terminals/
-      execution/
+    query_root.rs              # schema composition and registration
+    query_root/
+      queries.rs               # custom queries that survive generated CRUD
+      mutations/               # restricted CRUD and genuine operations
+      types.rs                 # custom types only where generation is insufficient
+    work_management/           # invariant-bearing application behavior
+    settings_persistence/
+    runs_persistence/
+    graphql_foundation/        # database/transport/readiness composition
     native_terminal/           # current implementation retained
     tmux_viewer.rs              # retained, split when responsibilities demand
 ```
 
-Each feature owns its domain rules, application commands/queries, repository
-contract, persistence implementation, GraphQL projection, and focused tests.
-Cross-feature behavior travels through narrow typed interfaces or durable facts,
-not imports into another feature's database implementation. A small shared
+The top-level `entities` and `query_root` boundaries follow Seaography's
+recommended project shape. Feature modules own domain rules, effects, and
+focused tests; they do not own handwritten copies of generated entities or
+ordinary CRUD resolvers. Cross-feature behavior travels through narrow typed
+interfaces or durable facts, not imports into another feature's database
+implementation. A small shared
 transport crate copied from the template is reasonable; a crate per trivial
 layer is not required. The root code-structure rules favor small,
 single-purpose files and capability ownership
@@ -226,7 +250,8 @@ following in the actual shell:
 1. existing native terminal/Tauri commands coexist with TauRPC GraphQL;
 2. initialization failure is structured and does not leave partial state;
 3. relations and foreign-key constraint errors are generated and mapped;
-4. a generated mutator can be hidden and replaced by an authored command;
+4. a generated mutator can be kept private and replaced by a restricted
+   model-shaped mutation;
 5. typed domain errors survive Rust -> GraphQL -> TypeScript;
 6. a durable cursor subscription reconnects and recovers from lag;
 7. Tauri restart reopens the existing app-data location safely; and

@@ -1,8 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { dialog } from "../../../../../state/clientStore";
-import { docUrl } from "../../../../../features/agents/api/agentApi";
-import type { DesignDoc } from "../../../../../features/agents/types";
-import { ApiError, saveDocument } from "../../../../../shared/api/client";
+import {
+  documentUrl,
+  newSaveOperationId,
+  saveDocument,
+  type DesignDoc,
+} from "../../../../../features/documents";
 import { renderMarkdown } from "./markdown";
 import {
   loadDocumentContent,
@@ -51,15 +54,6 @@ export function isFullHtmlDocument(source: string): boolean {
   return /^<html(?:\s[^>]*)?>[\s\S]*<\/html>\s*$/i.test(withoutPreamble);
 }
 
-function staleDigest(error: unknown): string | null {
-  if (!(error instanceof ApiError) || error.status !== 409) return null;
-  if (!error.body || typeof error.body !== "object") return null;
-  const detail = (error.body as { detail?: unknown }).detail;
-  if (!detail || typeof detail !== "object") return null;
-  const digest = (detail as { digest?: unknown }).digest;
-  return typeof digest === "string" && digest ? digest : null;
-}
-
 function HtmlDocViewer({
   doc,
   focusSignal,
@@ -77,7 +71,7 @@ function HtmlDocViewer({
     <iframe
       ref={frameRef}
       title={doc.label}
-      src={docUrl(doc.id, doc.rel_path)}
+      src={documentUrl(doc.id, doc.rel_path)}
       sandbox="allow-scripts"
       className="h-full w-full border-0 bg-white"
       data-testid="workspace-doc-frame"
@@ -156,6 +150,12 @@ function MarkdownDocViewer({
         setError(true);
       });
 
+    // `doc` carries the registry's content digest, so a refetch that finds the
+    // same bytes hands back the identical row and this effect does not run,
+    // while an external rewrite hands back a new one and it does. That is what
+    // makes a live document change reach an open tab: a clean viewer reloads,
+    // and the dirty guard above keeps a draft and raises the external-change
+    // flow instead of overwriting what someone is typing.
   }, [doc, editable]);
 
   useEffect(() => {
@@ -216,23 +216,28 @@ function MarkdownDocViewer({
     setSaving(true);
     setSaveError(false);
     try {
-      const saved = await saveDocument(doc.id, {
+      // One identity per save intent: a runtime that already made these bytes
+      // durable replays that answer instead of writing them a second time.
+      const saved = await saveDocument({
+        documentId: doc.id,
+        expectedDigest,
         content,
-        digest: expectedDigest,
+        operationId: newSaveOperationId(),
       });
+      if (saved.stale) {
+        // The draft stays exactly as it is; the digest is what a deliberate
+        // overwrite would be applied against.
+        setConflictDigest(saved.digest);
+        return;
+      }
       setDigest(saved.digest);
       setMarkdown(content);
       setHtml(renderMarkdown(content));
       setConflictDigest(null);
       setExternalChange(false);
       setExternalMarkdown(null);
-    } catch (reason) {
-      const currentDigest = staleDigest(reason);
-      if (currentDigest) {
-        setConflictDigest(currentDigest);
-      } else {
-        setSaveError(true);
-      }
+    } catch {
+      setSaveError(true);
     } finally {
       savingRef.current = false;
       setSaving(false);

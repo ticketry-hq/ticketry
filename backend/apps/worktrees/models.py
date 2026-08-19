@@ -1,5 +1,7 @@
 from django.db import models
 
+from apps.workspace_write_ownership import assert_django_workspace_write_allowed
+
 
 class Worktree(models.Model):
     """Persistent index mapping one top-level task to its git worktree.
@@ -9,6 +11,10 @@ class Worktree(models.Model):
     and ``ahead``/``behind`` are never stored here — they are computed live
     from git. The two persisted lifecycle states are ``active`` and
     ``conflict``; terminal transitions (integrated / discarded) delete the row.
+
+    Rust adopted this table at the Slice 4 handoff and is its only production
+    writer. The model remains readable for unmigrated Python capabilities; every
+    write path refuses.
     """
 
     id = models.CharField(primary_key=True)
@@ -29,3 +35,11 @@ class Worktree(models.Model):
 
     class Meta:
         db_table = "worktrees"
+
+    def save(self, *args, **kwargs):
+        assert_django_workspace_write_allowed("worktrees")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        assert_django_workspace_write_allowed("worktrees")
+        return super().delete(*args, **kwargs)

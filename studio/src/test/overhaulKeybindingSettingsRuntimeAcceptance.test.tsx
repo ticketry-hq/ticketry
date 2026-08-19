@@ -15,7 +15,6 @@ const startup = {
     workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
     agentApi: "http://127.0.0.1:8787/api",
     statusApi: "http://127.0.0.1:8787/api",
-    statusWebSocket: "ws://127.0.0.1:8787/ws/status",
     terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
   },
   values: { workTrackerApiKey: "" },

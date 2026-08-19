@@ -5,9 +5,9 @@ use sea_orm::{
 };
 
 use super::{LaunchPolicyDecision, LaunchPolicyError};
-use crate::work_management::entities::{launch_policy_decision, launch_policy_rejection};
+use crate::work_management::entities::launch_policy_decision;
 
-pub(crate) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {
+pub(super) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(), sea_orm::DbErr> {
     let backend = database.get_database_backend();
     let schema = Schema::new(backend);
     let mut decision_table = schema.create_table_from_entity(launch_policy_decision::Entity);
@@ -22,28 +22,6 @@ pub(crate) async fn ensure_schema(database: &impl ConnectionTrait) -> Result<(),
         .if_not_exists()
         .to_owned();
     database.execute(&index).await?;
-    let mut rejection_table = schema.create_table_from_entity(launch_policy_rejection::Entity);
-    rejection_table.if_not_exists();
-    database.execute(&rejection_table).await?;
-    Ok(())
-}
-
-pub(super) async fn record_rejection(
-    database: &DatabaseConnection,
-    caller_scope: &str,
-    idempotency_key: &str,
-    error: &LaunchPolicyError,
-) -> Result<(), LaunchPolicyError> {
-    launch_policy_rejection::Entity::insert(launch_policy_rejection::ActiveModel {
-        caller_scope: Set(caller_scope.to_owned()),
-        idempotency_key: Set(idempotency_key.to_owned()),
-        code: Set(error.code().to_owned()),
-        message: Set(error.to_string()),
-        rejected_at: NotSet,
-    })
-    .on_conflict(OnConflict::new().do_nothing().to_owned())
-    .exec_without_returning(database)
-    .await?;
     Ok(())
 }
 

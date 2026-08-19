@@ -142,6 +142,7 @@ async fn reparent_tasks(
                 before_id: None,
                 after_id: None,
             },
+            super::dispatch::work_facts(database).await.as_ref(),
         )
         .await
         {

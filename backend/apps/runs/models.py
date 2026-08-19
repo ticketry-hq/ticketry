@@ -13,6 +13,9 @@ class AgentRun(models.Model):
         Issue, on_delete=models.CASCADE, related_name="agent_runs"
     )
     ticket_seq = models.IntegerField(null=True)
+    # Immutable launch-time snapshot. `agent` is the resolved provider.
+    model = models.CharField(null=True)
+    reasoning = models.CharField(null=True)
     agent = models.CharField()
     status = models.CharField()
     started_at = models.CharField()

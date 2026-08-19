@@ -1,6 +1,7 @@
 use muxed_studio_lib::graphql_foundation::{
     initialize, initialize_and_install, FoundationInitializationErrorCode,
 };
+use sea_orm::Database;
 use tauri_graphql::{TransportApi, TransportApiImpl};
 
 fn request(query: &str, variables: serde_json::Value) -> String {
@@ -9,6 +10,52 @@ fn request(query: &str, variables: serde_json::Value) -> String {
         "variables": variables,
     })
     .to_string()
+}
+
+#[tokio::test]
+async fn migration_probes_are_only_composed_into_the_isolated_foundation_schema() {
+    let foundation_database = Database::connect("sqlite::memory:")
+        .await
+        .expect("open foundation schema database");
+    let probe_schema = muxed_studio_lib::query_root::foundation_schema(
+        foundation_database,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("build isolated foundation schema")
+    .sdl();
+
+    let foundation_database = Database::connect("sqlite::memory:")
+        .await
+        .expect("open product foundation database");
+    let worktracker_database = Database::connect("sqlite::memory:")
+        .await
+        .expect("open product state database");
+    let product_schema = muxed_studio_lib::query_root::foundation_schema(
+        foundation_database,
+        Some(worktracker_database),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("build product schema")
+    .sdl();
+
+    assert!(probe_schema.contains("migrationProbes"));
+    assert!(probe_schema.contains("migrationProbesCreateOne"));
+    assert!(!product_schema.contains("migrationProbes"));
 }
 
 #[tokio::test]
@@ -23,13 +70,13 @@ async fn restart_reopens_the_foundation_database() {
         &runtime
             .endpoint()
             .execute_json(&request(
-                "mutation SetProbe($value: String!) { setMigrationProbe(value: $value) }",
-                serde_json::json!({ "value": "reopened" }),
+                "mutation CreateProbe($data: MigrationProbesInsertInput!) { migrationProbesCreateOne(data: $data) { id value } }",
+                serde_json::json!({ "data": { "id": 1, "value": "reopened" } }),
             ))
             .await,
     )
     .expect("decode mutation response");
-    assert_eq!(mutation["data"]["setMigrationProbe"], true);
+    assert_eq!(mutation["data"]["migrationProbesCreateOne"]["id"], 1);
     drop(runtime);
 
     let reopened = initialize(&database_path)
@@ -115,7 +162,7 @@ async fn generated_query_is_reachable_through_the_taurpc_transport() {
 }
 
 #[tokio::test]
-async fn authored_command_maps_its_domain_error_into_graphql() {
+async fn generated_mutation_is_reachable_through_the_taurpc_transport() {
     let directory = tempfile::tempdir().expect("create foundation test directory");
     let api = TransportApiImpl::new();
     initialize_and_install(&directory.path().join("rust-core.sqlite3"), &api)
@@ -124,15 +171,16 @@ async fn authored_command_maps_its_domain_error_into_graphql() {
 
     let response: serde_json::Value = serde_json::from_str(
         &api.graphql_execute(request(
-            "mutation SetMigrationProbe($value: String!) { setMigrationProbe(value: $value) }",
-            serde_json::json!({ "value": "reject" }),
+            "mutation CreateMigrationProbe($data: MigrationProbesInsertInput!) { migrationProbesCreateOne(data: $data) { id value } }",
+            serde_json::json!({ "data": { "id": 1, "value": "generated" } }),
         ))
         .await,
     )
     .expect("decode command response");
 
+    assert_eq!(response["data"]["migrationProbesCreateOne"]["id"], 1);
     assert_eq!(
-        response["errors"][0]["extensions"]["code"],
-        "migration_probe_rejected"
+        response["data"]["migrationProbesCreateOne"]["value"],
+        "generated"
     );
 }

@@ -134,6 +134,7 @@ impl LifecycleService {
             )
             .await?;
         transaction.commit().await?;
+        self.events().wake_committed();
         Ok(LifecycleAcceptance {
             accepted: true,
             known_run: true,
@@ -151,9 +152,26 @@ impl LifecycleService {
         &self,
         fact: TerminalFact,
     ) -> Result<TerminalAcceptance, RunsPersistenceError> {
-        let occurred_at = timestamp::normalize(&fact.occurred_at)?;
         let transaction = self.database().begin().await?;
-        let run = load_run(&transaction, &fact.agent_run_id)
+        let acceptance = self.apply_terminal_fact_in(&transaction, fact).await?;
+        transaction.commit().await?;
+        if acceptance.applied {
+            self.events().wake_committed();
+        }
+        Ok(acceptance)
+    }
+
+    /// Terminal authority inside a caller-owned transaction. A launch outcome
+    /// settles its effect, owning Automation Attempt, and Agent Run together,
+    /// so the run's terminal fact cannot commit apart from the failure that
+    /// caused it.
+    pub(crate) async fn apply_terminal_fact_in(
+        &self,
+        transaction: &sea_orm::DatabaseTransaction,
+        fact: TerminalFact,
+    ) -> Result<TerminalAcceptance, RunsPersistenceError> {
+        let occurred_at = timestamp::normalize(&fact.occurred_at)?;
+        let run = load_run(transaction, &fact.agent_run_id)
             .await?
             .ok_or_else(|| {
                 RunsPersistenceError::new(
@@ -163,7 +181,6 @@ impl LifecycleService {
             })?;
         let public_state = fact.outcome.public_state().to_owned();
         if !should_apply_terminal(&run, fact.outcome.status(), &occurred_at)? {
-            transaction.commit().await?;
             return Ok(TerminalAcceptance {
                 applied: false,
                 state: if run.status == "lost" {
@@ -195,7 +212,7 @@ impl LifecycleService {
                 Expr::value(fact.exit_code.or(run.exit_code)),
             )
             .filter(agent_run::Column::Id.eq(&fact.agent_run_id))
-            .exec(&transaction)
+            .exec(transaction)
             .await?;
         let event_id = uuid::Uuid::new_v4().simple().to_string();
         let payload = json!({
@@ -208,7 +225,7 @@ impl LifecycleService {
         let cursor = self
             .events()
             .append(
-                &transaction,
+                transaction,
                 NewStatusEvent {
                     event_id: &event_id,
                     project_id: &run.project_id,
@@ -223,7 +240,6 @@ impl LifecycleService {
                 },
             )
             .await?;
-        transaction.commit().await?;
         Ok(TerminalAcceptance {
             applied: true,
             state: public_state,
@@ -273,14 +289,11 @@ fn should_apply_lifecycle(
                 "The stored lifecycle timestamp is invalid.",
             )
         })?);
+    // Providers routinely emit two facts inside one second. An exact duplicate
+    // stays a no-op; a differing state at the same timestamp resolves in
+    // arrival order, which is the only ordering the provider gives us.
     if ordering.is_lt() || (ordering.is_eq() && current_state == Some(incoming_state)) {
         return Ok(false);
-    }
-    if ordering.is_eq() {
-        return Err(RunsPersistenceError::new(
-            RunsPersistenceErrorCode::Conflict,
-            "Conflicting lifecycle facts share one timestamp.",
-        ));
     }
     Ok(true)
 }

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { type WorktreeContext } from "./internal/api";
+import { readWorktreeStatus } from "./internal/statusTransport";
 import {
-  createWorktree,
-  discardWorktree,
-  getWorktree,
-  type WorktreeContext,
-} from "./internal/api";
+  newOperationId,
+  requestWorktreeCreate,
+} from "./internal/createTransport";
+import { requestWorktreeDiscard } from "./internal/discardTransport";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
 
@@ -30,7 +31,11 @@ interface WorktreeBlockProps {
  *
  * There is no "Land it" control: integration fires automatically when the
  * task is marked Done (a backend close hook). Query owns status reads; Create
- * writes its authoritative response through and Discard refetches the key.
+ * and Discard each write their own authoritative response through the key.
+ *
+ * Discard stays explicitly confirmed: the first click asks, and only the
+ * second one sends. The request itself carries no path, branch, or repository
+ * — the runtime removes exactly the checkout Ticketry indexed.
  */
 export function WorktreeBlock({
   taskId,
@@ -52,12 +57,17 @@ export function WorktreeBlock({
     taskName,
   };
 
-  const statusKey = queryKeys.worktrees.status(taskId, parentId, moduleId);
+  // The checkout belongs to the top-level Work Item, so the holding is keyed
+  // by the owner rather than by whichever descendant this view is showing. A
+  // durable fact names that owner, which is how a parent window and a child
+  // window looking at one checkout converge on one result.
+  const ownerId = parentId ?? taskId;
+  const statusKey = queryKeys.worktrees.status(ownerId, taskId, moduleId);
   const statusQuery = useQuery(
     {
       queryKey: statusKey,
       queryFn: ({ signal }) =>
-        getWorktree(taskId, { parentId, moduleId }, signal),
+        readWorktreeStatus(taskId, { parentId, moduleId }, signal),
     },
     queryClient,
   );
@@ -74,8 +84,14 @@ export function WorktreeBlock({
   const onCreate = async () => {
     setBusy(true);
     setMutationError(null);
+    // One identity per intent: a retry of this click is the same operation and
+    // converges on the same worktree rather than cutting a second branch.
+    const operationId = newOperationId();
     try {
-      queryClient.setQueryData(statusKey, await createWorktree(taskId, ctx));
+      queryClient.setQueryData(
+        statusKey,
+        await requestWorktreeCreate(taskId, operationId, ctx),
+      );
     } catch {
       setMutationError("Create failed");
     } finally {
@@ -86,10 +102,19 @@ export function WorktreeBlock({
   const onDiscard = async () => {
     setBusy(true);
     setMutationError(null);
+    // One identity per confirmed intent: a retry of this click replays the
+    // same durable removal rather than throwing anything else away.
+    const operationId = newOperationId();
     try {
-      await discardWorktree(taskId, { parentId, moduleId });
+      const result = await requestWorktreeDiscard(taskId, operationId, ctx);
       setConfirming(false);
-      await statusQuery.refetch();
+      // The mutation's own response is authoritative for this window; a
+      // transport that cannot answer with one falls back to a refetch.
+      if (result.status) {
+        queryClient.setQueryData(statusKey, result.status);
+      } else {
+        await statusQuery.refetch();
+      }
     } catch {
       setMutationError("Discard failed");
     } finally {

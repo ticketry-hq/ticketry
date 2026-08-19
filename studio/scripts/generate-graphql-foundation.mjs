@@ -12,7 +12,7 @@ try {
   await generateFoundationArtifacts(scratch);
   const entityTarget = join(
     studioRoot,
-    "src-tauri/src/graphql_foundation/entities",
+    "src-tauri/src/entities/foundation",
   );
   const frontendTarget = join(studioRoot, "src/graphql-foundation/generated");
   await mkdir(entityTarget, { recursive: true });
@@ -44,10 +44,22 @@ try {
     "src/features/agents/status/generated",
   );
   await mkdir(agentStatusTarget, { recursive: true });
-  await copyFile(
-    join(scratch, "agent-status/attempts.ts"),
-    join(agentStatusTarget, "attempts.ts"),
+  for (const name of ["attempts.ts", "statusStream.ts"]) {
+    await copyFile(join(scratch, "agent-status", name), join(agentStatusTarget, name));
+  }
+  const worktreeTarget = join(
+    studioRoot,
+    "src/features/agents/worktrees/generated",
   );
+  await mkdir(worktreeTarget, { recursive: true });
+  for (const name of ["worktreeStatus.ts", "worktreeCreate.ts"]) {
+    await copyFile(join(scratch, "worktrees", name), join(worktreeTarget, name));
+  }
+  const documentTarget = join(studioRoot, "src/features/documents/generated");
+  await mkdir(documentTarget, { recursive: true });
+  for (const name of ["documentRegistry.ts", "documentSave.ts"]) {
+    await copyFile(join(scratch, "documents", name), join(documentTarget, name));
+  }
   console.log("generated GraphQL foundation entities, SDL, TauRPC, and operations");
 } finally {
   await rm(scratch, { recursive: true, force: true });

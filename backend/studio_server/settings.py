@@ -49,6 +49,8 @@ MIDDLEWARE = [
     "studio_server.origin.DesktopOriginMiddleware",
     "worktracker.write_ownership.RustWorkTrackerWriteOwnershipMiddleware",
     "apps.settings_store.write_ownership.RustSlice2WriteOwnershipMiddleware",
+    "apps.runs.write_ownership.RustSlice3WriteOwnershipMiddleware",
+    "apps.workspace_write_ownership.RustSlice4WriteOwnershipMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",

@@ -283,13 +283,6 @@ def test_scheduled_sweep_removes_stale_scratch_session(
     """A later authoritative sweep retires a scratch session with no runtime."""
 
     jobs = _capture_scheduler_jobs(monkeypatch)
-    published: list = []
-    monkeypatch.setattr(
-        reconciliation,
-        "publish_backend_session_sync",
-        lambda *args, **kwargs: published.append(args),
-    )
-
     _insert_run("scratch-stale", task_id=SCRATCH_TASK_ID)
     _insert_session(
         "scratch-stale",

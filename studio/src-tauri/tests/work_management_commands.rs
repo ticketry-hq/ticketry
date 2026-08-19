@@ -162,6 +162,7 @@ async fn catalogue_creation_validates_groups_levels_and_appends_orders() {
             group: "unstarted".to_owned(),
             color: None,
         },
+        None,
     )
     .await
     .unwrap();
@@ -201,6 +202,7 @@ async fn catalogue_creation_validates_groups_levels_and_appends_orders() {
             group: "invented".to_owned(),
             color: None,
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -214,7 +216,7 @@ async fn concurrent_creates_allocate_one_shared_sequence_and_revision_each() {
     for index in 0..12 {
         let database = database.clone();
         creates.push(tokio::spawn(async move {
-            work_items::create(&database, create_input(format!("Item {index}"))).await
+            work_items::create(&database, create_input(format!("Item {index}")), None).await
         }));
     }
     let mut ids = Vec::new();
@@ -252,7 +254,9 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
     let (_directory, database) = fixture().await;
     let mut invalid = create_input("Wrong birth");
     invalid.state_id = Some(DONE.to_owned());
-    let error = work_items::create(&database, invalid).await.unwrap_err();
+    let error = work_items::create(&database, invalid, None)
+        .await
+        .unwrap_err();
     assert_eq!(error.code(), "illegal_birth");
     let project = project::Entity::find_by_id(PROJECT)
         .one(&database)
@@ -261,7 +265,7 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
         .unwrap();
     assert_eq!((project.seq_counter, project.state_revision), (20, 7));
 
-    let id = work_items::create(&database, create_input("  New item  "))
+    let id = work_items::create(&database, create_input("  New item  "), None)
         .await
         .unwrap();
     let created = issue::Entity::find_by_id(&id)
@@ -283,6 +287,7 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
             description: Some("Body".to_owned()),
             issue_type_id: Some(OTHER_TASK_TYPE.to_owned()),
         },
+        None,
     )
     .await
     .unwrap();
@@ -306,6 +311,7 @@ async fn validation_failure_rolls_back_counters_and_typed_edits_advance_revision
             description: None,
             issue_type_id: Some(MODULE_TYPE.to_owned()),
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -330,10 +336,14 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
 
     let mut root_input = create_input("Root");
     root_input.parent_id = Some("20000000-0000-0000-0000-000000000001".to_owned());
-    let root = work_items::create(&database, root_input).await.unwrap();
+    let root = work_items::create(&database, root_input, None)
+        .await
+        .unwrap();
     let mut child_input = create_input("Child");
     child_input.parent_id = Some(root.clone());
-    let child = work_items::create(&database, child_input).await.unwrap();
+    let child = work_items::create(&database, child_input, None)
+        .await
+        .unwrap();
     database
         .execute_unprepared(&format!(
             "INSERT INTO worktracker_issue VALUES ('60000000000000000000000000000001','{PROJECT}','module','{MODULE_TYPE}','{child}','20000000000000000000000000000001',NULL,5,'Nested module',30,0,'m','',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
@@ -342,12 +352,12 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
         .unwrap();
     let mut nested_child_input = create_input("Nested child");
     nested_child_input.parent_id = Some("60000000-0000-0000-0000-000000000001".to_owned());
-    let nested_child = work_items::create(&database, nested_child_input)
+    let nested_child = work_items::create(&database, nested_child_input, None)
         .await
         .unwrap();
     let mut unrelated_input = create_input("Unrelated");
     unrelated_input.parent_id = Some("20000000-0000-0000-0000-000000000001".to_owned());
-    let unrelated = work_items::create(&database, unrelated_input)
+    let unrelated = work_items::create(&database, unrelated_input, None)
         .await
         .unwrap();
     let unrelated_before = issue::Entity::find_by_id(&unrelated)
@@ -364,6 +374,7 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
             before_id: Some("50000000-0000-0000-0000-000000000001".to_owned()),
             after_id: Some("50000000-0000-0000-0000-000000000002".to_owned()),
         },
+        None,
     )
     .await
     .unwrap();
@@ -424,6 +435,7 @@ async fn hierarchy_create_reparent_detach_repairs_deep_module_ancestry_across_re
             before_id: None,
             after_id: None,
         },
+        None,
     )
     .await
     .unwrap();
@@ -475,10 +487,14 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
         .unwrap();
     let mut root_input = create_input("Root");
     root_input.parent_id = Some("20000000000000000000000000000001".to_owned());
-    let root = work_items::create(&database, root_input).await.unwrap();
+    let root = work_items::create(&database, root_input, None)
+        .await
+        .unwrap();
     let mut child_input = create_input("Child");
     child_input.parent_id = Some(root.clone());
-    let child = work_items::create(&database, child_input).await.unwrap();
+    let child = work_items::create(&database, child_input, None)
+        .await
+        .unwrap();
     let before = issue::Entity::find()
         .filter(issue::Column::Id.is_in([root.clone(), child.clone()]))
         .order_by_asc(issue::Column::Id)
@@ -506,6 +522,7 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
                 before_id: None,
                 after_id: None,
             },
+            None,
         )
         .await
         .is_err());
@@ -539,7 +556,7 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
         let mut invalid_create = create_input("Rejected");
         invalid_create.parent_id = Some(parent_id.to_owned());
         assert_eq!(
-            work_items::create(&database, invalid_create)
+            work_items::create(&database, invalid_create, None)
                 .await
                 .unwrap_err()
                 .code(),
@@ -559,13 +576,13 @@ async fn invalid_hierarchy_targets_and_foreign_creation_are_atomic() {
 #[tokio::test]
 async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors() {
     let (_directory, database) = fixture().await;
-    let a = work_items::create(&database, create_input("A"))
+    let a = work_items::create(&database, create_input("A"), None)
         .await
         .unwrap();
-    let b = work_items::create(&database, create_input("B"))
+    let b = work_items::create(&database, create_input("B"), None)
         .await
         .unwrap();
-    let c = work_items::create(&database, create_input("C"))
+    let c = work_items::create(&database, create_input("C"), None)
         .await
         .unwrap();
 
@@ -577,6 +594,7 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
             after_id: Some(a.clone()),
             initial_order_ids: None,
         },
+        None,
     )
     .await
     .unwrap();
@@ -600,6 +618,7 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
             after_id: None,
             initial_order_ids: None,
         },
+        None,
     )
     .await
     .unwrap();
@@ -635,6 +654,7 @@ async fn task_reorder_matches_django_boundaries_and_rolls_back_invalid_neighbors
             after_id: Some(b),
             initial_order_ids: None,
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -692,6 +712,7 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
             after_id: Some(ids[2].to_owned()),
             initial_order_ids: Some(vec![ids[2].to_owned(), ids[1].to_owned()]),
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -718,6 +739,7 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
             after_id: Some(ids[2].to_owned()),
             initial_order_ids: Some(ids.iter().rev().map(|id| (*id).to_owned()).collect()),
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -746,6 +768,7 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
             after_id: Some(ids[2].to_owned()),
             initial_order_ids: Some(ids.iter().rev().map(|id| (*id).to_owned()).collect()),
         },
+        None,
     )
     .await
     .unwrap();
@@ -790,6 +813,7 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
             after_id: Some(ids[1].to_owned()),
             initial_order_ids: Some(vec![ids[0].to_owned()]),
         },
+        None,
     )
     .await
     .unwrap();
@@ -809,16 +833,20 @@ async fn first_module_drag_is_atomic_and_manual_order_survives_reopen() {
 #[tokio::test]
 async fn archive_cascades_delete_rejects_children_and_attachment_materializes_first() {
     let (directory, database) = fixture().await;
-    let parent = work_items::create(&database, create_input("Parent"))
+    let parent = work_items::create(&database, create_input("Parent"), None)
         .await
         .unwrap();
     let mut child_input = create_input("Child");
     child_input.parent_id = Some(parent.clone());
-    let child = work_items::create(&database, child_input).await.unwrap();
+    let child = work_items::create(&database, child_input, None)
+        .await
+        .unwrap();
 
-    let conflict = work_items::delete(&database, &parent).await.unwrap_err();
+    let conflict = work_items::delete(&database, &parent, None)
+        .await
+        .unwrap_err();
     assert_eq!(conflict.code(), "conflict");
-    work_items::archive(&database, &parent).await.unwrap();
+    work_items::archive(&database, &parent, None).await.unwrap();
     assert!(
         issue::Entity::find_by_id(&parent)
             .one(&database)
@@ -879,13 +907,13 @@ async fn archive_cascades_delete_rejects_children_and_attachment_materializes_fi
     );
     assert_eq!(attachments::list(&database, &child).await.unwrap().len(), 1);
 
-    work_items::delete(&database, &child).await.unwrap();
+    work_items::delete(&database, &child, None).await.unwrap();
     assert!(attachment::Entity::find_by_id(created.id)
         .one(&database)
         .await
         .unwrap()
         .is_none());
-    work_items::delete(&database, &parent).await.unwrap();
+    work_items::delete(&database, &parent, None).await.unwrap();
 }
 
 #[tokio::test]
@@ -925,7 +953,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         &api.clone()
             .graphql_execute(
                 serde_json::json!({
-                    "query": "{ __schema { mutationType { fields { name } } } }"
+                    "query": "{ __schema { mutationType { fields { name } } } workItemType: __type(name: \"WorkItem\") { name } }"
                 })
                 .to_string(),
             )
@@ -938,25 +966,34 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         .iter()
         .map(|field| field["name"].as_str().unwrap())
         .collect::<HashSet<_>>();
+    assert!(schema["data"]["workItemType"].is_null());
     for field in [
         "create_project",
         "create_state",
         "create_issue_type",
         "create_work_item",
         "update_work_item",
-        "archive_work_item",
         "reorder_work_item",
-        "reparent_work_item",
         "delete_work_item",
-        "create_attachment",
-        "transition_work_item",
-        "set_work_item_blockers",
-        "add_work_item_blocker",
-        "add_work_item_dependent",
         "remove_state_from_issue_type_workflow",
         "delete_state",
     ] {
         assert!(fields.contains(field), "missing authored mutation {field}");
+    }
+    for duplicate in [
+        "archive_work_item",
+        "reparent_work_item",
+        "transition_work_item",
+        "set_work_item_blockers",
+        "add_work_item_blocker",
+        "add_work_item_dependent",
+        "create_attachment",
+        "delete_issue_type_launch_binding",
+    ] {
+        assert!(
+            !fields.contains(duplicate),
+            "retired mutation {duplicate} must not be public"
+        );
     }
     assert!(!fields
         .iter()
@@ -979,7 +1016,6 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         workflow_mutations,
         [
             "create_issue_type_transition",
-            "delete_issue_type_launch_binding",
             "delete_issue_type_transition",
             "remove_state_from_issue_type_workflow",
             "update_issue_type_transition",
@@ -995,7 +1031,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
 
     let workflow_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
-            "query": format!("mutation {{ create_issue_type_transition(issue_type_id: \"{TASK_TYPE}\", from_state_id: \"{BACKLOG}\", to_state_id: \"{READY}\", agent_allowed: true, workflow_revision: 1) {{ agent_allowed }} }}")
+            "query": format!("mutation {{ create_issue_type_transition(issue_type_id: \"{TASK_TYPE}\", from_state_id: \"{BACKLOG}\", to_state_id: \"{READY}\", agent_allowed: true, workflow_revision: 1) {{ agent_allowed: agentAllowed }} }}")
         }).to_string()).await,
     ).unwrap();
     assert_eq!(
@@ -1013,7 +1049,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     );
     let binding_write: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
-            "query": format!("mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: \"Implement it.\", required_skills: [\"tdd\"]) {{ id prompt required_skills }} }}")
+            "query": format!("mutation {{ upsert_issue_type_launch_binding(issue_type_id: \"{TASK_TYPE}\", state_id: \"{BACKLOG}\", workflow_revision: 2, prompt: \"Implement it.\", required_skills: [\"tdd\"]) {{ id prompt required_skills: requiredSkills }} }}")
         }).to_string()).await,
     ).unwrap();
     assert!(binding_write.get("errors").is_none(), "{binding_write:#}");
@@ -1060,7 +1096,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         &api.clone()
             .graphql_execute(
                 serde_json::json!({
-                    "query": "{ modules(project_id: \"10000000-0000-0000-0000-000000000000\") { name } }"
+                    "query": "{ modules: worktrackerIssue(filters: { projectId: { eq: \"10000000000000000000000000000000\" }, type: { eq: \"module\" } }, orderBy: { rank: ASC }) { nodes { name } } }"
                 })
                 .to_string(),
             )
@@ -1068,7 +1104,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     )
     .unwrap();
     assert_eq!(
-        manual_order["data"]["modules"]
+        manual_order["data"]["modules"]["nodes"]
             .as_array()
             .unwrap()
             .iter()
@@ -1077,20 +1113,38 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         ["A", "C", "B"]
     );
 
-    let task_a = work_items::create(&database, create_input("GraphQL A"))
+    let task_a = work_items::create(&database, create_input("GraphQL A"), None)
         .await
         .unwrap();
-    let task_b = work_items::create(&database, create_input("GraphQL B"))
+    let task_b = work_items::create(&database, create_input("GraphQL B"), None)
         .await
         .unwrap();
+    let caller_update: serde_json::Value = serde_json::from_str(
+        &api.clone()
+            .graphql_execute(
+                serde_json::json!({
+                    "query": include_str!("../../src/features/work-items/operations/workItems.graphql"),
+                    "operationName": "UpdateWorkTrackerWorkItem",
+                    "variables": {"id": task_a, "name": "GraphQL A updated"}
+                })
+                .to_string(),
+            )
+            .await,
+    )
+    .unwrap();
+    assert!(caller_update.get("errors").is_none(), "{caller_update}");
+    assert_eq!(
+        caller_update["data"]["update_work_item"]["name"],
+        "GraphQL A updated"
+    );
     let transitioned: serde_json::Value = serde_json::from_str(
         &api.clone().graphql_execute(serde_json::json!({
-            "query": format!("mutation {{ transition_work_item(id: \"{task_a}\", target_state_id: \"{READY}\", origin: \"agent\") {{ id state state_revision }} }}")
+            "query": format!("mutation {{ update_work_item(id: \"{task_a}\", state_id: \"{READY}\") {{ id stateId stateRevision }} }}")
         }).to_string()).await,
     ).unwrap();
     assert!(transitioned.get("errors").is_none(), "{transitioned}");
     assert_eq!(
-        transitioned["data"]["transition_work_item"]["state"],
+        transitioned["data"]["update_work_item"]["stateId"],
         "40000000-0000-0000-0000-000000000003"
     );
     let task_reorder: serde_json::Value = serde_json::from_str(
@@ -1125,7 +1179,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
             .graphql_execute(
                 serde_json::json!({
                     "query": format!(
-                        "mutation {{ reparent_work_item(id: \"{task_b}\", parent_id: \"20000000-0000-0000-0000-000000000002\") {{ id parent_id module_id }} }}"
+                        "mutation {{ update_work_item(id: \"{task_b}\", parent_id: \"20000000-0000-0000-0000-000000000002\") {{ id parent_id: parentId module_id: moduleId }} }}"
                     )
                 })
                 .to_string(),
@@ -1135,7 +1189,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
     .unwrap();
     assert!(hierarchy_move.get("errors").is_none(), "{hierarchy_move}");
     assert_eq!(
-        hierarchy_move["data"]["reparent_work_item"]["module_id"],
+        hierarchy_move["data"]["update_work_item"]["module_id"],
         "20000000-0000-0000-0000-000000000002"
     );
     let hierarchy_detach: serde_json::Value = serde_json::from_str(
@@ -1143,7 +1197,7 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
             .graphql_execute(
                 serde_json::json!({
                     "query": format!(
-                        "mutation {{ reparent_work_item(id: \"{task_b}\") {{ id parent_id module_id }} }}"
+                        "mutation {{ update_work_item(id: \"{task_b}\", parent_id: null) {{ id parent_id: parentId module_id: moduleId }} }}"
                     )
                 })
                 .to_string(),
@@ -1155,8 +1209,8 @@ async fn graphql_exposes_only_authored_mutations_and_structured_errors() {
         hierarchy_detach.get("errors").is_none(),
         "{hierarchy_detach}"
     );
-    assert!(hierarchy_detach["data"]["reparent_work_item"]["parent_id"].is_null());
-    assert!(hierarchy_detach["data"]["reparent_work_item"]["module_id"].is_null());
+    assert!(hierarchy_detach["data"]["update_work_item"]["parent_id"].is_null());
+    assert!(hierarchy_detach["data"]["update_work_item"]["module_id"].is_null());
 
     let created_project: serde_json::Value = serde_json::from_str(
         &api.clone()
@@ -1246,12 +1300,14 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
         ))
         .await
         .unwrap();
-    let parent = work_items::create(&database, create_input("Parent"))
+    let parent = work_items::create(&database, create_input("Parent"), None)
         .await
         .unwrap();
     let mut child_input = create_input("Child");
     child_input.parent_id = Some(parent.clone());
-    let child = work_items::create(&database, child_input).await.unwrap();
+    let child = work_items::create(&database, child_input, None)
+        .await
+        .unwrap();
     blockers::replace(&database, &parent, vec![child.clone()])
         .await
         .unwrap();
@@ -1263,6 +1319,7 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
             target_state_id: READY.to_owned(),
             origin: workflow::TransitionOrigin::Agent,
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -1277,6 +1334,7 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
             target_state_id: READY.to_owned(),
             origin: workflow::TransitionOrigin::Human,
         },
+        None,
     )
     .await
     .unwrap();
@@ -1287,6 +1345,7 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
             target_state_id: CANCELLED.to_owned(),
             origin: workflow::TransitionOrigin::Agent,
         },
+        None,
     )
     .await
     .unwrap();
@@ -1314,6 +1373,7 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
             target_state_id: READY.to_owned(),
             origin: workflow::TransitionOrigin::Human,
         },
+        None,
     )
     .await
     .unwrap();
@@ -1339,6 +1399,7 @@ async fn transitions_preserve_human_agent_reachability_and_cancelled_subtrees() 
             target_state_id: DONE.to_owned(),
             origin: workflow::TransitionOrigin::Human,
         },
+        None,
     )
     .await
     .unwrap_err();
@@ -1555,13 +1616,13 @@ async fn concurrent_workflow_edits_have_one_winner_and_one_typed_stale_result() 
 #[tokio::test]
 async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart() {
     let (directory, database) = fixture().await;
-    let a = work_items::create(&database, create_input("A"))
+    let a = work_items::create(&database, create_input("A"), None)
         .await
         .unwrap();
-    let b = work_items::create(&database, create_input("B"))
+    let b = work_items::create(&database, create_input("B"), None)
         .await
         .unwrap();
-    let c = work_items::create(&database, create_input("C"))
+    let c = work_items::create(&database, create_input("C"), None)
         .await
         .unwrap();
     let foreign = "50000000000000000000000000000009";
@@ -1609,13 +1670,13 @@ async fn blocker_replacement_rejects_bad_graphs_atomically_and_survives_restart(
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn additive_blocker_changes_serialize_without_losing_edges() {
     let (_directory, database) = fixture().await;
-    let task = work_items::create(&database, create_input("Blocked"))
+    let task = work_items::create(&database, create_input("Blocked"), None)
         .await
         .unwrap();
-    let first = work_items::create(&database, create_input("First blocker"))
+    let first = work_items::create(&database, create_input("First blocker"), None)
         .await
         .unwrap();
-    let second = work_items::create(&database, create_input("Second blocker"))
+    let second = work_items::create(&database, create_input("Second blocker"), None)
         .await
         .unwrap();
 
@@ -1672,7 +1733,7 @@ async fn description_appends_serialize_without_losing_content() {
     let (_directory, database) = fixture().await;
     let mut input = create_input("Append target");
     input.description = Some("Original".to_owned());
-    let task = work_items::create(&database, input).await.unwrap();
+    let task = work_items::create(&database, input, None).await.unwrap();
 
     let appends = ["First", "Second"].map(|new_content| {
         let database = database.clone();
@@ -1716,7 +1777,7 @@ async fn review_finding_creation_owns_parent_policy_and_evidence_format() {
         ))
         .await
         .unwrap();
-    let parent = work_items::create(&database, create_input("Reviewed story"))
+    let parent = work_items::create(&database, create_input("Reviewed story"), None)
         .await
         .unwrap();
     database
@@ -2002,4 +2063,51 @@ async fn transition_rows_reject_stale_revisions_and_unknown_rows() {
             .unwrap(),
         1
     );
+}
+
+/// Composition opens exactly one writable pool and one profile store; both the
+/// desktop launch command and the GraphQL schema must share them rather than
+/// reopen `state.db` and re-run the launch-policy DDL per interactive launch.
+#[tokio::test]
+async fn composition_hands_back_the_command_connection_and_profile_store_it_opened() {
+    let directory = fixture().await.0;
+    let api = TransportApiImpl::new();
+
+    let runtime = initialize_with_worktracker_commands_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &directory.path().join("state.db"),
+        &directory.path().join("media"),
+        &api,
+    )
+    .await
+    .unwrap();
+
+    // The launch-policy schema already exists on the returned connection, so a
+    // caller reusing it never repeats the DDL that takes an exclusive write
+    // lock on a database several writers share.
+    let decisions = runtime
+        .commands()
+        .query_one_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "SELECT COUNT(*) AS decisions FROM ticketry_launchpolicydecision".to_owned(),
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get::<i64>("", "decisions")
+        .unwrap();
+    assert_eq!(decisions, 0);
+
+    // The returned profile store is the instance composition seeded and the
+    // GraphQL local-settings fields mutate, not a second store over the same
+    // file with its own mutation lock.
+    let seeded = runtime.profiles().read();
+    assert_eq!(
+        seeded
+            .profiles
+            .first()
+            .map(|profile| profile.workspace_slug.as_str()),
+        Some("meml")
+    );
+    assert!(directory.path().join("profiles.json").is_file());
 }

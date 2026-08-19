@@ -595,6 +595,51 @@ class LaunchAgentView(AuthenticatedAPIView):
         return _serialize_result(execution.create_launch_agent(issue_id, _pydantic(execution.LaunchAgentIn, request.data)))
 
 
+class RunsEffectReadinessView(AuthenticatedAPIView):
+    """The health record Rust requires before it will call this executor."""
+
+    @extend_schema(
+        operation_id="runsEffectPortReadiness",
+        tags=["terminals"],
+        responses={200: OpenSerializer},
+    )
+    def get(self, request):
+        from apps.terminals import runs_effect_port
+
+        readiness = runs_effect_port.readiness()
+        return Response(readiness, status=200 if readiness["ready"] else 503)
+
+
+class RunsEffectObserveView(AuthenticatedAPIView):
+    """Report what exists under one deterministic runtime identity."""
+
+    @extend_schema(
+        operation_id="runsEffectPortObserve",
+        tags=["terminals"],
+        request=OpenSerializer,
+        responses={200: OpenSerializer},
+    )
+    def post(self, request):
+        from apps.terminals import runs_effect_port
+
+        return Response(runs_effect_port.observe(request.data or {}), status=200)
+
+
+class RunsEffectExecuteView(AuthenticatedAPIView):
+    """Perform one already-durable launch effect and report a typed outcome."""
+
+    @extend_schema(
+        operation_id="runsEffectPortExecute",
+        tags=["terminals"],
+        request=OpenSerializer,
+        responses={200: OpenSerializer},
+    )
+    def post(self, request):
+        from apps.terminals import runs_effect_port
+
+        return Response(runs_effect_port.execute(request.data or {}), status=200)
+
+
 class LaunchPolicyEffectView(AuthenticatedAPIView):
     @extend_schema(
         operation_id="launchPolicyEffectReadiness",

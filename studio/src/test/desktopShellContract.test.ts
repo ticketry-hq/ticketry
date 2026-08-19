@@ -300,7 +300,6 @@ describe("desktop shell security contract", () => {
       MUXED_DESKTOP_WORKTRACKER_API: "http://127.0.0.1:15174/api/work-tracker",
       MUXED_DESKTOP_AGENT_API: "http://127.0.0.1:15174/api",
       MUXED_DESKTOP_STATUS_API: "http://127.0.0.1:15174/api",
-      MUXED_DESKTOP_STATUS_WEBSOCKET: "ws://127.0.0.1:15174/ws/status",
       MUXED_DESKTOP_TERMINAL_WEBSOCKET: "ws://127.0.0.1:15174/ws/terminal",
     });
     expect(() =>

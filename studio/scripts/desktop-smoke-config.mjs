@@ -2,7 +2,6 @@ const runtimeEndpointProtocols = {
   MUXED_DESKTOP_WORKTRACKER_API: "http:",
   MUXED_DESKTOP_AGENT_API: "http:",
   MUXED_DESKTOP_STATUS_API: "http:",
-  MUXED_DESKTOP_STATUS_WEBSOCKET: "ws:",
   MUXED_DESKTOP_TERMINAL_WEBSOCKET: "ws:",
 };
 
@@ -21,7 +20,6 @@ export function buildDevelopmentSmokeConfiguration(port) {
       MUXED_DESKTOP_WORKTRACKER_API: `${webviewUrl}/api/work-tracker`,
       MUXED_DESKTOP_AGENT_API: `${webviewUrl}/api`,
       MUXED_DESKTOP_STATUS_API: `${webviewUrl}/api`,
-      MUXED_DESKTOP_STATUS_WEBSOCKET: `${webSocketOrigin}/ws/status`,
       MUXED_DESKTOP_TERMINAL_WEBSOCKET: `${webSocketOrigin}/ws/terminal`,
     },
   };

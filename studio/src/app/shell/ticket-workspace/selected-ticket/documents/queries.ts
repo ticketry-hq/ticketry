@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import type { DesignDoc } from "../../../../../features/agents/types";
-import { getDocuments, getScratchDocuments } from "../../../../../features/agents/api/agentApi";
-import { docUrl } from "../../../../../features/agents/api/agentApi";
+import {
+  documentUrl,
+  listScratchDocuments,
+  listTaskDocuments,
+  type DesignDoc,
+} from "../../../../../features/documents";
 import { queryClient } from "../../../../../shared/query/queryClient";
 import { queryKeys } from "../../../../../shared/query/keys";
 
@@ -24,22 +27,27 @@ export function useWorkspaceDocuments(
         ? queryKeys.documents.registry("scratch", moduleId ?? "none", null, moduleId)
         : queryKeys.documents.registry("task", bucket ?? "none", projectId, moduleId),
       queryFn: ({ signal }) => scratch
-        ? getScratchDocuments(moduleId!, signal)
-        : getDocuments(bucket!, projectId ?? undefined, moduleId ?? undefined, signal),
+        ? listScratchDocuments(moduleId!, signal)
+        : listTaskDocuments(
+          bucket!,
+          projectId ?? undefined,
+          moduleId ?? undefined,
+          signal,
+        ),
       enabled: bucket !== null && (!scratch || moduleId !== null),
       staleTime: 0,
     },
     queryClient,
   );
   return {
-    documents: query.data?.documents ?? EMPTY_DOCUMENTS,
+    documents: query.data ?? EMPTY_DOCUMENTS,
     isFetched: query.isFetched,
   };
 }
 
 export function loadDocumentContent(doc: DesignDoc): Promise<LoadedMarkdown> {
   const controller = new AbortController();
-  return fetch(docUrl(doc.id, doc.rel_path), {
+  return fetch(documentUrl(doc.id, doc.rel_path), {
     cache: "no-store",
     signal: controller.signal,
   }).then(

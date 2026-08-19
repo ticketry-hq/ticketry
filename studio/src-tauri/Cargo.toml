@@ -23,15 +23,17 @@ async-trait = "=0.1.92"
 axum = "=0.8.9"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+futures-util.workspace = true
 http = "=1.4.2"
 libc = "0.2"
+notify = "=8.2.0"
 portable-pty = "0.9"
 rand = "0.8"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 rmcp = { version = "=3.0.0", features = ["transport-streamable-http-server"] }
 sea-orm = { version = "=2.0.1", features = ["runtime-tokio-rustls", "seaography", "sqlx-sqlite"] }
 sea-orm-migration = { version = "=2.0.1", features = ["runtime-tokio-rustls", "sqlx-sqlite"] }
-seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros"] }
+seaography = { version = "=2.0.0-rc.9", default-features = false, features = ["field-camel-case", "macros", "with-chrono", "with-json"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"

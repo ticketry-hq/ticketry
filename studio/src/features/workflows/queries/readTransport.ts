@@ -6,25 +6,10 @@ import type {
   State,
   SubtreeRunCapabilityMap,
 } from "../../../shared/api/types";
-import {
-  WorkTrackerIssueTypeTransitionsDocument,
-  WorkTrackerWorkflowCatalogDocument,
-  type WorkTrackerIssueType,
-} from "../generated/operations";
+import { compactWorktrackerId, publicWorktrackerId } from "../../../shared/api/generatedWorktracker";
+import { WorkTrackerIssueTypeTransitionsDocument } from "../generated/operations";
 import { LoadProviderCatalogDocument } from "../../settings/generated/providerCatalog";
-
-function issueType(row: WorkTrackerIssueType): IssueType {
-  return {
-    id: row.id,
-    project: row.project,
-    name: row.name,
-    level: row.level as IssueType["level"],
-    color: row.color,
-    sort_order: row.sort_order,
-    start_state: row.start_state,
-    workflow_revision: row.workflow_revision,
-  };
-}
+import { issueType, readWorkflowCatalog } from "./catalogTransport";
 
 export function readWorkflowStates(
   projectId: string,
@@ -32,9 +17,8 @@ export function readWorkflowStates(
 ): Promise<State[]> {
   return studioRuntime().readWorkTracker({
     rest: () => restReader(projectId),
-    graphQl: async (execute) => (
-      await execute(WorkTrackerWorkflowCatalogDocument, { projectId })
-    ).states.map((state) => ({ ...state })),
+    graphQl: async (execute) =>
+      (await readWorkflowCatalog(execute, projectId)).states,
   });
 }
 
@@ -44,9 +28,8 @@ export function readWorkflowIssueTypes(
 ): Promise<IssueType[]> {
   return studioRuntime().readWorkTracker({
     rest: () => restReader(projectId),
-    graphQl: async (execute) => (
-      await execute(WorkTrackerWorkflowCatalogDocument, { projectId })
-    ).issue_types.map(issueType),
+    graphQl: async (execute) =>
+      (await readWorkflowCatalog(execute, projectId)).issueTypes.map(issueType),
   });
 }
 
@@ -56,11 +39,9 @@ export function readSubtreeRunCapabilities(
   return studioRuntime().readWorkTracker({
     rest: () => rest.listSubtreeRunCapabilities(projectId),
     graphQl: async (execute) => {
-      const bindings = (
-        await execute(WorkTrackerWorkflowCatalogDocument, { projectId })
-      ).launch_bindings;
+      const { launchBindings } = await readWorkflowCatalog(execute, projectId);
       const capabilities: SubtreeRunCapabilityMap = {};
-      for (const binding of bindings) {
+      for (const binding of launchBindings) {
         if (!binding.subtree_run_enabled) continue;
         capabilities[binding.issue_type] = [
           ...(capabilities[binding.issue_type] ?? []),
@@ -79,31 +60,37 @@ export function readWorkflowSettings(
   return studioRuntime().readWorkTracker({
     rest: () => rest.getIssueTypeWorkflowSettings(projectId, issueTypeId),
     graphQl: async (execute) => {
-      const [catalog, transitionResult, providerCatalog] = await Promise.all([
-        execute(WorkTrackerWorkflowCatalogDocument, { projectId }),
-        execute(WorkTrackerIssueTypeTransitionsDocument, { issueTypeId }),
+      const [normalized, transitionResult, providerCatalog] = await Promise.all([
+        readWorkflowCatalog(execute, projectId),
+        execute(WorkTrackerIssueTypeTransitionsDocument, {
+          issueTypeId: compactWorktrackerId(issueTypeId),
+        }),
         execute(LoadProviderCatalogDocument, {}),
       ]);
-      const selectedType = catalog.issue_types.find(
-        (candidate) => candidate.id === issueTypeId,
+      const selectedType = normalized.issueTypes.find(
+        (candidate) => publicWorktrackerId(candidate.id) === issueTypeId,
       );
       if (!selectedType) throw new Error("Work-item type not found.");
       return rest.assembleScopedWorkflowSettings(
         issueType(selectedType),
-        catalog.states.map((state) => ({ ...state })),
-        transitionResult.issue_type_transitions.map((transition) => ({
-          ...transition,
-        })),
-        catalog.launch_bindings.map((binding) => ({
-          ...binding,
-          required_skills: [...binding.required_skills],
-        })),
-        catalog.providers.map((provider) => ({ ...provider })),
-        catalog.agent_models.map((model) => ({
-          ...model,
-          permitted_reasoning_levels: [...model.permitted_reasoning_levels],
-        })),
-        catalog.reasoning_levels.map((level) => ({ ...level })),
+        normalized.states,
+        transitionResult.issue_type_transitions.nodes.map((transition) => ({
+          id: transition.id,
+          issue_type: publicWorktrackerId(transition.issue_type),
+          from_state: publicWorktrackerId(transition.from_state),
+          to_state: publicWorktrackerId(transition.to_state),
+          agent_allowed: transition.agent_allowed,
+          from_order: transition.fromState?.sort_order ?? Number.MAX_SAFE_INTEGER,
+          to_order: transition.toState?.sort_order ?? Number.MAX_SAFE_INTEGER,
+        })).sort((left, right) =>
+          left.from_order - right.from_order
+          || left.to_order - right.to_order
+          || left.id - right.id
+        ).map(({ from_order: _from, to_order: _to, ...transition }) => transition),
+        normalized.launchBindings,
+        normalized.providers,
+        normalized.agentModels,
+        normalized.reasoningLevels,
         Boolean(providerCatalog.provider_catalog.global_default),
       );
     },

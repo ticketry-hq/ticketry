@@ -95,10 +95,14 @@ impl AgentRunMutations {
     }
 
     /// No target identifier is accepted. The principal is installed by the
-    /// authenticated transport rather than parsed from GraphQL variables.
+    /// authenticated transport rather than parsed from GraphQL variables, so
+    /// an unbound caller is rejected before any service is consulted. The
+    /// desktop transport binds no Agent Run; agents reach termination through
+    /// the authenticated MCP transport, which shares this service.
     async fn terminate_current_agent_run(ctx: &Context<'_>) -> Result<CurrentRunTermination> {
+        let principal = principal(ctx)?;
         termination(ctx)?
-            .terminate_current_run(principal(ctx)?)
+            .terminate_current_run(principal)
             .await
             .map(Into::into)
             .map_err(graphql_error)
@@ -115,12 +119,24 @@ pub fn register(mut builder: seaography::Builder) -> seaography::Builder {
 }
 
 fn services<'a>(ctx: &'a Context<'a>) -> Result<&'a RunsServices> {
+    ready(ctx)?;
     ctx.data::<RunsServices>().map_err(|_| unavailable())
 }
 
 fn termination<'a>(ctx: &'a Context<'a>) -> Result<&'a RunTerminationService> {
+    ready(ctx)?;
     ctx.data::<RunTerminationService>()
         .map_err(|_| unavailable())
+}
+
+/// Every Runs query and command passes through the readiness gate first. A
+/// partially ready runtime refuses rather than reaching a half-adopted store.
+fn ready(ctx: &Context<'_>) -> Result<()> {
+    if super::readiness_gate::open(ctx) {
+        Ok(())
+    } else {
+        Err(super::readiness_gate::unavailable())
+    }
 }
 
 fn principal<'a>(ctx: &'a Context<'a>) -> Result<&'a AuthenticatedAgentRun> {

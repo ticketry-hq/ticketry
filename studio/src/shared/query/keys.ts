@@ -48,6 +48,10 @@ export const queryKeys = {
   workspace: ["workspace"] as const,
 
   workflows: {
+    // The one normalized workflow-catalogue read every workflow/settings
+    // reader selects from, so a settings load costs one catalogue round-trip.
+    catalog: (projectId: string) =>
+      ["workflows", "catalog", projectId] as const,
     byProject: (projectId: string) =>
       ["workflows", "project", projectId] as const,
     byIssueType: (issueTypeId: string) =>
@@ -61,9 +65,25 @@ export const queryKeys = {
     capabilities: ["providers", "capabilities"] as const,
   },
 
+  // One top-level Work Item owns one checkout and every descendant shares it,
+  // so the owner leads the key: `owned(ownerId)` is the exact holding a durable
+  // `worktree.changed`/`worktree.deleted` fact names, and every child view of
+  // that same checkout sits underneath it and converges with it.
   worktrees: {
-    status: (taskId: string, parentId?: string | null, moduleId?: string | null) =>
-      ["worktrees", taskId, { parentId: parentId ?? null, moduleId: moduleId ?? null }] as const,
+    all: ["worktrees", "status"] as const,
+    owned: (topLevelTaskId: string) =>
+      ["worktrees", "status", topLevelTaskId] as const,
+    status: (
+      topLevelTaskId: string,
+      taskId: string,
+      moduleId?: string | null,
+    ) =>
+      [
+        "worktrees",
+        "status",
+        topLevelTaskId,
+        { taskId, moduleId: moduleId ?? null },
+      ] as const,
   },
 
   documents: {

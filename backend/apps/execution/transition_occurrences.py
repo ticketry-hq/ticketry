@@ -11,6 +11,7 @@ from weakref import WeakValueDictionary
 
 from django.db import connection, transaction
 
+from apps.runs import rust_port
 from apps.runs.models import AutomationAttempt
 from worktracker.models import Issue
 
@@ -111,23 +112,18 @@ def _materialize_attempt(
         )
         return None
 
-    with transaction.atomic():
-        attempt, _created = AutomationAttempt.objects.get_or_create(
-            transition_id=occurrence.id,
-            retry_of__isnull=True,
-            defaults={
-                "issue": issue,
-                "from_state_id": occurrence.from_state_id,
-                "to_state_id": occurrence.to_state_id,
-                "workflow_revision": occurrence.workflow_revision,
-                # The occurrence identity owns the external effect before launch.
-                "agent_run_id": occurrence.id.hex,
-            },
-        )
-        if not attempt.agent_run_id:
-            attempt.agent_run_id = occurrence.id.hex
-            attempt.save(update_fields=["agent_run_id", "updated_at"])
-        return attempt
+    # Rust owns automation_attempts. Materialization is idempotent by committed
+    # transition occurrence, so re-delivery returns the same root attempt and
+    # cannot launch a second time.
+    materialized = rust_port.materialize_attempt(
+        occurrence_id=str(occurrence.id),
+        issue_id=str(issue.pk),
+        project_id=str(occurrence.project_id),
+        from_state_id=str(occurrence.from_state_id),
+        to_state_id=str(occurrence.to_state_id),
+        workflow_revision=int(occurrence.workflow_revision),
+    )
+    return AutomationAttempt.objects.filter(pk=materialized["attempt_id"]).first()
 
 
 def _consume(

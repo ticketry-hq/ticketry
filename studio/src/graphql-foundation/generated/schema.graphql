@@ -1,10 +1,3 @@
-type AgentModel {
-	id: String!
-	provider: String!
-	name: String!
-	permitted_reasoning_levels: [String!]!
-}
-
 type AgentRunHolding {
 	agent_run_id: String!
 	project_id: String!
@@ -16,16 +9,6 @@ type AgentRunHolding {
 	state: String!
 	updated_at: String!
 	provider_session_id: String
-}
-
-type Attachment {
-	id: String!
-	issue: String!
-	filename: String!
-	mime_type: String!
-	size: Int
-	url: String!
-	created_at: String!
 }
 
 type AutomationAttemptProjection {
@@ -63,6 +46,65 @@ type CurrentRunTermination {
 input CursorInput {
 	cursor: String
 	limit: Int!
+}
+
+type DesignDocuments {
+	id: String!
+	moduleId: String!
+	taskId: String!
+	scope: String!
+	relPath: String!
+	createdAt: String!
+	updatedAt: String!
+	contentDigest: String
+}
+
+type DesignDocumentsConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [DesignDocuments!]!
+	edges: [DesignDocumentsEdge!]!
+}
+
+type DesignDocumentsEdge {
+	cursor: String!
+	node: DesignDocuments!
+}
+
+input DesignDocumentsFilterInput {
+	id: StringFilterInput
+	moduleId: StringFilterInput
+	taskId: StringFilterInput
+	scope: StringFilterInput
+	relPath: StringFilterInput
+	createdAt: StringFilterInput
+	updatedAt: StringFilterInput
+	contentDigest: StringFilterInput
+	and: [DesignDocumentsFilterInput!]
+	or: [DesignDocumentsFilterInput!]
+	not: DesignDocumentsFilterInput
+}
+
+input DesignDocumentsHavingInput {
+	_: Boolean
+}
+
+input DesignDocumentsOrderInput {
+	id: OrderByEnum
+	moduleId: OrderByEnum
+	taskId: OrderByEnum
+	scope: OrderByEnum
+	relPath: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+	contentDigest: OrderByEnum
+}
+
+type DocumentSaveOutcome {
+	document_id: String!
+	digest: String!
+	saved: Boolean!
+	stale: Boolean!
 }
 
 input FloatFilterInput {
@@ -113,48 +155,17 @@ input IntegerFilterInput {
 	not_between: [Int!]
 }
 
-type IssueType {
-	id: String!
-	project: String!
-	name: String!
-	level: String!
-	color: String!
-	sort_order: Int!
-	start_state: String
-	workflow_revision: Int!
-	is_pathfind: Boolean!
-	created_at: String!
-	updated_at: String!
-}
-
-type IssueTypeTransition {
-	id: Int!
-	issue_type: String!
-	from_state: String!
-	to_state: String!
-	agent_allowed: Boolean!
-}
-
 scalar Json
+
+input JsonFilterInput {
+	eq: Json
+	ne: Json
+}
 
 type KeybindingSetting {
 	scope: String!
 	key: String!
 	value: Json!
-	updated_at: String!
-}
-
-type LaunchBinding {
-	id: Int!
-	issue_type: String!
-	state: String!
-	prompt: String!
-	required_skills: [String!]!
-	model: String
-	reasoning: String
-	auto_start: Boolean!
-	subtree_run_enabled: Boolean!
-	created_at: String!
 	updated_at: String!
 }
 
@@ -218,6 +229,11 @@ type MigrationProbes {
 	value: String!
 }
 
+type MigrationProbesBasic {
+	id: Int!
+	value: String!
+}
+
 type MigrationProbesConnection {
 	pageInfo: PageInfo!
 	paginationInfo: PaginationInfo
@@ -242,50 +258,48 @@ input MigrationProbesHavingInput {
 	_: Boolean
 }
 
+input MigrationProbesInsertInput {
+	id: Int!
+	value: String!
+}
+
 input MigrationProbesOrderInput {
 	id: OrderByEnum
 	value: OrderByEnum
 }
 
-type Module {
-	id: String!
-	name: String!
-	project_id: String!
-	sequence_id: Int!
-	key: String!
-	is_archived: Boolean!
-	issue_type: String!
+input MigrationProbesUpdateInput {
+	id: Int
+	value: String
 }
 
 type Mutation {
-	acknowledge_onboarding: Workspace!
-	create_project(name: String!, slug: String!, description: String, workspace_slug: String): Project!
-	update_project(id: String!, name: String, description: String): Project!
+	migrationProbesCreateOne(data: MigrationProbesInsertInput!): MigrationProbesBasic!
+	migrationProbesCreateBatch(data: [MigrationProbesInsertInput!]!): [MigrationProbesBasic!]!
+	migrationProbesUpdate(data: MigrationProbesUpdateInput!, filter: MigrationProbesFilterInput): [MigrationProbesBasic!]!
+	migrationProbesDelete(filter: MigrationProbesFilterInput): Int!
+	worktree_create(task_id: String!, operation_id: String!): WorktreeStatusView!
+	worktree_discard(task_id: String!, operation_id: String!): WorktreeDiscardResult!
+	acknowledge_onboarding: WorktrackerWorkspace!
+	create_project(name: String!, slug: String!, description: String, workspace_slug: String): WorktrackerProject!
+	update_project(id: String!, name: String, description: String): WorktrackerProject!
 	delete_project(id: String!): Boolean!
-	create_state(project_id: String!, name: String!, group: String!, color: String): State!
-	update_state(id: String!, name: String, group: String, color: String, sort_order: Int): State!
-	reorder_states(project_id: String!, ordered_ids: [String!]!): [State!]!
-	create_issue_type(project_id: String!, name: String!, level: String!, color: String): IssueType!
-	update_issue_type(id: String!, name: String, color: String, sort_order: Int, start_state_id: String, workflow_revision: Int): IssueType!
+	create_state(project_id: String!, name: String!, group: String!, color: String): WorktrackerState!
+	update_state(id: String!, name: String, group: String, color: String, sort_order: Int): WorktrackerState!
+	reorder_states(project_id: String!, ordered_ids: [String!]!): [WorktrackerState!]!
+	create_issue_type(project_id: String!, name: String!, level: String!, color: String): WorktrackerIssuetype!
+	update_issue_type(id: String!, name: String, color: String, sort_order: Int, start_state_id: String, workflow_revision: Int): WorktrackerIssuetype!
 	delete_issue_type(id: String!, reassign_to: String): Boolean!
-	reorder_issue_types(project_id: String!, ordered_ids: [String!]!): [IssueType!]!
-	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorkItem!
-	update_work_item(id: String!, name: String, description: String, issue_type_id: String): WorkItem!
-	archive_work_item(id: String!): WorkItem!
-	reorder_work_item(id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorkItem!
-	reparent_work_item(id: String!, parent_id: String, before_id: String, after_id: String): WorkItem!
+	reorder_issue_types(project_id: String!, ordered_ids: [String!]!): [WorktrackerIssuetype!]!
+	create_work_item(project_id: String!, name: String!, issue_type_id: String!, description: String, state_id: String, parent_id: String): WorktrackerIssue!
+	update_work_item(id: String!, name: String, description: String, issue_type_id: String, state_id: String, parent_id: String, blocked_by_ids: [String!], is_archived: Boolean): WorktrackerIssue!
+	reorder_work_item(id: String!, before_id: String, after_id: String, initial_order_ids: [String!]): WorktrackerIssue!
 	delete_work_item(id: String!): Boolean!
-	create_attachment(issue_id: String!, filename: String!, mime_type: String, content_base64: String!): Attachment!
-	transition_work_item(id: String!, target_state_id: String!, origin: String): WorkItem!
-	set_work_item_blockers(id: String!, blocked_by_ids: [String!]!): WorkItem!
-	add_work_item_blocker(id: String!, blocker_id: String!): WorkItem!
-	add_work_item_dependent(id: String!, dependent_id: String!): WorkItem!
-	create_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): IssueTypeTransition!
-	update_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): IssueTypeTransition!
+	create_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): WorktrackerIssuetypetransition!
+	update_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, agent_allowed: Boolean!, workflow_revision: Int!): WorktrackerIssuetypetransition!
 	delete_issue_type_transition(issue_type_id: String!, from_state_id: String!, to_state_id: String!, workflow_revision: Int!): Boolean!
 	remove_state_from_issue_type_workflow(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
-	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): LaunchBinding!
-	delete_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!): Boolean!
+	upsert_issue_type_launch_binding(issue_type_id: String!, state_id: String!, workflow_revision: Int!, prompt: String, required_skills: [String!], model_id: String, reasoning_id: String, auto_start: Boolean, subtree_run_enabled: Boolean): WorktrackerLaunchbinding!
 	delete_state(state_id: String!): Boolean!
 	update_keybinding_setting(value: Json!): KeybindingSetting!
 	update_provider_catalog(activated_providers: [String!]!, default_provider: String, default_model: String, default_reasoning: String): ProviderCatalog!
@@ -298,7 +312,9 @@ type Mutation {
 	dismiss_automation_attempt(attempt_id: String!): AutomationAttemptProjection!
 	ingest_agent_lifecycle(agent_run_id: String!, kind: String!, occurred_at: String!, provider_session_id: String): LifecycleAccepted!
 	terminate_current_agent_run: CurrentRunTermination!
-	setMigrationProbe(value: String!): Boolean!
+	refresh_task_document_registry(task_id: String!, project_id: String, module_id: String): [DesignDocuments!]!
+	refresh_scratch_document_registry(module_id: String!): [DesignDocuments!]!
+	save_design_document(document_id: String!, expected_digest: String!, content: String!, operation_id: String!): DocumentSaveOutcome!
 }
 
 input OffsetInput {
@@ -336,68 +352,79 @@ input PaginationInput @oneOf {
 	offset: OffsetInput
 }
 
-type Project {
-	id: String!
-	name: String!
-	slug: String!
-	description: String!
-	manual_module_order: Boolean!
-}
-
-type Provider {
-	id: String!
-	slug: String!
-	activated: Boolean!
-	supports_unattended: Boolean!
-}
-
 type ProviderCatalog {
-	configurable_providers: [Provider!]!
-	providers: [Provider!]!
-	agent_models: [AgentModel!]!
-	reasoning_levels: [ReasoningLevel!]!
+	configurable_providers: [WorktrackerProvider!]!
+	providers: [WorktrackerProvider!]!
+	agent_models: [WorktrackerAgentmodel!]!
+	reasoning_levels: [WorktrackerReasoninglevel!]!
 	global_default: GlobalLaunchDefault
 }
 
 type Query {
 	migrationProbes(filters: MigrationProbesFilterInput, having: MigrationProbesHavingInput, orderBy: MigrationProbesOrderInput, pagination: PaginationInput): MigrationProbesConnection!
-	workspace: Workspace
-	projects: [Project!]!
-	modules(project_id: String!, include_archived: Boolean): [Module!]!
-	work_items(project_id: String, module_id: String, state_id: String): [WorkItem!]!
-	work_items_by_ids(ids: [String!]!): [WorkItem!]!
-	work_item(id: String!): WorkItem
-	states(project_id: String!): [State!]!
-	issue_types(project_id: String!): [IssueType!]!
-	issue_type(id: String!): IssueType
-	issue_type_transitions(issue_type_id: String!): [IssueTypeTransition!]!
-	launch_bindings(project_id: String!): [LaunchBinding!]!
-	providers: [Provider!]!
-	agent_models: [AgentModel!]!
-	reasoning_levels: [ReasoningLevel!]!
-	attachments(issue_id: String!): [Attachment!]!
+	worktrackerWorkspace(filters: WorktrackerWorkspaceFilterInput, having: WorktrackerWorkspaceHavingInput, orderBy: WorktrackerWorkspaceOrderInput, pagination: PaginationInput): WorktrackerWorkspaceConnection!
+	worktrackerProject(filters: WorktrackerProjectFilterInput, having: WorktrackerProjectHavingInput, orderBy: WorktrackerProjectOrderInput, pagination: PaginationInput): WorktrackerProjectConnection!
+	worktrackerState(filters: WorktrackerStateFilterInput, having: WorktrackerStateHavingInput, orderBy: WorktrackerStateOrderInput, pagination: PaginationInput): WorktrackerStateConnection!
+	worktrackerIssuetype(filters: WorktrackerIssuetypeFilterInput, having: WorktrackerIssuetypeHavingInput, orderBy: WorktrackerIssuetypeOrderInput, pagination: PaginationInput): WorktrackerIssuetypeConnection!
+	worktrackerIssue(filters: WorktrackerIssueFilterInput, having: WorktrackerIssueHavingInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
+	worktrackerIssueBlockedBy(filters: WorktrackerIssueBlockedByFilterInput, having: WorktrackerIssueBlockedByHavingInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
+	worktrackerAttachment(filters: WorktrackerAttachmentFilterInput, having: WorktrackerAttachmentHavingInput, orderBy: WorktrackerAttachmentOrderInput, pagination: PaginationInput): WorktrackerAttachmentConnection!
+	worktrackerIssuetypetransition(filters: WorktrackerIssuetypetransitionFilterInput, having: WorktrackerIssuetypetransitionHavingInput, orderBy: WorktrackerIssuetypetransitionOrderInput, pagination: PaginationInput): WorktrackerIssuetypetransitionConnection!
+	worktrackerLaunchbinding(filters: WorktrackerLaunchbindingFilterInput, having: WorktrackerLaunchbindingHavingInput, orderBy: WorktrackerLaunchbindingOrderInput, pagination: PaginationInput): WorktrackerLaunchbindingConnection!
+	worktrackerProvider(filters: WorktrackerProviderFilterInput, having: WorktrackerProviderHavingInput, orderBy: WorktrackerProviderOrderInput, pagination: PaginationInput): WorktrackerProviderConnection!
+	worktrackerAgentmodel(filters: WorktrackerAgentmodelFilterInput, having: WorktrackerAgentmodelHavingInput, orderBy: WorktrackerAgentmodelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelConnection!
+	worktrackerAgentmodelreasoninglevel(filters: WorktrackerAgentmodelreasoninglevelFilterInput, having: WorktrackerAgentmodelreasoninglevelHavingInput, orderBy: WorktrackerAgentmodelreasoninglevelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelreasoninglevelConnection!
+	worktrackerReasoninglevel(filters: WorktrackerReasoninglevelFilterInput, having: WorktrackerReasoninglevelHavingInput, orderBy: WorktrackerReasoninglevelOrderInput, pagination: PaginationInput): WorktrackerReasoninglevelConnection!
+	worktrees(filters: WorktreesFilterInput, having: WorktreesHavingInput, orderBy: WorktreesOrderInput, pagination: PaginationInput): WorktreesConnection!
+	worktree_status(task_id: String!): WorktreeStatusView!
 	keybinding_setting: KeybindingSetting
 	provider_catalog: ProviderCatalog!
 	local_settings: LocalSettings!
 	automation_attempts(project_id: String!, task_id: String): [AutomationAttemptProjection!]!
 	agent_run_holdings(project_id: String!, task_id: String): [AgentRunHolding!]!
+	designDocuments(filters: DesignDocumentsFilterInput, having: DesignDocumentsHavingInput, orderBy: DesignDocumentsOrderInput, pagination: PaginationInput): DesignDocumentsConnection!
+	directory_completions(path: String!): [String!]!
 }
 
-type ReasoningLevel {
-	id: String!
-	name: String!
+type RunStatusCaughtUp {
+	project_id: String!
+	cursor: Int!
 }
 
-type State {
-	id: String!
-	project: String!
-	name: String!
-	group: String!
-	color: String!
-	sort_order: Int!
-	is_protected: Boolean!
-	created_at: String!
-	updated_at: String!
+type RunStatusEvent {
+	cursor: Int!
+	event_id: String!
+	project_id: String!
+	event_kind: String!
+	payload_version: Int!
+	subject_kind: String!
+	subject_id: String!
+	agent_run_id: String
+	automation_attempt_id: String
+	work_item_id: String
+	payload: Json!
+	committed_at: String!
+}
+
+type RunStatusFailed {
+	code: String!
+	message: String!
+}
+
+union RunStatusFrame = RunStatusSnapshot | RunStatusEvent | RunStatusCaughtUp | RunStatusResetRequired | RunStatusFailed
+
+type RunStatusResetRequired {
+	project_id: String!
+	cursor: Int!
+	reason: String!
+}
+
+type RunStatusSnapshot {
+	project_id: String!
+	cursor: Int!
+	at: String!
+	runs: [AgentRunHolding!]!
+	automation_attempts: [AutomationAttemptProjection!]!
 }
 
 input StringFilterInput {
@@ -420,6 +447,10 @@ input StringFilterInput {
 	not_between: [String!]
 }
 
+type Subscription {
+	run_status_stream(project_id: String!, after_cursor: Int): RunStatusFrame!
+}
+
 input TextFilterInput {
 	eq: String
 	ne: String
@@ -434,32 +465,804 @@ input TextFilterInput {
 	not_between: [String!]
 }
 
-type WorkItem {
+type WorktrackerAgentmodel {
 	id: String!
+	providerId: String!
 	name: String!
-	project_id: String!
-	sequence_id: Int!
-	state: String
-	state_revision: Int!
-	description: String!
-	parent_id: String
-	module_id: String
-	sub_issues_count: Int!
-	key: String!
-	is_archived: Boolean!
-	created_at: String!
-	updated_at: String!
-	rank: String!
-	issue_type: String!
-	blocked_by_ids: [String!]!
-	blocks_ids: [String!]!
+	provider: WorktrackerProvider
+	launchBinding(filters: WorktrackerLaunchbindingFilterInput, orderBy: WorktrackerLaunchbindingOrderInput, pagination: PaginationInput): WorktrackerLaunchbindingConnection!
+	agentModelReasoningLevel(filters: WorktrackerAgentmodelreasoninglevelFilterInput, orderBy: WorktrackerAgentmodelreasoninglevelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelreasoninglevelConnection!
 }
 
-type Workspace {
+type WorktrackerAgentmodelConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerAgentmodel!]!
+	edges: [WorktrackerAgentmodelEdge!]!
+}
+
+type WorktrackerAgentmodelEdge {
+	cursor: String!
+	node: WorktrackerAgentmodel!
+}
+
+input WorktrackerAgentmodelFilterInput {
+	id: StringFilterInput
+	providerId: StringFilterInput
+	name: StringFilterInput
+	and: [WorktrackerAgentmodelFilterInput!]
+	or: [WorktrackerAgentmodelFilterInput!]
+	not: WorktrackerAgentmodelFilterInput
+}
+
+input WorktrackerAgentmodelHavingInput {
+	provider: WorktrackerProviderFilterInput
+	launchBinding: WorktrackerLaunchbindingFilterInput
+	agentModelReasoningLevel: WorktrackerAgentmodelreasoninglevelFilterInput
+}
+
+input WorktrackerAgentmodelOrderInput {
+	id: OrderByEnum
+	providerId: OrderByEnum
+	name: OrderByEnum
+}
+
+type WorktrackerAgentmodelreasoninglevel {
+	id: Int!
+	agentModelId: String!
+	reasoningLevelId: String!
+	agentModel: WorktrackerAgentmodel
+	reasoningLevel: WorktrackerReasoninglevel
+}
+
+type WorktrackerAgentmodelreasoninglevelConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerAgentmodelreasoninglevel!]!
+	edges: [WorktrackerAgentmodelreasoninglevelEdge!]!
+}
+
+type WorktrackerAgentmodelreasoninglevelEdge {
+	cursor: String!
+	node: WorktrackerAgentmodelreasoninglevel!
+}
+
+input WorktrackerAgentmodelreasoninglevelFilterInput {
+	id: IntegerFilterInput
+	agentModelId: StringFilterInput
+	reasoningLevelId: StringFilterInput
+	and: [WorktrackerAgentmodelreasoninglevelFilterInput!]
+	or: [WorktrackerAgentmodelreasoninglevelFilterInput!]
+	not: WorktrackerAgentmodelreasoninglevelFilterInput
+}
+
+input WorktrackerAgentmodelreasoninglevelHavingInput {
+	agentModel: WorktrackerAgentmodelFilterInput
+	reasoningLevel: WorktrackerReasoninglevelFilterInput
+}
+
+input WorktrackerAgentmodelreasoninglevelOrderInput {
+	id: OrderByEnum
+	agentModelId: OrderByEnum
+	reasoningLevelId: OrderByEnum
+}
+
+type WorktrackerAttachment {
+	id: String!
+	issueId: String!
+	file: String!
+	filename: String!
+	mimeType: String!
+	size: Int
+	createdAt: String!
+	issue: WorktrackerIssue
+}
+
+type WorktrackerAttachmentConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerAttachment!]!
+	edges: [WorktrackerAttachmentEdge!]!
+}
+
+type WorktrackerAttachmentEdge {
+	cursor: String!
+	node: WorktrackerAttachment!
+}
+
+input WorktrackerAttachmentFilterInput {
+	id: StringFilterInput
+	issueId: StringFilterInput
+	file: StringFilterInput
+	filename: StringFilterInput
+	mimeType: StringFilterInput
+	size: IntegerFilterInput
+	createdAt: TextFilterInput
+	and: [WorktrackerAttachmentFilterInput!]
+	or: [WorktrackerAttachmentFilterInput!]
+	not: WorktrackerAttachmentFilterInput
+}
+
+input WorktrackerAttachmentHavingInput {
+	issue: WorktrackerIssueFilterInput
+}
+
+input WorktrackerAttachmentOrderInput {
+	id: OrderByEnum
+	issueId: OrderByEnum
+	file: OrderByEnum
+	filename: OrderByEnum
+	mimeType: OrderByEnum
+	size: OrderByEnum
+	createdAt: OrderByEnum
+}
+
+type WorktrackerIssue {
+	id: String!
+	projectId: String!
+	type: String!
+	issueTypeId: String!
+	parentId: String
+	moduleId: String
+	stateId: String
+	stateRevision: Int!
+	name: String!
+	sequenceId: Int!
+	isArchived: Boolean!
+	rank: String!
+	description: String!
+	createdAt: String!
+	updatedAt: String!
+	project: WorktrackerProject
+	issueType: WorktrackerIssuetype
+	state: WorktrackerState
+	parent: WorktrackerIssue
+	children(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
+	module: WorktrackerIssue
+	moduleMembers(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
+	blockedByEdges(filters: WorktrackerIssueBlockedByFilterInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
+	blocksEdges(filters: WorktrackerIssueBlockedByFilterInput, orderBy: WorktrackerIssueBlockedByOrderInput, pagination: PaginationInput): WorktrackerIssueBlockedByConnection!
+	attachment(filters: WorktrackerAttachmentFilterInput, orderBy: WorktrackerAttachmentOrderInput, pagination: PaginationInput): WorktrackerAttachmentConnection!
+}
+
+type WorktrackerIssueBlockedBy {
+	id: Int!
+	fromIssueId: String!
+	toIssueId: String!
+	blockedIssue: WorktrackerIssue
+	blockingIssue: WorktrackerIssue
+}
+
+type WorktrackerIssueBlockedByConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerIssueBlockedBy!]!
+	edges: [WorktrackerIssueBlockedByEdge!]!
+}
+
+type WorktrackerIssueBlockedByEdge {
+	cursor: String!
+	node: WorktrackerIssueBlockedBy!
+}
+
+input WorktrackerIssueBlockedByFilterInput {
+	id: IntegerFilterInput
+	fromIssueId: StringFilterInput
+	toIssueId: StringFilterInput
+	and: [WorktrackerIssueBlockedByFilterInput!]
+	or: [WorktrackerIssueBlockedByFilterInput!]
+	not: WorktrackerIssueBlockedByFilterInput
+}
+
+input WorktrackerIssueBlockedByHavingInput {
+	blockedIssue: WorktrackerIssueFilterInput
+	blockingIssue: WorktrackerIssueFilterInput
+}
+
+input WorktrackerIssueBlockedByOrderInput {
+	id: OrderByEnum
+	fromIssueId: OrderByEnum
+	toIssueId: OrderByEnum
+}
+
+type WorktrackerIssueConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerIssue!]!
+	edges: [WorktrackerIssueEdge!]!
+}
+
+type WorktrackerIssueEdge {
+	cursor: String!
+	node: WorktrackerIssue!
+}
+
+input WorktrackerIssueFilterInput {
+	id: StringFilterInput
+	projectId: StringFilterInput
+	type: StringFilterInput
+	issueTypeId: StringFilterInput
+	parentId: StringFilterInput
+	moduleId: StringFilterInput
+	stateId: StringFilterInput
+	stateRevision: IntegerFilterInput
+	name: StringFilterInput
+	sequenceId: IntegerFilterInput
+	isArchived: BooleanFilterInput
+	rank: StringFilterInput
+	description: StringFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerIssueFilterInput!]
+	or: [WorktrackerIssueFilterInput!]
+	not: WorktrackerIssueFilterInput
+}
+
+input WorktrackerIssueHavingInput {
+	project: WorktrackerProjectFilterInput
+	issueType: WorktrackerIssuetypeFilterInput
+	state: WorktrackerStateFilterInput
+	parent: WorktrackerIssueFilterInput
+	children: WorktrackerIssueFilterInput
+	module: WorktrackerIssueFilterInput
+	moduleMembers: WorktrackerIssueFilterInput
+	blockedByEdges: WorktrackerIssueBlockedByFilterInput
+	blocksEdges: WorktrackerIssueBlockedByFilterInput
+	attachment: WorktrackerAttachmentFilterInput
+}
+
+input WorktrackerIssueOrderInput {
+	id: OrderByEnum
+	projectId: OrderByEnum
+	type: OrderByEnum
+	issueTypeId: OrderByEnum
+	parentId: OrderByEnum
+	moduleId: OrderByEnum
+	stateId: OrderByEnum
+	stateRevision: OrderByEnum
+	name: OrderByEnum
+	sequenceId: OrderByEnum
+	isArchived: OrderByEnum
+	rank: OrderByEnum
+	description: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
+type WorktrackerIssuetype {
+	id: String!
+	projectId: String!
+	name: String!
+	level: String!
+	color: String!
+	sortOrder: Int!
+	startStateId: String
+	workflowRevision: Int!
+	isPathfind: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	project: WorktrackerProject
+	state: WorktrackerState
+	issue(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
+	issueTypeTransition(filters: WorktrackerIssuetypetransitionFilterInput, orderBy: WorktrackerIssuetypetransitionOrderInput, pagination: PaginationInput): WorktrackerIssuetypetransitionConnection!
+	launchBinding(filters: WorktrackerLaunchbindingFilterInput, orderBy: WorktrackerLaunchbindingOrderInput, pagination: PaginationInput): WorktrackerLaunchbindingConnection!
+}
+
+type WorktrackerIssuetypeConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerIssuetype!]!
+	edges: [WorktrackerIssuetypeEdge!]!
+}
+
+type WorktrackerIssuetypeEdge {
+	cursor: String!
+	node: WorktrackerIssuetype!
+}
+
+input WorktrackerIssuetypeFilterInput {
+	id: StringFilterInput
+	projectId: StringFilterInput
+	name: StringFilterInput
+	level: StringFilterInput
+	color: StringFilterInput
+	sortOrder: IntegerFilterInput
+	startStateId: StringFilterInput
+	workflowRevision: IntegerFilterInput
+	isPathfind: BooleanFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerIssuetypeFilterInput!]
+	or: [WorktrackerIssuetypeFilterInput!]
+	not: WorktrackerIssuetypeFilterInput
+}
+
+input WorktrackerIssuetypeHavingInput {
+	project: WorktrackerProjectFilterInput
+	state: WorktrackerStateFilterInput
+	issue: WorktrackerIssueFilterInput
+	issueTypeTransition: WorktrackerIssuetypetransitionFilterInput
+	launchBinding: WorktrackerLaunchbindingFilterInput
+}
+
+input WorktrackerIssuetypeOrderInput {
+	id: OrderByEnum
+	projectId: OrderByEnum
+	name: OrderByEnum
+	level: OrderByEnum
+	color: OrderByEnum
+	sortOrder: OrderByEnum
+	startStateId: OrderByEnum
+	workflowRevision: OrderByEnum
+	isPathfind: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
+type WorktrackerIssuetypetransition {
+	id: Int!
+	issueTypeId: String!
+	fromStateId: String!
+	toStateId: String!
+	agentAllowed: Boolean!
+	issueType: WorktrackerIssuetype
+	fromState: WorktrackerState
+	toState: WorktrackerState
+}
+
+type WorktrackerIssuetypetransitionConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerIssuetypetransition!]!
+	edges: [WorktrackerIssuetypetransitionEdge!]!
+}
+
+type WorktrackerIssuetypetransitionEdge {
+	cursor: String!
+	node: WorktrackerIssuetypetransition!
+}
+
+input WorktrackerIssuetypetransitionFilterInput {
+	id: IntegerFilterInput
+	issueTypeId: StringFilterInput
+	fromStateId: StringFilterInput
+	toStateId: StringFilterInput
+	agentAllowed: BooleanFilterInput
+	and: [WorktrackerIssuetypetransitionFilterInput!]
+	or: [WorktrackerIssuetypetransitionFilterInput!]
+	not: WorktrackerIssuetypetransitionFilterInput
+}
+
+input WorktrackerIssuetypetransitionHavingInput {
+	issueType: WorktrackerIssuetypeFilterInput
+	fromState: WorktrackerStateFilterInput
+	toState: WorktrackerStateFilterInput
+}
+
+input WorktrackerIssuetypetransitionOrderInput {
+	id: OrderByEnum
+	issueTypeId: OrderByEnum
+	fromStateId: OrderByEnum
+	toStateId: OrderByEnum
+	agentAllowed: OrderByEnum
+}
+
+type WorktrackerLaunchbinding {
+	id: Int!
+	issueTypeId: String!
+	stateId: String!
+	prompt: String!
+	requiredSkills: Json!
+	modelId: String
+	reasoningId: String
+	autoStart: Boolean!
+	subtreeRunEnabled: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	issueType: WorktrackerIssuetype
+	state: WorktrackerState
+	agentModel: WorktrackerAgentmodel
+	reasoningLevel: WorktrackerReasoninglevel
+}
+
+type WorktrackerLaunchbindingConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerLaunchbinding!]!
+	edges: [WorktrackerLaunchbindingEdge!]!
+}
+
+type WorktrackerLaunchbindingEdge {
+	cursor: String!
+	node: WorktrackerLaunchbinding!
+}
+
+input WorktrackerLaunchbindingFilterInput {
+	id: IntegerFilterInput
+	issueTypeId: StringFilterInput
+	stateId: StringFilterInput
+	prompt: StringFilterInput
+	requiredSkills: JsonFilterInput
+	modelId: StringFilterInput
+	reasoningId: StringFilterInput
+	autoStart: BooleanFilterInput
+	subtreeRunEnabled: BooleanFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerLaunchbindingFilterInput!]
+	or: [WorktrackerLaunchbindingFilterInput!]
+	not: WorktrackerLaunchbindingFilterInput
+}
+
+input WorktrackerLaunchbindingHavingInput {
+	issueType: WorktrackerIssuetypeFilterInput
+	state: WorktrackerStateFilterInput
+	agentModel: WorktrackerAgentmodelFilterInput
+	reasoningLevel: WorktrackerReasoninglevelFilterInput
+}
+
+input WorktrackerLaunchbindingOrderInput {
+	id: OrderByEnum
+	issueTypeId: OrderByEnum
+	stateId: OrderByEnum
+	prompt: OrderByEnum
+	requiredSkills: OrderByEnum
+	modelId: OrderByEnum
+	reasoningId: OrderByEnum
+	autoStart: OrderByEnum
+	subtreeRunEnabled: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
+type WorktrackerProject {
+	id: String!
+	workspaceId: String!
+	name: String!
+	slug: String!
+	description: String!
+	seqCounter: Int!
+	stateRevision: Int!
+	manualModuleOrder: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	workspace: WorktrackerWorkspace
+	state(filters: WorktrackerStateFilterInput, orderBy: WorktrackerStateOrderInput, pagination: PaginationInput): WorktrackerStateConnection!
+	issueType(filters: WorktrackerIssuetypeFilterInput, orderBy: WorktrackerIssuetypeOrderInput, pagination: PaginationInput): WorktrackerIssuetypeConnection!
+	issue(filters: WorktrackerIssueFilterInput, orderBy: WorktrackerIssueOrderInput, pagination: PaginationInput): WorktrackerIssueConnection!
+}
+
+type WorktrackerProjectConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerProject!]!
+	edges: [WorktrackerProjectEdge!]!
+}
+
+type WorktrackerProjectEdge {
+	cursor: String!
+	node: WorktrackerProject!
+}
+
+input WorktrackerProjectFilterInput {
+	id: StringFilterInput
+	workspaceId: StringFilterInput
+	name: StringFilterInput
+	slug: StringFilterInput
+	description: StringFilterInput
+	seqCounter: IntegerFilterInput
+	stateRevision: IntegerFilterInput
+	manualModuleOrder: BooleanFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerProjectFilterInput!]
+	or: [WorktrackerProjectFilterInput!]
+	not: WorktrackerProjectFilterInput
+}
+
+input WorktrackerProjectHavingInput {
+	workspace: WorktrackerWorkspaceFilterInput
+	state: WorktrackerStateFilterInput
+	issueType: WorktrackerIssuetypeFilterInput
+	issue: WorktrackerIssueFilterInput
+}
+
+input WorktrackerProjectOrderInput {
+	id: OrderByEnum
+	workspaceId: OrderByEnum
+	name: OrderByEnum
+	slug: OrderByEnum
+	description: OrderByEnum
+	seqCounter: OrderByEnum
+	stateRevision: OrderByEnum
+	manualModuleOrder: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
+type WorktrackerProvider {
+	id: String!
+	slug: String!
+	activated: Boolean!
+	supportsUnattended: Boolean!
+	agentModel(filters: WorktrackerAgentmodelFilterInput, orderBy: WorktrackerAgentmodelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelConnection!
+}
+
+type WorktrackerProviderConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerProvider!]!
+	edges: [WorktrackerProviderEdge!]!
+}
+
+type WorktrackerProviderEdge {
+	cursor: String!
+	node: WorktrackerProvider!
+}
+
+input WorktrackerProviderFilterInput {
+	id: StringFilterInput
+	slug: StringFilterInput
+	activated: BooleanFilterInput
+	supportsUnattended: BooleanFilterInput
+	and: [WorktrackerProviderFilterInput!]
+	or: [WorktrackerProviderFilterInput!]
+	not: WorktrackerProviderFilterInput
+}
+
+input WorktrackerProviderHavingInput {
+	agentModel: WorktrackerAgentmodelFilterInput
+}
+
+input WorktrackerProviderOrderInput {
+	id: OrderByEnum
+	slug: OrderByEnum
+	activated: OrderByEnum
+	supportsUnattended: OrderByEnum
+}
+
+type WorktrackerReasoninglevel {
+	id: String!
+	name: String!
+	launchBinding(filters: WorktrackerLaunchbindingFilterInput, orderBy: WorktrackerLaunchbindingOrderInput, pagination: PaginationInput): WorktrackerLaunchbindingConnection!
+	agentModelReasoningLevel(filters: WorktrackerAgentmodelreasoninglevelFilterInput, orderBy: WorktrackerAgentmodelreasoninglevelOrderInput, pagination: PaginationInput): WorktrackerAgentmodelreasoninglevelConnection!
+}
+
+type WorktrackerReasoninglevelConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerReasoninglevel!]!
+	edges: [WorktrackerReasoninglevelEdge!]!
+}
+
+type WorktrackerReasoninglevelEdge {
+	cursor: String!
+	node: WorktrackerReasoninglevel!
+}
+
+input WorktrackerReasoninglevelFilterInput {
+	id: StringFilterInput
+	name: StringFilterInput
+	and: [WorktrackerReasoninglevelFilterInput!]
+	or: [WorktrackerReasoninglevelFilterInput!]
+	not: WorktrackerReasoninglevelFilterInput
+}
+
+input WorktrackerReasoninglevelHavingInput {
+	launchBinding: WorktrackerLaunchbindingFilterInput
+	agentModelReasoningLevel: WorktrackerAgentmodelreasoninglevelFilterInput
+}
+
+input WorktrackerReasoninglevelOrderInput {
+	id: OrderByEnum
+	name: OrderByEnum
+}
+
+type WorktrackerState {
+	id: String!
+	projectId: String!
+	name: String!
+	group: String!
+	color: String!
+	sortOrder: Int!
+	isProtected: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	project: WorktrackerProject
+}
+
+type WorktrackerStateConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerState!]!
+	edges: [WorktrackerStateEdge!]!
+}
+
+type WorktrackerStateEdge {
+	cursor: String!
+	node: WorktrackerState!
+}
+
+input WorktrackerStateFilterInput {
+	id: StringFilterInput
+	projectId: StringFilterInput
+	name: StringFilterInput
+	group: StringFilterInput
+	color: StringFilterInput
+	sortOrder: IntegerFilterInput
+	isProtected: BooleanFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerStateFilterInput!]
+	or: [WorktrackerStateFilterInput!]
+	not: WorktrackerStateFilterInput
+}
+
+input WorktrackerStateHavingInput {
+	project: WorktrackerProjectFilterInput
+}
+
+input WorktrackerStateOrderInput {
+	id: OrderByEnum
+	projectId: OrderByEnum
+	name: OrderByEnum
+	group: OrderByEnum
+	color: OrderByEnum
+	sortOrder: OrderByEnum
+	isProtected: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
+type WorktrackerWorkspace {
 	id: String!
 	slug: String!
 	name: String!
-	onboarding_required: Boolean!
+	onboardingRequired: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	project(filters: WorktrackerProjectFilterInput, orderBy: WorktrackerProjectOrderInput, pagination: PaginationInput): WorktrackerProjectConnection!
+}
+
+type WorktrackerWorkspaceConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [WorktrackerWorkspace!]!
+	edges: [WorktrackerWorkspaceEdge!]!
+}
+
+type WorktrackerWorkspaceEdge {
+	cursor: String!
+	node: WorktrackerWorkspace!
+}
+
+input WorktrackerWorkspaceFilterInput {
+	id: StringFilterInput
+	slug: StringFilterInput
+	name: StringFilterInput
+	onboardingRequired: BooleanFilterInput
+	createdAt: TextFilterInput
+	updatedAt: TextFilterInput
+	and: [WorktrackerWorkspaceFilterInput!]
+	or: [WorktrackerWorkspaceFilterInput!]
+	not: WorktrackerWorkspaceFilterInput
+}
+
+input WorktrackerWorkspaceHavingInput {
+	project: WorktrackerProjectFilterInput
+}
+
+input WorktrackerWorkspaceOrderInput {
+	id: OrderByEnum
+	slug: OrderByEnum
+	name: OrderByEnum
+	onboardingRequired: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
+}
+
+type WorktreeDiscardResult {
+	removed: Boolean!
+	task_id: String!
+	top_level_task_id: String!
+	branch: String
+	reason: String
+	status: WorktreeStatusView!
+}
+
+type WorktreeStatusView {
+	kind: String!
+	task_id: String!
+	top_level_task_id: String!
+	is_shared: Boolean!
+	branch: String
+	base_branch: String
+	path: String
+	state: String
+	clean: Boolean
+	dirty: Boolean
+	ahead: Int
+	behind: Int
+	conflict: Boolean
+	checkout_present: Boolean
+	ephemeral: Boolean!
+	reason: String
+}
+
+type Worktrees {
+	id: String!
+	taskId: String!
+	workspaceSlug: String
+	projectId: String
+	moduleId: String
+	ticketSeq: Int
+	repoRoot: String!
+	path: String!
+	branch: String!
+	baseBranch: String!
+	baseCommit: String!
+	status: String!
+	ephemeral: Boolean!
+	createdAt: String!
+	updatedAt: String!
+	issue: WorktrackerIssue
+	project: WorktrackerProject
+}
+
+type WorktreesConnection {
+	pageInfo: PageInfo!
+	paginationInfo: PaginationInfo
+	nodes: [Worktrees!]!
+	edges: [WorktreesEdge!]!
+}
+
+type WorktreesEdge {
+	cursor: String!
+	node: Worktrees!
+}
+
+input WorktreesFilterInput {
+	id: StringFilterInput
+	taskId: StringFilterInput
+	workspaceSlug: StringFilterInput
+	projectId: StringFilterInput
+	moduleId: StringFilterInput
+	ticketSeq: IntegerFilterInput
+	repoRoot: StringFilterInput
+	path: StringFilterInput
+	branch: StringFilterInput
+	baseBranch: StringFilterInput
+	baseCommit: StringFilterInput
+	status: StringFilterInput
+	ephemeral: BooleanFilterInput
+	createdAt: StringFilterInput
+	updatedAt: StringFilterInput
+	and: [WorktreesFilterInput!]
+	or: [WorktreesFilterInput!]
+	not: WorktreesFilterInput
+}
+
+input WorktreesHavingInput {
+	issue: WorktrackerIssueFilterInput
+	project: WorktrackerProjectFilterInput
+}
+
+input WorktreesOrderInput {
+	id: OrderByEnum
+	taskId: OrderByEnum
+	workspaceSlug: OrderByEnum
+	projectId: OrderByEnum
+	moduleId: OrderByEnum
+	ticketSeq: OrderByEnum
+	repoRoot: OrderByEnum
+	path: OrderByEnum
+	branch: OrderByEnum
+	baseBranch: OrderByEnum
+	baseCommit: OrderByEnum
+	status: OrderByEnum
+	ephemeral: OrderByEnum
+	createdAt: OrderByEnum
+	updatedAt: OrderByEnum
 }
 
 """
@@ -477,4 +1280,5 @@ directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: Query
 	mutation: Mutation
+	subscription: Subscription
 }

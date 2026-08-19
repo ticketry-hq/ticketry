@@ -6,7 +6,6 @@ use sea_orm::{
     TransactionTrait,
 };
 use serde_json::{json, Value};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::attempt_queries::{database_uuid, project};
 use super::entities::automation_attempt as automation_attempt_entity;
@@ -80,6 +79,9 @@ pub async fn materialize_root(
         .await?;
     }
     transaction.commit().await?;
+    if inserted {
+        events.wake_committed();
+    }
     project(attempt)
 }
 
@@ -89,17 +91,33 @@ pub async fn record_outcome(
     attempt_id: &str,
     outcome: AttemptOutcome,
 ) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
+    let transaction = database.begin().await?;
+    let projection = record_outcome_in(&transaction, events, attempt_id, outcome).await?;
+    transaction.commit().await?;
+    // A wake-up is a hint, never history. Publishing one for an idempotent
+    // repeat costs a subscriber one indexed reread that finds nothing.
+    events.wake_committed();
+    Ok(projection)
+}
+
+/// Attempt outcome inside a caller-owned transaction. A launch outcome
+/// projects onto its owning attempt in the same commit that settles the
+/// durable Launch Effect.
+pub(crate) async fn record_outcome_in(
+    transaction: &DatabaseTransaction,
+    events: &StatusEventRepository,
+    attempt_id: &str,
+    outcome: AttemptOutcome,
+) -> Result<AutomationAttemptProjection, RunsPersistenceError> {
     validate_outcome(&outcome)?;
     let attempt_id = database_uuid(attempt_id)?;
-    let transaction = database.begin().await?;
-    let (current, project_id) = attempt_with_project(&transaction, &attempt_id).await?;
+    let (current, project_id) = attempt_with_project(transaction, &attempt_id).await?;
     let desired_status = match &outcome {
         AttemptOutcome::Succeeded { .. } => "succeeded",
         AttemptOutcome::Failed { .. } => "failed",
     };
     if current.status != "pending" {
         if current.status == desired_status {
-            transaction.commit().await?;
             return project(current);
         }
         return Err(conflict("Automation Attempt outcome is already final"));
@@ -139,7 +157,7 @@ pub async fn record_outcome(
                 )
                 .filter(automation_attempt_entity::Column::Id.eq(&attempt_id))
                 .filter(automation_attempt_entity::Column::Status.eq("pending"))
-                .exec(&transaction)
+                .exec(transaction)
                 .await?
         }
         AttemptOutcome::Failed {
@@ -168,28 +186,26 @@ pub async fn record_outcome(
                 )
                 .filter(automation_attempt_entity::Column::Id.eq(&attempt_id))
                 .filter(automation_attempt_entity::Column::Status.eq("pending"))
-                .exec(&transaction)
+                .exec(transaction)
                 .await?
         }
     };
     if result.rows_affected == 0 {
-        let (winner, _) = attempt_with_project(&transaction, &attempt_id).await?;
+        let (winner, _) = attempt_with_project(transaction, &attempt_id).await?;
         if winner.status == desired_status {
-            transaction.commit().await?;
             return project(winner);
         }
         return Err(conflict("Automation Attempt outcome is already final"));
     }
-    let (attempt, _) = attempt_with_project(&transaction, &attempt_id).await?;
+    let (attempt, _) = attempt_with_project(transaction, &attempt_id).await?;
     append_attempt_event(
         events,
-        &transaction,
+        transaction,
         &project_id,
         "automation_attempt_outcome",
         &attempt,
     )
     .await?;
-    transaction.commit().await?;
     project(attempt)
 }
 
@@ -240,6 +256,9 @@ pub async fn dismiss(
         .await?;
     }
     transaction.commit().await?;
+    if changed {
+        events.wake_committed();
+    }
     project(attempt)
 }
 
@@ -316,6 +335,9 @@ pub async fn retry(
         .await?;
     }
     transaction.commit().await?;
+    if inserted {
+        events.wake_committed();
+    }
     project(retry)
 }
 
@@ -468,12 +490,5 @@ fn conflict(message: &'static str) -> RunsPersistenceError {
 }
 
 fn now() -> String {
-    let elapsed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("the system clock predates the Unix epoch");
-    sea_orm::prelude::DateTimeUtc::from_timestamp(elapsed.as_secs() as i64, elapsed.subsec_nanos())
-        .expect("the system clock is outside SQLite's datetime range")
-        .naive_utc()
-        .format("%Y-%m-%d %H:%M:%S%.f")
-        .to_string()
+    super::timestamp::database_now()
 }

@@ -9,19 +9,17 @@ from datetime import datetime, timezone
 from django.db import close_old_connections
 from django.db.models import Q
 
-from apps.documents import watch as documents_watch
-from apps.runs.bus import publish_backend_session_sync
 from apps.terminals.agents.registry import (
     cleanup_temporary_artifacts_for_run,
     reconcile_temporary_artifacts,
 )
 from apps.terminals.models import AgentTerminalSession
 from apps.terminals.persistence import (
-    compensate_launch,
+    discard_launch_request,
+    launch_effect_id,
     persist_reconciliation_outcome,
     persist_runtime_recovery,
 )
-from apps.terminals.recovery_status import publish_runtime_recovery
 from apps.terminals.runtime import (
     TerminalObservationError,
     TerminalRuntime,
@@ -103,7 +101,7 @@ class TerminalReconciler:
                     result.unavailable.append(agent_run_id)
                     continue
                 try:
-                    compensate_launch(agent_run_id)
+                    discard_launch_request(launch_effect_id(agent_run_id))
                 except Exception:
                     logger.exception(
                         "pending launch cleanup persistence failed agent_run_id=%s",
@@ -161,20 +159,10 @@ class TerminalReconciler:
             if observation.state is TerminalState.EXITED:
                 result.exited.append(agent_run_id)
                 self._cleanup_retained_runtime(agent_run_id)
-                event = "exited"
             else:
                 result.soft_deleted.append(agent_run_id)
-                event = "lost"
 
-            documents_watch.stop_watch(agent_run_id)
             cleanup_temporary_artifacts_for_run(agent_run_id)
-            if persisted.project_id:
-                publish_backend_session_sync(
-                    persisted.project_id,
-                    agent_run_id,
-                    event,
-                    at=ended_at,
-                )
 
         try:
             active_run_ids = set(
@@ -289,10 +277,6 @@ class TerminalReconciler:
                 continue
             if recovery.recovered:
                 result.recovered.append(agent_run_id)
-                publish_runtime_recovery(
-                    agent_run_id,
-                    recovered_at=recovered_at,
-                )
 
     def _cleanup_retained_runtime(self, agent_run_id: str) -> None:
         """Retry idempotent runtime cleanup until its durable marker clears."""

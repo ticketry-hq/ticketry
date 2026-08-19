@@ -143,7 +143,7 @@ _Reviewer's overall read: the persistence/runtime/policy seams are clean and ter
 9. **[Low] View handle can leak on the create-timeout race** — `studio/src-tauri/src/native_terminal.rs:311-318`
    If the main-thread closure's send lands between `recv_timeout` timing out and the receiver dropping, the buffered view (plus ghostty surface and bridge process) leaks permanently above the webview.
 
-10. **[Low] Unbounded registries fed by IPC** — `studio/src-tauri/src/native_terminal_frames.rs:71-73`, `viewer_commands.rs:711-733`
+10. **[Low] Unbounded registries fed by IPC** — `studio/src-tauri/src/native_terminal/frames.rs:71-73`, `viewer_commands.rs:711-733`
     `PendingFrames::publish` accepts any run id (entries only removed on attach) and closed viewer entries are never evicted; long sessions grow memory without bound.
 
 11. **[Low] CSP `connect-src` grants the renderer every local port** — `studio/src-tauri/tauri.conf.json:30`

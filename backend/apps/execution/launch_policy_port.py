@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 
 from apps.execution import driver
 from apps.execution.models import GraphRun, LaunchedTask, LaunchPolicyEffect
+from apps.runs import rust_port
 from apps.runs.models import AgentRun, AutomationAttempt
 from apps.terminals.launch_configuration import ResolvedLaunchConfiguration
 from worktracker.models import Issue
@@ -45,7 +46,7 @@ class LaunchPolicyDecisionIn(BaseModel):
     decision_id: str
     policy_identity: str
     policy_version: int
-    caller_scope: Literal["interactive", "auto_start", "subtree"]
+    caller_scope: Literal["interactive", "auto_start", "subtree", "retry"]
     idempotency_key: str
     task_id: str
     project_id: str
@@ -122,6 +123,9 @@ def _perform_or_recover(decision: LaunchPolicyDecisionIn) -> dict:
     if decision.caller_scope == "auto_start":
         return _perform_auto_start(decision, configuration)
 
+    if decision.caller_scope == "retry":
+        return _perform_retry(decision, configuration)
+
     header = GraphRun.objects.filter(pk=decision.task_id).first()
     if header is None:
         launched = driver.execute_graph(
@@ -141,6 +145,40 @@ def _perform_or_recover(decision: LaunchPolicyDecisionIn) -> dict:
     return {"root_id": decision.task_id, "launched": launched}
 
 
+def _perform_retry(
+    decision: LaunchPolicyDecisionIn,
+    configuration: ResolvedLaunchConfiguration,
+) -> dict:
+    """Launch the durable retry child Rust already appended.
+
+    Rust owns the retry lineage, so this effect never creates an attempt: it
+    performs the launch the pending child is still owed, and only while that
+    child is still pending. A replayed decision therefore reports the settled
+    attempt instead of starting a second session for the same retry.
+    """
+
+    attempt = AutomationAttempt.objects.filter(
+        pk=uuid.UUID(decision.idempotency_key)
+    ).first()
+    if attempt is None:
+        raise ValueError("automation_attempt_not_found")
+    if attempt.status == AutomationAttempt.Status.PENDING:
+        from apps.execution.signals import run_automation_attempt
+
+        run_automation_attempt(
+            attempt,
+            destination_state_id=decision.state_id,
+            launch_configuration=configuration,
+        )
+        attempt.refresh_from_db()
+    return {
+        "attempt_id": str(attempt.id),
+        "target_id": decision.task_id,
+        "agent_run_id": attempt.agent_run_id,
+        "status": attempt.status,
+    }
+
+
 def _perform_auto_start(
     decision: LaunchPolicyDecisionIn,
     configuration: ResolvedLaunchConfiguration,
@@ -158,19 +196,19 @@ def _perform_auto_start(
         row = cursor.fetchone()
     if row is None:
         raise ValueError("automation_occurrence_not_found")
-    issue = Issue.objects.get(pk=decision.task_id, type="task")
-    with transaction.atomic():
-        attempt, _ = AutomationAttempt.objects.get_or_create(
-            transition_id=occurrence_id,
-            retry_of__isnull=True,
-            defaults={
-                "issue": issue,
-                "from_state_id": row[0],
-                "to_state_id": row[1],
-                "workflow_revision": row[2],
-                "agent_run_id": decision.idempotency_key.replace("-", ""),
-            },
-        )
+    Issue.objects.get(pk=decision.task_id, type="task")
+    # Rust owns automation_attempts. Materialization is idempotent by committed
+    # transition occurrence, so a re-delivered decision returns the same root
+    # attempt rather than launching a second time.
+    materialized = rust_port.materialize_attempt(
+        occurrence_id=str(occurrence_id),
+        issue_id=decision.task_id,
+        project_id=decision.project_id,
+        from_state_id=str(row[0]),
+        to_state_id=str(row[1]),
+        workflow_revision=int(row[2]),
+    )
+    attempt = AutomationAttempt.objects.get(pk=materialized["attempt_id"])
     if attempt.status == AutomationAttempt.Status.PENDING:
         from apps.execution.signals import run_automation_attempt
 

@@ -38,35 +38,26 @@ django_asgi_app = get_asgi_application()
 
 from studio_server.routing import websocket_urlpatterns
 
-from apps.documents import watch as documents_watch
 from apps.execution import transition_occurrence_scheduler
 from apps.runs import hook_spool
 from apps.terminals.reconciliation import reconcile_terminals
-from apps.worktrees import service as worktrees_service
 
 
-# Stop every design-directory watcher on shutdown; rescan re-discovers (#521).
+# There is no design-directory watcher to stop. Live document discovery moved to
+# the Rust watcher supervisor at the Slice 4 handoff, and it is stopped by the
+# desktop shell that owns it.
 
-register_shutdown(documents_watch.stop_all)
 register_startup(hook_spool.start)
 register_shutdown(hook_spool.stop)
 register_startup(transition_occurrence_scheduler.start)
 register_shutdown(transition_occurrence_scheduler.stop)
 
 
-async def _reconcile_worktrees() -> None:
-    """Prune worktree rows whose tree git no longer knows (#585).
-
-    Best-effort: a reconcile failure is logged but never blocks startup.
-    """
-
-    try:
-        await asyncio.to_thread(worktrees_service.reconcile)
-    except Exception as exc:
-        logger.warning("startup worktree reconcile failed: %s", exc)
-
-
-register_startup(_reconcile_worktrees)
+# No worktree reconciliation is registered here either. Rust owns the Worktree
+# index and reconciles it from the durable Workspace Operation journal plus Git's
+# own evidence, which can distinguish an operation that never began from one that
+# changed Git and was not acknowledged. This startup pass could only prune, so
+# keeping it would leave a second writer whose only move is to delete.
 
 
 async def _validate_provider_catalog() -> None:

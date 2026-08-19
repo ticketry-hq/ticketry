@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use crate::work_management::{
     commands::attachments,
-    read_queries,
+    launch_policy, read_queries,
     read_types::{IssueType, IssueTypeTransition, State, WorkItem},
 };
 
@@ -146,7 +146,21 @@ pub async fn task_details(database: &DatabaseConnection, task: &WorkItem) -> Val
         .collect();
     detail.insert("sub_tasks".to_owned(), Value::Array(children));
     detail.insert("attachments".to_owned(), Value::Array(attachments));
+    detail.insert(
+        "launch_policy_rejections".to_owned(),
+        launch_policy_rejections(database, &task.id).await,
+    );
     Value::Object(detail)
+}
+
+/// Why an auto-start transition on this work item has not launched. Without
+/// this the ledger is invisible: the item moves into an auto-start state and
+/// then nothing observable happens.
+async fn launch_policy_rejections(database: &DatabaseConnection, work_item_id: &str) -> Value {
+    let rows = launch_policy::rejections_for_work_item(database, work_item_id)
+        .await
+        .unwrap_or_default();
+    serde_json::to_value(rows).unwrap_or(Value::Array(Vec::new()))
 }
 
 pub async fn scope_context(database: &DatabaseConnection, task: &WorkItem) -> Value {

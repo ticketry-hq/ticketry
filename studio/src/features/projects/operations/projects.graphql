@@ -1,31 +1,44 @@
 query WorkTrackerWorkspace {
-  workspace {
-    id
-    slug
-    name
-    onboarding_required
+  workspace: worktrackerWorkspace {
+    nodes {
+      id
+      slug
+      name
+      onboarding_required: onboardingRequired
+    }
   }
 }
 
 query WorkTrackerProjects {
-  projects {
-    id
-    name
-    slug
-    description
-    manual_module_order
+  projects: worktrackerProject {
+    nodes {
+      id
+      name
+      slug
+      description
+      manual_module_order: manualModuleOrder
+      created_at: createdAt
+    }
   }
 }
 
-query WorkTrackerModules($projectId: String!, $includeArchived: Boolean) {
-  modules(project_id: $projectId, include_archived: $includeArchived) {
-    id
-    name
-    project_id
-    sequence_id
-    key
-    is_archived
-    issue_type
+query WorkTrackerModules($projectId: String!) {
+  modules: worktrackerIssue(
+    filters: { projectId: { eq: $projectId }, type: { eq: "module" } }
+  ) {
+    nodes {
+      id
+      name
+      project_id: projectId
+      sequence_id: sequenceId
+      is_archived: isArchived
+      issue_type: issueTypeId
+      rank
+      project {
+        slug
+        manual_module_order: manualModuleOrder
+      }
+    }
   }
 }
 
@@ -34,7 +47,7 @@ mutation AcknowledgeWorkTrackerOnboarding {
     id
     slug
     name
-    onboarding_required
+    onboarding_required: onboardingRequired
   }
 }
 
@@ -44,7 +57,7 @@ mutation CreateWorkTrackerProject($name: String!, $slug: String!, $description: 
     name
     slug
     description
-    manual_module_order
+    manual_module_order: manualModuleOrder
   }
 }
 
@@ -54,7 +67,7 @@ mutation UpdateWorkTrackerProject($id: String!, $name: String, $description: Str
     name
     slug
     description
-    manual_module_order
+    manual_module_order: manualModuleOrder
   }
 }
 

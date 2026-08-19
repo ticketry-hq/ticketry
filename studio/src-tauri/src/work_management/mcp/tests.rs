@@ -25,7 +25,11 @@ pub(super) async fn post(url: &str, authorization: Option<&str>, body: Value) ->
     request.send().await.expect("call in-process MCP")
 }
 
-async fn start(directory: &tempfile::TempDir, port: u16, backend: SocketAddr) -> McpRuntime {
+pub(super) async fn start(
+    directory: &tempfile::TempDir,
+    port: u16,
+    backend: SocketAddr,
+) -> McpRuntime {
     let database_path = directory.path().join("state.db");
     let database = Database::connect(format!("sqlite:{}?mode=rwc", database_path.display()))
         .await

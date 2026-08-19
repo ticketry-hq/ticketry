@@ -1,132 +1,75 @@
-"""Transport-independent lifecycle application operations."""
+"""Transport-independent Runs operations after the Slice 3 handoff.
 
+Every durable Runs write is a Rust command now. What remains here is the
+normalized loopback adapter for provider lifecycle hooks — those stay outside
+the WebView trust boundary, so the hook still posts to Django — plus the read
+projections capabilities that have not migrated yet still consume. The adapter
+acknowledges its own caller only after Rust reports the fact committed, which
+is what makes spool replay and HTTP retry harmless.
+"""
+
+import asyncio
 import logging
 from datetime import datetime, timezone
 
-from django.db import transaction
 from apps.errors import ApplicationError
 from studio_server.contracts import (
     AgentStatusScope,
     AgentStatusSnapshot,
-    AgentLifecycleFrame,
     LifecycleEvent,
-    RunRecord,
-    reduce_lifecycle,
 )
 
-from apps.runs import dao
-from apps.runs.bus import publish_status
-from apps.runs.models import AutomationAttempt
-from apps.runs.projections import automation_attempt_record
+from apps.runs import dao, rust_port
 
 
 logger = logging.getLogger(__name__)
 
+
 def retry_automation_attempt(attempt_id: str):
-    """Create at most one explicit retry child for one failed attempt."""
+    """Retired. Automation Attempt retry is an authored Rust GraphQL command.
 
-    with transaction.atomic():
-        source = (
-            AutomationAttempt.objects.select_for_update()
-            .select_related("issue")
-            .filter(pk=attempt_id)
-            .first()
-        )
-        if source is None:
-            raise ApplicationError(
-                404,
-                "automation_attempt_not_found",
-                code="automation_attempt_not_found",
-            )
-        existing = AutomationAttempt.objects.filter(retry_of=source).first()
-        if existing is not None:
-            return automation_attempt_record(existing)
-        if source.status != AutomationAttempt.Status.FAILED:
-            raise ApplicationError(
-                409,
-                "automation_attempt_not_failed",
-                code="automation_attempt_not_failed",
-            )
-        if not source.retryable:
-            raise ApplicationError(
-                409,
-                "automation_attempt_not_retryable",
-                code="automation_attempt_not_retryable",
-                metadata={"failure": source.error_details},
-            )
-        retry = AutomationAttempt.objects.create(
-            transition_id=source.transition_id,
-            issue=source.issue,
-            from_state_id=source.from_state_id,
-            to_state_id=source.to_state_id,
-            workflow_revision=source.workflow_revision,
-            retry_of=source,
-            root_attempt=source.root_attempt or source,
-        )
+    Studio calls that command directly. Keeping a second Django writer here
+    would mean two authorities for one retry lineage, which is exactly what
+    the handoff exists to prevent.
+    """
 
-    # Import lazily to keep the runs transport app independent at import time.
-    from apps.execution.signals import run_automation_attempt
-
-    run_automation_attempt(retry, destination_state_id=str(retry.to_state_id))
-    return automation_attempt_record(retry)
+    raise ApplicationError(
+        410,
+        "django_slice3_write_disabled",
+        code="django_slice3_write_disabled",
+    )
 
 
 async def ingest_lifecycle_event(event: LifecycleEvent):
-    """Ingest one agent lifecycle/attention event and relay it (#498/#512).
+    """Adapt one provider hook onto the authoritative Rust lifecycle command.
 
-    :param event: the normalized lifecycle envelope from a per-agent hook.
-    :return: a ``202`` tuple echoing the event and its receive timestamp.
+    The response is the acknowledgement contract for the hook runner and its
+    atomic spool: a ``202`` means the fact is durable in Rust. A refusal is
+    raised so the caller retries rather than dropping a spooled fact.
     """
 
     received_at = datetime.now(timezone.utc).isoformat()
+    try:
+        occurred_at = dao.normalize_utc_timestamp(event.ts)
+    except (TypeError, ValueError):
+        raise ApplicationError(400, "timestamp_invalid", code="timestamp_invalid")
 
-    if event.provider_session_id:
-        try:
-            await dao.set_provider_session_id(
-                event.agent_run_id, event.provider_session_id
-            )
-        except Exception as exc:
-            logger.warning("failed to persist provider_session_id: %s", exc)
-
-    # Reduce the event kind to a lifecycle state and persist it as the run's
-    # latest state (#515). Unrecognized kinds reduce to None and are skipped.
-
-    state = reduce_lifecycle(event.kind)
-    if state is not None:
-        # Persist the state and read the run's routing keys, so the relayed
-        # frame can be placed under the right task (#512).
-
-        routing = None
-        try:
-            event_at = dao.normalize_utc_timestamp(event.ts)
-            persisted = await dao.set_lifecycle_state(
-                event.agent_run_id, state, updated_at=event_at
-            )
-            if persisted:
-                routing = await dao.get_status_routing(event.agent_run_id)
-        except Exception as exc:
-            logger.warning("failed to persist lifecycle_state: %s", exc)
-
-        # Relay to the run's module bus. The frame carries the resolved task_id
-        # so the client places it without a lookup; missing routing is skipped.
-
-        if routing is not None:
-            project_id, task_id, module_id, scope, agent, started_at = routing
-            frame = AgentLifecycleFrame(
-                at=event_at,
-                run=RunRecord(
-                    agent_run_id=event.agent_run_id,
-                    project_id=project_id,
-                    task_id=task_id,
-                    module_id=module_id,
-                    agent=agent,
-                    scope=scope,
-                    started_at=started_at,
-                    state=state,
-                    updated_at=event_at,
-                ),
-            )
-            await publish_status(project_id, frame.model_dump())
+    try:
+        await asyncio.to_thread(
+            rust_port.apply_lifecycle_fact,
+            event.agent_run_id,
+            event.kind,
+            occurred_at,
+            event.provider_session_id or None,
+        )
+    except rust_port.RunsPortUnavailable as unavailable:
+        # Never acknowledge a fact that was not committed: the spool file
+        # survives and the same delivery is replayed, which is a no-op once it
+        # does commit.
+        logger.warning("lifecycle ingress refused code=%s", unavailable.code)
+        raise ApplicationError(
+            503, "lifecycle_unavailable", code=unavailable.code
+        ) from unavailable
 
     return 202, {"accepted": event.model_dump(), "received_at": received_at}
 

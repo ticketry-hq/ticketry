@@ -123,19 +123,19 @@ test("explicit development service ports fail instead of shifting", async () => 
   );
 });
 
-test("temporary SQLite desktop attempts only the optional MCP port 8123", async () => {
+test("temporary SQLite desktop selects a free MCP port for concurrent launches", async () => {
   const checked = [];
   const ports = await selectDevelopmentServicePorts({
     environment: {},
     temporarySqlite: true,
     isAvailable: async (port) => {
       checked.push(port);
-      return port !== 8123;
+      return port !== 8223;
     },
   });
 
-  assert.deepEqual(ports, { backend: 8787, mcp: 8123 });
-  assert.deepEqual(checked, [8787]);
+  assert.deepEqual(ports, { backend: 8877, mcp: 8224 });
+  assert.deepEqual(checked, [8877, 8223, 8224]);
 });
 
 test("desktop development accepts connect or temporary SQLite mode", () => {
@@ -231,6 +231,16 @@ test("desktop development rejects a running installed macOS app actionably", () 
   );
 });
 
+test("temporary SQLite desktop allows the installed app to keep running", () => {
+  assert.doesNotThrow(() => assertInstalledTicketryIsNotRunning({
+    allowConcurrentInstalledApp: true,
+    platform: "darwin",
+    runner: () => {
+      throw new Error("temporary SQLite must not inspect or reject the installed app");
+    },
+  }));
+});
+
 test("desktop development allows raw debug processes and non-macOS hosts", () => {
   assert.doesNotThrow(() => assertInstalledTicketryIsNotRunning({
     platform: "darwin",
@@ -269,8 +279,8 @@ test("connect mode reuses the established pnpm dev stack without a sidecar comma
     "http://127.0.0.1:5174/api/work-tracker",
   );
   assert.equal(
-    launch.environment.MUXED_DESKTOP_STATUS_WEBSOCKET,
-    "ws://127.0.0.1:5174/ws/status",
+    launch.environment.MUXED_DESKTOP_TERMINAL_WEBSOCKET,
+    "ws://127.0.0.1:5174/ws/terminal",
   );
 });
 

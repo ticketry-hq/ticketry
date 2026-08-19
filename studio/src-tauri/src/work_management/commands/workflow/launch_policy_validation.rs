@@ -2,7 +2,7 @@ use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
 
 use super::super::CommandError;
-use crate::settings_persistence::entities::app_setting;
+use crate::settings_persistence::read_global_launch_default;
 use crate::work_management::entities::{agent_model, agent_model_reasoning_level, provider};
 
 const REQUIRED_SKILL_LOCK: &str =
@@ -179,27 +179,11 @@ async fn validate_reasoning(
 async fn unattended_default_provider(
     database: &impl ConnectionTrait,
 ) -> Result<Option<ProviderSelection>, CommandError> {
-    let setting = app_setting::Entity::find()
-        .filter(app_setting::Column::Scope.eq("host"))
-        .filter(app_setting::Column::Key.eq("provider_catalog"))
-        .one(database)
-        .await?;
-    let Some(setting) = setting else {
-        return Ok(None);
-    };
-    let document = setting.value.parse::<serde_json::Value>().ok();
-    let slug = document
-        .as_ref()
-        .and_then(|value| value.get("global_default"))
-        .and_then(|value| value.get("provider"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    let Some(slug) = slug else {
+    let Some(default) = read_global_launch_default(database).await? else {
         return Ok(None);
     };
     Ok(provider::Entity::find()
-        .filter(provider::Column::Slug.eq(slug))
+        .filter(provider::Column::Slug.eq(default.provider))
         .one(database)
         .await?
         .map(|row| ProviderSelection {

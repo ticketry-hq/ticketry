@@ -1,36 +1,78 @@
 //! Migration-safe persistence boundary for durable Runs history.
 //!
-//! This module is intentionally not installed in desktop startup yet. Django
-//! remains the production writer until the Slice 3 handoff; callers may open
-//! only explicitly supplied databases for fixture and compatibility work.
+//! `RunsServices` is installed in the live GraphQL schema, so Agent Run
+//! holdings and lifecycle ingress are authoritative Rust paths. Run-scoped
+//! termination is authorized here and reaches the temporary Python terminal
+//! boundary only as a `TerminationExecutor`, driven by the authenticated MCP
+//! transport. Launches reach that same boundary as a `LaunchExecutor`, which
+//! performs one already-durable effect and reports a typed outcome without
+//! ever writing a Runs table. Effects that outlive a crash are drained by
+//! reconciliation, which observes the deterministic runtime identity through a
+//! read-only `LaunchRuntimeProbe` before it adopts, executes, fails, or keeps
+//! cleaning up. Callers may open only explicitly supplied databases.
 
 mod adoption;
 mod attempt_commands;
 mod attempt_graphql;
 mod attempt_queries;
-mod entities;
+use crate::entities::runs as entities;
 mod error;
 mod intent;
+mod launch_claim;
+mod launch_cleanup;
+mod launch_dispatch;
+mod launch_executor;
+mod launch_outcome;
+mod launch_preparation;
+mod launch_probe;
+mod launch_reconciliation;
+mod launch_scan;
 mod lifecycle;
 mod lifecycle_graphql;
 mod lifecycle_types;
 mod mcp;
+pub mod ownership_manifest;
 mod queries;
+mod readiness;
+mod readiness_gate;
 mod records;
 mod repositories;
 mod schema;
 mod services;
+mod status_compaction;
+mod status_compaction_schedule;
+mod status_frames;
+mod status_stream;
+mod status_subscription;
+mod status_wakeup;
 mod termination;
 mod timestamp;
 mod work_item_scope;
 
-pub use adoption::{adopt, preflight, AdoptionEvidence, DjangoGeneration, SourceClassification};
+pub use adoption::{
+    adopt, outbox_adopted, preflight, AdoptionEvidence, DjangoGeneration, SourceClassification,
+};
 pub use error::{RunsPersistenceError, RunsPersistenceErrorCode};
 pub use intent::LaunchIntent;
+pub use launch_claim::{ClaimedLaunch, MAX_LEASE_SECONDS};
+pub use launch_dispatch::LaunchDispatchService;
+pub use launch_executor::{LaunchExecutor, LaunchExecutorFailure, LaunchRuntimeEvidence};
+pub use launch_outcome::{LaunchOutcome, RecordedLaunch};
+pub use launch_preparation::{PrepareLaunchRequest, PreparedLaunch, RunSnapshot};
+pub use launch_probe::{LaunchRuntimeProbe, RuntimeIdentity, RuntimeObservation};
+pub use launch_reconciliation::{
+    LaunchReconciliationService, ReconciledEffect, ReconciliationDecision, ReconciliationReport,
+    MAX_RECONCILIATION_BATCH, RUNTIME_CONFLICT_CODE,
+};
 pub use lifecycle_types::{
     LifecycleAcceptance, LifecycleFact, TerminalAcceptance, TerminalFact, TerminalOutcome,
 };
 pub use mcp::McpRunControl;
+pub use readiness::{
+    publish as publish_readiness, published_readiness_is_complete, unavailable_error,
+    Slice3Readiness, READINESS_FILE,
+};
+pub use readiness_gate::RunsReadinessGate;
 pub use records::{
     AgentRunHolding, AgentRunRecord, AttemptFailure, AttemptOutcome, AutomationAttemptProjection,
     AutomationAttemptRecord, LaunchEffectRecord, StatusEventRecord, TransitionOccurrence,
@@ -42,13 +84,35 @@ pub use repositories::{
 pub use schema::{AUTHORED_TABLES, CURRENT_DJANGO_LEAF, VERSION};
 pub use services::{
     AttemptService, CompatibilityService, EffectService, LifecycleService, OutboxService,
-    QueryProjectionService, RunsServices,
+    QueryProjectionService, RunsServices, StatusStreamService,
 };
+pub use status_compaction::{
+    CompactionOutcome, CompactionPolicy, StatusCompactionService, COMPACTION_BATCH,
+    RETAINED_EVENTS, RETENTION_DAYS,
+};
+pub use status_compaction_schedule::{CompactionSchedule, COMPACTION_INTERVAL};
+pub use status_frames::{
+    failure_code, reset_reason, RunStatusCaughtUp, RunStatusEvent, RunStatusFailed, RunStatusFrame,
+    RunStatusResetRequired, RunStatusSnapshot, StatusEventPayload, SUPPORTED_PAYLOAD_VERSION,
+};
+pub use status_stream::{StatusStreamRequest, MAX_REPLAY_BYTES, MAX_REPLAY_EVENTS};
 pub use termination::{
     AuthenticatedAgentRun, RunTerminationService, TerminateRunRequest, TerminationExecutor,
     TerminationExecutorEvidence, TerminationResult,
 };
 
 pub(crate) fn register_graphql(builder: seaography::Builder) -> seaography::Builder {
-    lifecycle_graphql::register(attempt_graphql::register(builder))
+    status_subscription::register(lifecycle_graphql::register(attempt_graphql::register(
+        builder,
+    )))
+}
+
+/// Open the project status stream directly. Tests and supported in-process
+/// callers use this seam so the connection ordering is exercised without a
+/// GraphQL document in the way.
+pub fn open_status_stream(
+    service: &StatusStreamService,
+    request: StatusStreamRequest,
+) -> impl futures_util::Stream<Item = RunStatusFrame> + Send + 'static {
+    status_stream::open(service.clone(), request)
 }

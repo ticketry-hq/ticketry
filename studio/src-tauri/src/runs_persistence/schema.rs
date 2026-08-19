@@ -5,7 +5,7 @@ use sea_orm::{ConnectionTrait, DbBackend, Statement, TransactionTrait};
 use super::{RunsPersistenceError, RunsPersistenceErrorCode};
 
 pub const VERSION: i32 = 1;
-pub const CURRENT_DJANGO_LEAF: &str = "0012_remove_legacy_agentrun_run_kind";
+pub const CURRENT_DJANGO_LEAF: &str = "0013_agentrun_launch_configuration_snapshot";
 
 pub const AUTHORED_TABLES: &[&str] = &[
     "agent_runs",
@@ -20,6 +20,8 @@ pub(crate) const AGENT_RUN_COLUMNS: &[&str] = &[
     "issue_id",
     "ticket_seq",
     "agent",
+    "model",
+    "reasoning",
     "status",
     "started_at",
     "ended_at",
@@ -116,6 +118,15 @@ async fn bridge(
             .await
             .map_err(storage)?;
     }
+    if source_number < 13 {
+        transaction
+            .execute_unprepared(
+                "ALTER TABLE agent_runs ADD COLUMN model varchar NULL;\n\
+                 ALTER TABLE agent_runs ADD COLUMN reasoning varchar NULL;",
+            )
+            .await
+            .map_err(storage)?;
+    }
     for migration in DJANGO_MIGRATIONS.iter().skip(source_number as usize) {
         transaction
             .execute_raw(Statement::from_sql_and_values(
@@ -132,7 +143,7 @@ async fn bridge(
 fn migration_number(leaf: &str) -> Result<i32, RunsPersistenceError> {
     leaf.get(..4)
         .and_then(|value| value.parse::<i32>().ok())
-        .filter(|value| (8..=12).contains(value))
+        .filter(|value| (8..=13).contains(value))
         .ok_or_else(|| {
             RunsPersistenceError::new(
                 RunsPersistenceErrorCode::IncompatibleSchema,
@@ -157,7 +168,7 @@ pub(crate) async fn columns(
         .collect()
 }
 
-pub(crate) const DJANGO_MIGRATIONS: [&str; 12] = [
+pub(crate) const DJANGO_MIGRATIONS: [&str; 13] = [
     "0001_initial",
     "0002_agentrun_resumed_from",
     "0003_drop_orchestrator_tables",
@@ -170,6 +181,7 @@ pub(crate) const DJANGO_MIGRATIONS: [&str; 12] = [
     "0010_make_required_skill_failures_retryable",
     "0011_dismiss_historical_automation_failures",
     "0012_remove_legacy_agentrun_run_kind",
+    "0013_agentrun_launch_configuration_snapshot",
 ];
 
 const FOCUSED_SCHEMA: &str = r#"
@@ -196,6 +208,10 @@ CREATE TABLE runs_status_events (
 );
 CREATE INDEX idx_runs_status_events_project_cursor
     ON runs_status_events(project_id, cursor);
+-- Compaction asks one project for its oldest retained rows, so the age
+-- protection is an indexed lookup rather than a scan of the global cursor space.
+CREATE INDEX idx_runs_status_events_project_committed
+    ON runs_status_events(project_id, committed_at);
 CREATE INDEX idx_runs_status_events_subject
     ON runs_status_events(subject_kind, subject_id, cursor);
 CREATE TRIGGER runs_status_events_immutable

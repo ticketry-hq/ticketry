@@ -65,7 +65,9 @@ explained, not silently resolved
 
 | Risk | Why it is real | Mitigation / gate |
 | --- | --- | --- |
-| Generated CRUD bypasses domain rules | The template optimizes for generated model CRUD; Ticketry writes enforce workflow, rank, hierarchy, dependency, lifecycle, and effect rules. | Hide unsafe mutators; expose authored commands; prove field hiding/custom errors first. [`../backend/worktracker/services/`](../backend/worktracker/services/) |
+| Handwritten model and CRUD layers drift from the database | The first implementation hand-authored real Ticketry entities, read types, resolvers, and repositories after proving generation only with a probe table. Every schema change can therefore require several synchronized edits. | Freeze expansion; generate from a clean migrated database; replace mutually-referential cohorts; delete mirrored types, ordinary resolvers, and pass-through repositories; make generated drift verification a handoff gate. |
+| SQLite introspection emits the wrong Rust types | Django's SQLite declarations expose `bool`, `datetime`, and JSON as custom types that SeaORM codegen can emit as ignored `String` fields; integer widths also differ. Blind replacement would compile the wrong contract or stop selecting fields. | Add one deterministic schema-driven normalization phase, test every corrected column, byte-compare its output, and reject unknown custom types. Do not hand-edit generated files. |
+| Generated CRUD bypasses domain rules | The template optimizes for generated model CRUD; Ticketry writes enforce workflow, rank, hierarchy, dependency, lifecycle, and effect rules. | Begin with generated CRUD, bind identity, allowlist fields, keep unsafe raw mutators private, and expose one restricted model-shaped create/update/delete seam. Prove field hiding and custom errors before cutover. [`../backend/worktracker/services/`](../backend/worktracker/services/) |
 | Template gaps appear late | The template does not yet prove relations, auth, lifecycle hooks, custom operations/errors, or production subscription behavior. | Slice 0 proves the required foundation gaps in the real shell; later gaps get the narrowest test in their owning slice. `/Users/karthik/merge_conflicts/general/tauri-graphql-template/docs/stability-boundary.md` |
 | Source keeps moving during a long migration | Execution, terminals, WorkTracker, generated contracts, Tauri, and acceptance behavior continue changing. External forks drifted for the same reason. | Work only in this repo's `rust-migration` worktree, port as-is in small slices, and flag every critical Python fix for re-porting after the freeze. |
 | Feature freeze drags on | A long Python freeze can delay critical fixes and force repeated re-porting before users see value. | Freeze only after slice 0 passes, keep slices small, dogfood 1a and 1b early, and make 1b the explicit go/no-go rather than assuming the full rewrite will finish. |
@@ -77,7 +79,7 @@ explained, not silently resolved
 | Native viewer work is accidentally rewritten | The existing shell already embeds pinned libghostty and native/tmux viewer state. Replacing it adds unrelated platform risk. | Keep the native modules and narrow their application-service seam; remove only Python-backed lifecycle pieces. [`../studio/src-tauri/src/native_terminal/`](../studio/src-tauri/src/native_terminal/) |
 | Filesystem/Git effects commit only halfway | Documents and worktrees have SQL plus external authority; a process crash can separate them. | Durable operation journal, authorized roots, idempotent operations, per-repo locks, startup rescan/reconciliation. [`../backend/apps/documents/`](../backend/apps/documents/), [`../backend/apps/worktrees/`](../backend/apps/worktrees/) |
 | Existing data is mutated before incompatibility is known | There are 70 product migrations, historical installations, WAL state, and optional PostgreSQL. | Exact schema classifier, semantic read-only preflight, verified snapshot, known bridges only, unknown-schema refusal. [data-migration.md](data-migration.md) |
-| Removing Python breaks MCP composition | The current 1,287-line Python service adds high-level behavior around generated SDK calls, not just transport. WorkTracker MCP writes cannot remain on Python after the 1b writer handoff. | Port composition into authored Rust WorkTracker services in 1b, re-point those MCP tools to the in-process listener at the handoff, and cover their schemas/results with targeted acceptance cases. [`../surfaces/worktracker-agent/api/service.py`](../surfaces/worktracker-agent/api/service.py) |
+| Removing Python breaks MCP composition | The current 1,287-line Python service adds high-level behavior around generated SDK calls, not just transport. WorkTracker MCP writes cannot remain on Python after the 1b writer handoff. | Port the invariant-bearing composition behind the same generated/restricted model seams in 1b, re-point those MCP tools to the in-process listener at the handoff, and cover their schemas/results with targeted acceptance cases. [`../surfaces/worktracker-agent/api/service.py`](../surfaces/worktracker-agent/api/service.py) |
 | Performance/regression in large trees | GraphQL relation loading and generated resolvers can create N+1 queries; status snapshots and execution graph reads can be large. | Query-count budgets, realistic tree fixtures, batched loaders, bounded page sizes, and startup/snapshot latency gates. |
 | Dependency/toolchain instability | The reference uses release-candidate Seaography and tightly pinned versions. | Copy pins and generated drift checks; isolate transport/generator adaptations; schedule upgrades separately. `/Users/karthik/merge_conflicts/general/tauri-graphql-template/Cargo.toml` |
 | Sidecar gets removed before external behavior moves | Studio can work via TauRPC while provider-launched MCP/hooks still depend on Python and loopback auth. | Keep the sidecar through the dogfoodable slices; final retirement is gated on real agent/MCP/hook packaged runs, not frontend completion. |
@@ -113,6 +115,9 @@ names settle domain meaning accidentally.
 
 ## Unknowns that require prototypes or measurements
 
+- Whether the normalization step can derive every Django SQLite boolean,
+  datetime, JSON, integer-width, and relationship correction from migration or
+  schema metadata without maintaining a second handwritten entity model.
 - Whether Seaography can hide unsafe relations/mutators and still produce stable
   generated SDL for Ticketry's full schema.
 - Whether TauRPC subscription cancellation/backpressure behaves correctly under
@@ -139,13 +144,18 @@ it. None requires committing to another standalone backend.
   mode; all Rust work lands in this repository's `rust-migration` worktree and
   the existing Tauri shell.
 - **Redesign while porting:** it obscures whether failures came from language,
-  transport, persistence, or changed behavior. Mirror Django/DRF/services first;
+  transport, persistence, or changed behavior. Preserve Django/DRF/service
+  semantics through generated models and narrow compatibility seams first;
   optimize only after Python retirement.
+- **Continue expanding handwritten entities and CRUD projections:** it gives up
+  the generator's principal leverage and makes compatibility scaffolding the
+  permanent architecture.
 - **Big-bang greenfield schema import:** it combines domain rewrite, schema
   transformation, transport change, and cutover in one untestable event.
 - **Production dual-write:** failure reconciliation is harder than the migration
   and can trigger duplicate automation/local effects.
 - **Keep Python only for MCP:** this retains Python packaging, process supervision,
   port/readiness/orphan behavior, and the generated Python SDK.
-- **Expose every table through generated mutation CRUD:** it erases the service
-  boundaries that protect Ticketry's invariants.
+- **Expose unrestricted generated writes publicly:** generated structure is the
+  default, but callers still need identity binding, field allowlists, and
+  invariant-preserving restricted CRUD.

@@ -9,37 +9,30 @@ use sea_orm::{
 use seaography::CustomOutputType;
 use serde::Serialize;
 
-use super::entities::app_setting;
+use super::entities::app_settings as app_setting;
+use super::global_launch_default::{
+    GlobalLaunchDefault, PROVIDER_CATALOG_KEY, PROVIDER_CATALOG_SCOPE,
+};
 use super::provider_catalog_read::load_from;
 use crate::work_management::entities::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
-use crate::work_management::read_types::{AgentModel, Provider, ReasoningLevel};
 
-pub(super) const PROVIDER_CATALOG_SCOPE: &str = "host";
-pub(super) const PROVIDER_CATALOG_KEY: &str = "provider_catalog";
 const ADAPTER_SLUGS: [&str; 4] = ["claude", "agy", "codex", "gemini"];
 pub(super) const CONFIGURABLE_PROVIDER_SLUGS: [&str; 3] = ["claude", "codex", "gemini"];
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
-pub struct GlobalLaunchDefault {
-    pub provider: String,
-    pub model: Option<String>,
-    pub reasoning: Option<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, CustomOutputType)]
+#[derive(Clone, Debug, Eq, PartialEq, CustomOutputType)]
 pub struct ProviderCatalog {
     /// All settings-configurable provider rows, including deactivated rows.
-    pub configurable_providers: Vec<Provider>,
+    pub configurable_providers: Vec<provider::Model>,
     /// Activated adapter-backed providers. Launch pickers consume only this list.
-    pub providers: Vec<Provider>,
+    pub providers: Vec<provider::Model>,
     /// All catalogue models, ordered by provider slug then model name. Consumers
     /// join these rows to `providers` for launches, while Settings can configure
     /// a provider that is activated in the same write.
-    pub agent_models: Vec<AgentModel>,
+    pub agent_models: Vec<agent_model::Model>,
     /// All reasoning rows in deterministic name order.
-    pub reasoning_levels: Vec<ReasoningLevel>,
+    pub reasoning_levels: Vec<reasoning_level::Model>,
     pub global_default: Option<GlobalLaunchDefault>,
 }
 

@@ -11,7 +11,6 @@ const startup = {
     workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
     agentApi: "http://127.0.0.1:8787/api",
     statusApi: "http://127.0.0.1:8787/api",
-    statusWebSocket: "ws://127.0.0.1:8787/ws/status",
     terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
   },
   values: { workTrackerApiKey: "" },
@@ -24,7 +23,7 @@ const provider = {
 };
 const model = {
   id: "model-gpt", provider: provider.id, name: "gpt-5.6-luna",
-  permitted_reasoning_levels: ["reasoning-medium"],
+  reasoning_levels: { nodes: [{ reasoning_level_id: "reasoning-medium" }] },
 };
 const reasoning = { id: "reasoning-medium", name: "medium" };
 const issueType = {
@@ -39,17 +38,22 @@ const state = {
 
 function catalog(subtreeRunEnabled: boolean, workflowRevision: number) {
   return {
-    states: [state],
-    issue_types: [{ ...issueType, workflow_revision: workflowRevision }],
-    launch_bindings: [{
+    states: { nodes: [state] },
+    issue_types: { nodes: [{ ...issueType, workflow_revision: workflowRevision }] },
+    launch_bindings: { nodes: [{
       id: 1, issue_type: "story", state: "build", prompt: "Implement it.",
       required_skills: ["tdd"], model: model.id, reasoning: reasoning.id,
       auto_start: false, subtree_run_enabled: subtreeRunEnabled,
       created_at: "", updated_at: "",
-    }],
-    providers: [provider],
-    agent_models: [model],
-    reasoning_levels: [reasoning],
+      issueType: { sort_order: 0 }, state_record: { sort_order: 0 },
+    }] },
+    providers: { nodes: [provider] },
+    agent_models: { nodes: [{
+      ...model,
+      provider_record: { slug: provider.slug },
+      reasoning_levels: { nodes: [{ reasoning_level_id: "reasoning-medium" }] },
+    }] },
+    reasoning_levels: { nodes: [reasoning] },
   };
 }
 
@@ -84,7 +88,7 @@ describe("launch-binding desktop runtime acceptance", () => {
         });
       }
       if (request.operationName === "WorkTrackerIssueTypeTransitions") {
-        return JSON.stringify({ data: { issue_type_transitions: [] } });
+        return JSON.stringify({ data: { issue_type_transitions: { nodes: [] } } });
       }
       if (request.operationName === "LoadProviderCatalog") {
         return JSON.stringify({ data: { provider_catalog: {

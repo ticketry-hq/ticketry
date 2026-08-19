@@ -10,7 +10,7 @@ const document = <TResult, TVariables>(
 
 export const AcknowledgeWorkTrackerOnboardingDocument = document<
   { acknowledge_onboarding: WorkTrackerWorkspace }, Record<string, never>
->("AcknowledgeWorkTrackerOnboarding", "mutation AcknowledgeWorkTrackerOnboarding { acknowledge_onboarding { id slug name onboarding_required } }");
+>("AcknowledgeWorkTrackerOnboarding", "mutation AcknowledgeWorkTrackerOnboarding { acknowledge_onboarding { id slug name onboarding_required: onboardingRequired } }");
 
 export interface ProjectMutationVariables {
   readonly id?: string;
@@ -21,11 +21,11 @@ export interface ProjectMutationVariables {
 
 export const CreateWorkTrackerProjectDocument = document<
   { create_project: WorkTrackerProject }, ProjectMutationVariables
->("CreateWorkTrackerProject", "mutation CreateWorkTrackerProject($name: String!, $slug: String!, $description: String) { create_project(name: $name, slug: $slug, description: $description) { id name slug description manual_module_order } }");
+>("CreateWorkTrackerProject", "mutation CreateWorkTrackerProject($name: String!, $slug: String!, $description: String) { create_project(name: $name, slug: $slug, description: $description) { id name slug description manual_module_order: manualModuleOrder } }");
 
 export const UpdateWorkTrackerProjectDocument = document<
   { update_project: WorkTrackerProject }, ProjectMutationVariables
->("UpdateWorkTrackerProject", "mutation UpdateWorkTrackerProject($id: String!, $name: String, $description: String) { update_project(id: $id, name: $name, description: $description) { id name slug description manual_module_order } }");
+>("UpdateWorkTrackerProject", "mutation UpdateWorkTrackerProject($id: String!, $name: String, $description: String) { update_project(id: $id, name: $name, description: $description) { id name slug description manual_module_order: manualModuleOrder } }");
 
 export const DeleteWorkTrackerProjectDocument = document<
   { delete_project: boolean }, { id: string }

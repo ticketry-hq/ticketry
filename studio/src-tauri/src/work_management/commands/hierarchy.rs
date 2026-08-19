@@ -7,6 +7,9 @@ use sea_orm::{
 
 use super::fractional_rank;
 use super::identifiers::database_uuid;
+use super::status_facts::{
+    record_work_item, stamp, WorkFactRecorder, WorkItemChange, WorkItemIdentity,
+};
 use super::CommandError;
 use crate::work_management::entities::{issue, project};
 
@@ -21,6 +24,7 @@ pub struct ReparentWorkItem {
 pub async fn reparent(
     database: &DatabaseConnection,
     input: ReparentWorkItem,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let id = database_uuid(&input.id, "id")?;
     let parent_id = optional_uuid(input.parent_id, "parent_id")?;
@@ -91,18 +95,45 @@ pub async fn reparent(
     let revision = next_revision(&transaction, &current.project_id).await?;
     let mut moved = current.clone();
     let mut active: issue::ActiveModel = current.into();
-    active.parent_id = Set(parent_id);
+    active.parent_id = Set(parent_id.clone());
     active.module_id = Set(module_id.clone());
     if let Some(rank) = rank {
         moved.rank = rank.clone();
         active.rank = Set(rank);
     }
+    moved.parent_id = parent_id;
     moved.module_id = module_id;
+    let now = super::timestamp::now();
+    let occurred_at = stamp(now);
     active.state_revision = Set(revision);
-    active.updated_at = Set(super::timestamp::now());
+    active.updated_at = Set(now.clone());
     active.update(&transaction).await?;
-    repair_descendant_modules(&transaction, moved).await?;
+    let repaired = repair_descendant_modules(&transaction, moved.clone()).await?;
+    let identity = WorkItemIdentity::of(&moved);
+    record_work_item(
+        facts,
+        &transaction,
+        identity.fact(WorkItemChange::Reparented, revision, &occurred_at),
+    )
+    .await?;
+    // A repaired descendant's module ancestry changed, so it leaves one module
+    // collection and joins another exactly as the moved item does.
+    for descendant in &repaired {
+        record_work_item(
+            facts,
+            &transaction,
+            WorkItemIdentity::of(descendant).fact(
+                WorkItemChange::Reparented,
+                revision,
+                &occurred_at,
+            ),
+        )
+        .await?;
+    }
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 
@@ -157,10 +188,13 @@ async fn derived_module<C: ConnectionTrait>(
     Ok(Some(module.id))
 }
 
+/// Repair derived module ancestry beneath a moved item, returning every row
+/// whose module actually changed so the caller can publish it.
 async fn repair_descendant_modules<C: ConnectionTrait>(
     database: &C,
     root: issue::Model,
-) -> Result<(), CommandError> {
+) -> Result<Vec<issue::Model>, CommandError> {
+    let mut repaired = Vec::new();
     let mut frontier = vec![root];
     while !frontier.is_empty() {
         let parents: HashMap<String, Option<String>> = frontier
@@ -186,11 +220,12 @@ async fn repair_descendant_modules<C: ConnectionTrait>(
                 active.module_id = Set(module_id.clone());
                 active.update(database).await?;
                 child.module_id = module_id;
+                repaired.push(child.clone());
             }
         }
         frontier = children;
     }
-    Ok(())
+    Ok(repaired)
 }
 
 async fn destination_rank<C: ConnectionTrait>(

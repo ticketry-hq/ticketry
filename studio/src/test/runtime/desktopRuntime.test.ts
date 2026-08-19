@@ -7,7 +7,6 @@ function startupConfiguration() {
       workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
       agentApi: "http://127.0.0.1:8787/api",
       statusApi: "http://127.0.0.1:8787/api",
-      statusWebSocket: "ws://127.0.0.1:8787/ws/status",
       terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
     },
     values: { workTrackerApiKey: "" },
@@ -48,8 +47,7 @@ describe("desktop runtime contract", () => {
         workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
         agentApi: "http://127.0.0.1:8787/api",
         statusApi: "http://127.0.0.1:8787/api",
-        statusWebSocket: "ws://127.0.0.1:8787/ws/status",
-        terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
+          terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
       },
       values: { workTrackerApiKey: "ephemeral-key" },
       serviceHealth: {
@@ -124,12 +122,12 @@ describe("desktop runtime contract", () => {
       ...configuration,
       endpoints: {
         ...configuration.endpoints,
-        statusWebSocket: "ftp://127.0.0.1/ws/status",
+        terminalWebSocket: "ftp://127.0.0.1/ws/terminal",
       },
     });
 
     await expect(createDesktopRuntime({ invoke })).rejects.toThrowError(
-      "Desktop initialization failed: statusWebSocket must be a loopback WebSocket URL",
+      "Desktop initialization failed: terminalWebSocket must be a loopback WebSocket URL",
     );
   });
 

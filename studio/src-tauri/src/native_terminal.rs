@@ -1,10 +1,18 @@
-//! macOS libghostty surface hosted above the Tauri webview.
+//! Native Terminal facade and platform-neutral viewer mechanics.
 //!
-//! libghostty owns the renderer-facing PTY and launches the validated tmux
-//! attach command directly. tmux remains the durable session owner while the
-//! native surface is only a transient viewer.
+//! On macOS, libghostty owns the renderer-facing PTY and launches the validated
+//! tmux attach command directly. tmux remains the durable session owner while
+//! the native surface is only a transient viewer. Other builds expose the same
+//! command surface as an unavailable implementation.
 
-pub use crate::native_terminal_frames::NativeTerminalFrame;
+pub mod frames;
+mod preparation;
+pub mod scroll;
+#[cfg(any(test, all(target_os = "macos", feature = "native-libghostty")))]
+mod visibility;
+pub mod worker;
+
+pub use frames::NativeTerminalFrame;
 
 #[cfg(all(target_os = "macos", feature = "native-libghostty"))]
 #[path = "native_terminal/macos/mod.rs"]

@@ -16,7 +16,6 @@ const startup = {
     workTrackerApi: "http://127.0.0.1:8787/api/work-tracker",
     agentApi: "http://127.0.0.1:8787/api",
     statusApi: "http://127.0.0.1:8787/api",
-    statusWebSocket: "ws://127.0.0.1:8787/ws/status",
     terminalWebSocket: "ws://127.0.0.1:8787/ws/terminal",
   },
   values: { workTrackerApiKey: "" },
@@ -24,12 +23,13 @@ const startup = {
   initialNotices: [],
 };
 
-const item = {
+const issue = {
   id: "item-1", name: "Item", project_id: "project-1", sequence_id: 1,
-  state: "state-1", state_revision: 1, description: "", parent_id: null,
-  sub_issues_count: 0, key: "PRJ-1", is_archived: false,
+  state_id: "state-1", state_revision: 1, description: "", parent_id: null,
+  module_id: null, is_archived: false,
   created_at: "2026-08-12T00:00:00Z", updated_at: "2026-08-12T00:00:00Z",
-  rank: "a", issue_type: "type-1", blocked_by_ids: [], blocks_ids: [],
+  rank: "a", issue_type_id: "type-1", project: { slug: "PRJ" },
+  children: { nodes: [] }, blocked_by_edges: { nodes: [] }, blocks_edges: { nodes: [] },
 };
 const state = { id: "state-1", project: "project-1", name: "Todo", group: "unstarted", color: "#fff", sort_order: 0, is_protected: false, created_at: "", updated_at: "" };
 const issueType = { id: "type-1", project: "project-1", name: "Story", level: "task", color: "", sort_order: 0, start_state: "state-1", workflow_revision: 1, is_pathfind: false, created_at: "", updated_at: "" };
@@ -42,9 +42,9 @@ describe("WorkTracker write runtime acceptance", () => {
       operations.push(operationName);
       const field = ({
         CreateWorkTrackerProject: ["create_project", { id: "project-1", name: "Project", slug: "PRJ", description: "", manual_module_order: false }],
-        CreateWorkTrackerWorkItem: ["create_work_item", item], UpdateWorkTrackerWorkItem: ["update_work_item", item],
-        TransitionWorkTrackerWorkItem: ["transition_work_item", item], ReparentWorkTrackerWorkItem: ["reparent_work_item", item],
-        SetWorkTrackerBlockers: ["set_work_item_blockers", item], ReorderWorkTrackerWorkItem: ["reorder_work_item", item],
+        CreateWorkTrackerWorkItem: ["create_work_item", issue], UpdateWorkTrackerWorkItem: ["update_work_item", issue],
+        TransitionWorkTrackerWorkItem: ["update_work_item", issue], ReparentWorkTrackerWorkItem: ["update_work_item", issue],
+        SetWorkTrackerBlockers: ["update_work_item", issue], ReorderWorkTrackerWorkItem: ["reorder_work_item", issue],
         DeleteWorkTrackerWorkItem: ["delete_work_item", true], CreateWorkTrackerState: ["create_state", state],
         UpdateWorkTrackerState: ["update_state", state], ReorderWorkTrackerStates: ["reorder_states", [state]],
         CreateWorkTrackerIssueType: ["create_issue_type", issueType], UpdateWorkTrackerIssueType: ["update_issue_type", issueType],

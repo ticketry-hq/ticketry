@@ -27,6 +27,13 @@ impl SettingsStores {
         }
     }
 
+    /// The one profile store this composition mutates through. Its mutation
+    /// lock is per instance, so every in-process writer must share it rather
+    /// than construct a second store over the same `profiles.json`.
+    pub fn profiles(&self) -> &ProfileStore {
+        &self.profiles
+    }
+
     fn snapshot(&self) -> LocalSettings {
         self.with_catalog(self.profiles.read())
     }

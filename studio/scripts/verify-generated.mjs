@@ -48,7 +48,7 @@ try {
 
   await assertSameTree(
     join(first, "entities"),
-    join(studioRoot, "src-tauri/src/graphql_foundation/entities"),
+    join(studioRoot, "src-tauri/src/entities/foundation"),
     "SeaORM entity drift",
   );
   const generatedDirectory = join(studioRoot, "src/graphql-foundation/generated");
@@ -80,6 +80,41 @@ try {
     join(first, "settings/providerCatalog.ts"),
     join(studioRoot, "src/features/settings/generated/providerCatalog.ts"),
     "settings provider catalogue operation drift",
+  );
+  await assertSameFile(
+    join(first, "agent-status/attempts.ts"),
+    join(studioRoot, "src/features/agents/status/generated/attempts.ts"),
+    "agent status automation attempt operation drift",
+  );
+  await assertSameFile(
+    join(first, "agent-status/statusStream.ts"),
+    join(studioRoot, "src/features/agents/status/generated/statusStream.ts"),
+    "agent status stream subscription operation drift",
+  );
+  await assertSameFile(
+    join(first, "worktrees/worktreeStatus.ts"),
+    join(studioRoot, "src/features/agents/worktrees/generated/worktreeStatus.ts"),
+    "worktree live status operation drift",
+  );
+  await assertSameFile(
+    join(first, "worktrees/worktreeCreate.ts"),
+    join(studioRoot, "src/features/agents/worktrees/generated/worktreeCreate.ts"),
+    "worktree creation operation drift",
+  );
+  await assertSameFile(
+    join(first, "worktrees/worktreeDiscard.ts"),
+    join(studioRoot, "src/features/agents/worktrees/generated/worktreeDiscard.ts"),
+    "worktree discard operation drift",
+  );
+  await assertSameFile(
+    join(first, "documents/documentRegistry.ts"),
+    join(studioRoot, "src/features/documents/generated/documentRegistry.ts"),
+    "document registry operation drift",
+  );
+  await assertSameFile(
+    join(first, "documents/documentSave.ts"),
+    join(studioRoot, "src/features/documents/generated/documentSave.ts"),
+    "document save operation drift",
   );
   console.log("GraphQL foundation generation is deterministic and drift-free");
 } finally {

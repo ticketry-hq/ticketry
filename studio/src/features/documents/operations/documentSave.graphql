@@ -1,0 +1,18 @@
+mutation SaveDesignDocument(
+  $documentId: String!
+  $expectedDigest: String!
+  $content: String!
+  $operationId: String!
+) {
+  save_design_document(
+    document_id: $documentId
+    expected_digest: $expectedDigest
+    content: $content
+    operation_id: $operationId
+  ) {
+    document_id
+    digest
+    saved
+    stale
+  }
+}

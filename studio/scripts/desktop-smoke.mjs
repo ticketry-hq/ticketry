@@ -217,13 +217,15 @@ if (mode === "all" || mode === "packaged") {
     );
     await assertPackagedAssets();
     if (guiSmokeSupported) {
-      await runCommandWithTimeout(
-        "packaged desktop startup",
-        executable,
-        [],
-        60_000,
-        packagedSmokeEnvironment,
-      );
+      for (const label of ["startup", "restart/reopen"]) {
+        await runCommandWithTimeout(
+          `packaged desktop ${label}`,
+          executable,
+          [],
+          60_000,
+          packagedSmokeEnvironment,
+        );
+      }
     } else {
       await runCommandWithTimeout(
         "headless packaged backend service smoke",

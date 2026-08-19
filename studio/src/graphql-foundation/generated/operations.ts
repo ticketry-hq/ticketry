@@ -13,12 +13,18 @@ export interface FoundationProbeQuery {
 
 export type FoundationProbeVariables = Record<string, never>;
 
-export interface SetMigrationProbeMutation {
-  readonly setMigrationProbe: boolean;
+export interface CreateMigrationProbeMutation {
+  readonly migrationProbesCreateOne: {
+    readonly id: number;
+    readonly value: string;
+  };
 }
 
-export interface SetMigrationProbeVariables {
-  readonly value: string;
+export interface CreateMigrationProbeVariables {
+  readonly data: {
+    readonly id: number;
+    readonly value: string;
+  };
 }
 
 export const FoundationProbeDocument: TypedDocumentNode<
@@ -30,11 +36,11 @@ export const FoundationProbeDocument: TypedDocumentNode<
   source: "query FoundationProbe {\n  migrationProbes {\n    nodes {\n      id\n      value\n    }\n  }\n}",
 };
 
-export const SetMigrationProbeDocument: TypedDocumentNode<
-  SetMigrationProbeMutation,
-  SetMigrationProbeVariables
+export const CreateMigrationProbeDocument: TypedDocumentNode<
+  CreateMigrationProbeMutation,
+  CreateMigrationProbeVariables
 > = {
   kind: "Document",
-  operationName: "SetMigrationProbe",
-  source: "mutation SetMigrationProbe($value: String!) {\n  setMigrationProbe(value: $value)\n}",
+  operationName: "CreateMigrationProbe",
+  source: "mutation CreateMigrationProbe($data: MigrationProbesInsertInput!) {\n  migrationProbesCreateOne(data: $data) {\n    id\n    value\n  }\n}",
 };

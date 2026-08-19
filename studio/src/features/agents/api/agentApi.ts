@@ -1,10 +1,8 @@
 import type {
-  DesignDoc,
   PersistedTerminalSession,
   ResumableTerminalSession,
 } from "../types";
 import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
-export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
 
 export class ApiError extends Error {
   constructor(
@@ -85,22 +83,3 @@ export const createTerminalRun = (body: CreateTerminalRunRequest) =>
     method: "POST",
     body: JSON.stringify(body),
   });
-
-export const getDocuments = (
-  taskId: string,
-  projectId?: string,
-  moduleId?: string,
-  signal?: AbortSignal,
-) => {
-  const params = new URLSearchParams({ task_id: taskId });
-  if (projectId) params.set("project_id", projectId);
-  if (moduleId) params.set("module_id", moduleId);
-  const url = `/api/documents?${params}`;
-  return request<{ documents: DesignDoc[] }>(url, { signal });
-};
-export const getScratchDocuments = (moduleId: string, signal?: AbortSignal) => {
-  const url = `/api/documents?scope=scratch&module_id=${encodeURIComponent(moduleId)}`;
-  return request<{ documents: DesignDoc[] }>(url, { signal });
-};
-export const fsComplete = (path: string, signal?: AbortSignal) =>
-  request<{ entries: string[] }>(`/api/fs/complete?path=${encodeURIComponent(path)}`, { signal });

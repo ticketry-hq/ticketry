@@ -14,6 +14,10 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         .expect("open fixture writer");
     writer.execute_unprepared(r#"
         PRAGMA journal_mode=WAL;
+        CREATE TABLE worktracker_workspace (
+            id char(32) PRIMARY KEY, slug varchar(64) NOT NULL, name varchar(255) NOT NULL,
+            onboarding_required bool NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL
+        );
         CREATE TABLE worktracker_project (
             id char(32) PRIMARY KEY, workspace_id char(32) NOT NULL, name varchar(255) NOT NULL,
             slug varchar(64) NOT NULL, description text NOT NULL, seq_counter integer NOT NULL,
@@ -30,6 +34,27 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         CREATE TABLE worktracker_issue_blocked_by (
             id integer PRIMARY KEY, from_issue_id char(32) NOT NULL, to_issue_id char(32) NOT NULL
         );
+        CREATE TABLE worktracker_state (
+            id char(32) PRIMARY KEY, project_id char(32) NOT NULL, name varchar(255) NOT NULL,
+            "group" varchar(32) NOT NULL, color varchar(32) NOT NULL, sort_order integer NOT NULL,
+            is_protected bool NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL
+        );
+        CREATE TABLE worktracker_issuetype (
+            id char(32) PRIMARY KEY, project_id char(32) NOT NULL, name varchar(255) NOT NULL,
+            level varchar(32) NOT NULL, color varchar(32) NOT NULL, sort_order integer NOT NULL,
+            start_state_id char(32), workflow_revision integer NOT NULL, is_pathfind bool NOT NULL,
+            created_at datetime NOT NULL, updated_at datetime NOT NULL
+        );
+        CREATE TABLE worktracker_issuetypetransition (
+            id integer PRIMARY KEY, issue_type_id char(32) NOT NULL, from_state_id char(32) NOT NULL,
+            to_state_id char(32) NOT NULL, agent_allowed bool NOT NULL
+        );
+        CREATE TABLE worktracker_launchbinding (
+            id integer PRIMARY KEY, issue_type_id char(32) NOT NULL, state_id char(32) NOT NULL,
+            prompt text NOT NULL, required_skills text NOT NULL, model_id char(32), reasoning_id char(32),
+            auto_start bool NOT NULL, subtree_run_enabled bool NOT NULL,
+            created_at datetime NOT NULL, updated_at datetime NOT NULL
+        );
         CREATE TABLE worktracker_provider (
             id char(32) PRIMARY KEY, slug varchar(64) NOT NULL, activated bool NOT NULL,
             supports_unattended bool NOT NULL
@@ -41,6 +66,9 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
         CREATE TABLE worktracker_agentmodelreasoninglevel (
             id integer PRIMARY KEY, agent_model_id char(32) NOT NULL, reasoning_level_id char(32) NOT NULL
         );
+        INSERT INTO worktracker_workspace VALUES
+            ('90000000000000000000000000000000', 'local', 'Local', 0,
+             '2026-08-12 00:00:00', '2026-08-12 00:00:00');
         INSERT INTO worktracker_project VALUES
             ('10000000000000000000000000000000', '90000000000000000000000000000000',
              'Memory Lane', 'MEM', '', 20, 0, 0, '2026-08-12 00:00:00', '2026-08-12 00:00:00');
@@ -53,6 +81,20 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
             ('40000000000000000000000000000003','10000000000000000000000000000000','task','30000000000000000000000000000001','40000000000000000000000000000001','20000000000000000000000000000002',NULL,6,'Archived child',12,1,'B','', '2026-08-12 00:00:12','2026-08-12 00:00:12');
         INSERT INTO worktracker_issue_blocked_by VALUES
             (1, '40000000000000000000000000000001', '40000000000000000000000000000002');
+        INSERT INTO worktracker_state VALUES
+            ('80000000000000000000000000000001', '10000000000000000000000000000000',
+             'Backlog', 'backlog', '#888888', 0, 1, '2026-08-12 00:00:00', '2026-08-12 00:00:00');
+        INSERT INTO worktracker_issuetype VALUES
+            ('30000000000000000000000000000001', '10000000000000000000000000000000',
+             'Task', 'task', '#888888', 0, '80000000000000000000000000000001', 1, 0,
+             '2026-08-12 00:00:00', '2026-08-12 00:00:00');
+        INSERT INTO worktracker_issuetypetransition VALUES
+            (1, '30000000000000000000000000000001', '80000000000000000000000000000001',
+             '80000000000000000000000000000001', 1);
+        INSERT INTO worktracker_launchbinding VALUES
+            (1, '30000000000000000000000000000001', '80000000000000000000000000000001',
+             'Implement it.', '["tdd"]', NULL, NULL, 0, 1,
+             '2026-08-12 00:00:00', '2026-08-12 00:00:00');
         INSERT INTO worktracker_provider VALUES
             ('50000000000000000000000000000000', 'codex', 1, 1);
         INSERT INTO worktracker_reasoninglevel VALUES
@@ -65,9 +107,18 @@ async fn fixture() -> (tempfile::TempDir, sea_orm::DatabaseConnection) {
     (directory, writer)
 }
 
+fn operation_request(query: &str, operation_name: &str, variables: serde_json::Value) -> String {
+    serde_json::json!({
+        "query": query,
+        "operationName": operation_name,
+        "variables": variables,
+    })
+    .to_string()
+}
+
 #[tokio::test]
-async fn module_and_work_item_reads_keep_drf_filters_shapes_and_ordering() {
-    let (directory, writer) = fixture().await;
+async fn generated_reads_expose_filters_relations_and_dataloaders() {
+    let (directory, _writer) = fixture().await;
     let api = TransportApiImpl::new();
     initialize_with_worktracker_and_install(
         &directory.path().join("rust-core.sqlite3"),
@@ -77,80 +128,125 @@ async fn module_and_work_item_reads_keep_drf_filters_shapes_and_ordering() {
     .await
     .expect("install composed GraphQL endpoint");
 
-    let automatic: serde_json::Value = serde_json::from_str(
+    let generated: serde_json::Value = serde_json::from_str(
         &api.clone()
             .graphql_execute(request(
                 r#"query($project: String!) {
-          modules(project_id: $project) { name key is_archived issue_type }
-          archived: modules(project_id: $project, include_archived: true) { name }
-          work_items(module_id: "20000000-0000-0000-0000-000000000002") {
-            name key is_archived sub_issues_count blocked_by_ids blocks_ids
+          modules: worktrackerIssue(filters: { projectId: { eq: $project }, type: { eq: "module" } }) {
+            nodes { name isArchived issueTypeId project { slug manualModuleOrder } }
           }
-          agent_models { name provider permitted_reasoning_levels }
+          workItems: worktrackerIssue(filters: { moduleId: { eq: "20000000000000000000000000000002" }, type: { eq: "task" } }) {
+            nodes {
+              name isArchived
+              children(filters: { isArchived: { eq: false } }) { nodes { id } }
+              blockedByEdges { nodes { toIssueId } }
+              blocksEdges { nodes { fromIssueId } }
+            }
+          }
+          agentModels: worktrackerAgentmodel {
+            nodes { name providerId agentModelReasoningLevel { nodes { reasoningLevelId } } }
+          }
         }"#,
-                serde_json::json!({"project": "10000000-0000-0000-0000-000000000000"}),
+                serde_json::json!({"project": "10000000000000000000000000000000"}),
             ))
             .await,
     )
     .expect("decode GraphQL read");
 
     assert_eq!(
-        automatic["data"]["modules"]
+        generated["data"]["modules"]["nodes"]
             .as_array()
             .unwrap()
             .iter()
             .map(|row| row["name"].as_str().unwrap())
             .collect::<Vec<_>>(),
-        vec!["Newer", "Older"]
+        vec!["Older", "Newer", "Archived"]
     );
     assert_eq!(
-        automatic["data"]["archived"]
+        generated["data"]["workItems"]["nodes"]
             .as_array()
             .unwrap()
             .iter()
             .map(|row| row["name"].as_str().unwrap())
             .collect::<Vec<_>>(),
-        vec!["Archived", "Newer", "Older"]
+        vec!["Root", "Active child", "Archived child"]
     );
     assert_eq!(
-        automatic["data"]["work_items"]
+        generated["data"]["workItems"]["nodes"][0]["children"]["nodes"]
             .as_array()
             .unwrap()
-            .iter()
-            .map(|row| row["name"].as_str().unwrap())
-            .collect::<Vec<_>>(),
-        vec!["Active child", "Archived child", "Root"]
+            .len(),
+        1
     );
-    assert_eq!(automatic["data"]["work_items"][2]["sub_issues_count"], 1);
     assert_eq!(
-        automatic["data"]["work_items"][2]["blocked_by_ids"][0],
+        generated["data"]["workItems"]["nodes"][0]["blockedByEdges"]["nodes"][0]["toIssueId"],
         "40000000-0000-0000-0000-000000000002"
     );
-    assert_eq!(automatic["data"]["agent_models"][0]["name"], "gpt-5.6");
     assert_eq!(
-        automatic["data"]["agent_models"][0]["permitted_reasoning_levels"][0],
+        generated["data"]["agentModels"]["nodes"][0]["agentModelReasoningLevel"]["nodes"][0]
+            ["reasoningLevelId"],
         "60000000-0000-0000-0000-000000000000"
     );
+}
 
-    writer
-        .execute_unprepared("UPDATE worktracker_project SET manual_module_order = 1")
-        .await
-        .expect("switch fixture to manual order");
-    let manual: serde_json::Value = serde_json::from_str(
-        &api.graphql_execute(request(
-            r#"query($project: String!) { modules(project_id: $project) { name } }"#,
-            serde_json::json!({"project": "10000000-0000-0000-0000-000000000000"}),
-        ))
-        .await,
+#[tokio::test]
+async fn caller_documents_validate_and_execute_generated_reads() {
+    let (directory, _writer) = fixture().await;
+    let api = TransportApiImpl::new();
+    initialize_with_worktracker_and_install(
+        &directory.path().join("rust-core.sqlite3"),
+        &directory.path().join("state.db"),
+        &api,
     )
-    .expect("decode manual module read");
-    assert_eq!(
-        manual["data"]["modules"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|row| row["name"].as_str().unwrap())
-            .collect::<Vec<_>>(),
-        vec!["Newer", "Older"]
-    );
+    .await
+    .expect("install composed GraphQL endpoint");
+
+    let introspection: serde_json::Value = serde_json::from_str(
+        &api.clone()
+            .graphql_execute(request(
+                "{ __schema { queryType { fields { name } } } }",
+                serde_json::json!({}),
+            ))
+            .await,
+    )
+    .expect("decode GraphQL introspection");
+    let query_fields = introspection["data"]["__schema"]["queryType"]["fields"]
+        .as_array()
+        .expect("query fields")
+        .iter()
+        .filter_map(|field| field["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(query_fields.contains(&"worktrackerIssue"));
+    assert!(query_fields.contains(&"worktrackerProject"));
+    assert!(!query_fields.contains(&"work_items"));
+    assert!(!query_fields.contains(&"projects"));
+
+    for (document, operation, variables) in [
+        (
+            include_str!("../../src/features/projects/operations/projects.graphql"),
+            "WorkTrackerModules",
+            serde_json::json!({"projectId": "10000000000000000000000000000000"}),
+        ),
+        (
+            include_str!("../../src/features/work-items/operations/workItems.graphql"),
+            "WorkTrackerWorkItems",
+            serde_json::json!({"projectId": "10000000000000000000000000000000"}),
+        ),
+        (
+            include_str!("../../src/features/workflows/operations/workflows.graphql"),
+            "WorkTrackerWorkflowCatalog",
+            serde_json::json!({"projectId": "10000000000000000000000000000000"}),
+        ),
+    ] {
+        let response: serde_json::Value = serde_json::from_str(
+            &api.clone()
+                .graphql_execute(operation_request(document, operation, variables))
+                .await,
+        )
+        .expect("decode caller operation response");
+        assert!(
+            response.get("errors").is_none(),
+            "{operation} failed: {response:#}"
+        );
+    }
 }

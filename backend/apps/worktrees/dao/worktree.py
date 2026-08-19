@@ -7,6 +7,7 @@ from typing import Optional
 import django.db
 
 from apps.worktrees.models import Worktree
+from apps.workspace_write_ownership import assert_django_workspace_write_allowed
 
 
 def now_iso() -> str:
@@ -47,6 +48,8 @@ def create(
 ) -> Worktree:
     """Insert a new worktree row and return it."""
 
+    # Queryset writes bypass the model's own refusal, so the DAO repeats it.
+    assert_django_workspace_write_allowed("worktrees")
     stamp = now_iso()
     try:
         return Worktree.objects.create(
@@ -73,6 +76,7 @@ def create(
 def set_status(task_id: str, status: str) -> bool:
     """Update a worktree's coarse lifecycle status; bump ``updated_at``."""
 
+    assert_django_workspace_write_allowed("worktrees")
     try:
         updated = Worktree.objects.filter(task_id=task_id).update(
             status=status,
@@ -86,6 +90,7 @@ def set_status(task_id: str, status: str) -> bool:
 def delete(task_id: str) -> None:
     """Delete a worktree row by top-level task id."""
 
+    assert_django_workspace_write_allowed("worktrees")
     try:
         Worktree.objects.filter(task_id=task_id).delete()
     finally:

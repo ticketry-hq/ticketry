@@ -92,6 +92,22 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
                 created_at datetime NOT NULL, updated_at datetime NOT NULL,
                 UNIQUE(issue_type_id, state_id)
             );
+            CREATE TABLE agent_runs (
+                id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER,
+                agent TEXT NOT NULL, model TEXT, reasoning TEXT, status TEXT NOT NULL,
+                started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER, error TEXT,
+                cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
+                lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT,
+                scope TEXT NOT NULL
+            );
+            CREATE TABLE runs_status_events (
+                cursor INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,
+                project_id TEXT NOT NULL, event_kind TEXT NOT NULL,
+                payload_version INTEGER NOT NULL, subject_kind TEXT NOT NULL,
+                subject_id TEXT NOT NULL, agent_run_id TEXT, automation_attempt_id TEXT,
+                work_item_id TEXT, payload TEXT NOT NULL,
+                committed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             INSERT INTO worktracker_project VALUES
                 ('10000000000000000000000000000000', '90000000000000000000000000000000',
                  'Authorized', 'AUTH', '', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -116,7 +132,16 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
             INSERT INTO worktracker_issue VALUES
                 ('20000000000000000000000000000001', '10000000000000000000000000000000',
                  'module', '30000000000000000000000000000003', NULL, NULL, NULL, 0,
-                 'Module', 0, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                 'Module', 0, 0, 'M', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                ('30000000000000000000000000000000', '10000000000000000000000000000000',
+                 'task', '30000000000000000000000000000002', NULL,
+                 '20000000000000000000000000000001', '40000000000000000000000000000001', 0,
+                 'Authenticated caller', 900, 0, 'Z', '',
+                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+            INSERT INTO agent_runs
+                (id, issue_id, agent, status, started_at, scope)
+                VALUES ('run-valid', '30000000000000000000000000000000', 'codex',
+                        'running', '2026-08-15T00:00:00+00:00', 'task');
             INSERT INTO worktracker_provider VALUES
                 ('50000000000000000000000000000001', 'codex', 1, 1),
                 ('50000000000000000000000000000002', 'disabled', 0, 1);
@@ -129,6 +154,33 @@ async fn prepare_command_database(directory: &tempfile::TempDir) {
         .await
         .expect("create MCP command fixture");
     database.close().await.expect("close MCP command fixture");
+}
+
+/// Read the authoritative terminal facts the Rust termination service owns.
+async fn terminal_record(directory: &tempfile::TempDir) -> (Option<String>, i64) {
+    let database = Database::connect(format!(
+        "sqlite:{}?mode=rwc",
+        directory.path().join("state.db").display()
+    ))
+    .await
+    .expect("open terminal fact reader");
+    let row = database
+        .query_one_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "SELECT (SELECT ended_at FROM agent_runs WHERE id = 'run-valid') AS ended_at, \
+             (SELECT COUNT(*) FROM runs_status_events WHERE agent_run_id = 'run-valid' \
+              AND event_kind = 'agent_run.terminal') AS events"
+                .to_owned(),
+        ))
+        .await
+        .expect("read terminal facts")
+        .expect("terminal fact row");
+    let record = (
+        row.try_get::<Option<String>>("", "ended_at").unwrap(),
+        row.try_get::<i64>("", "events").unwrap(),
+    );
+    database.close().await.expect("close terminal fact reader");
+    record
 }
 
 async fn call(url: &str, id: u64, name: &str, arguments: Value) -> Value {
@@ -438,7 +490,20 @@ async fn mcp_mutations_cover_crud_hierarchy_workflow_and_blockers_through_rust_c
     .await;
     assert_eq!(launched["agent_run_id"], "run-launched", "{launched}");
     let terminated = call(&url, 13, "terminate_current_run", json!({})).await;
-    assert_eq!(terminated["agent_run_id"], "run-valid");
+    assert_eq!(terminated["agent_run_id"], "run-valid", "{terminated}");
+    assert_eq!(terminated["terminated"], true);
+    assert_eq!(terminated["already_terminated"], false);
+    // Rust authorized the run and owns its terminal outcome; the Python
+    // boundary only executed the effect.
+    let (ended_at, events) = terminal_record(&directory).await;
+    assert!(ended_at.is_some(), "the terminal outcome was not recorded");
+    assert_eq!(events, 1);
+
+    // A second call finds a settled run: no repeated executor effect and no
+    // second durable fact.
+    let repeated = call(&url, 14, "terminate_current_run", json!({})).await;
+    assert_eq!(repeated["already_terminated"], true, "{repeated}");
+    assert_eq!(terminal_record(&directory).await, (ended_at, 1));
 
     runtime.shutdown().await;
     backend_shutdown.cancel();

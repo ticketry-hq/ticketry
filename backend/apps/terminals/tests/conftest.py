@@ -4,6 +4,7 @@ import pytest
 from django.test import Client
 
 import apps.terminals.launch as session_module
+from apps.terminals import launch_paths_port
 from apps.terminals.launch_configuration import ResolvedLaunchConfiguration
 from worktracker.tests.factories import ensure_issue
 
@@ -58,6 +59,21 @@ def default_task_launch_configuration(monkeypatch):
         )
 
     monkeypatch.setattr(session_module, "resolve_task_launch_configuration", resolve)
+
+
+@pytest.fixture(autouse=True)
+def unresolved_launch_paths(monkeypatch):
+    """Keep spawn harnesses focused on spawning, not on the Rust boundary.
+
+    Documents and Worktrees live in the desktop runtime, which these Django
+    tests do not run. The default answer is therefore "nothing resolved": the
+    launch keeps the module folder it already computed and sources no
+    documents. Tests about the boundary itself override this seam explicitly.
+    """
+
+    monkeypatch.setattr(
+        launch_paths_port, "resolve", lambda **kwargs: launch_paths_port.LaunchPaths()
+    )
 
 
 def write_profiles(config_file, profiles, recent=None):

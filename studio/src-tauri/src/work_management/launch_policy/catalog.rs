@@ -1,9 +1,8 @@
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
-use serde::Deserialize;
 
 use super::rows::BindingRow;
 use super::LaunchPolicyError;
-use crate::settings_persistence::entities::app_setting;
+use crate::settings_persistence::{read_global_launch_default, GlobalLaunchDefault};
 use crate::work_management::entities::{
     agent_model, agent_model_reasoning_level, provider, reasoning_level,
 };
@@ -213,15 +212,8 @@ impl<'a> CatalogReader<'a> {
             .map(Some)
     }
 
-    async fn global_default(&self) -> Result<Option<GlobalDefault>, LaunchPolicyError> {
-        let row = app_setting::Entity::find()
-            .filter(app_setting::Column::Scope.eq("host"))
-            .filter(app_setting::Column::Key.eq("provider_catalog"))
-            .one(self.database)
-            .await?;
-        Ok(row
-            .and_then(|setting| serde_json::from_str::<CatalogSetting>(&setting.value).ok())
-            .and_then(|setting| setting.global_default))
+    async fn global_default(&self) -> Result<Option<GlobalLaunchDefault>, LaunchPolicyError> {
+        Ok(read_global_launch_default(self.database).await?)
     }
 }
 
@@ -253,16 +245,4 @@ fn model_row(row: Option<(agent_model::Model, Option<provider::Model>)>) -> Opti
         name: model.name,
         provider_slug: provider.slug,
     })
-}
-
-#[derive(Deserialize)]
-struct CatalogSetting {
-    global_default: Option<GlobalDefault>,
-}
-
-#[derive(Deserialize)]
-struct GlobalDefault {
-    provider: String,
-    model: Option<String>,
-    reasoning: Option<String>,
 }

@@ -2,6 +2,8 @@
 
 import pytest
 
+from apps.runs.tests.seeding import aseed_agent_run
+
 from apps.runs import dao as runs_dao
 from apps.runs.models import AgentRun
 from apps.terminals import dao
@@ -64,7 +66,7 @@ def _make_session(
 
 async def _insert(run_id: str, task_id: str, created_at: str, **kwargs) -> None:
     module_id = kwargs.get("module_id", "mod-1")
-    await runs_dao.insert_agent_run(
+    await aseed_agent_run(
         _make_run(
             run_id,
             task_id=task_id,
@@ -106,9 +108,16 @@ async def test_insert_list_and_soft_delete() -> None:
 
 
 async def test_parent_delete_cascades_to_terminal_session() -> None:
+    """The mirror is a child row: deleting its Agent Run removes it.
+
+    Only Rust deletes an Agent Run now, so the delete is exercised through the
+    database constraint that carries the cascade rather than through a Django
+    writer that no longer exists.
+    """
+
     await _insert("run-1", "task-1", "2026-05-29T09:00:00")
 
-    await runs_dao.delete_agent_run("run-1")
+    await AgentRun.objects.filter(id="run-1").adelete()
 
     assert await AgentTerminalSession.objects.acount() == 0
 

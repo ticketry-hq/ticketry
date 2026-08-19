@@ -26,6 +26,17 @@ pub(crate) fn format(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::AutoSi, false)
 }
 
+/// SQLite `datetime` literal shape. Lease expiry and outcome timestamps are
+/// compared by the database itself, so they must sort against the
+/// `CURRENT_TIMESTAMP` defaults the Runs schema writes.
+pub(crate) fn database_format(value: DateTime<Utc>) -> String {
+    value.naive_utc().format("%Y-%m-%d %H:%M:%S%.f").to_string()
+}
+
+pub(crate) fn database_now() -> String {
+    database_format(Utc::now())
+}
+
 fn invalid() -> RunsPersistenceError {
     RunsPersistenceError::new(
         RunsPersistenceErrorCode::InvalidTimestamp,

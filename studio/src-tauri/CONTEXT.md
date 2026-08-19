@@ -4,6 +4,76 @@ The Rust shell that packages Studio as a desktop application. It owns the
 local data directory, starts and supervises the local services Studio depends
 on, and publishes a single health signal to the webview.
 
+## Rust migration recovery handoff (2026-08-13)
+
+The `rust-migration` branch is recovering from an implementation drift in the
+SeaORM/Seaography migration. The ratified architecture called for migrations to
+produce generated SeaORM entities and generated Seaography model CRUD, with
+custom code limited to Ticketry invariants. The first implementation proved
+that chain only with `migration_probes`, then hand-authored the real Ticketry
+entities, GraphQL output types, ordinary read resolvers, repositories, and
+mutations. Do not extend those handwritten layers.
+
+The recovery decisions are:
+
+1. Generated SeaORM entities and Seaography queries, filtering, ordering,
+   pagination, inputs, outputs, and ordinary CRUD are the default.
+2. Public writes bind a concrete identity and allowlist caller-writable fields.
+   If raw generated CRUD would bypass an invariant, keep it private and expose
+   one restricted model-shaped create/update/delete seam. Do not replace model
+   CRUD with per-field or per-relationship RPCs.
+3. While Django owns a table, generate its entity cohort from a clean database
+   at the current Django migration leaf. After Rust becomes sole writer, future
+   schema changes and entity generation start from SeaORM migrations.
+4. Replace mutually-referential entities as cohorts after mechanical parity
+   comparison. Delete the matching handwritten types, ordinary resolvers, and
+   pass-through repositories after their parity tests pass.
+5. DRF-shaped GraphQL projections are temporary caller-compatibility adapters,
+   not the permanent model/query architecture.
+
+Current recovery state:
+
+- The Rust source has been mechanically reorganized to the Seaography-style
+  `src/entities/`, `src/query_root.rs`, and
+  `src/query_root/{queries,mutations,types}` boundaries. Generation and drift
+  scripts point at the new foundation-entity location.
+- A clean SQLite database created by the current Django migration chain was
+  successfully introspected with `sea-orm-cli generate entity --seaography`.
+- Generated and handwritten WorkTracker entities describe broadly the same
+  physical schema, so salvage is viable. They are not safe for blind
+  replacement yet: Django SQLite `bool`, `datetime`, and JSON declarations
+  generate as ignored `String` fields; integer widths differ; generated
+  relationship names are database-derived rather than semantic; and generated
+  metadata includes keys/actions omitted by some handwritten mappings.
+- `app_settings` was a byte-for-byte match and has been replaced by the
+  generated entity at `src/entities/settings/app_settings.rs`.
+- The remaining WorkTracker cohort is still the compatibility mapping pending
+  deterministic generation normalization. Rust-owned tables such as transition
+  occurrences and launch-policy decisions/rejections are absent from the
+  Django-generated cohort and must be generated from their Rust-owned schema.
+- `cargo check --locked`, formatting, generated-artifact drift, and focused
+  GraphQL/database parity tests passed after the structural move. The broad
+  library suite passed 149/150; the remaining
+  `append_description_serializes_read_modify_write` case fails with SQLite
+  `database is locked` and is not evidence of a module-move failure.
+- Preserve the pre-existing uncommitted edit in
+  `tests/agent_run_lifecycle.rs`; it is not part of this recovery cleanup.
+
+The next task is to make entity generation type-correct and reproducible, not
+to port another feature. Build one deterministic, schema-driven normalization
+step for the generated Django-owned cohort; prove every boolean, datetime,
+JSON, integer-width, key, and relationship correction; reject unknown custom
+SQLite types; and byte-compare the result in the drift check. Generate into
+scratch and compare before replacing any current WorkTracker entity. Never
+hand-edit a generated entity as the solution.
+
+The governing documents are
+[`../../rust-migration/migration-strategy.md`](../../rust-migration/migration-strategy.md),
+[`../../rust-migration/template-architecture.md`](../../rust-migration/template-architecture.md),
+[`../../rust-migration/data-migration.md`](../../rust-migration/data-migration.md),
+and
+[`../../rust-migration/risks-open-questions.md`](../../rust-migration/risks-open-questions.md).
+
 ## Language
 
 **Sidecar**:

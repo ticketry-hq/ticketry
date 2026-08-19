@@ -14,10 +14,19 @@ import { queryClient } from "../shared/query/queryClient";
 import { useClientStore } from "../state/clientStore";
 
 const terminalApi = vi.hoisted(() => ({
-  getDocuments: vi.fn(),
   getTerminals: vi.fn(),
   listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
+}));
+
+const documentRegistry = vi.hoisted(() => ({
+  listTaskDocuments: vi.fn(),
+  listScratchDocuments: vi.fn(),
+}));
+
+vi.mock("../features/documents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../features/documents")>()),
+  ...documentRegistry,
 }));
 
 vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
@@ -97,7 +106,8 @@ describe("overhaul acceptance — terminals", () => {
       automationAttempts: {},
       automationByTask: {},
     });
-    terminalApi.getDocuments.mockResolvedValue({ documents: [] });
+    documentRegistry.listTaskDocuments.mockResolvedValue([]);
+    documentRegistry.listScratchDocuments.mockResolvedValue([]);
     terminalApi.getTerminals.mockResolvedValue([]);
     terminalApi.listResumableTerminals.mockResolvedValue([]);
   });

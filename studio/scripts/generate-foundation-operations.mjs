@@ -11,20 +11,21 @@ const schema = await readFile(schemaPath, "utf8");
 const operations = (await readFile(operationsPath, "utf8")).trim();
 for (const required of [
   "migrationProbes(",
-  "setMigrationProbe(value: String!): Boolean!",
+  "migrationProbesCreateOne(",
+  "MigrationProbesInsertInput",
 ]) {
   if (!schema.includes(required)) {
     throw new Error(`foundation schema is missing ${required}`);
   }
 }
 
-const separator = "\n\nmutation SetMigrationProbe";
+const separator = "\n\nmutation CreateMigrationProbe";
 const split = operations.indexOf(separator);
 if (split < 0) {
   throw new Error("foundation operations have an unknown shape");
 }
 const querySource = operations.slice(0, split);
-const mutationSource = `mutation SetMigrationProbe${operations.slice(
+const mutationSource = `mutation CreateMigrationProbe${operations.slice(
   split + separator.length,
 )}`;
 
@@ -43,12 +44,18 @@ export interface FoundationProbeQuery {
 
 export type FoundationProbeVariables = Record<string, never>;
 
-export interface SetMigrationProbeMutation {
-  readonly setMigrationProbe: boolean;
+export interface CreateMigrationProbeMutation {
+  readonly migrationProbesCreateOne: {
+    readonly id: number;
+    readonly value: string;
+  };
 }
 
-export interface SetMigrationProbeVariables {
-  readonly value: string;
+export interface CreateMigrationProbeVariables {
+  readonly data: {
+    readonly id: number;
+    readonly value: string;
+  };
 }
 
 export const FoundationProbeDocument: TypedDocumentNode<
@@ -60,12 +67,12 @@ export const FoundationProbeDocument: TypedDocumentNode<
   source: ${JSON.stringify(querySource)},
 };
 
-export const SetMigrationProbeDocument: TypedDocumentNode<
-  SetMigrationProbeMutation,
-  SetMigrationProbeVariables
+export const CreateMigrationProbeDocument: TypedDocumentNode<
+  CreateMigrationProbeMutation,
+  CreateMigrationProbeVariables
 > = {
   kind: "Document",
-  operationName: "SetMigrationProbe",
+  operationName: "CreateMigrationProbe",
   source: ${JSON.stringify(mutationSource)},
 };
 `;

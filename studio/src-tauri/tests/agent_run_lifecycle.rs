@@ -20,6 +20,7 @@ async fn fixture() -> (tempfile::TempDir, DatabaseConnection, RunsServices) {
         );
         CREATE TABLE agent_runs (
             id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, ticket_seq INTEGER, agent TEXT NOT NULL,
+            model TEXT, reasoning TEXT,
             status TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER,
             error TEXT, cwd TEXT, provider_session_id TEXT, lifecycle_state TEXT,
             lifecycle_updated_at TEXT, design_dir TEXT, resumed_from TEXT, scope TEXT NOT NULL
@@ -516,14 +517,109 @@ async fn termination_is_principal_bound_and_shared_with_the_mcp_adapter() {
 }
 
 #[tokio::test]
+async fn same_timestamp_lifecycle_facts_resolve_in_arrival_order() {
+    let (_directory, database, services) = fixture().await;
+    insert_run(
+        &database,
+        "same-second",
+        "task-a",
+        "2026-08-12T07:00:00Z",
+        None,
+        "running",
+        None,
+        None,
+        None,
+        "task",
+    )
+    .await;
+    let apply = |kind: &'static str| {
+        let services = services.clone();
+        async move {
+            services
+                .lifecycle()
+                .apply_lifecycle_fact(LifecycleFact {
+                    agent_run_id: "same-second".into(),
+                    kind: kind.into(),
+                    occurred_at: "2026-08-12T08:00:00Z".into(),
+                    provider_session_id: None,
+                })
+                .await
+                .unwrap()
+        }
+    };
+    assert!(apply("turn_start").await.applied);
+    // The provider gives no sub-second ordering, so the second fact resolves
+    // deterministically in arrival order rather than raising a conflict.
+    let second = apply("awaiting_input").await;
+    assert!(second.applied);
+    assert_eq!(second.state.as_deref(), Some("needs_input"));
+    // The exact duplicate stays a no-op.
+    assert!(!apply("awaiting_input").await.applied);
+    assert_eq!(event_count(&database).await, 2);
+}
+
+#[tokio::test]
+async fn terminating_a_settled_run_spends_no_effect_and_appends_no_fact() {
+    let (_directory, database, services) = fixture().await;
+    insert_run(
+        &database,
+        "run-ended",
+        "task-a",
+        "2026-08-12T07:00:00Z",
+        Some("2026-08-12T09:00:00Z"),
+        "completed",
+        Some("exited"),
+        Some("2026-08-12T09:00:00Z"),
+        None,
+        "task",
+    )
+    .await;
+    let executor = Arc::new(FakeExecutor::default());
+    let result = RunTerminationService::new(
+        database.clone(),
+        services.lifecycle().clone(),
+        executor.clone(),
+    )
+    .terminate_current_run(&AuthenticatedAgentRun {
+        agent_run_id: "run-ended".into(),
+        issue_id: "task-a".into(),
+        project_id: "project-a".into(),
+        scope: "task".into(),
+    })
+    .await
+    .unwrap();
+    assert!(result.already_terminated && !result.durable_fact_applied);
+    assert!(executor.requests.lock().unwrap().is_empty());
+    assert_eq!(event_count(&database).await, 0);
+}
+
+#[tokio::test]
+async fn unbound_graphql_callers_cannot_reach_run_scoped_termination() {
+    let database = Database::connect("sqlite::memory:").await.unwrap();
+    let schema = muxed_studio_lib::query_root::foundation_schema(
+        database, None, None, None, None, None, None, None, None, None,
+    )
+    .unwrap();
+    let response = schema
+        .execute("mutation { terminate_current_agent_run { agent_run_id } }")
+        .await;
+    // The desktop transport binds no Agent Run, so the caller is rejected for
+    // being unbound rather than misreported as a missing service.
+    let body = serde_json::to_value(&response).unwrap();
+    assert_eq!(
+        body["errors"][0]["extensions"]["code"], "caller_run_unbound",
+        "{body}"
+    );
+}
+
+#[tokio::test]
 async fn generated_graphql_contract_has_scoped_holdings_and_targetless_termination() {
     let sdl = muxed_studio_lib::graphql_foundation::generated_schema_sdl()
         .await
         .unwrap();
-    assert!(
-        sdl.contains("agentRunHoldings(projectId: String!, taskId: String): [AgentRunHolding!]!")
-    );
-    assert!(sdl.contains("ingestAgentLifecycle("));
-    assert!(sdl.contains("terminateCurrentAgentRun: CurrentRunTermination!"));
-    assert!(!sdl.contains("terminateCurrentAgentRun(agentRunId:"));
+    assert!(sdl
+        .contains("agent_run_holdings(project_id: String!, task_id: String): [AgentRunHolding!]!"));
+    assert!(sdl.contains("ingest_agent_lifecycle("));
+    assert!(sdl.contains("terminate_current_agent_run: CurrentRunTermination!"));
+    assert!(!sdl.contains("terminate_current_agent_run(agent_run_id:"));
 }

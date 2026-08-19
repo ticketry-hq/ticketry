@@ -4,7 +4,11 @@
 
 Move Ticketry's backend into the existing Tauri process, using the
 `tauri-graphql-template` transport and generation chain as the starting point,
-but keep Ticketry's invariant-rich writes behind authored application services.
+with generated SeaORM entities and generated Seaography model CRUD as the
+default. Keep only the validation, locking, derived-field repair, cascades, and
+effects required by Ticketry invariants behind restricted model-shaped write
+seams.
+
 The target is one Rust application core with three adapters:
 
 1. GraphQL over TauRPC for Studio;
@@ -51,6 +55,24 @@ network-facing projection because external agent processes cannot invoke Tauri
 IPC. The MCP listener lives in the Tauri process; it is not a separately
 supervised executable.
 
+## Recovery status (2026-08-13)
+
+The first implementation proved database-driven generation only with a probe
+table, then hand-authored the real Ticketry entities and much of the read/CRUD
+surface. That broadened a legitimate custom-write exception into the default
+architecture. Further feature migration is paused while that is corrected.
+
+The Rust source now follows Seaography's top-level `entities` and `query_root`
+shape. A clean database at the current Django migration leaf successfully
+generates the real WorkTracker and settings entities. The comparison found that
+the database model is broadly aligned, but Django's SQLite declarations require
+deterministic correction of generated boolean, datetime, JSON, integer-width,
+and relationship metadata before the WorkTracker cohort can be replaced safely.
+The generated `app_settings` entity was a byte-for-byte match and is the first
+replacement. See the recovery gate in
+[migration-strategy.md](migration-strategy.md) and the pinned framework audit in
+[seaography-hooks-audit.md](seaography-hooks-audit.md).
+
 ## Why neither prior attempt is the destination
 
 `ticketry-rust` contains roughly 50,147 lines of Rust, strong database-adoption
@@ -80,10 +102,12 @@ repository. See [prior-attempts-postmortem.md](prior-attempts-postmortem.md).
 
 ## Governing principles
 
-1. **Port as is; optimize afterward.** Rust initially mirrors the Django
-   domains, GraphQL reproduces DRF serializer semantics, and current service
-   functions become authored commands. No domain, schema, or interaction
-   redesign happens during porting; GraphQL-native cleanup is a final phase.
+1. **Generate structure; port behavior.** While Django owns a table, build a
+   clean database at the current Django migration leaf and generate its SeaORM
+   entities from that database. After Rust takes ownership, generate from
+   SeaORM migrations. Port only the domain behavior the database and Seaography
+   cannot express; do not hand-author parallel models, ordinary CRUD resolvers,
+   mirrored DTOs, or repository wrappers around generated SeaORM operations.
 2. **Migrate behavior, not routes.** The 81 current OpenAPI operations and 30
    current MCP tools are evidence and compatibility inputs, not a mandate to
    reproduce HTTP internally ([`../openapi.json`](../openapi.json),
@@ -94,9 +118,12 @@ repository. See [prior-attempts-postmortem.md](prior-attempts-postmortem.md).
    own the same mutation path
    ([`../docs/decisions/2026-08-04-frontend-state-and-api-contract.md`](../docs/decisions/2026-08-04-frontend-state-and-api-contract.md),
    [`../docs/decisions/2026-08-06-one-holding-per-thing.md`](../docs/decisions/2026-08-06-one-holding-per-thing.md)).
-4. **Do not expose storage as the domain API.** Ranking, transition gates,
-   hierarchy, launch effects, and graph-run lifecycle require authored commands;
-   generated CRUD mutators must not bypass them
+4. **Generated CRUD is the default, not an authorization policy.** Begin with
+   the generated model surface. Bind concrete identities and allowlist writable
+   fields at the public boundary. Put ranking, transition gates, hierarchy,
+   launch effects, and graph-run lifecycle behind the corresponding restricted
+   model-shaped create/update/delete seam; generated mutators must not bypass
+   them
    ([`../backend/worktracker/services/`](../backend/worktracker/services/),
    [`../backend/apps/execution/driver.py`](../backend/apps/execution/driver.py)).
 5. **Durability precedes realtime.** Persist the event/effect fact before
@@ -117,6 +144,11 @@ repository. See [prior-attempts-postmortem.md](prior-attempts-postmortem.md).
    acceptance suite plus targeted cases, then daily-drive a snapshot/copy of the
    real data directory for a couple of days before merge or release. There is
    no post-write downgrade promise.
+10. **Replace generated cohorts, then delete duplication.** Generate into
+    scratch space, compare columns, types, keys, and relations, and replace a
+    mutually-referential entity cohort only when parity is proved. Remove its
+    handwritten entities, ordinary read resolvers, mirrored types, and
+    pass-through repositories in the same or immediately following change.
 
 ## Evidence and scope
 

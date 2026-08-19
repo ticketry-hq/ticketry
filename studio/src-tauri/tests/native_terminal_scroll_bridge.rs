@@ -3,10 +3,10 @@
 //! tmux server.
 
 use crate::common::isolated_tmux::{IsolatedTmux, TmuxEnvironmentOverride, RUN_ID, TMUX_ENV_LOCK};
-use muxed_studio_lib::native_terminal_scroll::{
+use muxed_studio_lib::native_terminal::scroll::{
     ScrollGestureSink, MAX_NATIVE_SCROLL_LINES, SCROLL_DIRECTION_DOWN, SCROLL_DIRECTION_UP,
 };
-use muxed_studio_lib::native_terminal_worker::{
+use muxed_studio_lib::native_terminal::worker::{
     run_native_worker, NativeViewerCommand, NativeWorkerExit,
 };
 use muxed_studio_lib::terminal_runtime::{TerminalAttachment, TerminalCommandAttachment};

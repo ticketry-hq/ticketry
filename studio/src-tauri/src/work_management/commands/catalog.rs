@@ -8,6 +8,9 @@ use sea_orm::{
 use serde::Deserialize;
 
 use super::identifiers::{database_uuid, new_database_uuid};
+use super::status_facts::{
+    record_workflow_state, stamp, WorkFactRecorder, WorkflowStateChange, WorkflowStateFact,
+};
 use super::CommandError;
 use crate::work_management::entities::{
     issue, issue_type, issue_type_transition, launch_binding, project, state, workspace,
@@ -295,6 +298,7 @@ pub async fn delete_project(
 pub async fn create_state(
     database: &DatabaseConnection,
     input: CreateState,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let project_id = database_uuid(&input.project_id, "project_id")?;
     let name = valid_text(&input.name, "name", 255)?;
@@ -349,20 +353,40 @@ pub async fn create_state(
     };
     let id = new_database_uuid();
     let now = super::timestamp::now();
+    let occurred_at = stamp(now);
+    let sort_order = max_order.map_or(0, |value| value + 1);
     state::ActiveModel {
         id: Set(id.clone()),
-        project_id: Set(project_id),
-        name: Set(name),
-        group: Set(input.group),
-        color: Set(color),
-        sort_order: Set(max_order.map_or(0, |value| value + 1)),
+        project_id: Set(project_id.clone()),
+        name: Set(name.clone()),
+        group: Set(input.group.clone()),
+        color: Set(color.clone()),
+        sort_order: Set(sort_order),
         is_protected: Set(false),
-        created_at: Set(now),
-        updated_at: Set(now),
+        created_at: Set(now.clone()),
+        updated_at: Set(now.clone()),
     }
     .insert(&transaction)
     .await?;
+    record_workflow_state(
+        facts,
+        &transaction,
+        WorkflowStateFact {
+            project_id: &project_id,
+            state_id: &id,
+            change: WorkflowStateChange::Created,
+            name: &name,
+            group: &input.group,
+            color: &color,
+            sort_order,
+            occurred_at: &occurred_at,
+        },
+    )
+    .await?;
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 
@@ -512,6 +536,7 @@ pub async fn delete_issue_type(
 pub async fn update_state(
     database: &DatabaseConnection,
     input: UpdateState,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<String, CommandError> {
     let id = database_uuid(&input.id, "state_id")?;
     let row = state::Entity::find_by_id(&id)
@@ -525,6 +550,7 @@ pub async fn update_state(
             )));
         }
     }
+    let project_id = row.project_id.clone();
     let mut active: state::ActiveModel = row.into();
     if let Some(name) = input.name {
         active.name = Set(valid_text(&name, "name", 255)?);
@@ -538,8 +564,32 @@ pub async fn update_state(
     if let Some(sort_order) = input.sort_order {
         active.sort_order = Set(sort_order);
     }
-    active.updated_at = Set(super::timestamp::now());
-    active.update(database).await?;
+    let now = super::timestamp::now();
+    let occurred_at = stamp(now);
+    active.updated_at = Set(now.clone());
+    // The fact is published from the row that committed, so a rename, recolour,
+    // regroup, or reorder reaches consumers as one authoritative version.
+    let transaction = database.begin().await?;
+    let updated = active.update(&transaction).await?;
+    record_workflow_state(
+        facts,
+        &transaction,
+        WorkflowStateFact {
+            project_id: &project_id,
+            state_id: &updated.id,
+            change: WorkflowStateChange::Updated,
+            name: &updated.name,
+            group: &updated.group,
+            color: &updated.color,
+            sort_order: updated.sort_order,
+            occurred_at: &occurred_at,
+        },
+    )
+    .await?;
+    transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(id)
 }
 
@@ -548,15 +598,23 @@ pub async fn reorder_issue_types(
     project_id: &str,
     ordered_ids: Vec<String>,
 ) -> Result<(), CommandError> {
-    reorder_catalogue(database, project_id, ordered_ids, Catalogue::IssueTypes).await
+    reorder_catalogue(
+        database,
+        project_id,
+        ordered_ids,
+        Catalogue::IssueTypes,
+        None,
+    )
+    .await
 }
 
 pub async fn reorder_states(
     database: &DatabaseConnection,
     project_id: &str,
     ordered_ids: Vec<String>,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<(), CommandError> {
-    reorder_catalogue(database, project_id, ordered_ids, Catalogue::States).await
+    reorder_catalogue(database, project_id, ordered_ids, Catalogue::States, facts).await
 }
 
 #[derive(Clone, Copy)]
@@ -570,6 +628,7 @@ async fn reorder_catalogue(
     project_id: &str,
     ordered_ids: Vec<String>,
     catalogue: Catalogue,
+    facts: Option<&WorkFactRecorder>,
 ) -> Result<(), CommandError> {
     let project_id = database_uuid(project_id, "project_id")?;
     let ids = ordered_ids
@@ -627,15 +686,37 @@ async fn reorder_catalogue(
                     .await?;
             }
             Catalogue::States => {
-                state::Entity::update_many()
+                let updated = state::Entity::update_many()
                     .col_expr(state::Column::SortOrder, Expr::value(sort_order as i32))
-                    .filter(state::Column::Id.eq(id))
-                    .exec(&transaction)
+                    .filter(state::Column::Id.eq(&id))
+                    .exec_with_returning(&transaction)
                     .await?;
+                // One fact per moved state: order is a property of each row, so
+                // a consumer converges without being told to refetch a list.
+                for row in &updated {
+                    record_workflow_state(
+                        facts,
+                        &transaction,
+                        WorkflowStateFact {
+                            project_id: &project_id,
+                            state_id: &row.id,
+                            change: WorkflowStateChange::Reordered,
+                            name: &row.name,
+                            group: &row.group,
+                            color: &row.color,
+                            sort_order: row.sort_order,
+                            occurred_at: &stamp(row.updated_at),
+                        },
+                    )
+                    .await?;
+                }
             }
         }
     }
     transaction.commit().await?;
+    if let Some(facts) = facts {
+        facts.wake();
+    }
     Ok(())
 }
 

@@ -448,16 +448,14 @@ async def test_tmux_launch_failure_retains_cleanup_handle_until_termination_succ
             resolved_skills=resolved,
         )
 
+    # Cleanup could not be proven, so nothing is deleted: the run remains a
+    # durable handle, no terminal mirror was ever recorded because no runtime
+    # was created, and the artifacts survive for reconciliation. Settling the
+    # effect belongs to the Runs owner, whose reconciliation pass observes the
+    # deterministic runtime identity before it adopts, retries, or closes.
     run = await AgentRun.objects.aget(id=run_id)
     assert run.status == "cleanup_pending"
-    assert await AgentTerminalSession.objects.filter(agent_run_id=run_id).aexists()
-    assert (tmp_path / "ticketry-agent-runs" / run_id).exists()
-
-    monkeypatch.setattr(runtime, "terminate", terminate)
-    await asyncio.to_thread(TerminalReconciler(runtime).reconcile)
-
-    assert not await AgentRun.objects.filter(id=run_id).aexists()
     assert not await AgentTerminalSession.objects.filter(
         agent_run_id=run_id
     ).aexists()
-    assert not (tmp_path / "ticketry-agent-runs" / run_id).exists()
+    assert (tmp_path / "ticketry-agent-runs" / run_id).exists()

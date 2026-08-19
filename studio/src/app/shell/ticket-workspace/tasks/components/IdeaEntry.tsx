@@ -21,6 +21,9 @@ export function IdeaEntry() {
   const selectedModuleId = useClientStore((state) => state.selectedModuleId);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
+  // #623: focus needs to read at a glance — the caret alone was invisible
+  // against the pane, so the field carries an accent border plus a soft ring.
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const previousModuleRef = useRef(selectedModuleId);
   const submissionRef = useRef(0);
@@ -120,20 +123,28 @@ export function IdeaEntry() {
 
   return (
     <div className="mb-2 min-w-0">
-      <textarea
-        ref={inputRef}
-        data-idea-entry="true"
-        data-coach-anchor="story-add"
-        aria-label="Capture an idea"
-        aria-busy={pending}
-        rows={1}
-        value={draft}
-        readOnly={pending}
-        placeholder="Capture an idea…"
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={handleKeyDown}
-        className="block min-h-7 w-full resize-none overflow-hidden rounded border border-pane-border bg-pane-bg px-2 py-1 text-sm leading-5 text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent"
-      />
+      <div
+        data-idea-entry-field="true"
+        data-focused={focused}
+        className="border border-pane-border bg-pane-bg transition-[border-color,box-shadow] duration-150 data-[focused=true]:border-focus-accent data-[focused=true]:shadow-[0_0_0_2px_rgba(122,162,247,0.25)]"
+      >
+        <textarea
+          ref={inputRef}
+          data-idea-entry="true"
+          data-coach-anchor="story-add"
+          aria-label="Capture an idea"
+          aria-busy={pending}
+          rows={1}
+          value={draft}
+          readOnly={pending}
+          placeholder="Capture an idea…"
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          className="block min-h-7 w-full resize-none overflow-hidden bg-transparent px-2 py-1 text-sm leading-5 text-text-primary caret-focus-accent outline-none placeholder:text-text-muted"
+        />
+      </div>
     </div>
   );
 }

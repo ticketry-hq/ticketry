@@ -61,7 +61,7 @@ export default function BlockerPicker({ issueId, projectId, items, currentIds, o
                 }}
               >
                 <span
-                  className="h-2 w-2 flex-none rounded-full"
+                  className="h-2 w-2 flex-none"
                   style={{ backgroundColor: stateColor(stateById(states, c.state)) }}
                 />
                 <span className="w-20 flex-none font-mono text-xs text-text-muted">

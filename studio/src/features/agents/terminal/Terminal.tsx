@@ -1,3 +1,4 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "xterm/css/xterm.css";
 
@@ -17,10 +18,15 @@ import { useTerminalPresentation } from "./internal/useTerminalPresentation";
 import { registerTerminalFocus } from "./internal/terminalRegistry";
 import { NativeGhosttyTerminal } from "./NativeGhosttyTerminal";
 import { nativeGhosttyAvailable } from "./internal/nativeGhosttyAvailability";
+import { reportNativeRenderFailure } from "./internal/nativeRenderRecovery";
+import { nativeFailureIsHostNotVisible } from "./internal/nativeViewerFailure";
+import { nativeViewerSessionIsLive } from "./internal/nativeViewerSessionLiveness";
+import { ensureTerminalRunCreated } from "./internal/terminalRunCreation";
 
 const OWNER_LABEL: Record<ForegroundOwner, string> = {
   studio: "the fallback workspace",
   drawer: "the issue drawer",
+  panel: "the terminal panel",
 };
 
 type TerminalProps = {
@@ -44,7 +50,10 @@ export function Terminal({
   const session = useTerminalStore((state) =>
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
-  const [nativeAvailable, setNativeAvailable] = useState(false);
+  const desktop = isTauri();
+  const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(() =>
+    desktop ? null : false,
+  );
   const [nativeFailure, setNativeFailure] = useState<{
     sessionId: string | null;
     reason: string;
@@ -56,6 +65,7 @@ export function Terminal({
     nativeFailure?.sessionId === sessionId ? nativeFailure.reason : null;
 
   useEffect(() => {
+    if (!desktop) return;
     let active = true;
     void nativeGhosttyAvailable().then((available) => {
       if (active) setNativeAvailable(available);
@@ -63,7 +73,44 @@ export function Terminal({
     return () => {
       active = false;
     };
-  }, []);
+  }, [desktop]);
+
+  useEffect(() => {
+    if (!sessionId || !session) return;
+    ensureTerminalRunCreated(sessionId, session);
+  }, [session, sessionId]);
+
+  // A native failure on a live desktop terminal is the only input to the
+  // window-scoped recovery campaign. Capability absence, browser rendering and
+  // ended sessions are supported fallback postures, not render failures.
+  useEffect(() => {
+    if (!desktop || !nativeAvailable || !nativeFailureReason) return;
+    if (!session?.agentRunId || !nativeViewerSessionIsLive(session.status)) return;
+    // A host with no visible frame before attachment never reaches the
+    // renderer. Refreshing rebuilds the same layout, so the campaign would
+    // escalate to its cap and reload forever without a renderer ever failing.
+    if (nativeFailureIsHostNotVisible(nativeFailureReason)) return;
+    // Report the run, not just the reason, and hold the report for as long as
+    // this surface shows the fallback: these inputs cannot change again once
+    // the run has failed, so the coordinator is the only place that remembers
+    // the run is still broken while other terminals recover natively.
+    return reportNativeRenderFailure(session.agentRunId, nativeFailureReason);
+  }, [
+    desktop,
+    nativeAvailable,
+    nativeFailureReason,
+    session?.agentRunId,
+    session?.status,
+  ]);
+
+  if (desktop && (nativeAvailable === null || !session?.agentRunId)) {
+    return (
+      <div
+        className="h-full w-full bg-pane-panel"
+        data-testid="terminal-renderer-pending"
+      />
+    );
+  }
 
   if (
     nativeAvailable &&
@@ -85,7 +132,7 @@ export function Terminal({
   }
   const fallback = (
     <XtermTerminal
-      sessionId={active ? sessionId : null}
+      sessionId={active || session?.status === "connecting" ? sessionId : null}
       owner={owner}
       focusSignal={focusSignal}
     />
@@ -97,22 +144,12 @@ export function Terminal({
       <div
         role="status"
         data-testid="native-terminal-fallback-notice"
-        className="pointer-events-none absolute bottom-2 right-2 max-w-[min(32rem,calc(100%-1rem))] rounded border border-lifecycle-attention/40 bg-pane-bg/95 px-2 py-1 text-xs text-lifecycle-attention shadow"
+        className="pointer-events-none absolute bottom-2 right-2 max-w-[min(32rem,calc(100%-1rem))] border border-lifecycle-attention/40 bg-pane-bg/95 px-2 py-1 text-xs text-lifecycle-attention shadow"
       >
         Native terminal unavailable: {nativeFailureReason}. Using compatibility renderer.
       </div>
     </div>
   );
-}
-
-function nativeViewerSessionIsLive(status: string): boolean {
-  return ![
-    "exited",
-    "error",
-    "viewer_closed",
-    "pty_eof",
-    "session_lost",
-  ].includes(status);
 }
 
 function XtermTerminal({
@@ -207,7 +244,7 @@ function TerminalOwnershipNotice({
         type="button"
         data-testid="terminal-reclaim"
         onClick={onReclaim}
-        className="rounded-md border border-pane-border px-3 py-1 text-sm text-text-primary hover:bg-pane-title"
+        className="border border-pane-border px-3 py-1 text-sm text-text-primary hover:bg-pane-title"
       >
         View here
       </button>

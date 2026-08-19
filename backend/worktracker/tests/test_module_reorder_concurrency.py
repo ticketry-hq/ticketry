@@ -174,7 +174,8 @@ def test_a_first_drag_meeting_a_held_project_row_waits_for_the_winner(
     # the lock — a re-seed would have reset both.
     ranks = ranks_by_name(project)
     assert ranks["b"] == "V"
-    assert ranks["a"] == "7kV"
+    # key_between(None, "F") with midpoint shortening: the head slot before c.
+    assert ranks["a"] == "7"
     assert ranks["c"] > ranks["b"]
 
 

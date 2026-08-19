@@ -42,6 +42,14 @@ replacement CRUD, DAO/repository layers that mirror SeaORM, mirrored DTOs,
 identifies the missing behavior, rejected framework/database facilities, the
 smallest custom seam, and its drift-prevention test.
 
+Backend HTTP endpoints must use Django REST Framework's native machinery, not
+handwritten views. Before adding or changing any backend REST endpoint,
+serializer, or view, read
+[`.codex/skills/drf-rest-api/SKILL.md`](.codex/skills/drf-rest-api/SKILL.md);
+to review the backend for framework drift, follow
+[`.codex/skills/drf-rest-api-audit/SKILL.md`](.codex/skills/drf-rest-api-audit/SKILL.md).
+The same skills are exposed to Claude via symlinks in `.claude/skills/`.
+
 Keep the Tauri/webview boundary narrow. The native terminal renderer consumes a
 pinned libghostty revision through its C API, while tmux remains responsible for
 durable sessions. Preserve the existing fallback unless a deliberate migration

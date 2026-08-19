@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
+import { nativeViewerSessionIsLive } from "./nativeViewerSessionLiveness";
 import { useTerminalStore } from "./sessionStore";
 
 type MountEntry = {
@@ -27,28 +28,36 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-function nativeViewerSessionIsLive(status: string): boolean {
-  return ![
-    "exited",
-    "error",
-    "viewer_closed",
-    "pty_eof",
-    "session_lost",
-  ].includes(status);
-}
+let sessionWatch: (() => void) | null = null;
 
-useTerminalStore.subscribe((state) => {
-  let changed = false;
-  for (const runId of failedRuns.keys()) {
-    const sessionId = state.sessionByRun[runId];
-    const session = sessionId ? state.sessions[sessionId] : undefined;
-    if (!session || !nativeViewerSessionIsLive(session.status)) {
-      failedRuns.delete(runId);
-      changed = true;
+/**
+ * Retire a failed run's ledger entry once its session stops being live.
+ *
+ * Started on first use rather than at module scope. This module sits inside the
+ * terminal barrel's import cycle (`sessionStore` → `state/clientStore` →
+ * terminal barrel → `NativeGhosttyTerminal` → here → `sessionStore`), so which
+ * edge is walked first decides whether `useTerminalStore` is initialised by the
+ * time this file's body runs. Touching the store at module scope makes that
+ * ordering load-bearing: any new import edge anywhere in the cycle can reorder
+ * evaluation and turn this line into `Cannot read properties of undefined`.
+ * Deferring the subscription costs nothing — the ledger it prunes cannot hold
+ * anything until `failNativeViewerMount` has run at least once.
+ */
+function watchSessionLiveness(): void {
+  if (sessionWatch) return;
+  sessionWatch = useTerminalStore.subscribe((state) => {
+    let changed = false;
+    for (const runId of failedRuns.keys()) {
+      const sessionId = state.sessionByRun[runId];
+      const session = sessionId ? state.sessions[sessionId] : undefined;
+      if (!session || !nativeViewerSessionIsLive(session.status)) {
+        failedRuns.delete(runId);
+        changed = true;
+      }
     }
-  }
-  if (changed) publish();
-});
+    if (changed) publish();
+  });
+}
 
 /** Reserves one attachment lifecycle while every mounted host shares its handle. */
 export function useNativeViewerMount(runId: string | null, retained: boolean) {
@@ -155,6 +164,7 @@ export function beginNativeViewerRelease(runId: string, token: symbol): void {
 }
 
 export function failNativeViewerMount(runId: string, reason: string): void {
+  watchSessionLiveness();
   if (!failedRuns.has(runId)) {
     failedRuns.set(runId, reason);
     publish();

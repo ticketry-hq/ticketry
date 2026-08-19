@@ -44,6 +44,7 @@ unsafe extern "C" {
         viewport_width: f64,
         viewport_height: f64,
     ) -> GhosttyGridSize;
+    fn muxed_ghostty_view_is_focused(view: *mut c_void) -> bool;
     fn muxed_ghostty_view_focus(view: *mut c_void);
     fn muxed_ghostty_view_set_scroll_callback(
         view: *mut c_void,
@@ -55,6 +56,16 @@ unsafe extern "C" {
         callback: Option<unsafe extern "C" fn(*mut c_void, u16, u16)>,
         context: *mut c_void,
     );
+    fn muxed_ghostty_view_set_chord_callback(
+        view: *mut c_void,
+        callback: Option<unsafe extern "C" fn(*mut c_void, u8)>,
+        context: *mut c_void,
+    );
+    fn muxed_ghostty_view_disable_chord_callback(view: *mut c_void);
+    // The native view recognises the chords itself; Ticketry calls this only
+    // to assert that its policy still matches the Studio keymap.
+    #[cfg(test)]
+    fn muxed_ghostty_studio_chord(modifier_flags: u64, key_code: u16) -> u8;
     fn muxed_ghostty_view_disable_scroll_callback(view: *mut c_void);
     fn muxed_ghostty_view_disable_resize_callback(view: *mut c_void);
     fn muxed_ghostty_view_disable_process_exit_callback(view: *mut c_void);
@@ -84,6 +95,19 @@ unsafe extern "C" fn report_scroll_gesture(context: *mut c_void, direction: u8, 
     }
     let sink = unsafe { &*(context as *const ScrollGestureSink) };
     sink.accept(direction, lines);
+}
+
+/// Reported by the native view on AppKit's main thread when it recognises a
+/// Studio chord instead of forwarding it to the terminal.
+unsafe extern "C" fn report_studio_chord(context: *mut c_void, chord: u8) {
+    if context.is_null() {
+        return;
+    }
+    let Some(chord) = StudioChord::from_native(chord) else {
+        return;
+    };
+    let sink = unsafe { &*(context as *const ChordSink) };
+    sink.report(chord);
 }
 
 unsafe extern "C" fn report_process_exit(context: *mut c_void, _exit_code: u32) {

@@ -38,6 +38,7 @@ export type {
   LifecycleEventSource,
   LifecyclePresentation,
   LifecycleState,
+  TerminalPresentationState,
   LifecycleTone,
 } from "./lifecycle";
 export type { ModuleFolderPayload } from "./ModuleFolder";
@@ -48,6 +49,24 @@ export {
   useActiveSession,
   type SessionTab,
 } from "./hooks";
+// Terminal presentation rule (#694): the launch-state label, its duplicate
+// ordinals, hover/accessible text, and the provider colour tokens. Active tabs
+// and dormant history chips share it so their vocabularies cannot drift.
+export { presentTerminalRuns } from "./presentation/terminalRunPresentation";
+export type {
+  TerminalRunFacts,
+  TerminalRunPresentation,
+} from "./presentation/terminalRunPresentation";
+export {
+  isTerminalProvider,
+  providerToneClasses,
+  type TerminalProvider,
+} from "./presentation/providerPresentation";
+export { isLiveTerminalState } from "./presentation/terminalLiveness";
+export {
+  presentDormantTerminalChips,
+  type DormantTerminalChip,
+} from "./presentation/dormantTerminalChips";
 export {
   usePersistedTerminalSessions,
   useResumableTerminalSessions,

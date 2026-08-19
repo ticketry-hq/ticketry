@@ -7,10 +7,10 @@ export const SETTINGS_EYEBROW_CLASS =
   "text-xs font-semibold uppercase tracking-wide text-text-secondary";
 
 export const SETTINGS_FIELD_CLASS =
-  "min-w-0 rounded border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent focus:ring-1 focus:ring-focus-accent";
+  "min-w-0 border border-pane-border bg-pane-bg px-3 py-2 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-focus-accent focus:ring-1 focus:ring-focus-accent";
 
 export const SETTINGS_CHECKBOX_CLASS =
-  "grid size-4 shrink-0 appearance-none place-content-center rounded-[3px] border border-pane-border bg-pane-bg before:size-2 before:scale-0 before:bg-pane-bg before:content-[''] checked:border-focus-accent checked:bg-focus-accent checked:before:scale-100 disabled:cursor-not-allowed disabled:opacity-40";
+  "grid size-4 shrink-0 appearance-none place-content-center border border-pane-border bg-pane-bg before:size-2 before:scale-0 before:bg-pane-bg before:content-[''] checked:border-focus-accent checked:bg-focus-accent checked:before:scale-100 disabled:cursor-not-allowed disabled:opacity-40";
 
 type SettingsButtonTier =
   | "primary"
@@ -33,7 +33,7 @@ export function settingsButtonClass(
   tier: SettingsButtonTier,
   className = "",
 ): string {
-  return `rounded border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40 ${BUTTON_TIER_CLASS[tier]} ${className}`;
+  return `border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40 ${BUTTON_TIER_CLASS[tier]} ${className}`;
 }
 
 type SettingsStatusTone = "success" | "attention" | "danger";
@@ -61,7 +61,7 @@ export function SettingsStatusLine({
   return (
     <div
       role={tone === "danger" ? "alert" : "status"}
-      className={`rounded border-l-2 px-3 py-2 text-sm ${STATUS_TONE_CLASS[tone]} ${className}`}
+      className={`border-l-2 px-3 py-2 text-sm ${STATUS_TONE_CLASS[tone]} ${className}`}
       {...props}
     >
       {children}

@@ -31,6 +31,7 @@ export function openBrowserTerminalClient(
   let everReady = false;
   let detached = false;
   let sessionLost = false;
+  let sessionEnded = false;
   let viewerReplaced = false;
   let suspended = false;
   let state: TerminalClientStatus = "connecting";
@@ -80,10 +81,14 @@ export function openBrowserTerminalClient(
       const error = parseError(parsed);
       if (error) {
         if (error.message === "session_not_found") sessionLost = true;
+        if (error.message === "session_ended") sessionEnded = true;
         if (error.message === "replaced_by_another_viewer") viewerReplaced = true;
         onEvent({
           type: "error",
-          layer: error.message === "session_not_found" ? "session" : "protocol",
+          layer:
+            error.message === "session_not_found" || error.message === "session_ended"
+              ? "session"
+              : "protocol",
           message: error.message,
         });
       }
@@ -98,6 +103,11 @@ export function openBrowserTerminalClient(
       if (sessionLost) {
         state = "reattachment_required";
         onEvent({ type: "reattachment_required", reason: "session_not_found" });
+        return;
+      }
+      if (sessionEnded) {
+        state = "reattachment_required";
+        onEvent({ type: "reattachment_required", reason: "session_ended" });
         return;
       }
       if (viewerReplaced) {

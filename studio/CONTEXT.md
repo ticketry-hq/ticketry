@@ -34,6 +34,36 @@ chicklets, each visible state has one glyph and count; it is neither a
 Stories-pane tree row nor a terminal tab.
 _Avoid_: Scratch child row, per-run chicklet, run tab
 
+**Terminal panel**:
+The collapsible Studio surface along the bottom of the ticket workspace that
+hosts plain interactive shells for the selected module. It spans the Stories and
+workspace panes so its extent matches its module scope, and it never shows an
+agent run. Whether it is open and how tall it is belong to the window; which
+shells it holds belongs to the module.
+_Avoid_: Terminal drawer, bottom dock, console panel
+
+**Panel size mode**:
+Whether the terminal panel is rendering at the person's own ordinary height or
+at the geometry policy's current upper bound — ordinary or maximized. It is a
+size mode inside an open panel, not a third open state: hiding and reopening
+keeps it, maximized height is recomputed from the window rather than stored, and
+resizing the panel directly returns it to ordinary at the height it lands on.
+_Avoid_: Fullscreen, expanded, zoomed panel
+
+**Panel shell tab**:
+One shell run, shown in the terminal panel. A module has several and exactly one
+is visible at a time. Unlike a terminal tab it carries no agent, no lifecycle
+state and no work item, and it disappears when its shell exits cleanly rather
+than remaining as a record of something that happened.
+_Avoid_: Terminal tab, scratch terminal, shell session
+
+**Dead panel shell**:
+A panel shell tab whose shell ended other than cleanly, kept on the strip with
+the code it ended on because it is the only record of the failure. It holds no
+viewer and no durable session; the action it offers is a shell restart, which
+puts a newly minted shell run in its slot rather than reopening the dead one.
+_Avoid_: Failed terminal, disconnected shell, stale tab
+
 **Task workspace**:
 The Studio pane for one work item, containing its Details, design-document,
 and terminal tabs regardless of whether the pane is hosted inline or in a drawer.
@@ -54,6 +84,16 @@ _Avoid_: Active pane, selected pane
 **Idea entry**:
 The Stories pane's rapid-capture surface where one submitted idea becomes a Story in the currently selected module.
 _Avoid_: Task entry, generic issue composer
+
+**Run now action**:
+The work-item Details control that sends an idea straight into implementation,
+skipping Grill, Spec, and Tickets. It is offered only while the item sits in a
+state the workflow lets a human move directly to `Implement`, so workflow
+configuration alone decides whether it exists. A successful click relocates the
+row out of Ideas and activates that work item's terminal, because the run it
+started is the thing worth looking at. Distinct from an Instant run, which is
+taskless and scratch-scoped.
+_Avoid_: Instant change, quick implement, skip button
 
 **Subtree lifecycle chicklets**:
 The compact per-lifecycle-state summary of agent runs attached to a work item and
@@ -240,27 +280,31 @@ _Avoid_: Default view, navigation mode, three-pane mode
 **Navigation zone**:
 One of the three focus targets the edit view cycles between — the Stories list,
 the tab strip, or the active tab body. Shift+Tab steps forward through them
-(wrapping); arrows move within the focused zone.
+(wrapping); arrows are zone-local with one exception — Right from the Stories
+list, on a story with nothing left to expand, dives into the active tab body.
 _Avoid_: Pane, focus region, tab group
 
 **Navigation mode**:
 The edit view's default state, in which Studio owns the keyboard: Shift+Tab
-cycles navigation zones, arrows move within a zone, and Enter dives into the
-active tab body. A terminal body remains in navigation mode until Enter is
-pressed again to enter terminal typing mode.
+cycles navigation zones, arrows move within a zone, and Enter — or Right on a
+story with nothing left to expand — dives into the active tab body. A terminal
+body remains in navigation mode until Enter is pressed again to enter terminal
+typing mode.
 _Avoid_: Command mode, normal mode, browse mode
 
 **Terminal typing mode**:
 The edit view state entered explicitly by pressing Enter while a live terminal
 body is the focused navigation zone. Keystrokes then go to the agent and the
-only chord Studio intercepts is Cmd+Esc — which exits typing and returns to the
-Stories list.
+only chord Studio intercepts is Cmd+Esc — which leaves typing mode and returns
+to the un-engaged active tab body, still the focused navigation zone. Left then
+returns to the Stories list.
 _Avoid_: Insert mode, terminal focus, raw input mode
 
 **Active tab**:
 The tab each ticket remembers as last-selected in its Task workspace. Entering
-a ticket restores it: Enter from the Stories list dives into its body, Shift+Tab
-lands the tab-strip highlight on it.
+a ticket restores it: Enter — or Right on a story with nothing left to expand —
+from the Stories list dives into its body, Shift+Tab lands the tab-strip
+highlight on it.
 _Avoid_: Current tab, default tab, open tab
 
 **Installation feature flag**:
@@ -376,8 +420,29 @@ _Avoid_: Stale pointer, fallback state, reconciliation
 One agent run, shown in a task workspace. A work item has many runs and so many
 tabs; a run has one tmux session for its whole life, named from the run's own
 id, so reattaching returns to the same session rather than making another. What
-the tab shows is that session; what the tab *is* is the run.
+the tab shows is that session; what the tab *is* is the run. It names the run's
+launch state and carries its provider as colour; it does not name the work item,
+which the workspace around it already identifies.
 _Avoid_: Terminal session tab, tmux tab, agent tab
+
+**Launch state**:
+The workflow state a run's work item was in at the moment that run spawned,
+kept as it was rather than following the work item afterwards. It is what tells
+two conversations on one work item apart: a run begun while the item sat in
+Grill is a Grill conversation for the rest of its life, whatever the item does
+next. A run with no work item behind it has no launch state, and neither does
+one that began before this was recorded — in both cases the absence is the
+honest answer, never a substituted one.
+_Avoid_: Current state, ticket status, run status, state at render
+
+**Provider colour**:
+The one colour that stands for a provider wherever a run appears, carrying who
+is working without a word for it. It says only which provider, never which
+model and never how the run is faring, and a run that has finished gives it up
+entirely — so colour on a strip means a run still going. Reversing which side
+of a tab the colour falls on, its ground or its lettering, is how that tab says
+it is the chosen one.
+_Avoid_: Agent colour, model colour, status colour, provider badge
 
 **Run liveness**:
 Whether an agent run is starting, working, waiting, or finished, and when that

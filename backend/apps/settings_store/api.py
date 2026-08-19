@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from apps.errors import ApplicationError
 from apps.settings_store import dao, service
+from apps.settings_store.module_folder_validation import validate_module_folder
 from apps.settings_store.provider_catalog import (
     PROVIDER_CATALOG_KEY,
     PROVIDER_CATALOG_SCOPE,
@@ -41,6 +42,10 @@ CONFIGURABLE_PROVIDER_SLUGS = ("claude", "codex", "gemini")
 
 class RecentIndexBody(BaseModel):
     recent_profile_index: int
+
+
+class ModuleFolderValidationBody(BaseModel):
+    path: str
 
 
 def _raise_index_out_of_range() -> None:
@@ -158,3 +163,7 @@ async def patch_config(body: RecentIndexBody):
         return service.set_recent_index(body.recent_profile_index)
     except service.IndexOutOfRange:
         _raise_index_out_of_range()
+
+
+async def validate_folder(body: ModuleFolderValidationBody):
+    return await sync_to_async(validate_module_folder)(body.path)

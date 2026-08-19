@@ -32,7 +32,7 @@
 #   NO_COMMIT          1 = do not commit or push at all
 #   NO_PUSH            1 = commit but never push
 #   NO_CHECKPOINT      1 = do not checkpoint a dirty tree before starting
-#   PROJECT_ID         only needed when the root is a module
+#   PROJECT_ID         required when the root is a module, unused otherwise
 #   PLAN               1 = print the full launch order and exit
 #   DRY_RUN            1 = print the next launch only, launch nothing
 #   WORKTRACKER_BASE_URL  default http://127.0.0.1:8787/api/work-tracker
@@ -51,7 +51,7 @@ MAX_TICKET_MINUTES="${MAX_TICKET_MINUTES:-90}"
 DRY_RUN="${DRY_RUN:-0}"
 # Only needed when the root is a module: a module has no work-item record to
 # read the project from, so state names cannot be resolved without it.
-PROJECT_ID="${PROJECT_ID:-345113f3-2578-4285-aed7-b86eb7c4fd78}"
+PROJECT_ID="${PROJECT_ID:-}"
 REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 NO_COMMIT="${NO_COMMIT:-0}"
 NO_PUSH="${NO_PUSH:-0}"
@@ -140,6 +140,11 @@ fetch_graph() {
     MODULE_MODE=0; printf '%s' "$out"; return 0
   fi
   MODULE_MODE=1
+  if [[ -z "$PROJECT_ID" ]]; then
+    echo "error: the root is a module, so PROJECT_ID must be set" >&2
+    echo "usage: PROJECT_ID=<project-uuid> $0 <root-module-uuid>" >&2
+    exit 64                                # usage error — the caller must not retry
+  fi
   [[ -z "$STATE_NAMES_JSON" ]] && load_state_names "$PROJECT_ID"
   api GET "$BASE/work-items?module=$ROOT_ID" | python3 -c '
 import json,sys
@@ -299,7 +304,9 @@ current_name=''
 waited=0
 
 while true; do
-  if ! graph="$(fetch_graph)"; then
+  rc=0; graph="$(fetch_graph)" || rc=$?
+  if (( rc == 64 )); then exit 1; fi       # usage error already printed
+  if (( rc != 0 )); then
     say "! cannot reach the graph — retrying in ${INTERVAL}s"
     sleep "$INTERVAL"; continue
   fi

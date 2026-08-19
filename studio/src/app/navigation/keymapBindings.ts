@@ -115,6 +115,14 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     chord: chord("|", { meta: true, shift: true }),
     defaultAliases: [chord("\\", { meta: true, shift: true })],
   },
+  // Capture context on purpose: terminal typing mode hands an engaged terminal
+  // every other key, so a focused-pane or global binding would be swallowed
+  // exactly where reaching a shell matters most (#667).
+  {
+    context: "capture",
+    actionId: "toggle-terminal-panel",
+    chord: chord("`", { control: true }),
+  },
   { context: "capture", actionId: "workspace-tab-next", chord: chord("ArrowRight", { meta: true }) },
   { context: "capture", actionId: "workspace-tab-previous", chord: chord("ArrowLeft", { meta: true }) },
   ...Array.from({ length: 10 }, (_, index): BindingDefinition => {
@@ -170,7 +178,12 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   },
   globalBinding("plan", "n"),
   globalBinding("instant-change", "i"),
+  globalBinding("run-now", "r"),
   globalBinding("status", "s"),
+  // Settings must also open from an engaged native terminal, where the WebView
+  // sees no keydown at all; the native view recognises `Cmd+E` and reports it
+  // to `nativeTerminalChords.ts` (#735). Extra modifiers are allowed here, so
+  // that chord resolves to this same action on the WebView route.
   globalBinding("settings", "e"),
   globalBinding("set-folder", "f"),
   globalBinding("close-tab", "q"),

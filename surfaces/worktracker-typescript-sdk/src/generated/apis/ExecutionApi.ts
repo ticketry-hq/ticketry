@@ -55,6 +55,21 @@ import {
     OpenFromJSON,
     OpenToJSON,
 } from '../models/Open.js';
+import {
+    type RunNowRefusal,
+    RunNowRefusalFromJSON,
+    RunNowRefusalToJSON,
+} from '../models/RunNowRefusal.js';
+import {
+    type RunNowRequest,
+    RunNowRequestFromJSON,
+    RunNowRequestToJSON,
+} from '../models/RunNowRequest.js';
+import {
+    type RunNowResponse,
+    RunNowResponseFromJSON,
+    RunNowResponseToJSON,
+} from '../models/RunNowResponse.js';
 
 export interface LaunchPolicyEffectCreateRequest {
     open?: Open;
@@ -76,6 +91,11 @@ export interface WorkItemsGraphRunRetrieveRequest {
 export interface WorkItemsLaunchAgentCreateRequest {
     issueId: string;
     agentOverride?: AgentOverride;
+}
+
+export interface WorkItemsRunNowCreateRequest {
+    issueId: string;
+    runNowRequest?: RunNowRequest;
 }
 
 /**
@@ -212,6 +232,29 @@ export interface ExecutionApiInterface {
     /**
      */
     workItemsLaunchAgentCreate(requestParameters: WorkItemsLaunchAgentCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LaunchedAgentResponse>;
+
+    /**
+     * Creates request options for workItemsRunNowCreate without sending the request
+     * @param {string} issueId
+     * @param {RunNowRequest} [runNowRequest]
+     * @throws {RequiredError}
+     * @memberof ExecutionApiInterface
+     */
+    workItemsRunNowCreateRequestOpts(requestParameters: WorkItemsRunNowCreateRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     *
+     * @param {string} issueId
+     * @param {RunNowRequest} [runNowRequest]
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ExecutionApiInterface
+     */
+    workItemsRunNowCreateRaw(requestParameters: WorkItemsRunNowCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RunNowResponse>>;
+
+    /**
+     */
+    workItemsRunNowCreate(requestParameters: WorkItemsRunNowCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RunNowResponse>;
 
 }
 
@@ -492,6 +535,56 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
      */
     async workItemsLaunchAgentCreate(requestParameters: WorkItemsLaunchAgentCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LaunchedAgentResponse> {
         const response = await this.workItemsLaunchAgentCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for workItemsRunNowCreate without sending the request
+     */
+    async workItemsRunNowCreateRequestOpts(requestParameters: WorkItemsRunNowCreateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['issueId'] == null) {
+            throw new runtime.RequiredError(
+                'issueId',
+                'Required parameter "issueId" was null or undefined when calling workItemsRunNowCreate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/work-tracker/work-items/{issue_id}/run-now`;
+        urlPath = urlPath.replace('{issue_id}', encodeURIComponent(String(requestParameters['issueId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: RunNowRequestToJSON(requestParameters['runNowRequest']),
+        };
+    }
+
+    /**
+     */
+    async workItemsRunNowCreateRaw(requestParameters: WorkItemsRunNowCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RunNowResponse>> {
+        const requestOptions = await this.workItemsRunNowCreateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RunNowResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async workItemsRunNowCreate(requestParameters: WorkItemsRunNowCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RunNowResponse> {
+        const response = await this.workItemsRunNowCreateRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

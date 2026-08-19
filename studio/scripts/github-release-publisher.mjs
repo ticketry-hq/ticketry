@@ -197,6 +197,18 @@ function validateRepository(repository) {
   }
 }
 
+// Publish-time guard only: unsigned artifacts must never land in a public
+// repository. Repository visibility is deliberately not consulted by
+// `release:validate` or any CI check — validation passes regardless of
+// visibility; only an actual publish attempt is refused.
+export function assertUnsignedArtifactDestinationIsPrivate(repositoryDetails, repository) {
+  if (repositoryDetails.private !== true) {
+    throw new GitHubReleasePublisherError(
+      `refusing to publish unsigned artifacts because ${repository} is not private`,
+    );
+  }
+}
+
 export async function publishGitHubRelease({
   manifest,
   targetId,
@@ -234,11 +246,7 @@ export async function publishGitHubRelease({
   const repositoryUrl = `${githubApi}/repos/${repositoryPath}`;
 
   const repositoryDetails = await githubRequest(fetchImpl, token, repositoryUrl);
-  if (repositoryDetails.private !== true) {
-    throw new GitHubReleasePublisherError(
-      `refusing to publish unsigned artifacts because ${repository} is not private`,
-    );
-  }
+  assertUnsignedArtifactDestinationIsPrivate(repositoryDetails, repository);
 
   const remoteTag = await fetchImpl(`${repositoryUrl}/git/ref/tags/${tagPath}`, {
     headers: githubHeaders(token),

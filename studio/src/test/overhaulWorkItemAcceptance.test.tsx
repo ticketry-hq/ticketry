@@ -123,7 +123,20 @@ describe("overhaul acceptance — Stories and details", () => {
       issue_type_id: "implementation",
     });
     const issueTypePicker = within(details).getByTestId("issue-type-picker");
-    fireEvent.click(within(issueTypePicker).getByRole("button", { name: "Story" }));
+    const issueTypeTrigger = within(issueTypePicker).getByRole("button", {
+      name: "Story",
+    });
+    expect(issueTypeTrigger).not.toHaveClass("border", "border-pane-border");
+    const issueTypeLabel = within(issueTypePicker).getByTestId("issue-type-label");
+    expect(issueTypeLabel).toHaveClass(
+      "border",
+      "border-pane-border",
+      "bg-pane-bg",
+      "px-1.5",
+      "py-0.5",
+    );
+    expect(issueTypeLabel).not.toHaveClass("rounded");
+    fireEvent.click(issueTypeTrigger);
     fireEvent.click(await screen.findByRole("button", { name: "Implementation" }));
     await typeChanged;
     expect(
@@ -227,6 +240,52 @@ describe("overhaul acceptance — Stories and details", () => {
         .toHaveTextContent("Grill0");
       expect(within(stories).getByRole("button", { name: "Collapse Ideas" }))
         .toHaveTextContent("Ideas2");
+    });
+  });
+
+  it("[overhaul-133] lets a person move a Story directly from Ideas to Implement", async () => {
+    const http = fixture();
+    const implement = {
+      id: "implement",
+      name: "Implement",
+      group: "started",
+      color: null,
+      sort_order: 4,
+    };
+    http.tree("module-1", {
+      rootIds: ["story-1", "implement-seed"],
+      children: { "story-1": [], "implement-seed": [] },
+      order: ["story-1", "implement-seed"],
+    });
+    http.workItems([
+      workItem({ id: "story-1", name: "Ready for direct kickoff" }),
+      workItem({
+        id: "implement-seed",
+        name: "Already implementing",
+        key: "MEML-2",
+        state: implement,
+      }),
+    ]);
+    const patched = http.expectPatch("story-1", {
+      state_id: "implement",
+      origin: "human",
+    });
+    mountStudio({ http });
+
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    fireEvent.click(
+      within(stories).getByRole("treeitem", { name: /Ready for direct kickoff/ }),
+    );
+    const details = screen.getByRole("region", { name: "Details" });
+    fireEvent.click(await within(details).findByRole("button", { name: "Ideas" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Implement" }));
+
+    await patched;
+    await waitFor(() => {
+      expect(within(stories).getByRole("button", { name: "Collapse Ideas" }))
+        .toHaveTextContent("Ideas0");
+      expect(within(stories).getByRole("button", { name: "Collapse Implement" }))
+        .toHaveTextContent("Implement2");
     });
   });
 

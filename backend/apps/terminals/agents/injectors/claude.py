@@ -42,8 +42,9 @@ def build_claude_lifecycle_settings(agent_run_id: str, lifecycle_url: str) -> di
     Produces an *additional* settings object (loaded via ``--settings``) that
     Claude merges on top of the user/project settings hierarchy, so existing
     hooks are never clobbered. The ``env`` block carries this run's identity
-    down to the hook subprocess; the ``hooks`` block points every wired event
-    at the bundled :mod:`terminals.agents.hooks.claude_hook` reporter.
+    and its run-scoped ingress credential down to the hook subprocess; the
+    ``hooks`` block points every wired event at the bundled
+    :mod:`terminals.agents.hooks.claude_hook` reporter.
 
     :param agent_run_id: Durable id stamped onto every reported event.
     :param lifecycle_url: Ingress URL the hook posts events to.
@@ -59,6 +60,7 @@ def build_claude_lifecycle_settings(agent_run_id: str, lifecycle_url: str) -> di
         "env": {
             "MUXED_AGENT_RUN_ID": agent_run_id,
             "MUXED_LIFECYCLE_URL": lifecycle_url,
+            "MUXED_LIFECYCLE_TOKEN": issue_run_authorization(agent_run_id),
         },
         "hooks": {event: [hook_entry] for event in _CLAUDE_HOOK_EVENTS},
     }

@@ -1,7 +1,10 @@
 import { useSyncExternalStore } from "react";
 import type { SessionMeta } from "./sessionStore";
 
-export type ForegroundOwner = "studio" | "drawer";
+// `panel` is the bottom terminal panel (#667). Claims are keyed by run, and a
+// shell run is never an agent run, so a shell and an agent terminal can be
+// presented at the same time without competing for the same claim.
+export type ForegroundOwner = "studio" | "drawer" | "panel";
 
 interface TerminalForegroundRegistry {
   claims: Record<string, ForegroundOwner>;

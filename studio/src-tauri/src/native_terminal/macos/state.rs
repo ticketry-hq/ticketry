@@ -17,6 +17,16 @@ struct NativeTerminalCompletion {
     reason: String,
 }
 
+/// One Studio chord recognised by a presented native viewer. The identifiers
+/// are carried for tracing; Studio's binding owns the action.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeTerminalChord {
+    handle: String,
+    run_id: String,
+    chord: &'static str,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeTerminalFailure {
@@ -39,19 +49,37 @@ pub struct NativeTerminalState {
     pending_frames: PendingFrames,
 }
 
+/// Callback contexts leaked to one native view. Each is released only after
+/// that view has disabled the callback which reads it, so no context is freed
+/// while the view can still emit through it.
+#[derive(Clone, Copy, Default)]
+struct NativeViewContexts {
+    /// Leaked `Arc<ScrollGestureSink>`.
+    scroll: usize,
+    /// Leaked `Arc<ChordSink>`.
+    chord: usize,
+    /// Leaked worker sender, read by the child-exit and grid-resize callbacks.
+    process: usize,
+}
+
 struct NativeEntry {
     run_id: String,
     view: usize,
     worker: mpsc::Sender<NativeViewerCommand>,
     scroll_sink: Arc<ScrollGestureSink>,
-    /// Leaked `Arc<ScrollGestureSink>` handed to the native view as its
-    /// callback context. Released only after the view can no longer emit.
-    scroll_context: usize,
-    /// Leaked worker sender used by libghostty's child-exit callback.
-    /// Released only after the native view has disabled that callback.
-    process_context: usize,
+    chord_sink: Arc<ChordSink>,
+    contexts: NativeViewContexts,
     visibility: NativeTerminalVisibility,
     preparation_phase: Arc<AtomicU8>,
+}
+
+impl NativeEntry {
+    /// Viewer detachment stops accepting reported events before the native
+    /// view is removed, so an event in flight cannot reach the next viewer.
+    fn stop_accepting_events(&self) {
+        self.scroll_sink.stop_accepting();
+        self.chord_sink.stop_accepting();
+    }
 }
 
 #[derive(Default)]
@@ -198,14 +226,14 @@ impl NativeTerminalState {
         };
         for entry in entries {
             entry.preparation_phase.store(FAILED, Ordering::Release);
-            entry.scroll_sink.stop_accepting();
+            entry.stop_accepting_events();
             unsafe {
                 muxed_ghostty_view_disable_scroll_callback(entry.view as *mut c_void);
+                muxed_ghostty_view_disable_chord_callback(entry.view as *mut c_void);
                 muxed_ghostty_view_disable_process_exit_callback(entry.view as *mut c_void);
                 muxed_ghostty_view_free(entry.view as *mut c_void);
             };
-            release_scroll_context(entry.scroll_context);
-            release_process_context(entry.process_context);
+            release_view_contexts(entry.contexts);
             let _ = entry.worker.send(NativeViewerCommand::Detach);
         }
         // A cancelled preparation may still be unwinding a main-thread

@@ -33,7 +33,7 @@ export function LaunchAgentAction({ issueId }: { issueId: string }) {
       title="Run agent"
       disabled={pending}
       onClick={() => void launchAgent()}
-      className="flex-none rounded border border-pane-border p-1.5 text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
+      className="flex-none border border-pane-border p-1.5 text-text-muted hover:border-focus-accent hover:text-text-primary disabled:cursor-wait disabled:opacity-60"
     >
       <IconPlay size={14} />
     </button>

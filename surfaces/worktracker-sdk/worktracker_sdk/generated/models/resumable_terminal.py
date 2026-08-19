@@ -20,6 +20,7 @@ import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
+from worktracker_sdk.generated.models.scope_enum import ScopeEnum
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -32,9 +33,12 @@ class ResumableTerminal(BaseModel):
     agent: StrictStr
     status: StrictStr
     started_at: StrictStr
+    launch_state: Optional[StrictStr]
+    launch_model: Optional[StrictStr]
+    scope: ScopeEnum
     provider_session_id: StrictStr
     resumed_from: Optional[StrictStr]
-    __properties: ClassVar[List[str]] = ["agent_run_id", "agent", "status", "started_at", "provider_session_id", "resumed_from"]
+    __properties: ClassVar[List[str]] = ["agent_run_id", "agent", "status", "started_at", "launch_state", "launch_model", "scope", "provider_session_id", "resumed_from"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -75,6 +79,16 @@ class ResumableTerminal(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # set to None if launch_state (nullable) is None
+        # and model_fields_set contains the field
+        if self.launch_state is None and "launch_state" in self.model_fields_set:
+            _dict['launch_state'] = None
+
+        # set to None if launch_model (nullable) is None
+        # and model_fields_set contains the field
+        if self.launch_model is None and "launch_model" in self.model_fields_set:
+            _dict['launch_model'] = None
+
         # set to None if resumed_from (nullable) is None
         # and model_fields_set contains the field
         if self.resumed_from is None and "resumed_from" in self.model_fields_set:
@@ -96,6 +110,9 @@ class ResumableTerminal(BaseModel):
             "agent": obj.get("agent"),
             "status": obj.get("status"),
             "started_at": obj.get("started_at"),
+            "launch_state": obj.get("launch_state"),
+            "launch_model": obj.get("launch_model"),
+            "scope": obj.get("scope"),
             "provider_session_id": obj.get("provider_session_id"),
             "resumed_from": obj.get("resumed_from")
         })

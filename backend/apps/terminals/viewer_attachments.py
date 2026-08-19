@@ -113,6 +113,16 @@ def acquire(
     return viewer
 
 
+def capture_screen(agent_run_id: str) -> bytes:
+    """Read a durable terminal's rendered screen without attaching a viewer.
+
+    Terminal-output activity is observed through this seam so the configured
+    runtime — real or fake — stays private to this module.
+    """
+
+    return _runtime.capture_screen(agent_run_id)
+
+
 def renew(viewer: ViewerAttachment) -> bool:
     """Return whether this viewer still owns the outside lease."""
 

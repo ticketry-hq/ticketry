@@ -70,10 +70,12 @@ LEGAL_BY_TYPE = {
     "Story": [
         ("Ideas", "Grill"),
         ("Ideas", "Spec"),
+        ("Ideas", "Implement"),
         ("Grill", "Ideas"),
         ("Grill", "Spec"),
         ("Spec", "Tickets"),
         ("Tickets", "Implement"),
+        ("Implement", "Grill"),
         ("Implement", "Review"),
         ("Review", "Implement"),
         ("Review", "Done"),
@@ -99,7 +101,6 @@ LEGAL_BY_TYPE = {
 ILLEGAL_BY_TYPE = {
     "Story": [
         ("Ideas", "Tickets"),
-        ("Ideas", "Implement"),
         ("Ideas", "Done"),
         ("Grill", "Tickets"),
         ("Grill", "Implement"),
@@ -247,14 +248,18 @@ def test_human_only_transition_rejects_agent_but_allows_human(project, sdlc):
 
 
 @pytest.mark.django_db
-def test_agent_allowed_transition_accepts_agent_origin(project, sdlc):
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [("Ideas", "Implement"), ("Implement", "Grill")],
+)
+def test_run_now_transitions_accept_agent_origin(project, sdlc, source, target):
     states, types = sdlc
-    issue = _issue(project, states, types["Story"], state="Grill")
+    issue = _issue(project, states, types["Story"], state=source)
 
-    transition_state(issue, states["Spec"].id, origin="agent")
+    transition_state(issue, states[target].id, origin="agent")
 
     issue.refresh_from_db()
-    assert issue.state.name == "Spec"
+    assert issue.state.name == target
 
 
 @pytest.mark.django_db

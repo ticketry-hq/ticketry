@@ -8,7 +8,7 @@ export default function PopoverSearch(props: PopoverSearchProps) {
       <input
         autoFocus
         type="text"
-        className="w-full rounded-md border border-pane-border bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/70 focus:border-text-muted focus:outline-none"
+        className="w-full border border-pane-border bg-transparent px-2 py-1 text-sm text-text-primary placeholder:text-text-muted/70 focus:border-text-muted focus:outline-none"
         {...props}
       />
     </div>

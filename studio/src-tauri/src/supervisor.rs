@@ -2,7 +2,9 @@
 //!
 //! This module deliberately has no "run a command" API.  A caller can only
 //! construct the application-owned backend command table and the supervisor
-//! only reaps children whose `Child` handles it owns.
+//! only reaps sidecars whose [`OwnedSidecar`] handles it created.  Containment
+//! of those sidecars lives in [`crate::owned_sidecar`]; this module owns only
+//! the policy around it.
 
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Serialize;
@@ -14,13 +16,15 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     mpsc, Arc, Mutex,
 };
 use std::thread;
 use std::time::{Duration, Instant};
+
+use crate::owned_sidecar::OwnedSidecar;
 
 const CREDENTIAL_ENV: &str = "MUXED_SIDECAR_CREDENTIAL";
 const DESKTOP_ORIGIN_ENV: &str = "MUXED_DESKTOP_ORIGIN";
@@ -32,6 +36,7 @@ const DEVELOPMENT_LOG_PATH_ENV: &str = "MUXED_DEVELOPMENT_LOG_PATH";
 const MCP_PORT_FILE_NAME: &str = "mcp-port";
 const MCP_RESPONSE_LIMIT_BYTES: usize = 64 * 1024;
 const READINESS_TERMINAL_DRAIN: Duration = Duration::from_millis(50);
+const STARTUP_CLEANUP_GRACE: Duration = Duration::from_millis(100);
 const PYINSTALLER_PARENT_ENV: [&str; 3] = [
     "_PYI_APPLICATION_HOME_DIR",
     "_PYI_ARCHIVE_FILE",
@@ -518,8 +523,8 @@ impl CapturedLogs {
     }
 }
 
-struct RunningChild {
-    child: Child,
+struct RunningSidecar {
+    sidecar: OwnedSidecar,
     port: u16,
 }
 
@@ -546,8 +551,8 @@ pub struct Supervisor {
     logs: Arc<Mutex<CapturedLogs>>,
     log_path: PathBuf,
     events: Arc<Mutex<Vec<SupervisorEvent>>>,
-    running: Option<RunningChild>,
-    running_mcp: Option<RunningChild>,
+    running: Option<RunningSidecar>,
+    running_mcp: Option<RunningSidecar>,
     pinned_port: Option<u16>,
     pinned_mcp_port: Option<u16>,
     persisted_mcp_port: Option<u16>,
@@ -679,12 +684,12 @@ impl Supervisor {
                     self.running_mcp = Some(running);
                     if let Err(error) = self.commit_mcp_port(port, rollover_from) {
                         if let Some(mut mcp) = self.running_mcp.take() {
-                            let _ = stop_and_reap(&mut mcp.child);
+                            let _ = stop_and_reap(&mut mcp.sidecar);
                         }
                         let error = self.record_service_failure("mcp", error);
                         if self.options.mcp_required {
                             if let Some(mut backend) = self.running.take() {
-                                let _ = stop_and_reap(&mut backend.child);
+                                let _ = stop_and_reap(&mut backend.sidecar);
                             }
                             return Err(error);
                         }
@@ -694,7 +699,7 @@ impl Supervisor {
                     let error = self.record_service_failure("mcp", error);
                     if self.options.mcp_required {
                         if let Some(mut backend) = self.running.take() {
-                            let _ = stop_and_reap(&mut backend.child);
+                            let _ = stop_and_reap(&mut backend.sidecar);
                         }
                         return Err(error);
                     }
@@ -728,22 +733,38 @@ impl Supervisor {
             return self.attempt_recovery();
         }
         if let Some(running) = self.running_mcp.as_mut() {
-            if let Some(status) = running.child.try_wait().map_err(process_error)? {
+            if let Some(status) = running
+                .sidecar
+                .try_direct_child_exit()
+                .map_err(process_error)?
+            {
                 self.emit(SupervisorEvent::Exited {
                     service: "mcp".to_owned(),
                     status: status.code(),
                 });
-                self.running_mcp = None;
+                let running = self
+                    .running_mcp
+                    .take()
+                    .expect("the exited MCP handle observed above");
+                self.stop_exited_owned_child("mcp", running)?;
                 return self.queue_recovery("mcp");
             }
         }
         if let Some(running) = self.running.as_mut() {
-            if let Some(status) = running.child.try_wait().map_err(process_error)? {
+            if let Some(status) = running
+                .sidecar
+                .try_direct_child_exit()
+                .map_err(process_error)?
+            {
                 self.emit(SupervisorEvent::Exited {
                     service: "backend".to_owned(),
                     status: status.code(),
                 });
-                self.running = None;
+                let running = self
+                    .running
+                    .take()
+                    .expect("the exited backend handle observed above");
+                self.stop_exited_owned_child("backend", running)?;
                 return self.queue_recovery("backend");
             }
         }
@@ -763,12 +784,9 @@ impl Supervisor {
         }
         self.liveness_probe = None;
         self.healthy_since = None;
-        if let Some(mcp) = self.running_mcp.take() {
-            self.stop_owned_child("mcp", mcp)?;
-        }
-        if let Some(backend) = self.running.take() {
-            self.stop_owned_child("backend", backend)?;
-        }
+        // Recovery replaces the pair, so it tears down exactly what shutdown
+        // does: an MCP failure is retained but never skips backend cleanup.
+        self.stop_owned_sidecars()?;
         if self.restarts >= self.options.restart_limit {
             return Err(self.record_service_failure(
                 failed_service,
@@ -854,51 +872,106 @@ impl Supervisor {
         Ok(())
     }
 
-    /// Stops the exact child handle owned by this supervisor.  On Unix the
-    /// graceful phase is SIGTERM; any surviving owned child is then killed and
-    /// reaped.  No PID lookup or process adoption occurs.
+    /// Stops the exact sidecar handles owned by this supervisor.  MCP stops
+    /// before the backend, the graceful phase is a cooperative stop request,
+    /// and any surviving owned process group is then forced out and reaped.
+    /// No PID lookup or process adoption occurs.
     pub fn shutdown(&mut self) -> Result<(), SupervisorError> {
         self.shutting_down = true;
         self.liveness_probe = None;
         self.next_recovery = None;
         self.healthy_since = None;
+        self.stop_owned_sidecars()
+    }
+
+    /// Takes every owned handle in teardown order and stops each one.
+    ///
+    /// This is the single supervisor-owned teardown operation shared by
+    /// explicit shutdown and recovery replacement.  MCP is always attempted
+    /// before the backend, so MCP cannot issue requests into a backend that is
+    /// going away, and a failure on either service is retained while the
+    /// remaining owned cleanup still runs.
+    fn stop_owned_sidecars(&mut self) -> Result<(), SupervisorError> {
         let mut first_error = None;
-        if let Some(running) = self.running_mcp.take() {
-            if let Err(error) = self.stop_owned_child("mcp", running) {
-                first_error = Some(error);
-            }
-        }
-        if let Some(running) = self.running.take() {
-            if let Err(error) = self.stop_owned_child("backend", running) {
+        for (service, running) in self.take_owned_sidecars() {
+            if let Err(error) = self.stop_owned_child(service, running) {
                 first_error.get_or_insert(error);
             }
         }
         first_error.map_or(Ok(()), Err)
     }
 
+    /// Every owned handle, taken exactly once, in MCP-before-backend order.
+    ///
+    /// Ownership moves out here, so a repeated or overlapping teardown observes
+    /// no handle, does nothing, and cannot signal a stale or unrelated process.
+    fn take_owned_sidecars(&mut self) -> Vec<(&'static str, RunningSidecar)> {
+        self.running_mcp
+            .take()
+            .map(|running| ("mcp", running))
+            .into_iter()
+            .chain(self.running.take().map(|running| ("backend", running)))
+            .collect()
+    }
+
+    /// Releases the owned group behind a service whose direct child has already
+    /// exited on its own.
+    ///
+    /// An exited direct child does not mean the owned group is empty: a
+    /// PyInstaller-shaped sidecar's worker outlives the bootloader that spawned
+    /// it and keeps holding the pinned loopback port, so simply dropping the
+    /// handle would strand it and the replacement spawn would fail to bind.
+    /// When the group has already drained there is nothing left to signal;
+    /// when anything survives it goes through the same owned teardown that
+    /// shutdown and recovery use.
+    fn stop_exited_owned_child(
+        &self,
+        service: &str,
+        mut running: RunningSidecar,
+    ) -> Result<(), SupervisorError> {
+        match running.sidecar.wait_for_owned_exit(Duration::ZERO) {
+            Ok(true) => Ok(()),
+            Ok(false) => self.stop_owned_child(service, running),
+            Err(error) => {
+                running.sidecar.terminate_and_reap_best_effort();
+                Err(teardown_error(error).for_service(service))
+            }
+        }
+    }
+
     fn stop_owned_child(
         &self,
         service: &str,
-        mut running: RunningChild,
+        mut running: RunningSidecar,
     ) -> Result<(), SupervisorError> {
         self.emit(SupervisorEvent::ShutdownTermRequested {
             service: service.to_owned(),
         });
-        let graceful_result = request_graceful_stop(&running.child)
-            .and_then(|()| wait_for_exit(&mut running.child, self.options.shutdown_grace));
+        let graceful_result = running
+            .sidecar
+            .request_graceful_stop()
+            .and_then(|()| {
+                running
+                    .sidecar
+                    .wait_for_owned_exit(self.options.shutdown_grace)
+            })
+            .map_err(teardown_error);
         match graceful_result {
             Ok(true) => Ok(()),
             Ok(false) => {
                 self.emit(SupervisorEvent::ShutdownKillRequested {
                     service: service.to_owned(),
                 });
-                kill_and_reap(&mut running.child).map_err(|error| error.for_service(service))
+                running
+                    .sidecar
+                    .terminate_and_reap()
+                    .map_err(|error| teardown_error(error).for_service(service))
             }
             Err(error) => {
                 self.emit(SupervisorEvent::ShutdownKillRequested {
                     service: service.to_owned(),
                 });
-                best_effort_kill_and_reap(&mut running.child);
+                running.sidecar.terminate_and_reap_best_effort();
                 Err(error.for_service(service))
             }
         }
@@ -968,7 +1041,7 @@ impl Supervisor {
         });
     }
 
-    fn spawn_and_wait(&mut self, mcp_port: Option<u16>) -> Result<RunningChild, SupervisorError> {
+    fn spawn_and_wait(&mut self, mcp_port: Option<u16>) -> Result<RunningSidecar, SupervisorError> {
         let port = match self.pinned_port {
             Some(port) => select_pinned_loopback_port(
                 port,
@@ -993,38 +1066,33 @@ impl Supervisor {
         if let Some(mcp_port) = mcp_port {
             command.env(MCP_URL_ENV, format!("http://127.0.0.1:{mcp_port}/mcp"));
         }
-        let mut child = command.spawn().map_err(process_error)?;
+        let mut sidecar = OwnedSidecar::spawn(command).map_err(process_error)?;
         self.emit(SupervisorEvent::Spawned {
             service: "backend".to_owned(),
             port,
         });
-        let receiver = start_log_readers(&mut child, Arc::clone(&self.logs))?;
+        let receiver = start_log_readers(&mut sidecar, Arc::clone(&self.logs))?;
 
         let deadline = Instant::now() + self.options.readiness_timeout;
         loop {
-            if let Some(status) = child.try_wait().map_err(process_error)? {
+            if let Some(status) = sidecar.try_direct_child_exit().map_err(process_error)? {
                 self.emit(SupervisorEvent::Exited {
                     service: "backend".to_owned(),
                     status: status.code(),
                 });
                 let failure = drain_control_failures(&receiver, port, READINESS_TERMINAL_DRAIN);
                 self.report_pending_sidecar_log_error();
+                let crash = stop_after_exit_before_readiness(&mut sidecar, "backend", status);
                 if let Some(error) = failure {
                     return Err(error);
                 }
-                return Err(SupervisorError::new(
-                    FailureKind::Crash,
-                    format!(
-                        "backend exited before readiness with status {:?}",
-                        status.code()
-                    ),
-                ));
+                return Err(crash);
             }
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
                 let failure = drain_control_failures(&receiver, port, READINESS_TERMINAL_DRAIN);
                 self.report_pending_sidecar_log_error();
-                let cleanup = stop_and_reap(&mut child);
+                let cleanup = stop_and_reap(&mut sidecar);
                 if let Some(error) = failure {
                     return Err(error);
                 }
@@ -1040,7 +1108,9 @@ impl Supervisor {
                     self.report_pending_sidecar_log_error();
                     match control_line {
                         ControlLine::Ready => {
-                            if let Some(status) = child.try_wait().map_err(process_error)? {
+                            if let Some(status) =
+                                sidecar.try_direct_child_exit().map_err(process_error)?
+                            {
                                 self.emit(SupervisorEvent::Exited {
                                     service: "backend".to_owned(),
                                     status: status.code(),
@@ -1051,25 +1121,24 @@ impl Supervisor {
                                     READINESS_TERMINAL_DRAIN,
                                 );
                                 self.report_pending_sidecar_log_error();
+                                let crash = stop_after_exit_before_readiness(
+                                    &mut sidecar,
+                                    "backend",
+                                    status,
+                                );
                                 if let Some(error) = failure {
                                     return Err(error);
                                 }
-                                return Err(SupervisorError::new(
-                                    FailureKind::Crash,
-                                    format!(
-                                        "backend exited before readiness with status {:?}",
-                                        status.code()
-                                    ),
-                                ));
+                                return Err(crash);
                             }
                             self.emit(SupervisorEvent::Ready {
                                 service: "backend".to_owned(),
                                 port,
                             });
-                            return Ok(RunningChild { child, port });
+                            return Ok(RunningSidecar { sidecar, port });
                         }
                         ControlLine::Failure(kind, message) => {
-                            let _ = stop_and_reap(&mut child);
+                            let _ = stop_and_reap(&mut sidecar);
                             return Err(SupervisorError::new(kind, message));
                         }
                         ControlLine::Other => {}
@@ -1081,7 +1150,7 @@ impl Supervisor {
         }
     }
 
-    fn spawn_mcp_and_wait(&mut self, port: u16) -> Result<RunningChild, SupervisorError> {
+    fn spawn_mcp_and_wait(&mut self, port: u16) -> Result<RunningSidecar, SupervisorError> {
         let backend_port = self
             .running
             .as_ref()
@@ -1113,26 +1182,24 @@ impl Supervisor {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         sanitize_packaged_process_environment(&mut command);
-        let mut child = command.spawn().map_err(process_error)?;
+        let mut sidecar = OwnedSidecar::spawn(command).map_err(process_error)?;
         self.emit(SupervisorEvent::Spawned {
             service: "mcp".to_owned(),
             port,
         });
-        let _receiver = start_log_readers(&mut child, Arc::clone(&self.logs))?;
+        let _receiver = start_log_readers(&mut sidecar, Arc::clone(&self.logs))?;
         let deadline = Instant::now() + self.options.readiness_timeout;
         loop {
             self.report_pending_sidecar_log_error();
-            if let Some(status) = child.try_wait().map_err(process_error)? {
-                return Err(SupervisorError::new(
-                    FailureKind::Crash,
-                    format!(
-                        "MCP service exited before readiness with status {:?}",
-                        status.code()
-                    ),
+            if let Some(status) = sidecar.try_direct_child_exit().map_err(process_error)? {
+                return Err(stop_after_exit_before_readiness(
+                    &mut sidecar,
+                    "MCP service",
+                    status,
                 ));
             }
             if Instant::now() >= deadline {
-                stop_and_reap(&mut child)?;
+                stop_and_reap(&mut sidecar)?;
                 return Err(SupervisorError::new(
                     FailureKind::ReadinessTimeout,
                     "MCP service did not complete initialization before the deadline",
@@ -1143,10 +1210,10 @@ impl Supervisor {
                     service: "mcp".to_owned(),
                     port,
                 });
-                return Ok(RunningChild { child, port });
+                return Ok(RunningSidecar { sidecar, port });
             }
             if Instant::now() >= deadline {
-                stop_and_reap(&mut child)?;
+                stop_and_reap(&mut sidecar)?;
                 return Err(SupervisorError::new(
                     FailureKind::ReadinessTimeout,
                     "MCP service did not complete initialization before the deadline",
@@ -1542,13 +1609,13 @@ fn parse_control_line(line: &str, expected_port: u16) -> ControlLine {
 }
 
 fn start_log_readers(
-    child: &mut Child,
+    sidecar: &mut OwnedSidecar,
     logs: Arc<Mutex<CapturedLogs>>,
 ) -> Result<mpsc::Receiver<String>, SupervisorError> {
-    let stdout = child.stdout.take().ok_or_else(|| {
+    let stdout = sidecar.take_stdout().ok_or_else(|| {
         SupervisorError::new(FailureKind::Crash, "sidecar stdout was not captured")
     })?;
-    let stderr = child.stderr.take().ok_or_else(|| {
+    let stderr = sidecar.take_stderr().ok_or_else(|| {
         SupervisorError::new(FailureKind::Crash, "sidecar stderr was not captured")
     })?;
     let (sender, receiver) = mpsc::channel();
@@ -1584,75 +1651,78 @@ fn process_error(error: std::io::Error) -> SupervisorError {
     )
 }
 
-fn wait_for_exit(child: &mut Child, grace: Duration) -> Result<bool, SupervisorError> {
-    let deadline = Instant::now() + grace;
-    loop {
-        if child.try_wait().map_err(process_error)?.is_some() {
-            return Ok(true);
-        }
-        if Instant::now() >= deadline {
-            return Ok(false);
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-}
-
-fn stop_and_reap(child: &mut Child) -> Result<(), SupervisorError> {
-    let graceful_result = request_graceful_stop(child)
-        .and_then(|()| wait_for_exit(child, Duration::from_millis(100)));
+/// The short teardown used while starting up, where a failure has already been
+/// decided and the user is not waiting on the configured shutdown grace.
+fn stop_and_reap(sidecar: &mut OwnedSidecar) -> Result<(), SupervisorError> {
+    let graceful_result = sidecar
+        .request_graceful_stop()
+        .and_then(|()| sidecar.wait_for_owned_exit(STARTUP_CLEANUP_GRACE))
+        .map_err(teardown_error);
     match graceful_result {
         Ok(true) => Ok(()),
-        Ok(false) => kill_and_reap(child),
+        Ok(false) => sidecar.terminate_and_reap().map_err(teardown_error),
         Err(error) => {
-            best_effort_kill_and_reap(child);
+            sidecar.terminate_and_reap_best_effort();
             Err(error)
         }
     }
 }
 
-fn kill_and_reap(child: &mut Child) -> Result<(), SupervisorError> {
-    let kill_result = child.kill().map_err(process_error);
-    let wait_result = child.wait().map(|_| ()).map_err(process_error);
-    kill_result.and(wait_result)
+/// Reports a startup failure whose direct child exited before readiness, after
+/// stopping the rest of the partially started group.
+///
+/// An exited direct child says nothing about the group it led: a bootloader
+/// that hands off to a worker exits immediately while the worker keeps the
+/// loopback port and the log pipes.  Startup therefore ends the owned group
+/// here exactly as a readiness timeout does, giving the survivors the same
+/// cooperative request and grace period the supervisor owes anything it
+/// started, rather than returning and leaving them to the forced last resort a
+/// dropped handle performs.
+///
+/// Teardown never displaces the diagnosis.  The exit status is what the caller
+/// needs in order to understand the failed launch, so a cleanup error is
+/// dropped rather than reported in its place — the same precedence the
+/// reported-failure path already keeps.
+fn stop_after_exit_before_readiness(
+    sidecar: &mut OwnedSidecar,
+    service: &str,
+    status: ExitStatus,
+) -> SupervisorError {
+    let _ = stop_and_reap(sidecar);
+    SupervisorError::new(
+        FailureKind::Crash,
+        format!(
+            "{service} exited before readiness with status {:?}",
+            status.code()
+        ),
+    )
 }
 
-fn best_effort_kill_and_reap(child: &mut Child) {
-    let _ = child.kill();
-    let _ = child.wait();
+fn teardown_error(error: std::io::Error) -> SupervisorError {
+    SupervisorError::new(
+        FailureKind::Crash,
+        format!("could not stop the owned sidecar process group: {error}"),
+    )
 }
 
-#[cfg(unix)]
-fn request_graceful_stop(child: &Child) -> Result<(), SupervisorError> {
-    let outcome = unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGTERM) };
-    if outcome == 0 {
-        Ok(())
-    } else {
-        Err(SupervisorError::new(
-            FailureKind::Crash,
-            format!(
-                "could not send SIGTERM to owned sidecar: {}",
-                std::io::Error::last_os_error()
-            ),
-        ))
-    }
-}
-
-#[cfg(not(unix))]
-fn request_graceful_stop(_child: &Child) -> Result<(), SupervisorError> {
-    // `std::process` exposes no cross-platform soft signal.  Give the owned
-    // child its configured grace period (for a future sidecar control channel)
-    // before escalating to `kill` in `shutdown`; never kill immediately.
-    Ok(())
-}
-
+/// Cleanup remains best effort.  This runs during ordinary unwinding — a
+/// supervisor leaving scope, a failed startup, a panic in a build that unwinds
+/// — and it cannot run after an abrupt death of the desktop process itself: a
+/// macOS `SIGKILL` (Force Quit, the out-of-memory killer), a power loss, a
+/// build configured to abort on panic, or an operating-system crash all skip
+/// destructors.  Nor does it promise anything for a descendant that
+/// deliberately left the owned group.  A group stranded either way outlives
+/// this shell: the next launch reclaims the data-directory lock the kernel
+/// released and supervises its own sidecars, and never signals the strays,
+/// which it does not own.
 impl Drop for Supervisor {
     fn drop(&mut self) {
         self.liveness_probe = None;
-        if let Some(mut running) = self.running_mcp.take() {
-            best_effort_kill_and_reap(&mut running.child);
-        }
-        if let Some(mut running) = self.running.take() {
-            best_effort_kill_and_reap(&mut running.child);
+        // The same ordered, exactly-once take as explicit shutdown and
+        // recovery; only the bound differs, because nothing is waiting on a
+        // grace period once the supervisor itself is going away.
+        for (_service, mut running) in self.take_owned_sidecars() {
+            running.sidecar.terminate_and_reap_best_effort();
         }
     }
 }
@@ -1788,12 +1858,70 @@ mod tests {
         fs::remove_file(path).expect("remove persisted MCP port");
     }
 
+    /// A bounded wait that reports rather than requires: for a fact whose
+    /// absence is the assertion's own business.
+    fn until_or_timeout(mut predicate: impl FnMut() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !predicate() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     fn until(mut predicate: impl FnMut() -> bool) {
         let deadline = Instant::now() + Duration::from_secs(2);
         while !predicate() {
             assert!(Instant::now() < deadline, "condition did not become true");
             thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    /// The operating system's own view of one process: `None` once it is gone,
+    /// and a state beginning with `Z` while it lingers unreaped.  Reading it
+    /// from outside the supervisor keeps the reaping contract observable
+    /// without giving the supervisor a process-identifier accessor.
+    #[cfg(unix)]
+    fn process_state(pid: u32) -> Option<String> {
+        let output = Command::new("/bin/ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .expect("inspect the process table");
+        let state = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        (!state.is_empty()).then_some(state)
+    }
+
+    /// Records that this process was asked to stop cooperatively, then exits.
+    ///
+    /// The record is written from the signal handler itself, so it can only
+    /// exist if SIGTERM was actually delivered and honoured.  Both calls are
+    /// async-signal-safe; the descriptor is opened before the handler is armed.
+    #[cfg(unix)]
+    fn record_cooperative_exit_on_term(path: &Path) {
+        use std::os::unix::ffi::OsStrExt;
+        use std::sync::atomic::AtomicI32;
+
+        static RECORD: AtomicI32 = AtomicI32::new(-1);
+
+        extern "C" fn on_term(_signal: i32) {
+            let descriptor = RECORD.load(Ordering::Relaxed);
+            if descriptor >= 0 {
+                let note = b"stopped-cooperatively";
+                unsafe { libc::write(descriptor, note.as_ptr().cast(), note.len()) };
+            }
+            unsafe { libc::_exit(0) }
+        }
+
+        let mut c_path = path.as_os_str().as_bytes().to_vec();
+        c_path.push(0);
+        let descriptor = unsafe {
+            libc::open(
+                c_path.as_ptr().cast(),
+                libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+                0o600 as libc::c_int,
+            )
+        };
+        assert!(descriptor >= 0, "open the cooperative-exit record");
+        RECORD.store(descriptor, Ordering::Relaxed);
+        unsafe { libc::signal(libc::SIGTERM, on_term as *const () as libc::sighandler_t) };
     }
 
     #[test]
@@ -1810,10 +1938,42 @@ mod tests {
         supervisor.launch().expect("starts normally");
         assert!(supervisor.port().is_some());
         supervisor.shutdown().expect("shuts down normally");
-        assert!(supervisor
-            .events()
+        let events = supervisor.events();
+        assert!(events
             .iter()
             .any(|event| matches!(event, SupervisorEvent::Ready { .. })));
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                SupervisorEvent::ShutdownTermRequested { service } if service == "backend"
+            )),
+            "a cooperative backend is asked to stop before anything is forced"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, SupervisorEvent::ShutdownKillRequested { .. })),
+            "a cooperative backend exits within its grace period without escalation"
+        );
+        assert!(supervisor.running.is_none() && supervisor.running_mcp.is_none());
+    }
+
+    #[test]
+    fn contract_shutdown_without_mcp_is_idempotent() {
+        let mut supervisor = Supervisor::new(stub_table("ready", vec![]), fast_options());
+        supervisor.launch().expect("starts normally");
+        supervisor.shutdown().expect("first shutdown");
+        let after_first = supervisor.events().len();
+
+        supervisor
+            .shutdown()
+            .expect("a second shutdown owns no handle and signals nothing");
+
+        assert_eq!(
+            supervisor.events().len(),
+            after_first,
+            "a repeated shutdown must not signal anything"
+        );
     }
 
     #[test]
@@ -2723,10 +2883,396 @@ mod tests {
         let mut supervisor = Supervisor::new(stub_table("ignore-term", vec![]), fast_options());
         supervisor.launch().expect("starts");
         supervisor.shutdown().expect("kills after grace");
-        assert!(supervisor
-            .events()
-            .iter()
-            .any(|event| matches!(event, SupervisorEvent::ShutdownKillRequested { .. })));
+        let events = supervisor.events();
+        let term_requested = events.iter().position(|event| {
+            matches!(event, SupervisorEvent::ShutdownTermRequested { service } if service == "backend")
+        });
+        let kill_requested = events.iter().position(|event| {
+            matches!(event, SupervisorEvent::ShutdownKillRequested { service } if service == "backend")
+        });
+
+        assert!(
+            term_requested < kill_requested && kill_requested.is_some(),
+            "escalation must follow a bounded wait on the cooperative request"
+        );
+        assert!(supervisor.running.is_none());
+    }
+
+    /// The identifier a stub descendant records once it is up, if it is there
+    /// yet.  Waiting on the record is how a caller knows the worker exists
+    /// before the process that spawned it goes away.
+    #[cfg(unix)]
+    fn recorded_pid_if_any(path: &Path) -> Option<u32> {
+        fs::read_to_string(path)
+            .ok()
+            .and_then(|text| text.trim().parse::<u32>().ok())
+    }
+
+    #[cfg(unix)]
+    fn recorded_pid(path: &Path) -> u32 {
+        recorded_pid_if_any(path).expect("the descendant recorded its identifier")
+    }
+
+    /// What a stub worker wrote when it honoured a cooperative stop request.
+    /// Absent when it was only ever forced out.
+    #[cfg(unix)]
+    fn cooperative_stop_record(pid_path: &Path) -> Option<String> {
+        let record = format!("{}.stop", pid_path.display());
+        until_or_timeout(|| fs::metadata(&record).is_ok());
+        fs::read_to_string(&record)
+            .ok()
+            .map(|text| text.trim().to_owned())
+    }
+
+    #[cfg(unix)]
+    fn remove_descendant_records(pid_path: &Path) {
+        let _ = fs::remove_file(format!("{}.stop", pid_path.display()));
+        let _ = fs::remove_file(pid_path);
+    }
+
+    /// A reserved-then-released loopback port, for a descendant to take over.
+    #[cfg(unix)]
+    fn free_loopback_port() -> u16 {
+        let reservation = TcpListener::bind("127.0.0.1:0").expect("reserve a loopback port");
+        let port = reservation.local_addr().expect("reserved address").port();
+        drop(reservation);
+        port
+    }
+
+    #[cfg(unix)]
+    fn descendant_table(descendant_port: u16, extra: Vec<(OsString, OsString)>) -> CommandTable {
+        let mut environment = vec![(
+            OsString::from("MUXED_STUB_DESCENDANT_PORT"),
+            OsString::from(descendant_port.to_string()),
+        )];
+        environment.extend(extra);
+        stub_table("ready-with-descendant", environment)
+    }
+
+    /// One teardown against a real PyInstaller-shaped process tree: the direct
+    /// child stops on the cooperative request while its descendant has to be
+    /// forced out, and neither the descendant's loopback resource nor the
+    /// direct child's process-table entry may survive the shutdown.
+    #[cfg(unix)]
+    #[test]
+    fn shutdown_ends_a_descendant_tree_by_both_exit_paths() {
+        let descendant_port = free_loopback_port();
+        let parent_pid_path = unique_temp_path("supervisor-descendant-parent-pid");
+        let parent_exit_path = unique_temp_path("supervisor-descendant-parent-exit");
+        let mut supervisor = Supervisor::new(
+            descendant_table(
+                descendant_port,
+                vec![
+                    (
+                        OsString::from("MUXED_STUB_PARENT_PID_PATH"),
+                        parent_pid_path.clone().into_os_string(),
+                    ),
+                    (
+                        OsString::from("MUXED_STUB_PARENT_EXIT_PATH"),
+                        parent_exit_path.clone().into_os_string(),
+                    ),
+                ],
+            ),
+            fast_options(),
+        );
+
+        supervisor.launch().expect("parent and descendant start");
+        until(|| TcpStream::connect(("127.0.0.1", descendant_port)).is_ok());
+        let direct_child_pid = fs::read_to_string(&parent_pid_path)
+            .expect("the direct child recorded its identifier")
+            .trim()
+            .parse::<u32>()
+            .expect("a numeric process identifier");
+
+        supervisor
+            .shutdown()
+            .expect("the whole owned process group stops");
+
+        assert_eq!(
+            fs::read_to_string(&parent_exit_path).unwrap_or_default(),
+            "stopped-cooperatively",
+            "the direct child must stop on the cooperative request"
+        );
+        assert!(
+            supervisor.events().iter().any(|event| matches!(
+                event,
+                SupervisorEvent::ShutdownKillRequested { service } if service == "backend"
+            )),
+            "the descendant that ignored the request must force an escalation"
+        );
+        assert_eq!(
+            process_state(direct_child_pid),
+            None,
+            "the direct child was left unreaped"
+        );
+        until(|| TcpListener::bind(("127.0.0.1", descendant_port)).is_ok());
+        let _ = fs::remove_file(parent_pid_path);
+        let _ = fs::remove_file(parent_exit_path);
+    }
+
+    /// An unexpected exit is the one path that used to drop the owned handle
+    /// instead of tearing the group down.  A direct child that exits says
+    /// nothing about the rest of its group, so the surviving worker — and the
+    /// loopback port it pins for the replacement spawn — must be released here,
+    /// through the same owned teardown shutdown and recovery use.
+    #[cfg(unix)]
+    #[test]
+    fn poll_ends_a_surviving_descendant_when_the_direct_child_exits() {
+        let descendant_port = free_loopback_port();
+        let marker = unique_temp_path("supervisor-poll-descendant-marker");
+        let mut supervisor = Supervisor::new(
+            stub_table(
+                "ready-with-descendant-then-crash-once",
+                vec![
+                    (
+                        OsString::from("MUXED_STUB_DESCENDANT_PORT"),
+                        OsString::from(descendant_port.to_string()),
+                    ),
+                    (
+                        OsString::from("MUXED_STUB_MARKER"),
+                        marker.clone().into_os_string(),
+                    ),
+                ],
+            ),
+            fast_options(),
+        );
+        supervisor.launch().expect("parent and descendant start");
+        until(|| TcpStream::connect(("127.0.0.1", descendant_port)).is_ok());
+
+        until(|| {
+            supervisor
+                .poll()
+                .expect("an unexpected exit queues recovery");
+            supervisor.events().iter().any(|event| {
+                matches!(event, SupervisorEvent::RecoveryQueued { service } if service == "backend")
+            })
+        });
+
+        assert!(
+            supervisor.events().iter().any(|event| matches!(
+                event,
+                SupervisorEvent::ShutdownKillRequested { service } if service == "backend"
+            )),
+            "the surviving descendant must force the owned teardown to escalate"
+        );
+        until(|| TcpListener::bind(("127.0.0.1", descendant_port)).is_ok());
+        supervisor.shutdown().expect("stop the replacement sidecar");
+        let _ = fs::remove_file(marker);
+    }
+
+    /// A failed launch ends the group it partially started, through the same
+    /// ordered teardown a readiness timeout uses: the direct child exiting says
+    /// nothing about the worker it handed off to, and that worker is asked to
+    /// stop before anything forces it.  Dropping the handle would eventually
+    /// force the group out, but only startup can afford it a graceful stop.
+    #[cfg(unix)]
+    #[test]
+    fn a_backend_that_exits_before_readiness_stops_its_partially_started_group() {
+        let descendant_pid_path = unique_temp_path("supervisor-startup-descendant-pid");
+        let mut supervisor = Supervisor::new(
+            stub_table(
+                "exit-with-descendant",
+                vec![(
+                    OsString::from("MUXED_STUB_DESCENDANT_PID_PATH"),
+                    descendant_pid_path.clone().into_os_string(),
+                )],
+            ),
+            fast_options(),
+        );
+
+        let error = supervisor
+            .launch()
+            .expect_err("a backend that never reports readiness fails the launch");
+
+        assert_eq!(error.kind, FailureKind::Crash);
+        assert!(
+            error.message.contains("exited before readiness"),
+            "the exit status stays the reported diagnosis: {}",
+            error.message
+        );
+        assert_eq!(
+            cooperative_stop_record(&descendant_pid_path),
+            Some("stopped-cooperatively".to_owned()),
+            "the partially started worker was never asked to stop"
+        );
+        assert_eq!(
+            process_state(recorded_pid(&descendant_pid_path)),
+            None,
+            "the partially started group outlived the failed launch"
+        );
+        remove_descendant_records(&descendant_pid_path);
+    }
+
+    /// The MCP service reaches the same startup failure by its own readiness
+    /// path, and owes the same teardown of what its failed launch started.
+    #[cfg(unix)]
+    #[test]
+    fn an_mcp_service_that_exits_before_readiness_stops_its_partially_started_group() {
+        let _guard = MCP_TEST_LOCK.lock().expect("MCP test lock");
+        let descendant_pid_path = unique_temp_path("supervisor-startup-mcp-descendant-pid");
+        let mut table = stub_table_with_mcp();
+        let mcp_port_path = table.mcp_port_path.clone();
+        table.mcp.as_mut().expect("MCP command").environment = vec![
+            (
+                OsString::from("MUXED_STUB_MODE"),
+                OsString::from("mcp-exit-with-descendant"),
+            ),
+            (
+                OsString::from("MUXED_STUB_DESCENDANT_PID_PATH"),
+                descendant_pid_path.clone().into_os_string(),
+            ),
+        ];
+
+        let error = Supervisor::new(table, fast_options())
+            .launch()
+            .expect_err("an MCP service that never initializes fails the launch");
+
+        assert_eq!(error.kind, FailureKind::Crash);
+        assert_eq!(error.service, "mcp");
+        assert_eq!(
+            cooperative_stop_record(&descendant_pid_path),
+            Some("stopped-cooperatively".to_owned()),
+            "the partially started MCP worker was never asked to stop"
+        );
+        assert_eq!(
+            process_state(recorded_pid(&descendant_pid_path)),
+            None,
+            "the partially started MCP group outlived the failed launch"
+        );
+        remove_descendant_records(&descendant_pid_path);
+        let _ = fs::remove_file(mcp_port_path);
+    }
+
+    /// The third startup path — a direct child that exits between emitting its
+    /// readiness line and the supervisor observing it — cannot be pinned down
+    /// from outside, because which of the two startup checks notices the exit
+    /// first is a race.  All three paths report through this one operation, so
+    /// the operation itself is held to tearing the group down first.
+    #[cfg(unix)]
+    #[test]
+    fn reporting_an_exit_before_readiness_first_ends_the_rest_of_the_owned_group() {
+        let pid_path = unique_temp_path("supervisor-exit-before-readiness-descendant-pid");
+        let mut command = Command::new("/bin/sh");
+        command
+            .arg("-c")
+            .arg(format!(
+                "sh -c 'trap \"\" TERM; echo $$ > {}; sleep 30' & exit 7",
+                pid_path.display()
+            ))
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut sidecar = OwnedSidecar::spawn(command).expect("spawn an owned sidecar");
+        until(|| recorded_pid_if_any(&pid_path).is_some());
+        let descendant_pid = recorded_pid(&pid_path);
+        until(|| {
+            sidecar
+                .try_direct_child_exit()
+                .expect("exit status is readable")
+                .is_some()
+        });
+        let status = sidecar
+            .try_direct_child_exit()
+            .expect("exit status is readable")
+            .expect("the direct child has exited");
+
+        let error = stop_after_exit_before_readiness(&mut sidecar, "backend", status);
+
+        assert_eq!(error.kind, FailureKind::Crash);
+        assert_eq!(
+            error.message, "backend exited before readiness with status Some(7)",
+            "teardown must not displace the exit status the caller needs"
+        );
+        until(|| process_state(descendant_pid).is_none());
+        let _ = fs::remove_file(pid_path);
+    }
+
+    /// Cleanup is best effort, not absent: a supervisor that simply leaves
+    /// scope during ordinary unwinding still releases the group it owns.  Only
+    /// an abrupt death of this process could skip it.
+    #[cfg(unix)]
+    #[test]
+    fn a_supervisor_leaving_scope_releases_its_owned_group() {
+        let descendant_port = free_loopback_port();
+
+        {
+            let mut supervisor =
+                Supervisor::new(descendant_table(descendant_port, vec![]), fast_options());
+            supervisor.launch().expect("parent and descendant start");
+            until(|| TcpStream::connect(("127.0.0.1", descendant_port)).is_ok());
+        }
+
+        until(|| TcpListener::bind(("127.0.0.1", descendant_port)).is_ok());
+    }
+
+    /// Teardown reaches owned handles and nothing else.  Both sentinels share
+    /// this test process's own group, so a teardown that reached beyond its
+    /// handles would take them down too — and the second is deliberately shaped
+    /// like whatever a process search would match: the same executable as the
+    /// sidecar, holding a loopback port of its own.  Durable tmux sessions and
+    /// terminal sessions sit outside the boundary for the same reason; that the
+    /// containment layer names no such search at all is held by
+    /// `owned_sidecar::tests::the_containment_boundary_never_searches_for_a_process_it_did_not_spawn`.
+    #[cfg(unix)]
+    #[test]
+    fn shutdown_leaves_processes_this_supervisor_did_not_spawn_alone() {
+        let mut unrelated = Command::new("/bin/sh")
+            .arg("-c")
+            .arg("sleep 30")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("start a process this supervisor does not own");
+        let sentinel_port = free_loopback_port();
+        let mut sentinel_command = Command::new(env::current_exe().expect("test executable"));
+        sentinel_command
+            .args(["--exact", "supervisor::tests::stub_sidecar", "--nocapture"])
+            .env("MUXED_STUB_MODE", "unrelated-sentinel")
+            .env("MUXED_STUB_DESCENDANT_PORT", sentinel_port.to_string())
+            .env("MUXED_BACKEND_PORT", "0")
+            .env(CREDENTIAL_ENV, "unrelated-sentinel-credential")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        // The sentinel is the only stub this test spawns directly rather than
+        // through the supervisor, so the sanitisation every supervisor-launched
+        // process gets has to be applied here too: `stub_sidecar` exits 39 on
+        // inherited PyInstaller parent state, which a shell launched from the
+        // packaged app always carries.
+        sanitize_packaged_process_environment(&mut sentinel_command);
+        let mut look_alike = sentinel_command
+            .spawn()
+            .expect("start a look-alike process this supervisor does not own");
+        until(|| TcpStream::connect(("127.0.0.1", sentinel_port)).is_ok());
+
+        let mut supervisor = Supervisor::new(stub_table("ready", vec![]), fast_options());
+        supervisor.launch().expect("starts");
+
+        supervisor.shutdown().expect("stops only its own sidecars");
+
+        assert!(
+            unrelated
+                .try_wait()
+                .expect("unrelated process is observable")
+                .is_none(),
+            "shutdown must not signal a process this supervisor did not spawn"
+        );
+        assert!(
+            look_alike
+                .try_wait()
+                .expect("look-alike process is observable")
+                .is_none(),
+            "shutdown must not target a process by executable name"
+        );
+        assert!(
+            TcpListener::bind(("127.0.0.1", sentinel_port)).is_err(),
+            "shutdown must not target a process by the loopback port it holds"
+        );
+        for mut sentinel in [unrelated, look_alike] {
+            sentinel.kill().expect("stop the sentinel");
+            sentinel.wait().expect("reap the sentinel");
+        }
     }
 
     #[cfg(unix)]
@@ -2736,8 +3282,9 @@ mod tests {
         let mut supervisor = Supervisor::new(stub_table_with_mcp(), fast_options());
         supervisor.launch().expect("packaged services start");
         let mcp = supervisor.running_mcp.as_mut().expect("owned MCP child");
-        mcp.child.kill().expect("kill MCP before shutdown");
-        mcp.child.wait().expect("reap MCP before shutdown");
+        mcp.sidecar
+            .terminate_and_reap()
+            .expect("stop and reap MCP before shutdown");
 
         let error = supervisor
             .shutdown()
@@ -2750,6 +3297,82 @@ mod tests {
         )));
         assert!(supervisor.running.is_none());
         assert!(supervisor.running_mcp.is_none());
+    }
+
+    #[test]
+    fn contract_full_service_shutdown_stops_mcp_before_the_backend() {
+        let _guard = MCP_TEST_LOCK.lock().expect("MCP test lock");
+        let mut supervisor = Supervisor::new(stub_table_with_mcp(), fast_options());
+        supervisor.launch().expect("the supervised pair starts");
+
+        supervisor.shutdown().expect("the supervised pair stops");
+
+        let events = supervisor.events();
+        let mcp_term = events.iter().position(|event| {
+            matches!(event, SupervisorEvent::ShutdownTermRequested { service } if service == "mcp")
+        });
+        let backend_term = events.iter().position(|event| {
+            matches!(
+                event,
+                SupervisorEvent::ShutdownTermRequested { service } if service == "backend"
+            )
+        });
+        assert!(
+            mcp_term.is_some() && mcp_term < backend_term,
+            "MCP must be asked to stop before the backend it depends on"
+        );
+        assert!(
+            supervisor.running.is_none() && supervisor.running_mcp.is_none(),
+            "no owned handle may remain after a full-service shutdown"
+        );
+
+        let after_first = supervisor.events().len();
+        supervisor
+            .shutdown()
+            .expect("a repeated full-service shutdown owns no handle");
+        assert_eq!(
+            supervisor.events().len(),
+            after_first,
+            "each handle is taken exactly once, so nothing is signalled twice"
+        );
+    }
+
+    #[test]
+    fn contract_degraded_mcp_shutdown_still_tears_down_the_backend() {
+        let _guard = MCP_TEST_LOCK.lock().expect("MCP test lock");
+        let occupied = TcpListener::bind("127.0.0.1:0").expect("reserve MCP port");
+        let blocked_port = occupied.local_addr().expect("address").port();
+        let mut options = fast_options();
+        options.mcp_port_candidates = vec![blocked_port];
+        options.mcp_required = false;
+        let mut table = stub_table_with_mcp();
+        table.backend.environment =
+            vec![(OsString::from("MUXED_STUB_MODE"), OsString::from("ready"))];
+        let mut supervisor = Supervisor::new(table, options);
+        supervisor.launch().expect("the backend starts without MCP");
+        assert_eq!(supervisor.mcp_port(), None, "MCP is degraded, not owned");
+
+        supervisor
+            .shutdown()
+            .expect("degraded MCP must not weaken backend cleanup");
+
+        let events = supervisor.events();
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                SupervisorEvent::ShutdownTermRequested { service } if service == "backend"
+            )),
+            "the backend still receives its normal graceful teardown"
+        );
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                SupervisorEvent::ShutdownTermRequested { service }
+                    | SupervisorEvent::ShutdownKillRequested { service } if service == "mcp"
+            )),
+            "an unowned MCP service must never be signalled"
+        );
+        assert!(supervisor.running.is_none());
     }
 
     #[test]
@@ -2997,6 +3620,109 @@ mod tests {
                     libc::signal(libc::SIGTERM, libc::SIG_IGN);
                 }
                 serve_health(&port);
+            }
+            "ready-with-descendant" => {
+                // A PyInstaller-shaped tree: a bootloader-style parent that
+                // keeps serving, plus a worker that holds a loopback resource
+                // and refuses to stop cooperatively.  One teardown therefore
+                // has to end two processes by two different exit paths.
+                if let Some(path) = env::var_os("MUXED_STUB_PARENT_PID_PATH") {
+                    fs::write(path, std::process::id().to_string()).expect("record the parent pid");
+                }
+                #[cfg(unix)]
+                if let Some(path) = env::var_os("MUXED_STUB_PARENT_EXIT_PATH") {
+                    record_cooperative_exit_on_term(Path::new(&path));
+                }
+                Command::new(env::current_exe().expect("test executable"))
+                    .args(["--exact", "supervisor::tests::stub_sidecar", "--nocapture"])
+                    .env("MUXED_STUB_MODE", "descendant-ignore-term")
+                    .spawn()
+                    .expect("spawn stubborn descendant");
+                serve_health(&port);
+            }
+            "ready-with-descendant-then-crash-once" => {
+                // The same PyInstaller shape, except the bootloader-style
+                // parent dies unexpectedly once its worker holds the loopback
+                // resource: the direct child is gone while the owned group is
+                // not empty.  Only the first instance does this, so the
+                // replacement the supervisor starts is an ordinary sidecar.
+                let marker = PathBuf::from(env::var_os("MUXED_STUB_MARKER").expect("marker"));
+                if OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .open(marker)
+                    .is_err()
+                {
+                    serve_health(&port);
+                    return;
+                }
+                let descendant_port: u16 = env::var("MUXED_STUB_DESCENDANT_PORT")
+                    .expect("descendant port")
+                    .parse()
+                    .expect("a numeric descendant port");
+                Command::new(env::current_exe().expect("test executable"))
+                    .args(["--exact", "supervisor::tests::stub_sidecar", "--nocapture"])
+                    .env("MUXED_STUB_MODE", "descendant-ignore-term")
+                    .spawn()
+                    .expect("spawn stubborn descendant");
+                let _listener = bind_ready(&port);
+                // Exiting before the worker holds the port would leave nothing
+                // for the supervisor to find surviving.
+                while TcpStream::connect(("127.0.0.1", descendant_port)).is_err() {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                std::process::exit(37);
+            }
+            "exit-with-descendant" | "mcp-exit-with-descendant" => {
+                // The same PyInstaller shape, failing this time during startup:
+                // the bootloader-style parent hands off to a worker and then
+                // exits without ever reporting readiness.  The worker records
+                // the cooperative request it honours, so a test can tell an
+                // ordered teardown of the partially started group from the
+                // forced last resort every dropped handle already performs.
+                let pid_path = env::var("MUXED_STUB_DESCENDANT_PID_PATH")
+                    .expect("descendant pid path passed by the test");
+                Command::new("/bin/sh")
+                    .arg("-c")
+                    .arg(format!(
+                        "trap 'echo stopped-cooperatively > {pid_path}.stop; exit 0' TERM; \
+                         echo $$ > {pid_path}; while :; do sleep 0.05; done"
+                    ))
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .expect("spawn the startup worker");
+                // Exiting before the worker records itself would leave nothing
+                // for the supervisor to find surviving.
+                while recorded_pid_if_any(Path::new(&pid_path)).is_none() {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                std::process::exit(37);
+            }
+            "unrelated-sentinel" => {
+                // Deliberately shaped like a target a process search would find:
+                // the same executable as the sidecar, holding a loopback port.
+                let sentinel_port = env::var("MUXED_STUB_DESCENDANT_PORT").expect("sentinel port");
+                let _listener = TcpListener::bind(format!("127.0.0.1:{sentinel_port}"))
+                    .expect("bind sentinel port");
+                println!("stub-sentinel-listening");
+                loop {
+                    thread::sleep(Duration::from_millis(25));
+                }
+            }
+            "descendant-ignore-term" => {
+                #[cfg(unix)]
+                unsafe {
+                    libc::signal(libc::SIGTERM, libc::SIG_IGN);
+                }
+                let descendant_port =
+                    env::var("MUXED_STUB_DESCENDANT_PORT").expect("descendant port");
+                let _listener = TcpListener::bind(format!("127.0.0.1:{descendant_port}"))
+                    .expect("bind descendant port");
+                loop {
+                    thread::sleep(Duration::from_millis(25));
+                }
             }
             "chatty" => {
                 for number in 0..50 {

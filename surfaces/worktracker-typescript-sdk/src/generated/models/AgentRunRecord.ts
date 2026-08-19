@@ -58,13 +58,25 @@ export interface AgentRunRecord {
      * @type {string}
      * @memberof AgentRunRecord
      */
-    agent: string;
+    agent: string | null;
     /**
      *
      * @type {ScopeEnum}
      * @memberof AgentRunRecord
      */
     scope: ScopeEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentRunRecord
+     */
+    launch_state: string | null;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentRunRecord
+     */
+    launch_model: string | null;
     /**
      *
      * @type {string}
@@ -83,6 +95,24 @@ export interface AgentRunRecord {
      * @memberof AgentRunRecord
      */
     updated_at: string;
+    /**
+     *
+     * @type {number}
+     * @memberof AgentRunRecord
+     */
+    output_sequence: number;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentRunRecord
+     */
+    last_output_at: string | null;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentRunRecord
+     */
+    effective_state: string;
 }
 
 
@@ -97,9 +127,14 @@ export function instanceOfAgentRunRecord(value: object): value is AgentRunRecord
     if (!('module_id' in value) || value['module_id'] === undefined) return false;
     if (!('agent' in value) || value['agent'] === undefined) return false;
     if (!('scope' in value) || value['scope'] === undefined) return false;
+    if (!('launch_state' in value) || value['launch_state'] === undefined) return false;
+    if (!('launch_model' in value) || value['launch_model'] === undefined) return false;
     if (!('started_at' in value) || value['started_at'] === undefined) return false;
     if (!('state' in value) || value['state'] === undefined) return false;
     if (!('updated_at' in value) || value['updated_at'] === undefined) return false;
+    if (!('output_sequence' in value) || value['output_sequence'] === undefined) return false;
+    if (!('last_output_at' in value) || value['last_output_at'] === undefined) return false;
+    if (!('effective_state' in value) || value['effective_state'] === undefined) return false;
     return true;
 }
 
@@ -119,9 +154,14 @@ export function AgentRunRecordFromJSONTyped(json: any, ignoreDiscriminator: bool
         'module_id': json['module_id'],
         'agent': json['agent'],
         'scope': ScopeEnumFromJSON(json['scope']),
+        'launch_state': json['launch_state'],
+        'launch_model': json['launch_model'],
         'started_at': json['started_at'],
         'state': json['state'],
         'updated_at': json['updated_at'],
+        'output_sequence': json['output_sequence'],
+        'last_output_at': json['last_output_at'],
+        'effective_state': json['effective_state'],
     };
 }
 
@@ -142,8 +182,13 @@ export function AgentRunRecordToJSONTyped(value?: AgentRunRecord | null, ignoreD
         'module_id': value['module_id'],
         'agent': value['agent'],
         'scope': ScopeEnumToJSON(value['scope']),
+        'launch_state': value['launch_state'],
+        'launch_model': value['launch_model'],
         'started_at': value['started_at'],
         'state': value['state'],
         'updated_at': value['updated_at'],
+        'output_sequence': value['output_sequence'],
+        'last_output_at': value['last_output_at'],
+        'effective_state': value['effective_state'],
     };
 }

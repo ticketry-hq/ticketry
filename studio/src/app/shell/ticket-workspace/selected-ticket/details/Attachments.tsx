@@ -16,7 +16,7 @@ export default function Attachments({ attachments }: AttachmentsProps) {
         </span>
         <span className="text-xs text-text-muted">{attachments.length}</span>
       </div>
-      <div className="overflow-hidden rounded-lg border border-pane-border">
+      <div className="overflow-hidden border border-pane-border">
         {attachments.map((a) => (
           <a
             key={a.id}

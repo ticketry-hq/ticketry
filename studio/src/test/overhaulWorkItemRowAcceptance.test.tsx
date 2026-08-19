@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
 
 describe("overhaul acceptance — work-item rows", () => {
-  it("[overhaul-33] keeps titles first and compact ticket identifiers at the trailing edge", async () => {
+  it("[overhaul-33] reads rows as one left-aligned identifier · name label", async () => {
     const http = fixture();
     const implementation = {
       id: "implementation",
@@ -80,6 +80,11 @@ describe("overhaul acceptance — work-item rows", () => {
     expect(unresolved.querySelector("[data-task-id-token]")).toBeNull();
     expect(unresolved).not.toHaveTextContent(/T-(null|undefined)/);
     expect(unresolved).not.toHaveTextContent("MEML-UNRESOLVED");
+    // No identifier resolves, so the label is the bare name — no separator.
+    expect(unresolved).not.toHaveTextContent("·");
+    expect(
+      unresolved.querySelector("[data-task-label]"),
+    ).toHaveTextContent(/^Unresolved work item$/);
 
     const parent = await within(stories).findByRole("treeitem", {
       name: /A deliberately long Story title/,
@@ -94,17 +99,27 @@ describe("overhaul acceptance — work-item rows", () => {
     );
     const status = await within(parent).findByTestId("agent-state-badge");
     const key = within(parent).getByText("T-33");
+    const label = parent.querySelector("[data-task-label]");
+    // Caret, then the one combined label, then trailing operational status.
     expect([...parent.children]).toEqual([
       expect.any(HTMLElement),
-      title,
+      label,
       status,
-      key,
     ]);
-    expect(title).toHaveClass("min-w-0", "flex-1", "truncate");
-    expect(key).toHaveClass("shrink-0");
+    // Identifier and name are one left-aligned unit that truncates together.
+    expect(label).toContainElement(key);
+    expect(label).toContainElement(title);
+    expect(label).toHaveClass("min-w-0", "flex-1", "truncate");
+    expect(label).toHaveTextContent(
+      "T-33 · A deliberately long Story title that must yield space to its key",
+    );
+    expect(key.compareDocumentPosition(title))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    // Workflow-state color lands on the identifier token alone.
     expect(key).toHaveStyle({ color: "#5b8def" });
-    expect(parent).not.toHaveTextContent("·");
-    expect(parent.lastElementChild).toBe(key);
+    expect(title).not.toHaveStyle({ color: "#5b8def" });
+    // The status badge is a sibling of the label, so it stays visible.
+    expect(status.parentElement).toBe(parent);
 
     fireEvent.click(parent);
     expect(parent).toHaveAttribute("aria-selected", "true");
@@ -114,12 +129,15 @@ describe("overhaul acceptance — work-item rows", () => {
       name: /Implementation child/,
     });
     const childTitle = within(child).getByText("Implementation child");
-    const fallbackKey = within(child).getByText("T-34");
-    expect(childTitle.parentElement).toBe(child);
-    expect(child.lastElementChild).toBe(fallbackKey);
-    expect(fallbackKey).toHaveClass("shrink-0");
+    const childKey = within(child).getByText("T-34");
+    const childLabel = child.querySelector("[data-task-label]");
+    // Nested rows keep the same reading order and indentation as root rows.
+    expect(childLabel).toContainElement(childKey);
+    expect(childLabel).toContainElement(childTitle);
+    expect(child.children[1]).toBe(childLabel);
+    expect(childLabel).toHaveTextContent("T-34 · Implementation child");
+    expect(childLabel).toHaveClass("min-w-0", "flex-1", "truncate");
     expect(child).toHaveStyle({ paddingLeft: "2ch" });
-    expect(child).not.toHaveTextContent("·");
 
     const search = within(stories).getByRole("textbox", { name: "Search stories" });
     fireEvent.change(search, { target: { value: "MEML-CANONICAL-IMPLEMENTATION" } });

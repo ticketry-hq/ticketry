@@ -1,9 +1,10 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status";
+import { dispatchStatusFrame } from "../features/agents/status/testing/legacyStatusFrameTestDriver";
 import {
   useTerminalStore,
   type SessionMeta,
@@ -54,7 +55,6 @@ function session(
     projectId: "project-1",
     moduleId: "module-1",
     agent: "codex",
-    ticketSeq: 1,
     status,
     transport: status === "ready" ? "ready" : "closed",
     isPlanning: false,
@@ -111,6 +111,38 @@ describe("overhaul acceptance — terminals", () => {
     terminalApi.listResumableTerminals.mockResolvedValue([]);
   });
 
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("[overhaul-135] opens a document tab discovered by the backend watcher", async () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(documentRegistry.listTaskDocuments).toHaveBeenCalled());
+
+    act(() => dispatchStatusFrame({
+      v: 1,
+      type: "document",
+      at: "2026-08-14T12:00:00Z",
+      task_id: "story-1",
+      module_id: "module-1",
+      event: "created",
+      doc: { id: "spec", rel_path: "SPEC.html", label: "Spec" },
+    }));
+
+    expect(await screen.findByRole("tab", { name: "Spec" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   it("[overhaul-50] keeps the same opened terminal mounted across Details and documents", async () => {
     documentRegistry.listTaskDocuments.mockResolvedValue([
       { id: "design", rel_path: "DESIGN.md", label: "Design" },
@@ -128,7 +160,6 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={1}
           owner="studio"
           details={<div>Issue details</div>}
         />
@@ -138,7 +169,7 @@ describe("overhaul acceptance — terminals", () => {
     const terminal = await screen.findByTestId("selected-ticket-terminal");
     expect(terminal).toHaveAttribute("data-active", "false");
 
-    fireEvent.click(screen.getByRole("tab", { name: "T-1 · codex" }));
+    fireEvent.click(screen.getByRole("tab", { name: "codex terminal" }));
     expect(terminal).toHaveAttribute("data-active", "true");
 
     fireEvent.click(screen.getByRole("tab", { name: "Details" }));
@@ -148,7 +179,7 @@ describe("overhaul acceptance — terminals", () => {
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(terminal);
     expect(terminal).toHaveAttribute("data-active", "false");
 
-    fireEvent.click(screen.getByRole("tab", { name: "T-1 · codex" }));
+    fireEvent.click(screen.getByRole("tab", { name: "codex terminal" }));
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(terminal);
     expect(terminal).toHaveAttribute("data-active", "true");
   });
@@ -161,29 +192,28 @@ describe("overhaul acceptance — terminals", () => {
     useAgentStatusStore.setState({ runs: { "run-1": run("run-1", "story-1") } });
     useClientStore.setState({ activeByTask: { "story-1": "session-1" } });
 
-    const workspace = (bucket: string, ticketSeq: number) => (
+    const workspace = (bucket: string) => (
       <QueryClientProvider client={queryClient}>
         <SelectedTicketContent
           bucket={bucket}
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={ticketSeq}
           owner="studio"
           details={<div>Issue details</div>}
         />
       </QueryClientProvider>
     );
-    const view = render(workspace("story-1", 1));
+    const view = render(workspace("story-1"));
 
     const retainedHost = await screen.findByTestId("selected-ticket-terminal");
     expect(retainedHost).toHaveTextContent("story-1");
 
-    view.rerender(workspace("story-empty", 2));
+    view.rerender(workspace("story-empty"));
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(retainedHost);
     expect(retainedHost).toHaveTextContent("story-empty");
     expect(retainedHost).toHaveAttribute("data-active", "false");
 
-    view.rerender(workspace("story-1", 1));
+    view.rerender(workspace("story-1"));
     expect(screen.getByTestId("selected-ticket-terminal")).toBe(retainedHost);
     expect(retainedHost).toHaveTextContent("story-1");
   });
@@ -199,7 +229,6 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={1}
           owner="studio"
           details={<div>Issue details</div>}
         />
@@ -207,7 +236,7 @@ describe("overhaul acceptance — terminals", () => {
     );
 
     await waitFor(() => expect(terminalApi.getTerminals).toHaveBeenCalled());
-    expect(screen.queryByRole("tab", { name: "T-1 · codex" }))
+    expect(screen.queryByRole("tab", { name: "codex terminal" }))
       .not.toBeInTheDocument();
     expect(useTerminalStore.getState().sessions).toEqual({});
   });

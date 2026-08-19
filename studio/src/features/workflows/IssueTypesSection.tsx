@@ -102,8 +102,8 @@ export function IssueTypesSection() {
               void selectType(issueType.id);
             }}
             className={issueType.id === selectedTypeId
-              ? "rounded-full border border-focus-accent bg-pane-title px-3 py-1.5 text-sm font-medium text-text-primary"
-              : "rounded-full border border-pane-border px-3 py-1.5 text-sm text-text-muted hover:border-text-muted hover:text-text-primary"}
+              ? "border border-focus-accent bg-pane-title px-3 py-1.5 text-sm font-medium text-text-primary"
+              : "border border-pane-border px-3 py-1.5 text-sm text-text-muted hover:border-text-muted hover:text-text-primary"}
           >
             {issueType.name}
           </button>
@@ -298,7 +298,7 @@ function WorkflowSourceGroup({
       <div className="flex min-h-10 flex-wrap items-center gap-3">
         <span
           aria-hidden="true"
-          className="size-2.5 shrink-0 rounded-full"
+          className="size-2.5 shrink-0"
           style={{ backgroundColor: state.color ?? "#7a8599" }}
         />
         <h3 className="min-w-0 flex-1 text-base font-semibold text-text-primary">
@@ -435,7 +435,7 @@ function TransitionDisclosure({
         aria-label={`${expanded ? "Collapse" : "Expand"} ${source.name} to ${target.name}`}
         aria-expanded={expanded}
         onClick={onToggle}
-        className="flex w-full flex-wrap items-center gap-2 rounded px-2 py-2 text-left text-sm text-text-primary outline-none hover:bg-pane-title focus-visible:ring-1 focus-visible:ring-focus-accent"
+        className="flex w-full flex-wrap items-center gap-2 px-2 py-2 text-left text-sm text-text-primary outline-none hover:bg-pane-title focus-visible:ring-1 focus-visible:ring-focus-accent"
       >
         <span className="min-w-24 flex-1 font-medium">{target.name}</span>
         <TransitionTag>{edge.agent_allowed ? "Agents + people" : "People only"}</TransitionTag>
@@ -524,7 +524,7 @@ function StateLaunchConfiguration({
   return (
     <section
       aria-label={`${state.name} state launch settings`}
-      className="ml-6 mt-2 space-y-5 rounded border border-pane-border px-3 py-4"
+      className="ml-6 mt-2 space-y-5 border border-pane-border px-3 py-4"
     >
       <section aria-label={`${state.name} on entry`} className="space-y-3">
         <h4 className={SETTINGS_EYEBROW_CLASS}>On entry · {state.name}</h4>
@@ -588,7 +588,7 @@ function StateLaunchConfiguration({
 
 function TransitionTag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full border border-pane-border px-2 py-0.5 text-xs text-text-muted">
+    <span className="border border-pane-border px-2 py-0.5 text-xs text-text-muted">
       {children}
     </span>
   );
@@ -725,7 +725,7 @@ function WorkflowImpactDialog({
       aria-label="Workflow deletion impact"
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
     >
-      <div className="w-full max-w-lg space-y-4 rounded border border-pane-border bg-pane-panel p-5 shadow-xl">
+      <div className="w-full max-w-lg space-y-4 border border-pane-border bg-pane-panel p-5 shadow-xl">
         <div>
           <h2 className="text-base font-semibold text-text-primary">{change.title}</h2>
           <p className="mt-1 text-sm text-text-muted">

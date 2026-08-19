@@ -36,6 +36,12 @@ pub fn native_terminal_attach(
         .map_err(|_| "direct tmux command contained a NUL byte".to_owned())?;
     let (worker, commands) = mpsc::channel();
     let process_context = Arc::into_raw(Arc::new(worker.clone())) as usize;
+    // A viewer that fails during preparation never reached presentation, so
+    // it never had the callbacks whose contexts are installed with it.
+    let preparation_contexts = NativeViewContexts {
+        process: process_context,
+        ..NativeViewContexts::default()
+    };
     let mut created_view = None;
     let preparation = (|| -> Result<(usize, TerminalGrid), String> {
         let parent = webview_ns_view(&window)?;
@@ -117,7 +123,7 @@ pub fn native_terminal_attach(
         Err(error) => {
             eprintln!("native libghostty attach failed for run {run_id}: {error}");
             if let Some(view) = created_view {
-                let _ = free_view(&window, view, 0, process_context);
+                let _ = free_view(&window, view, preparation_contexts);
             }
             return Err(error);
         }
@@ -129,7 +135,7 @@ pub fn native_terminal_attach(
         match apply_frame(&window, view, pending) {
             Ok(reconciled) => grid = reconciled,
             Err(error) => {
-                let _ = free_view(&window, view, 0, process_context);
+                let _ = free_view(&window, view, preparation_contexts);
                 return Err(error);
             }
         }
@@ -138,7 +144,7 @@ pub fn native_terminal_attach(
     gate.frame_applied(grid);
     let control = attachment.into_control();
     if let Err(error) = control.resize(grid.columns, grid.rows) {
-        let _ = free_view(&window, view, 0, process_context);
+        let _ = free_view(&window, view, preparation_contexts);
         return Err(error.to_string());
     }
     gate.attachment_ready(grid);
@@ -163,25 +169,25 @@ pub fn native_terminal_attach(
             })
             .map_err(|error| {
                 preparation_phase.store(FAILED, Ordering::Release);
-                let _ = free_view(&window, view, 0, process_context);
+                let _ = free_view(&window, view, preparation_contexts);
                 error.to_string()
             })?;
         let generation = redraw_receiver
             .recv_timeout(PREPARATION_TIMEOUT)
             .map_err(|_| {
                 preparation_phase.store(FAILED, Ordering::Release);
-                let _ = free_view(&window, view, 0, process_context);
+                let _ = free_view(&window, view, preparation_contexts);
                 "timed out requesting the first native terminal redraw".to_owned()
             })?;
         if preparation_phase.load(Ordering::Acquire) == FAILED {
             gate.claim_cleanup();
-            let _ = free_view(&window, view, 0, process_context);
+            let _ = free_view(&window, view, preparation_contexts);
             return Err("native terminal attachment was cancelled by teardown".to_owned());
         }
         if let Err(error) = ensure_preparation_thread() {
             preparation_phase.store(FAILED, Ordering::Release);
             gate.claim_cleanup();
-            let _ = free_view(&window, view, 0, process_context);
+            let _ = free_view(&window, view, preparation_contexts);
             return Err(error);
         }
         let redrawn = unsafe {
@@ -194,7 +200,7 @@ pub fn native_terminal_attach(
         if !redrawn || preparation_phase.load(Ordering::Acquire) == FAILED {
             preparation_phase.store(FAILED, Ordering::Release);
             gate.claim_cleanup();
-            let _ = free_view(&window, view, 0, process_context);
+            let _ = free_view(&window, view, preparation_contexts);
             return Err(if redrawn {
                 "native terminal attachment failed during preparation".to_owned()
             } else {
@@ -213,7 +219,7 @@ pub fn native_terminal_attach(
             Err(error) => {
                 preparation_phase.store(FAILED, Ordering::Release);
                 gate.claim_cleanup();
-                let _ = free_view(&window, view, 0, process_context);
+                let _ = free_view(&window, view, preparation_contexts);
                 return Err(error);
             }
         };
@@ -227,11 +233,16 @@ pub fn native_terminal_attach(
     }
     if !gate.redraw_ready(grid) {
         gate.claim_cleanup();
-        let _ = free_view(&window, view, 0, process_context);
+        let _ = free_view(&window, view, preparation_contexts);
         return Err("native terminal preparation did not finish".to_owned());
     }
     let scroll_sink = ScrollGestureSink::new(worker.clone());
-    let scroll_context = Arc::into_raw(Arc::clone(&scroll_sink)) as usize;
+    let chord_sink = chord_sink(&window, &handle, &run_id);
+    let contexts = NativeViewContexts {
+        scroll: Arc::into_raw(Arc::clone(&scroll_sink)) as usize,
+        chord: Arc::into_raw(Arc::clone(&chord_sink)) as usize,
+        process: process_context,
+    };
     if let Err(error) = reservation.insert_entry(
         &state.entries,
         handle.clone(),
@@ -240,13 +251,13 @@ pub fn native_terminal_attach(
             view,
             worker: worker.clone(),
             scroll_sink,
-            scroll_context,
-            process_context,
-            visibility: NativeTerminalVisibility::Hidden,
+            chord_sink,
+            contexts,
+            visibility: NativeTerminalVisibility::hidden(),
             preparation_phase: Arc::clone(&preparation_phase),
         },
     ) {
-        let _ = free_view(&window, view, scroll_context, process_context);
+        let _ = free_view(&window, view, contexts);
         return Err(error);
     }
     spawn_worker(WorkerSetup {

@@ -1,5 +1,6 @@
 {
   "name": "worktracker-stack",
+  "license": "MIT",
   "private": true,
   "version": "0.1.0",
   "workspaces": [
@@ -29,6 +30,8 @@
     "boundary:check": "node scripts/check-boundary.mjs",
     "prototype:supabase": "node backend/prototypes/supabase-migration/tui.mjs",
     "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
+    "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
+    "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
     "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio --",
     "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",
     "desktop:smoke:concurrent": "npm run desktop:smoke:concurrent --workspace @worktracker/studio",

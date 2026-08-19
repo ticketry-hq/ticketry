@@ -3,6 +3,7 @@ import * as api from "../../settings";
 import { type ConfigPayload, type Profile } from "../lib/types";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
+import { isAbsoluteFolderPath } from "../lib/moduleFolderPath";
 
 // Server config (profiles + feature flags) lives in the TanStack Query cache
 // under queryKeys.config — this module is the one place that reads and writes
@@ -134,6 +135,9 @@ export async function setModuleFolder(
   moduleId: string,
   path: string,
 ): Promise<void> {
+  if (!isAbsoluteFolderPath(path)) {
+    throw new Error("Module folders require a complete filesystem path.");
+  }
   const { recentProfileIndex, profiles } = getConfigSnapshot();
   if (recentProfileIndex === null) return;
   const profile = profiles[recentProfileIndex];

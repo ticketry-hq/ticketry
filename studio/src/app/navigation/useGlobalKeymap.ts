@@ -16,6 +16,8 @@ import {
   routeModulePositionNavigation,
   routeSharedNavigation,
 } from "./sharedNavigation";
+import { routeTerminalPanelToggle } from "../../features/terminal-panel";
+import { subscribeNativeTerminalChords } from "./nativeTerminalChords";
 import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
 
@@ -45,6 +47,9 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       if (hasOpenModal(ui)) return;
 
       const actionId = studioKeymapRegistry.resolve("capture", event);
+      // Ahead of body engagement: the panel toggle must reverse itself from any
+      // focus position, including an agent terminal in typing mode (#667).
+      if (routeTerminalPanelToggle(event, actionId)) return;
       if (routeModulePositionNavigation(event, actionId)) return;
       if (!sidebarVisible && routeThreeZoneBodyEngagement(event)) return;
       if (sidebarVisible) {
@@ -116,4 +121,10 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
+
+  // The desktop build's native terminal owns the keyboard outright while it is
+  // engaged, so the chords that must survive it arrive as host events rather
+  // than keydowns (#684, #735). They are mounted here because this hook owns
+  // their other keyboard entry point.
+  useEffect(() => subscribeNativeTerminalChords(), []);
 }

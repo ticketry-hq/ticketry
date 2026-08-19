@@ -1,19 +1,22 @@
+import { projectRunPresentation } from "./runPresentation";
+import { isAgentlessRun } from "./runScopes";
 import type {
   AgentLifecycle,
   AgentStatusData,
   AutomationAttemptRecord,
-  RawLifecycleState,
+  RunPresentationState,
+  RunRecord,
 } from "./types";
 
-const ATTENTION = new Set<RawLifecycleState>([
+const ATTENTION = new Set<RunPresentationState>([
   "needs_input", "turn_complete", "error", "lost",
 ]);
-const TERMINAL = new Set<RawLifecycleState>(["exited", "lost"]);
-const ACTIVE = new Set<RawLifecycleState>([
+const TERMINAL = new Set<RunPresentationState>(["exited", "lost"]);
+const ACTIVE = new Set<RunPresentationState>([
   "starting", "working", "permission_required", "reconnecting",
 ]);
 const RANK: Record<AgentLifecycle, number> = { idle: 0, active: 1, attention: 2 };
-const LIFECYCLE_STATE_ORDER: RawLifecycleState[] = [
+const LIFECYCLE_STATE_ORDER: RunPresentationState[] = [
   "lost",
   "error",
   "needs_input",
@@ -22,12 +25,22 @@ const LIFECYCLE_STATE_ORDER: RawLifecycleState[] = [
   "working",
   "starting",
   "reconnecting",
+  "stalled",
   "quiet",
 ];
 
 export interface TaskLifecycleChip {
-  state: RawLifecycleState;
+  state: RunPresentationState;
   count: number;
+}
+
+/**
+ * Every selector below reads a run through this one projection, so a terminal
+ * tab, the work-item aggregate, and a module count cannot disagree about the
+ * same run.
+ */
+function presentationOf(run: RunRecord | undefined): RunPresentationState | null {
+  return run ? projectRunPresentation(run) : null;
 }
 
 export function selectTaskAutomationAttempts(
@@ -48,22 +61,23 @@ export function selectTaskAutomationAttempts(
 }
 
 export function toAgentLifecycle(
-  state: RawLifecycleState | null | undefined,
+  state: RunPresentationState | null | undefined,
 ): AgentLifecycle {
   if (state && ATTENTION.has(state)) return "attention";
   if (state && ACTIVE.has(state)) return "active";
   return "idle";
 }
 
+/** The effective presentation of one run: provider lifecycle, overlaid. */
 export function selectRunState(
   state: AgentStatusData,
   runId: string,
-): RawLifecycleState | null {
-  return state.runs[runId]?.state ?? null;
+): RunPresentationState | null {
+  return presentationOf(state.runs[runId]);
 }
 
 export function isLiveAgentRunState(
-  state: RawLifecycleState | null | undefined,
+  state: RunPresentationState | null | undefined,
 ): boolean {
   return state !== null && state !== undefined && !TERMINAL.has(state);
 }
@@ -75,6 +89,10 @@ function taskRunIds(
 ): string[] {
   const taskIds = new Set([taskId, ...descendantTaskIds]);
   return Object.values(state.runs)
+    // Work-item rollups and subtree chicklets are agent activity. A shell run
+    // hangs off its module's own work item, so a task filter alone already
+    // misses it — but the exclusion is stated rather than inherited (#670).
+    .filter((run) => !isAgentlessRun(run))
     .filter((run) => run.task_id !== null && taskIds.has(run.task_id))
     .map((run) => run.agent_run_id);
 }
@@ -86,7 +104,7 @@ export function selectTaskAgentLifecycle(
 ): AgentLifecycle {
   let best: AgentLifecycle = "idle";
   for (const runId of taskRunIds(state, taskId, descendantTaskIds)) {
-    const lifecycle = toAgentLifecycle(state.runs[runId]?.state);
+    const lifecycle = toAgentLifecycle(presentationOf(state.runs[runId]));
     if (RANK[lifecycle] > RANK[best]) best = lifecycle;
   }
   return best;
@@ -98,7 +116,7 @@ export function selectTaskRunCount(
   descendantTaskIds: readonly string[] = [],
 ): number {
   return taskRunIds(state, taskId, descendantTaskIds).filter(
-    (runId) => isLiveAgentRunState(state.runs[runId]?.state),
+    (runId) => isLiveAgentRunState(presentationOf(state.runs[runId])),
   ).length;
 }
 
@@ -107,9 +125,9 @@ export function selectTaskLifecycleChips(
   taskId: string,
   descendantTaskIds: readonly string[] = [],
 ): TaskLifecycleChip[] {
-  const counts = new Map<RawLifecycleState, number>();
+  const counts = new Map<RunPresentationState, number>();
   for (const runId of taskRunIds(state, taskId, descendantTaskIds)) {
-    const lifecycle = state.runs[runId]?.state;
+    const lifecycle = presentationOf(state.runs[runId]);
     if (!lifecycle || !LIFECYCLE_STATE_ORDER.includes(lifecycle)) continue;
     counts.set(lifecycle, (counts.get(lifecycle) ?? 0) + 1);
   }
@@ -126,13 +144,14 @@ export function selectScratchLifecycleChips(
 ): TaskLifecycleChip[] {
   if (state.projectId !== projectId) return [];
 
-  const counts = new Map<RawLifecycleState, number>();
+  const counts = new Map<RunPresentationState, number>();
   for (const run of Object.values(state.runs)) {
     if (run.module_id !== moduleId) continue;
     if (run.scope !== "plan" && run.scope !== "instant") continue;
-    if (!isLiveAgentRunState(run.state)) continue;
-    if (!LIFECYCLE_STATE_ORDER.includes(run.state)) continue;
-    counts.set(run.state, (counts.get(run.state) ?? 0) + 1);
+    const presented = projectRunPresentation(run);
+    if (!isLiveAgentRunState(presented)) continue;
+    if (!LIFECYCLE_STATE_ORDER.includes(presented)) continue;
+    counts.set(presented, (counts.get(presented) ?? 0) + 1);
   }
   return LIFECYCLE_STATE_ORDER.flatMap((lifecycle) => {
     const count = counts.get(lifecycle);
@@ -173,7 +192,7 @@ export type ModuleLifecycleState = (typeof MODULE_LIFECYCLE_STATES)[number];
 export type ModuleLifecycleCounts = Record<ModuleLifecycleState, number>;
 
 function isModuleLifecycleState(
-  state: RawLifecycleState,
+  state: RunPresentationState,
 ): state is ModuleLifecycleState {
   return MODULE_LIFECYCLE_STATES.includes(state as ModuleLifecycleState);
 }
@@ -189,8 +208,14 @@ export function selectModuleLifecycleCounts(
     working: 0,
   };
   for (const run of Object.values(state.runs)) {
-    if (run.module_id !== moduleId || !isModuleLifecycleState(run.state)) continue;
-    counts[run.state] += 1;
+    // A module badge counts agent activity. A shell run is the person's own
+    // terminal and never moves it — declared here rather than left to fall out
+    // of which lifecycle states a run without agent hooks happens to reach,
+    // because that is exactly how the exclusion would regress silently (#670).
+    if (isAgentlessRun(run)) continue;
+    const presented = projectRunPresentation(run);
+    if (run.module_id !== moduleId || !isModuleLifecycleState(presented)) continue;
+    counts[presented] += 1;
   }
   return counts;
 }

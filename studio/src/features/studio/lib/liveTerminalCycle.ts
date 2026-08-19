@@ -1,4 +1,5 @@
 import {
+  isAgentlessRun,
   isLiveAgentRunState,
   type AgentStatusData,
 } from "../../agents/status";
@@ -74,6 +75,10 @@ export function selectLiveTerminalStops({
       const run = agentStatus.runs[session.agentRunId];
       if (
         !run ||
+        // This cycle walks the agent terminals of the work-item tree. A shell
+        // run belongs to the terminal panel and is never a stop in it, stated
+        // here rather than left to the task filter below to imply (#670).
+        isAgentlessRun(run) ||
         run.task_id !== taskId ||
         run.module_id !== moduleId ||
         !isLiveAgentRunState(run.state)

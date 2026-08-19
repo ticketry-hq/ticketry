@@ -43,6 +43,7 @@ import IssueSidebar from "./IssueSidebar";
 import IssueActionsMenu from "./IssueActionsMenu";
 import { LaunchAgentAction } from "./LaunchAgentAction";
 import { SubtreeRunActions } from "./SubtreeRunActions";
+import { RunNowAction } from "./RunNowAction";
 import { readVersionedItem } from "../../../../../shared/storage/versioned";
 
 const DescriptionEditor = lazy(() => import("../documents/DescriptionEditor"));
@@ -235,7 +236,7 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
             aria-label={sidebarVisible ? "Hide details panel" : "Show details panel"}
             title={sidebarVisible ? "Hide details panel" : "Show details panel"}
             data-testid="issue-sidebar-toggle"
-            className={`flex-none rounded p-1 transition-colors hover:bg-pane-title hover:text-text-primary ${
+            className={`flex-none p-1 transition-colors hover:bg-pane-title hover:text-text-primary ${
               sidebarVisible ? "text-text-secondary" : "text-focus-accent"
             }`}
           >
@@ -266,6 +267,12 @@ export default function IssueDetail({ issueId }: { issueId: string }) {
                 { onError: reportMutationError },
               )
             }
+          />
+          <RunNowAction
+            item={task}
+            moduleId={epic?.id ?? null}
+            states={states}
+            issueTypes={issueTypes}
           />
           <SubtreeRunActions task={task} moduleId={epic?.id ?? null} />
         </div>

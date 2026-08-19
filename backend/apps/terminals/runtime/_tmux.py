@@ -319,6 +319,23 @@ class TmuxTerminalRuntime:
         exit_code = exit_codes[0] if len(set(exit_codes)) == 1 and exit_codes else None
         return TerminalObservation(TerminalState.EXITED, exit_code)
 
+    def capture_screen(self, agent_run_id: str) -> bytes:
+        name = _session_name(agent_run_id)
+        try:
+            server = self._server_factory()
+            captured = server.cmd("capture-pane", "-p", "-t", name)
+        except Exception as exc:
+            raise TerminalObservationError(
+                f"could not capture terminal for AgentRun {agent_run_id}"
+            ) from exc
+        if captured.returncode != 0:
+            if _target_is_missing(captured):
+                raise TerminalNotFound(agent_run_id)
+            raise TerminalObservationError(
+                f"could not capture terminal for AgentRun {agent_run_id}"
+            )
+        return "\n".join(captured.stdout or []).encode("utf-8", "replace")
+
     def terminate(self, agent_run_id: str) -> TerminationResult:
         name = _session_name(agent_run_id)
         try:

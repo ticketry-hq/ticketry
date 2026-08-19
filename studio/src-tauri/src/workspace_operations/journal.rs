@@ -7,21 +7,30 @@
 use std::sync::Arc;
 
 use sea_orm::DatabaseConnection;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 use super::{WorkspaceOperationExecutor, WorkspaceOperationReconciler, WorkspaceStateProbe};
 
 #[derive(Clone)]
 pub struct WorkspaceOperationJournal {
     database: DatabaseConnection,
+    write_lock: Arc<Mutex<()>>,
 }
 
 impl WorkspaceOperationJournal {
     pub fn new(database: DatabaseConnection) -> Self {
-        Self { database }
+        Self {
+            database,
+            write_lock: Arc::new(Mutex::new(())),
+        }
     }
 
     pub(crate) fn database(&self) -> &DatabaseConnection {
         &self.database
+    }
+
+    pub(crate) async fn lock_write(&self) -> OwnedMutexGuard<()> {
+        self.write_lock.clone().lock_owned().await
     }
 
     /// Bind the probe and executor that startup reconciliation needs. The

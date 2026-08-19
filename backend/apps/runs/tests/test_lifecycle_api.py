@@ -6,14 +6,16 @@ Ported from ``web/backend/tests/test_lifecycle_events.py``:
 - A recognized kind is reduced and stored as the run's latest state.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
-from django.test import AsyncClient
+from django.test import AsyncClient, override_settings
 
 from apps.runs import dao
 from apps.runs.tests.seeding import aseed_agent_run, seed_agent_run
 from apps.runs.models import AgentRun
+from apps.terminals import launch as terminal_launch
+from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.models import AgentTerminalSession
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
@@ -75,6 +77,7 @@ async def _seed_run(
         project_id="proj-1",
         agent="codex",
         created_at="2026-06-02T10:00:00",
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
         scope=scope,
     )
 
@@ -238,6 +241,51 @@ async def test_non_attention_kind_still_persists_its_state() -> None:
     assert await _state("run-quiet") == "quiet"
 
 
+# --- run-scoped ingress authorization ----------------------------------------
+
+
+async def test_ingest_requires_run_authorization_when_auth_enabled() -> None:
+    await _seed_run("run-auth-missing")
+
+    with override_settings(WORKTRACKER_DISABLE_AUTH=False):
+        response = await client.post(
+            "/lifecycle/events", json=_event("run-auth-missing")
+        )
+
+    assert response.status_code == 401
+    assert await _state("run-auth-missing") is None
+
+
+async def test_ingest_rejects_token_bound_to_another_run() -> None:
+    await _seed_run("run-auth-other")
+
+    foreign = issue_run_authorization("some-other-run")
+    with override_settings(WORKTRACKER_DISABLE_AUTH=False):
+        response = await client.post(
+            "/lifecycle/events",
+            json=_event("run-auth-other"),
+            headers={"Authorization": foreign},
+        )
+
+    assert response.status_code == 401
+    assert await _state("run-auth-other") is None
+
+
+async def test_ingest_accepts_matching_run_authorization() -> None:
+    await _seed_run("run-auth-ok")
+
+    credential = issue_run_authorization("run-auth-ok")
+    with override_settings(WORKTRACKER_DISABLE_AUTH=False):
+        response = await client.post(
+            "/lifecycle/events",
+            json=_event("run-auth-ok"),
+            headers={"Authorization": credential},
+        )
+
+    assert response.status_code == 202
+    assert await _state("run-auth-ok") == "starting"
+
+
 # --- GET /runs/agent-status (T962-S1) ---------------------------------------
 
 
@@ -252,6 +300,10 @@ async def _seed_status_run(
     status: str = "running",
     ended_at: str | None = None,
     scope: str = "task",
+    runtime_namespace: str | None = None,
+    persist_terminal: bool = True,
+    launch_state: str | None = None,
+    launch_model: str | None = None,
 ) -> None:
     await aseed_agent_run(
         AgentRun(
@@ -265,19 +317,25 @@ async def _seed_status_run(
             ended_at=ended_at,
             lifecycle_state=lifecycle_state,
             lifecycle_updated_at=lifecycle_updated_at,
+            launch_state=launch_state,
+            launch_model=launch_model,
             scope=scope,
         )
     )
-    await AgentTerminalSession.objects.acreate(
-        agent_run_id=run_id,
-        tmux_session_name=f"tmux-{run_id}",
-        task_id=task_id or "scratch",
-        module_id="mod-1",
-        project_id=project_id,
-        agent="codex",
-        created_at=started_at,
-        scope=scope,
-    )
+    if persist_terminal:
+        await AgentTerminalSession.objects.acreate(
+            agent_run_id=run_id,
+            tmux_session_name=f"tmux-{run_id}",
+            task_id=task_id or "scratch",
+            module_id="mod-1",
+            project_id=project_id,
+            agent="codex",
+            created_at=started_at,
+            runtime_namespace=(
+                runtime_namespace or terminal_launch.terminal_runtime.namespace
+            ),
+            scope=scope,
+        )
 
 
 async def test_agent_status_returns_snapshot_body_and_all_run_records(
@@ -295,6 +353,8 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
         "with-event", task_id="t1", started_at="2026-07-12T14:00:00+00:00",
         lifecycle_state="needs_input",
         lifecycle_updated_at="2026-07-12T15:00:00+00:00",
+        launch_state="Grill",
+        launch_model="gpt-5-codex",
     )
     await _seed_status_run(
         "pre-event", task_id="t2", started_at="2026-07-12T15:05:00+00:00",
@@ -315,9 +375,23 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
                 "module_id": MODULE_1_ID,
                 "agent": "codex",
                 "scope": "plan",
+                # A run that recorded no launch snapshots projects them as
+                # null; the snapshot never falls back to the work item's
+                # current state or a provider default (#693).
+                "launch_state": None,
+                "launch_model": None,
                 "started_at": "2026-07-12T15:05:00+00:00",
                 "state": "unknown",
                 "updated_at": "2026-07-12T15:05:00+00:00",
+                # No hosted command has reported a result on a live run.
+                "exit_code": None,
+                # Both axes travel in the snapshot. This session has produced no
+                # output and reports no provider state, so it falls back to its
+                # creation-time inactivity origin and projects stalled long
+                # after (#661).
+                "output_sequence": 0,
+                "last_output_at": "2026-07-12T15:05:00+00:00",
+                "effective_state": "stalled",
             },
             {
                 "agent_run_id": "with-event",
@@ -326,9 +400,19 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
                 "module_id": MODULE_1_ID,
                 "agent": "codex",
                 "scope": "task",
+                # A run that recorded them projects exactly what it captured
+                # at launch.
+                "launch_state": "Grill",
+                "launch_model": "gpt-5-codex",
                 "started_at": "2026-07-12T14:00:00+00:00",
                 "state": "needs_input",
                 "updated_at": "2026-07-12T15:00:00+00:00",
+                "exit_code": None,
+                "output_sequence": 0,
+                "last_output_at": "2026-07-12T14:00:00+00:00",
+                # A run waiting on the person keeps that signal however long it
+                # waits: it already explains its own silence (#681).
+                "effective_state": "needs_input",
             },
         ],
         "automation_attempts": [],
@@ -336,9 +420,47 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
     }
 
 
-async def test_agent_status_ended_run_is_an_exited_tombstone() -> None:
+async def test_agent_status_projects_the_inactivity_boundary_at_read_time() -> None:
+    """#661: the snapshot projects both axes without rewriting either."""
+
+    await _seed_status_run(
+        "silent-run",
+        task_id="t1",
+        started_at="2026-07-12T15:00:00+00:00",
+        lifecycle_state="working",
+        lifecycle_updated_at="2026-07-12T15:00:00+00:00",
+    )
+    observed = datetime(2026, 7, 12, 15, 0, tzinfo=timezone.utc)
+
+    just_inside = await dao.agent_status_records(
+        PROJECT_ID,
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
+        now=observed + timedelta(seconds=59),
+    )
+    at_boundary = await dao.agent_status_records(
+        PROJECT_ID,
+        runtime_namespace=terminal_launch.terminal_runtime.namespace,
+        now=observed + timedelta(seconds=60),
+    )
+
+    assert [record.effective_state for record in just_inside] == ["working"]
+    assert [record.effective_state for record in at_boundary] == ["stalled"]
+    # The persisted provider lifecycle record is untouched by either read.
+    assert [record.state for record in at_boundary] == ["working"]
+    run = await AgentRun.objects.aget(id="silent-run")
+    assert run.lifecycle_state == "working"
+
+
+async def test_agent_status_ended_run_is_an_exited_tombstone(monkeypatch) -> None:
     """#978: an ended run must snapshot as `exited` even if its last recorded
     lifecycle event said `working` (or it recorded none at all)."""
+
+    class MockDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 7, 12, 15, 30, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("apps.runs.dao.activity.datetime", MockDatetime)
 
     await _seed_status_run(
         "ended-working", task_id="t1",
@@ -364,6 +486,51 @@ async def test_agent_status_ended_run_is_an_exited_tombstone() -> None:
     assert runs["ended-working"]["updated_at"] == "2026-07-12T15:00:00+00:00"
     assert runs["ended-silent"]["state"] == "exited"
     assert runs["ended-silent"]["updated_at"] == "2026-07-12T14:20:00+00:00"
+
+
+async def test_agent_status_omits_active_run_owned_by_another_runtime() -> None:
+    """A foreign runtime's unresolved row must not create a local live badge."""
+
+    now = datetime.now(timezone.utc).isoformat()
+    await _seed_status_run(
+        "owned",
+        task_id="t1",
+        started_at=now,
+        lifecycle_state="working",
+        lifecycle_updated_at=now,
+    )
+    await _seed_status_run(
+        "foreign-ghost",
+        task_id="t2",
+        started_at=now,
+        lifecycle_state="working",
+        lifecycle_updated_at=now,
+        runtime_namespace="another-runtime",
+    )
+
+    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+
+    assert response.status_code == 200
+    assert [run["agent_run_id"] for run in response.json()["runs"]] == ["owned"]
+
+
+async def test_agent_status_omits_active_run_without_terminal_session() -> None:
+    """An old partial row without a terminal cannot be a live local run."""
+
+    now = datetime.now(timezone.utc).isoformat()
+    await _seed_status_run(
+        "terminal-less-ghost",
+        task_id="t1",
+        started_at=now,
+        lifecycle_state="turn_complete",
+        lifecycle_updated_at=now,
+        persist_terminal=False,
+    )
+
+    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+
+    assert response.status_code == 200
+    assert response.json()["runs"] == []
 
 
 async def test_agent_status_optional_task_filter_is_authoritative_scope() -> None:

@@ -6,6 +6,7 @@ use super::scroll::ScrollGestureSink;
 use super::visibility::NativeTerminalVisibility;
 use super::worker::{run_native_worker, NativeViewerCommand, NativeWorkerExit};
 use super::NativeTerminalFrame;
+use crate::native_terminal_chords::{ChordSink, StudioChord, NATIVE_CHORD_EVENT};
 use crate::terminal_runtime::{TerminalCommandAttachment, TerminalCommandAttachmentControl};
 use rand::Rng;
 use serde::Serialize;

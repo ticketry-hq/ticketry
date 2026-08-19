@@ -16,7 +16,7 @@ use crate::desktop::lifecycle::{
 };
 use crate::desktop::service_state::DesktopServiceState;
 use crate::desktop::startup::initialize_services;
-use crate::{graphql_foundation, native_terminal, viewer_commands};
+use crate::{graphql_foundation, native_terminal, native_terminal_focus_trace, viewer_commands};
 
 pub fn run() {
     let ownership = data_directory_ownership_for_startup();
@@ -54,7 +54,8 @@ pub fn run() {
                 native_terminal::native_terminal_hide,
                 native_terminal::native_terminal_show,
                 native_terminal::native_terminal_focus,
-                native_terminal::native_terminal_detach
+                native_terminal::native_terminal_detach,
+                native_terminal_focus_trace::native_terminal_trace
             ],
             graphql_api,
         ))

@@ -56,6 +56,8 @@ export const queryKeys = {
       ["workflows", "project", projectId] as const,
     byIssueType: (issueTypeId: string) =>
       ["workflows", "issue-type", issueTypeId] as const,
+    transitionsByIssueType: (issueTypeId: string) =>
+      ["workflows", "issue-type", issueTypeId, "transitions"] as const,
     stateCounts: (projectId: string) =>
       ["workflows", "state-counts", projectId] as const,
   },

@@ -293,8 +293,10 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         recent=0,
     )
 
+    fetched_tasks = []
+
     async def get_task_details(project_id, task_id):
-        del project_id, task_id
+        fetched_tasks.append((project_id, task_id))
         return TaskDetails(
             task=TaskSummary(
                 id=str(issue.id),
@@ -359,8 +361,10 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
     )
 
     command = runtime.requests[0].command
+    assert fetched_tasks == [(str(issue.project_id), str(issue.id))]
     assert "Configured workflow prompt" in command
     assert "Required skills available for this invocation: to-spec" in command
+    assert "Additional user instructions:" not in command
     assert "--plugin-dir" not in command
     assert "LEGACY PROFILE PROMPT" not in command
     assert "--model sonnet" in command

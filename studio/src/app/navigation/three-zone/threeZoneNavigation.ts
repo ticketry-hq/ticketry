@@ -1,5 +1,6 @@
 import type { TreeRow } from "../../shell/ticket-workspace/tasks/TasksPane";
-import { useClientStore } from "../../../state/clientStore";
+import { isEngageableZone, useClientStore } from "../../../state/clientStore";
+import { useTerminalPanelStore } from "../../../features/terminal-panel/panelStore";
 import { routeTaskWorkspaceEditViewAction } from "../../shell/ticket-workspace/selected-ticket/appNavigation";
 import { isTypingTarget } from "../../../shared/utilities/keyboard";
 import {
@@ -49,19 +50,22 @@ export function routeThreeZoneNavigation(
     case "active-tab-body":
       routed = routeActiveTabBodyZone(event, actionId);
       break;
+    case "terminal-panel":
+      routed = routeTerminalPanelZone(event, actionId);
+      break;
   }
   if (routed) ctx.ui.setNavigationModality("keyboard");
   return routed;
 }
 
 /**
- * Gives an engaged body every key except Cmd+Escape.
+ * Gives an engaged body every key except Cmd+Escape. The terminal panel engages
+ * the same way, so leaving its shell is the one chord a developer already knows
+ * — and it leaves typing without closing the panel (#669).
  */
 export function routeThreeZoneBodyEngagement(event: KeyboardEvent): boolean {
   const ui = useClientStore.getState();
-  const isEngaged =
-    ui.editViewZone === "active-tab-body" &&
-    ui.editViewBodyEngaged;
+  const isEngaged = isEngageableZone(ui.editViewZone) && ui.editViewBodyEngaged;
   if (!isEngaged) return false;
 
   if (
@@ -75,12 +79,42 @@ export function routeThreeZoneBodyEngagement(event: KeyboardEvent): boolean {
     event.stopImmediatePropagation();
     ui.setEditViewBodyEngaged(false);
     ui.setNavigationModality("keyboard");
+    // Focus lands on the zone the developer was typing in, so the panel stays
+    // open and stays the current zone.
     document
       .querySelector<HTMLElement>(
-        '[data-navigation-zone="active-tab-body"]',
+        `[data-navigation-zone="${ui.editViewZone}"]`,
       )
       ?.focus({ preventScroll: true });
   }
+  return true;
+}
+
+/**
+ * The panel is a single surface with one shell in it, so its zone-local keys are
+ * just the routes out of it and the route back into typing.
+ */
+function routeTerminalPanelZone(
+  event: KeyboardEvent,
+  actionId: string,
+): boolean {
+  if (actionId === "edit-view.commit") {
+    consume(event);
+    useClientStore.getState().setEditViewBodyEngaged(true);
+    useTerminalPanelStore.getState().focusShell();
+    return true;
+  }
+
+  const destination =
+    actionId === "edit-view.up"
+      ? "active-tab-body"
+      : actionId === "edit-view.left"
+        ? "stories"
+        : null;
+  if (!destination) return false;
+
+  consume(event);
+  useClientStore.getState().setEditViewZone(destination);
   return true;
 }
 
@@ -119,7 +153,7 @@ function routeStoriesZone(
     case "edit-view.left":
       return setTaskExpanded(ctx, false);
     case "edit-view.right":
-      return expandTaskOrExitToTabStrip(ctx);
+      return expandTaskOrDiveActiveBody(ctx);
     case "edit-view.commit":
       return workspaceActionHandled(
         routeTaskWorkspaceEditViewAction(ctx.event, "dive-active"),
@@ -164,26 +198,28 @@ function workspaceActionHandled(
   return outcome !== "unavailable";
 }
 
-function expandTaskOrExitToTabStrip(
+/**
+ * Right expands while expansion remains; otherwise it dives straight into the
+ * remembered Active tab body, exactly where Enter lands. The workspace tab
+ * strip is a sibling navigation zone, not a waypoint on this route.
+ *
+ * Only the expand branch needs a work-item row: rows without expansion of
+ * their own (the scratch workspace row) fall through to the same dive Enter
+ * takes, so Right always lands where Enter lands.
+ */
+function expandTaskOrDiveActiveBody(
   ctx: ReturnType<typeof createNavigationContext>,
 ): boolean {
   const row = currentTaskRow(ctx);
-  if (!row) return false;
-  if (row.expandable && !row.expanded) {
+  if (row?.expandable && !row.expanded) {
     consume(ctx.event);
     const moduleId = ctx.tasks.selectedModuleId;
     if (moduleId) ctx.ui.setExpanded(moduleId, row.id, true);
     return true;
   }
-  if (
-    routeTaskWorkspaceEditViewAction(ctx.event, "probe-navigable") ===
-    "unavailable"
-  ) {
-    return false;
-  }
-  consume(ctx.event);
-  ctx.ui.setEditViewZone("tab-strip");
-  return true;
+  return workspaceActionHandled(
+    routeTaskWorkspaceEditViewAction(ctx.event, "dive-active"),
+  );
 }
 
 function setTaskExpanded(

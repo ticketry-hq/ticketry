@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { SelectedTicketDetails } from "../app/shell/ticket-workspace/selected-ticket/details/SelectedTicketDetails";
@@ -77,5 +77,32 @@ describe("overhaul acceptance — module scratch workspace", () => {
     expect(await screen.findByTestId("scratch-run-chicklets")).toHaveTextContent(
       "▶1",
     );
+  });
+
+  it("[overhaul-127] clears a ghost scratch badge when the authoritative snapshot omits its foreign or orphaned run", () => {
+    useAgentStatusStore.getState().upsertRun({
+      agent_run_id: "foreign-ghost",
+      project_id: "project-1",
+      task_id: null,
+      module_id: "module-1",
+      agent: "codex",
+      scope: "instant",
+      state: "working",
+      started_at: "2026-08-10T12:00:00Z",
+      updated_at: "2026-08-10T12:00:00Z",
+    });
+
+    render(<SelectedTicketDetails />);
+    expect(screen.getByTestId("scratch-run-chicklets")).toHaveTextContent("▶1");
+
+    act(() => {
+      useAgentStatusStore.getState().reconcileScope(
+        { project_id: "project-1", task_id: null },
+        [],
+        "2026-08-12T12:00:00Z",
+      );
+    });
+
+    expect(screen.getByText("No active Scratch runs.")).toBeVisible();
   });
 });

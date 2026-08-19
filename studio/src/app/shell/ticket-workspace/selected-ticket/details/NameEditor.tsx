@@ -54,7 +54,7 @@ export default function NameEditor({
           setEditing(false);
         }
       }}
-      className="w-full rounded-md border border-pane-border bg-pane-bg px-2 py-1 text-lg font-semibold text-text-primary outline-none focus:border-focus-accent"
+      className="w-full border border-pane-border bg-pane-bg px-2 py-1 text-lg font-semibold text-text-primary outline-none focus:border-focus-accent"
     />
   );
 }

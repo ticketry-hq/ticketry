@@ -22,6 +22,7 @@ import monoLatinUrl from "@fontsource-variable/jetbrains-mono/files/jetbrains-mo
 import "./app/styles/tailwind.css";
 import "./app/styles/studio-surface.css";
 import { createDesktopRuntime } from "./runtime/desktopRuntime";
+import { suppressNativeContextMenu } from "./app/startup/suppressNativeContextMenu";
 import {
   initializeBrowserRuntime,
   initializeStudioRuntime,
@@ -29,6 +30,10 @@ import {
 
 if (import.meta.env.DEV && isTauri()) {
   installFrontendLogBridge({ invoke });
+}
+
+if (isTauri()) {
+  suppressNativeContextMenu();
 }
 
 // Studio uses the dark theme from boot.

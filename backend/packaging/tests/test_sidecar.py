@@ -1037,4 +1037,9 @@ def test_shared_settings_keep_development_defaults_but_close_the_admin():
         check=True,
     )
 
-    assert json.loads(result.stdout) == [True, "muxed-localhost-only", ["*"], False]
+    assert json.loads(result.stdout) == [
+        True,
+        "muxed-localhost-only",
+        ["localhost", "127.0.0.1", "[::1]", "testserver"],
+        False,
+    ]

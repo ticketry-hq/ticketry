@@ -138,6 +138,7 @@ def test_state_out_serializes_is_protected(client, project, auth):
     assert all("is_protected" in s for s in states)
     protected = {s["name"] for s in states if s["is_protected"]}
     assert protected == {
+        "Ideas",
         "Grill",
         "Spec",
         "Tickets",

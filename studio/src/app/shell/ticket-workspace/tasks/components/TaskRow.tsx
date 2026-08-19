@@ -12,6 +12,7 @@ import {
 } from "../../../../../features/agents/lifecycle";
 import { TEMP_TASK_ID } from "../../../../../features/agents/types";
 import { useStudioStore } from "../../../../../features/projects";
+import { WorkItemRowLabel } from "./WorkItemRowLabel";
 import { useClientStore } from "../../../../../state/clientStore";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -210,7 +211,11 @@ function PlanningRowView({
         </span>
       )}
 
-      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <WorkItemRowLabel
+        identifier={identifier}
+        stateColor={stateColor}
+        name={name}
+      />
 
       {isScratch ? (
         <ScratchTaskStateBadge moduleId={scratchModuleId} />
@@ -228,16 +233,6 @@ function PlanningRowView({
           />
         </>
       )}
-
-      {identifier ? (
-        <span
-          data-task-id-token
-          className={`ml-2 shrink-0 ${stateColor ? "" : "text-text-muted"}`}
-          style={stateColor ? { color: stateColor } : undefined}
-        >
-          {identifier}
-        </span>
-      ) : null}
     </li>
   );
 }

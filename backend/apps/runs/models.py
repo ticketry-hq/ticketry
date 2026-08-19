@@ -13,10 +13,11 @@ class AgentRun(models.Model):
         Issue, on_delete=models.CASCADE, related_name="agent_runs"
     )
     ticket_seq = models.IntegerField(null=True)
-    # Immutable launch-time snapshot. `agent` is the resolved provider.
+    # Immutable launch-time provider configuration.
     model = models.CharField(null=True)
     reasoning = models.CharField(null=True)
-    agent = models.CharField()
+    # Null for an agentless shell run.
+    agent = models.CharField(null=True)
     status = models.CharField()
     started_at = models.CharField()
     ended_at = models.CharField(null=True)
@@ -28,6 +29,9 @@ class AgentRun(models.Model):
     lifecycle_updated_at = models.CharField(null=True)
     design_dir = models.CharField(null=True)
     resumed_from = models.CharField(null=True)
+    # Write-once snapshots of the workflow state and model used at launch.
+    launch_state = models.CharField(null=True)
+    launch_model = models.CharField(null=True)
     # Hooks can report lifecycle before the terminal-session mirror exists, so
     # the run itself owns the durable routing scope.
     scope = models.CharField()

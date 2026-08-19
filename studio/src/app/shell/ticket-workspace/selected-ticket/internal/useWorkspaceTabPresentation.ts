@@ -2,7 +2,11 @@ import type {
   DesignDoc,
   ResumableTerminalSession,
 } from "../../../../../features/agents/types";
-import type { SessionTab } from "../../../../../features/agents/terminal";
+import {
+  presentDormantTerminalChips,
+  type SessionTab,
+} from "../../../../../features/agents/terminal";
+import { useAgentStatusStore } from "../../../../../features/agents/status";
 import {
   DEFAULT_WORKSPACE,
   useClientStore as useTicketWorkspaceStore,
@@ -51,6 +55,16 @@ export function useWorkspaceTabPresentation({
     moduleId,
     excludedRunIds: resumableRunIds,
   });
+  // Dormant chips are the same runs the strip labels, so they are presented by
+  // the same rule from the same durable records (#695). The run store supplies
+  // liveness and, for a run still inside the status window, a second copy of
+  // the launch snapshot the listing already carries.
+  const runs = useAgentStatusStore((state) => state.runs);
+  const dormantChips = presentDormantTerminalChips({
+    resumableSessions: resumable,
+    history: visibleHistory,
+    runs,
+  });
   const activeDocument =
     openDocuments.find((document) => document.id === workspace.activeDocId) ??
     openDocuments[0] ??
@@ -85,7 +99,7 @@ export function useWorkspaceTabPresentation({
     openDocuments,
     closedDocuments,
     resumable,
-    visibleHistory,
+    dormantChips,
     activeDocument,
     activeKind,
     navigableTabs,

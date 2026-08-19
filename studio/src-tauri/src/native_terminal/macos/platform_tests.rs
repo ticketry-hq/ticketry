@@ -68,6 +68,104 @@ mod tests {
         assert!(off_main.join().unwrap().is_ok());
     }
 
+    // AppKit modifier bits and virtual key codes used by the chord policy.
+    const CONTROL: u64 = 1 << 18;
+    const OPTION: u64 = 1 << 19;
+    const COMMAND: u64 = 1 << 20;
+    const SHIFT: u64 = 1 << 17;
+    const CAPS_LOCK: u64 = 1 << 16;
+    const GRAVE_KEY: u16 = 0x32;
+    const ESCAPE_KEY: u16 = 0x35;
+    const E_KEY: u16 = 0x0E;
+
+    fn studio_chord(modifier_flags: u64, key_code: u16) -> Option<StudioChord> {
+        StudioChord::from_native(unsafe { muxed_ghostty_studio_chord(modifier_flags, key_code) })
+    }
+
+    #[test]
+    fn control_grave_is_the_panel_toggle_the_view_keeps_from_the_terminal() {
+        assert_eq!(
+            studio_chord(CONTROL, GRAVE_KEY),
+            Some(StudioChord::PanelToggle)
+        );
+        // A stuck caps lock is not a chord modifier.
+        assert_eq!(
+            studio_chord(CONTROL | CAPS_LOCK, GRAVE_KEY),
+            Some(StudioChord::PanelToggle)
+        );
+
+        // Exact modifier match, like the Studio keymap: anything else is
+        // ordinary terminal input and still reaches libghostty.
+        assert_eq!(studio_chord(CONTROL | SHIFT, GRAVE_KEY), None);
+        assert_eq!(studio_chord(CONTROL | OPTION, GRAVE_KEY), None);
+        assert_eq!(studio_chord(CONTROL | COMMAND, GRAVE_KEY), None);
+        assert_eq!(studio_chord(0, GRAVE_KEY), None);
+        assert_eq!(studio_chord(CONTROL, ESCAPE_KEY), None);
+    }
+
+    #[test]
+    fn command_e_is_the_settings_chord_and_typing_e_is_not() {
+        assert_eq!(studio_chord(COMMAND, E_KEY), Some(StudioChord::Settings));
+        assert_eq!(
+            studio_chord(COMMAND | CAPS_LOCK, E_KEY),
+            Some(StudioChord::Settings)
+        );
+
+        // Someone typing into the terminal keeps every unmodified letter, and
+        // Ctrl+E stays the shell's own end-of-line binding.
+        assert_eq!(studio_chord(0, E_KEY), None);
+        assert_eq!(studio_chord(SHIFT, E_KEY), None);
+        assert_eq!(studio_chord(CONTROL, E_KEY), None);
+        assert_eq!(studio_chord(OPTION, E_KEY), None);
+        assert_eq!(studio_chord(COMMAND | SHIFT, E_KEY), None);
+        assert_eq!(studio_chord(COMMAND | CONTROL, E_KEY), None);
+    }
+
+    #[test]
+    fn a_recognised_chord_reaches_the_chord_sink() {
+        let (reported, chords) = mpsc::channel();
+        let sink = ChordSink::new(move |chord| {
+            let _ = reported.send(chord);
+        });
+        let context = Arc::into_raw(Arc::clone(&sink)) as *mut c_void;
+
+        unsafe { report_studio_chord(context, 1) };
+        unsafe { report_studio_chord(context, 2) };
+
+        assert_eq!(chords.try_recv(), Ok(StudioChord::PanelToggle));
+        assert_eq!(chords.try_recv(), Ok(StudioChord::Settings));
+        release_chord_context(context as usize);
+    }
+
+    #[test]
+    fn an_unrecognised_chord_code_is_not_reported() {
+        let (reported, chords) = mpsc::channel();
+        let sink = ChordSink::new(move |chord| {
+            let _ = reported.send(chord);
+        });
+        let context = Arc::into_raw(Arc::clone(&sink)) as *mut c_void;
+
+        unsafe { report_studio_chord(context, 0) };
+
+        assert!(chords.try_recv().is_err());
+        release_chord_context(context as usize);
+    }
+
+    #[test]
+    fn a_chord_from_a_detaching_viewer_is_not_reported() {
+        let (reported, chords) = mpsc::channel();
+        let sink = ChordSink::new(move |chord| {
+            let _ = reported.send(chord);
+        });
+        let context = Arc::into_raw(Arc::clone(&sink)) as *mut c_void;
+
+        sink.stop_accepting();
+        unsafe { report_studio_chord(context, 2) };
+
+        assert!(chords.try_recv().is_err());
+        release_chord_context(context as usize);
+    }
+
     #[test]
     fn child_exit_callback_queues_attachment_completion() {
         let (worker, commands) = mpsc::channel::<NativeViewerCommand>();
@@ -108,9 +206,9 @@ mod tests {
                 view: 1,
                 worker: first_worker.clone(),
                 scroll_sink: ScrollGestureSink::new(first_worker),
-                scroll_context: 0,
-                process_context: 0,
-                visibility: NativeTerminalVisibility::Visible,
+                chord_sink: ChordSink::new(|_| {}),
+                contexts: NativeViewContexts::default(),
+                visibility: NativeTerminalVisibility::visible(),
                 preparation_phase: Arc::new(AtomicU8::new(PRESENTED)),
             },
         );
@@ -121,9 +219,9 @@ mod tests {
                 view: 2,
                 worker: second_worker.clone(),
                 scroll_sink: ScrollGestureSink::new(second_worker),
-                scroll_context: 0,
-                process_context: 0,
-                visibility: NativeTerminalVisibility::Visible,
+                chord_sink: ChordSink::new(|_| {}),
+                contexts: NativeViewContexts::default(),
+                visibility: NativeTerminalVisibility::visible(),
                 preparation_phase: Arc::new(AtomicU8::new(PRESENTED)),
             },
         );
@@ -147,9 +245,9 @@ mod tests {
                 view: 7,
                 worker: worker.clone(),
                 scroll_sink: ScrollGestureSink::new(worker),
-                scroll_context: 0,
-                process_context: 0,
-                visibility: NativeTerminalVisibility::Visible,
+                chord_sink: ChordSink::new(|_| {}),
+                contexts: NativeViewContexts::default(),
+                visibility: NativeTerminalVisibility::visible(),
                 preparation_phase: Arc::new(AtomicU8::new(PRESENTED)),
             },
         );
@@ -157,8 +255,8 @@ mod tests {
         {
             let mut registry = entries.lock().expect("registry");
             let entry = registry.get_mut("native-retained").expect("entry");
-            assert!(entry.visibility.hide());
-            assert!(!entry.visibility.hide());
+            assert!(entry.visibility.hide(false));
+            assert!(!entry.visibility.hide(false));
             assert!(entry.visibility.show_after_frame(120, 36).unwrap());
             assert!(!entry.visibility.show_after_frame(120, 36).unwrap());
             entry
@@ -211,9 +309,9 @@ mod tests {
                 view: 0,
                 worker: worker.clone(),
                 scroll_sink: ScrollGestureSink::new(worker),
-                scroll_context: 0,
-                process_context: 0,
-                visibility: NativeTerminalVisibility::Hidden,
+                chord_sink: ChordSink::new(|_| {}),
+                contexts: NativeViewContexts::default(),
+                visibility: NativeTerminalVisibility::hidden(),
                 preparation_phase: Arc::clone(&reservation.phase),
             },
         );

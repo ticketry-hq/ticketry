@@ -23,6 +23,13 @@ export type LifecycleState =
   | "error"
   | "unknown";
 
+// The render-facing vocabulary (#661). `stalled` is the effective presentation
+// of a still-live run whose terminal output has not changed for 60 seconds. It
+// is never emitted by an adapter, never reduced from an event kind, and never
+// persisted as a run's lifecycle state — the projection in
+// features/agents/status/runPresentation.ts is its only source.
+export type TerminalPresentationState = LifecycleState | "stalled";
+
 // What an adapter reports happened. The reducer maps a kind to a state, so the
 // wire vocabulary (kinds) stays decoupled from the rendered vocabulary (states).
 export type LifecycleEventKind =
@@ -111,7 +118,7 @@ export interface LifecyclePresentation {
 
 // Single source of truth for how each state renders. `unknown` is intentionally
 // blank so an unwired/degraded session shows no badge rather than a guess.
-const PRESENTATION: Record<LifecycleState, LifecyclePresentation> = {
+const PRESENTATION: Record<TerminalPresentationState, LifecyclePresentation> = {
   starting: {
     label: "Starting",
     glyph: "○",
@@ -161,6 +168,16 @@ const PRESENTATION: Record<LifecycleState, LifecyclePresentation> = {
     // Honest about the heuristic: inactivity is not a confirmed completion.
     title: "No recent activity (heuristic — not a confirmed completion)",
   },
+  stalled: {
+    label: "Stalled",
+    glyph: "◴",
+    tone: "idle",
+    priority: 1,
+    needsAttention: false,
+    // Honest about what was actually observed: quiet output, not a dead,
+    // failed, or completed process.
+    title: "Terminal output has not changed for 60 seconds (the session is still live)",
+  },
   reconnecting: {
     label: "Reconnecting",
     glyph: "⟳",
@@ -204,7 +221,9 @@ const PRESENTATION: Record<LifecycleState, LifecyclePresentation> = {
 };
 
 // Look up the render-facing view of a state.
-export function presentLifecycle(state: LifecycleState): LifecyclePresentation {
+export function presentLifecycle(
+  state: TerminalPresentationState,
+): LifecyclePresentation {
   return PRESENTATION[state];
 }
 

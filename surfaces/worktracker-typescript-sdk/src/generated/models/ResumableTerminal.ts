@@ -15,6 +15,14 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { ScopeEnum } from './ScopeEnum.js';
+import {
+    ScopeEnumFromJSON,
+    ScopeEnumFromJSONTyped,
+    ScopeEnumToJSON,
+    ScopeEnumToJSONTyped,
+} from './ScopeEnum.js';
+
 /**
  *
  * @export
@@ -50,6 +58,24 @@ export interface ResumableTerminal {
      * @type {string}
      * @memberof ResumableTerminal
      */
+    launch_state: string | null;
+    /**
+     *
+     * @type {string}
+     * @memberof ResumableTerminal
+     */
+    launch_model: string | null;
+    /**
+     *
+     * @type {ScopeEnum}
+     * @memberof ResumableTerminal
+     */
+    scope: ScopeEnum;
+    /**
+     *
+     * @type {string}
+     * @memberof ResumableTerminal
+     */
     provider_session_id: string;
     /**
      *
@@ -59,6 +85,8 @@ export interface ResumableTerminal {
     resumed_from: string | null;
 }
 
+
+
 /**
  * Check if a given object implements the ResumableTerminal interface.
  */
@@ -67,6 +95,9 @@ export function instanceOfResumableTerminal(value: object): value is ResumableTe
     if (!('agent' in value) || value['agent'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('started_at' in value) || value['started_at'] === undefined) return false;
+    if (!('launch_state' in value) || value['launch_state'] === undefined) return false;
+    if (!('launch_model' in value) || value['launch_model'] === undefined) return false;
+    if (!('scope' in value) || value['scope'] === undefined) return false;
     if (!('provider_session_id' in value) || value['provider_session_id'] === undefined) return false;
     if (!('resumed_from' in value) || value['resumed_from'] === undefined) return false;
     return true;
@@ -86,6 +117,9 @@ export function ResumableTerminalFromJSONTyped(json: any, ignoreDiscriminator: b
         'agent': json['agent'],
         'status': json['status'],
         'started_at': json['started_at'],
+        'launch_state': json['launch_state'],
+        'launch_model': json['launch_model'],
+        'scope': ScopeEnumFromJSON(json['scope']),
         'provider_session_id': json['provider_session_id'],
         'resumed_from': json['resumed_from'],
     };
@@ -106,6 +140,9 @@ export function ResumableTerminalToJSONTyped(value?: ResumableTerminal | null, i
         'agent': value['agent'],
         'status': value['status'],
         'started_at': value['started_at'],
+        'launch_state': value['launch_state'],
+        'launch_model': value['launch_model'],
+        'scope': ScopeEnumToJSON(value['scope']),
         'provider_session_id': value['provider_session_id'],
         'resumed_from': value['resumed_from'],
     };

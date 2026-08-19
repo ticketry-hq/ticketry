@@ -21,6 +21,7 @@ const terminalApi = vi.hoisted(() => ({
   getTerminals: vi.fn(),
   listResumableTerminals: vi.fn(),
   resumeTerminal: vi.fn(),
+  terminateTerminal: vi.fn(),
 }));
 
 const documentRegistry = vi.hoisted(() => ({
@@ -67,7 +68,6 @@ function session(
     projectId: "project-1",
     moduleId: "module-1",
     agent: "codex",
-    ticketSeq: 1,
     status,
     transport: status === "ready" ? "ready" : "closed",
     isPlanning: false,
@@ -115,6 +115,7 @@ describe("overhaul acceptance — terminals", () => {
       expandedIdsByModule: {},
       workspaces: {},
       activeByTask: {},
+      toasts: [],
     });
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useAgentStatusStore.setState({
@@ -197,8 +198,8 @@ describe("overhaul acceptance — terminals", () => {
     expect(useClientStore.getState().collapsedStateIds.has("todo")).toBe(false);
   });
 
-  it("[overhaul-16] resumes a dormant run into a selected terminal tab", async () => {
-    terminalApi.listResumableTerminals.mockResolvedValue([{
+  it("[overhaul-16] closes, refreshes, and resumes a provider conversation in place", async () => {
+    const resumableSession = {
       agent_run_id: "run-old",
       agent: "codex",
       status: "exited",
@@ -206,15 +207,38 @@ describe("overhaul acceptance — terminals", () => {
       ended_at: "2026-08-07T12:30:00Z",
       provider_session_id: "provider-session",
       resumed_from: null,
-      scope: "task",
-    }]);
+      scope: "task" as const,
+    };
+    terminalApi.listResumableTerminals
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([resumableSession]);
+    terminalApi.terminateTerminal.mockResolvedValue({
+      agent_run_id: "run-old",
+      terminated: true,
+    });
     terminalApi.resumeTerminal.mockResolvedValue({
       agent_run_id: "run-new",
       resumed_from: "run-old",
     });
+    useTerminalStore.setState({
+      sessions: {
+        "session-old": session("session-old", "story-1", "run-old"),
+      },
+      sessionByRun: { "run-old": "session-old" },
+    });
+    useClientStore.setState({
+      workspaces: {
+        "story-1": {
+          active: "terminal",
+          activeDocId: null,
+          closedDocIds: [],
+        },
+      },
+      activeByTask: { "story-1": "session-old" },
+    });
     useAgentStatusStore.setState({
       runs: {
-        "run-old": run("run-old", "story-1", "exited"),
+        "run-old": run("run-old", "story-1"),
       },
     });
 
@@ -224,17 +248,38 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={350}
           owner="studio"
-          details={<div>Issue details</div>}
+          details={<input aria-label="Issue title draft" defaultValue="Draft" />}
         />
       </QueryClientProvider>,
     );
 
+    const draft = screen.getByRole("textbox", { name: "Issue title draft" });
+    fireEvent.change(draft, { target: { value: "Unsaved title" } });
+    await waitFor(() => {
+      expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
+      .not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Close codex terminal",
+    }));
+
     const resume = await screen.findByRole("button", {
       name: "Resume codex terminal",
     });
-    expect(screen.queryByText("codex ✕")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "codex terminal" }))
+      .not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", {
+      name: "Resume codex terminal",
+    })).toHaveLength(1);
+    expect(terminalApi.terminateTerminal).toHaveBeenCalledWith("run-old");
+    expect(terminalApi.listResumableTerminals).toHaveBeenCalledTimes(2);
+    expect(terminalApi.terminateTerminal.mock.invocationCallOrder[0])
+      .toBeLessThan(terminalApi.listResumableTerminals.mock.invocationCallOrder[1]);
+    expect(screen.getByRole("textbox", { name: "Issue title draft" }))
+      .toHaveValue("Unsaved title");
 
     fireEvent.click(resume);
 
@@ -247,8 +292,10 @@ describe("overhaul acceptance — terminals", () => {
     expect(useClientStore.getState().workspaces["story-1"]?.active).toBe(
       "terminal",
     );
-    expect(screen.getByRole("tab", { name: "T-350 · codex" }))
+    expect(screen.getByRole("tab", { name: "codex terminal" }))
       .toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("button", { name: "Resume codex terminal" }))
+      .not.toBeInTheDocument();
   });
 
 });

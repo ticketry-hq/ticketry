@@ -112,8 +112,15 @@ export MUXED_RELEASE_PUBLISH_COMMAND='["node","scripts/github-release-publisher.
 npm run release:publish -- --target macos-aarch64
 ```
 
-The destination repository must be private. Keep `GITHUB_TOKEN` in the
-environment only; the publisher never includes it in logs or release notes.
+The destination repository must be private. This is a publish-time guard
+only: the publisher checks repository visibility when an actual publish is
+attempted and refuses to publish unsigned artifacts to a repository that is
+not private. `release:validate` and CI never consult repository visibility,
+so a public source repository keeps a green pipeline. While this repository
+is public and no signing credentials exist, no binary releases are published
+at all — the application is distributed as source only. Keep `GITHUB_TOKEN`
+in the environment only; the publisher never includes it in logs or release
+notes.
 The local and remote `0.1.0` tags must already exist, and an existing release
 on that tag is never overwritten. Publishing the supported unsigned developer
 build requires a separate acknowledgement:
@@ -205,7 +212,8 @@ backend, SDK, and Rust test/build checks, builds and verifies the host-native
 sidecar, runs the release contract tests, and runs `release:validate`.
 `release:validate` checks manifest structure, declared files and migrations,
 component versions, and the finalized-defaults artifact validation gate. It
-does not check credentials or perform a real release build. CI never runs
+does not check credentials, repository visibility, or perform a real release
+build; it passes whether the repository is private or public. CI never runs
 `release:build`, bundles a `.app` or `.dmg`, signs, notarizes, runs
 installed-artifact acceptance, or publishes. The packaging path can therefore
 rot undetected between manual releases. Closing this gap is deliberately out

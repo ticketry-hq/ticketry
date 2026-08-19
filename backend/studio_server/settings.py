@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 from apps.settings_store.config import CONFIG_DIR
 from studio_server.database import default_database_settings
 
@@ -8,9 +10,26 @@ from studio_server.database import default_database_settings
 # Muxed is a localhost developer tool; these defaults match that posture.
 # Override via the environment when running anywhere that isn't a single-user
 # local machine.
-SECRET_KEY = os.getenv("MUXED_SECRET_KEY", "muxed-localhost-only")
 DEBUG = os.getenv("MUXED_DEBUG", "true").lower() in ("1", "true", "yes")
-ALLOWED_HOSTS = os.getenv("MUXED_ALLOWED_HOSTS", "*").split(",")
+
+# The hardcoded fallback secret exists only for DEBUG development runs. A
+# non-DEBUG process (the packaged sidecar, or any production-shaped start)
+# must supply its own key — a well-known signing secret would let any local
+# process forge the run-scoped Bearer credentials minted with it.
+SECRET_KEY = os.getenv("MUXED_SECRET_KEY", "")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "MUXED_SECRET_KEY must be set when MUXED_DEBUG is false; the "
+            "built-in fallback secret is for local development only."
+        )
+    SECRET_KEY = "muxed-localhost-only"
+
+# The backend is a loopback sidecar; ``testserver`` is Django's test-client
+# host. Anything wider must be an explicit operator decision via the env var.
+ALLOWED_HOSTS = os.getenv(
+    "MUXED_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver"
+).split(",")
 # The Django admin is a development affordance, not a product surface
 # (T1419 / ADR-0013). It fails closed: every entrypoint that wants it — only
 # ``scripts/dev.sh`` today — opts in explicitly, so starting this same code

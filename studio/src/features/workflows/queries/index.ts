@@ -53,6 +53,10 @@ export function setWorkflowSettings(
     queryKeys.workflows.byIssueType(workflow.issue_type_id),
     workflow,
   );
+  queryClient.setQueryData(
+    queryKeys.workflows.transitionsByIssueType(workflow.issue_type_id),
+    workflow.transitions,
+  );
 }
 
 export function getWorkflowSettingsSnapshot(

@@ -1,5 +1,9 @@
 import { useCallback, useEffect } from "react";
 import { statusStreamFeed } from "../../features/agents/status/stream/statusStreamFeed";
+import {
+  startStallDeadlines,
+  stopStallDeadlines,
+} from "../../features/agents/status";
 import { useStudioStore } from "../../features/projects";
 import { useClientStore } from "../../state/clientStore";
 import OnboardingTour from "../onboarding/OnboardingTour";
@@ -28,7 +32,11 @@ export function StudioShell() {
     const createProxy = statusStreamTransport();
     if (!createProxy) return;
     statusStreamFeed.start(selectedProjectId, { createProxy });
-    return () => statusStreamFeed.stop();
+    startStallDeadlines();
+    return () => {
+      statusStreamFeed.stop();
+      stopStallDeadlines();
+    };
   }, [selectedProjectId]);
 
   return (

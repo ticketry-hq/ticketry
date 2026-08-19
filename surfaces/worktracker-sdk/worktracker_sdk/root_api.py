@@ -43,6 +43,17 @@ class LaunchedAgentOut(BaseModel):
     agent_run_id: str
 
 
+class CommittedStateOut(BaseModel):
+    id: str
+    name: str
+
+
+class RunNowOut(BaseModel):
+    target_id: str
+    committed_state: CommittedStateOut
+    run: LaunchedAgentOut
+
+
 class _RootApi:
     def __init__(self, api_client: ApiClient | None = None) -> None:
         self.api_client = api_client or ApiClient.get_default()
@@ -59,6 +70,8 @@ class _RootApi:
         path_params: dict[str, str | UUID],
         body: dict[str, Any] | None,
         success_status: int,
+        headers: dict[str, str] | None = None,
+        error_type: str = "object",
     ) -> Any:
         request = self.api_client.param_serialize(
             method=method,
@@ -67,6 +80,7 @@ class _RootApi:
             header_params={
                 "Accept": "application/json",
                 **({"Content-Type": "application/json"} if body is not None else {}),
+                **(headers or {}),
             },
             body=body,
             auth_settings=["ApiKeyAuth"],
@@ -77,8 +91,8 @@ class _RootApi:
         response.read()
         response_types = {
             str(success_status): "object",
-            "4XX": "object",
-            "5XX": "object",
+            "4XX": error_type,
+            "5XX": error_type,
         }
         return self.api_client.response_deserialize(
             response_data=response,
@@ -130,6 +144,28 @@ class ExecutionApi(_RootApi):
             success_status=200,
         )
         return ResetGraphOut.model_validate(data)
+
+    def run_now(
+        self,
+        target_id: str | UUID,
+        *,
+        origin: str,
+        authorization: str | None = None,
+    ) -> RunNowOut:
+        data = self._request(
+            "POST",
+            "/work-tracker/work-items/{target_id}/run-now",
+            path_params={"target_id": target_id},
+            body={"origin": origin},
+            success_status=201,
+            error_type="RunNowRefusal",
+            headers=(
+                {"Authorization": authorization}
+                if authorization is not None
+                else None
+            ),
+        )
+        return RunNowOut.model_validate(data)
 
 
 class LaunchApi(_RootApi):

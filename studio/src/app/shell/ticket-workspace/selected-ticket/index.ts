@@ -18,4 +18,3 @@ export {
   useClientStore as useTicketWorkspaceStore,
 } from "../../../../state/clientStore";
 export { closeTerminalTab } from "./internal/closeTerminalTab";
-export { terminalLabel } from "./internal/terminalLabel";

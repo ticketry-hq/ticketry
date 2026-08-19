@@ -1,23 +1,12 @@
 import { type FormEvent, useState } from "react";
 import { apiErrorMessage } from "../../shared/api/client";
-import type { ProviderCatalog } from "../../shared/api/types";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
 import { getConfigSnapshot } from "../../features/studio/stores/configStore";
 import { useStudioStore } from "../../features/projects";
-import {
-  setProviderCapabilities,
-  updateProviderCatalog,
-} from "../../features/workflows";
-import { acknowledgeOnboarding } from "./onboardingStore";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 import { OnboardingProviders } from "./OnboardingProviders";
 
 type WelcomePane = "providers" | "project";
-
-const EMPTY_CATALOG: ProviderCatalog = {
-  activated_providers: [],
-  global_default: null,
-};
 
 export default function OnboardingWelcome() {
   const projectsEnabled = getConfigSnapshot().features.projects;
@@ -27,9 +16,7 @@ export default function OnboardingWelcome() {
   const [name, setName] = useState("Coding");
   const [slug, setSlug] = useState("CDN");
   const [creating, setCreating] = useState(false);
-  const [skipping, setSkipping] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [skipError, setSkipError] = useState<string | null>(null);
 
   const continueFromProviders = async () => {
     if (projectsEnabled) {
@@ -48,7 +35,7 @@ export default function OnboardingWelcome() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (creating || skipping || !name.trim() || !slug.trim()) return;
+    if (creating || !name.trim() || !slug.trim()) return;
     setCreating(true);
     setCreateError(null);
     try {
@@ -66,26 +53,12 @@ export default function OnboardingWelcome() {
     }
   };
 
-  const skip = async () => {
-    if (skipping) return;
-    setSkipping(true);
-    setSkipError(null);
-    try {
-      await updateProviderCatalog(EMPTY_CATALOG);
-      setProviderCapabilities([]);
-      await acknowledgeOnboarding();
-    } catch (cause) {
-      setSkipError(apiErrorMessage(cause));
-      setSkipping(false);
-    }
-  };
-
   return (
     <div
       className="flex h-full w-full items-center justify-center overflow-y-auto bg-pane-bg px-6 py-8"
       data-testid="onboarding-welcome"
     >
-      <main className="w-full max-w-xl rounded-xl border border-pane-border bg-pane-panel p-8 shadow-xl">
+      <main className="w-full max-w-xl border border-pane-border bg-pane-panel p-8 shadow-xl">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-focus-accent">
           Welcome to WorkTracker
         </div>
@@ -113,7 +86,7 @@ export default function OnboardingWelcome() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   data-testid="onboarding-project-name"
-                  className="mt-2 block w-full rounded-md border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
+                  className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
                 />
               </label>
               <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-text-secondary">
@@ -123,7 +96,7 @@ export default function OnboardingWelcome() {
                   onChange={(event) => setSlug(event.target.value)}
                   maxLength={3}
                   data-testid="onboarding-project-key"
-                  className="mt-2 block w-full rounded-md border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm font-normal tracking-normal text-text-primary outline-none focus:border-focus-accent"
+                  className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm font-normal tracking-normal text-text-primary outline-none focus:border-focus-accent"
                 />
                 <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-text-muted">
                   Project key must be exactly three letters, using only A-Z.
@@ -144,10 +117,10 @@ export default function OnboardingWelcome() {
                 <button
                   type="submit"
                   disabled={
-                    creating || skipping || !name.trim() || !slug.trim()
+                    creating || !name.trim() || !slug.trim()
                   }
                   data-testid="onboarding-create-project"
-                  className="rounded-md bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
+                  className="bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creating ? "Creating…" : "Create project"}
                 </button>
@@ -156,26 +129,6 @@ export default function OnboardingWelcome() {
           </>
         )}
 
-        {skipError ? (
-          <p
-            data-testid="onboarding-skip-error"
-            role="alert"
-            className="mt-4 text-sm text-lifecycle-danger"
-          >
-            {skipError}
-          </p>
-        ) : null}
-        <div className="mt-4">
-          <button
-            type="button"
-            disabled={skipping}
-            onClick={() => void skip()}
-            data-testid="onboarding-skip"
-            className="rounded-md px-3 py-2 text-sm font-semibold text-text-muted hover:text-text-primary disabled:opacity-50"
-          >
-            {skipping ? "Skipping…" : skipError ? "Retry skip" : "Skip"}
-          </button>
-        </div>
       </main>
     </div>
   );

@@ -132,6 +132,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
             "edges": {
                 ("Ideas", "Grill", True),
                 ("Ideas", "Spec", True),
+                ("Ideas", "Implement", True),
                 ("Grill", "Ideas", True),
                 ("Grill", "Spec", True),
                 ("Grill", "Cancelled", True),
@@ -139,6 +140,7 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
                 ("Spec", "Cancelled", True),
                 ("Tickets", "Implement", False),
                 ("Tickets", "Cancelled", True),
+                ("Implement", "Grill", True),
                 ("Implement", "Review", True),
                 ("Implement", "Cancelled", True),
                 ("Review", "Implement", True),
@@ -180,7 +182,9 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
         } == expected["edges"]
 
     story_prompts = REVIEWED_DEFAULTS["prompts"]["Story"]
-    assert "interactive grill session" in story_prompts["Ideas"]
+    assert "small, unambiguous, and self-contained" in story_prompts["Ideas"]
+    assert "`run_now`" in story_prompts["Ideas"]
+    assert "never use a bare state move" in story_prompts["Ideas"]
     assert "`Grill`" in story_prompts["Ideas"]
     assert "`Spec`" in story_prompts["Ideas"]
     assert "Do not implement" in story_prompts["Ideas"]
@@ -193,6 +197,9 @@ def test_artifact_declares_the_matt_style_fresh_project_contract():
     assert "Implementation children" in story_prompts["Tickets"]
     assert "`Implement`" in story_prompts["Tickets"]
     assert "`Spec`" not in story_prompts["Tickets"]
+    assert "no Implementation children" in story_prompts["Implement"]
+    assert "larger or more ambiguous" in story_prompts["Implement"]
+    assert "move the Story to `Grill`" in story_prompts["Implement"]
     for prompts in REVIEWED_DEFAULTS["prompts"].values():
         assert "directly in `Implement`" in prompts["Review"]
         assert "directly in `Ready`" not in prompts["Review"]

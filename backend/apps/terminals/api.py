@@ -15,6 +15,7 @@ from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals import dao
 from apps.terminals.control_plane import create_terminal_run
 from apps.terminals.models import AgentTerminalSession
+from apps.terminals.output_activity import report_native_output
 from apps.terminals.launch import (
     LaunchUnavailable,
     ResumeUnavailable,
@@ -33,6 +34,7 @@ from apps.terminals.validation import SpawnRequest, _validate_init
 from apps.terminals import viewer_leases
 from apps.settings_store.config import NoConfigurationSelected
 from apps.runs.models import AgentRun
+from apps.runs.run_scopes import SHELL_SCOPE
 
 
 class CreateTerminalRunBody(BaseModel):
@@ -60,6 +62,12 @@ class ViewerLeaseBody(BaseModel):
 class ViewerLeaseReleaseBody(BaseModel):
     agent_run_id: str
     viewer_id: str
+
+
+class ViewerOutputReportBody(BaseModel):
+    """One native viewer's report that its durable session produced output."""
+
+    agent_run_id: str
 
 
 def _viewer_lease_payload(lease: viewer_leases.ViewerLease) -> dict[str, Any]:
@@ -118,6 +126,24 @@ def release_viewer_lease(body: ViewerLeaseReleaseBody):
         viewer_id=body.viewer_id,
     )
     return {"released": released}
+
+
+def report_viewer_output(body: ViewerOutputReportBody):
+    """Record one native viewer's output observation for its durable session.
+
+    The native renderer owns its own PTY, so it reports only that output
+    happened; the shared activity operation still captures the screen, decides
+    whether the output identity changed, and publishes the run projection. An
+    unchanged screen — a reconnect or reload redraw — advances nothing.
+
+    This is status telemetry for a terminal the person is watching: an unknown
+    run, an ended session, a failed capture, or a failed publication is
+    reported as `observed: false` rather than as an error the renderer must
+    handle.
+    """
+
+    observed = async_to_sync(report_native_output)(body.agent_run_id)
+    return {"agent_run_id": body.agent_run_id, "observed": observed}
 
 
 def _create_request_as_spawn_init(
@@ -213,6 +239,10 @@ def list_terminals(task_id: str) -> list[dict[str, Any]]:
             runtime_namespace=terminal_launch.terminal_runtime.namespace,
         )
         if session.scope != "docchat"
+        # A shell run carries the scratch sentinel as its task, so a listing
+        # asked for that sentinel would otherwise return one. Shells belong to
+        # their own module surface, never to a work item's tab strip (#666).
+        and session.scope != SHELL_SCOPE
     ]
     payload = [_terminal_session_payload(s) for s in sessions]
     schedule_terminal_reconciliation()
@@ -258,9 +288,16 @@ def list_resumable_terminals(
                 }
             else:
                 return []
-            terminated_query = AgentRun.objects.filter(
-                ended_at__isnull=False, **scope
-            ).exclude(scope="docchat")
+            terminated_query = (
+                AgentRun.objects.filter(ended_at__isnull=False, **scope)
+                .exclude(scope="docchat")
+                # A run with no provider has no conversation to resume, and the
+                # resume chip is labelled with the agent it would relaunch. Such
+                # a run never reaches here anyway (it carries no
+                # provider_session_id), but the exclusion is declared rather
+                # than inferred (#665).
+                .exclude(scope=SHELL_SCOPE)
+            )
             # Scratch history is deliberately limited to the two launch modes
             # rendered in the Scratch workspace. A sentinel-task doc-chat (or
             # any future scratch-only mode) must not consume a resume chip.
@@ -309,6 +346,17 @@ def list_resumable_terminals(
             "agent": run.agent,
             "status": run.status,
             "started_at": run.started_at,
+            # The launch snapshot travels with the dormant listing so a resume
+            # chip names the phase its conversation began in without waiting
+            # for — or being limited by — the status snapshot's recency window
+            # (#695). Null stays null: an unrecorded phase is never guessed.
+            "launch_state": run.launch_state,
+            "launch_model": run.launch_model,
+            # A scratch Plan or Instant run records no launch state by design,
+            # so its routing scope is the only durable source for the word its
+            # resume chip shows (#708). It travels here for the same reason the
+            # launch snapshot does.
+            "scope": run.scope,
             "provider_session_id": run.provider_session_id,
             "resumed_from": run.resumed_from,
         }
@@ -331,6 +379,9 @@ def list_scratch_terminals(
         for session in scratch_sessions
         if session.project_id == project_id
         and session.scope != "docchat"
+        # A shell run shares the scratch sentinel task but belongs to its own
+        # surface, not the Scratch workspace tab strip (#665).
+        and session.scope != SHELL_SCOPE
         and (module_id is None or session.module_id == module_id)
     ]
     payload = [_terminal_session_payload(s) for s in sessions]

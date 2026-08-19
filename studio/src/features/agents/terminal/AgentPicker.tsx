@@ -26,7 +26,6 @@ export interface AgentPickerPayload {
    * runs launched from Studio work-item surfaces.
    */
   taskId?: string;
-  ticketSeq?: number | null;
   /** Optional surface callback after a launch has been placed in its workspace. */
   onLaunched?: () => void;
 }
@@ -81,7 +80,6 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
         projectId,
         moduleId,
         agent,
-        ticketSeq: null,
         initialPrompt: prompt,
         isPlanning: false,
         isInstant: true,
@@ -100,14 +98,11 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
       popModal();
       return;
     }
-    const ticketSeq =
-      payload?.ticketSeq ?? null;
     launchAgent({
       taskId,
       projectId,
       moduleId,
       agent,
-      ticketSeq,
       initialPrompt: prompt,
       isPlanning: false,
     });
@@ -151,7 +146,7 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
             <li
               key={a}
               onClick={() => commit(a)}
-              className={`cursor-pointer rounded px-2 py-1 ${
+              className={`cursor-pointer px-2 py-1 ${
                 i === cursor
                   ? "bg-selection-bg text-text-primary"
                   : "hover:bg-pane-title"

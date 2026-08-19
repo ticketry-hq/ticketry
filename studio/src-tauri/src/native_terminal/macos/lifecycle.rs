@@ -81,6 +81,25 @@ fn spawn_worker(setup: WorkerSetup) {
     });
 }
 
+/// Builds the sink that forwards each recognised Studio chord to the WebView.
+/// The native view only reports the chord; the WebView keymap binding stays
+/// the single owner of what that chord means.
+fn chord_sink(window: &tauri::WebviewWindow, handle: &str, run_id: &str) -> Arc<ChordSink> {
+    let window = window.clone();
+    let handle = handle.to_owned();
+    let run_id = run_id.to_owned();
+    ChordSink::new(move |chord: StudioChord| {
+        let _ = window.emit(
+            NATIVE_CHORD_EVENT,
+            NativeTerminalChord {
+                handle: handle.clone(),
+                run_id: run_id.clone(),
+                chord: chord.as_str(),
+            },
+        );
+    })
+}
+
 fn take_native_entry(
     entries: &Arc<Mutex<HashMap<String, NativeEntry>>>,
     handle: &str,
@@ -97,19 +116,25 @@ fn take_native_entry(
 fn free_view(
     window: &tauri::WebviewWindow,
     view: usize,
-    scroll_context: usize,
-    process_context: usize,
+    contexts: NativeViewContexts,
 ) -> tauri::Result<()> {
     window.run_on_main_thread(move || {
         unsafe {
             muxed_ghostty_view_disable_scroll_callback(view as *mut c_void);
+            muxed_ghostty_view_disable_chord_callback(view as *mut c_void);
             muxed_ghostty_view_disable_resize_callback(view as *mut c_void);
             muxed_ghostty_view_disable_process_exit_callback(view as *mut c_void);
             muxed_ghostty_view_free(view as *mut c_void);
         };
-        release_scroll_context(scroll_context);
-        release_process_context(process_context);
+        release_view_contexts(contexts);
     })
+}
+
+/// Drops every leaked callback context handed to one native view.
+fn release_view_contexts(contexts: NativeViewContexts) {
+    release_scroll_context(contexts.scroll);
+    release_chord_context(contexts.chord);
+    release_process_context(contexts.process);
 }
 
 /// Drops the leaked `Arc<ScrollGestureSink>` handed to a native view.
@@ -118,6 +143,14 @@ fn release_scroll_context(scroll_context: usize) {
         return;
     }
     drop(unsafe { Arc::from_raw(scroll_context as *const ScrollGestureSink) });
+}
+
+/// Drops the leaked `Arc<ChordSink>` handed to a native view.
+fn release_chord_context(chord_context: usize) {
+    if chord_context == 0 {
+        return;
+    }
+    drop(unsafe { Arc::from_raw(chord_context as *const ChordSink) });
 }
 
 fn release_process_context(process_context: usize) {
@@ -135,14 +168,9 @@ fn cleanup_entry(
     let Some(entry) = take_native_entry(entries, handle) else {
         return;
     };
-    entry.scroll_sink.stop_accepting();
+    entry.stop_accepting_events();
     let _ = entry.worker.send(NativeViewerCommand::Detach);
-    let _ = free_view(
-        window,
-        entry.view,
-        entry.scroll_context,
-        entry.process_context,
-    );
+    let _ = free_view(window, entry.view, entry.contexts);
 }
 
 fn close_worker_entry(
@@ -153,13 +181,8 @@ fn close_worker_entry(
     let Some(entry) = take_native_entry(entries, handle) else {
         return;
     };
-    entry.scroll_sink.stop_accepting();
-    let _ = free_view(
-        window,
-        entry.view,
-        entry.scroll_context,
-        entry.process_context,
-    );
+    entry.stop_accepting_events();
+    let _ = free_view(window, entry.view, entry.contexts);
 }
 
 fn new_handle() -> String {

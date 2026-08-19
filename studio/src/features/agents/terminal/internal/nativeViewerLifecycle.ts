@@ -10,6 +10,7 @@ import {
 } from "./nativeTerminalPreparation";
 import {
   nativeFailureMessage,
+  NATIVE_TERMINAL_HOST_NOT_VISIBLE,
   type NativeTerminalCompletion,
   type NativeTerminalFailure,
   type NativeTerminalStatus,
@@ -26,6 +27,11 @@ import {
   forgetNativeViewer,
   showNativeViewer,
 } from "./nativeViewerPresentation";
+import {
+  desktopOutputActivity,
+  reportNativeViewerAttached,
+  type OutputActivityClient,
+} from "./nativeOutputActivity";
 import { createViewerLease, desktopViewerLease } from "./viewerLease";
 
 type NativeViewerLifecycleOptions = {
@@ -34,6 +40,8 @@ type NativeViewerLifecycleOptions = {
   token: symbol;
   host: () => HTMLElement | null;
   shouldPresent: () => boolean;
+  /** Overridden only by tests; production always reports to the backend. */
+  outputActivity?: OutputActivityClient;
 };
 
 /**
@@ -48,6 +56,7 @@ export function ensureNativeViewerLifecycle({
   token,
   host,
   shouldPresent,
+  outputActivity = desktopOutputActivity,
 }: NativeViewerLifecycleOptions): void {
   let disposed = false;
   let unlistenFailure: UnlistenFn | null = null;
@@ -141,13 +150,12 @@ export function ensureNativeViewerLifecycle({
       const attachmentHost = host();
       if (!attachmentHost) throw new Error("native terminal host was not mounted");
       const frame = clippedNativeTerminalFrame(attachmentHost);
-      if (!frame) throw new Error("native terminal host has no visible frame");
+      if (!frame) throw new Error(NATIVE_TERMINAL_HOST_NOT_VISIBLE);
       const preparation = publishPreparationFrames(attachmentHost, runId, frame);
       let status: NativeTerminalStatus | null;
       let initiallyPresented = false;
       try {
         const activation = await attachNativeViewer(
-          runId,
           () => serializeNativeAttach(runId, async () => {
             if (disposed || tornDown) return null;
             const attached = await invoke<NativeTerminalStatus>(
@@ -204,6 +212,12 @@ export function ensureNativeViewerLifecycle({
       if (settled.columns <= 0 || settled.rows <= 0) {
         throw new Error("native terminal renderer returned an empty grid");
       }
+      // Retire the compatibility viewer before claiming native ownership.
+      // Acquiring the desktop lease while xterm's WebSocket still owns the run
+      // makes the backend evict that socket as `replaced_by_another_viewer`.
+      // The socket then marks the shared session exited and React tears down
+      // the native surface that was meant to replace it.
+      releasePooledTransport(sessionId);
       const acquired = await viewerLease.acquire();
       if (!acquired || disposed || tornDown) {
         const detachedHandle = handle;
@@ -241,13 +255,17 @@ export function ensureNativeViewerLifecycle({
         return;
       }
       attachmentHost.replaceChildren();
-      releasePooledTransport(sessionId);
       publishNativeViewerHandle(
         runId,
         token,
         status.handle,
         initiallyPresented,
       );
+      // One report, at the moment this viewer takes the run: it re-observes a
+      // session the backend sweep may already have projected as stalled. The
+      // sweep, not the viewer, keeps observing from here — visibility and
+      // attachment are not evidence about output either way.
+      reportNativeViewerAttached(outputActivity, runId);
       leaseTimer = setInterval(() => {
         void viewerLease.renew().catch((error) => {
           if (!disposed) failNativeViewerMount(runId, nativeFailureMessage(error));

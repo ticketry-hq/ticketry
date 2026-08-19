@@ -6,7 +6,7 @@ import {
 } from "./internal/sessionStore";
 import { launchAgent } from "./internal/actions";
 import type { SessionId, TaskId } from "../types";
-import type { LifecycleState } from "./lifecycle";
+import type { TerminalPresentationState } from "./lifecycle";
 import {
   isLiveAgentRunState,
   selectRunState,
@@ -34,7 +34,15 @@ export function launchSession(args: OpenSessionArgs): SessionId {
 export interface SessionTab {
   id: SessionId;
   meta: SessionMeta;
-  lifecycle: LifecycleState;
+  lifecycle: TerminalPresentationState;
+  /**
+   * Launch facts the durable run captured at spawn (#693), carried through so
+   * the strip can label a tab by the phase its conversation began in. Null on a
+   * run that recorded none — never substituted from the work item's current
+   * state.
+   */
+  launchState: string | null;
+  launchModel: string | null;
 }
 
 export function deriveTaskSessions(
@@ -60,12 +68,14 @@ export function deriveTaskSessions(
         left.sessionId.localeCompare(right.sessionId);
     })
     .map((meta) => {
+      const run = meta.agentRunId ? runs[meta.agentRunId] : undefined;
       const runState = selectRunState(
         {
           projectId: null,
           runs,
           automationAttempts: {},
           automationByTask: {},
+          stallEpoch: 0,
         },
         meta.agentRunId ?? "",
       );
@@ -74,13 +84,19 @@ export function deriveTaskSessions(
       // projection reports alive must not be presented as lost just because
       // an earlier viewer failed to attach (the backend may have healed the
       // session since).
-      const lifecycle: LifecycleState =
+      const lifecycle: TerminalPresentationState =
         meta.status === "reconnecting"
           ? "reconnecting"
           : meta.status === "session_lost" && !isLiveAgentRunState(runState)
             ? "lost"
             : (runState ?? "unknown");
-      return { id: meta.sessionId, meta, lifecycle };
+      return {
+        id: meta.sessionId,
+        meta,
+        lifecycle,
+        launchState: run?.launch_state ?? null,
+        launchModel: run?.launch_model ?? null,
+      };
     });
 }
 
@@ -90,6 +106,10 @@ export function deriveTaskSessions(
 export function useTaskSessions(taskId: TaskId | null): SessionTab[] {
   const sessions = useTerminalStore((s) => s.sessions);
   const runStates = useAgentStatusStore((s) => s.runs);
+  // A run can change presentation with no run fact changing at all — the clock
+  // simply passed its unchanged-output deadline. The epoch is what tells this
+  // memo to reproject then.
+  const stallEpoch = useAgentStatusStore((s) => s.stallEpoch);
   return useMemo(
     () => deriveTaskSessions(
       taskId,
@@ -97,7 +117,7 @@ export function useTaskSessions(taskId: TaskId | null): SessionTab[] {
       runStates,
       taskId ? dismissedRunsFor(taskId) : new Set(),
     ),
-    [taskId, sessions, runStates],
+    [taskId, sessions, runStates, stallEpoch],
   );
 }
 

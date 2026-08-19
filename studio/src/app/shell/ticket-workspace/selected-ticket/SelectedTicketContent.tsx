@@ -61,7 +61,6 @@ export function SelectedTicketContent({
   bucket,
   projectId,
   moduleId,
-  ticketSeq,
   owner,
   details,
   launchContext = null,
@@ -72,12 +71,6 @@ export function SelectedTicketContent({
   bucket: string | null;
   projectId: string | null;
   moduleId: string | null;
-  /**
-   * Work-item sequence behind this ticket workspace, used only to compose the
-   * compact `T-<sequence>` terminal-tab label. Absent for scratch workspaces
-   * and unresolved data, which keep their identifier-free labels.
-   */
-  ticketSeq?: number | null;
   owner: ForegroundOwner;
   details: ReactNode;
   launchContext?: WorkspaceLauncherContext | null;
@@ -243,7 +236,7 @@ export function SelectedTicketContent({
     openDocuments: openDocs,
     closedDocuments: closedDocs,
     resumable,
-    visibleHistory,
+    dormantChips,
     activeDocument: activeDoc,
     activeKind: effActive,
     navigableTabs,
@@ -354,7 +347,6 @@ export function SelectedTicketContent({
         activeTerminalId={activeTermId}
         documents={openDocs}
         terminalTabs={tabs}
-        ticketSeq={ticketSeq}
         bucket={bucket}
         launchContext={launchContext}
         activatedProviders={activatedProviders}
@@ -371,7 +363,8 @@ export function SelectedTicketContent({
       <DormantWorkspaceTabs
         closedDocuments={closedDocs}
         resumableSessions={resumable}
-        visibleHistory={visibleHistory}
+        resumableChips={dormantChips.resumable}
+        historyChips={dormantChips.history}
         resumingRunId={resumingRunId}
         onReopenDocument={reopenWorkspaceDocument}
         onResumeTerminal={(session) => void resumeWorkspaceTerminal(session)}

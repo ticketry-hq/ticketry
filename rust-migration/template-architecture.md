@@ -2,20 +2,20 @@
 
 ## What was inspected
 
-The reference template is
-`/Users/karthik/merge_conflicts/general/tauri-graphql-template`. The review read
+The reference template is a local checkout of the `tauri-graphql-template`
+repository; template paths below are relative to that checkout. The review read
 its root guidance, README, architecture/stability/model-addition documents,
 Cargo and package manifests, database composition and migrations, generated
 entities and schema, GraphQL/TauRPC transport, Apollo link/client/codegen,
 drift-verification scripts, and Rust/TypeScript tests. Principal sources are:
 
-- `/Users/karthik/merge_conflicts/general/tauri-graphql-template/README.md`
-- `/Users/karthik/merge_conflicts/general/tauri-graphql-template/docs/architecture.md`
-- `/Users/karthik/merge_conflicts/general/tauri-graphql-template/docs/adding-a-model.md`
-- `/Users/karthik/merge_conflicts/general/tauri-graphql-template/docs/stability-boundary.md`
-- `/Users/karthik/merge_conflicts/general/tauri-graphql-template/src-tauri/src/db/`
-- `/Users/karthik/merge_conflicts/general/tauri-graphql-template/crates/tauri-graphql/`
-- `/Users/karthik/merge_conflicts/general/tauri-graphql-template/src/graphql/`
+- `README.md`
+- `docs/architecture.md`
+- `docs/adding-a-model.md`
+- `docs/stability-boundary.md`
+- `src-tauri/src/db/`
+- `crates/tauri-graphql/`
+- `src/graphql/`
 
 ## The template's useful architecture
 
@@ -49,8 +49,7 @@ model. Its output is byte-compared in the drift check.
 At runtime it opens `application.sqlite3` under Tauri's application-data
 directory, enables foreign keys, limits the SQLite pool to four connections,
 runs forward migrations, builds the schema, and installs the TauRPC endpoint
-(`/Users/karthik/merge_conflicts/general/tauri-graphql-template/src-tauri/src/db/`;
-`/Users/karthik/merge_conflicts/general/tauri-graphql-template/src-tauri/src/app.rs`).
+(the template's `src-tauri/src/db/` and `src-tauri/src/app.rs`).
 Calls made before initialization receive a
 structured service-unavailable error rather than racing partially composed
 state.
@@ -58,7 +57,7 @@ state.
 The transport supports unary GraphQL execution and subscription IDs backed by
 Tauri channels. Subscription buffers are bounded at 256, and unsubscribe aborts
 and removes the task
-(`/Users/karthik/merge_conflicts/general/tauri-graphql-template/crates/tauri-graphql/src/endpoint.rs`).
+(the template's `crates/tauri-graphql/src/endpoint.rs`).
 Studio therefore needs no HTTP server, port allocation, CORS, per-launch API
 secret, or WebSocket just to call its own backend.
 
@@ -88,8 +87,7 @@ The template tests multiple boundaries instead of relying on one happy path:
 
 Relevant locations are the template's `src-tauri/tests/`,
 `crates/tauri-graphql/tests/`, `src/graphql/*.test.ts`, and
-`scripts/verify-generated.mjs`, all under
-`/Users/karthik/merge_conflicts/general/tauri-graphql-template/`.
+`scripts/verify-generated.mjs`, all inside the template checkout.
 
 Ticketry should add a second testing dimension: characterization/differential
 cases against current Django. The template proves its own mechanics, not
@@ -101,7 +99,7 @@ Its stability boundary says it has not established production behavior for
 foreign-key relations, field hiding, authorization, lifecycle hooks, custom
 model operations, custom GraphQL error mapping, production subscriptions, or
 updater/signing integration
-(`/Users/karthik/merge_conflicts/general/tauri-graphql-template/docs/stability-boundary.md`).
+(the template's `docs/stability-boundary.md`).
 Those are not peripheral gaps for Ticketry:
 
 - nearly all important data is relational;

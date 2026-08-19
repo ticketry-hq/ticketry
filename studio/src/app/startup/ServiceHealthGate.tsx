@@ -4,10 +4,7 @@ import {
   type ServiceHealth,
   type StudioRuntime,
 } from "../../runtime";
-
-function reloadStudio(): void {
-  window.location.reload();
-}
+import { reloadStudio } from "./reloadStudio";
 
 export function ServiceHealthGate({
   children,
@@ -75,7 +72,7 @@ export function ServiceHealthGate({
             type="button"
             disabled={retrying}
             onClick={() => void retry()}
-            className="mt-5 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            className="mt-5 bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
             {retrying ? "Retrying…" : "Retry"}
           </button>

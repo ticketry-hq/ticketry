@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
-import { terminalLabel } from "../app/shell/ticket-workspace/selected-ticket/internal/terminalLabel";
+import { presentTerminalRuns } from "../features/agents/terminal";
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status";
 import {
@@ -55,7 +55,6 @@ function session(
     projectId: "project-1",
     moduleId: "module-1",
     agent: "codex",
-    ticketSeq: 1,
     status,
     transport: status === "ready" ? "ready" : "closed",
     isPlanning: false,
@@ -69,13 +68,19 @@ function run(
   agentRunId: string,
   taskId: string,
   state: "working" | "exited" | "lost" = "working",
+  launchState: string | null = null,
 ) {
   return {
     agent_run_id: agentRunId,
     task_id: taskId,
     module_id: "module-1",
+    // An agent run names its provider. The tab label reads it from the record;
+    // nothing substitutes one when it is absent (#665).
+    agent: "codex",
     scope: "task" as const,
     state,
+    launch_state: launchState,
+    launch_model: null,
     started_at: "2026-08-07T12:00:00Z",
     updated_at: "2026-08-07T12:00:00Z",
   };
@@ -112,17 +117,18 @@ describe("overhaul acceptance — terminals", () => {
     terminalApi.listResumableTerminals.mockResolvedValue([]);
   });
 
-  it("[overhaul-35] labels task-bound terminal tabs with the compact ticket identifier", async () => {
-    // A live spawn carries its own sequence; a restored attach carries none and
-    // must read the workspace's sequence instead. Both land in the same strip.
+  it("[overhaul-35] labels task-bound terminal tabs with their captured launch state", async () => {
+    // A live spawn and a restored attach both read the launch state their own
+    // durable run recorded — never the ticket identifier the workspace already
+    // shows, and never the Story's current state.
     useTerminalStore.setState({
       sessions: { "session-live": session("session-live", "story-1", "run-live") },
       sessionByRun: { "run-live": "session-live" },
     });
     useAgentStatusStore.setState({
       runs: {
-        "run-live": run("run-live", "story-1"),
-        "run-restored": run("run-restored", "story-1"),
+        "run-live": run("run-live", "story-1", "working", "Grill"),
+        "run-restored": run("run-restored", "story-1", "working", "Spec"),
       },
     });
     act(() => {
@@ -134,7 +140,7 @@ describe("overhaul acceptance — terminals", () => {
     const restored = Object.values(useTerminalStore.getState().sessions).find(
       (meta) => meta.agentRunId === "run-restored",
     );
-    expect(restored?.ticketSeq).toBeNull();
+    expect(restored?.taskId).toBe("story-1");
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -142,7 +148,6 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={350}
           owner="studio"
           details={<div>Issue details</div>}
         />
@@ -150,34 +155,39 @@ describe("overhaul acceptance — terminals", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getAllByRole("tab", { name: "T-350 · codex" })).toHaveLength(2);
+      expect(screen.getByRole("tab", { name: "Grill codex terminal" }))
+        .toBeInTheDocument();
     });
+    expect(screen.getByRole("tab", { name: "Spec codex terminal" }))
+      .toBeInTheDocument();
     expect(
-      screen.getAllByRole("button", { name: "Close terminal T-350 · codex" }),
-    ).toHaveLength(2);
+      screen.getByRole("button", { name: "Close Grill codex terminal" }),
+    ).toBeInTheDocument();
+    // The strip never repeats the ticket the workspace is already showing.
+    expect(screen.getByTestId("workspace-tabs")).not.toHaveTextContent("T-350");
 
     // Identity, persistence, and run ownership stay on the opaque identifiers.
     expect(useTerminalStore.getState().sessionByRun["run-live"]).toBe("session-live");
 
-    const scratchPlan = {
-      ...session("session-plan", "story-1", "run-plan"),
-      taskId: null,
-      ticketSeq: null,
+    // Scratch runs have no workflow state and keep their lowercase launch
+    // modes; a run that recorded no launch state shows no invented word.
+    const scratch = {
+      key: "scratch",
+      agent: "codex",
+      launchState: null,
+      launchModel: null,
       isPlanning: true,
+      isInstant: false,
+      live: true,
     };
-    // Scratch, taskless, and sequence-less sessions keep identifier-free labels,
-    // and no candidate sequence can compose a `T-null`/`T-undefined` label.
-    expect(terminalLabel(scratchPlan)).toBe("plan");
-    expect(terminalLabel({ ...scratchPlan, isPlanning: false, isInstant: true }))
-      .toBe("instant");
-    expect(terminalLabel({ ...scratchPlan, isPlanning: false })).toBe("codex");
-    expect(terminalLabel({ ...scratchPlan, isPlanning: false }, null)).toBe("codex");
-    expect(terminalLabel({ ...scratchPlan, isPlanning: false }, undefined))
-      .toBe("codex");
-    expect(terminalLabel({ ...scratchPlan, isPlanning: false }, Number.NaN))
-      .toBe("codex");
-    expect(terminalLabel(session("session-x", "story-1", "run-x"), 350))
-      .toBe("T-350 · codex");
+    expect(presentTerminalRuns([scratch])[0].label).toBe("plan");
+    expect(
+      presentTerminalRuns([{ ...scratch, isPlanning: false, isInstant: true }])[0]
+        .label,
+    ).toBe("instant");
+    const unrecorded = presentTerminalRuns([{ ...scratch, isPlanning: false }])[0];
+    expect(unrecorded.label).toBe("");
+    expect(unrecorded.accessibleName).toBe("codex terminal");
   });
 
   it("[overhaul-49] restores a persisted terminal when its run projection arrives later", async () => {
@@ -192,7 +202,6 @@ describe("overhaul acceptance — terminals", () => {
           bucket="story-1"
           projectId="project-1"
           moduleId="module-1"
-          ticketSeq={1}
           owner="studio"
           details={<div>Issue details</div>}
         />
@@ -213,8 +222,167 @@ describe("overhaul acceptance — terminals", () => {
         expect.objectContaining({ agentRunId: "run-late" }),
       );
     });
-    expect(screen.getByRole("tab", { name: "T-1 · codex" }))
-      .toBeInTheDocument();
+    // Its run recorded no launch state, so the tab shows no phase — but the
+    // provider Studio does know about is still carried by colour.
+    const tab = screen.getByRole("tab", { name: "codex terminal" });
+    expect(tab).toBeInTheDocument();
+    expect(tab).not.toHaveTextContent("codex");
+    expect(tab).toHaveClass("text-provider-codex");
   });
 
+  it("[overhaul-111] gives dormant terminal chips the same launch identity as the tab for the same run", async () => {
+    // A resumable conversation and a terminated one are the same kind of thing
+    // the strip is showing, so they read the same way (#695).
+    terminalApi.listResumableTerminals.mockResolvedValue([
+      {
+        agent_run_id: "run-resumable",
+        agent: "codex",
+        status: "terminated",
+        started_at: "2026-08-07T11:00:00Z",
+        launch_state: "Grill",
+        launch_model: "gpt-5",
+        scope: "task",
+        provider_session_id: "sess-1",
+        resumed_from: null,
+      },
+      {
+        // A scratch Instant run records no launch state by design, and this one
+        // ended long enough ago that no run record survives in the status
+        // store — its own scope is the only thing left to name it (#708).
+        agent_run_id: "run-aged-scratch",
+        agent: "codex",
+        status: "terminated",
+        started_at: "2026-06-01T09:00:00Z",
+        launch_state: null,
+        launch_model: null,
+        scope: "instant",
+        provider_session_id: "sess-2",
+        resumed_from: null,
+      },
+    ]);
+    useTerminalStore.setState({
+      sessions: { "session-live": session("session-live", "story-1", "run-live") },
+      sessionByRun: { "run-live": "session-live" },
+    });
+    useAgentStatusStore.setState({
+      runs: {
+        // The live tab this workspace is looking at…
+        "run-live": run("run-live", "story-1", "working", "Grill"),
+        // …and an ended run of the same phase, kept as history.
+        "run-ended": run("run-ended", "story-1", "exited", "Grill"),
+        // A run that recorded no phase shows none, rather than a guess.
+        "run-unrecorded": run("run-unrecorded", "story-1", "exited", null),
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+
+    const tab = await screen.findByRole("tab", { name: "Grill codex terminal" });
+    const endedChip = await screen.findByLabelText(
+      "Terminated Grill codex terminal",
+    );
+    // Chip and tab agree word for word on the run's identity, and neither
+    // repeats the ticket the workspace already shows.
+    expect(endedChip).toHaveTextContent("Grill");
+    expect(endedChip).not.toHaveTextContent("T-350");
+    expect(endedChip).toHaveAttribute("title", tab.getAttribute("title")!);
+    // The tab is live so it wears its provider colour; the ended chip does not.
+    expect(tab).toHaveClass("text-provider-codex");
+    expect(endedChip).toHaveClass("text-provider-ended");
+    expect(endedChip).not.toHaveClass("text-provider-codex");
+
+    // A resume chip names its phase too, and resuming stays addressed by run.
+    const resumeChip = await screen.findByRole("button", {
+      name: "Resume Grill codex terminal",
+    });
+    expect(resumeChip).toHaveTextContent("Grill");
+    expect(resumeChip).toHaveAttribute(
+      "title",
+      "codex · gpt-5 · started in Grill",
+    );
+
+    // The aged-out scratch run recorded no launch state and has no run record
+    // left in the status store, so the listing's own scope is what keeps its
+    // lowercase mode word instead of leaving a wordless chip (#708).
+    const scratchChip = screen.getByRole("button", {
+      name: /^Resume instant codex terminal/,
+    });
+    expect(scratchChip).toHaveTextContent("instant");
+    expect(scratchChip).toHaveAttribute("title", "codex");
+
+    // An unrecorded phase stays blank rather than borrowing the Story's state.
+    const blankChip = screen.getByLabelText("Terminated codex terminal");
+    expect(blankChip.textContent?.trim()).toBe("✕");
+    expect(blankChip).toHaveAttribute("title", "codex");
+  });
+
+  it("[overhaul-112] rebuilds launch labels, provider styling and ordinals from the authoritative records after a reload", async () => {
+    // A reload starts with no client-side session state at all: the terminals
+    // listing and the run projection are the only inputs, and they must be
+    // enough to reproduce exactly the tabs that were on screen before.
+    terminalApi.getTerminals.mockResolvedValue([
+      { agent_run_id: "run-first", created_at: "2026-08-07T12:00:00Z" },
+      { agent_run_id: "run-second", created_at: "2026-08-07T12:05:00Z" },
+      { agent_run_id: "run-gone", created_at: "2026-08-07T12:10:00Z" },
+    ]);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(terminalApi.getTerminals).toHaveBeenCalled());
+
+    act(() => {
+      useAgentStatusStore.setState({
+        runs: {
+          "run-first": {
+            ...run("run-first", "story-1", "working", "Grill"),
+            launch_model: "gpt-5",
+            started_at: "2026-08-07T12:00:00Z",
+          },
+          "run-second": {
+            ...run("run-second", "story-1", "working", "Grill"),
+            started_at: "2026-08-07T12:05:00Z",
+          },
+          "run-gone": {
+            ...run("run-gone", "story-1", "exited", "Spec"),
+            started_at: "2026-08-07T12:10:00Z",
+          },
+        },
+      });
+    });
+
+    // Captured state and model come back on the tab, ordinals included: the
+    // two live Grill runs still collide, in the launch order the records give.
+    const first = await screen.findByRole("tab", {
+      name: "Grill 1 codex terminal",
+    });
+    expect(first).toHaveAttribute("title", "codex · gpt-5 · started in Grill");
+    expect(first).toHaveClass("bg-pane-bg", "text-provider-codex");
+    expect(screen.getByRole("tab", { name: "Grill 2 codex terminal" }))
+      .toHaveClass("text-provider-codex");
+    // The ended run comes back as history rather than a tab, and its captured
+    // phase and neutral liveness treatment are reconstructed too.
+    const ended = screen.getByLabelText("Terminated Spec codex terminal");
+    expect(ended).toHaveTextContent("Spec");
+    expect(ended).toHaveClass("text-provider-ended");
+  });
 });

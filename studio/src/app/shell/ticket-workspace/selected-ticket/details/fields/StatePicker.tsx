@@ -20,7 +20,7 @@ interface Props {
 function Dot({ color }: { color: string }) {
   return (
     <span
-      className="h-2.5 w-2.5 flex-none rounded-full"
+      className="h-2.5 w-2.5 flex-none"
       style={{ backgroundColor: color }}
     />
   );

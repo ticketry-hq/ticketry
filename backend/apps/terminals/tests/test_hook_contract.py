@@ -60,7 +60,9 @@ MAPPING_ROWS = {
         "PreToolUse": "tool_use",
         "PostToolUse": "tool_use",
         "PermissionRequest": "permission_required",
-        "Stop": "turn_complete",
+        # Codex's only end-of-activity hook: an open Codex terminal has stopped
+        # because it is waiting for the user (#660), not because the run ended.
+        "Stop": "awaiting_input",
     },
     "gemini": {
         "SessionStart": "session_start",
@@ -99,9 +101,11 @@ SAMPLE_TOOL_EVENT = {
     "agy": "PreToolUse",
 }
 
-# A recognized end-of-turn event per agent (for late/duplicate coverage).
+# A recognized end-of-turn event per agent (for late/duplicate coverage). The
+# kind it normalizes to is read from MAPPING_ROWS, since Codex's `Stop` reports
+# `awaiting_input` while the others report `turn_complete`.
 
-SAMPLE_TURN_COMPLETE_EVENT = {
+SAMPLE_END_OF_TURN_EVENT = {
     "claude": "Stop",
     "codex": "Stop",
     "gemini": "AfterAgent",
@@ -127,6 +131,14 @@ def _mapping_ids():
 @pytest.mark.parametrize("agent,name", _mapping_ids())
 def test_event_maps_to_kind(agent, name):
     assert _reporter.event_to_kind(spec(agent), name) == MAPPING_ROWS[agent][name]
+
+
+@pytest.mark.parametrize("agent", list(SHIMS))
+def test_adapter_declares_exactly_the_contract_mapping(agent):
+    # Exhaustive, not row-by-row: a shim may not quietly add, drop, or re-point
+    # an event. Correcting Codex `Stop` (#660) must leave every other Codex row
+    # and every Claude/Gemini/agy row untouched.
+    assert spec(agent).event_to_kind == MAPPING_ROWS[agent]
 
 
 # --- 2. Unrecognized events -> None ---------------------------------------
@@ -234,7 +246,7 @@ def test_build_event_key_order_with_message_and_session(agent):
 def test_no_run_id_means_no_event(agent):
     payload = _reporter.build_event_from_hook(
         spec(agent),
-        {"hook_event_name": SAMPLE_TURN_COMPLETE_EVENT[agent]},
+        {"hook_event_name": SAMPLE_END_OF_TURN_EVENT[agent]},
         None,
         "t",
     )
@@ -346,15 +358,16 @@ def test_agy_ignores_generic_session_ids():
 
 @pytest.mark.parametrize("agent", list(SHIMS))
 def test_late_or_duplicate_event_still_builds_valid_payload(agent):
-    name = SAMPLE_TURN_COMPLETE_EVENT[agent]
+    name = SAMPLE_END_OF_TURN_EVENT[agent]
+    expected = MAPPING_ROWS[agent][name]
     first = _reporter.build_event_from_hook(
         spec(agent), {"hook_event_name": name}, "r", "t1"
     )
     late = _reporter.build_event_from_hook(
         spec(agent), {"hook_event_name": name}, "r", "t2"
     )
-    assert first["kind"] == "turn_complete"
-    assert late["kind"] == "turn_complete"
+    assert first["kind"] == expected
+    assert late["kind"] == expected
     assert late["ts"] == "t2"
 
 

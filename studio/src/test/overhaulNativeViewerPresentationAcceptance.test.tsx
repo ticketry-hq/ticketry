@@ -68,7 +68,6 @@ describe("native viewer attachment acceptance", () => {
           projectId: "project-1",
           moduleId: "module-1",
           agent: "codex",
-          ticketSeq: 1,
           status: "ready",
           transport: "ready",
           isPlanning: false,
@@ -112,9 +111,13 @@ describe("native viewer attachment acceptance", () => {
     });
   });
 
-  it("[overhaul-48] presents the direct native Ghostty viewer for a live run", async () => {
+  it("[overhaul-48] waits for desktop Ghostty without mounting the WebSocket fallback", async () => {
+    let resolveAvailability!: (available: boolean) => void;
+    const availability = new Promise<boolean>((resolve) => {
+      resolveAvailability = resolve;
+    });
     tauri.invoke.mockImplementation((command: string) => {
-      if (command === "native_terminal_available") return Promise.resolve(true);
+      if (command === "native_terminal_available") return availability;
       if (command === "native_terminal_attach") {
         return Promise.resolve({
           handle: "native-1",
@@ -142,10 +145,14 @@ describe("native viewer attachment acceptance", () => {
     );
 
     const view = render(<Terminal sessionId="session-1" />);
-    const fallbackHost = view.getByTestId("terminal-host");
-    const staleXtermCanvas = document.createElement("canvas");
-    staleXtermCanvas.dataset.testid = "stale-xterm-canvas";
-    fallbackHost.append(staleXtermCanvas);
+    expect(view.getByTestId("terminal-renderer-pending")).toBeVisible();
+    expect(view.queryByTestId("terminal-host")).not.toBeInTheDocument();
+    expect(tauri.invoke).not.toHaveBeenCalledWith(
+      "native_terminal_attach",
+      expect.anything(),
+    );
+
+    resolveAvailability(true);
 
     await waitFor(() => {
       expect(view.getByTestId("native-terminal-host")).toHaveAttribute(
@@ -153,7 +160,7 @@ describe("native viewer attachment acceptance", () => {
         "libghostty",
       );
     });
-    expect(view.queryByTestId("stale-xterm-canvas")).not.toBeInTheDocument();
+    expect(view.queryByTestId("terminal-host")).not.toBeInTheDocument();
     await waitFor(() => {
       expect(tauri.invoke).toHaveBeenCalledWith("native_terminal_attach", {
         runId: "run-1",
@@ -168,6 +175,74 @@ describe("native viewer attachment acceptance", () => {
       });
     });
 
+    view.unmount();
+  });
+
+  it("creates a fresh desktop run before Ghostty without mounting xterm", async () => {
+    tauri.invoke.mockImplementation((command: string) => {
+      if (command === "native_terminal_available") return Promise.resolve(true);
+      if (command === "native_terminal_attach") {
+        return Promise.resolve({
+          handle: "native-fresh",
+          runId: "run-fresh",
+          columns: 100,
+          rows: 30,
+        });
+      }
+      return Promise.resolve();
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        return new Response(
+          url.endsWith("/api/terminals")
+            ? JSON.stringify({ agent_run_id: "run-fresh" })
+            : "{}",
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }),
+    );
+    useTerminalStore.setState({
+      sessions: {
+        "tmp-fresh": {
+          sessionId: "tmp-fresh",
+          taskId: "task-1",
+          projectId: "project-1",
+          moduleId: "module-1",
+          agent: "codex",
+          status: "connecting",
+          transport: "connecting",
+          isPlanning: false,
+          isInstant: false,
+          initialPrompt: null,
+          agentRunId: null,
+        },
+      },
+      sessionByRun: {},
+    });
+
+    const view = render(<Terminal sessionId="tmp-fresh" />);
+    expect(view.getByTestId("terminal-renderer-pending")).toBeVisible();
+    expect(view.queryByTestId("terminal-host")).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(useTerminalStore.getState().sessions["tmp-fresh"]?.agentRunId).toBe(
+        "run-fresh",
+      );
+    });
+    expect(view.queryByTestId("terminal-host")).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith(
+        "native_terminal_attach",
+        expect.objectContaining({ runId: "run-fresh" }),
+      );
+    });
+    expect(view.queryByTestId("terminal-host")).not.toBeInTheDocument();
     view.unmount();
   });
 

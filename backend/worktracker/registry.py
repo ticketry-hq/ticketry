@@ -46,6 +46,16 @@ MODEL_ROUTES = {
             ),
         ),
     },
+    "RunNow": {
+        "reads": (),
+        "writes": (
+            RouteDeclaration(
+                "POST",
+                "/api/work-tracker/work-items/{issue_id}/run-now",
+                "Move an eligible Story to Implement and launch its pinned policy.",
+            ),
+        ),
+    },
     "Workspace": {
         "reads": (
             RouteDeclaration(
@@ -353,6 +363,11 @@ HOST_ROUTES = (
         "GET", "/api/config", "Read local profiles and feature configuration."
     ),
     RouteDeclaration("PATCH", "/api/config", "Select the recent local profile."),
+    RouteDeclaration(
+        "POST",
+        "/api/config/folders/validate",
+        "Validate a local module working directory.",
+    ),
     RouteDeclaration("POST", "/api/config/profiles", "Create a local profile."),
     RouteDeclaration("PUT", "/api/config/profiles/{index}", "Replace a local profile."),
     RouteDeclaration(
@@ -385,6 +400,11 @@ HOST_ROUTES = (
     ),
     RouteDeclaration(
         "POST",
+        "/api/terminals/viewers/output",
+        "Report one native terminal viewer's output observation.",
+    ),
+    RouteDeclaration(
+        "POST",
         "/api/terminals",
         "Create a durable terminal run through the control-plane service.",
     ),
@@ -397,6 +417,14 @@ HOST_ROUTES = (
         "GET", "/api/terminals/resumable", "List resumable provider conversations."
     ),
     RouteDeclaration("GET", "/api/terminals/scratch", "List scratch terminal runs."),
+    RouteDeclaration(
+        "POST",
+        "/api/terminals/shells",
+        "Create a durable login shell rooted in a module folder.",
+    ),
+    RouteDeclaration(
+        "GET", "/api/terminals/shells", "List a module's live login shells."
+    ),
     RouteDeclaration(
         "POST",
         "/api/terminals/self-terminate",
@@ -484,7 +512,7 @@ PUBLIC_ROUTE_REASONS = {
     (
         "POST",
         "/api/lifecycle/events",
-    ): "Provider hook subprocesses report best-effort loopback lifecycle events without the desktop API key.",
+    ): "Provider hook subprocesses lack the desktop API key; the handler verifies a run-scoped Authorization token injected at launch.",
     (
         "POST",
         "/api/terminals/self-terminate",

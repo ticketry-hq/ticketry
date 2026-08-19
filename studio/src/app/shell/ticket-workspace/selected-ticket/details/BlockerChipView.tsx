@@ -25,7 +25,7 @@ export default function BlockerChipView({
     <span
       data-testid="blocker-chip"
       data-warn={warn ? "true" : "false"}
-      className={`group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+      className={`group inline-flex items-center gap-1 border px-2 py-0.5 text-xs ${
         warn
           ? "border-lifecycle-attention/60 bg-lifecycle-attention/10 text-lifecycle-attention"
           : "border-pane-border bg-pane-title text-text-primary"

@@ -138,6 +138,51 @@
                 }
             }
         },
+        "/config/folders/validate": {
+            "post": {
+                "operationId": "config_folders_validate_create",
+                "tags": [
+                    "settings"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleFolderValidation"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleFolderValidation"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleFolderValidation"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModuleFolderValidationResult"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/config/profiles": {
             "post": {
                 "operationId": "config_profiles_create",
@@ -627,6 +672,7 @@
         "/lifecycle/events": {
             "post": {
                 "operationId": "lifecycle_events_create",
+                "description": "Lifecycle ingress for agent hooks, guarded by run-scoped authorization.\n\nThe view skips DRF's static-API-key authentication because its callers are\nhook subprocesses that never hold the desktop credential. Instead each\nlaunch injects a Studio-signed Bearer credential bound to exactly one run\n(the same scheme :class:`SelfTerminateView` uses), so an arbitrary local\nprocess cannot spoof lifecycle state or hijack another run's\n``provider_session_id``.",
                 "tags": [
                     "runs"
                 ],
@@ -659,6 +705,16 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/LifecycleAccepted"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
                                 }
                             }
                         },
@@ -1244,7 +1300,6 @@
         "/terminals/runs-effects/execute": {
             "post": {
                 "operationId": "runsEffectPortExecute",
-                "description": "Perform one already-durable launch effect and report a typed outcome.",
                 "tags": [
                     "terminals"
                 ],
@@ -1289,7 +1344,6 @@
         "/terminals/runs-effects/observe": {
             "post": {
                 "operationId": "runsEffectPortObserve",
-                "description": "Report what exists under one deterministic runtime identity.",
                 "tags": [
                     "terminals"
                 ],
@@ -1421,6 +1475,109 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/shells": {
+            "get": {
+                "operationId": "terminals_shells_list",
+                "description": "A module's durable login shells, which are runs with no agent.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "terminals"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ModuleShell"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "terminals_shells_create",
+                "description": "A module's durable login shells, which are runs with no agent.",
+                "tags": [
+                    "terminals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateModuleShell"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateModuleShell"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateModuleShell"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentRunId"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
                                 }
                             }
                         },
@@ -1586,6 +1743,51 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/terminals/viewers/output": {
+            "post": {
+                "operationId": "terminals_viewers_output_create",
+                "tags": [
+                    "terminals"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerOutputReport"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerOutputReport"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ViewerOutputReport"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ViewerOutputReportResult"
                                 }
                             }
                         },
@@ -3824,6 +4026,110 @@
                 }
             }
         },
+        "/work-tracker/work-items/{issue_id}/run-now": {
+            "post": {
+                "operationId": "workItemsRunNowCreate",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "execution"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RunNowRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RunNowRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RunNowRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunNowRefusal"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/work-tracker/work-items/batch": {
             "post": {
                 "operationId": "batchWorkItems",
@@ -4156,10 +4462,19 @@
                         "type": "string"
                     },
                     "agent": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "scope": {
                         "$ref": "#/components/schemas/ScopeEnum"
+                    },
+                    "launch_state": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "launch_model": {
+                        "type": "string",
+                        "nullable": true
                     },
                     "started_at": {
                         "type": "string"
@@ -4169,12 +4484,27 @@
                     },
                     "updated_at": {
                         "type": "string"
+                    },
+                    "output_sequence": {
+                        "type": "integer"
+                    },
+                    "last_output_at": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "effective_state": {
+                        "type": "string"
                     }
                 },
                 "required": [
                     "agent",
                     "agent_run_id",
+                    "effective_state",
+                    "last_output_at",
+                    "launch_model",
+                    "launch_state",
                     "module_id",
+                    "output_sequence",
                     "project_id",
                     "scope",
                     "started_at",
@@ -4325,6 +4655,21 @@
                     "work_item_id"
                 ]
             },
+            "CommittedState": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name"
+                ]
+            },
             "Config": {
                 "type": "object",
                 "properties": {
@@ -4362,6 +4707,17 @@
                 },
                 "required": [
                     "ordered_ids"
+                ]
+            },
+            "CreateModuleShell": {
+                "type": "object",
+                "properties": {
+                    "module_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "module_id"
                 ]
             },
             "CreateTerminal": {
@@ -5025,6 +5381,40 @@
                     "name"
                 ]
             },
+            "ModuleFolderValidation": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "path"
+                ]
+            },
+            "ModuleFolderValidationResult": {
+                "type": "object",
+                "properties": {
+                    "valid": {
+                        "type": "boolean"
+                    },
+                    "reason": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/ReasonEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "reason",
+                    "valid"
+                ]
+            },
             "ModuleLink": {
                 "type": "object",
                 "properties": {
@@ -5038,6 +5428,30 @@
                 "required": [
                     "module_id",
                     "path"
+                ]
+            },
+            "ModuleShell": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "created_at",
+                    "module_id"
+                ]
+            },
+            "NullEnum": {
+                "enum": [
+                    null
                 ]
             },
             "Open": {
@@ -5456,6 +5870,15 @@
                     "value"
                 ]
             },
+            "ReasonEnum": {
+                "enum": [
+                    "module_folder_not_absolute",
+                    "module_folder_missing",
+                    "module_folder_not_a_directory"
+                ],
+                "type": "string",
+                "description": "* `module_folder_not_absolute` - module_folder_not_absolute\n* `module_folder_missing` - module_folder_missing\n* `module_folder_not_a_directory` - module_folder_not_a_directory"
+            },
             "ReasoningLevel": {
                 "type": "object",
                 "properties": {
@@ -5515,6 +5938,17 @@
                     "started_at": {
                         "type": "string"
                     },
+                    "launch_state": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "launch_model": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "scope": {
+                        "$ref": "#/components/schemas/ScopeEnum"
+                    },
                     "provider_session_id": {
                         "type": "string"
                     },
@@ -5526,8 +5960,11 @@
                 "required": [
                     "agent",
                     "agent_run_id",
+                    "launch_model",
+                    "launch_state",
                     "provider_session_id",
                     "resumed_from",
+                    "scope",
                     "started_at",
                     "status"
                 ]
@@ -5545,6 +5982,70 @@
                 "required": [
                     "agent_run_id",
                     "resumed_from"
+                ]
+            },
+            "RunNowRefusal": {
+                "type": "object",
+                "properties": {
+                    "target_id": {
+                        "type": "string"
+                    },
+                    "committed_state": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/CommittedState"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "run": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/LaunchedAgentResponse"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "committed_state",
+                    "detail",
+                    "run",
+                    "target_id"
+                ]
+            },
+            "RunNowRequest": {
+                "type": "object",
+                "properties": {
+                    "origin": {
+                        "$ref": "#/components/schemas/OriginEnum"
+                    }
+                }
+            },
+            "RunNowResponse": {
+                "type": "object",
+                "properties": {
+                    "target_id": {
+                        "type": "string"
+                    },
+                    "committed_state": {
+                        "$ref": "#/components/schemas/CommittedState"
+                    },
+                    "run": {
+                        "$ref": "#/components/schemas/LaunchedAgentResponse"
+                    }
+                },
+                "required": [
+                    "committed_state",
+                    "run",
+                    "target_id"
                 ]
             },
             "SaveDocument": {
@@ -5567,10 +6068,11 @@
                     "task",
                     "plan",
                     "instant",
-                    "docchat"
+                    "docchat",
+                    "shell"
                 ],
                 "type": "string",
-                "description": "* `task` - task\n* `plan` - plan\n* `instant` - instant\n* `docchat` - docchat"
+                "description": "* `task` - task\n* `plan` - plan\n* `instant` - instant\n* `docchat` - docchat\n* `shell` - shell"
             },
             "SelfTerminateResult": {
                 "type": "object",
@@ -5784,6 +6286,32 @@
                     "replaced",
                     "transport",
                     "viewer_id"
+                ]
+            },
+            "ViewerOutputReport": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id"
+                ]
+            },
+            "ViewerOutputReportResult": {
+                "type": "object",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "observed": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "observed"
                 ]
             },
             "WorkItem": {

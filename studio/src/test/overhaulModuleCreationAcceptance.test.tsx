@@ -12,6 +12,10 @@ const api = vi.hoisted(() => ({
   updateProject: vi.fn(),
 }));
 
+const moduleFolderValidationApi = vi.hoisted(() => ({
+  validateModuleFolder: vi.fn(),
+}));
+
 vi.mock("../shared/api/client", async () => {
   const actual = await vi.importActual<typeof import("../shared/api/client")>(
     "../shared/api/client",
@@ -36,6 +40,10 @@ vi.mock("../features/projects/mutationTransport", async () => {
   >("../features/projects/mutationTransport");
   return { ...actual, updateProject: api.updateProject };
 });
+
+vi.mock("../features/studio/api/moduleFolderValidationApi", () =>
+  moduleFolderValidationApi,
+);
 
 import { ModalHost } from "../app/modal/ModalHost";
 import { useModalStore } from "../app/modal/modalStore";
@@ -178,6 +186,9 @@ describe("module creation front-placement acceptance", () => {
   beforeEach(() => {
     queryClient.clear();
     api.createModule.mockReset().mockResolvedValue(CREATED);
+    moduleFolderValidationApi.validateModuleFolder
+      .mockReset()
+      .mockResolvedValue({ valid: true, reason: null });
     api.getTasks.mockReset().mockResolvedValue({
       rootIds: [],
       children: {},

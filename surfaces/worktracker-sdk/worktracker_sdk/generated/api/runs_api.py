@@ -324,6 +324,7 @@ class RunsApi:
     ) -> LifecycleAccepted:
         """lifecycle_events_create
 
+        Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF's static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run's ``provider_session_id``.
 
         :param lifecycle_event: (required)
         :type lifecycle_event: LifecycleEvent
@@ -359,6 +360,7 @@ class RunsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '202': "LifecycleAccepted",
+            '401': "Open",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -390,6 +392,7 @@ class RunsApi:
     ) -> ApiResponse[LifecycleAccepted]:
         """lifecycle_events_create
 
+        Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF's static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run's ``provider_session_id``.
 
         :param lifecycle_event: (required)
         :type lifecycle_event: LifecycleEvent
@@ -425,6 +428,7 @@ class RunsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '202': "LifecycleAccepted",
+            '401': "Open",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -456,6 +460,7 @@ class RunsApi:
     ) -> RESTResponseType:
         """lifecycle_events_create
 
+        Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF's static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run's ``provider_session_id``.
 
         :param lifecycle_event: (required)
         :type lifecycle_event: LifecycleEvent
@@ -491,6 +496,7 @@ class RunsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '202': "LifecycleAccepted",
+            '401': "Open",
         }
         response_data = self.api_client.call_api(
             *_param,

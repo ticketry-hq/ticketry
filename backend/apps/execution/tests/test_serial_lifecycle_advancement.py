@@ -326,11 +326,8 @@ def test_concurrent_manual_and_lifecycle_triggers_launch_one_child(
             driver.execute_graph(
                 str(root.id), agent="codex", mode=SERIAL, spawn=overlapping_spawn
             )
-        except ValueError as exc:
-            # A request arriving before the termination commits is refused,
-            # which is the existing live-campaign contract.
-            if str(exc) != "graph_run_exists":
-                errors.append(exc)
+        except ValueError as exc:  # pragma: no cover - surfaced by assertion
+            errors.append(exc)
         except BaseException as exc:  # pragma: no cover - surfaced by assertion
             errors.append(exc)
 

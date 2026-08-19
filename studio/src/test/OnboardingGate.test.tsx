@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const catalogApi = vi.hoisted(() => ({
@@ -80,7 +80,7 @@ describe("OnboardingGate", () => {
     expect(queryClient.getQueryData(queryKeys.workspace)).toBe(true);
   });
 
-  it("skip acknowledges onboarding and reveals the app shell", async () => {
+  it("does not offer a way to skip required onboarding", () => {
     queryClient.setQueryData(queryKeys.workspace, true);
 
     render(
@@ -89,28 +89,11 @@ describe("OnboardingGate", () => {
       </OnboardingGate>,
     );
 
-    fireEvent.click(screen.getByTestId("onboarding-skip"));
-
-    expect(await screen.findByText("App shell")).toBeInTheDocument();
-    expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId("onboarding-welcome")).not.toBeInTheDocument();
-  });
-
-  it("keeps the surface with an inline error when acknowledgement fails", async () => {
-    queryClient.setQueryData(queryKeys.workspace, true);
-    acknowledgeOnboarding.mockRejectedValue(new Error("boom"));
-
-    render(
-      <OnboardingGate>
-        <div>App shell</div>
-      </OnboardingGate>,
-    );
-
-    fireEvent.click(screen.getByTestId("onboarding-skip"));
-
-    await waitFor(() =>
-      expect(screen.getByTestId("onboarding-skip-error")).toBeInTheDocument(),
-    );
+    expect(
+      screen.queryByRole("button", { name: "Skip" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("onboarding-welcome")).toBeInTheDocument();
     expect(screen.queryByText("App shell")).not.toBeInTheDocument();
+    expect(acknowledgeOnboarding).not.toHaveBeenCalled();
   });
 });

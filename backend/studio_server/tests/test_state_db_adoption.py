@@ -271,10 +271,20 @@ def test_fake_initial_adopts_existing_database_without_data_change(
             ("runs", "0007_backfill_terminal_lifecycle_state"),
             ("runs", "0008_agentrun_issue"),
             ("runs", "0009_automationattempt_launch_rejection"),
+            ("runs", "0010_make_required_skill_failures_retryable"),
+            ("runs", "0011_dismiss_historical_automation_failures"),
+            ("runs", "0012_remove_legacy_agentrun_run_kind"),
+            ("runs", "0013_agentrun_optional_agent"),
+            ("runs", "0014_agentrun_launch_metadata"),
             ("settings_store", "0001_initial"),
             ("settings_store", "0002_migrate_profile_prompt_authority"),
             ("terminals", "0001_initial"),
             ("terminals", "0002_agent_run_viewer_lease"),
+            ("terminals", "0003_agentterminalsession_runtime_cleanup_pending"),
+            ("terminals", "0004_agentterminalsession_runtime_namespace"),
+            ("terminals", "0005_terminal_output_activity"),
+            ("terminals", "0006_terminal_session_optional_agent"),
+            ("terminals", "0007_restore_agent_run_fk_cascade"),
         ]
 
     # The unreferencable legacy run and its terminal mirror are intentionally

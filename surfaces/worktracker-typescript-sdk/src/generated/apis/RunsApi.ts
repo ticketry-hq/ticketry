@@ -96,7 +96,7 @@ export interface RunsApiInterface {
     lifecycleEventsCreateRequestOpts(requestParameters: LifecycleEventsCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF\'s static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run\'s ``provider_session_id``.
      * @param {LifecycleEvent} lifecycleEvent
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -105,6 +105,7 @@ export interface RunsApiInterface {
     lifecycleEventsCreateRaw(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LifecycleAccepted>>;
 
     /**
+     * Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF\'s static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run\'s ``provider_session_id``.
      */
     lifecycleEventsCreate(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LifecycleAccepted>;
 
@@ -238,6 +239,7 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
     }
 
     /**
+     * Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF\'s static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run\'s ``provider_session_id``.
      */
     async lifecycleEventsCreateRaw(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LifecycleAccepted>> {
         const requestOptions = await this.lifecycleEventsCreateRequestOpts(requestParameters);
@@ -247,6 +249,7 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
     }
 
     /**
+     * Lifecycle ingress for agent hooks, guarded by run-scoped authorization.  The view skips DRF\'s static-API-key authentication because its callers are hook subprocesses that never hold the desktop credential. Instead each launch injects a Studio-signed Bearer credential bound to exactly one run (the same scheme :class:`SelfTerminateView` uses), so an arbitrary local process cannot spoof lifecycle state or hijack another run\'s ``provider_session_id``.
      */
     async lifecycleEventsCreate(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LifecycleAccepted> {
         const response = await this.lifecycleEventsCreateRaw(requestParameters, initOverrides);

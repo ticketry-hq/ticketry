@@ -6,8 +6,7 @@ import { useTerminalStore, type SessionMeta } from "./sessionStore";
 import { ackTerminal } from "./actions";
 import type { TerminalClient } from "./terminalClient";
 import { terminalClientTransport } from "./terminalClientRuntime";
-import { createTerminalRun } from "../../api/agentApi";
-import { launchFailureMessage, launchFailureReason } from "./launchFailure";
+import { launchFailureReason } from "./launchFailure";
 
 // CODIN-749 — shared terminal entry pool.
 //
@@ -26,18 +25,12 @@ export interface SessionEntry {
   ws: TerminalClient | null;
   lastCols: number;
   lastRows: number;
-  initialPrompt: string | null;
-  isPlanning: boolean;
-  isInstant: boolean;
   agentRunId: string | null;
   // How many surfaces currently present this session's xterm DOM (hosts report
   // via notifyForeground/notifyBackground). At 0 for the grace period, the
   // transport is suspended so hidden terminals stop streaming.
   visibleCount: number;
   suspendTimer: ReturnType<typeof setTimeout> | null;
-  // A fresh terminal must receive its durable run id from the control plane
-  // before a WebSocket is allowed to attach.
-  creatingRun: boolean;
   onDataSubscription: IDisposable | null;
 }
 
@@ -100,7 +93,11 @@ const entries = new Map<string, SessionEntry>();
 // this can run on every render without churning the Terminal/WS objects.
 export function syncEntries(sessions: Record<string, SessionMeta>): void {
   for (const [id, meta] of Object.entries(sessions)) {
-    if (entries.has(id)) continue;
+    const existing = entries.get(id);
+    if (existing) {
+      existing.agentRunId = meta.agentRunId;
+      continue;
+    }
     const initialGeometry = readTerminalGeometry();
     const term = new Terminal({ ...XTERM_OPTIONS, ...initialGeometry });
     const fit = new FitAddon();
@@ -112,13 +109,9 @@ export function syncEntries(sessions: Record<string, SessionMeta>): void {
       ws: null,
       lastCols: initialGeometry.cols,
       lastRows: initialGeometry.rows,
-      initialPrompt: meta.initialPrompt,
-      isPlanning: meta.isPlanning,
-      isInstant: meta.isInstant,
       agentRunId: meta.agentRunId,
       visibleCount: 0,
       suspendTimer: null,
-      creatingRun: false,
       onDataSubscription: null,
     };
     entries.set(id, entry);
@@ -146,8 +139,7 @@ export function syncEntries(sessions: Record<string, SessionMeta>): void {
     if (id in sessions) continue;
     // More than one Terminal presenter can reconcile this singleton pool.
     // An effect from an older render must not dispose an entry that a newer
-    // store state still owns, especially while durable run creation is in
-    // flight: recreating that entry would issue a second creation request.
+    // store state still owns across a renderer or session-id transition.
     if (id in useTerminalStore.getState().sessions) continue;
     const entry = entries.get(id);
     entries.delete(id);
@@ -203,39 +195,7 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
     return;
   }
 
-  if (entry.agentRunId === null) {
-    if (entry.creatingRun) return;
-    entry.creatingRun = true;
-    void createTerminalRun({
-      agent: meta.agent,
-      project_id: meta.projectId,
-      module_id: meta.moduleId,
-      task_id: meta.taskId,
-      initial_prompt: entry.isInstant ? null : entry.initialPrompt,
-      is_planning: entry.isPlanning,
-      is_instant: entry.isInstant,
-      instant_prompt: entry.isInstant ? entry.initialPrompt : null,
-    })
-      .then(({ agent_run_id }) => {
-        entry.creatingRun = false;
-        // The tab might have been closed while creation was in flight. The
-        // durable run remains attachable, but this disposed xterm must not open
-        // a transport of its own.
-        if (entries.get(sessionId) !== entry) return;
-        entry.agentRunId = agent_run_id;
-        store().bindRun(sessionId, agent_run_id);
-        ensureConnected(sessionId, {
-          ...meta,
-          agentRunId: agent_run_id,
-        });
-      })
-      .catch((error: unknown) => {
-        entry.creatingRun = false;
-        entry.term.write(`\r\n[control_plane] ${launchFailureMessage(error)}\r\n`);
-        store().setError(sessionId);
-      });
-    return;
-  }
+  if (entry.agentRunId === null) return;
 
   const tempId = sessionId;
   // Tracks the tab's current store id across the tempId -> serverId rekey;
@@ -301,7 +261,17 @@ export function ensureConnected(sessionId: string, meta: SessionMeta): void {
       }
       if (
         event.type === "reattachment_required" &&
-        (event.reason === "session_not_found" || event.reason === "session_ended")
+        event.reason === "session_ended"
+      ) {
+        // The durable run ended normally (including through the MCP exit
+        // tool). Remove its live viewer tab; the backend run remains available
+        // to the resumable/history queries.
+        store().closeTab(liveId, { dismiss: false });
+        return;
+      }
+      if (
+        event.type === "reattachment_required" &&
+        event.reason === "session_not_found"
       ) {
         entry.term.write("\r\n[session lost]\r\n");
         store().setSessionLost(liveId);

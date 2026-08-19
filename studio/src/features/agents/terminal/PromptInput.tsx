@@ -53,14 +53,14 @@ export function PromptInput({ payload }: { payload?: PromptInputPayload }) {
         <button
           type="button"
           onClick={popModal}
-          className="rounded border border-pane-border bg-pane-bg px-3 py-1"
+          className="border border-pane-border bg-pane-bg px-3 py-1"
         >
           Cancel
         </button>
         <button
           type="button"
           onClick={submit}
-          className="rounded border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent"
+          className="border border-focus-accent bg-pane-title px-3 py-1 text-focus-accent"
         >
           Submit
         </button>

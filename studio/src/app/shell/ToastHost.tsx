@@ -27,7 +27,7 @@ export default function ToastHost() {
             role={isError ? "alert" : "status"}
             aria-live={isError ? "assertive" : "polite"}
             data-testid={`toast-${t.kind}`}
-            className={`pointer-events-auto flex items-start gap-2.5 rounded-lg border px-3 py-2.5 shadow-lg ${
+            className={`pointer-events-auto flex items-start gap-2.5 border px-3 py-2.5 shadow-lg ${
               isError
                 ? "border-lifecycle-danger/40 bg-lifecycle-danger/15"
                 : "border-lifecycle-success/40 bg-lifecycle-success/15"

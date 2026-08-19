@@ -12,7 +12,7 @@ import {
 } from "./foregroundStore";
 import { useClientStore as useWorkspaceTabsStore } from "../../../../state/clientStore";
 import { readVersionedItem } from "../../../../shared/storage/versioned";
-import { useAgentStatusStore } from "../../status";
+import { isAgentlessRun, useAgentStatusStore } from "../../status";
 import { rekeyTerminalFocus } from "./terminalRegistry";
 
 export type SessionStatus =
@@ -154,12 +154,16 @@ export interface SessionMeta {
   taskId: TaskId | null;
   projectId: string;
   moduleId: string;
-  agent: "claude" | "agy" | "codex" | "gemini";
-  ticketSeq: number | null;
+  // Null only for a shell session: a plain login shell has no provider, and no
+  // reader may substitute one for it (#667).
+  agent: "claude" | "agy" | "codex" | "gemini" | null;
   status: SessionStatus;
   transport?: TerminalTransport;
   isPlanning: boolean;
   isInstant: boolean;
+  // The viewer of a shell run: hosted by the terminal panel, never an agent
+  // terminal tab, and never counted as agent activity.
+  isShell?: boolean;
   initialPrompt: string | null;
   // Set when this tab reattaches to a persisted tmux session rather than
   // spawning a fresh agent. Drives the attach-mode init frame in ws.ts.
@@ -171,12 +175,18 @@ export interface OpenSessionArgs {
   projectId: string;
   moduleId?: string;
   agent: SessionMeta["agent"];
-  ticketSeq: number | null;
   initialPrompt?: string | null;
   isPlanning?: boolean;
   isInstant?: boolean;
   agentRunId?: string | null;
   select?: boolean;
+}
+
+export interface OpenShellSessionArgs {
+  moduleId: string;
+  projectId: string;
+  /** The shell run the backend already launched; a shell never spawns here. */
+  agentRunId: string;
 }
 
 // A session's *bucket* is its real taskId when set, else a per-module scratch
@@ -214,6 +224,9 @@ export function selectScratchAgentCount(
   // Count only active no-task (scratch) sessions.
   for (const meta of Object.values(state.sessions)) {
     if (meta.taskId !== null) continue;
+    // A shell is not an agent. It shares the taskless shape of a scratch run,
+    // so without this it would silently inflate a module's agent count (#667).
+    if (meta.isShell) continue;
     if (moduleId && meta.moduleId !== moduleId) continue;
     if (projectId && meta.projectId !== projectId) continue;
     if (
@@ -235,6 +248,14 @@ interface TerminalStoreState {
   // only, and notifies that store on open/rekey/focus/close.
 
   openSession: (args: OpenSessionArgs) => SessionId;
+  /**
+   * Opens the viewer for an already-launched shell run (#667).
+   *
+   * Deliberately not `openSession`: a shell has no provider to spawn and no
+   * workspace tab to open, so this neither creates a run nor tells the
+   * workspace tab store anything. The panel owns where a shell is presented.
+   */
+  openShellSession: (args: OpenShellSessionArgs) => SessionId;
   setReady: (
     tempId: SessionId,
     sessionId: SessionId,
@@ -262,7 +283,16 @@ interface TerminalStoreState {
     sessions: readonly PersistedTerminalSession[],
   ) => void;
   attachPersisted: (session: PersistedTerminalSession) => SessionId;
-  terminatePersisted: (agentRunId: string, taskId: TaskId) => Promise<void>;
+  // `dismiss` defaults to true for the same reason `closeTab` does: an agent
+  // run's kill can race a listing that still reports it live. Callers whose run
+  // never appears in that listing — a module shell, which `list_scratch_terminals`
+  // excludes (#686) — pass false, because a dismissal recorded there can never
+  // be spent and would evict real dismissals from the capped ledger.
+  terminatePersisted: (
+    agentRunId: string,
+    taskId: TaskId,
+    opts?: { dismiss?: boolean },
+  ) => Promise<void>;
 }
 
 let _tempCounter = 0;
@@ -284,7 +314,6 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       projectId: args.projectId,
       moduleId: args.moduleId ?? "",
       agent: args.agent,
-      ticketSeq: args.ticketSeq,
       status: "connecting",
       transport: "connecting",
       isPlanning: args.isPlanning ?? false,
@@ -297,6 +326,31 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       .getState()
       .tabOpened(bucketOfMeta(meta), tempId, args.select);
     if (args.agentRunId) get().bindRun(tempId, args.agentRunId);
+    return tempId;
+  },
+
+  openShellSession({ moduleId, projectId, agentRunId }) {
+    const existing = get().sessionByRun[agentRunId];
+    if (existing && get().sessions[existing]) return existing;
+    const tempId = makeTempId();
+    const meta: SessionMeta = {
+      sessionId: tempId,
+      taskId: null,
+      projectId,
+      moduleId,
+      agent: null,
+      status: "connecting",
+      transport: "connecting",
+      isPlanning: false,
+      isInstant: false,
+      isShell: true,
+      initialPrompt: null,
+      agentRunId,
+    };
+    set((s) => ({
+      sessions: { ...s.sessions, [tempId]: meta },
+      sessionByRun: { ...s.sessionByRun, [agentRunId]: tempId },
+    }));
     return tempId;
   },
 
@@ -592,6 +646,9 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
         removeDismissedRun(taskId, session.agent_run_id);
         continue;
       }
+      // A run with no provider is not an agent run. It has its own surface and
+      // must never be restored as an agent terminal tab (#665).
+      if (isAgentlessRun(run)) continue;
       if (attached.has(session.agent_run_id)) continue;
       if (dismissed.has(session.agent_run_id)) continue;
       if (hasUnboundSpawn && !sessionByRun[session.agent_run_id]) continue;
@@ -603,6 +660,12 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     const run = useAgentStatusStore.getState().runs[session.agent_run_id];
     if (!run) {
       throw new Error(`run projection missing for terminal ${session.agent_run_id}`);
+    }
+    if (isAgentlessRun(run)) {
+      // Refused rather than papered over with a substitute provider: an agent
+      // terminal tab is labelled, spawned and resumed by its provider, so a run
+      // that has none cannot be represented as one (#665).
+      throw new Error(`run ${session.agent_run_id} has no agent to attach`);
     }
     const { sessions } = get();
     const existingId = get().sessionByRun[session.agent_run_id];
@@ -627,8 +690,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       taskId: isScratch ? null : run.task_id,
       projectId: run.project_id ?? "",
       moduleId: run.module_id,
-      agent: (run.agent ?? "codex") as SessionMeta["agent"],
-      ticketSeq: null,
+      agent: run.agent as SessionMeta["agent"],
       agentRunId: session.agent_run_id,
       isPlanning: run.scope === "plan",
       isInstant: run.scope === "instant",
@@ -636,19 +698,23 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     });
   },
 
-  async terminatePersisted(agentRunId, _taskId) {
+  async terminatePersisted(agentRunId, _taskId, opts) {
     await api.terminateTerminal(agentRunId);
     // The session is gone for good: drop it from the auto-reattach set.
     removeLiveRun(agentRunId);
     // Close any live tab attached to the now-killed session so it does not
-    // linger with a dead socket. This close counts as a dismissal on purpose: a
-    // re-fetch whose response raced the kill still reports the run live, and the
-    // tab must not come back. `restoreLiveSessions` spends the dismissal as soon
-    // as the server reports the run ended.
+    // linger with a dead socket. This close counts as a dismissal by default on
+    // purpose: a re-fetch whose response raced the kill still reports the run
+    // live, and the tab must not come back. `restoreLiveSessions` spends the
+    // dismissal as soon as the server reports the run ended.
+    //
+    // `dismiss: false` is for runs no restore listing ever reports: with no
+    // re-fetch to guard against, the dismissal would sit unspendable in a capped
+    // ledger and eventually evict a real one (#686).
     const liveId = get().sessionByRun[agentRunId];
     const live = liveId
       ? get().sessions[liveId]
       : Object.values(get().sessions).find((session) => session.agentRunId === agentRunId);
-    if (live) get().closeTab(live.sessionId);
+    if (live) get().closeTab(live.sessionId, { dismiss: opts?.dismiss !== false });
   },
 }));

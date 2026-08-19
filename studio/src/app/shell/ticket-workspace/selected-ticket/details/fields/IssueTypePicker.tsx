@@ -40,6 +40,7 @@ export default function IssueTypePicker({
           onClick={onClick}
           disabled={disabled}
           saving={saving}
+          variant="bare"
           label={selected ? <IssueTypeLabel issueType={selected} /> : "Unknown type"}
         />
       )}

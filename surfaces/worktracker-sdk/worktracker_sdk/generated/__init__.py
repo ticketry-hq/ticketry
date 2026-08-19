@@ -57,8 +57,10 @@ __all__ = [
     "AgentStatusScopeResponse",
     "Attachment",
     "AutomationAttempt",
+    "CommittedState",
     "Config",
     "ConfigurationReorder",
+    "CreateModuleShell",
     "CreateTerminal",
     "CreateWorktree",
     "Digest",
@@ -88,7 +90,11 @@ __all__ = [
     "LifecycleEvent",
     "Module",
     "ModuleCreate",
+    "ModuleFolderValidation",
+    "ModuleFolderValidationResult",
     "ModuleLink",
+    "ModuleShell",
+    "NullEnum",
     "Open",
     "OriginEnum",
     "PatchedAgentModel",
@@ -105,11 +111,15 @@ __all__ = [
     "Provider",
     "ProviderCatalog",
     "ProviderCatalogEnvelope",
+    "ReasonEnum",
     "ReasoningLevel",
     "ReleaseResult",
     "ReplacedViewer",
     "ResumableTerminal",
     "ResumeResult",
+    "RunNowRefusal",
+    "RunNowRequest",
+    "RunNowResponse",
     "SaveDocument",
     "ScopeEnum",
     "SelfTerminateResult",
@@ -123,6 +133,8 @@ __all__ = [
     "ViewerLease",
     "ViewerLeaseRelease",
     "ViewerLeaseResult",
+    "ViewerOutputReport",
+    "ViewerOutputReportResult",
     "WorkItem",
     "WorkItemBatch",
     "WorkItemCreate",
@@ -174,8 +186,10 @@ from worktracker_sdk.generated.models.agent_status_response import AgentStatusRe
 from worktracker_sdk.generated.models.agent_status_scope_response import AgentStatusScopeResponse as AgentStatusScopeResponse
 from worktracker_sdk.generated.models.attachment import Attachment as Attachment
 from worktracker_sdk.generated.models.automation_attempt import AutomationAttempt as AutomationAttempt
+from worktracker_sdk.generated.models.committed_state import CommittedState as CommittedState
 from worktracker_sdk.generated.models.config import Config as Config
 from worktracker_sdk.generated.models.configuration_reorder import ConfigurationReorder as ConfigurationReorder
+from worktracker_sdk.generated.models.create_module_shell import CreateModuleShell as CreateModuleShell
 from worktracker_sdk.generated.models.create_terminal import CreateTerminal as CreateTerminal
 from worktracker_sdk.generated.models.create_worktree import CreateWorktree as CreateWorktree
 from worktracker_sdk.generated.models.digest import Digest as Digest
@@ -205,7 +219,11 @@ from worktracker_sdk.generated.models.lifecycle_accepted import LifecycleAccepte
 from worktracker_sdk.generated.models.lifecycle_event import LifecycleEvent as LifecycleEvent
 from worktracker_sdk.generated.models.module import Module as Module
 from worktracker_sdk.generated.models.module_create import ModuleCreate as ModuleCreate
+from worktracker_sdk.generated.models.module_folder_validation import ModuleFolderValidation as ModuleFolderValidation
+from worktracker_sdk.generated.models.module_folder_validation_result import ModuleFolderValidationResult as ModuleFolderValidationResult
 from worktracker_sdk.generated.models.module_link import ModuleLink as ModuleLink
+from worktracker_sdk.generated.models.module_shell import ModuleShell as ModuleShell
+from worktracker_sdk.generated.models.null_enum import NullEnum as NullEnum
 from worktracker_sdk.generated.models.open import Open as Open
 from worktracker_sdk.generated.models.origin_enum import OriginEnum as OriginEnum
 from worktracker_sdk.generated.models.patched_agent_model import PatchedAgentModel as PatchedAgentModel
@@ -222,11 +240,15 @@ from worktracker_sdk.generated.models.project import Project as Project
 from worktracker_sdk.generated.models.provider import Provider as Provider
 from worktracker_sdk.generated.models.provider_catalog import ProviderCatalog as ProviderCatalog
 from worktracker_sdk.generated.models.provider_catalog_envelope import ProviderCatalogEnvelope as ProviderCatalogEnvelope
+from worktracker_sdk.generated.models.reason_enum import ReasonEnum as ReasonEnum
 from worktracker_sdk.generated.models.reasoning_level import ReasoningLevel as ReasoningLevel
 from worktracker_sdk.generated.models.release_result import ReleaseResult as ReleaseResult
 from worktracker_sdk.generated.models.replaced_viewer import ReplacedViewer as ReplacedViewer
 from worktracker_sdk.generated.models.resumable_terminal import ResumableTerminal as ResumableTerminal
 from worktracker_sdk.generated.models.resume_result import ResumeResult as ResumeResult
+from worktracker_sdk.generated.models.run_now_refusal import RunNowRefusal as RunNowRefusal
+from worktracker_sdk.generated.models.run_now_request import RunNowRequest as RunNowRequest
+from worktracker_sdk.generated.models.run_now_response import RunNowResponse as RunNowResponse
 from worktracker_sdk.generated.models.save_document import SaveDocument as SaveDocument
 from worktracker_sdk.generated.models.scope_enum import ScopeEnum as ScopeEnum
 from worktracker_sdk.generated.models.self_terminate_result import SelfTerminateResult as SelfTerminateResult
@@ -240,6 +262,8 @@ from worktracker_sdk.generated.models.transport_enum import TransportEnum as Tra
 from worktracker_sdk.generated.models.viewer_lease import ViewerLease as ViewerLease
 from worktracker_sdk.generated.models.viewer_lease_release import ViewerLeaseRelease as ViewerLeaseRelease
 from worktracker_sdk.generated.models.viewer_lease_result import ViewerLeaseResult as ViewerLeaseResult
+from worktracker_sdk.generated.models.viewer_output_report import ViewerOutputReport as ViewerOutputReport
+from worktracker_sdk.generated.models.viewer_output_report_result import ViewerOutputReportResult as ViewerOutputReportResult
 from worktracker_sdk.generated.models.work_item import WorkItem as WorkItem
 from worktracker_sdk.generated.models.work_item_batch import WorkItemBatch as WorkItemBatch
 from worktracker_sdk.generated.models.work_item_create import WorkItemCreate as WorkItemCreate

@@ -39,6 +39,21 @@ def _block_real_spawn(monkeypatch):
     monkeypatch.setattr(driver, "spawn_run", _blocked)
 
 
+@pytest.fixture(autouse=True)
+def _no_background_reconciliation(monkeypatch):
+    """Keep the best-effort liveness sweep out of these tests.
+
+    The real request submits ``reconcile_terminals`` to a background thread,
+    which both races the test's own writes on SQLite's shared-cache test
+    database ("database table is locked") and can terminate the very fake
+    sessions a scenario is holding live. The refresh is best-effort by
+    contract; its own behavior is pinned by ``test_serial_liveness_refresh``,
+    which installs its own recorder over this stub.
+    """
+
+    monkeypatch.setattr(driver, "request_terminal_liveness_refresh", lambda: False)
+
+
 def _clear_registry():
     LaunchedTask.objects.all().delete()
     GraphRun.objects.all().delete()

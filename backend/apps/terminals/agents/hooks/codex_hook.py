@@ -16,11 +16,14 @@ command line.
 Provider-session evidence: Codex carries its resumable UUID as ``session_id``
 on every hook event, so the adapter captures that field when present.
 
-Codex exposes no genuine end-of-turn event other than ``Stop``, and has no
-``Notification`` or ``SessionEnd`` hooks. ``PermissionRequest`` maps to the
-distinct ``permission_required`` state: Ticketry launches Codex with
-auto-review, so the status exposes the review without claiming human input is
-needed. ``PostToolUse`` reaffirms ``tool_use`` (only ``Stop`` flips to complete).
+Codex has no ``Notification`` or ``SessionEnd`` hooks, so ``Stop`` is its only
+end-of-activity signal. An open Codex terminal stops because Codex is waiting
+for the user, so ``Stop`` normalizes to ``awaiting_input`` (rendered as
+``needs_input`` by the shared reducer) rather than claiming a completed turn or
+an exited session. ``PermissionRequest`` maps to the distinct
+``permission_required`` state: Ticketry launches Codex with auto-review, so the
+status exposes the review without claiming human input is needed.
+``PostToolUse`` reaffirms ``tool_use`` (only ``Stop`` flips to waiting).
 """
 
 try:
@@ -36,7 +39,7 @@ SPEC = _reporter.HookSpec(
         "PreToolUse": "tool_use",
         "PostToolUse": "tool_use",
         "PermissionRequest": "permission_required",
-        "Stop": "turn_complete",
+        "Stop": "awaiting_input",
     },
     identity="argv",
     provider_session_keys=("session_id",),

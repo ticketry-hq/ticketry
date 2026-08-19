@@ -35,7 +35,7 @@ from worktracker.models import Issue
 class LaunchRecords:
     agent_run_id: str
     issue_id: str
-    agent: str
+    agent: str | None
     started_at: str
     cwd: str
     design_dir: str | None
@@ -233,6 +233,7 @@ def record_terminal_mirror(records: LaunchRecords, routing: LaunchRouting) -> No
                 "project_id": routing.project_id,
                 "agent": records.agent,
                 "created_at": records.started_at,
+                "last_output_at": records.started_at,
                 "terminated_at": None,
                 "runtime_namespace": records.runtime_namespace,
                 "runtime_cleanup_pending": False,
@@ -242,6 +243,57 @@ def record_terminal_mirror(records: LaunchRecords, routing: LaunchRouting) -> No
         )
     finally:
         close_old_connections()
+
+
+def persist_launch(
+    records: LaunchRecords,
+    *,
+    command: str = "test-persisted-launch",
+    environment: Mapping[str, str] | None = None,
+) -> LaunchRouting:
+    """Compatibility seam for new terminal capabilities over Rust ownership.
+
+    Agent Run and launch-effect rows still enter through Rust. Django records
+    only its terminal-owned request and mirror.
+    """
+
+    prepared = prepare_launch(
+        records,
+        PreparedCommand(
+            command=command,
+            environment=environment or {},
+            columns=80,
+            rows=24,
+        ),
+    )
+    record_terminal_mirror(records, prepared.routing)
+    return prepared.routing
+
+
+def compensate_launch(agent_run_id: str) -> None:
+    """Settle a failed prepared launch after runtime cleanup was confirmed."""
+
+    effect_id = launch_effect_id(agent_run_id)
+    settle_launch(
+        effect_id,
+        applied=False,
+        code="terminal_runtime_unavailable",
+        retryable=True,
+        cleanup_confirmed=True,
+    )
+    discard_launch_request(effect_id)
+
+
+def mark_launch_cleanup_pending(agent_run_id: str) -> None:
+    """Retain a failed effect until runtime cleanup can be proven."""
+
+    settle_launch(
+        launch_effect_id(agent_run_id),
+        applied=False,
+        code="terminal_runtime_unavailable",
+        retryable=True,
+        cleanup_confirmed=False,
+    )
 
 
 def settle_launch(

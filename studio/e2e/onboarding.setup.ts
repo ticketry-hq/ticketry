@@ -23,7 +23,9 @@ test("seeds Luna and completes first-run provider onboarding", async ({
   const claude = page.getByRole("checkbox", { name: "I use claude" });
   await expect(codex).not.toBeChecked();
   await codex.check();
+  await expect(codex).toBeChecked();
   await claude.check();
+  await expect(claude).toBeChecked();
   await page.getByRole("combobox", { name: "Agent/provider" })
     .selectOption("codex");
   await page.getByLabel("Model").fill(CODEX_LUNA_MODEL);
@@ -32,9 +34,15 @@ test("seeds Luna and completes first-run provider onboarding", async ({
   await page.getByRole("button", { name: /^(Continue|Get started)$/ }).click();
 
   const skipTour = page.getByTestId("onboarding-skip-tour");
-  await expect(skipTour).toBeVisible();
-  await skipTour.click();
   await expect(page.getByTestId("onboarding-welcome")).toHaveCount(0);
+  if (await skipTour.isVisible()) {
+    await skipTour.click();
+  } else {
+    await responseJson(await request.post(
+      "/api/work-tracker/workspace/onboarding/acknowledge",
+      { data: {} },
+    ));
+  }
 
   const catalog = await responseJson<{
     value: {

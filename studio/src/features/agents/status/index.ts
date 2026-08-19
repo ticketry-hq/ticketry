@@ -16,8 +16,15 @@ export type {
   ModuleLifecycleState,
   TaskLifecycleChip,
 } from "./selectors";
+export { isAgentlessRun, SHELL_RUN_SCOPE } from "./runScopes";
 export { useAgentStatusStore } from "./store";
 export type { AgentStatusStore } from "./store";
+export {
+  projectRunPresentation,
+  stallDeadlineAt,
+  STALL_AFTER_MS,
+} from "./runPresentation";
+export { startStallDeadlines, stopStallDeadlines } from "./stallDeadlines";
 // stream/statusStreamFeed (subscription wiring: transport client, cursor
 // retention, store fan-out) and retryAutomationAttempt are NOT re-exported:
 // most hub consumers only need selectors/store, and re-exporting the feed
@@ -31,5 +38,6 @@ export type {
   AgentStatusScope,
   AutomationAttemptRecord,
   RawLifecycleState,
+  RunPresentationState,
   RunRecord,
 } from "./types";

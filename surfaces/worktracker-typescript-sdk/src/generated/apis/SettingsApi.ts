@@ -16,6 +16,16 @@
 
 import * as runtime from '../runtime.js';
 import {
+    type ModuleFolderValidation,
+    ModuleFolderValidationFromJSON,
+    ModuleFolderValidationToJSON,
+} from '../models/ModuleFolderValidation.js';
+import {
+    type ModuleFolderValidationResult,
+    ModuleFolderValidationResultFromJSON,
+    ModuleFolderValidationResultToJSON,
+} from '../models/ModuleFolderValidationResult.js';
+import {
     type Open,
     OpenFromJSON,
     OpenToJSON,
@@ -30,6 +40,10 @@ import {
     SettingValueFromJSON,
     SettingValueToJSON,
 } from '../models/SettingValue.js';
+
+export interface ConfigFoldersValidateCreateRequest {
+    moduleFolderValidation: ModuleFolderValidation;
+}
 
 export interface SettingsKeybindingsUpdateRequest {
     settingValue: SettingValue;
@@ -46,6 +60,27 @@ export interface SettingsProviderCatalogUpdateRequest {
  * @interface SettingsApiInterface
  */
 export interface SettingsApiInterface {
+    /**
+     * Creates request options for configFoldersValidateCreate without sending the request
+     * @param {ModuleFolderValidation} moduleFolderValidation
+     * @throws {RequiredError}
+     * @memberof SettingsApiInterface
+     */
+    configFoldersValidateCreateRequestOpts(requestParameters: ConfigFoldersValidateCreateRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     *
+     * @param {ModuleFolderValidation} moduleFolderValidation
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SettingsApiInterface
+     */
+    configFoldersValidateCreateRaw(requestParameters: ConfigFoldersValidateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ModuleFolderValidationResult>>;
+
+    /**
+     */
+    configFoldersValidateCreate(requestParameters: ConfigFoldersValidateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ModuleFolderValidationResult>;
+
     /**
      * Creates request options for settingsKeybindingsRetrieve without sending the request
      * @throws {RequiredError}
@@ -132,6 +167,55 @@ export interface SettingsApiInterface {
  *
  */
 export class SettingsApi extends runtime.BaseAPI implements SettingsApiInterface {
+
+    /**
+     * Creates request options for configFoldersValidateCreate without sending the request
+     */
+    async configFoldersValidateCreateRequestOpts(requestParameters: ConfigFoldersValidateCreateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['moduleFolderValidation'] == null) {
+            throw new runtime.RequiredError(
+                'moduleFolderValidation',
+                'Required parameter "moduleFolderValidation" was null or undefined when calling configFoldersValidateCreate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/config/folders/validate`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ModuleFolderValidationToJSON(requestParameters['moduleFolderValidation']),
+        };
+    }
+
+    /**
+     */
+    async configFoldersValidateCreateRaw(requestParameters: ConfigFoldersValidateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ModuleFolderValidationResult>> {
+        const requestOptions = await this.configFoldersValidateCreateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ModuleFolderValidationResultFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async configFoldersValidateCreate(requestParameters: ConfigFoldersValidateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ModuleFolderValidationResult> {
+        const response = await this.configFoldersValidateCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for settingsKeybindingsRetrieve without sending the request

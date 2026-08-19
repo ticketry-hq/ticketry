@@ -78,7 +78,7 @@ export default function Popover({
       {open && (
         <div
           style={pos}
-          className="fixed z-50 w-max min-w-[200px] max-w-[380px] overflow-hidden rounded-lg border border-pane-border bg-pane-panel py-1 shadow-2xl"
+          className="fixed z-50 w-max min-w-[200px] max-w-[380px] overflow-hidden border border-pane-border bg-pane-panel py-1 shadow-2xl"
         >
           {children(() => setOpen(false))}
         </div>

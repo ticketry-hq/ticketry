@@ -95,6 +95,9 @@ impl WorkspaceOperationJournal {
     where
         F: for<'t> FnOnce(&'t DatabaseTransaction) -> Settlement<'t> + Send,
     {
+        // SQLite deferred transactions can otherwise race when independent
+        // repository operations settle against the shared journal.
+        let _write_guard = self.lock_write().await;
         validate_owner(lease_owner)?;
         let outcome = validated(outcome)?;
         let operation_id = intent::database_uuid(operation_id).ok_or_else(|| {

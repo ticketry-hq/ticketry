@@ -1,13 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 
-type VisibleViewer = {
-  runId: string;
-  handle: string;
-};
-
-let desiredRunId: string | null = null;
-let visibleViewer: VisibleViewer | null = null;
+// Presentation intent is per run. Distinct runs own distinct AppKit views and
+// may be visible together (for example, an agent terminal above the module's
+// bottom-panel shell). The shared queue still serializes calls into AppKit, but
+// it must not turn keyboard focus's singularity into a one-viewer policy.
+const desiredHandles = new Map<string, string>();
+const visibleHandles = new Map<string, string>();
+const intentRevisions = new Map<string, number>();
 let presentationTail: Promise<void> = Promise.resolve();
+
+function issueIntent(runId: string): number {
+  const revision = (intentRevisions.get(runId) ?? 0) + 1;
+  intentRevisions.set(runId, revision);
+  return revision;
+}
+
+function intentIsCurrent(runId: string, revision: number): boolean {
+  return intentRevisions.get(runId) === revision;
+}
 
 function enqueue<T>(operation: () => Promise<T>): Promise<T> {
   const result = presentationTail.catch(() => {}).then(operation);
@@ -15,21 +25,11 @@ function enqueue<T>(operation: () => Promise<T>): Promise<T> {
   return result;
 }
 
-async function hideCurrentViewer(nextRunId: string): Promise<void> {
-  const current = visibleViewer;
-  if (!current || current.runId === nextRunId) return;
-  await invoke("native_terminal_hide", { handle: current.handle });
-  if (visibleViewer?.handle === current.handle) visibleViewer = null;
-}
-
 /** Serializes a first attachment with every retained hide/show operation. */
 export function attachNativeViewer<T extends { handle: string }>(
-  runId: string,
   attach: () => Promise<T | null>,
 ): Promise<{ status: T | null; presented: boolean }> {
-  desiredRunId = runId;
   return enqueue(async () => {
-    if (desiredRunId === runId) await hideCurrentViewer(runId);
     const status = await attach();
     // Native attach returns a prepared hidden handle. Only showNativeViewer may
     // commit presentation after the caller has acquired viewer authority.
@@ -43,19 +43,31 @@ export function showNativeViewer<T>(
   handle: string,
   reveal: () => Promise<T | null>,
 ): Promise<T | null> {
-  desiredRunId = runId;
+  const revision = issueIntent(runId);
+  desiredHandles.set(runId, handle);
   return enqueue(async () => {
-    if (desiredRunId !== runId) return null;
-    await hideCurrentViewer(runId);
-    if (desiredRunId !== runId) return null;
+    if (!intentIsCurrent(runId, revision)) return null;
+    const previousHandle = visibleHandles.get(runId);
+    if (previousHandle && previousHandle !== handle) {
+      await invoke("native_terminal_hide", { handle: previousHandle });
+      if (visibleHandles.get(runId) === previousHandle) {
+        visibleHandles.delete(runId);
+      }
+    }
+    if (!intentIsCurrent(runId, revision)) return null;
     const result = await reveal();
-    if (desiredRunId !== runId) {
+    // Handle identity is deliberately insufficient here. A close/reopen/close
+    // sequence can return to the same retained handle while the first reveal
+    // is still in flight; its geometry, owner, modal episode, and focus intent
+    // are nevertheless stale. Every request carries a monotonic revision so
+    // that ABA completion is hidden before the newest reveal may commit.
+    if (!intentIsCurrent(runId, revision)) {
       await invoke("native_terminal_hide", { handle });
-      if (visibleViewer?.handle === handle) visibleViewer = null;
+      if (visibleHandles.get(runId) === handle) visibleHandles.delete(runId);
       return null;
     }
     if (result === null) return null;
-    visibleViewer = { runId, handle };
+    visibleHandles.set(runId, handle);
     return result;
   });
 }
@@ -65,21 +77,24 @@ export function hideNativeViewer(
   runId: string,
   handle: string | null,
 ): Promise<void> {
-  if (desiredRunId === runId) desiredRunId = null;
+  const revision = issueIntent(runId);
+  if (handle && desiredHandles.get(runId) === handle) {
+    desiredHandles.delete(runId);
+  }
   return enqueue(async () => {
-    if (desiredRunId === runId || !handle) return;
+    if (!handle || !intentIsCurrent(runId, revision)) return;
     await invoke("native_terminal_hide", { handle });
-    if (visibleViewer?.handle === handle) visibleViewer = null;
+    if (visibleHandles.get(runId) === handle) visibleHandles.delete(runId);
   });
 }
 
 /** Removes a real teardown from presentation bookkeeping. */
 export function forgetNativeViewer(runId: string, handle: string | null): void {
-  if (desiredRunId === runId) desiredRunId = null;
-  if (
-    visibleViewer?.runId === runId &&
-    (!handle || visibleViewer.handle === handle)
-  ) {
-    visibleViewer = null;
+  issueIntent(runId);
+  if (!handle || desiredHandles.get(runId) === handle) {
+    desiredHandles.delete(runId);
+  }
+  if (!handle || visibleHandles.get(runId) === handle) {
+    visibleHandles.delete(runId);
   }
 }

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { browserTerminalClient } from "../../features/agents/terminal/internal/browserTerminalClient";
 import { terminalClientContractSuite, type TerminalClientOperation } from "./terminalClientContractSuite";
@@ -91,4 +91,25 @@ describe("browser terminal client adapter", () => {
       return operations;
     },
   }));
+
+  it("distinguishes a gracefully ended run from a missing session", () => {
+    const events: import("../../features/agents/terminal/internal/terminalClient").TerminalClientEvent[] = [];
+    browserTerminalClient.attach(
+      { agentRunId: "run-ended", cols: 80, rows: 24 },
+      (event) => events.push(event),
+    );
+    const socket = FakeWebSocket.instances.at(-1)!;
+    socket.open();
+    socket.text({ type: "error", message: "session_ended" });
+    socket.close(1008, "ended");
+
+    expect(events).toContainEqual({
+      type: "reattachment_required",
+      reason: "session_ended",
+    });
+    expect(events).not.toContainEqual({
+      type: "reattachment_required",
+      reason: "session_not_found",
+    });
+  });
 });

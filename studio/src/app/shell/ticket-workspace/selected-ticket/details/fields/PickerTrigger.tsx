@@ -5,7 +5,7 @@ interface PickerTriggerProps {
   icon?: ReactNode;
   saving?: boolean;
   disabled?: boolean;
-  variant?: "default" | "dashed";
+  variant?: "default" | "dashed" | "bare";
   onClick?: () => void;
   "data-testid"?: string;
 }
@@ -19,11 +19,13 @@ export default function PickerTrigger({
   onClick,
   "data-testid": testId,
 }: PickerTriggerProps) {
-  const isDashed = variant === "dashed";
-
-  const className = isDashed
-    ? "inline-flex items-center gap-1 rounded-full border border-dashed border-focus-accent px-2.5 py-0.5 text-xs text-focus-accent hover:bg-pane-title disabled:opacity-50"
-    : "inline-flex items-center gap-2 rounded-md border border-pane-border px-2.5 py-1 text-sm text-text-primary hover:border-text-muted disabled:opacity-50";
+  const className = {
+    bare: "inline-flex items-center gap-2 px-2.5 py-1 text-sm text-text-primary hover:bg-pane-title disabled:opacity-50",
+    dashed:
+      "inline-flex items-center gap-1 border border-dashed border-focus-accent px-2.5 py-0.5 text-xs text-focus-accent hover:bg-pane-title disabled:opacity-50",
+    default:
+      "inline-flex items-center gap-2 border border-pane-border px-2.5 py-1 text-sm text-text-primary hover:border-text-muted disabled:opacity-50",
+  }[variant];
 
   return (
     <button

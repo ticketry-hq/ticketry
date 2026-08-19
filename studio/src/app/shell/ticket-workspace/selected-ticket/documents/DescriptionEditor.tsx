@@ -40,7 +40,7 @@ export default function DescriptionEditor({
 
     return (
       <div
-        className={`min-h-[48px] cursor-text rounded-md px-2 py-1.5 text-base leading-relaxed text-text-primary transition-colors ${
+        className={`min-h-[48px] cursor-text px-2 py-1.5 text-base leading-relaxed text-text-primary transition-colors ${
           value
             ? "border border-transparent hover:border-pane-border"
             : "border border-dashed border-pane-border hover:border-focus-accent"
@@ -82,7 +82,7 @@ export default function DescriptionEditor({
           <textarea
             autoFocus
             aria-label="Ticket description source"
-            className="min-h-[12rem] w-full resize-y rounded-lg border border-pane-border bg-pane-panel p-3 font-mono text-sm text-text-primary focus:border-focus-accent focus:outline-none"
+            className="min-h-[12rem] w-full resize-y border border-pane-border bg-pane-panel p-3 font-mono text-sm text-text-primary focus:border-focus-accent focus:outline-none"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
           />
@@ -111,14 +111,14 @@ export default function DescriptionEditor({
         <button
           type="button"
           onClick={commit}
-          className="rounded bg-focus-accent px-2.5 py-1 text-xs font-semibold text-pane-bg"
+          className="bg-focus-accent px-2.5 py-1 text-xs font-semibold text-pane-bg"
         >
           Save
         </button>
         <button
           type="button"
           onClick={() => setEditing(false)}
-          className="rounded border border-pane-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary"
+          className="border border-pane-border px-2.5 py-1 text-xs text-text-muted hover:text-text-primary"
         >
           Cancel
         </button>

@@ -123,7 +123,7 @@ export function StateCatalog() {
           aria-label={`Delete ${previewState?.name ?? "state"}?`}
           className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
         >
-          <div className="w-full max-w-md rounded border border-pane-border bg-pane-panel p-5 shadow-xl">
+          <div className="w-full max-w-md border border-pane-border bg-pane-panel p-5 shadow-xl">
             <h2 className="text-base font-semibold text-text-primary">
               Delete {previewState?.name ?? "state"}?
             </h2>
@@ -197,7 +197,7 @@ export function StateCatalog() {
       ) : null}
 
       {adding ? (
-        <div className="mt-3 grid gap-2 rounded border border-dashed border-pane-border p-3">
+        <div className="mt-3 grid gap-2 border border-dashed border-pane-border p-3">
           <label className="grid gap-1 text-sm text-text-muted">
             State name
             <input
@@ -295,7 +295,7 @@ function CatalogStateRow({
         aria-label={`State color for ${state.name}`}
         value={state.color || "#7a8599"}
         onChange={(event) => void updateState(stateId, { color: event.target.value })}
-        className="size-4 cursor-pointer appearance-none rounded-full border border-pane-border bg-transparent p-0 [&::-moz-color-swatch]:rounded-full [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0"
+        className="size-4 cursor-pointer appearance-none border border-pane-border bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0"
       />
       <input
         aria-label={`State name for ${state.name}`}
@@ -305,12 +305,12 @@ function CatalogStateRow({
           const next = name.trim();
           if (next && next !== state.name) void updateState(stateId, { name: next });
         }}
-        className="min-w-0 rounded border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-text-primary outline-none hover:border-pane-border focus:border-focus-accent focus:bg-pane-bg focus:ring-1 focus:ring-focus-accent"
+        className="min-w-0 border border-transparent bg-transparent px-2 py-1 text-sm font-medium text-text-primary outline-none hover:border-pane-border focus:border-focus-accent focus:bg-pane-bg focus:ring-1 focus:ring-focus-accent"
       />
       <span className="text-right text-xs tabular-nums text-text-muted">
         {workItemCount} work {workItemCount === 1 ? "item" : "items"}
       </span>
-      <span className="rounded border border-pane-border px-2 py-1 text-sm text-text-secondary">
+      <span className="border border-pane-border px-2 py-1 text-sm text-text-secondary">
         {GROUP_LABELS[state.group] ?? state.group}
       </span>
       <div className="flex items-center gap-1">
@@ -337,7 +337,7 @@ function CatalogStateRow({
           aria-label={`Delete ${state.name}`}
           onClick={onRemove}
           disabled={action !== null}
-          className="grid size-8 place-items-center rounded text-sm text-text-muted opacity-0 transition-opacity hover:bg-lifecycle-danger/10 hover:text-lifecycle-danger focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus-accent group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-not-allowed disabled:!opacity-0"
+          className="grid size-8 place-items-center text-sm text-text-muted opacity-0 transition-opacity hover:bg-lifecycle-danger/10 hover:text-lifecycle-danger focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus-accent group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-not-allowed disabled:!opacity-0"
         >
           ×
         </button>

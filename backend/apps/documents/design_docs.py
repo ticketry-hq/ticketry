@@ -23,6 +23,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from apps.documents.git_exclude import exclude_directory
 from studio_server.contracts import ModuleSummary, TaskSummary
 
 # Slug length budgets keep directory names readable, per LLD.
@@ -164,6 +165,7 @@ def ensure_dir(root: Path, rel: str) -> Path:
 
     abs_dir = (root / rel).resolve()
     abs_dir.mkdir(parents=True, exist_ok=True)
+    exclude_directory(root, root / SPEC_ROOT)
     return abs_dir
 
 

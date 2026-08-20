@@ -3,21 +3,23 @@ import type {
   GraphRunExecutionModeEnum as GeneratedGraphRunExecutionMode,
   GraphRunResult as GeneratedGraphRunResult,
   Module as GeneratedModule,
+  ModuleLink as GeneratedModuleLink,
   Project as GeneratedProject,
   PatchedProject as GeneratedProjectPatch,
   WorkItem as GeneratedWorkItem,
   WorkItemCreate as GeneratedWorkItemCreate,
   PatchedWorkItemPatch as GeneratedWorkItemPatch,
-  Workspace as GeneratedWorkspace,
 } from "@worktracker/typescript-sdk";
 
 export type Project = GeneratedProject;
 // `manual_module_order` joins `id` as server-owned: a project's module
 // ordering mode is set by the module reorder domain operation, never by a
 // create or update body.
-export type ProjectCreate = Omit<GeneratedProject, "id" | "manual_module_order">;
+export type ProjectCreate = Omit<
+  GeneratedProject,
+  "id" | "manual_module_order" | "onboarding_required"
+>;
 export type ProjectPatch = GeneratedProjectPatch;
-export type Workspace = GeneratedWorkspace;
 export interface LaunchBinding extends LaunchBindingInput {
   id: number;
   issue_type_id: string;
@@ -29,18 +31,20 @@ export interface LaunchBinding extends LaunchBindingInput {
 export interface LaunchBindingInput {
   prompt?: string | null;
   required_skills?: string[] | null;
+  entry_skill?: string | null;
   agent?: string | null;
   model?: string | null;
   reasoning?: string | null;
 }
 export interface ProviderCapabilities {
   agent: string;
-  accepts_model: boolean;
-  accepts_any_model: boolean;
-  model_aliases?: string[];
-  model_prefixes?: string[];
-  reasoning_levels?: string[];
+  models: ProviderModelCapability[];
   supports_unattended?: boolean;
+}
+
+export interface ProviderModelCapability {
+  name: string;
+  reasoning_levels: string[];
 }
 
 export interface StateImpact {
@@ -73,6 +77,7 @@ export type GraphRunExecutionMode = `${GeneratedGraphRunExecutionMode}`;
 export type GraphRunResult = GeneratedGraphRunResult;
 
 export type Module = GeneratedModule;
+export type ModuleLink = GeneratedModuleLink;
 
 export type IssueLevel = "module" | "task";
 export interface IssueType {
@@ -84,6 +89,8 @@ export interface IssueType {
   sort_order: number;
   start_state?: string | null;
   workflow_revision?: number;
+  /** Backend-only orchestration types are retained in storage but hidden in Studio. */
+  is_pathfind?: boolean;
 }
 
 export interface State {
@@ -178,6 +185,7 @@ export interface ScopedWorkflowLaunchBinding extends LaunchBindingInput {
   state_id: string;
   prompt: string;
   required_skills: string[];
+  entry_skill: string | null;
   agent: string | null;
   model: string | null;
   reasoning: string | null;

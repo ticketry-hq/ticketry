@@ -23,7 +23,6 @@ from worktracker.models import (
     LaunchBinding,
     Project,
     State,
-    Workspace,
 )
 
 
@@ -46,10 +45,7 @@ def client():
 
 @pytest.fixture
 def project():
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    return Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
-    )
+    return Project.objects.create(id=uuid.uuid4(), name="meml", slug="MEML")
 
 
 def _issue_type(project, name, level):

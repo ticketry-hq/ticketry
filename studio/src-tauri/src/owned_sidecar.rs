@@ -14,19 +14,16 @@
 //! periods, ordering, readiness, recovery, and error precedence — lives in the
 //! supervisor, not here.
 //!
-//! Every exit path ends in the same forced teardown, including the destructor:
-//! a handle dropped before it reaches the supervisor's state — a startup that
-//! failed after the spawn, an unwinding panic — still takes its group with it.
+//! Every local handle-release path retains the same forced process-group
+//! teardown, including the destructor: a handle dropped before it reaches the
+//! supervisor's state — a startup that failed after the spawn, an unwinding
+//! panic — still takes its group with it.
 //!
-//! Cleanup is only best effort when the owner itself dies.  Rust destructors
-//! run while the owning process is still alive and unwinding normally; they
-//! cannot run after an abrupt owner death — a macOS `SIGKILL` (including Force
-//! Quit and the out-of-memory killer), a power loss, a build configured to
-//! abort on panic, or an operating-system crash.  POSIX process groups carry no
-//! parent-death guarantee, so an abruptly killed desktop app may leave its
-//! sidecar group behind.  The next launch reclaims the data-directory lock the
-//! kernel released and owns only the sidecars it spawns itself; it never adopts
-//! or signals the stranded ones.
+//! Each packaged service additionally owns the desktop side of a private
+//! liveness pipe. Abrupt desktop death closes its sole writer in the kernel,
+//! allowing the child to stop even though Rust destructors cannot run. This is
+//! an owner-liveness guarantee, not a stronger process-group primitive;
+//! process groups remain the containment boundary for both services.
 //!
 //! Containment is also not a cage.  A descendant that deliberately leaves the
 //! owned group — by calling `setsid`, or by joining a group this shell never
@@ -44,6 +41,9 @@ use std::time::{Duration, Instant};
 use process_wrap::std::ProcessGroup;
 use process_wrap::std::{ChildWrapper, CommandWrap};
 
+use crate::owner_liveness::{OwnerLivenessWriter, PendingOwnerLiveness};
+use crate::process_spawn;
+
 /// A sidecar process this supervisor spawned, plus every process still inside
 /// the process group it leads.
 #[derive(Debug)]
@@ -54,6 +54,8 @@ pub(crate) struct OwnedSidecar {
     #[cfg(unix)]
     group: i32,
     direct_child_exit: Option<ExitStatus>,
+    owner_liveness: Option<OwnerLivenessWriter>,
+    teardown_complete: bool,
 }
 
 impl OwnedSidecar {
@@ -62,10 +64,26 @@ impl OwnedSidecar {
     /// The caller applies the fixed arguments, environment, standard I/O, and
     /// packaged-environment sanitisation first; this only adds containment.
     pub(crate) fn spawn(command: Command) -> io::Result<Self> {
+        Self::spawn_contained(command, None)
+    }
+
+    /// Spawns the packaged backend with a fresh owner-liveness reader and
+    /// retains the pipe's sole writer for this handle's lifetime.
+    pub(crate) fn spawn_backend(mut command: Command) -> io::Result<Self> {
+        let pending = PendingOwnerLiveness::prepare(&mut command)?;
+        let mut sidecar = Self::spawn_contained(command, None)?;
+        sidecar.owner_liveness = Some(pending.transfer_complete());
+        Ok(sidecar)
+    }
+
+    fn spawn_contained(
+        command: Command,
+        owner_liveness: Option<OwnerLivenessWriter>,
+    ) -> io::Result<Self> {
         let mut wrapped = CommandWrap::from(command);
         #[cfg(unix)]
         wrapped.wrap(ProcessGroup::leader());
-        let child = wrapped.spawn()?;
+        let child = process_spawn::with_lock(|| wrapped.spawn())?;
         #[cfg(unix)]
         let group = i32::try_from(child.id()).map_err(|_| {
             io::Error::other("owned sidecar process identifier exceeds the process-group range")
@@ -75,6 +93,8 @@ impl OwnedSidecar {
             #[cfg(unix)]
             group,
             direct_child_exit: None,
+            owner_liveness,
+            teardown_complete: false,
         })
     }
 
@@ -86,6 +106,14 @@ impl OwnedSidecar {
     /// Takes the captured standard error, for the supervisor's log readers.
     pub(crate) fn take_stderr(&mut self) -> Option<ChildStderr> {
         self.child.stderr().take()
+    }
+
+    /// Closes this backend's desktop-owned writer without signalling its
+    /// process group. The backend observes EOF and owns cooperative service
+    /// shutdown; repeated releases are harmless.
+    #[cfg(test)]
+    pub(crate) fn release_owner_liveness(&mut self) {
+        self.owner_liveness = None;
     }
 
     /// Reports the direct child's exit status without blocking, reaping it and
@@ -114,6 +142,9 @@ impl OwnedSidecar {
     pub(crate) fn request_graceful_stop(&self) -> io::Result<()> {
         #[cfg(unix)]
         {
+            if self.teardown_complete || !self.owned_group_exists() {
+                return Err(io::Error::from_raw_os_error(libc::ESRCH));
+            }
             self.child.signal(libc::SIGTERM)
         }
         #[cfg(not(unix))]
@@ -132,6 +163,7 @@ impl OwnedSidecar {
         loop {
             let direct_child_exited = self.try_direct_child_exit()?.is_some();
             if direct_child_exited && !self.owned_group_exists() {
+                self.teardown_complete = true;
                 return Ok(true);
             }
             if Instant::now() >= deadline {
@@ -146,12 +178,19 @@ impl OwnedSidecar {
     /// A group that has already gone away counts as stopped once the direct
     /// child has been reaped.
     pub(crate) fn terminate_and_reap(&mut self) -> io::Result<()> {
+        if self.teardown_complete {
+            return Ok(());
+        }
         let kill_result = match self.child.start_kill() {
             Err(error) if is_missing_process(&error) => Ok(()),
             other => other,
         };
         let wait_result = self.reap_direct_child();
-        kill_result.and(wait_result)
+        let result = kill_result.and(wait_result);
+        if result.is_ok() {
+            self.teardown_complete = true;
+        }
+        result
     }
 
     /// The same forced teardown, for paths that must not fail: `Drop` and
@@ -461,6 +500,7 @@ mod tests {
     fn a_stopped_sidecar_refuses_a_later_graceful_stop_request() {
         let mut sidecar = shell_sidecar(&format!("{READY}; while :; do sleep 0.05; done"));
         sidecar.terminate_and_reap().expect("teardown");
+        assert_group_is_gone(&sidecar);
 
         sidecar
             .request_graceful_stop()

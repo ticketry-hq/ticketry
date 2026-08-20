@@ -20,10 +20,21 @@ import {
     LaunchBindingFromJSON,
     LaunchBindingToJSON,
 } from '../models/LaunchBinding.js';
+import {
+    type LaunchBindingWrite,
+    LaunchBindingWriteFromJSON,
+    LaunchBindingWriteToJSON,
+} from '../models/LaunchBindingWrite.js';
+import {
+    type WorkflowRevision,
+    WorkflowRevisionFromJSON,
+    WorkflowRevisionToJSON,
+} from '../models/WorkflowRevision.js';
 
 export interface DeleteLaunchBindingRequest {
     stateId: string;
     typeId: string;
+    workflowRevision: WorkflowRevision;
 }
 
 export interface ListLaunchBindingsRequest {
@@ -33,7 +44,7 @@ export interface ListLaunchBindingsRequest {
 export interface UpsertLaunchBindingRequest {
     stateId: string;
     typeId: string;
-    launchBinding: Omit<LaunchBinding, 'id'|'issue_type'|'state'|'created_at'|'updated_at'>;
+    launchBindingWrite: LaunchBindingWrite;
 }
 
 /**
@@ -47,15 +58,17 @@ export interface LaunchBindingsApiInterface {
      * Creates request options for deleteLaunchBinding without sending the request
      * @param {string} stateId
      * @param {string} typeId
+     * @param {WorkflowRevision} workflowRevision
      * @throws {RequiredError}
      * @memberof LaunchBindingsApiInterface
      */
     deleteLaunchBindingRequestOpts(requestParameters: DeleteLaunchBindingRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Revision-guarded upsert/delete at the row\'s composite domain key.
+     * Project reads and revision-guarded composite-key upsert/delete.
      * @param {string} stateId
      * @param {string} typeId
+     * @param {WorkflowRevision} workflowRevision
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof LaunchBindingsApiInterface
@@ -63,7 +76,7 @@ export interface LaunchBindingsApiInterface {
     deleteLaunchBindingRaw(requestParameters: DeleteLaunchBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>>;
 
     /**
-     * Revision-guarded upsert/delete at the row\'s composite domain key.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     deleteLaunchBinding(requestParameters: DeleteLaunchBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void>;
 
@@ -76,7 +89,7 @@ export interface LaunchBindingsApiInterface {
     listLaunchBindingsRequestOpts(requestParameters: ListLaunchBindingsRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Canonical project-scoped collection read.
+     * Project reads and revision-guarded composite-key upsert/delete.
      * @param {string} projectId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -85,7 +98,7 @@ export interface LaunchBindingsApiInterface {
     listLaunchBindingsRaw(requestParameters: ListLaunchBindingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<LaunchBinding>>>;
 
     /**
-     * Canonical project-scoped collection read.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     listLaunchBindings(requestParameters: ListLaunchBindingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<LaunchBinding>>;
 
@@ -93,17 +106,17 @@ export interface LaunchBindingsApiInterface {
      * Creates request options for upsertLaunchBinding without sending the request
      * @param {string} stateId
      * @param {string} typeId
-     * @param {LaunchBinding} launchBinding
+     * @param {LaunchBindingWrite} launchBindingWrite
      * @throws {RequiredError}
      * @memberof LaunchBindingsApiInterface
      */
     upsertLaunchBindingRequestOpts(requestParameters: UpsertLaunchBindingRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Revision-guarded upsert/delete at the row\'s composite domain key.
+     * Project reads and revision-guarded composite-key upsert/delete.
      * @param {string} stateId
      * @param {string} typeId
-     * @param {LaunchBinding} launchBinding
+     * @param {LaunchBindingWrite} launchBindingWrite
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof LaunchBindingsApiInterface
@@ -111,7 +124,7 @@ export interface LaunchBindingsApiInterface {
     upsertLaunchBindingRaw(requestParameters: UpsertLaunchBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LaunchBinding>>;
 
     /**
-     * Revision-guarded upsert/delete at the row\'s composite domain key.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     upsertLaunchBinding(requestParameters: UpsertLaunchBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LaunchBinding>;
 
@@ -140,9 +153,18 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
             );
         }
 
+        if (requestParameters['workflowRevision'] == null) {
+            throw new runtime.RequiredError(
+                'workflowRevision',
+                'Required parameter "workflowRevision" was null or undefined when calling deleteLaunchBinding().'
+            );
+        }
+
         const queryParameters: any = {};
 
         const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
 
         if (this.configuration && this.configuration.apiKey) {
             headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
@@ -158,11 +180,12 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
             method: 'DELETE',
             headers: headerParameters,
             query: queryParameters,
+            body: WorkflowRevisionToJSON(requestParameters['workflowRevision']),
         };
     }
 
     /**
-     * Revision-guarded upsert/delete at the row\'s composite domain key.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     async deleteLaunchBindingRaw(requestParameters: DeleteLaunchBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
         const requestOptions = await this.deleteLaunchBindingRequestOpts(requestParameters);
@@ -172,7 +195,7 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
     }
 
     /**
-     * Revision-guarded upsert/delete at the row\'s composite domain key.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     async deleteLaunchBinding(requestParameters: DeleteLaunchBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
         await this.deleteLaunchBindingRaw(requestParameters, initOverrides);
@@ -210,7 +233,7 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
     }
 
     /**
-     * Canonical project-scoped collection read.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     async listLaunchBindingsRaw(requestParameters: ListLaunchBindingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<LaunchBinding>>> {
         const requestOptions = await this.listLaunchBindingsRequestOpts(requestParameters);
@@ -220,7 +243,7 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
     }
 
     /**
-     * Canonical project-scoped collection read.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     async listLaunchBindings(requestParameters: ListLaunchBindingsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<LaunchBinding>> {
         const response = await this.listLaunchBindingsRaw(requestParameters, initOverrides);
@@ -245,10 +268,10 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
             );
         }
 
-        if (requestParameters['launchBinding'] == null) {
+        if (requestParameters['launchBindingWrite'] == null) {
             throw new runtime.RequiredError(
-                'launchBinding',
-                'Required parameter "launchBinding" was null or undefined when calling upsertLaunchBinding().'
+                'launchBindingWrite',
+                'Required parameter "launchBindingWrite" was null or undefined when calling upsertLaunchBinding().'
             );
         }
 
@@ -272,12 +295,12 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
             method: 'PUT',
             headers: headerParameters,
             query: queryParameters,
-            body: LaunchBindingToJSON(requestParameters['launchBinding']),
+            body: LaunchBindingWriteToJSON(requestParameters['launchBindingWrite']),
         };
     }
 
     /**
-     * Revision-guarded upsert/delete at the row\'s composite domain key.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     async upsertLaunchBindingRaw(requestParameters: UpsertLaunchBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LaunchBinding>> {
         const requestOptions = await this.upsertLaunchBindingRequestOpts(requestParameters);
@@ -287,7 +310,7 @@ export class LaunchBindingsApi extends runtime.BaseAPI implements LaunchBindings
     }
 
     /**
-     * Revision-guarded upsert/delete at the row\'s composite domain key.
+     * Project reads and revision-guarded composite-key upsert/delete.
      */
     async upsertLaunchBinding(requestParameters: UpsertLaunchBindingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LaunchBinding> {
         const response = await this.upsertLaunchBindingRaw(requestParameters, initOverrides);

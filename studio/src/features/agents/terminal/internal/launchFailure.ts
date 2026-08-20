@@ -6,7 +6,6 @@
 
 /** Codes worth a sentence. Anything else keeps its raw code. */
 const LAUNCH_FAILURE_REASONS: Record<string, string> = {
-  no_profile_selected: "Select a Studio launch profile before trying again.",
   // ADR-0015: a binding naming a deactivated provider is blocked, never
   // silently substituted, so the message names the specific cause and fix.
   provider_not_activated:

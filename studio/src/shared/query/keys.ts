@@ -16,6 +16,10 @@ export const queryKeys = {
     byProject: (projectId: string) => ["modules", projectId] as const,
   },
 
+  moduleLinks: {
+    all: ["module-links"] as const,
+  },
+
   states: {
     byProject: (projectId: string) => ["states", projectId] as const,
   },
@@ -45,7 +49,7 @@ export const queryKeys = {
       ["work-items", "project", projectId, filters] as const,
   },
 
-  workspace: ["workspace"] as const,
+  onboarding: ["onboarding"] as const,
 
   workflows: {
     byProject: (projectId: string) =>

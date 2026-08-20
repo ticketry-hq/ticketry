@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * One transition row plus the revision guard carried by write bodies.
+ * One persisted transition row returned by reads and writes.
  * @export
  * @interface IssueTypeTransition
  */
@@ -38,25 +38,19 @@ export interface IssueTypeTransition {
      * @type {string}
      * @memberof IssueTypeTransition
      */
-    from_state: string;
+    readonly from_state: string;
     /**
      *
      * @type {string}
      * @memberof IssueTypeTransition
      */
-    to_state: string;
+    readonly to_state: string;
     /**
      *
      * @type {boolean}
      * @memberof IssueTypeTransition
      */
-    agent_allowed?: boolean;
-    /**
-     *
-     * @type {number}
-     * @memberof IssueTypeTransition
-     */
-    workflow_revision: number;
+    readonly agent_allowed: boolean;
 }
 
 /**
@@ -67,7 +61,7 @@ export function instanceOfIssueTypeTransition(value: object): value is IssueType
     if (!('issue_type' in value) || value['issue_type'] === undefined) return false;
     if (!('from_state' in value) || value['from_state'] === undefined) return false;
     if (!('to_state' in value) || value['to_state'] === undefined) return false;
-    if (!('workflow_revision' in value) || value['workflow_revision'] === undefined) return false;
+    if (!('agent_allowed' in value) || value['agent_allowed'] === undefined) return false;
     return true;
 }
 
@@ -85,8 +79,7 @@ export function IssueTypeTransitionFromJSONTyped(json: any, ignoreDiscriminator:
         'issue_type': json['issue_type'],
         'from_state': json['from_state'],
         'to_state': json['to_state'],
-        'agent_allowed': json['agent_allowed'] == null ? undefined : json['agent_allowed'],
-        'workflow_revision': json['workflow_revision'],
+        'agent_allowed': json['agent_allowed'],
     };
 }
 
@@ -94,16 +87,12 @@ export function IssueTypeTransitionToJSON(json: any): IssueTypeTransition {
     return IssueTypeTransitionToJSONTyped(json, false);
 }
 
-export function IssueTypeTransitionToJSONTyped(value?: Omit<IssueTypeTransition, 'id'|'issue_type'> | null, ignoreDiscriminator: boolean = false): any {
+export function IssueTypeTransitionToJSONTyped(value?: Omit<IssueTypeTransition, 'id'|'issue_type'|'from_state'|'to_state'|'agent_allowed'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'from_state': value['from_state'],
-        'to_state': value['to_state'],
-        'agent_allowed': value['agent_allowed'],
-        'workflow_revision': value['workflow_revision'],
     };
 }

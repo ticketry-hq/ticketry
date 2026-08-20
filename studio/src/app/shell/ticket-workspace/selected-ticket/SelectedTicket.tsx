@@ -1,7 +1,6 @@
 import { TEMP_TASK_ID } from "../../../../features/agents/types";
 import { scratchBucketId } from "../../../../features/agents/terminal";
 import { PaneShell } from "../../PaneShell";
-import { useConfig } from "../../../../features/studio/stores/configStore";
 import { useStudioStore } from "../../../../features/projects/store";
 import { useClientStore } from "../../../../state/clientStore";
 import { useCachedStates } from "../../../../shared/query/stateCatalog";
@@ -25,11 +24,9 @@ export function SelectedTicket() {
   const dismissStateConfiguration = useClientStore(
     (s) => s.dismissStateConfiguration,
   );
-  const { profiles, recentProfileIndex } = useConfig();
   const { data: task } = useWorkItem(
     selectedTaskId && selectedTaskId !== TEMP_TASK_ID ? selectedTaskId : null,
   );
-  const profile = recentProfileIndex === null ? null : profiles[recentProfileIndex] ?? null;
   const bucket =
     selectedTaskId === TEMP_TASK_ID
       ? scratchBucketId(selectedModuleId ?? "")
@@ -43,13 +40,10 @@ export function SelectedTicket() {
           moduleId: selectedModuleId,
           taskKey: task?.id ?? selectedTaskId,
           taskName: task?.name ?? "",
-          profileReady: !!profile,
-          profile,
         }
       : selectedTaskId === TEMP_TASK_ID && selectedProjectId && selectedModuleId
         ? {
             kind: "scratch",
-            profileReady: !!profile,
             onChooseMode: (mode) => {
               if (mode === "plan") startPlanFlow();
               else startInstantChangeFlow();

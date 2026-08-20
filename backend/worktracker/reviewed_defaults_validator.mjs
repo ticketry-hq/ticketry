@@ -10,6 +10,7 @@ const TOP_LEVEL_KEYS = new Set([
   "states",
   "issueTypes",
   "requiredSkills",
+  "entrySkills",
   "prompts",
   "workflows",
 ]);
@@ -188,6 +189,37 @@ function validateRequiredSkills(requiredSkills, states, errors) {
     if (!vocabulary.has(state)) {
       errors.push(
         `Required-skills map declares unknown state '${state}'.`,
+      );
+    }
+  }
+}
+
+function validateEntrySkills(entrySkills, requiredSkills, states, errors) {
+  if (!isObject(entrySkills)) {
+    errors.push("Entry-skills map is missing or is not an object.");
+    return;
+  }
+
+  const vocabulary = new Set(states);
+  for (const [state, identifier] of Object.entries(entrySkills)) {
+    if (!vocabulary.has(state)) {
+      errors.push(`Entry-skills map declares unknown state '${state}'.`);
+      continue;
+    }
+    if (typeof identifier !== "string" || !identifier.trim()) {
+      errors.push(
+        `State '${state}' has malformed entrySkills identifier '${String(identifier)}'.`,
+      );
+      continue;
+    }
+    if (!PINNED_SKILL_IDS.has(identifier)) {
+      errors.push(
+        `Entry skill '${identifier}' for state '${state}' is not provided by the pinned snapshot.`,
+      );
+    }
+    if (!Array.isArray(requiredSkills?.[state]) || !requiredSkills[state].includes(identifier)) {
+      errors.push(
+        `Entry skill '${identifier}' for state '${state}' must also be declared in requiredSkills.`,
       );
     }
   }
@@ -378,6 +410,12 @@ export function validateFinalizedDefaults(value) {
     errors,
   );
   validateRequiredSkills(value.requiredSkills, canonicalStates, errors);
+  validateEntrySkills(
+    value.entrySkills,
+    value.requiredSkills,
+    canonicalStates,
+    errors,
+  );
 
   const vocabulary = new Set(canonicalStates);
   const terminalStates = new Set(

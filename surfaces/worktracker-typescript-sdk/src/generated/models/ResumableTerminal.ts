@@ -24,7 +24,7 @@ import {
 } from './ScopeEnum.js';
 
 /**
- *
+ * Derived resumable-run projection after history de-duplication.
  * @export
  * @interface ResumableTerminal
  */
@@ -34,55 +34,55 @@ export interface ResumableTerminal {
      * @type {string}
      * @memberof ResumableTerminal
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
     /**
      *
      * @type {string}
      * @memberof ResumableTerminal
      */
-    agent: string;
+    readonly agent: string;
     /**
      *
      * @type {string}
      * @memberof ResumableTerminal
      */
-    status: string;
+    readonly status: string;
     /**
      *
      * @type {string}
      * @memberof ResumableTerminal
      */
-    started_at: string;
+    readonly started_at: string;
     /**
      *
      * @type {string}
      * @memberof ResumableTerminal
      */
-    launch_state: string | null;
+    readonly launch_state: string | null;
     /**
      *
      * @type {string}
      * @memberof ResumableTerminal
      */
-    launch_model: string | null;
+    readonly launch_model: string | null;
     /**
      *
      * @type {ScopeEnum}
      * @memberof ResumableTerminal
      */
-    scope: ScopeEnum;
+    readonly scope: ScopeEnum;
     /**
      *
      * @type {string}
      * @memberof ResumableTerminal
      */
-    provider_session_id: string;
+    readonly provider_session_id: string;
     /**
      *
      * @type {string}
      * @memberof ResumableTerminal
      */
-    resumed_from: string | null;
+    readonly resumed_from: string | null;
 }
 
 
@@ -129,21 +129,12 @@ export function ResumableTerminalToJSON(json: any): ResumableTerminal {
     return ResumableTerminalToJSONTyped(json, false);
 }
 
-export function ResumableTerminalToJSONTyped(value?: ResumableTerminal | null, ignoreDiscriminator: boolean = false): any {
+export function ResumableTerminalToJSONTyped(value?: Omit<ResumableTerminal, 'agent_run_id'|'agent'|'status'|'started_at'|'launch_state'|'launch_model'|'scope'|'provider_session_id'|'resumed_from'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
-        'agent': value['agent'],
-        'status': value['status'],
-        'started_at': value['started_at'],
-        'launch_state': value['launch_state'],
-        'launch_model': value['launch_model'],
-        'scope': ScopeEnumToJSON(value['scope']),
-        'provider_session_id': value['provider_session_id'],
-        'resumed_from': value['resumed_from'],
     };
 }

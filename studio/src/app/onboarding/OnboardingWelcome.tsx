@@ -1,29 +1,12 @@
-import { type FormEvent, useState } from "react";
-import { apiErrorMessage } from "../../shared/api/client";
 import { resolveDefaultProject } from "../../features/studio/lib/defaultProject";
-import { getConfigSnapshot } from "../../features/studio/stores/configStore";
 import { useStudioStore } from "../../features/projects/store";
 import { useOnboardingTourStore } from "./onboardingTourStore";
 import { OnboardingProviders } from "./OnboardingProviders";
 
-type WelcomePane = "providers" | "project";
-
 export default function OnboardingWelcome() {
-  const projectsEnabled = getConfigSnapshot().features.projects;
-  const [pane, setPane] = useState<WelcomePane>("providers");
-  const createProject = useStudioStore((state) => state.createProjectWithError);
   const startTour = useOnboardingTourStore((state) => state.start);
-  const [name, setName] = useState("Coding");
-  const [slug, setSlug] = useState("CDN");
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   const continueFromProviders = async () => {
-    if (projectsEnabled) {
-      setPane("project");
-      return;
-    }
-
     let projectId = useStudioStore.getState().selectedProjectId;
     if (!projectId) {
       const project = await resolveDefaultProject();
@@ -31,26 +14,6 @@ export default function OnboardingWelcome() {
       projectId = project.id;
     }
     if (projectId) startTour(projectId);
-  };
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (creating || !name.trim() || !slug.trim()) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const project = await createProject({
-        name: name.trim(),
-        slug: slug.trim(),
-        description: "",
-      });
-      if (!project.id) throw new Error("The created project has no id.");
-      await useStudioStore.getState().selectProject(project.id);
-      startTour(project.id);
-    } catch (cause) {
-      setCreateError(apiErrorMessage(cause));
-      setCreating(false);
-    }
   };
 
   return (
@@ -62,73 +25,10 @@ export default function OnboardingWelcome() {
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-focus-accent">
           Welcome to WorkTracker
         </div>
-
-        {!projectsEnabled || pane === "providers" ? (
-          <OnboardingProviders
-            continueLabel={projectsEnabled ? "Continue" : "Get started"}
-            onContinue={continueFromProviders}
-          />
-        ) : (
-          <>
-            <h1 className="mt-3 text-2xl font-semibold text-text-primary">
-              Your first project
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-text-secondary">
-              Projects organize modules and stories. Use these defaults or make
-              them your own.
-            </p>
-
-            <form className="mt-7" onSubmit={(event) => void submit(event)}>
-              <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary">
-                Project name
-                <input
-                  autoFocus
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  data-testid="onboarding-project-name"
-                  className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 text-base font-normal normal-case tracking-normal text-text-primary outline-none focus:border-focus-accent"
-                />
-              </label>
-              <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-text-secondary">
-                Project key
-                <input
-                  value={slug}
-                  onChange={(event) => setSlug(event.target.value)}
-                  maxLength={3}
-                  data-testid="onboarding-project-key"
-                  className="mt-2 block w-full border border-pane-border bg-pane-bg px-3 py-2 font-mono text-sm font-normal tracking-normal text-text-primary outline-none focus:border-focus-accent"
-                />
-                <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-text-muted">
-                  Project key must be exactly three letters, using only A-Z.
-                </span>
-              </label>
-
-              {createError ? (
-                <p
-                  className="mt-4 text-sm text-lifecycle-danger"
-                  data-testid="onboarding-create-error"
-                  role="alert"
-                >
-                  {createError}
-                </p>
-              ) : null}
-
-              <div className="mt-7 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={
-                    creating || !name.trim() || !slug.trim()
-                  }
-                  data-testid="onboarding-create-project"
-                  className="bg-focus-accent px-4 py-2 text-sm font-semibold text-pane-bg disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {creating ? "Creating…" : "Create project"}
-                </button>
-              </div>
-            </form>
-          </>
-        )}
-
+        <OnboardingProviders
+          continueLabel="Get started"
+          onContinue={continueFromProviders}
+        />
       </main>
     </div>
   );

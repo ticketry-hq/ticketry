@@ -8,7 +8,7 @@ from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 
 datas = []
-hiddenimports = []
+hiddenimports = ["owner_liveness"]
 binaries = []
 database_filename_markers = (".db", ".sqlite", ".sqlite3")
 
@@ -108,7 +108,7 @@ if database_sources:
 
 a = Analysis(
     ["sidecar.py"],
-    pathex=[],
+    pathex=[SPECPATH],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

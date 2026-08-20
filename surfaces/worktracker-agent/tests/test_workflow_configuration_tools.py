@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from worktracker_sdk.generated import (
-    IssueTypeTransition,
-    LaunchBinding,
+    IssueTypeTransitionCreate,
+    LaunchBindingWrite,
     PatchedIssueType,
     PatchedIssueTypeTransition,
 )
@@ -71,6 +71,7 @@ def _sdk():
             state=BUILD,
             prompt="Implement",
             required_skills=["tdd"],
+            entry_skill=None,
             model=MODEL,
             reasoning=REASONING,
             auto_start=True,
@@ -83,6 +84,7 @@ def _sdk():
                 "state": BUILD,
                 "prompt": "Implement",
                 "required_skills": ["tdd"],
+                "entry_skill": None,
                 "model": MODEL,
                 "reasoning": REASONING,
                 "auto_start": True,
@@ -109,7 +111,27 @@ def test_read_assembles_the_legacy_tool_shape_from_crud_rows():
     }
     assert result["launch_bindings"][0]["agent"] == "codex"
     assert result["launch_bindings"][0]["model"] == "gpt-5"
+    assert result["launch_bindings"][0]["entry_skill"] is None
     assert result["warnings"] == []
+
+
+def test_read_warns_when_user_invoke_only_skill_is_not_the_entry():
+    sdk = _sdk()
+    binding = sdk.launch_bindings.returns["list_launch_bindings"][0]
+    binding.required_skills = ["to-spec", "tdd"]
+    binding.entry_skill = None
+
+    result = WorktrackerService(
+        base_url="http://example.test", sdk=sdk
+    ).get_issue_type_workflow_settings(str(TYPE))
+
+    warning = next(
+        item
+        for item in result["warnings"]
+        if item["code"] == "user_invoke_only_skill_not_entry"
+    )
+    assert "to-spec" in warning["message"]
+    assert "tdd" not in warning["message"]
 
 
 def test_transition_writes_use_the_crud_operations_and_revision_bodies():
@@ -122,12 +144,10 @@ def test_transition_writes_use_the_crud_operations_and_revision_bodies():
     service.set_issue_type_workflow_transition_permission(
         str(TYPE), str(READY), str(BUILD), False, 7
     )
-    service.remove_issue_type_workflow_transition(
-        str(TYPE), str(READY), str(BUILD), 7
-    )
+    service.remove_issue_type_workflow_transition(str(TYPE), str(READY), str(BUILD), 7)
 
     create_body = sdk.workflows.calls[0][1][1]
-    assert isinstance(create_body, IssueTypeTransition)
+    assert isinstance(create_body, IssueTypeTransitionCreate)
     assert create_body.from_state == READY
     update_body = sdk.workflows.calls[1][1][3]
     assert isinstance(update_body, PatchedIssueTypeTransition)
@@ -161,14 +181,16 @@ def test_launch_binding_tool_resolves_catalog_rows_without_changing_arguments():
         "gpt-5",
         "high",
         ["to-spec"],
+        "to-spec",
     )
 
     _, args, _ = sdk.launch_bindings.calls[-1]
     assert args[:2] == (BUILD, TYPE)
     body = args[2]
-    assert isinstance(body, LaunchBinding)
+    assert isinstance(body, LaunchBindingWrite)
     assert body.model == MODEL
     assert body.reasoning == REASONING
+    assert body.entry_skill == "to-spec"
     assert body.auto_start is True
 
 
@@ -190,26 +212,51 @@ def test_workflow_configuration_tools_keep_their_public_signatures():
     expected = {
         "get_issue_type_workflow_settings": ("type_id",),
         "add_issue_type_workflow_transition": (
-            "type_id", "from_state_id", "to_state_id", "workflow_revision", "agent_allowed"
+            "type_id",
+            "from_state_id",
+            "to_state_id",
+            "workflow_revision",
+            "agent_allowed",
         ),
         "remove_issue_type_workflow_transition": (
-            "type_id", "from_state_id", "to_state_id", "workflow_revision"
+            "type_id",
+            "from_state_id",
+            "to_state_id",
+            "workflow_revision",
         ),
         "set_issue_type_workflow_transition_permission": (
-            "type_id", "from_state_id", "to_state_id", "agent_allowed", "workflow_revision"
+            "type_id",
+            "from_state_id",
+            "to_state_id",
+            "agent_allowed",
+            "workflow_revision",
         ),
         "set_issue_type_workflow_start_state": (
-            "type_id", "state_id", "workflow_revision"
+            "type_id",
+            "state_id",
+            "workflow_revision",
         ),
         "upsert_issue_type_workflow_launch_binding": (
-            "type_id", "state_id", "workflow_revision", "prompt", "agent", "model",
-            "reasoning", "required_skills"
+            "type_id",
+            "state_id",
+            "workflow_revision",
+            "prompt",
+            "agent",
+            "model",
+            "reasoning",
+            "required_skills",
+            "entry_skill",
         ),
         "clear_issue_type_workflow_launch_binding": (
-            "type_id", "state_id", "workflow_revision"
+            "type_id",
+            "state_id",
+            "workflow_revision",
         ),
         "set_issue_type_workflow_auto_start": (
-            "type_id", "state_id", "auto_start", "workflow_revision"
+            "type_id",
+            "state_id",
+            "auto_start",
+            "workflow_revision",
         ),
     }
 

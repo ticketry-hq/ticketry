@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from importlib.resources import files
 
@@ -16,6 +17,27 @@ _PINNED_UPSTREAM_SKILL_LOCK = json.loads(
 )
 PINNED_UPSTREAM_SKILL_IDS = tuple(_PINNED_UPSTREAM_SKILL_LOCK["selected_packages"])
 _PINNED_UPSTREAM_SKILL_ID_SET = frozenset(PINNED_UPSTREAM_SKILL_IDS)
+
+
+def _is_user_invoke_only(identifier: str) -> bool:
+    skill_text = (
+        files("apps.terminals.agents.skills")
+        .joinpath("snapshot", identifier, "SKILL.md")
+        .read_text(encoding="utf-8")
+    )
+    return bool(
+        re.search(
+            r"(?m)^disable-model-invocation:\s*true\s*$",
+            skill_text,
+        )
+    )
+
+
+USER_INVOKE_ONLY_SKILL_IDS = frozenset(
+    identifier
+    for identifier in PINNED_UPSTREAM_SKILL_IDS
+    if _is_user_invoke_only(identifier)
+)
 
 DEFAULT_REQUIRED_SKILLS = REVIEWED_REQUIRED_SKILLS
 

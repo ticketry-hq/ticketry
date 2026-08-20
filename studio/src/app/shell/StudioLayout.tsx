@@ -29,7 +29,7 @@ export function StudioLayout() {
       onLayout={handleOuterLayout}
     >
       {sidebarVisible && paneComposition !== "absent" ? (
-        <StudioSidebar layout={layout} paneComposition={paneComposition} />
+        <StudioSidebar layout={layout} />
       ) : null}
       <Panel defaultSize={outerLayout.at(-1)} minSize={30} order={3}>
         <TicketWorkspace

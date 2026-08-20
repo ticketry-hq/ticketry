@@ -26,13 +26,13 @@ export interface ViewerOutputReportResult {
      * @type {string}
      * @memberof ViewerOutputReportResult
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
     /**
      *
      * @type {boolean}
      * @memberof ViewerOutputReportResult
      */
-    observed: boolean;
+    readonly observed: boolean;
 }
 
 /**
@@ -63,14 +63,12 @@ export function ViewerOutputReportResultToJSON(json: any): ViewerOutputReportRes
     return ViewerOutputReportResultToJSONTyped(json, false);
 }
 
-export function ViewerOutputReportResultToJSONTyped(value?: ViewerOutputReportResult | null, ignoreDiscriminator: boolean = false): any {
+export function ViewerOutputReportResultToJSONTyped(value?: Omit<ViewerOutputReportResult, 'agent_run_id'|'observed'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
-        'observed': value['observed'],
     };
 }

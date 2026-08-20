@@ -14,8 +14,6 @@ from __future__ import annotations
 from typing import Any
 
 from asgiref.sync import async_to_sync
-from pydantic import BaseModel
-
 from apps.errors import ApplicationError
 from apps.terminals import dao
 import apps.terminals.launch as terminal_launch
@@ -24,12 +22,6 @@ from apps.terminals.reconciliation_scheduler import (
     schedule_terminal_reconciliation,
 )
 from apps.terminals.shell_launch import ShellLaunchRefused, launch_module_shell
-
-
-class CreateModuleShellBody(BaseModel):
-    """Inputs for one new durable login shell rooted in a module folder."""
-
-    module_id: str
 
 
 def _module_shell_payload(session) -> dict[str, Any]:
@@ -42,11 +34,11 @@ def _module_shell_payload(session) -> dict[str, Any]:
     }
 
 
-def create_module_shell(body: CreateModuleShellBody) -> dict[str, Any]:
+def create_module_shell(*, module_id: str) -> dict[str, Any]:
     """Create a durable shell run and its terminal for one module."""
 
     try:
-        agent_run_id = async_to_sync(launch_module_shell)(body.module_id)
+        agent_run_id = async_to_sync(launch_module_shell)(module_id)
     except ShellLaunchRefused as exc:
         # 409 rather than 400: the request is well-formed, and the remedy is to
         # give the module a folder rather than to correct the call.

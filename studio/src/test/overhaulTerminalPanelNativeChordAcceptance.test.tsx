@@ -15,11 +15,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { NATIVE_TERMINAL_CHORD_EVENT } from "../app/navigation/nativeTerminalChords";
+import { seedModuleLinks } from "../features/module-links";
+import { seedModules, useStudioStore } from "../features/projects";
 import {
   isTerminalPanelOpenIn,
   useTerminalPanelStore,
 } from "../features/terminal-panel";
 import { useClientStore } from "../state/clientStore";
+import type { Module } from "../shared/api/types";
+
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
+  getTasks: vi.fn().mockResolvedValue({
+    rootIds: [],
+    children: {},
+    order: [],
+    states: [],
+    workItems: [],
+  }),
+}));
 
 const runtime = vi.hoisted(() => ({ desktop: true }));
 
@@ -52,6 +66,27 @@ describe("terminal panel — native chord", () => {
     host.listeners.clear();
     host.listen.mockClear();
     useTerminalPanelStore.setState({ openModules: {} });
+    useStudioStore.setState({ selectedProjectId: "project-1", error: null });
+    seedModules("project-1", [
+      { id: "module-1", name: "One", project_id: "project-1" },
+      { id: "module-2", name: "Two", project_id: "project-1" },
+    ] as Module[]);
+    seedModuleLinks([
+      {
+        id: "link-1",
+        module_id: "module-1",
+        local_path: "/repo/one",
+        created_at: "",
+        updated_at: "",
+      },
+      {
+        id: "link-2",
+        module_id: "module-2",
+        local_path: "/repo/two",
+        created_at: "",
+        updated_at: "",
+      },
+    ]);
     // The panel belongs to the module it opens onto, so the chord needs one
     // selected to act on (#730).
     useClientStore.setState({ selectedModuleId: "module-1" });
@@ -96,6 +131,18 @@ describe("terminal panel — native chord", () => {
     });
     expect(isTerminalPanelOpenIn("module-1")).toBe(false);
 
+    keymap.unmount();
+  });
+
+  it("[overhaul-137] switches module tabs by position from an engaged native terminal", async () => {
+    const keymap = renderHook(() => useGlobalKeymap());
+    await act(async () => {});
+
+    act(() => {
+      host.reportChord("module-position-2");
+    });
+
+    expect(useClientStore.getState().selectedModuleId).toBe("module-2");
     keymap.unmount();
   });
 

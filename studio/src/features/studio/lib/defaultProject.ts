@@ -8,10 +8,11 @@ import type { Project } from "../../../shared/api/types";
 export const DEFAULT_PROJECT_KEY = "CDN";
 export const LEGACY_PROJECT_KEY = "CODING";
 
-function findDefaultProject(projects: Project[]): Project | null {
+export function findDefaultProject(projects: Project[]): Project | null {
   return (
     projects.find((project) => project.slug === DEFAULT_PROJECT_KEY) ??
     projects.find((project) => project.slug === LEGACY_PROJECT_KEY) ??
+    projects[0] ??
     null
   );
 }

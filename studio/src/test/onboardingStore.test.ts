@@ -6,8 +6,8 @@ vi.mock("../shared/api/client", async () => {
   );
   return {
     ...actual,
-    getWorkspace: vi.fn(),
-    acknowledgeOnboarding: vi.fn(),
+    listProjects: vi.fn(),
+    acknowledgeProjectOnboarding: vi.fn(),
   };
 });
 
@@ -15,55 +15,60 @@ import * as api from "../shared/api/client";
 import {
   acknowledgeOnboarding as acknowledgeOnboardingAction,
   getOnboardingRequiredSnapshot,
-  loadWorkspaceState,
+  loadProjectOnboardingState,
 } from "../app/onboarding/onboardingStore";
 import { queryClient } from "../shared/query/queryClient";
 import { queryKeys } from "../shared/query/keys";
 
-const getWorkspace = api.getWorkspace as ReturnType<typeof vi.fn>;
-const acknowledgeOnboarding = api.acknowledgeOnboarding as ReturnType<typeof vi.fn>;
+const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
+const acknowledgeProjectOnboarding = api.acknowledgeProjectOnboarding as ReturnType<typeof vi.fn>;
 
-const workspace = (onboarding_required: boolean) => ({
-  id: "w1",
-  name: "MEML",
-  slug: "meml",
+const project = (onboarding_required: boolean) => ({
+  id: "p1",
+  name: "Coding",
+  slug: "CDN",
+  description: "",
+  manual_module_order: false,
   onboarding_required,
 });
 
 beforeEach(() => {
-  getWorkspace.mockReset();
-  acknowledgeOnboarding.mockReset();
-  queryClient.setQueryData(queryKeys.workspace, false);
+  listProjects.mockReset();
+  acknowledgeProjectOnboarding.mockReset();
+  queryClient.clear();
+  queryClient.setQueryData(queryKeys.onboarding, false);
 });
 
 describe("onboardingStore", () => {
-  it("maps the workspace flag onto onboardingRequired", async () => {
-    getWorkspace.mockResolvedValue(workspace(true));
-    await loadWorkspaceState();
+  it("maps the default project's flag onto onboardingRequired", async () => {
+    listProjects.mockResolvedValue([project(true)]);
+    await loadProjectOnboardingState();
     expect(getOnboardingRequiredSnapshot()).toBe(true);
 
-    getWorkspace.mockResolvedValue(workspace(false));
-    await loadWorkspaceState();
+    listProjects.mockResolvedValue([project(false)]);
+    await loadProjectOnboardingState();
     expect(getOnboardingRequiredSnapshot()).toBe(false);
   });
 
   it("swallows a failing load: resolves and leaves onboarding not required", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    queryClient.setQueryData(queryKeys.workspace, true);
-    getWorkspace.mockRejectedValue(new TypeError("Failed to fetch"));
+    queryClient.setQueryData(queryKeys.onboarding, true);
+    listProjects.mockRejectedValue(new TypeError("Failed to fetch"));
 
     await expect(
-      loadWorkspaceState(),
+      loadProjectOnboardingState(),
     ).resolves.toBeUndefined();
     expect(getOnboardingRequiredSnapshot()).toBe(false);
   });
 
   it("acknowledgement clears onboardingRequired", async () => {
-    queryClient.setQueryData(queryKeys.workspace, true);
-    acknowledgeOnboarding.mockResolvedValue(workspace(false));
+    listProjects.mockResolvedValue([project(true)]);
+    await loadProjectOnboardingState();
+    queryClient.setQueryData(queryKeys.onboarding, true);
+    acknowledgeProjectOnboarding.mockResolvedValue(project(false));
 
     await acknowledgeOnboardingAction();
     expect(getOnboardingRequiredSnapshot()).toBe(false);
-    expect(acknowledgeOnboarding).toHaveBeenCalledTimes(1);
+    expect(acknowledgeProjectOnboarding).toHaveBeenCalledWith("p1");
   });
 });

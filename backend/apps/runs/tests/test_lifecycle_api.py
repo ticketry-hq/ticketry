@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from django.test import AsyncClient, override_settings
 
+from apps.runs import api as runs
 from apps.runs import dao
 from apps.runs.models import AgentRun
 from apps.terminals import launch as terminal_launch
@@ -36,11 +37,6 @@ PROJECT_ID = fixture_uuid("proj-1")
 MODULE_1_ID = fixture_issue_id(
     project_id="proj-1", module_id="mod-1", task_id=None
 )
-MODULE_2_ID = fixture_issue_id(
-    project_id="proj-1", module_id="mod-2", task_id=None
-)
-
-
 def _task_id(label: str) -> str:
     return fixture_issue_id(
         project_id="proj-1", module_id="mod-1", task_id=label
@@ -79,44 +75,6 @@ async def _seed_run(
         runtime_namespace=terminal_launch.terminal_runtime.namespace,
         scope=scope,
     )
-
-
-async def test_module_activity_endpoint_returns_scoped_map(monkeypatch) -> None:
-    from datetime import datetime, timezone
-    class MockDatetime:
-        @classmethod
-        def now(cls, tz=None):
-            return datetime(2026, 6, 15, tzinfo=timezone.utc)
-    monkeypatch.setattr("apps.runs.dao.activity.datetime", MockDatetime)
-
-    # Scratch run (null task) under mod-2 must still rank its module (#598).
-    await _seed_run("r1", module_id="mod-1")
-    await _seed_run("r2", task_id=None, module_id="mod-2")
-
-    resp = await client.get(f"/runs/module-activity?project_id={PROJECT_ID}")
-
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body[MODULE_1_ID] == "2026-06-02T10:00:00"
-    assert body[MODULE_2_ID] == "2026-06-02T10:00:00"
-
-
-async def test_module_activity_window_param_excludes_old_runs(monkeypatch) -> None:
-    from datetime import datetime, timezone
-    class MockDatetime:
-        @classmethod
-        def now(cls, tz=None):
-            return datetime(2026, 6, 15, tzinfo=timezone.utc)
-    monkeypatch.setattr("apps.runs.dao.activity.datetime", MockDatetime)
-
-    await _seed_run("r1", module_id="mod-1")  # started 2026-06-02, well past
-
-    resp = await client.get(
-        f"/runs/module-activity?project_id={PROJECT_ID}&window_days=1"
-    )
-
-    assert resp.status_code == 200
-    assert resp.json() == {}
 
 
 def _event(run_id: str, **extra) -> dict:
@@ -285,7 +243,12 @@ async def test_ingest_accepts_matching_run_authorization() -> None:
     assert await _state("run-auth-ok") == "starting"
 
 
-# --- GET /runs/agent-status (T962-S1) ---------------------------------------
+# --- Agent status snapshot service (T962-S1) --------------------------------
+
+
+async def _status_payload(task_id: str | None = None) -> dict:
+    snapshot = await runs.agent_status(PROJECT_ID, task_id)
+    return snapshot.model_dump(mode="json")
 
 
 async def _seed_status_run(
@@ -361,10 +324,9 @@ async def test_agent_status_returns_snapshot_body_and_all_run_records(
         scope="plan",
     )
 
-    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+    body = await _status_payload()
 
-    assert response.status_code == 200
-    assert response.json() == {
+    assert body == {
         "scope": {"project_id": PROJECT_ID, "task_id": None},
         "runs": [
             {
@@ -477,14 +439,13 @@ async def test_agent_status_ended_run_is_an_exited_tombstone(monkeypatch) -> Non
         ended_at="2026-07-12T14:20:00+00:00",
     )
 
-    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+    body = await _status_payload()
 
-    assert response.status_code == 200
-    runs = {run["agent_run_id"]: run for run in response.json()["runs"]}
-    assert runs["ended-working"]["state"] == "exited"
-    assert runs["ended-working"]["updated_at"] == "2026-07-12T15:00:00+00:00"
-    assert runs["ended-silent"]["state"] == "exited"
-    assert runs["ended-silent"]["updated_at"] == "2026-07-12T14:20:00+00:00"
+    records = {run["agent_run_id"]: run for run in body["runs"]}
+    assert records["ended-working"]["state"] == "exited"
+    assert records["ended-working"]["updated_at"] == "2026-07-12T15:00:00+00:00"
+    assert records["ended-silent"]["state"] == "exited"
+    assert records["ended-silent"]["updated_at"] == "2026-07-12T14:20:00+00:00"
 
 
 async def test_agent_status_omits_active_run_owned_by_another_runtime() -> None:
@@ -507,10 +468,9 @@ async def test_agent_status_omits_active_run_owned_by_another_runtime() -> None:
         runtime_namespace="another-runtime",
     )
 
-    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+    body = await _status_payload()
 
-    assert response.status_code == 200
-    assert [run["agent_run_id"] for run in response.json()["runs"]] == ["owned"]
+    assert [run["agent_run_id"] for run in body["runs"]] == ["owned"]
 
 
 async def test_agent_status_omits_active_run_without_terminal_session() -> None:
@@ -526,10 +486,9 @@ async def test_agent_status_omits_active_run_without_terminal_session() -> None:
         persist_terminal=False,
     )
 
-    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+    body = await _status_payload()
 
-    assert response.status_code == 200
-    assert response.json()["runs"] == []
+    assert body["runs"] == []
 
 
 async def test_agent_status_optional_task_filter_is_authoritative_scope() -> None:
@@ -543,12 +502,8 @@ async def test_agent_status_optional_task_filter_is_authoritative_scope() -> Non
         lifecycle_updated_at=now,
     )
 
-    response = await client.get(
-        f"/runs/agent-status?project_id={PROJECT_ID}&task_id={_task_id('t1')}"
-    )
+    body = await _status_payload(_task_id("t1"))
 
-    assert response.status_code == 200
-    body = response.json()
     assert body["scope"] == {"project_id": PROJECT_ID, "task_id": _task_id("t1")}
     assert [run["agent_run_id"] for run in body["runs"]] == ["wanted"]
 
@@ -581,9 +536,9 @@ async def test_agent_status_omits_old_ended_runs_but_keeps_old_active_runs(
         status="completed", ended_at="2026-07-12T15:00:00+00:00",
     )
 
-    response = await client.get(f"/runs/agent-status?project_id={PROJECT_ID}")
+    body = await _status_payload()
 
-    assert [run["agent_run_id"] for run in response.json()["runs"]] == [
+    assert [run["agent_run_id"] for run in body["runs"]] == [
         "recently-ended", "old-active",
     ]
 
@@ -601,11 +556,9 @@ async def test_older_lifecycle_event_does_not_regress_snapshot_state() -> None:
         json=_event("ordered", kind="turn_start", ts="2026-07-12T14:00:00Z"),
     )
 
-    response = await client.get(
-        f"/runs/agent-status?project_id={PROJECT_ID}&task_id={_task_id('t1')}"
-    )
+    body = await _status_payload(_task_id("t1"))
 
-    assert response.json()["runs"][0]["state"] == "turn_complete"
-    assert response.json()["runs"][0]["updated_at"] == (
+    assert body["runs"][0]["state"] == "turn_complete"
+    assert body["runs"][0]["updated_at"] == (
         "2026-07-12T15:00:00+00:00"
     )

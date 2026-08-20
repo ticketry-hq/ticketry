@@ -21,6 +21,10 @@ import {
   dragEvent,
   dragTab,
   dragTabAboveStrip,
+  layoutRows,
+  layoutTabs,
+  transientDocumentDragLeave,
+  transientDocumentDragLeaveTargets,
 } from "./moduleDragGestures";
 import {
   backlogGroupOrder,
@@ -198,4 +202,105 @@ describe("module tab strip reorder acceptance", () => {
     fireEvent.click(tabFor("module-a"));
     expect(selectModule).toHaveBeenCalledWith("module-a");
   });
+
+  it.each(transientDocumentDragLeaveTargets)(
+    "[overhaul-130] resumes consecutive fullscreen Module drags with each surface's visible baseline after a %s leave",
+    async (leaveTarget) => {
+      await renderAutomaticProject();
+      listModules.mockResolvedValue(modules("module-a", "module-c", "module-b"));
+
+      const laidOut = layoutTabs();
+      const source = laidOut.get("module-c")!;
+      const target = laidOut.get("module-a")!;
+      const transfer = dataTransfer();
+
+      dragEvent(source, "dragstart", transfer);
+      dragEvent(target, "dragover", transfer, { clientX: 2 });
+      expect(screen.getByTestId("module-tab-drop-seam")).toHaveAttribute(
+        "data-drop-intent",
+        "near",
+      );
+
+      transientDocumentDragLeave(transfer, leaveTarget);
+      expect(screen.queryByTestId("module-tab-drop-seam")).toBeNull();
+
+      // The horizontal position remains authoritative above the narrow strip.
+      dragEvent(document.body, "dragover", transfer, {
+        clientX: 98,
+        clientY: -40,
+      });
+      expect(screen.getByTestId("module-tab-drop-seam")).toHaveAttribute(
+        "data-drop-intent",
+        "far",
+      );
+      dragEvent(document.body, "drop", transfer, {
+        clientX: 98,
+        clientY: -40,
+      });
+
+      // Every drag sends the order visible when it started. There is no
+      // client-side automatic/manual ordering branch.
+      await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledOnce());
+      expect(reorderWorkItem).toHaveBeenCalledWith("module-c", {
+        before_id: "module-a",
+        after_id: "module-b",
+        initial_order_ids: ["module-a", "module-b", "module-c"],
+      });
+      expect(tabStripOrder()).toEqual(["A", "C", "B"]);
+      expect(sidebarOrder()).toEqual(["module-a", "module-c", "module-b"]);
+      expect(backlogGroupOrder()).toEqual(["A", "C", "B"]);
+      expect(screen.queryByTestId("module-tab-drop-seam")).toBeNull();
+
+      await waitFor(() =>
+        expect(
+          rows().every((row) => row.getAttribute("draggable") === "true"),
+        ).toBe(true),
+      );
+
+      reorderWorkItem.mockClear();
+      listModules.mockResolvedValue(modules("module-b", "module-a", "module-c"));
+
+      const laidOutRows = layoutRows();
+      const rowSource = laidOutRows.get("module-b")!;
+      const rowTarget = laidOutRows.get("module-a")!;
+      const rowTransfer = dataTransfer();
+
+      dragEvent(rowSource, "dragstart", rowTransfer);
+      dragEvent(rowTarget, "dragover", rowTransfer, { clientY: 2 });
+      expect(screen.getByTestId("module-drop-seam")).toHaveAttribute(
+        "data-drop-intent",
+        "near",
+      );
+
+      transientDocumentDragLeave(rowTransfer, leaveTarget);
+      expect(screen.queryByTestId("module-drop-seam")).toBeNull();
+
+      // The vertical position likewise remains authoritative beside the rows.
+      dragEvent(document.body, "dragover", rowTransfer, {
+        clientX: 400,
+        clientY: 2,
+      });
+      expect(screen.getByTestId("module-drop-seam")).toHaveAttribute(
+        "data-drop-intent",
+        "near",
+      );
+      dragEvent(document.body, "drop", rowTransfer, {
+        clientX: 400,
+        clientY: 2,
+      });
+
+      // A consecutive drag uses the current visible order as its new baseline
+      // while the neighbor ids continue to express the fractional insertion.
+      await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledOnce());
+      expect(reorderWorkItem).toHaveBeenCalledWith("module-b", {
+        before_id: null,
+        after_id: "module-a",
+        initial_order_ids: ["module-a", "module-c", "module-b"],
+      });
+      expect(tabStripOrder()).toEqual(["B", "A", "C"]);
+      expect(sidebarOrder()).toEqual(["module-b", "module-a", "module-c"]);
+      expect(backlogGroupOrder()).toEqual(["B", "A", "C"]);
+      expect(screen.queryByTestId("module-drop-seam")).toBeNull();
+    },
+  );
 });

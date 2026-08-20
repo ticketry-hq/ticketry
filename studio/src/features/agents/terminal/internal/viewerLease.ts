@@ -1,4 +1,7 @@
-import { authenticatedHostFetch } from "../../../../shared/api/authenticatedHostFetch";
+import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
+import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
+import { TransportEnum } from "@worktracker/typescript-sdk/models";
+import { apiBase, apiKey } from "../../../../shared/api/client";
 
 export interface ViewerLeaseClient {
   acquire(agentRunId: string, viewerId: string): Promise<void>;
@@ -56,38 +59,60 @@ export function createViewerLease(
   };
 }
 
-async function request(path: string, body: Record<string, string>): Promise<void> {
-  const response = await authenticatedHostFetch(path, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  if (response.ok) return;
-  const payload = await response.json().catch(() => null) as { detail?: { error?: string } } | null;
-  const error = new Error(payload?.detail?.error ?? `HTTP ${response.status}`) as Error & { code?: string };
-  error.code = payload?.detail?.error;
-  throw error;
+const terminalsApi = () =>
+  createWorkTrackerClient({ baseUrl: apiBase(), apiKey: apiKey() }).terminals;
+
+async function request(operation: () => Promise<unknown>): Promise<void> {
+  try {
+    await operation();
+  } catch (cause) {
+    if (!(cause instanceof WorkTrackerApiError)) throw cause;
+    const payload = cause.body as
+      | { code?: string; detail?: string | { error?: string } }
+      | null;
+    const code =
+      payload?.code ??
+      (typeof payload?.detail === "object" ? payload.detail.error : undefined);
+    const error = new Error(code ?? `HTTP ${cause.status}`) as Error & {
+      code?: string;
+    };
+    error.code = code;
+    throw error;
+  }
 }
 
 /** Desktop's small control-plane companion to the native byte stream. */
 export const desktopViewerLease: ViewerLeaseClient = {
   acquire(agentRunId, viewerId) {
-    return request("/api/terminals/viewers/lease", {
-      agent_run_id: agentRunId,
-      viewer_id: viewerId,
-      transport: "desktop",
-    });
+    return request(() =>
+      terminalsApi().terminalsViewersLeaseCreate({
+        viewerLeaseRequest: {
+          agent_run_id: agentRunId,
+          viewer_id: viewerId,
+          transport: TransportEnum.desktop,
+        },
+      }),
+    );
   },
   renew(agentRunId, viewerId) {
-    return request("/api/terminals/viewers/lease/renew", {
-      agent_run_id: agentRunId,
-      viewer_id: viewerId,
-    });
+    return request(() =>
+      terminalsApi().terminalsViewersLeaseRenewCreate({
+        viewerLeaseIdentity: {
+          agent_run_id: agentRunId,
+          viewer_id: viewerId,
+        },
+      }),
+    );
   },
   release(agentRunId, viewerId) {
-    return request("/api/terminals/viewers/lease/release", {
-      agent_run_id: agentRunId,
-      viewer_id: viewerId,
-    });
+    return request(() =>
+      terminalsApi().terminalsViewersLeaseReleaseCreate({
+        viewerLeaseIdentity: {
+          agent_run_id: agentRunId,
+          viewer_id: viewerId,
+        },
+      }),
+    );
   },
 };
 

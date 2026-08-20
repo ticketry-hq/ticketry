@@ -90,7 +90,7 @@ export interface WorkItemsApiInterface {
     batchWorkItemsRequestOpts(requestParameters: BatchWorkItemsRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Read up to one hundred task work items by exact id in one request.
+     * Read at most one hundred exact ids while preserving caller order.
      * @param {WorkItemBatch} workItemBatch
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -99,7 +99,7 @@ export interface WorkItemsApiInterface {
     batchWorkItemsRaw(requestParameters: BatchWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<WorkItem>>>;
 
     /**
-     * Read up to one hundred task work items by exact id in one request.
+     * Read at most one hundred exact ids while preserving caller order.
      */
     batchWorkItems(requestParameters: BatchWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<WorkItem>>;
 
@@ -113,7 +113,7 @@ export interface WorkItemsApiInterface {
     createWorkItemRequestOpts(requestParameters: CreateWorkItemRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Create an ordinary task or an absorbed review finding.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      * @param {string} projectId
      * @param {WorkItemCreate} workItemCreate
      * @param {*} [options] Override http request option.
@@ -123,7 +123,7 @@ export interface WorkItemsApiInterface {
     createWorkItemRaw(requestParameters: CreateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItem>>;
 
     /**
-     * Create an ordinary task or an absorbed review finding.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     createWorkItem(requestParameters: CreateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItem>;
 
@@ -136,7 +136,7 @@ export interface WorkItemsApiInterface {
     deleteWorkItemRequestOpts(requestParameters: DeleteWorkItemRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      * @param {string} issueId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -145,7 +145,7 @@ export interface WorkItemsApiInterface {
     deleteWorkItemRaw(requestParameters: DeleteWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>>;
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     deleteWorkItem(requestParameters: DeleteWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void>;
 
@@ -158,7 +158,7 @@ export interface WorkItemsApiInterface {
     getWorkItemRequestOpts(requestParameters: GetWorkItemRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      * @param {string} issueId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -167,7 +167,7 @@ export interface WorkItemsApiInterface {
     getWorkItemRaw(requestParameters: GetWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItem>>;
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     getWorkItem(requestParameters: GetWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItem>;
 
@@ -182,7 +182,7 @@ export interface WorkItemsApiInterface {
     listWorkItemsRequestOpts(requestParameters: ListWorkItemsRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * The only task collection read, narrowed by declared query parameters.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      * @param {string} [module]
      * @param {string} [project]
      * @param {string} [state]
@@ -193,7 +193,7 @@ export interface WorkItemsApiInterface {
     listWorkItemsRaw(requestParameters: ListWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<WorkItem>>>;
 
     /**
-     * The only task collection read, narrowed by declared query parameters.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     listWorkItems(requestParameters: ListWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<WorkItem>>;
 
@@ -207,7 +207,7 @@ export interface WorkItemsApiInterface {
     reorderWorkItemRequestOpts(requestParameters: ReorderWorkItemRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Allocate the moved row\'s server-owned fractional rank.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      * @param {string} issueId
      * @param {WorkItemReorder} [workItemReorder]
      * @param {*} [options] Override http request option.
@@ -217,7 +217,7 @@ export interface WorkItemsApiInterface {
     reorderWorkItemRaw(requestParameters: ReorderWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItem>>;
 
     /**
-     * Allocate the moved row\'s server-owned fractional rank.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     reorderWorkItem(requestParameters: ReorderWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItem>;
 
@@ -231,7 +231,7 @@ export interface WorkItemsApiInterface {
     updateWorkItemRequestOpts(requestParameters: UpdateWorkItemRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      * @param {string} issueId
      * @param {PatchedWorkItemPatch} [patchedWorkItemPatch]
      * @param {*} [options] Override http request option.
@@ -241,7 +241,7 @@ export interface WorkItemsApiInterface {
     updateWorkItemRaw(requestParameters: UpdateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItem>>;
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     updateWorkItem(requestParameters: UpdateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItem>;
 
@@ -286,7 +286,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Read up to one hundred task work items by exact id in one request.
+     * Read at most one hundred exact ids while preserving caller order.
      */
     async batchWorkItemsRaw(requestParameters: BatchWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<WorkItem>>> {
         const requestOptions = await this.batchWorkItemsRequestOpts(requestParameters);
@@ -296,7 +296,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Read up to one hundred task work items by exact id in one request.
+     * Read at most one hundred exact ids while preserving caller order.
      */
     async batchWorkItems(requestParameters: BatchWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<WorkItem>> {
         const response = await this.batchWorkItemsRaw(requestParameters, initOverrides);
@@ -345,7 +345,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Create an ordinary task or an absorbed review finding.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async createWorkItemRaw(requestParameters: CreateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItem>> {
         const requestOptions = await this.createWorkItemRequestOpts(requestParameters);
@@ -355,7 +355,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Create an ordinary task or an absorbed review finding.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async createWorkItem(requestParameters: CreateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItem> {
         const response = await this.createWorkItemRaw(requestParameters, initOverrides);
@@ -394,7 +394,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async deleteWorkItemRaw(requestParameters: DeleteWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
         const requestOptions = await this.deleteWorkItemRequestOpts(requestParameters);
@@ -404,7 +404,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async deleteWorkItem(requestParameters: DeleteWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
         await this.deleteWorkItemRaw(requestParameters, initOverrides);
@@ -442,7 +442,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async getWorkItemRaw(requestParameters: GetWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItem>> {
         const requestOptions = await this.getWorkItemRequestOpts(requestParameters);
@@ -452,7 +452,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async getWorkItem(requestParameters: GetWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItem> {
         const response = await this.getWorkItemRaw(requestParameters, initOverrides);
@@ -495,7 +495,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * The only task collection read, narrowed by declared query parameters.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async listWorkItemsRaw(requestParameters: ListWorkItemsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<WorkItem>>> {
         const requestOptions = await this.listWorkItemsRequestOpts(requestParameters);
@@ -505,7 +505,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * The only task collection read, narrowed by declared query parameters.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async listWorkItems(requestParameters: ListWorkItemsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<WorkItem>> {
         const response = await this.listWorkItemsRaw(requestParameters, initOverrides);
@@ -547,7 +547,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Allocate the moved row\'s server-owned fractional rank.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async reorderWorkItemRaw(requestParameters: ReorderWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItem>> {
         const requestOptions = await this.reorderWorkItemRequestOpts(requestParameters);
@@ -557,7 +557,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Allocate the moved row\'s server-owned fractional rank.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async reorderWorkItem(requestParameters: ReorderWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItem> {
         const response = await this.reorderWorkItemRaw(requestParameters, initOverrides);
@@ -599,7 +599,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async updateWorkItemRaw(requestParameters: UpdateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorkItem>> {
         const requestOptions = await this.updateWorkItemRequestOpts(requestParameters);
@@ -609,7 +609,7 @@ export class WorkItemsApi extends runtime.BaseAPI implements WorkItemsApiInterfa
     }
 
     /**
-     * Retrieve, update, or delete one bare work item.
+     * Task CRUD with service-owned workflow and hierarchy invariants.
      */
     async updateWorkItem(requestParameters: UpdateWorkItemRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorkItem> {
         const response = await this.updateWorkItemRaw(requestParameters, initOverrides);

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type { WorkItemRow } from "../app/shell/ticket-workspace/tasks/TasksPane";
+import { ApiError } from "../features/agents/api/agentApi";
 import { useStudioStore } from "../features/projects/store";
 import { useAgentStatusStore } from "../features/agents/status";
 import {
@@ -288,4 +289,49 @@ describe("overhaul acceptance — terminals", () => {
       .not.toBeInTheDocument();
   });
 
+  it("[overhaul-145] explains a rejected provider resume and keeps it available", async () => {
+    terminalApi.listResumableTerminals.mockResolvedValue([{
+      agent_run_id: "run-old",
+      agent: "codex",
+      status: "exited",
+      started_at: "2026-08-07T12:00:00Z",
+      ended_at: "2026-08-07T12:30:00Z",
+      provider_session_id: "provider-session",
+      resumed_from: null,
+      scope: "task",
+    }]);
+    terminalApi.resumeTerminal.mockRejectedValue(new ApiError(
+      409,
+      "cwd_missing",
+      { detail: "cwd_missing", code: "cwd_missing" },
+    ));
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SelectedTicketContent
+          bucket="story-1"
+          projectId="project-1"
+          moduleId="module-1"
+          owner="studio"
+          details={<div>Issue details</div>}
+        />
+      </QueryClientProvider>,
+    );
+
+    const resume = await screen.findByRole("button", {
+      name: "Resume codex terminal",
+    });
+    fireEvent.click(resume);
+
+    await waitFor(() => {
+      expect(useClientStore.getState().toasts).toContainEqual(
+        expect.objectContaining({
+          kind: "error",
+          message: "Working directory no longer exists",
+        }),
+      );
+    });
+    expect(resume).toBeEnabled();
+    expect(useTerminalStore.getState().sessions).toEqual({});
+  });
 });

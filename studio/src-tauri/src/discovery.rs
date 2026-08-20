@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::ownership::established_data_directory;
+use crate::process_spawn;
 
 const APPROVED_PATHS_FILE: &str = "approved-executables.json";
 
@@ -365,7 +366,8 @@ where
 }
 
 fn version_probe(candidate: &Path, flag: &str) -> Result<String, String> {
-    let output = Command::new(candidate)
+    let mut command = Command::new(candidate);
+    command
         .arg(flag)
         .env_clear()
         // Node-installed CLIs commonly use `#!/usr/bin/env node`.  Give that
@@ -374,8 +376,8 @@ fn version_probe(candidate: &Path, flag: &str) -> Result<String, String> {
         .env("PATH", safe_probe_path(candidate))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
+        .stderr(Stdio::piped());
+    let output = process_spawn::output(&mut command)
         .map_err(|_| "version probe could not start".to_owned())?;
     if !output.status.success() {
         return Err("version probe returned a failure status".to_owned());

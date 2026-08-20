@@ -5,28 +5,27 @@ import {
   LaunchDefaultPicker,
   type LaunchDefaultPickerValue,
 } from "../features/workflows/LaunchDefaultPicker";
+import { validateLaunchBindingOptions } from "../features/workflows/launchBindingValidation";
 import type { ProviderCapabilities } from "../shared/api/types";
 
 const capabilities: ProviderCapabilities[] = [
   {
     agent: "claude",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: ["sonnet", "opus"],
-    model_prefixes: ["claude-"],
     // Deliberately only partly overlapping with codex below: "medium" is
     // shared, "high" and "low" are claude-only here. Reasoning names overlap
     // across providers but not completely, which is what makes carrying one
     // across a provider change a real decision rather than a formality.
-    reasoning_levels: ["low", "medium", "high"],
+    models: [
+      { name: "sonnet", reasoning_levels: ["low", "medium", "high"] },
+      { name: "opus", reasoning_levels: ["medium", "high"] },
+    ],
   },
   {
     agent: "codex",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: ["gpt-5.4", "gpt-5.3-codex"],
-    model_prefixes: ["gpt-"],
-    reasoning_levels: ["minimal", "medium", "xhigh"],
+    models: [
+      { name: "gpt-5.4", reasoning_levels: ["minimal", "medium", "xhigh"] },
+      { name: "gpt-5.3-codex", reasoning_levels: ["medium", "xhigh"] },
+    ],
   },
 ];
 
@@ -49,40 +48,30 @@ function PickerHarness({
 }
 
 describe("LaunchDefaultPicker", () => {
-  it("offers known models while accepting and committing free text", () => {
+  it("offers only catalog models and commits the newly selected triple", () => {
     const onCommit = vi.fn();
     render(<PickerHarness onCommit={onCommit} />);
 
     const model = screen.getByRole("combobox", { name: "Model" });
-    const suggestions = document.getElementById(model.getAttribute("list") ?? "");
-    expect(suggestions).not.toBeNull();
-    expect(suggestions?.querySelector('option[value="sonnet"]')).not.toBeNull();
-    expect(suggestions?.querySelector('option[value="opus"]')).not.toBeNull();
+    expect(within(model).getByRole("option", { name: "sonnet" }))
+      .toBeInTheDocument();
+    expect(within(model).getByRole("option", { name: "opus" }))
+      .toBeInTheDocument();
 
     fireEvent.change(model, { target: { value: "sonnet" } });
-    fireEvent.blur(model);
     expect(onCommit).toHaveBeenLastCalledWith({
       provider: "claude",
       model: "sonnet",
       reasoning: "",
     }, "model");
 
-    fireEvent.change(model, { target: { value: "claude-custom-model" } });
-    expect(model).toHaveValue("claude-custom-model");
-    fireEvent.blur(model);
-
-    expect(onCommit).toHaveBeenLastCalledWith({
-      provider: "claude",
-      model: "claude-custom-model",
-      reasoning: "",
-    }, "model");
   });
 
-  it("uses reasoning levels and model suggestions from the selected provider", () => {
+  it("uses catalog models from the provider and no reasoning before selection", () => {
     const onCommit = vi.fn();
     render(
       <PickerHarness
-        initialValue={{ provider: "claude", model: "", reasoning: "high" }}
+        initialValue={{ provider: "claude", model: "sonnet", reasoning: "high" }}
         onCommit={onCommit}
       />,
     );
@@ -91,17 +80,16 @@ describe("LaunchDefaultPicker", () => {
     fireEvent.change(provider, { target: { value: "codex" } });
 
     const reasoning = screen.getByRole("combobox", { name: "Reasoning" });
-    expect(within(reasoning).getByRole("option", { name: "minimal" }))
-      .toBeInTheDocument();
-    expect(within(reasoning).getByRole("option", { name: "medium" }))
-      .toBeInTheDocument();
+    expect(within(reasoning).queryByRole("option", { name: "minimal" }))
+      .not.toBeInTheDocument();
     expect(within(reasoning).queryByRole("option", { name: "low" }))
       .not.toBeInTheDocument();
 
     const model = screen.getByRole("combobox", { name: "Model" });
-    const suggestions = document.getElementById(model.getAttribute("list") ?? "");
-    expect(suggestions?.querySelector('option[value="gpt-5.4"]')).not.toBeNull();
-    expect(suggestions?.querySelector('option[value="sonnet"]')).toBeNull();
+    expect(within(model).getByRole("option", { name: "gpt-5.4" }))
+      .toBeInTheDocument();
+    expect(within(model).queryByRole("option", { name: "sonnet" }))
+      .not.toBeInTheDocument();
   });
 
   it("drops a reasoning the newly chosen provider does not offer", () => {
@@ -127,11 +115,11 @@ describe("LaunchDefaultPicker", () => {
     expect(screen.getByRole("combobox", { name: "Reasoning" })).toHaveValue("");
   });
 
-  it("carries a reasoning both providers offer across the change", () => {
+  it("clears reasoning on a provider change even when names overlap", () => {
     const onCommit = vi.fn();
     render(
       <PickerHarness
-        initialValue={{ provider: "claude", model: "", reasoning: "medium" }}
+        initialValue={{ provider: "claude", model: "sonnet", reasoning: "medium" }}
         onCommit={onCommit}
       />,
     );
@@ -143,8 +131,38 @@ describe("LaunchDefaultPicker", () => {
     expect(onCommit).toHaveBeenCalledWith({
       provider: "codex",
       model: "",
-      reasoning: "medium",
+      reasoning: "",
     }, "provider");
+  });
+
+  it("retains shared reasoning on model changes and clears unsupported reasoning", () => {
+    const onCommit = vi.fn();
+    const { unmount } = render(
+      <PickerHarness
+        initialValue={{ provider: "claude", model: "sonnet", reasoning: "medium" }}
+        onCommit={onCommit}
+      />,
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
+      target: { value: "opus" },
+    });
+    expect(onCommit).toHaveBeenLastCalledWith({
+      provider: "claude", model: "opus", reasoning: "medium",
+    }, "model");
+
+    unmount();
+    render(
+      <PickerHarness
+        initialValue={{ provider: "claude", model: "sonnet", reasoning: "low" }}
+        onCommit={onCommit}
+      />,
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
+      target: { value: "opus" },
+    });
+    expect(onCommit).toHaveBeenLastCalledWith({
+      provider: "claude", model: "opus", reasoning: "",
+    }, "model");
   });
 
   it("still marks a reasoning that arrived from the server as unsupported", () => {
@@ -152,12 +170,23 @@ describe("LaunchDefaultPicker", () => {
     // already has must stay visible rather than silently disappear.
     render(
       <PickerHarness
-        initialValue={{ provider: "codex", model: "", reasoning: "high" }}
+        initialValue={{ provider: "codex", model: "removed-model", reasoning: "high" }}
       />,
     );
 
     const reasoning = screen.getByRole("combobox", { name: "Reasoning" });
+    expect(within(screen.getByRole("combobox", { name: "Model" })).getByRole(
+      "option", { name: "removed-model (unsupported)" },
+    )).toBeInTheDocument();
     expect(within(reasoning).getByRole("option", { name: "high (unsupported)" }))
       .toBeInTheDocument();
+    expect(validateLaunchBindingOptions({
+      agent: "codex",
+      model: "removed-model",
+      reasoning: "high",
+    }, capabilities)).toEqual({
+      field: "model",
+      message: "Model 'removed-model' is not compatible with agent/provider 'codex'.",
+    });
   });
 });

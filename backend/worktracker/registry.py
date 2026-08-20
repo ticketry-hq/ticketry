@@ -56,16 +56,6 @@ MODEL_ROUTES = {
             ),
         ),
     },
-    "Workspace": {
-        "reads": (
-            RouteDeclaration(
-                "GET",
-                "/api/work-tracker/workspace",
-                "Retrieve the installation workspace singleton.",
-            ),
-        ),
-        "writes": (),
-    },
     "Project": {
         "reads": (
             RouteDeclaration(
@@ -343,7 +333,7 @@ DOMAIN_OPERATIONS = (
     ),
     RouteDeclaration(
         "POST",
-        "/api/work-tracker/workspace/onboarding/acknowledge",
+        "/api/work-tracker/projects/{project_id}/onboarding/acknowledge",
         "Onboarding acknowledgement is a monotonic write with no inverse route.",
     ),
 )
@@ -353,6 +343,17 @@ HOST_ROUTES = (
     RouteDeclaration("GET", "/api/healthz", "Report sidecar health."),
     RouteDeclaration("GET", "/api/settings/keybindings", "Read host keybindings."),
     RouteDeclaration("PUT", "/api/settings/keybindings", "Replace host keybindings."),
+    RouteDeclaration("GET", "/api/module-links", "List host-local Module links."),
+    RouteDeclaration(
+        "PUT",
+        "/api/module-links/{module_id}",
+        "Create or replace one host-local Module link.",
+    ),
+    RouteDeclaration(
+        "DELETE",
+        "/api/module-links/{module_id}",
+        "Delete one host-local Module link.",
+    ),
     RouteDeclaration(
         "GET", "/api/settings/provider-catalog", "Read the host provider default."
     ),
@@ -360,18 +361,9 @@ HOST_ROUTES = (
         "PUT", "/api/settings/provider-catalog", "Replace the host provider default."
     ),
     RouteDeclaration(
-        "GET", "/api/config", "Read local profiles and feature configuration."
-    ),
-    RouteDeclaration("PATCH", "/api/config", "Select the recent local profile."),
-    RouteDeclaration(
         "POST",
         "/api/config/folders/validate",
         "Validate a local module working directory.",
-    ),
-    RouteDeclaration("POST", "/api/config/profiles", "Create a local profile."),
-    RouteDeclaration("PUT", "/api/config/profiles/{index}", "Replace a local profile."),
-    RouteDeclaration(
-        "DELETE", "/api/config/profiles/{index}", "Delete a local profile."
     ),
     RouteDeclaration(
         "POST",
@@ -380,12 +372,6 @@ HOST_ROUTES = (
     ),
     RouteDeclaration(
         "POST", "/api/lifecycle/events", "Ingest and publish one lifecycle event."
-    ),
-    RouteDeclaration(
-        "GET", "/api/runs/module-activity", "Read recent module activity."
-    ),
-    RouteDeclaration(
-        "GET", "/api/runs/agent-status", "Read the authoritative agent status snapshot."
     ),
     RouteDeclaration(
         "POST", "/api/terminals/viewers/lease", "Acquire a terminal viewer lease."

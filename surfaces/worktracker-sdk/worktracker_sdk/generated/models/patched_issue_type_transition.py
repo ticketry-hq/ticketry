@@ -18,25 +18,20 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
-from typing import Any, ClassVar, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from typing import Any, ClassVar, Dict, List
 from typing_extensions import Annotated
-from uuid import UUID
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
 class PatchedIssueTypeTransition(BaseModel):
     """
-    One transition row plus the revision guard carried by write bodies.
+    The mutable transition field plus its mandatory revision guard.
     """ # noqa: E501
-    id: Optional[StrictInt] = None
-    issue_type: Optional[UUID] = None
-    from_state: Optional[UUID] = None
-    to_state: Optional[UUID] = None
-    agent_allowed: Optional[StrictBool] = None
-    workflow_revision: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
-    __properties: ClassVar[List[str]] = ["id", "issue_type", "from_state", "to_state", "agent_allowed", "workflow_revision"]
+    agent_allowed: StrictBool
+    workflow_revision: Annotated[int, Field(strict=True, ge=0)]
+    __properties: ClassVar[List[str]] = ["agent_allowed", "workflow_revision"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -68,12 +63,8 @@ class PatchedIssueTypeTransition(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
-        * OpenAPI `readOnly` fields are excluded.
-        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
-            "id",
-            "issue_type",
         ])
 
         _dict = self.model_dump(
@@ -93,10 +84,6 @@ class PatchedIssueTypeTransition(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "id": obj.get("id"),
-            "issue_type": obj.get("issue_type"),
-            "from_state": obj.get("from_state"),
-            "to_state": obj.get("to_state"),
             "agent_allowed": obj.get("agent_allowed"),
             "workflow_revision": obj.get("workflow_revision")
         })

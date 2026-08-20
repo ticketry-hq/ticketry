@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible Ticketry problem
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not report security vulnerabilities here. Use private vulnerability reporting in the Security tab.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the result and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest reliable sequence that triggers the problem.
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Ticketry revision
+      description: Commit SHA or branch name.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and hardware
+      placeholder: macOS 15.6, Apple M3
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Remove tokens, paths, and personal data before pasting output from npm run logs.

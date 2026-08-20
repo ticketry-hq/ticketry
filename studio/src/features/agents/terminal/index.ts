@@ -118,4 +118,5 @@ export {
   type ForegroundOwner,
 } from "./internal/foregroundStore";
 export { focusTerminal } from "./internal/terminalRegistry";
+export { useModalOcclusionActive } from "./internal/modalOcclusion";
 export { launchFailureMessage } from "./internal/launchFailure";

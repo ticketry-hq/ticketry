@@ -26,10 +26,12 @@ pub fn native_terminal_set_frame(
             .ok_or_else(|| "native terminal handle was not found".to_owned())?;
         (entry.view, entry.run_id.clone())
     };
+    let entries = Arc::clone(&state.entries);
+    let queued_handle = handle.clone();
     let (size_sender, size_receiver) = mpsc::channel();
     window
         .run_on_main_thread(move || {
-            let size = unsafe {
+            let size = with_live_native_entry(&entries, &queued_handle, view, |_| unsafe {
                 muxed_ghostty_view_set_frame(
                     view as *mut c_void,
                     x,
@@ -39,13 +41,14 @@ pub fn native_terminal_set_frame(
                     viewport_width,
                     viewport_height,
                 )
-            };
+            });
             let _ = size_sender.send(size);
         })
         .map_err(|error| error.to_string())?;
     let size = size_receiver
         .recv_timeout(Duration::from_secs(2))
-        .map_err(|_| "timed out resizing the native libghostty view".to_owned())?;
+        .map_err(|_| "timed out resizing the native libghostty view".to_owned())?
+        .ok_or_else(|| "native terminal handle was detached before resize".to_owned())?;
     Ok(NativeTerminalStatus {
         handle,
         run_id,
@@ -83,25 +86,24 @@ pub fn native_terminal_hide(
     // Hiding makes AppKit resign first responder, so whether this viewer holds
     // the keyboard has to be read before the view is hidden. The next reveal
     // uses it to give the keyboard back.
+    let entries = Arc::clone(&state.entries);
+    let queued_handle = handle.clone();
     let (hidden_sender, hidden_receiver) = mpsc::channel();
     window
         .run_on_main_thread(move || {
-            let focused = unsafe { muxed_ghostty_view_is_focused(view as *mut c_void) };
-            unsafe { muxed_ghostty_view_hide(view as *mut c_void) };
+            let focused = with_live_native_entry(&entries, &queued_handle, view, |entry| {
+                let focused = unsafe { muxed_ghostty_view_is_focused(view as *mut c_void) };
+                unsafe { muxed_ghostty_view_hide(view as *mut c_void) };
+                entry.visibility.hide(focused);
+                focused
+            });
             let _ = hidden_sender.send(focused);
         })
         .map_err(|error| error.to_string())?;
-    let focused = hidden_receiver
+    hidden_receiver
         .recv_timeout(Duration::from_secs(2))
-        .map_err(|_| "timed out hiding the native terminal view".to_owned())?;
-    state
-        .entries
-        .lock()
-        .expect("native terminal registry poisoned")
-        .get_mut(&handle)
-        .ok_or_else(|| "native terminal handle was not found".to_owned())?
-        .visibility
-        .hide(focused);
+        .map_err(|_| "timed out hiding the native terminal view".to_owned())?
+        .ok_or_else(|| "native terminal handle was detached before hide".to_owned())?;
     Ok(())
 }
 
@@ -131,57 +133,54 @@ pub fn native_terminal_show(
         viewport_width,
         viewport_height,
     } = frame;
+    let entries = Arc::clone(&state.entries);
+    let queued_handle = handle.clone();
     let (shown_sender, shown_receiver) = mpsc::channel();
     window
         .run_on_main_thread(move || {
-            let size = unsafe {
-                muxed_ghostty_view_set_scroll_callback(
-                    view as *mut c_void,
-                    Some(report_scroll_gesture),
-                    contexts.scroll as *mut c_void,
-                );
-                // A hidden viewer has no keyboard, so Studio chords are
-                // recognised only while the surface is on screen.
-                muxed_ghostty_view_set_chord_callback(
-                    view as *mut c_void,
-                    Some(report_studio_chord),
-                    contexts.chord as *mut c_void,
-                );
-                muxed_ghostty_view_set_resize_callback(
-                    view as *mut c_void,
-                    Some(report_grid_resize),
-                    contexts.process as *mut c_void,
-                );
-                muxed_ghostty_view_show(
-                    view as *mut c_void,
-                    x,
-                    y,
-                    width,
-                    height,
-                    viewport_width,
-                    viewport_height,
-                )
-            };
-            let _ = shown_sender.send(size);
+            let shown = with_live_native_entry(&entries, &queued_handle, view, |entry| {
+                let size = unsafe {
+                    muxed_ghostty_view_set_scroll_callback(
+                        view as *mut c_void,
+                        Some(report_scroll_gesture),
+                        contexts.scroll as *mut c_void,
+                    );
+                    // A hidden viewer has no keyboard, so Studio chords are
+                    // recognised only while the surface is on screen.
+                    muxed_ghostty_view_set_chord_callback(
+                        view as *mut c_void,
+                        Some(report_studio_chord),
+                        contexts.chord as *mut c_void,
+                    );
+                    muxed_ghostty_view_set_resize_callback(
+                        view as *mut c_void,
+                        Some(report_grid_resize),
+                        contexts.process as *mut c_void,
+                    );
+                    muxed_ghostty_view_show(
+                        view as *mut c_void,
+                        x,
+                        y,
+                        width,
+                        height,
+                        viewport_width,
+                        viewport_height,
+                    )
+                };
+                let result = entry
+                    .visibility
+                    .show_after_frame(size.columns, size.rows)
+                    .map(|_| entry.visibility.take_focus_restoration());
+                (size, result)
+            });
+            let _ = shown_sender.send(shown);
         })
         .map_err(|error| error.to_string())?;
-    let size = shown_receiver
+    let (size, restore_focus) = shown_receiver
         .recv_timeout(Duration::from_secs(2))
-        .map_err(|_| "timed out showing the native terminal view".to_owned())?;
-    let restore_focus = {
-        let mut registry = state
-            .entries
-            .lock()
-            .expect("native terminal registry poisoned");
-        let entry = registry
-            .get_mut(&handle)
-            .ok_or_else(|| "native terminal handle was not found".to_owned())?;
-        entry
-            .visibility
-            .show_after_frame(size.columns, size.rows)
-            .map_err(str::to_owned)?;
-        entry.visibility.take_focus_restoration()
-    };
+        .map_err(|_| "timed out showing the native terminal view".to_owned())?
+        .ok_or_else(|| "native terminal handle was detached before show".to_owned())?;
+    let restore_focus = restore_focus.map_err(str::to_owned)?;
     crate::native_terminal_focus_trace::trace(
         "command show",
         &format!("run={run_id} handle={handle} restoresFocus={restore_focus}"),
@@ -189,11 +188,23 @@ pub fn native_terminal_show(
     // A viewer the user was typing into keeps the keyboard across a hide/show
     // cycle it never asked for; one that was idle must not steal it.
     if restore_focus {
+        let entries = Arc::clone(&state.entries);
+        let queued_handle = handle.clone();
+        let (focus_sender, focus_receiver) = mpsc::channel();
         window
-            .run_on_main_thread(move || unsafe {
-                muxed_ghostty_view_focus(view as *mut c_void);
+            .run_on_main_thread(move || {
+                let focused = with_live_native_entry(&entries, &queued_handle, view, |_| unsafe {
+                    muxed_ghostty_view_focus(view as *mut c_void);
+                });
+                let _ = focus_sender.send(focused.is_some());
             })
             .map_err(|error| error.to_string())?;
+        if !focus_receiver
+            .recv_timeout(Duration::from_secs(2))
+            .map_err(|_| "timed out focusing the native terminal view".to_owned())?
+        {
+            return Err("native terminal handle was detached before focus".to_owned());
+        }
     }
     Ok(NativeTerminalStatus {
         handle,
@@ -230,11 +241,29 @@ pub fn native_terminal_focus(
         );
         entry.view
     };
+    let entries = Arc::clone(&state.entries);
+    let queued_handle = handle.clone();
+    let (focus_sender, focus_receiver) = mpsc::channel();
     window
-        .run_on_main_thread(move || unsafe {
-            muxed_ghostty_view_focus(view as *mut c_void);
+        .run_on_main_thread(move || {
+            let focused = with_live_native_entry(&entries, &queued_handle, view, |entry| {
+                if !entry.visibility.accepts_input() {
+                    return false;
+                }
+                unsafe { muxed_ghostty_view_focus(view as *mut c_void) };
+                true
+            });
+            let _ = focus_sender.send(focused.unwrap_or(false));
         })
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    if focus_receiver
+        .recv_timeout(Duration::from_secs(2))
+        .map_err(|_| "timed out focusing the native terminal view".to_owned())?
+    {
+        Ok(())
+    } else {
+        Err("native terminal handle was detached before focus".to_owned())
+    }
 }
 
 #[tauri::command]

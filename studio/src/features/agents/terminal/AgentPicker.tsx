@@ -10,6 +10,7 @@ import {
 } from "../../workflows/launchProviderCatalog";
 import { bucketFor } from "./internal/sessionStore";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
+import { providerToneClasses } from "./presentation/providerPresentation";
 
 export const AGENTS = ["claude", "agy", "codex", "gemini"] as const;
 export type Agent = (typeof AGENTS)[number];
@@ -141,18 +142,25 @@ export function AgentPicker({ payload }: { payload?: AgentPickerPayload }) {
           {providerListPlaceholder({ loaded, failed })}
         </p>
       ) : (
-        <ul>
+        <ul className="flex flex-wrap gap-1">
           {agents.map((a, i) => (
-            <li
-              key={a}
-              onClick={() => commit(a)}
-              className={`cursor-pointer px-2 py-1 ${
-                i === cursor
-                  ? "bg-selection-bg text-text-primary"
-                  : "hover:bg-pane-title"
-              }`}
-            >
-              {a}
+            <li key={a}>
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-current={i === cursor ? "true" : undefined}
+                onClick={() => commit(a)}
+                className={`flex shrink-0 cursor-pointer items-center border px-2 py-0.5 text-xs hover:bg-pane-title ${providerToneClasses(
+                  {
+                    agent: a,
+                    live: true,
+                    selected: i === cursor,
+                    ground: "pane-panel",
+                  },
+                )}`}
+              >
+                {a}
+              </button>
             </li>
           ))}
         </ul>

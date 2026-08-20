@@ -1,9 +1,11 @@
-import json
-from pathlib import Path
-
 import pytest
 from django.test import Client
 from worktracker.tests.factories import ensure_issue
+
+
+@pytest.fixture(autouse=True)
+def disable_api_auth(settings):
+    settings.WORKTRACKER_DISABLE_AUTH = True
 
 
 @pytest.fixture(autouse=True)
@@ -16,22 +18,21 @@ def seeded_agent_run_issues(request):
 
 @pytest.fixture
 def tmp_config(tmp_path, monkeypatch):
-    """Redirect profile storage to a temporary file."""
+    """Provide an isolated typed Module-link lookup for document tests."""
 
-    config_dir = tmp_path / "settings"
-    config_file = config_dir / "profiles.json"
-    from apps.settings_store import config as config_module
+    from apps.documents import service
 
-    monkeypatch.setattr(config_module, "CONFIG_DIR", config_dir)
-    monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
-    return config_file
+    links = {}
+    monkeypatch.setattr(service, "resolve_module_path", lambda module_id: links.get(str(module_id)))
+    return links
 
 
-def write_profiles(config_file: Path, profiles, recent=None):
-    config_file.parent.mkdir(parents=True, exist_ok=True)
-    config_file.write_text(
-        json.dumps({"recent_profile_index": recent, "profiles": profiles})
-    )
+def write_profiles(config_file, profiles, recent=None):
+    del recent
+    config_file.clear()
+    for profile in profiles:
+        for link in profile.get("module_links", []):
+            config_file[str(link["module_id"])] = link.get("path")
 
 
 @pytest.fixture

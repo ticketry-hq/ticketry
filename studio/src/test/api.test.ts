@@ -7,7 +7,7 @@ import {
   createModule,
   createState,
   createWorkItem,
-  acknowledgeOnboarding,
+  acknowledgeProjectOnboarding,
   deleteIssueType,
   deleteState,
   deleteWorkItem,
@@ -18,7 +18,6 @@ import {
   listProjects,
   getWorkItem,
   getProviderCatalog,
-  getWorkspace,
   patchIssueType,
   patchState,
   patchWorkItem,
@@ -123,24 +122,19 @@ describe("api client", () => {
     expect(new Headers(init.headers).has("x-api-key")).toBe(false);
   });
 
-  it("reads and acknowledges onboarding before project selection", async () => {
-    const workspace = {
-      id: "w1", name: "MEML", slug: "meml", onboarding_required: true,
+  it("acknowledges onboarding on the owning project", async () => {
+    const project = {
+      id: "p1", name: "Coding", slug: "CDN", onboarding_required: false,
     };
-    fetchMock.mockResolvedValueOnce(jsonResponse(workspace));
-    fetchMock.mockResolvedValueOnce(jsonResponse({
-      ...workspace, onboarding_required: false,
-    }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(project));
 
-    await expect(getWorkspace()).resolves.toEqual(workspace);
-    await expect(acknowledgeOnboarding()).resolves.toMatchObject({
+    await expect(acknowledgeProjectOnboarding("p1")).resolves.toMatchObject({
       onboarding_required: false,
     });
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/work-tracker/workspace");
-    expect(fetchMock.mock.calls[1][0]).toBe(
-      "/api/work-tracker/workspace/onboarding/acknowledge",
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/work-tracker/projects/p1/onboarding/acknowledge",
     );
-    expect(fetchMock.mock.calls[1][1].method).toBe("POST");
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
   });
 
   it("reads provider activation with the global launch default", async () => {

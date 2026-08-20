@@ -6,18 +6,19 @@ const catalogApi = vi.hoisted(() => ({
   getProviderCatalog: vi.fn(),
   putProviderCatalog: vi.fn(),
 }));
+const resolveDefaultProject = vi.hoisted(() => vi.fn());
 
 vi.mock("../shared/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../shared/api/client")>()),
   ...catalogApi,
 }));
+vi.mock("../features/studio/lib/defaultProject", () => ({
+  resolveDefaultProject,
+}));
 
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { useStudioStore } from "../features/projects/store";
-import { seedConfig } from "../features/studio/stores/configStore";
-
-const createProject = vi.fn();
 const selectProject = vi.fn();
 let releaseSelection = () => {};
 
@@ -30,9 +31,8 @@ describe("onboarding acceptance", () => {
     catalogApi.putProviderCatalog.mockReset().mockImplementation(async (value) => ({
       value,
     }));
-    seedConfig({ features: { sidebar: true, projects: true } });
     useOnboardingTourStore.getState().reset();
-    createProject.mockReset().mockResolvedValue({
+    resolveDefaultProject.mockReset().mockResolvedValue({
       id: "created-project",
       name: "Coding",
       slug: "CDN",
@@ -48,7 +48,6 @@ describe("onboarding acceptance", () => {
     );
     useStudioStore.setState({
       selectedProjectId: null,
-      createProjectWithError: createProject,
       selectProject,
     });
   });
@@ -58,9 +57,7 @@ describe("onboarding acceptance", () => {
 
     expect(screen.queryByRole("button", { name: "Skip" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("checkbox", { name: "I use codex" }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Your first project" });
-    fireEvent.click(screen.getByTestId("onboarding-create-project"));
+    fireEvent.click(screen.getByRole("button", { name: "Get started" }));
 
     await waitFor(() =>
       expect(selectProject).toHaveBeenCalledWith("created-project"),
@@ -68,7 +65,7 @@ describe("onboarding acceptance", () => {
     expect(useOnboardingTourStore.getState().step).toBe("inactive");
     releaseSelection();
     await waitFor(() =>
-      expect(useOnboardingTourStore.getState().step).toBe("projects-pane"),
+      expect(useOnboardingTourStore.getState().step).toBe("module-create"),
     );
     expect(useStudioStore.getState().selectedProjectId).toBe("created-project");
     expect(useOnboardingTourStore.getState().projectId).toBe("created-project");

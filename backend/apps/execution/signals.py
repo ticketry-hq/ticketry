@@ -13,6 +13,7 @@ from apps.runs.bus import publish_automation_attempt
 from apps.runs.models import AutomationAttempt
 from apps.runs.projections import automation_attempt_record
 from apps.terminals.launch_configuration import resolve_task_launch_configuration
+from apps.terminals.launch import PromptDeliveryFailed
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.termination_seam import agent_run_terminated
 from worktracker.models import Issue
@@ -46,7 +47,7 @@ def run_automation_attempt(
     except Exception as exc:
         attempt.status = AutomationAttempt.Status.FAILED
         attempt.error = str(exc) or exc.__class__.__name__
-        if isinstance(exc, RequiredSkillUnavailable):
+        if isinstance(exc, (RequiredSkillUnavailable, PromptDeliveryFailed)):
             attempt.error_details = exc.as_payload()
             attempt.retryable = True
         else:

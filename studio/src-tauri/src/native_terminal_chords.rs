@@ -3,8 +3,8 @@
 //! While a libghostty view is first responder the WebView receives no key
 //! events, so a Studio keymap binding cannot fire from an engaged agent
 //! terminal. The native view recognises the few chords that must survive that
-//! state — the terminal panel's toggle (#667) and the global Settings chord
-//! (#735) — and reports them here; this sink forwards each one to the WebView,
+//! state — including module-position navigation — and reports them here; this
+//! sink forwards each one to the WebView,
 //! where the existing binding remains the single owner of what the chord does.
 //! A viewer stops reporting the moment Viewer detachment begins, so a late
 //! chord from a replaced viewer cannot act for its replacement.
@@ -21,6 +21,7 @@ pub const NATIVE_CHORD_EVENT: &str = "native-terminal-chord";
 pub enum StudioChord {
     PanelToggle,
     Settings,
+    ModulePosition(u8),
 }
 
 impl StudioChord {
@@ -31,6 +32,7 @@ impl StudioChord {
         match code {
             1 => Some(Self::PanelToggle),
             2 => Some(Self::Settings),
+            3..=12 => Some(Self::ModulePosition(code - 2)),
             _ => None,
         }
     }
@@ -40,6 +42,17 @@ impl StudioChord {
         match self {
             Self::PanelToggle => "panel-toggle",
             Self::Settings => "settings",
+            Self::ModulePosition(1) => "module-position-1",
+            Self::ModulePosition(2) => "module-position-2",
+            Self::ModulePosition(3) => "module-position-3",
+            Self::ModulePosition(4) => "module-position-4",
+            Self::ModulePosition(5) => "module-position-5",
+            Self::ModulePosition(6) => "module-position-6",
+            Self::ModulePosition(7) => "module-position-7",
+            Self::ModulePosition(8) => "module-position-8",
+            Self::ModulePosition(9) => "module-position-9",
+            Self::ModulePosition(10) => "module-position-10",
+            Self::ModulePosition(_) => unreachable!("module positions are validated at the bridge"),
         }
     }
 }
@@ -102,6 +115,7 @@ mod tests {
         assert_eq!(requests.try_recv(), Ok(StudioChord::Settings));
         assert_eq!(StudioChord::Settings.as_str(), "settings");
         assert_eq!(StudioChord::PanelToggle.as_str(), "panel-toggle");
+        assert_eq!(StudioChord::ModulePosition(4).as_str(), "module-position-4");
     }
 
     #[test]
@@ -109,8 +123,16 @@ mod tests {
         assert_eq!(StudioChord::from_native(0), None);
         assert_eq!(StudioChord::from_native(1), Some(StudioChord::PanelToggle));
         assert_eq!(StudioChord::from_native(2), Some(StudioChord::Settings));
+        assert_eq!(
+            StudioChord::from_native(3),
+            Some(StudioChord::ModulePosition(1))
+        );
+        assert_eq!(
+            StudioChord::from_native(12),
+            Some(StudioChord::ModulePosition(10))
+        );
         // A code this build does not know is not acted on as another chord.
-        assert_eq!(StudioChord::from_native(3), None);
+        assert_eq!(StudioChord::from_native(13), None);
     }
 
     #[test]

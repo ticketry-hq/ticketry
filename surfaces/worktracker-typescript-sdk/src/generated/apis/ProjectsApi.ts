@@ -26,8 +26,12 @@ import {
     ProjectToJSON,
 } from '../models/Project.js';
 
+export interface AcknowledgeProjectOnboardingRequest {
+    projectId: string;
+}
+
 export interface CreateProjectRequest {
-    project: Omit<Project, 'id'|'manual_module_order'>;
+    project: Omit<Project, 'id'|'manual_module_order'|'onboarding_required'>;
 }
 
 export interface DeleteProjectRequest {
@@ -36,7 +40,7 @@ export interface DeleteProjectRequest {
 
 export interface UpdateProjectRequest {
     projectId: string;
-    patchedProject?: Omit<PatchedProject, 'id'|'manual_module_order'>;
+    patchedProject?: Omit<PatchedProject, 'id'|'manual_module_order'|'onboarding_required'>;
 }
 
 /**
@@ -46,6 +50,28 @@ export interface UpdateProjectRequest {
  * @interface ProjectsApiInterface
  */
 export interface ProjectsApiInterface {
+    /**
+     * Creates request options for acknowledgeProjectOnboarding without sending the request
+     * @param {string} projectId
+     * @throws {RequiredError}
+     * @memberof ProjectsApiInterface
+     */
+    acknowledgeProjectOnboardingRequestOpts(requestParameters: AcknowledgeProjectOnboardingRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * Perform the default project\'s monotonic onboarding acknowledgement.
+     * @param {string} projectId
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof ProjectsApiInterface
+     */
+    acknowledgeProjectOnboardingRaw(requestParameters: AcknowledgeProjectOnboardingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Project>>;
+
+    /**
+     * Perform the default project\'s monotonic onboarding acknowledgement.
+     */
+    acknowledgeProjectOnboarding(requestParameters: AcknowledgeProjectOnboardingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Project>;
+
     /**
      * Creates request options for createProject without sending the request
      * @param {Project} project
@@ -140,6 +166,55 @@ export interface ProjectsApiInterface {
  *
  */
 export class ProjectsApi extends runtime.BaseAPI implements ProjectsApiInterface {
+
+    /**
+     * Creates request options for acknowledgeProjectOnboarding without sending the request
+     */
+    async acknowledgeProjectOnboardingRequestOpts(requestParameters: AcknowledgeProjectOnboardingRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['projectId'] == null) {
+            throw new runtime.RequiredError(
+                'projectId',
+                'Required parameter "projectId" was null or undefined when calling acknowledgeProjectOnboarding().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/work-tracker/projects/{project_id}/onboarding/acknowledge`;
+        urlPath = urlPath.replace('{project_id}', encodeURIComponent(String(requestParameters['projectId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Perform the default project\'s monotonic onboarding acknowledgement.
+     */
+    async acknowledgeProjectOnboardingRaw(requestParameters: AcknowledgeProjectOnboardingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Project>> {
+        const requestOptions = await this.acknowledgeProjectOnboardingRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ProjectFromJSON(jsonValue));
+    }
+
+    /**
+     * Perform the default project\'s monotonic onboarding acknowledgement.
+     */
+    async acknowledgeProjectOnboarding(requestParameters: AcknowledgeProjectOnboardingRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Project> {
+        const response = await this.acknowledgeProjectOnboardingRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for createProject without sending the request

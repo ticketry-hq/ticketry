@@ -1,4 +1,3 @@
-import { useId } from "react";
 import type { ProviderCapabilities } from "../../shared/api/types";
 import { SETTINGS_FIELD_CLASS } from "../../shared/ui/SettingsPrimitives";
 
@@ -18,23 +17,56 @@ interface LaunchDefaultPickerProps {
   value: LaunchDefaultPickerValue;
 }
 
+const REASONING_LEVEL_ORDER = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "ultra",
+] as const;
+
+const reasoningLevelRank = new Map<string, number>(
+  REASONING_LEVEL_ORDER.map((level, index) => [level, index]),
+);
+
+function sortReasoningLevels(levels: readonly string[]): string[] {
+  return levels.map((level, index) => ({ level, index })).sort((left, right) => {
+    const leftRank = reasoningLevelRank.get(left.level);
+    const rightRank = reasoningLevelRank.get(right.level);
+    if (leftRank === undefined && rightRank === undefined) {
+      return left.index - right.index;
+    }
+    if (leftRank === undefined) return 1;
+    if (rightRank === undefined) return -1;
+    return leftRank - rightRank;
+  }).map(({ level }) => level);
+}
+
 export function LaunchDefaultPicker({
   onChange,
   onCommit,
   providerCapabilities,
   value,
 }: LaunchDefaultPickerProps) {
-  const modelSuggestionsId = useId();
   const selectedCapability = providerCapabilities.find((candidate) =>
     candidate.agent === value.provider);
-  const modelAliases = selectedCapability?.model_aliases ?? [];
-  const reasoningLevels = selectedCapability?.reasoning_levels ?? [];
+  const models = selectedCapability?.models ?? [];
+  const selectedModel = models.find((model) => model.name === value.model);
+  const reasoningLevels = sortReasoningLevels(
+    selectedModel?.reasoning_levels ?? [],
+  );
+  const unsupportedCurrentModel = Boolean(
+    value.model && !selectedModel,
+  );
   const unsupportedCurrentReasoning = Boolean(
     value.reasoning && !reasoningLevels.includes(value.reasoning),
   );
 
-  const reasoningLevelsFor = (provider: string) =>
+  const reasoningLevelsFor = (provider: string, model: string) =>
     providerCapabilities.find((candidate) => candidate.agent === provider)
+      ?.models.find((candidate) => candidate.name === model)
       ?.reasoning_levels ?? [];
 
   const update = (
@@ -42,21 +74,23 @@ export function LaunchDefaultPicker({
     nextFieldValue: string,
     commit: boolean,
   ) => {
-    // A model belongs to exactly one provider, so switching provider clears it
-    // rather than carrying a name the new CLI would reject. Reasoning names do
-    // overlap, so one the new provider also offers is carried across — but one
-    // it does not is dropped rather than written back as an invalid pair. The
-    // `(unsupported)` option below still shows a level that arrived from the
-    // server; this only refuses to carry one forward across a user's change.
+    // Model rows belong to providers, and reasoning rows are permitted by one
+    // selected model. A user-driven parent change normalizes only the dependent
+    // values it can verify; stored unsupported values remain visible otherwise.
     const nextValue = field === "provider"
       ? {
           ...value,
           provider: nextFieldValue,
           model: "",
-          reasoning: reasoningLevelsFor(nextFieldValue).includes(value.reasoning)
-            ? value.reasoning
-            : "",
+          reasoning: "",
         }
+      : field === "model"
+        ? {
+            ...value,
+            model: nextFieldValue,
+            reasoning: reasoningLevelsFor(value.provider, nextFieldValue)
+              .includes(value.reasoning) ? value.reasoning : "",
+          }
       : { ...value, [field]: nextFieldValue };
     onChange(nextValue);
     if (commit) {
@@ -85,20 +119,20 @@ export function LaunchDefaultPicker({
 
       <label className="grid gap-1 text-sm text-text-muted">
         Model
-        <input
+        <select
           aria-label="Model"
           value={value.model}
-          onChange={(event) => update("model", event.target.value, false)}
-          onBlur={() => onCommit?.(value, "model")}
+          onChange={(event) => update("model", event.target.value, true)}
           className={SETTINGS_FIELD_CLASS}
-          placeholder="Provider default"
-          list={modelSuggestionsId}
-        />
-        <datalist id={modelSuggestionsId}>
-          {modelAliases.map((model) => (
-            <option key={model} value={model} />
+        >
+          <option value="">Provider default</option>
+          {unsupportedCurrentModel ? (
+            <option value={value.model}>{value.model} (unsupported)</option>
+          ) : null}
+          {models.map((model) => (
+            <option key={model.name} value={model.name}>{model.name}</option>
           ))}
-        </datalist>
+        </select>
       </label>
 
       <label className="grid gap-1 text-sm text-text-muted">
@@ -109,7 +143,7 @@ export function LaunchDefaultPicker({
           onChange={(event) => update("reasoning", event.target.value, true)}
           className={SETTINGS_FIELD_CLASS}
         >
-          <option value="">Provider default</option>
+          <option value="">Model default</option>
           {unsupportedCurrentReasoning ? (
             <option value={value.reasoning}>
               {value.reasoning} (unsupported)

@@ -114,10 +114,7 @@ export function ensureNativeViewerLifecycle({
     if (handle !== completion.handle) return;
     // The native worker has already removed and freed this handle.
     handle = null;
-    failNativeViewerMount(
-      runId,
-      "the native terminal attachment process exited",
-    );
+    teardown();
   };
 
   const attach = async () => {
@@ -183,10 +180,7 @@ export function ensureNativeViewerLifecycle({
       }
       if (completedHandle === status.handle) {
         handle = null;
-        failNativeViewerMount(
-          runId,
-          "the native terminal attachment process exited",
-        );
+        teardown();
         return;
       }
       if (disposed || tornDown) {

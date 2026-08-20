@@ -206,21 +206,22 @@ impl Default for SupervisorOptions {
 }
 
 #[derive(Debug, Clone)]
-struct BackendCommand {
-    program: PathBuf,
-    fixed_arguments: Vec<OsString>,
-    environment: Vec<(OsString, OsString)>,
-    pass_port_argument: bool,
+pub(crate) struct BackendCommand {
+    pub(crate) program: PathBuf,
+    pub(crate) fixed_arguments: Vec<OsString>,
+    pub(crate) environment: Vec<(OsString, OsString)>,
+    pub(crate) pass_port_argument: bool,
+    pub(crate) requires_owner_liveness: bool,
 }
 
 /// A fixed, application-owned command table.  This intentionally exposes no
 /// arbitrary program or argument setters.
 #[derive(Debug, Clone)]
 pub struct CommandTable {
-    backend: BackendCommand,
-    mcp: Option<BackendCommand>,
-    sidecar_log_path: PathBuf,
-    mcp_port_path: PathBuf,
+    pub(crate) backend: BackendCommand,
+    pub(crate) mcp: Option<BackendCommand>,
+    pub(crate) sidecar_log_path: PathBuf,
+    pub(crate) mcp_port_path: PathBuf,
 }
 
 impl CommandTable {
@@ -251,6 +252,7 @@ impl CommandTable {
                     OsString::from(desktop_origin),
                 )],
                 pass_port_argument: true,
+                requires_owner_liveness: true,
             },
             mcp: None,
             sidecar_log_path: sidecar_log_path(data_dir),
@@ -271,6 +273,7 @@ impl CommandTable {
             fixed_arguments: vec![OsString::from("mcp")],
             environment: Vec::new(),
             pass_port_argument: false,
+            requires_owner_liveness: true,
         });
         Ok(commands)
     }
@@ -303,6 +306,7 @@ impl CommandTable {
                 fixed_arguments: arguments,
                 environment,
                 pass_port_argument: false,
+                requires_owner_liveness: false,
             },
             mcp: None,
             mcp_port_path: sidecar_log_path.with_file_name(format!(
@@ -981,6 +985,16 @@ impl Supervisor {
         self.events.lock().expect("events lock poisoned").clone()
     }
 
+    #[cfg(test)]
+    pub(crate) fn release_and_wait_for_backend_owner_eof_for_test(
+        &mut self,
+        timeout: Duration,
+    ) -> std::io::Result<bool> {
+        let mut running = self.running.take().expect("running backend");
+        running.sidecar.release_owner_liveness();
+        running.sidecar.wait_for_owned_exit(timeout)
+    }
+
     pub fn logs(&self) -> Vec<String> {
         self.logs.lock().expect("logs lock poisoned").snapshot()
     }
@@ -1066,7 +1080,12 @@ impl Supervisor {
         if let Some(mcp_port) = mcp_port {
             command.env(MCP_URL_ENV, format!("http://127.0.0.1:{mcp_port}/mcp"));
         }
-        let mut sidecar = OwnedSidecar::spawn(command).map_err(process_error)?;
+        let mut sidecar = if self.commands.backend.requires_owner_liveness {
+            OwnedSidecar::spawn_backend(command)
+        } else {
+            OwnedSidecar::spawn(command)
+        }
+        .map_err(process_error)?;
         self.emit(SupervisorEvent::Spawned {
             service: "backend".to_owned(),
             port,
@@ -1182,7 +1201,12 @@ impl Supervisor {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         sanitize_packaged_process_environment(&mut command);
-        let mut sidecar = OwnedSidecar::spawn(command).map_err(process_error)?;
+        let mut sidecar = if command_spec.requires_owner_liveness {
+            OwnedSidecar::spawn_backend(command)
+        } else {
+            OwnedSidecar::spawn(command)
+        }
+        .map_err(process_error)?;
         self.emit(SupervisorEvent::Spawned {
             service: "mcp".to_owned(),
             port,
@@ -1705,16 +1729,10 @@ fn teardown_error(error: std::io::Error) -> SupervisorError {
     )
 }
 
-/// Cleanup remains best effort.  This runs during ordinary unwinding — a
-/// supervisor leaving scope, a failed startup, a panic in a build that unwinds
-/// — and it cannot run after an abrupt death of the desktop process itself: a
-/// macOS `SIGKILL` (Force Quit, the out-of-memory killer), a power loss, a
-/// build configured to abort on panic, or an operating-system crash all skip
-/// destructors.  Nor does it promise anything for a descendant that
-/// deliberately left the owned group.  A group stranded either way outlives
-/// this shell: the next launch reclaims the data-directory lock the kernel
-/// released and supervises its own sidecars, and never signals the strays,
-/// which it does not own.
+/// Cleanup during ordinary unwinding remains the final fallback for the owned
+/// process groups. Abrupt desktop death skips this destructor; each packaged
+/// service instead observes EOF on its private owner-liveness reader. Neither
+/// path adopts foreign processes.
 impl Drop for Supervisor {
     fn drop(&mut self) {
         self.liveness_probe = None;
@@ -1794,8 +1812,25 @@ mod tests {
                 OsString::from("mcp-ready"),
             )],
             pass_port_argument: false,
+            requires_owner_liveness: false,
         });
         table
+    }
+
+    #[test]
+    fn packaged_mcp_observes_desktop_owner_liveness() {
+        let data_dir = unique_temp_path("packaged-mcp-owner-liveness");
+        let table = CommandTable::packaged_services(
+            env::current_exe().expect("test executable"),
+            &data_dir,
+            "tauri://localhost",
+        )
+        .expect("packaged command table");
+
+        assert!(
+            table.mcp.expect("MCP command").requires_owner_liveness,
+            "abrupt desktop death must not leave an MCP process on the public port"
+        );
     }
 
     fn fast_options() -> SupervisorOptions {

@@ -9,7 +9,7 @@ import pytest
 from apps.execution.work_item_liveness import has_live_work, live_work_item_ids
 from apps.runs.models import AgentRun
 from apps.terminals.models import AgentTerminalSession
-from worktracker.models import Issue, IssueType, Project, Workspace
+from worktracker.models import Issue, IssueType, Project
 
 
 pytestmark = pytest.mark.django_db
@@ -18,10 +18,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def project():
     slug = f"liveness-{uuid.uuid4().hex[:8]}"
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug=slug, name=slug)
-    return Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name=slug, slug=slug.upper()
-    )
+    return Project.objects.create(id=uuid.uuid4(), name=slug, slug=slug.upper())
 
 
 @pytest.fixture

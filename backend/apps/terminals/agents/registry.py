@@ -64,6 +64,7 @@ from apps.terminals.agents.skills.preflight import (
     ResolvedSkills,
     WORKTRACKER_TOOLS,
 )
+from apps.terminals.entry_skill import format_entry_skill_command
 
 
 class UnknownAgent(Exception):
@@ -72,6 +73,20 @@ class UnknownAgent(Exception):
 
 class ResumeUnsupported(Exception):
     """No resume builder registered for this agent."""
+
+
+@dataclass(frozen=True)
+class PromptReadiness:
+    """One provider's rendered terminal marker for an idle composer."""
+
+    pattern: re.Pattern[str]
+
+    def matches(self, screen: bytes) -> bool:
+        rendered = screen.decode("utf-8", "replace")
+        # Terminal color/control sequences may split otherwise stable prompt
+        # text. Remove them before applying the provider-owned matcher.
+        rendered = re.sub(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))", "", rendered)
+        return self.pattern.search(rendered) is not None
 
 
 @dataclass(frozen=True)
@@ -152,6 +167,8 @@ class AgentAdapter:
     _command: Callable[[str, str | None, str | None], list[str]]
     _inject: Callable[..., list[str]]
     _resume_command: Callable[[str], list[str]] | None = None
+    prompt_readiness: PromptReadiness | None = None
+    entry_skill_prefix: str = "/"
     supports_worktracker_mcp: bool = False
     supports_required_skills: bool = True
     #: Providers with no inline settings flag write a run-scoped settings file
@@ -280,6 +297,21 @@ class AgentAdapter:
             raise ResumeUnsupported(self.slug)
         return self._resume_command(provider_session_id)
 
+    def is_prompt_ready(self, screen: bytes) -> bool:
+        """Return whether this provider's idle composer is visible."""
+
+        if self.prompt_readiness is None:
+            return False
+        return self.prompt_readiness.matches(screen)
+
+    def entry_skill_command(self, entry_skill: str | None) -> str | None:
+        """Format one manual skill invocation for this provider."""
+
+        return format_entry_skill_command(
+            entry_skill,
+            prefix=self.entry_skill_prefix,
+        )
+
 
 def _resume_claude(provider_session_id: str) -> list[str]:
     return [
@@ -320,9 +352,7 @@ def _command_claude(
     return ["claude", "--permission-mode", "auto", *options, prompt]
 
 
-def _command_agy(
-    prompt: str, model: str | None, reasoning: str | None
-) -> list[str]:
+def _command_agy(prompt: str, model: str | None, reasoning: str | None) -> list[str]:
     del reasoning
     options = ["--model", model] if model is not None else []
     return ["agy", "--dangerously-skip-permissions", *options, "-i", prompt]
@@ -353,6 +383,7 @@ _REGISTRY: dict[str, AgentAdapter] = {
         _command_claude,
         inject_claude_lifecycle_settings,
         _resume_command=_resume_claude,
+        prompt_readiness=PromptReadiness(re.compile(r"(?:^|\n)\s*❯\s*", re.MULTILINE)),
         supports_worktracker_mcp=True,
     ),
     "agy": AgentAdapter(
@@ -360,6 +391,9 @@ _REGISTRY: dict[str, AgentAdapter] = {
         _command_agy,
         inject_agy_lifecycle_settings,
         _resume_command=_resume_agy,
+        prompt_readiness=PromptReadiness(
+            re.compile(r"(?:^|\n)\s*>\s*you:\s*", re.MULTILINE)
+        ),
         supports_worktracker_mcp=True,
         _inject_with_settings_file=inject_agy_launch,
     ),
@@ -368,6 +402,10 @@ _REGISTRY: dict[str, AgentAdapter] = {
         _command_codex,
         inject_codex_lifecycle_settings,
         _resume_command=_resume_codex,
+        prompt_readiness=PromptReadiness(
+            re.compile(r"(?:^|\n)\s*›\s+Ask Codex\b", re.MULTILINE)
+        ),
+        entry_skill_prefix="$",
         supports_worktracker_mcp=True,
     ),
     "gemini": AgentAdapter(
@@ -375,6 +413,9 @@ _REGISTRY: dict[str, AgentAdapter] = {
         _command_gemini,
         inject_gemini_lifecycle_settings,
         _resume_command=_resume_gemini,
+        prompt_readiness=PromptReadiness(
+            re.compile(r"(?:^|\n)\s*>\s*Type your message", re.MULTILINE)
+        ),
         supports_worktracker_mcp=True,
         _inject_with_settings_file=inject_gemini_launch,
     ),

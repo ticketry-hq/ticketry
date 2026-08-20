@@ -14,11 +14,7 @@ import { loadProviderCapabilities } from "../features/workflows/providerQueries"
 
 const capability = (agent: string) => ({
   agent,
-  accepts_model: true,
-  accepts_any_model: false,
-  model_aliases: [],
-  model_prefixes: [],
-  reasoning_levels: [],
+  models: [],
 });
 
 describe("provider capabilities query", () => {

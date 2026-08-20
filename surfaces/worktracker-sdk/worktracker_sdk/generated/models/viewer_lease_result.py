@@ -66,8 +66,18 @@ class ViewerLeaseResult(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
+            "agent_run_id",
+            "viewer_id",
+            "transport",
+            "expires_at",
+            "replaced",
         ])
 
         _dict = self.model_dump(

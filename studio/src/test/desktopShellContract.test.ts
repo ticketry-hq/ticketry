@@ -254,7 +254,7 @@ describe("desktop shell security contract", () => {
       "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio",
       "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
       "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
-      "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
+      "deploy": "npm run desktop:deploy --workspace @worktracker/studio && open /Applications/Ticketry.app",
       "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",
       "desktop:smoke:dev": "npm run desktop:smoke:dev --workspace @worktracker/studio",
       "desktop:smoke:packaged": "npm run desktop:smoke:packaged --workspace @worktracker/studio",
@@ -281,6 +281,8 @@ describe("desktop shell security contract", () => {
       targets: ["app", "dmg"],
       icon: ["icons/icon.icns", "icons/icon.png"],
       resources: {
+        "../../LICENSE": "LICENSE.txt",
+        "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
         "native/ticketry-ghostty.conf": "ticketry-ghostty.conf",
         "vendor/libghostty/resources/": "",
       },

@@ -10,18 +10,18 @@
       "studio/scripts/release-build.mjs"
     ]
   },
-  "guidance": "# Ticketry desktop application\n\nThis repository owns the complete Ticketry desktop application: the React\nfrontend, Tauri shell, supervised Python backend sidecar, MCP service, and\ngenerated SDKs required by that application.\n\nUse `npm run desktop:dev` or `pnpm run dev` from the repository root for local\ndesktop development. Both commands rebuild and launch the sidecar. Keep browser-\nonly service commands as supporting development tools, not as a separate product.\n\nCode structure is a governing constraint, not a preference: keep files small\nand single-purpose, place frontend code in `studio/src/features/<domain>/`\n(with `app/` for the shell and `shared/` for cross-feature plumbing only), and\ngive each backend capability its own Django app under `backend/apps/` with the\ncore domain split across `worktracker/`'s `models/`, `rest/`, and `services/`.\nWhen a file outgrows one concern, split it rather than extend it. The full\nrules live in [`CLAUDE.md`](CLAUDE.md) under \"Code structure — governing\nrules\"; keep the two documents consistent.\n\nKeep the Tauri/webview boundary narrow. The native terminal renderer consumes a\npinned libghostty revision through its C API, while tmux remains responsible for\ndurable sessions. Preserve the existing fallback unless a deliberate migration\nremoves it.\n\nDevelopment data must remain isolated from live application data. Generated\ndatabases, caches, sidecars, native libraries, and build output must not be\ncommitted.\n\nDevelopment frontend, backend, and MCP output is persisted at\n`.ticketry-dev/logs/ticketry.log`. Use `npm run logs` to inspect recent output,\n`npm run logs:follow` while reproducing a problem, and `npm run logs:clear` to\nstart a clean capture. This directory is generated and must not be committed.\n\nEvery user-visible Studio UI behavior change must add or update an automated\nacceptance case in `studio/src/test/*Acceptance.test.tsx`. Keep the numbered\noverhaul gate current and run `npm run test:overhaul --workspace\n@worktracker/studio` before handing the change off.",
+  "guidance": "# Ticketry desktop application\n\nThis repository owns the complete Ticketry desktop application: the React\nfrontend, Tauri shell, supervised Python backend sidecar, MCP service, and\ngenerated SDKs required by that application.\n\nUse `npm run desktop:dev` or `pnpm run dev` from the repository root for local\ndesktop development. Both commands rebuild and launch the sidecar. Keep browser-\nonly service commands as supporting development tools, not as a separate product.\n\nCode structure is a governing constraint, not a preference: keep files small\nand single-purpose, place frontend code in `studio/src/features/<domain>/`\n(with `app/` for the shell and `shared/` for cross-feature plumbing only), and\ngive each backend capability its own Django app under `backend/apps/` with the\ncore domain split across `worktracker/`'s `models/`, `rest/`, and `services/`.\nWhen a file outgrows one concern, split it rather than extend it. The full\nrules live in [`CLAUDE.md`](CLAUDE.md) under \"Code structure — governing\nrules\"; keep the two documents consistent.\n\nBackend HTTP endpoints must use Django REST Framework's native machinery, not\nhandwritten views. Before adding or changing any backend REST endpoint,\nserializer, or view, read\n[`.codex/skills/drf-rest-api/SKILL.md`](.codex/skills/drf-rest-api/SKILL.md);\nto review the backend for framework drift, follow\n[`.codex/skills/drf-rest-api-audit/SKILL.md`](.codex/skills/drf-rest-api-audit/SKILL.md).\nThe same skills are exposed to Claude via symlinks in `.claude/skills/`.\n\nKeep the Tauri/webview boundary narrow. The native terminal renderer consumes a\npinned libghostty revision through its C API, while tmux remains responsible for\ndurable sessions. Preserve the existing fallback unless a deliberate migration\nremoves it.\n\nDevelopment data must remain isolated from live application data. Generated\ndatabases, caches, sidecars, native libraries, and build output must not be\ncommitted.\n\nDevelopment frontend, backend, and MCP output is persisted at\n`.ticketry-dev/logs/ticketry.log`. Use `npm run logs` to inspect recent output,\n`npm run logs:follow` while reproducing a problem, and `npm run logs:clear` to\nstart a clean capture. This directory is generated and must not be committed.\n\nTicketry currently exposes one installation project. Agents using WorkTracker\nMCP must use the Project ID from their launch context. Do not list projects,\nask the user to choose one, or look for another project. `list_projects` exists\nonly for clients without launch context and returns the installation project.\n\nEvery user-visible Studio UI behavior change must add or update an automated\nacceptance case in `studio/src/test/*Acceptance.test.tsx`. Keep the numbered\noverhaul gate current and run `npm run test:overhaul --workspace\n@worktracker/studio` before handing the change off.",
   "states": [
     {
       "name": "Ideas",
       "group": "backlog",
-      "color": "#D12771",
+      "color": "#60646C",
       "autoStart": true
     },
     {
       "name": "Grill",
       "group": "backlog",
-      "color": "#60646C",
+      "color": "#FA4D56",
       "autoStart": false
     },
     {
@@ -45,7 +45,7 @@
     {
       "name": "Review",
       "group": "started",
-      "color": "#D6409F",
+      "color": "#08BDBA",
       "autoStart": false
     },
     {
@@ -81,6 +81,11 @@
     "Review": [],
     "Done": [],
     "Cancelled": []
+  },
+  "entrySkills": {
+    "Grill": "grill-with-docs",
+    "Spec": "to-spec",
+    "Tickets": "to-tickets"
   },
   "prompts": {
     "Story": {

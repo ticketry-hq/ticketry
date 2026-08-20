@@ -67,7 +67,12 @@ export function DormantWorkspaceTabs({
             disabled={resumingRunId !== null}
             onClick={() => onResumeTerminal(session)}
             className={`shrink-0 border border-dashed px-2 py-0.5 text-xs hover:border-focus-accent disabled:cursor-wait disabled:opacity-50 ${providerToneClasses(
-              { agent: chip.agent, live: chip.live, selected: false },
+              {
+                agent: chip.agent,
+                live: chip.live,
+                selected: false,
+                ground: "pane-bg",
+              },
             )}`}
           >
             {resumingRunId === chip.key ? "Resuming…" : `↻ ${chip.label}`}
@@ -82,7 +87,12 @@ export function DormantWorkspaceTabs({
           aria-label={`Terminated ${chip.accessibleName}`}
           title={chip.hoverTitle || "Terminated run"}
           className={`shrink-0 border border-dashed px-2 py-0.5 text-xs opacity-60 ${providerToneClasses(
-            { agent: chip.agent, live: chip.live, selected: false },
+            {
+              agent: chip.agent,
+              live: chip.live,
+              selected: false,
+              ground: "pane-bg",
+            },
           )}`}
         >
           {chip.label} ✕

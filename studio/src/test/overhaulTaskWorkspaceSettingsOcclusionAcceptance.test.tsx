@@ -23,6 +23,12 @@ import { StudioFooter } from "../app/shell/StudioFooter";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import { useAgentStatusStore } from "../features/agents/status";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
+import {
+  INITIAL_NATIVE_RENDER_RECOVERY_DELAY_MS,
+  configureNativeRenderRecovery,
+  nativeRenderRecoveryPending,
+  resetNativeRenderRecovery,
+} from "../features/agents/terminal/internal/nativeRenderRecovery";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useStudioStore } from "../features/projects/store";
 import { seedConfig } from "../features/studio/stores/configStore";
@@ -158,12 +164,16 @@ function mountTaskWorkspace() {
 }
 
 describe("overhaul acceptance — Task workspace Settings occlusion", () => {
+  const reload = vi.fn();
+  let restoreNativeRenderRecovery: () => void;
+
   beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
     queryClient.clear();
     hostRequests = [];
     tauri.desktop = true;
+    restoreNativeRenderRecovery = configureNativeRenderRecovery({ reload });
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
     vi.stubGlobal(
       "fetch",
@@ -249,6 +259,9 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
   });
 
   afterEach(() => {
+    resetNativeRenderRecovery();
+    restoreNativeRenderRecovery();
+    vi.useRealTimers();
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useModalStore.setState({ modalStack: [], presentedNoticeIds: new Set() });
     vi.unstubAllGlobals();
@@ -328,6 +341,58 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     browserView.unmount();
   });
 
+  it("[overhaul-146] keeps Settings mounted when its native viewer hide fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    seedTaskWorkspace("session-857", "run-857");
+    tauri.invoke.mockImplementation(
+      (command: string, input?: { runId?: string }) => {
+        if (command === "native_terminal_available") return Promise.resolve(true);
+        if (command === "native_terminal_hide") {
+          return Promise.reject(new Error("native terminal hide failed"));
+        }
+        if (
+          command === "native_terminal_attach" ||
+          command === "native_terminal_show" ||
+          command === "native_terminal_set_frame" ||
+          command === "native_terminal_reconcile_frame"
+        ) {
+          return Promise.resolve({
+            handle: HANDLE,
+            runId: input?.runId ?? "run-857",
+            columns: 100,
+            rows: 30,
+          });
+        }
+        return Promise.resolve();
+      },
+    );
+
+    const view = mountTaskWorkspace();
+    await waitFor(() =>
+      expect(invocations("native_terminal_show")).toHaveLength(1),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    const dialog = await screen.findByRole("dialog", { name: "Studio settings" });
+    await waitFor(() =>
+      expect(screen.getByTestId("native-terminal-fallback-notice")).toBeVisible(),
+    );
+
+    expect(dialog).toBeVisible();
+    expect(
+      within(dialog).getByRole("button", { name: "Close dialog" }),
+    ).toBeEnabled();
+    expect(nativeRenderRecoveryPending()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(
+      INITIAL_NATIVE_RENDER_RECOVERY_DELAY_MS + 200,
+    );
+    expect(reload).not.toHaveBeenCalled();
+    expect(dialog).toBeVisible();
+
+    view.unmount();
+  });
+
   it("[overhaul-124] shields a newer Task destination until Settings' pending native hide commits", async () => {
     seedTaskWorkspace("session-792", "run-792");
     let finishHide: (() => void) | null = null;
@@ -375,6 +440,26 @@ describe("overhaul acceptance — Task workspace Settings occlusion", () => {
     // a shield until the already-issued hide makes Details safe to expose.
     expect(screen.getByTestId("native-viewer-transition-shield")).toBeVisible();
     expect(invocations("native_terminal_show")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    const reopenedDialog = await screen.findByRole("dialog", {
+      name: "Studio settings",
+    });
+    const closeControl = within(reopenedDialog).getByRole("button", {
+      name: "Close dialog",
+    });
+    expect(reopenedDialog).toBeVisible();
+    expect(closeControl).toBeVisible();
+    expect(closeControl).toBeEnabled();
+    expect(
+      screen.queryByTestId("native-viewer-transition-shield"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(closeControl);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("native-viewer-transition-shield")).toBeVisible();
 
     await act(async () => finishHide?.());
     await waitFor(() =>

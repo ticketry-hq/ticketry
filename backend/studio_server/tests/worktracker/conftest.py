@@ -10,7 +10,7 @@ import uuid
 import pytest
 from django.test import Client
 
-from worktracker.models import IssueType, Project, State, Workspace
+from worktracker.models import IssueType, Project, State
 
 
 TOKEN = "test-token"
@@ -49,11 +49,7 @@ def client():
 def project(db):
     """A workspace + project (slug MEML)."""
 
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-
-    return Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
-    )
+    return Project.objects.create(id=uuid.uuid4(), name="meml", slug="MEML")
 
 
 @pytest.fixture

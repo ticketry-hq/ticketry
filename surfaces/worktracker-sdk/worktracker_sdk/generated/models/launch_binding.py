@@ -19,9 +19,8 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
 from uuid import UUID
 from typing import Optional, Set
 from typing_extensions import Self
@@ -29,21 +28,21 @@ from pydantic_core import to_jsonable_python
 
 class LaunchBinding(BaseModel):
     """
-    The one row shape for reads and composite-key writes.
+    One persisted launch binding returned by reads and writes.
     """ # noqa: E501
     id: StrictInt
     issue_type: UUID
     state: UUID
-    prompt: Optional[StrictStr] = None
-    required_skills: Optional[Any] = None
-    model: Optional[UUID] = None
-    reasoning: Optional[UUID] = None
-    auto_start: Optional[StrictBool] = None
-    subtree_run_enabled: Optional[StrictBool] = None
-    workflow_revision: Annotated[int, Field(strict=True, ge=0)]
+    prompt: StrictStr
+    required_skills: Optional[Any]
+    entry_skill: Optional[StrictStr]
+    model: Optional[UUID]
+    reasoning: Optional[UUID]
+    auto_start: StrictBool
+    subtree_run_enabled: StrictBool
     created_at: datetime
     updated_at: datetime
-    __properties: ClassVar[List[str]] = ["id", "issue_type", "state", "prompt", "required_skills", "model", "reasoning", "auto_start", "subtree_run_enabled", "workflow_revision", "created_at", "updated_at"]
+    __properties: ClassVar[List[str]] = ["id", "issue_type", "state", "prompt", "required_skills", "entry_skill", "model", "reasoning", "auto_start", "subtree_run_enabled", "created_at", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -80,11 +79,25 @@ class LaunchBinding(BaseModel):
         * OpenAPI `readOnly` fields are excluded.
         * OpenAPI `readOnly` fields are excluded.
         * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
             "id",
             "issue_type",
             "state",
+            "prompt",
+            "required_skills",
+            "entry_skill",
+            "model",
+            "reasoning",
+            "auto_start",
+            "subtree_run_enabled",
             "created_at",
             "updated_at",
         ])
@@ -98,6 +111,11 @@ class LaunchBinding(BaseModel):
         # and model_fields_set contains the field
         if self.required_skills is None and "required_skills" in self.model_fields_set:
             _dict['required_skills'] = None
+
+        # set to None if entry_skill (nullable) is None
+        # and model_fields_set contains the field
+        if self.entry_skill is None and "entry_skill" in self.model_fields_set:
+            _dict['entry_skill'] = None
 
         # set to None if model (nullable) is None
         # and model_fields_set contains the field
@@ -126,11 +144,11 @@ class LaunchBinding(BaseModel):
             "state": obj.get("state"),
             "prompt": obj.get("prompt"),
             "required_skills": obj.get("required_skills"),
+            "entry_skill": obj.get("entry_skill"),
             "model": obj.get("model"),
             "reasoning": obj.get("reasoning"),
             "auto_start": obj.get("auto_start"),
             "subtree_run_enabled": obj.get("subtree_run_enabled"),
-            "workflow_revision": obj.get("workflow_revision"),
             "created_at": obj.get("created_at"),
             "updated_at": obj.get("updated_at")
         })

@@ -19,6 +19,7 @@ from worktracker.models import (
 )
 from worktracker.launch_seeds import (
     DEFAULT_AUTO_START_BY_STATE,
+    DEFAULT_ENTRY_SKILL_BY_STATE,
     default_agent_prompt,
 )
 from worktracker.required_skills import DEFAULT_REQUIRED_SKILLS
@@ -86,6 +87,9 @@ def ensure_launch_bindings(
         field.name == "required_skills"
         for field in LaunchBinding._meta.get_fields()
     )
+    supports_entry_skill = any(
+        field.name == "entry_skill" for field in LaunchBinding._meta.get_fields()
+    )
     supports_auto_start = any(
         field.name == "auto_start" for field in LaunchBinding._meta.get_fields()
     )
@@ -108,6 +112,10 @@ def ensure_launch_bindings(
             if supports_required_skills:
                 defaults["required_skills"] = list(
                     DEFAULT_REQUIRED_SKILLS.get(state.name, ())
+                )
+            if supports_entry_skill:
+                defaults["entry_skill"] = DEFAULT_ENTRY_SKILL_BY_STATE.get(
+                    state.name
                 )
             if supports_auto_start:
                 defaults["auto_start"] = DEFAULT_AUTO_START_BY_STATE.get(

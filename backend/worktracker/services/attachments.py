@@ -10,9 +10,7 @@ def list_attachments(issue_id):
     """Return one work item's attachments in stable creation order."""
 
     get_issue(issue_id)
-    return list(
-        Attachment.objects.filter(issue_id=issue_id).order_by("created_at", "id")
-    )
+    return Attachment.objects.filter(issue_id=issue_id).order_by("created_at", "id")
 
 
 def create_attachment(issue_id, uploaded, *, filename=None):

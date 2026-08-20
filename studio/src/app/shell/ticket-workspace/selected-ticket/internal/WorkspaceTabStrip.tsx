@@ -152,6 +152,7 @@ export function WorkspaceTabStrip({
               agent: tab.meta.agent,
               live: isLiveTerminal(tab),
               selected: active,
+              ground: "pane-bg",
             })}
             /* Attention axis — its own palette, independent of provider tone. */
             badge={<LifecycleBadge state={tab.lifecycle} />}

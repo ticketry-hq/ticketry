@@ -140,7 +140,7 @@ def test_reject_foreign_project_parent(project, sdlc):
     states, types = sdlc
     parent = _story(project, states, types, state="Review")
     other = Project.objects.create(
-        id=uuid.uuid4(), workspace=project.workspace, name="Other", slug="OTHR"
+        id=uuid.uuid4(), name="Other", slug="OTHR"
     )
 
     with pytest.raises(InvalidTransition) as excinfo:

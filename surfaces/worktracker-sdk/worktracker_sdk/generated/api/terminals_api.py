@@ -16,8 +16,9 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import StrictStr
+from pydantic import Field
 from typing import List, Optional
+from typing_extensions import Annotated
 from worktracker_sdk.generated.models.agent_run_id import AgentRunId
 from worktracker_sdk.generated.models.create_module_shell import CreateModuleShell
 from worktracker_sdk.generated.models.create_terminal import CreateTerminal
@@ -28,8 +29,8 @@ from worktracker_sdk.generated.models.resume_result import ResumeResult
 from worktracker_sdk.generated.models.self_terminate_result import SelfTerminateResult
 from worktracker_sdk.generated.models.terminal_run import TerminalRun
 from worktracker_sdk.generated.models.terminate_result import TerminateResult
-from worktracker_sdk.generated.models.viewer_lease import ViewerLease
-from worktracker_sdk.generated.models.viewer_lease_release import ViewerLeaseRelease
+from worktracker_sdk.generated.models.viewer_lease_identity import ViewerLeaseIdentity
+from worktracker_sdk.generated.models.viewer_lease_request import ViewerLeaseRequest
 from worktracker_sdk.generated.models.viewer_lease_result import ViewerLeaseResult
 from worktracker_sdk.generated.models.viewer_output_report import ViewerOutputReport
 from worktracker_sdk.generated.models.viewer_output_report_result import ViewerOutputReportResult
@@ -71,6 +72,7 @@ class TerminalsApi:
     ) -> AgentRunId:
         """terminals_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param create_terminal: (required)
         :type create_terminal: CreateTerminal
@@ -107,6 +109,7 @@ class TerminalsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "AgentRunId",
             '400': "ErrorEnvelope",
+            '409': "Open",
             '500': "ErrorEnvelope",
         }
         response_data = self.api_client.call_api(
@@ -139,6 +142,7 @@ class TerminalsApi:
     ) -> ApiResponse[AgentRunId]:
         """terminals_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param create_terminal: (required)
         :type create_terminal: CreateTerminal
@@ -175,6 +179,7 @@ class TerminalsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "AgentRunId",
             '400': "ErrorEnvelope",
+            '409': "Open",
             '500': "ErrorEnvelope",
         }
         response_data = self.api_client.call_api(
@@ -207,6 +212,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param create_terminal: (required)
         :type create_terminal: CreateTerminal
@@ -243,6 +249,7 @@ class TerminalsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "AgentRunId",
             '400': "ErrorEnvelope",
+            '409': "Open",
             '500': "ErrorEnvelope",
         }
         response_data = self.api_client.call_api(
@@ -334,7 +341,7 @@ class TerminalsApi:
     @validate_call
     def terminals_destroy(
         self,
-        agent_run_id: StrictStr,
+        agent_run_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -350,6 +357,7 @@ class TerminalsApi:
     ) -> TerminateResult:
         """terminals_destroy
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param agent_run_id: (required)
         :type agent_run_id: str
@@ -402,7 +410,7 @@ class TerminalsApi:
     @validate_call
     def terminals_destroy_with_http_info(
         self,
-        agent_run_id: StrictStr,
+        agent_run_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -418,6 +426,7 @@ class TerminalsApi:
     ) -> ApiResponse[TerminateResult]:
         """terminals_destroy
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param agent_run_id: (required)
         :type agent_run_id: str
@@ -470,7 +479,7 @@ class TerminalsApi:
     @validate_call
     def terminals_destroy_without_preload_content(
         self,
-        agent_run_id: StrictStr,
+        agent_run_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -486,6 +495,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_destroy
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param agent_run_id: (required)
         :type agent_run_id: str
@@ -600,7 +610,7 @@ class TerminalsApi:
     @validate_call
     def terminals_list(
         self,
-        task_id: StrictStr,
+        task_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -616,6 +626,7 @@ class TerminalsApi:
     ) -> List[TerminalRun]:
         """terminals_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param task_id: (required)
         :type task_id: str
@@ -666,7 +677,7 @@ class TerminalsApi:
     @validate_call
     def terminals_list_with_http_info(
         self,
-        task_id: StrictStr,
+        task_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -682,6 +693,7 @@ class TerminalsApi:
     ) -> ApiResponse[List[TerminalRun]]:
         """terminals_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param task_id: (required)
         :type task_id: str
@@ -732,7 +744,7 @@ class TerminalsApi:
     @validate_call
     def terminals_list_without_preload_content(
         self,
-        task_id: StrictStr,
+        task_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -748,6 +760,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param task_id: (required)
         :type task_id: str
@@ -860,9 +873,9 @@ class TerminalsApi:
     @validate_call
     def terminals_resumable_list(
         self,
-        module_id: Optional[StrictStr] = None,
-        project_id: Optional[StrictStr] = None,
-        task_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        project_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        task_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -878,6 +891,7 @@ class TerminalsApi:
     ) -> List[ResumableTerminal]:
         """terminals_resumable_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param module_id:
         :type module_id: str
@@ -934,9 +948,9 @@ class TerminalsApi:
     @validate_call
     def terminals_resumable_list_with_http_info(
         self,
-        module_id: Optional[StrictStr] = None,
-        project_id: Optional[StrictStr] = None,
-        task_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        project_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        task_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -952,6 +966,7 @@ class TerminalsApi:
     ) -> ApiResponse[List[ResumableTerminal]]:
         """terminals_resumable_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param module_id:
         :type module_id: str
@@ -1008,9 +1023,9 @@ class TerminalsApi:
     @validate_call
     def terminals_resumable_list_without_preload_content(
         self,
-        module_id: Optional[StrictStr] = None,
-        project_id: Optional[StrictStr] = None,
-        task_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        project_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        task_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1026,6 +1041,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_resumable_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param module_id:
         :type module_id: str
@@ -1154,7 +1170,7 @@ class TerminalsApi:
     @validate_call
     def terminals_resume_create(
         self,
-        agent_run_id: StrictStr,
+        agent_run_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1170,6 +1186,7 @@ class TerminalsApi:
     ) -> ResumeResult:
         """terminals_resume_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param agent_run_id: (required)
         :type agent_run_id: str
@@ -1223,7 +1240,7 @@ class TerminalsApi:
     @validate_call
     def terminals_resume_create_with_http_info(
         self,
-        agent_run_id: StrictStr,
+        agent_run_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1239,6 +1256,7 @@ class TerminalsApi:
     ) -> ApiResponse[ResumeResult]:
         """terminals_resume_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param agent_run_id: (required)
         :type agent_run_id: str
@@ -1292,7 +1310,7 @@ class TerminalsApi:
     @validate_call
     def terminals_resume_create_without_preload_content(
         self,
-        agent_run_id: StrictStr,
+        agent_run_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1308,6 +1326,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_resume_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param agent_run_id: (required)
         :type agent_run_id: str
@@ -1423,8 +1442,8 @@ class TerminalsApi:
     @validate_call
     def terminals_scratch_list(
         self,
-        project_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
+        project_id: Annotated[str, Field(min_length=1, strict=True)],
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1440,6 +1459,7 @@ class TerminalsApi:
     ) -> List[TerminalRun]:
         """terminals_scratch_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param project_id: (required)
         :type project_id: str
@@ -1493,8 +1513,8 @@ class TerminalsApi:
     @validate_call
     def terminals_scratch_list_with_http_info(
         self,
-        project_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
+        project_id: Annotated[str, Field(min_length=1, strict=True)],
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1510,6 +1530,7 @@ class TerminalsApi:
     ) -> ApiResponse[List[TerminalRun]]:
         """terminals_scratch_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param project_id: (required)
         :type project_id: str
@@ -1563,8 +1584,8 @@ class TerminalsApi:
     @validate_call
     def terminals_scratch_list_without_preload_content(
         self,
-        project_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
+        project_id: Annotated[str, Field(min_length=1, strict=True)],
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1580,6 +1601,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_scratch_list
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param project_id: (required)
         :type project_id: str
@@ -1715,6 +1737,7 @@ class TerminalsApi:
     ) -> SelfTerminateResult:
         """terminals_self_terminate_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -1780,6 +1803,7 @@ class TerminalsApi:
     ) -> ApiResponse[SelfTerminateResult]:
         """terminals_self_terminate_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -1845,6 +1869,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_self_terminate_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -1967,7 +1992,7 @@ class TerminalsApi:
     ) -> AgentRunId:
         """terminals_shells_create
 
-        A module's durable login shells, which are runs with no agent.
+        Owning ViewSet for terminal sessions and their commands.
 
         :param create_module_shell: (required)
         :type create_module_shell: CreateModuleShell
@@ -2036,7 +2061,7 @@ class TerminalsApi:
     ) -> ApiResponse[AgentRunId]:
         """terminals_shells_create
 
-        A module's durable login shells, which are runs with no agent.
+        Owning ViewSet for terminal sessions and their commands.
 
         :param create_module_shell: (required)
         :type create_module_shell: CreateModuleShell
@@ -2105,7 +2130,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_shells_create
 
-        A module's durable login shells, which are runs with no agent.
+        Owning ViewSet for terminal sessions and their commands.
 
         :param create_module_shell: (required)
         :type create_module_shell: CreateModuleShell
@@ -2233,7 +2258,7 @@ class TerminalsApi:
     @validate_call
     def terminals_shells_list(
         self,
-        module_id: StrictStr,
+        module_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2249,7 +2274,7 @@ class TerminalsApi:
     ) -> List[ModuleShell]:
         """terminals_shells_list
 
-        A module's durable login shells, which are runs with no agent.
+        Owning ViewSet for terminal sessions and their commands.
 
         :param module_id: (required)
         :type module_id: str
@@ -2300,7 +2325,7 @@ class TerminalsApi:
     @validate_call
     def terminals_shells_list_with_http_info(
         self,
-        module_id: StrictStr,
+        module_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2316,7 +2341,7 @@ class TerminalsApi:
     ) -> ApiResponse[List[ModuleShell]]:
         """terminals_shells_list
 
-        A module's durable login shells, which are runs with no agent.
+        Owning ViewSet for terminal sessions and their commands.
 
         :param module_id: (required)
         :type module_id: str
@@ -2367,7 +2392,7 @@ class TerminalsApi:
     @validate_call
     def terminals_shells_list_without_preload_content(
         self,
-        module_id: StrictStr,
+        module_id: Annotated[str, Field(min_length=1, strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2383,7 +2408,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_shells_list
 
-        A module's durable login shells, which are runs with no agent.
+        Owning ViewSet for terminal sessions and their commands.
 
         :param module_id: (required)
         :type module_id: str
@@ -2496,7 +2521,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_create(
         self,
-        viewer_lease: ViewerLease,
+        viewer_lease_request: ViewerLeaseRequest,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2512,9 +2537,10 @@ class TerminalsApi:
     ) -> ViewerLeaseResult:
         """terminals_viewers_lease_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease: (required)
-        :type viewer_lease: ViewerLease
+        :param viewer_lease_request: (required)
+        :type viewer_lease_request: ViewerLeaseRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2538,7 +2564,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_create_serialize(
-            viewer_lease=viewer_lease,
+            viewer_lease_request=viewer_lease_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2564,7 +2590,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_create_with_http_info(
         self,
-        viewer_lease: ViewerLease,
+        viewer_lease_request: ViewerLeaseRequest,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2580,9 +2606,10 @@ class TerminalsApi:
     ) -> ApiResponse[ViewerLeaseResult]:
         """terminals_viewers_lease_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease: (required)
-        :type viewer_lease: ViewerLease
+        :param viewer_lease_request: (required)
+        :type viewer_lease_request: ViewerLeaseRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2606,7 +2633,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_create_serialize(
-            viewer_lease=viewer_lease,
+            viewer_lease_request=viewer_lease_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2632,7 +2659,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_create_without_preload_content(
         self,
-        viewer_lease: ViewerLease,
+        viewer_lease_request: ViewerLeaseRequest,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2648,9 +2675,10 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_viewers_lease_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease: (required)
-        :type viewer_lease: ViewerLease
+        :param viewer_lease_request: (required)
+        :type viewer_lease_request: ViewerLeaseRequest
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2674,7 +2702,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_create_serialize(
-            viewer_lease=viewer_lease,
+            viewer_lease_request=viewer_lease_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2695,7 +2723,7 @@ class TerminalsApi:
 
     def _terminals_viewers_lease_create_serialize(
         self,
-        viewer_lease,
+        viewer_lease_request,
         _request_auth,
         _content_type,
         _headers,
@@ -2721,8 +2749,8 @@ class TerminalsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if viewer_lease is not None:
-            _body_params = viewer_lease
+        if viewer_lease_request is not None:
+            _body_params = viewer_lease_request
 
 
         # set the HTTP header `Accept`
@@ -2775,7 +2803,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_release_create(
         self,
-        viewer_lease_release: ViewerLeaseRelease,
+        viewer_lease_identity: ViewerLeaseIdentity,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2791,9 +2819,10 @@ class TerminalsApi:
     ) -> ReleaseResult:
         """terminals_viewers_lease_release_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease_release: (required)
-        :type viewer_lease_release: ViewerLeaseRelease
+        :param viewer_lease_identity: (required)
+        :type viewer_lease_identity: ViewerLeaseIdentity
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2817,7 +2846,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_release_create_serialize(
-            viewer_lease_release=viewer_lease_release,
+            viewer_lease_identity=viewer_lease_identity,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2841,7 +2870,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_release_create_with_http_info(
         self,
-        viewer_lease_release: ViewerLeaseRelease,
+        viewer_lease_identity: ViewerLeaseIdentity,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2857,9 +2886,10 @@ class TerminalsApi:
     ) -> ApiResponse[ReleaseResult]:
         """terminals_viewers_lease_release_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease_release: (required)
-        :type viewer_lease_release: ViewerLeaseRelease
+        :param viewer_lease_identity: (required)
+        :type viewer_lease_identity: ViewerLeaseIdentity
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2883,7 +2913,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_release_create_serialize(
-            viewer_lease_release=viewer_lease_release,
+            viewer_lease_identity=viewer_lease_identity,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2907,7 +2937,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_release_create_without_preload_content(
         self,
-        viewer_lease_release: ViewerLeaseRelease,
+        viewer_lease_identity: ViewerLeaseIdentity,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2923,9 +2953,10 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_viewers_lease_release_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease_release: (required)
-        :type viewer_lease_release: ViewerLeaseRelease
+        :param viewer_lease_identity: (required)
+        :type viewer_lease_identity: ViewerLeaseIdentity
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -2949,7 +2980,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_release_create_serialize(
-            viewer_lease_release=viewer_lease_release,
+            viewer_lease_identity=viewer_lease_identity,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -2968,7 +2999,7 @@ class TerminalsApi:
 
     def _terminals_viewers_lease_release_create_serialize(
         self,
-        viewer_lease_release,
+        viewer_lease_identity,
         _request_auth,
         _content_type,
         _headers,
@@ -2994,8 +3025,8 @@ class TerminalsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if viewer_lease_release is not None:
-            _body_params = viewer_lease_release
+        if viewer_lease_identity is not None:
+            _body_params = viewer_lease_identity
 
 
         # set the HTTP header `Accept`
@@ -3048,7 +3079,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_renew_create(
         self,
-        viewer_lease_release: ViewerLeaseRelease,
+        viewer_lease_identity: ViewerLeaseIdentity,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3064,9 +3095,10 @@ class TerminalsApi:
     ) -> ViewerLeaseResult:
         """terminals_viewers_lease_renew_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease_release: (required)
-        :type viewer_lease_release: ViewerLeaseRelease
+        :param viewer_lease_identity: (required)
+        :type viewer_lease_identity: ViewerLeaseIdentity
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -3090,7 +3122,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_renew_create_serialize(
-            viewer_lease_release=viewer_lease_release,
+            viewer_lease_identity=viewer_lease_identity,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -3115,7 +3147,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_renew_create_with_http_info(
         self,
-        viewer_lease_release: ViewerLeaseRelease,
+        viewer_lease_identity: ViewerLeaseIdentity,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3131,9 +3163,10 @@ class TerminalsApi:
     ) -> ApiResponse[ViewerLeaseResult]:
         """terminals_viewers_lease_renew_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease_release: (required)
-        :type viewer_lease_release: ViewerLeaseRelease
+        :param viewer_lease_identity: (required)
+        :type viewer_lease_identity: ViewerLeaseIdentity
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -3157,7 +3190,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_renew_create_serialize(
-            viewer_lease_release=viewer_lease_release,
+            viewer_lease_identity=viewer_lease_identity,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -3182,7 +3215,7 @@ class TerminalsApi:
     @validate_call
     def terminals_viewers_lease_renew_create_without_preload_content(
         self,
-        viewer_lease_release: ViewerLeaseRelease,
+        viewer_lease_identity: ViewerLeaseIdentity,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3198,9 +3231,10 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_viewers_lease_renew_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
-        :param viewer_lease_release: (required)
-        :type viewer_lease_release: ViewerLeaseRelease
+        :param viewer_lease_identity: (required)
+        :type viewer_lease_identity: ViewerLeaseIdentity
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -3224,7 +3258,7 @@ class TerminalsApi:
         """ # noqa: E501
 
         _param = self._terminals_viewers_lease_renew_create_serialize(
-            viewer_lease_release=viewer_lease_release,
+            viewer_lease_identity=viewer_lease_identity,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -3244,7 +3278,7 @@ class TerminalsApi:
 
     def _terminals_viewers_lease_renew_create_serialize(
         self,
-        viewer_lease_release,
+        viewer_lease_identity,
         _request_auth,
         _content_type,
         _headers,
@@ -3270,8 +3304,8 @@ class TerminalsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if viewer_lease_release is not None:
-            _body_params = viewer_lease_release
+        if viewer_lease_identity is not None:
+            _body_params = viewer_lease_identity
 
 
         # set the HTTP header `Accept`
@@ -3340,6 +3374,7 @@ class TerminalsApi:
     ) -> ViewerOutputReportResult:
         """terminals_viewers_output_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param viewer_output_report: (required)
         :type viewer_output_report: ViewerOutputReport
@@ -3406,6 +3441,7 @@ class TerminalsApi:
     ) -> ApiResponse[ViewerOutputReportResult]:
         """terminals_viewers_output_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param viewer_output_report: (required)
         :type viewer_output_report: ViewerOutputReport
@@ -3472,6 +3508,7 @@ class TerminalsApi:
     ) -> RESTResponseType:
         """terminals_viewers_output_create
 
+        Owning ViewSet for terminal sessions and their commands.
 
         :param viewer_output_report: (required)
         :type viewer_output_report: ViewerOutputReport

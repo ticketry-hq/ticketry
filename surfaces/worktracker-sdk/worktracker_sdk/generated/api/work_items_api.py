@@ -62,7 +62,7 @@ class WorkItemsApi:
     ) -> List[WorkItem]:
         """batch_work_items
 
-        Read up to one hundred task work items by exact id in one request.
+        Read at most one hundred exact ids while preserving caller order.
 
         :param work_item_batch: (required)
         :type work_item_batch: WorkItemBatch
@@ -129,7 +129,7 @@ class WorkItemsApi:
     ) -> ApiResponse[List[WorkItem]]:
         """batch_work_items
 
-        Read up to one hundred task work items by exact id in one request.
+        Read at most one hundred exact ids while preserving caller order.
 
         :param work_item_batch: (required)
         :type work_item_batch: WorkItemBatch
@@ -196,7 +196,7 @@ class WorkItemsApi:
     ) -> RESTResponseType:
         """batch_work_items
 
-        Read up to one hundred task work items by exact id in one request.
+        Read at most one hundred exact ids while preserving caller order.
 
         :param work_item_batch: (required)
         :type work_item_batch: WorkItemBatch
@@ -339,7 +339,7 @@ class WorkItemsApi:
     ) -> WorkItem:
         """create_work_item
 
-        Create an ordinary task or an absorbed review finding.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -410,7 +410,7 @@ class WorkItemsApi:
     ) -> ApiResponse[WorkItem]:
         """create_work_item
 
-        Create an ordinary task or an absorbed review finding.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -481,7 +481,7 @@ class WorkItemsApi:
     ) -> RESTResponseType:
         """create_work_item
 
-        Create an ordinary task or an absorbed review finding.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -629,7 +629,7 @@ class WorkItemsApi:
     ) -> None:
         """delete_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -696,7 +696,7 @@ class WorkItemsApi:
     ) -> ApiResponse[None]:
         """delete_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -763,7 +763,7 @@ class WorkItemsApi:
     ) -> RESTResponseType:
         """delete_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -883,7 +883,7 @@ class WorkItemsApi:
     ) -> WorkItem:
         """get_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -950,7 +950,7 @@ class WorkItemsApi:
     ) -> ApiResponse[WorkItem]:
         """get_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1017,7 +1017,7 @@ class WorkItemsApi:
     ) -> RESTResponseType:
         """get_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1146,7 +1146,7 @@ class WorkItemsApi:
     ) -> List[WorkItem]:
         """list_work_items
 
-        The only task collection read, narrowed by declared query parameters.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param module:
         :type module: UUID
@@ -1221,7 +1221,7 @@ class WorkItemsApi:
     ) -> ApiResponse[List[WorkItem]]:
         """list_work_items
 
-        The only task collection read, narrowed by declared query parameters.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param module:
         :type module: UUID
@@ -1296,7 +1296,7 @@ class WorkItemsApi:
     ) -> RESTResponseType:
         """list_work_items
 
-        The only task collection read, narrowed by declared query parameters.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param module:
         :type module: UUID
@@ -1442,7 +1442,7 @@ class WorkItemsApi:
     ) -> WorkItem:
         """reorder_work_item
 
-        Allocate the moved row's server-owned fractional rank.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: UUID
@@ -1513,7 +1513,7 @@ class WorkItemsApi:
     ) -> ApiResponse[WorkItem]:
         """reorder_work_item
 
-        Allocate the moved row's server-owned fractional rank.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: UUID
@@ -1584,7 +1584,7 @@ class WorkItemsApi:
     ) -> RESTResponseType:
         """reorder_work_item
 
-        Allocate the moved row's server-owned fractional rank.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: UUID
@@ -1733,7 +1733,7 @@ class WorkItemsApi:
     ) -> WorkItem:
         """update_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1804,7 +1804,7 @@ class WorkItemsApi:
     ) -> ApiResponse[WorkItem]:
         """update_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1875,7 +1875,7 @@ class WorkItemsApi:
     ) -> RESTResponseType:
         """update_work_item
 
-        Retrieve, update, or delete one bare work item.
+        Task CRUD with service-owned workflow and hierarchy invariants.
 
         :param issue_id: (required)
         :type issue_id: str

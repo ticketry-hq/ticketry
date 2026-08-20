@@ -24,7 +24,7 @@ import {
 } from './GraphRunExecutionModeEnum.js';
 
 /**
- * Graph-run create body: provider override plus execution mode.
+ * Optional launch context for arming or advancing a graph run.
  * @export
  * @interface GraphRunRequest
  */
@@ -34,13 +34,13 @@ export interface GraphRunRequest {
      * @type {string}
      * @memberof GraphRunRequest
      */
-    agent?: string;
+    agent?: string | null;
     /**
      *
      * @type {GraphRunExecutionModeEnum}
      * @memberof GraphRunRequest
      */
-    mode?: GraphRunExecutionModeEnum;
+    mode?: GraphRunExecutionModeEnum | null;
 }
 
 

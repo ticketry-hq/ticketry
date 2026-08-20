@@ -98,6 +98,7 @@ fn build_native_libghostty() {
     );
     for source in [
         "native/libghostty_focus_trace.m",
+        "native/libghostty_clipboard.m",
         "native/libghostty_runtime.m",
         "native/libghostty_view.m",
         "native/libghostty_view_bridge.m",

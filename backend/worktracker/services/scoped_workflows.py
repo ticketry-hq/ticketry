@@ -79,6 +79,7 @@ def _launch_binding_payload(binding):
         "state_id": binding.state_id,
         "prompt": binding.prompt,
         "required_skills": binding.required_skills,
+        "entry_skill": binding.entry_skill,
         "agent": binding.provider_slug,
         "model": binding.model_name,
         "reasoning": binding.reasoning_name,
@@ -213,6 +214,7 @@ def _launch_policy_warnings(bindings, states):
     """
 
     from apps.settings_store.provider_catalog import load_provider_catalog
+    from worktracker.required_skills import USER_INVOKE_ONLY_SKILL_IDS
     from worktracker.services.provider_catalog import activated_provider_slugs
 
     catalog = load_provider_catalog()
@@ -223,6 +225,23 @@ def _launch_policy_warnings(bindings, states):
         if not binding.has_launch_policy:
             continue
         state_name = state_names.get(binding.state_id, "This state")
+        misplaced_entry_skills = [
+            skill
+            for skill in binding.required_skills
+            if skill in USER_INVOKE_ONLY_SKILL_IDS and skill != binding.entry_skill
+        ]
+        if misplaced_entry_skills:
+            skills = ", ".join(misplaced_entry_skills)
+            warnings.append(
+                {
+                    "code": "user_invoke_only_skill_not_entry",
+                    "state_id": binding.state_id,
+                    "message": (
+                        f"{state_name} requires {skills}, but user-invoke-only "
+                        "skills must be selected as the entry skill."
+                    ),
+                }
+            )
         if (
             binding.provider_slug is not None
             and binding.provider_slug not in activated_providers
@@ -290,10 +309,8 @@ def list_transitions(type_id):
     """Return one issue type's transition rows in canonical display order."""
 
     issue_type = _issue_type(type_id)
-    return list(
-        IssueTypeTransition.objects.filter(issue_type=issue_type).order_by(
-            "from_state__sort_order", "to_state__sort_order", "id"
-        )
+    return IssueTypeTransition.objects.filter(issue_type=issue_type).order_by(
+        "from_state__sort_order", "to_state__sort_order", "id"
     )
 
 

@@ -27,27 +27,15 @@ export const PROVIDER_CAPABILITY_DEFAULTS: Record<
 > = {
   claude: {
     agent: "claude",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: ["sonnet", "opus", "haiku", "fable"],
-    model_prefixes: ["claude-"],
-    reasoning_levels: ["low", "medium", "high", "xhigh", "max"],
+    models: [],
   },
   codex: {
     agent: "codex",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: [],
-    model_prefixes: ["gpt-", "codex-", "chatgpt-", "o1", "o3", "o4"],
-    reasoning_levels: ["minimal", "low", "medium", "high", "xhigh"],
+    models: [],
   },
   gemini: {
     agent: "gemini",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: [],
-    model_prefixes: ["gemini-"],
-    reasoning_levels: [],
+    models: [],
   },
 };
 
@@ -83,6 +71,25 @@ export function launchBindingsByStateId(
 
 const text = (value: string | null | undefined) => value?.trim() ?? "";
 
+const USER_INVOKE_ONLY_SKILLS = new Set([
+  "grill-with-docs",
+  "implement",
+  "setup-matt-pocock-skills",
+  "to-spec",
+  "to-tickets",
+]);
+
+export function entrySkillWarning(
+  requiredSkills: string[],
+  entrySkill: string | null | undefined,
+): string | null {
+  const misplaced = requiredSkills.filter(
+    (skill) => USER_INVOKE_ONLY_SKILLS.has(skill) && skill !== text(entrySkill),
+  );
+  if (misplaced.length === 0) return null;
+  return `${misplaced.join(", ")} can only start through user input. Select it as the entry skill.`;
+}
+
 export function validateLaunchBindingOptions(
   binding: LaunchBindingInput,
   capabilities: ProviderCapabilities[],
@@ -101,21 +108,25 @@ export function validateLaunchBindingOptions(
   if (!capability) {
     return { field: "agent", message: unavailableProviderMessage(agent) };
   }
-  if (
-    model &&
-    !capability.accepts_any_model &&
-    !(capability.model_aliases ?? []).includes(model) &&
-    !(capability.model_prefixes ?? []).some((prefix) => model.startsWith(prefix))
-  ) {
+  if (!model) {
+    return reasoning ? {
+      field: "model",
+      message: "Choose a catalog model before configuring reasoning.",
+    } : null;
+  }
+  const selectedModel = capability.models.find(
+    (candidate) => candidate.name === model,
+  );
+  if (!selectedModel) {
     return {
       field: "model",
       message: `Model '${model}' is not compatible with agent/provider '${agent}'.`,
     };
   }
-  if (reasoning && !(capability.reasoning_levels ?? []).includes(reasoning)) {
+  if (reasoning && !selectedModel.reasoning_levels.includes(reasoning)) {
     return {
       field: "reasoning",
-      message: `Reasoning '${reasoning}' is not supported by agent/provider '${agent}'.`,
+      message: `Reasoning '${reasoning}' is not supported by model '${model}'.`,
     };
   }
   return null;

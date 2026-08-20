@@ -33,6 +33,34 @@ export function dragEvent(
   fireEvent(target, event);
 }
 
+export const transientDocumentDragLeaveTargets = [
+  "document",
+  "body",
+  "documentElement",
+] as const;
+
+export type TransientDocumentDragLeaveTarget =
+  (typeof transientDocumentDragLeaveTargets)[number];
+
+/** The transient leave shapes emitted at a document/WebView boundary. */
+export function transientDocumentDragLeave(
+  transfer: unknown,
+  targetName: TransientDocumentDragLeaveTarget = "document",
+): void {
+  const event = new Event("dragleave", { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    dataTransfer: { value: transfer },
+    relatedTarget: { value: null },
+  });
+  const target =
+    targetName === "document"
+      ? document
+      : targetName === "body"
+        ? document.body
+        : document.documentElement;
+  fireEvent(target, event);
+}
+
 const ROW_HEIGHT = 20;
 const TAB_WIDTH = 100;
 

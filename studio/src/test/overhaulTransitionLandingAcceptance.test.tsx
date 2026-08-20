@@ -1,10 +1,10 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { fixture, mountStudio, workItem } from "./seam";
-import { dragWorkItem } from "./workItemDragGestures";
+import { dragWorkItemAcrossTransientDocumentLeave } from "./workItemDragGestures";
 
 describe("overhaul acceptance — transition landing", () => {
-  it("[overhaul-60] keeps authoritative transition landing and explicit drag placement", async () => {
+  it("[overhaul-60] resumes transition landing after a transient document leave", async () => {
     const http = fixture();
     const grill = {
       id: "grill",
@@ -66,7 +66,7 @@ describe("overhaul acceptance — transition landing", () => {
       before_id: "ideas-top",
       after_id: "ideas-bottom",
     });
-    dragWorkItem(dragged, target, "before");
+    dragWorkItemAcrossTransientDocumentLeave(dragged, target, "before");
 
     await transitioned;
     await reordered;

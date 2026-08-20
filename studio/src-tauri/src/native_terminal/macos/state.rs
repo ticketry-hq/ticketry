@@ -209,7 +209,7 @@ impl NativeTerminalState {
     }
 
     pub fn detach_all(&self) {
-        let (entries, has_in_flight_attachments) = {
+        let entries = {
             let mut attaching = self
                 .attaching
                 .lock()
@@ -219,10 +219,7 @@ impl NativeTerminalState {
                 .entries
                 .lock()
                 .expect("native terminal registry poisoned");
-            (
-                registry.drain().map(|(_, entry)| entry).collect::<Vec<_>>(),
-                !attaching.runs.is_empty(),
-            )
+            registry.drain().map(|(_, entry)| entry).collect::<Vec<_>>()
         };
         for entry in entries {
             entry.preparation_phase.store(FAILED, Ordering::Release);
@@ -236,19 +233,9 @@ impl NativeTerminalState {
             release_view_contexts(entry.contexts);
             let _ = entry.worker.send(NativeViewerCommand::Detach);
         }
-        // A cancelled preparation may still be unwinding a main-thread
-        // libghostty operation. Keep the shared runtime alive until a later
-        // teardown rather than freeing it underneath that operation.
-        if !has_in_flight_attachments {
-            if let Some(runtime) = self
-                .runtime
-                .lock()
-                .expect("ghostty runtime poisoned")
-                .take()
-            {
-                unsafe { muxed_ghostty_runtime_free(runtime as *mut c_void) };
-            }
-        }
+        // Keep the one shared runtime for the life of the process. The pinned
+        // libghostty app teardown revisits surfaces already freed above and can
+        // crash in `apprt.embedded.Surface.deinit`. Webview reloads reuse this
+        // runtime, and the OS reclaims it when the desktop process exits.
     }
 }
-

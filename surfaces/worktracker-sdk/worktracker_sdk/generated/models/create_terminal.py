@@ -33,10 +33,10 @@ class CreateTerminal(BaseModel):
     module_id: StrictStr
     task_id: Optional[StrictStr] = None
     initial_prompt: Optional[StrictStr] = None
-    is_planning: Optional[StrictBool] = None
-    is_instant: Optional[StrictBool] = None
+    is_planning: Optional[StrictBool] = False
+    is_instant: Optional[StrictBool] = False
     instant_prompt: Optional[StrictStr] = None
-    is_doc_chat: Optional[StrictBool] = None
+    is_doc_chat: Optional[StrictBool] = False
     doc_rel_path: Optional[StrictStr] = None
     doc_id: Optional[StrictStr] = None
     __properties: ClassVar[List[str]] = ["agent", "project_id", "module_id", "task_id", "initial_prompt", "is_planning", "is_instant", "instant_prompt", "is_doc_chat", "doc_rel_path", "doc_id"]
@@ -122,10 +122,10 @@ class CreateTerminal(BaseModel):
             "module_id": obj.get("module_id"),
             "task_id": obj.get("task_id"),
             "initial_prompt": obj.get("initial_prompt"),
-            "is_planning": obj.get("is_planning"),
-            "is_instant": obj.get("is_instant"),
+            "is_planning": obj.get("is_planning") if obj.get("is_planning") is not None else False,
+            "is_instant": obj.get("is_instant") if obj.get("is_instant") is not None else False,
             "instant_prompt": obj.get("instant_prompt"),
-            "is_doc_chat": obj.get("is_doc_chat"),
+            "is_doc_chat": obj.get("is_doc_chat") if obj.get("is_doc_chat") is not None else False,
             "doc_rel_path": obj.get("doc_rel_path"),
             "doc_id": obj.get("doc_id")
         })

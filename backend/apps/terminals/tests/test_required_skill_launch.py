@@ -308,7 +308,8 @@ def test_adapter_uses_persistent_exact_locked_installation(
     adapter = get_adapter(provider)
     augmentation = adapter.augment_launch(
         adapter.command(
-            "prompt", activated_providers={"claude", "agy", "codex", "gemini"}
+            "task prompt",
+            activated_providers={"claude", "agy", "codex", "gemini"}
         ),
         f"run-{provider}",
         lifecycle_url="http://127.0.0.1:8123/api/lifecycle/events",

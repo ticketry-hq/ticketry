@@ -20,8 +20,28 @@ _Avoid_: Services, the stack, backend and friends
 
 **Owned backend**:
 A sidecar the desktop shell spawned itself, holding the data-directory lock
-for the application's lifetime. Only an owned backend may be supervised.
+for the application's lifetime. Each launch also has its own backend
+owner-liveness channel. Only an owned backend may be supervised.
 _Avoid_: Local backend, our backend
+
+**Backend owner-liveness channel**:
+A private OS pipe created immediately before one owned-backend launch. The
+desktop retains the sole write end and the packaged backend watches the read
+end. EOF therefore proves that this backend's desktop owner closed the channel
+or no longer exists, including after `SIGKILL`; the backend then performs
+cooperative ASGI shutdown. Recovery creates a new channel for the replacement.
+The channel carries no heartbeat data and uses no polling interval, read
+deadline, missed-heartbeat counter, or owner timeout. It guarantees backend
+owner-death notification; it does not make a process group parent-death-aware
+and it does not apply to MCP.
+_Avoid_: Heartbeat, lease, owner poll, process-group liveness
+
+**Unowned backend launch**:
+The explicit `--unowned` opt-out from the backend owner-liveness channel for
+direct sidecar smoke tests and supporting development commands. It carries no
+owner-death guarantee. Packaged desktop launches must always supply
+`--owner-fd` instead.
+_Avoid_: Development stack
 
 **Development stack**:
 An already-running `pnpm dev` backend that the desktop shell deliberately
@@ -46,10 +66,12 @@ failed startup, a panic in a build that unwinds — and nothing more. It cannot
 run after an abrupt death of the desktop process itself: a macOS `SIGKILL`
 (Force Quit, the out-of-memory killer), a power loss, a build configured to
 abort on panic, or an operating-system crash all skip destructors entirely, and
-POSIX gives a process group no parent-death guarantee. A group stranded that way
-outlives the shell: the next launch reclaims the data-directory lock the kernel
-released and starts its own sidecars, but it never hunts the stranded processes
-down, because they are no longer processes it owns.
+POSIX gives a process group no parent-death guarantee. This limitation still
+applies to destructor/process-group cleanup and to MCP. It does not weaken the
+owned backend's separate OS-backed guarantee: abrupt desktop death closes the
+backend owner-liveness writer, and the backend cooperatively shuts down. A
+process outside that channel's backend contract may still outlive the shell;
+the next launch never hunts such a process down or adopts it.
 _Avoid_: Guaranteed cleanup, automatic teardown, cleanup on exit
 
 **Pinned port**:

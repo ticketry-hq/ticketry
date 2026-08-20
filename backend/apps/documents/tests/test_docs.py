@@ -87,7 +87,9 @@ def _seed_design_dir(tmp_path: Path) -> Path:
 # ---------- serving ----------
 
 
-def test_serves_registered_html(client, tmp_path):
+def test_serves_registered_html_without_authentication(client, tmp_path, settings):
+    settings.WORKTRACKER_API_TOKEN = "secret"
+    settings.WORKTRACKER_DISABLE_AUTH = False
     root = _seed_design_dir(tmp_path)
     _register_doc(doc_id="d1", root_dir=str(root), rel_path="design.html")
 
@@ -331,6 +333,15 @@ def test_lists_registered_documents_for_task(client, tmp_path):
     assert docs[0]["label"] == "design"
 
 
+def test_listing_requires_authentication(client, settings):
+    settings.WORKTRACKER_API_TOKEN = "secret"
+    settings.WORKTRACKER_DISABLE_AUTH = False
+
+    resp = client.get("/api/documents", {"task_id": TASK_ID})
+
+    assert resp.status_code == 401
+
+
 def test_listing_prunes_registered_documents_missing_on_disk(client, tmp_path):
     root = _seed_design_dir(tmp_path)
     _register_doc(doc_id="d1", root_dir=str(root), rel_path="design.html")
@@ -379,15 +390,15 @@ def test_rescan_resolves_canonical_dir_with_zero_prior_rows(
     inactive_canonical.mkdir(parents=True)
     (inactive_canonical / "wrong.html").write_text("<html>wrong profile</html>")
 
-    inactive_profile = dict(sample_profile)
-    inactive_profile["module_links"] = [
+    first_import_batch = dict(sample_profile)
+    first_import_batch["module_links"] = [
         {"module_id": MODULE_ID, "path": str(inactive_folder)}
     ]
-    active_profile = dict(sample_profile)
-    active_profile["module_links"] = [
+    last_import_batch = dict(sample_profile)
+    last_import_batch["module_links"] = [
         {"module_id": MODULE_ID, "path": str(module_folder)}
     ]
-    write_profiles(tmp_config, [inactive_profile, active_profile], recent=0)
+    write_profiles(tmp_config, [first_import_batch, last_import_batch], recent=0)
 
     from apps import worktracker_queries
     from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
@@ -416,7 +427,6 @@ def test_rescan_resolves_canonical_dir_with_zero_prior_rows(
             "task_id": TASK_ID,
             "project_id": PROJECT_ID,
             "module_id": MODULE_ID,
-            "profile": 1,
         },
     )
     assert resp.status_code == 200

@@ -26,13 +26,13 @@ export interface TerminateResult {
      * @type {string}
      * @memberof TerminateResult
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
     /**
      *
      * @type {boolean}
      * @memberof TerminateResult
      */
-    terminated: boolean;
+    readonly terminated: boolean;
 }
 
 /**
@@ -63,14 +63,12 @@ export function TerminateResultToJSON(json: any): TerminateResult {
     return TerminateResultToJSONTyped(json, false);
 }
 
-export function TerminateResultToJSONTyped(value?: TerminateResult | null, ignoreDiscriminator: boolean = false): any {
+export function TerminateResultToJSONTyped(value?: Omit<TerminateResult, 'agent_run_id'|'terminated'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
-        'terminated': value['terminated'],
     };
 }

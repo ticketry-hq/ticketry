@@ -194,28 +194,16 @@ function socketUrl(projectId: string, cursor?: number): string {
   return url.toString();
 }
 
-interface StatusFeedOptions {
-  refreshSnapshotOnSocketOpen?: boolean;
-}
-
 let active: {
   projectId: string;
-  refreshSnapshotOnSocketOpen: boolean;
   acceptCursor: (projectId: string, revision: number) => void;
   acceptWorkItemFrame: (frame: WorkItemStateFrame) => void;
   stop: () => void;
 } | null = null;
 
 export const statusFeed = {
-  start(projectId: string, options: StatusFeedOptions = {}): void {
-    const refreshSnapshotOnSocketOpen =
-      options.refreshSnapshotOnSocketOpen ?? false;
-    if (
-      active?.projectId === projectId &&
-      active.refreshSnapshotOnSocketOpen === refreshSnapshotOnSocketOpen
-    ) {
-      return;
-    }
+  start(projectId: string): void {
+    if (active?.projectId === projectId) return;
     active?.stop();
     useAgentStatusStore.getState().switchProject(projectId);
 
@@ -339,7 +327,6 @@ export const statusFeed = {
     };
     active = {
       projectId,
-      refreshSnapshotOnSocketOpen,
       acceptCursor,
       acceptWorkItemFrame,
       stop,

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import type { Profile } from "../../../../../features/agents/types";
 import type { SessionMeta } from "../../../../../features/agents/terminal";
 import { providerListPlaceholder } from "../../../../../features/workflows/launchProviderCatalog";
 import { loadSelectedTicketTerminal } from "../terminals/selectedTicketTerminalLoader";
@@ -22,8 +21,6 @@ export interface TicketLaunchContext {
   taskId: string;
   taskKey: string;
   taskName: string;
-  profileReady: boolean;
-  profile: Profile | null;
 }
 
 /**
@@ -37,7 +34,6 @@ export type WorkspaceLauncherContext =
   | ({ kind: "task" } & TicketLaunchContext)
   | {
       kind: "scratch";
-      profileReady: boolean;
       onChooseMode: (mode: ScratchLaunchMode) => void;
     };
 
@@ -183,7 +179,6 @@ export function WorkspaceLauncher({
     }
   }
 
-  const canLaunch = launchContext.profileReady;
   return (
     <div className="relative">
       <button
@@ -205,21 +200,18 @@ export function WorkspaceLauncher({
         }
         onPointerEnter={() => void loadSelectedTicketTerminal()}
         onFocus={() => void loadSelectedTicketTerminal()}
-        disabled={!canLaunch}
         aria-haspopup="menu"
         aria-expanded={launchOpen}
         title={
-          canLaunch
-            ? launchContext.kind === "scratch"
-              ? "Start a new Plan or Instant run"
-              : "Start a new agent run for this issue"
-            : "A ready Studio profile is required to launch a run"
+          launchContext.kind === "scratch"
+            ? "Start a new Plan or Instant run"
+            : "Start a new agent run for this issue"
         }
         className="flex shrink-0 items-center border border-dashed border-pane-border px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-focus-accent hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-pane-border disabled:hover:text-text-muted"
       >
         ＋ Agent
       </button>
-      {launchOpen && canLaunch && (
+      {launchOpen && (
         <div
           ref={launchMenuRef}
           role="menu"

@@ -5,10 +5,10 @@ This module owns the one write that can change that answer: dragging a module
 into a new place.
 
 A project reaches Manual module order exactly once, on its first module drag.
-Until then its modules are ordered by the automatic fallback plus whatever
-agent-activity recency Studio layers on top, and their persisted ranks mean
-nothing. The first drag therefore carries a *baseline*: the complete list of
-module ids in the order the user could actually see. Freezing that baseline
+Until then its modules use the server's automatic newest-created-first order,
+and their persisted ranks mean nothing. The first drag therefore carries a
+*baseline*: the complete list of module ids in the order the user could
+actually see. Freezing that baseline
 into ranks, applying the requested move, and flipping the project to manual
 mode all happen inside one transaction behind a project-row lock, so a project
 can never persist a half-seeded arrangement.

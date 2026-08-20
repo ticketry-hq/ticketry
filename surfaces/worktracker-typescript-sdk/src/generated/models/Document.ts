@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- *
+ * Read-only public projection of a registered design document.
  * @export
  * @interface Document
  */
@@ -26,49 +26,19 @@ export interface Document {
      * @type {string}
      * @memberof Document
      */
-    id: string;
+    readonly id: string;
     /**
      *
      * @type {string}
      * @memberof Document
      */
-    rel_path: string;
+    readonly rel_path: string;
     /**
      *
      * @type {string}
      * @memberof Document
      */
-    root_dir?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof Document
-     */
-    title?: string | null;
-    /**
-     *
-     * @type {string}
-     * @memberof Document
-     */
-    kind?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof Document
-     */
-    scope?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof Document
-     */
-    module_id?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof Document
-     */
-    task_id?: string;
+    readonly label: string;
 }
 
 /**
@@ -77,6 +47,7 @@ export interface Document {
 export function instanceOfDocument(value: object): value is Document {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('rel_path' in value) || value['rel_path'] === undefined) return false;
+    if (!('label' in value) || value['label'] === undefined) return false;
     return true;
 }
 
@@ -92,12 +63,7 @@ export function DocumentFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
 
         'id': json['id'],
         'rel_path': json['rel_path'],
-        'root_dir': json['root_dir'] == null ? undefined : json['root_dir'],
-        'title': json['title'] == null ? undefined : json['title'],
-        'kind': json['kind'] == null ? undefined : json['kind'],
-        'scope': json['scope'] == null ? undefined : json['scope'],
-        'module_id': json['module_id'] == null ? undefined : json['module_id'],
-        'task_id': json['task_id'] == null ? undefined : json['task_id'],
+        'label': json['label'],
     };
 }
 
@@ -105,20 +71,12 @@ export function DocumentToJSON(json: any): Document {
     return DocumentToJSONTyped(json, false);
 }
 
-export function DocumentToJSONTyped(value?: Document | null, ignoreDiscriminator: boolean = false): any {
+export function DocumentToJSONTyped(value?: Omit<Document, 'id'|'rel_path'|'label'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'id': value['id'],
-        'rel_path': value['rel_path'],
-        'root_dir': value['root_dir'],
-        'title': value['title'],
-        'kind': value['kind'],
-        'scope': value['scope'],
-        'module_id': value['module_id'],
-        'task_id': value['task_id'],
     };
 }

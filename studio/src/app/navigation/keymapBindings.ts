@@ -108,6 +108,12 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
     chord: chord("Enter"),
     configurable: false,
   },
+  {
+    context: "capture",
+    actionId: "edit-view.choose-provider",
+    chord: chord("Enter", { shift: true }),
+    configurable: false,
+  },
   { context: "capture", actionId: "cycle-terminal-forward", chord: chord("\\", { meta: true }) },
   {
     context: "capture",
@@ -155,7 +161,16 @@ export const DEFAULT_BINDINGS: readonly BindingDefinition[] = [
   paneBinding("modules.activate", "Enter"),
   paneBinding("tasks.next", "ArrowDown"),
   paneBinding("tasks.previous", "ArrowUp"),
-  paneBinding("tasks.activate", "Enter"),
+  {
+    ...paneBinding("tasks.activate", "Enter"),
+    allowExtraModifiers: false,
+  },
+  {
+    context: "focused-pane",
+    actionId: "tasks.choose-provider",
+    chord: chord("Enter", { shift: true }),
+    configurable: false,
+  },
   {
     ...paneBinding("tasks.expand", "l"),
     fixedAliases: [chord("ArrowRight")],

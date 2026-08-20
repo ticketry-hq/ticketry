@@ -16,6 +16,16 @@
 
 import * as runtime from '../runtime.js';
 import {
+    type ModuleFolderValidation,
+    ModuleFolderValidationFromJSON,
+    ModuleFolderValidationToJSON,
+} from '../models/ModuleFolderValidation.js';
+import {
+    type ModuleFolderValidationResult,
+    ModuleFolderValidationResultFromJSON,
+    ModuleFolderValidationResultToJSON,
+} from '../models/ModuleFolderValidationResult.js';
+import {
     type Open,
     OpenFromJSON,
     OpenToJSON,
@@ -30,6 +40,10 @@ import {
     SettingValueFromJSON,
     SettingValueToJSON,
 } from '../models/SettingValue.js';
+
+export interface ConfigFoldersValidateCreateRequest {
+    moduleFolderValidation: ModuleFolderValidation;
+}
 
 export interface SettingsKeybindingsUpdateRequest {
     settingValue: SettingValue;
@@ -47,6 +61,28 @@ export interface SettingsProviderCatalogUpdateRequest {
  */
 export interface SettingsApiInterface {
     /**
+     * Creates request options for configFoldersValidateCreate without sending the request
+     * @param {ModuleFolderValidation} moduleFolderValidation
+     * @throws {RequiredError}
+     * @memberof SettingsApiInterface
+     */
+    configFoldersValidateCreateRequestOpts(requestParameters: ConfigFoldersValidateCreateRequest): Promise<runtime.RequestOpts>;
+
+    /**
+     * Stateless settings operations that do not own a model resource.
+     * @param {ModuleFolderValidation} moduleFolderValidation
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SettingsApiInterface
+     */
+    configFoldersValidateCreateRaw(requestParameters: ConfigFoldersValidateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ModuleFolderValidationResult>>;
+
+    /**
+     * Stateless settings operations that do not own a model resource.
+     */
+    configFoldersValidateCreate(requestParameters: ConfigFoldersValidateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ModuleFolderValidationResult>;
+
+    /**
      * Creates request options for settingsKeybindingsRetrieve without sending the request
      * @throws {RequiredError}
      * @memberof SettingsApiInterface
@@ -54,7 +90,7 @@ export interface SettingsApiInterface {
     settingsKeybindingsRetrieveRequestOpts(): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Retrieve or replace the installation\'s singleton keybindings value.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof SettingsApiInterface
@@ -62,6 +98,7 @@ export interface SettingsApiInterface {
     settingsKeybindingsRetrieveRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SettingValue>>;
 
     /**
+     * Retrieve or replace the installation\'s singleton keybindings value.
      */
     settingsKeybindingsRetrieve(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SettingValue>;
 
@@ -74,7 +111,7 @@ export interface SettingsApiInterface {
     settingsKeybindingsUpdateRequestOpts(requestParameters: SettingsKeybindingsUpdateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Retrieve or replace the installation\'s singleton keybindings value.
      * @param {SettingValue} settingValue
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -83,6 +120,7 @@ export interface SettingsApiInterface {
     settingsKeybindingsUpdateRaw(requestParameters: SettingsKeybindingsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SettingValue>>;
 
     /**
+     * Retrieve or replace the installation\'s singleton keybindings value.
      */
     settingsKeybindingsUpdate(requestParameters: SettingsKeybindingsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SettingValue>;
 
@@ -134,6 +172,57 @@ export interface SettingsApiInterface {
 export class SettingsApi extends runtime.BaseAPI implements SettingsApiInterface {
 
     /**
+     * Creates request options for configFoldersValidateCreate without sending the request
+     */
+    async configFoldersValidateCreateRequestOpts(requestParameters: ConfigFoldersValidateCreateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['moduleFolderValidation'] == null) {
+            throw new runtime.RequiredError(
+                'moduleFolderValidation',
+                'Required parameter "moduleFolderValidation" was null or undefined when calling configFoldersValidateCreate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
+        }
+
+
+        let urlPath = `/config/folders/validate`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ModuleFolderValidationToJSON(requestParameters['moduleFolderValidation']),
+        };
+    }
+
+    /**
+     * Stateless settings operations that do not own a model resource.
+     */
+    async configFoldersValidateCreateRaw(requestParameters: ConfigFoldersValidateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ModuleFolderValidationResult>> {
+        const requestOptions = await this.configFoldersValidateCreateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ModuleFolderValidationResultFromJSON(jsonValue));
+    }
+
+    /**
+     * Stateless settings operations that do not own a model resource.
+     */
+    async configFoldersValidateCreate(requestParameters: ConfigFoldersValidateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ModuleFolderValidationResult> {
+        const response = await this.configFoldersValidateCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for settingsKeybindingsRetrieve without sending the request
      */
     async settingsKeybindingsRetrieveRequestOpts(): Promise<runtime.RequestOpts> {
@@ -157,6 +246,7 @@ export class SettingsApi extends runtime.BaseAPI implements SettingsApiInterface
     }
 
     /**
+     * Retrieve or replace the installation\'s singleton keybindings value.
      */
     async settingsKeybindingsRetrieveRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SettingValue>> {
         const requestOptions = await this.settingsKeybindingsRetrieveRequestOpts();
@@ -166,6 +256,7 @@ export class SettingsApi extends runtime.BaseAPI implements SettingsApiInterface
     }
 
     /**
+     * Retrieve or replace the installation\'s singleton keybindings value.
      */
     async settingsKeybindingsRetrieve(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SettingValue> {
         const response = await this.settingsKeybindingsRetrieveRaw(initOverrides);
@@ -206,6 +297,7 @@ export class SettingsApi extends runtime.BaseAPI implements SettingsApiInterface
     }
 
     /**
+     * Retrieve or replace the installation\'s singleton keybindings value.
      */
     async settingsKeybindingsUpdateRaw(requestParameters: SettingsKeybindingsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SettingValue>> {
         const requestOptions = await this.settingsKeybindingsUpdateRequestOpts(requestParameters);
@@ -215,6 +307,7 @@ export class SettingsApi extends runtime.BaseAPI implements SettingsApiInterface
     }
 
     /**
+     * Retrieve or replace the installation\'s singleton keybindings value.
      */
     async settingsKeybindingsUpdate(requestParameters: SettingsKeybindingsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SettingValue> {
         const response = await this.settingsKeybindingsUpdateRaw(requestParameters, initOverrides);

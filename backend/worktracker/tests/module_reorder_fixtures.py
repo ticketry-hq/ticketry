@@ -45,7 +45,7 @@ def make_foreign_module(project, name="foreign"):
     """A module in a sibling project of the same workspace."""
 
     other = Project.objects.create(
-        id=uuid.uuid4(), workspace=project.workspace, name="other", slug="OTHER"
+        id=uuid.uuid4(), name="other", slug="OTHER"
     )
     foreign_type = IssueType.objects.create(
         id=uuid.uuid4(), project=other, name="Module", level="module"

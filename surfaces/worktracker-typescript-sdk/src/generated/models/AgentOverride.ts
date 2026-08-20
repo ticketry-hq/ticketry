@@ -26,7 +26,7 @@ export interface AgentOverride {
      * @type {string}
      * @memberof AgentOverride
      */
-    agent?: string;
+    agent?: string | null;
 }
 
 /**

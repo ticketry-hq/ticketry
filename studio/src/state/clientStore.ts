@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import {
-  getConfigSnapshot,
   getModuleFolder,
-  isSidebarEnabled,
-  sidebarPaneComposition,
-  updateProfile,
+  loadModuleLinks,
+  moduleLinksHaveLoaded,
+} from "../features/module-links";
+import {
+  DEFAULT_SIDEBAR_PANE_COMPOSITION,
   type SidebarPaneComposition,
-} from "../features/studio/stores/configStore";
+} from "../app/shell/layout/layoutMath";
 import { useModalStore } from "../app/modal/modalStore";
 import { useStudioStore } from "../features/projects/store";
 import type {
@@ -31,8 +32,10 @@ import {
   rememberTaskSelection,
   writeCollapsedStateIds,
   writeExpandedIdsByModule,
+  writeLastSelectedModule,
   writeSidebarVisible,
 } from "./persistence";
+import { MODULES_SIDEBAR_ENABLED } from "./sidebarAvailability";
 
 export type FocusedPane =
   | "projects"
@@ -275,7 +278,7 @@ function zoneEntryEngagement(
   state: { editViewZone: EditViewZone; editViewBodyEngaged: boolean; sidebarVisible: boolean },
   entering: EditViewZone,
 ): boolean {
-  const inEditView = !isSidebarEnabled() || !state.sidebarVisible;
+  const inEditView = !state.sidebarVisible;
   // The panel holds nothing but a shell, so entering it commits to typing.
   if (entering === "terminal-panel") return inEditView;
   if (entering === "active-tab-body" && state.editViewZone === entering) {
@@ -329,11 +332,7 @@ function hasProject(): boolean {
 }
 
 function currentSidebarPaneComposition(): SidebarPaneComposition {
-  const config = getConfigSnapshot();
-  return sidebarPaneComposition(
-    config.features.projects,
-    isSidebarEnabled(config),
-  );
+  return DEFAULT_SIDEBAR_PANE_COMPOSITION;
 }
 
 function nextExpandedMap(
@@ -358,7 +357,7 @@ export const useClientStore = create<ClientState>((set, get) => ({
   navigationModality: "keyboard",
   projectsCursorId: null,
   modulesCursorId: null,
-  sidebarVisible: readSidebarVisible(),
+  sidebarVisible: MODULES_SIDEBAR_ENABLED && readSidebarVisible(),
   panelLayout: readPanelLayout(),
   modalStack: [],
   bindingsStack: [DEFAULT_BINDINGS],
@@ -373,10 +372,16 @@ export const useClientStore = create<ClientState>((set, get) => ({
   async selectModule(id) {
     const projectId = useStudioStore.getState().selectedProjectId;
     if (!projectId) return;
-    const { recentProfileIndex, profiles } = getConfigSnapshot();
-    const profile =
-      recentProfileIndex === null ? undefined : profiles[recentProfileIndex];
-    if (!getModuleFolder(profile, id)) {
+    if (!moduleLinksHaveLoaded()) {
+      try {
+        await loadModuleLinks();
+      } catch {
+        get().pushToast("error", "Could not load module folders.");
+        return;
+      }
+      if (useStudioStore.getState().selectedProjectId !== projectId) return;
+    }
+    if (!getModuleFolder(id)) {
       useModalStore.getState().pushModal({
         type: "module-folder",
         payload: { moduleId: id, resumeModuleSelection: true },
@@ -388,24 +393,9 @@ export const useClientStore = create<ClientState>((set, get) => ({
       selectedTaskId: null,
       workspaceSelection: { kind: "task" },
     });
+    writeLastSelectedModule(id);
     const { loadModuleTree } = await import("../features/work-items/queries");
-    const persistRecentModule =
-      profile && profile.recent_module_ids?.[projectId] !== id
-        ? updateProfile(recentProfileIndex!, {
-            ...profile,
-            recent_project_id: projectId,
-            recent_module_ids: {
-              ...(profile.recent_module_ids ?? {}),
-              [projectId]: id,
-            },
-          }).catch((error) => {
-            console.warn("[clientStore] persist recent module failed", error);
-          })
-        : Promise.resolve();
-    const [tree] = await Promise.all([
-      loadModuleTree(projectId, id),
-      persistRecentModule,
-    ]);
+    const tree = await loadModuleTree(projectId, id);
     if (
       useStudioStore.getState().selectedProjectId !== projectId ||
       get().selectedModuleId !== id
@@ -544,14 +534,15 @@ export const useClientStore = create<ClientState>((set, get) => ({
       return;
     }
     if (!sidebarVisible && paneComposition !== "absent") {
-      writeSidebarVisible(true);
-      set({
-        sidebarVisible: true,
-        focusedPane:
-          hasSelectedProject || paneComposition === "modules"
-            ? "modules"
-            : "projects",
-      });
+      get().setSidebarVisible(true);
+      if (get().sidebarVisible) {
+        set({
+          focusedPane:
+            hasSelectedProject || paneComposition === "modules"
+              ? "modules"
+              : "projects",
+        });
+      }
     }
   },
 
@@ -592,7 +583,7 @@ export const useClientStore = create<ClientState>((set, get) => ({
     set({
       editViewBodyEngaged:
         engaged &&
-        (!isSidebarEnabled() || !state.sidebarVisible) &&
+        !state.sidebarVisible &&
         isEngageableZone(state.editViewZone),
     });
   },
@@ -632,9 +623,10 @@ export const useClientStore = create<ClientState>((set, get) => ({
   },
 
   setSidebarVisible(sidebarVisible) {
-    writeSidebarVisible(sidebarVisible);
+    const nextSidebarVisible = MODULES_SIDEBAR_ENABLED && sidebarVisible;
+    writeSidebarVisible(nextSidebarVisible);
     set(
-      sidebarVisible
+      nextSidebarVisible
         ? { sidebarVisible: true, editViewBodyEngaged: false }
         : {
             sidebarVisible: false,

@@ -1,23 +1,23 @@
-"""Canonical DRF CRUD surface for task work items and attachments."""
+"""Canonical DRF ViewSets for task work items and attachments."""
 
 import uuid
 
-from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import status
-from rest_framework.exceptions import ValidationError as DRFValidationError
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import mixins, status, viewsets
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
-from worktracker.rest.serializers import (
+from worktracker.rest.domain_ops import WorkItemDomainActionMixin
+from worktracker.rest.work_item_serializers import (
     AttachmentSerializer,
-    WorkItemBatchSerializer,
+    AttachmentUploadSerializer,
     WorkItemCreateSerializer,
+    WorkItemFilterSerializer,
     WorkItemPatchSerializer,
     WorkItemSerializer,
 )
 from worktracker.services.attachments import create_attachment, list_attachments
 from worktracker.services.work_items import (
-    batch_work_items,
     create_work_item,
     delete_work_item,
     list_work_items,
@@ -26,61 +26,56 @@ from worktracker.services.work_items import (
 )
 
 
-def _uuid_query(request, name):
-    value = request.query_params.get(name)
-    if not value:
-        return None
-    try:
-        return uuid.UUID(value)
-    except ValueError:
-        raise DRFValidationError({name: "Must be a valid UUID."})
-
-
-class WorkItemListView(APIView):
-    """The only task collection read, narrowed by declared query parameters."""
-
-    @extend_schema(
+@extend_schema_view(
+    list=extend_schema(
         operation_id="listWorkItems",
         tags=["Work Items"],
         parameters=[
-            OpenApiParameter("project", uuid.UUID, required=False),
-            OpenApiParameter("module", uuid.UUID, required=False),
-            OpenApiParameter("state", uuid.UUID, required=False),
+            OpenApiParameter("project", type=uuid.UUID, required=False),
+            OpenApiParameter("module", type=uuid.UUID, required=False),
+            OpenApiParameter("state", type=uuid.UUID, required=False),
         ],
-        responses=WorkItemSerializer(many=True),
-    )
-    def get(self, request):
-        project_id = _uuid_query(request, "project")
-        module_id = _uuid_query(request, "module")
-        state_id = _uuid_query(request, "state")
-        items = list_work_items(
-            project_id=project_id,
-            module_id=module_id,
-            state_id=state_id,
+    ),
+    retrieve=extend_schema(operation_id="getWorkItem", tags=["Work Items"]),
+    destroy=extend_schema(
+        operation_id="deleteWorkItem", tags=["Work Items"], responses={204: None}
+    ),
+)
+class WorkItemViewSet(
+    WorkItemDomainActionMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Task CRUD with service-owned workflow and hierarchy invariants."""
+
+    serializer_class = WorkItemSerializer
+    lookup_url_kwarg = "issue_id"
+
+    def get_serializer_class(self):
+        return {
+            "create": WorkItemCreateSerializer,
+            "partial_update": WorkItemPatchSerializer,
+        }.get(self.action, WorkItemSerializer)
+
+    def get_queryset(self):
+        if self.action != "list":
+            return list_work_items(include_archived=True)
+        filters = WorkItemFilterSerializer(data=self.request.query_params)
+        filters.is_valid(raise_exception=True)
+        values = filters.validated_data
+        return list_work_items(
+            project_id=values.get("project"),
+            module_id=values.get("module"),
+            state_id=values.get("state"),
             include_archived=True,
-            include_pathfind=True,
         )
-        return Response(WorkItemSerializer(items, many=True).data)
 
-
-class WorkItemBatchView(APIView):
-    """Read up to one hundred task work items by exact id in one request."""
-
-    @extend_schema(
-        operation_id="batchWorkItems",
-        tags=["Work Items"],
-        request=WorkItemBatchSerializer,
-        responses=WorkItemSerializer(many=True),
-    )
-    def post(self, request):
-        serializer = WorkItemBatchSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        items = batch_work_items(serializer.validated_data["ids"])
-        return Response(WorkItemSerializer(items, many=True).data)
-
-
-class WorkItemCreateView(APIView):
-    """Create an ordinary task or an absorbed review finding."""
+    def get_object(self):
+        return retrieve_work_item(self.kwargs["issue_id"])
 
     @extend_schema(
         operation_id="createWorkItem",
@@ -88,24 +83,19 @@ class WorkItemCreateView(APIView):
         request=WorkItemCreateSerializer,
         responses={201: WorkItemSerializer},
     )
-    def post(self, request, project_id):
-        serializer = WorkItemCreateSerializer(data=request.data)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        issue = create_work_item(project_id, **serializer.validated_data)
+        self.perform_create(serializer)
         return Response(
-            WorkItemSerializer(issue).data,
+            WorkItemSerializer(serializer.instance).data,
             status=status.HTTP_201_CREATED,
         )
 
-
-class WorkItemDetailView(APIView):
-    """Retrieve, update, or delete one bare work item."""
-
-    @extend_schema(
-        operation_id="getWorkItem", tags=["Work Items"], responses=WorkItemSerializer
-    )
-    def get(self, request, issue_id):
-        return Response(WorkItemSerializer(retrieve_work_item(issue_id)).data)
+    def perform_create(self, serializer):
+        serializer.instance = create_work_item(
+            self.kwargs["project_id"], **serializer.validated_data
+        )
 
     @extend_schema(
         operation_id="updateWorkItem",
@@ -113,31 +103,48 @@ class WorkItemDetailView(APIView):
         request=WorkItemPatchSerializer,
         responses=WorkItemSerializer,
     )
-    def patch(self, request, issue_id):
-        serializer = WorkItemPatchSerializer(data=request.data)
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        issue = update_work_item(issue_id, **serializer.validated_data)
-        return Response(WorkItemSerializer(issue).data)
+        self.perform_update(serializer)
+        return Response(WorkItemSerializer(serializer.instance).data)
 
-    @extend_schema(
-        operation_id="deleteWorkItem", tags=["Work Items"], responses={204: None}
-    )
-    def delete(self, request, issue_id):
-        delete_work_item(issue_id)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    def perform_update(self, serializer):
+        serializer.instance = update_work_item(
+            self.kwargs["issue_id"], **serializer.validated_data
+        )
+
+    def perform_destroy(self, instance):
+        delete_work_item(instance.id)
 
 
-class AttachmentCollectionView(APIView):
-    """Read or append attachment rows without re-reading their work item."""
-
-    @extend_schema(
+@extend_schema_view(
+    list=extend_schema(
         operation_id="listWorkItemAttachments",
         tags=["Attachments"],
         responses=AttachmentSerializer(many=True),
     )
-    def get(self, request, issue_id):
-        attachments = list_attachments(issue_id)
-        return Response(AttachmentSerializer(attachments, many=True).data)
+)
+class AttachmentViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Nested attachment collection for one work item."""
+
+    serializer_class = AttachmentSerializer
+    parser_classes = (MultiPartParser, FormParser)
+
+    def get_serializer_class(self):
+        return (
+            AttachmentUploadSerializer
+            if self.action == "create"
+            else AttachmentSerializer
+        )
+
+    def get_queryset(self):
+        return list_attachments(self.kwargs["issue_id"])
 
     @extend_schema(
         operation_id="uploadAttachment",
@@ -154,16 +161,18 @@ class AttachmentCollectionView(APIView):
         },
         responses={201: AttachmentSerializer},
     )
-    def post(self, request, issue_id):
-        uploaded = request.FILES.get("file")
-        if uploaded is None:
-            raise DRFValidationError({"file": "This field is required."})
-        attachment = create_attachment(
-            issue_id,
-            uploaded,
-            filename=request.data.get("name"),
-        )
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
         return Response(
-            AttachmentSerializer(attachment).data,
+            AttachmentSerializer(serializer.instance).data,
             status=status.HTTP_201_CREATED,
+        )
+
+    def perform_create(self, serializer):
+        serializer.instance = create_attachment(
+            self.kwargs["issue_id"],
+            serializer.validated_data["file"],
+            filename=serializer.validated_data.get("name"),
         )

@@ -78,9 +78,7 @@ def test_shell_launch_persists_an_agentless_module_scoped_run(
 ):
     runtime = patch_terminal_runtime(monkeypatch)
 
-    created = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )
+    created = shell_api.create_module_shell(module_id=linked_module)
 
     agent_run_id = created["agent_run_id"]
     run = AgentRun.objects.get(id=agent_run_id)
@@ -102,9 +100,7 @@ def test_shell_hosts_a_login_shell_in_the_module_folder_with_no_agent_environmen
     monkeypatch.setenv("SHELL", "/bin/zsh")
     runtime = patch_terminal_runtime(monkeypatch)
 
-    shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )
+    shell_api.create_module_shell(module_id=linked_module)
 
     request = runtime.requests[0]
     assert request.command.endswith("/bin/zsh -l")
@@ -132,9 +128,7 @@ def test_shell_launch_is_refused_without_a_usable_module_folder(
     runtime = patch_terminal_runtime(monkeypatch)
 
     with pytest.raises(ApplicationError) as refusal:
-        shell_api.create_module_shell(
-            shell_api.CreateModuleShellBody(module_id=module_id)
-        )
+        shell_api.create_module_shell(module_id=module_id)
 
     assert refusal.value.code == reason
     assert refusal.value.status == 409
@@ -152,9 +146,7 @@ def test_shell_launch_compensates_both_records_when_the_runtime_fails(
     )
 
     with pytest.raises(ApplicationError) as failure:
-        shell_api.create_module_shell(
-            shell_api.CreateModuleShellBody(module_id=linked_module)
-        )
+        shell_api.create_module_shell(module_id=linked_module)
 
     assert failure.value.code == "launch_unavailable"
     assert not AgentRun.objects.filter(scope=SHELL_SCOPE).exists()
@@ -169,12 +161,8 @@ def test_module_shells_are_listed_without_disturbing_agent_run_listings(
 ):
     patch_terminal_runtime(monkeypatch)
 
-    first = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
-    second = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
+    first = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
+    second = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
 
     listed = shell_api.list_module_shells(linked_module)
 
@@ -190,9 +178,7 @@ def test_module_shells_are_listed_without_disturbing_agent_run_listings(
 
 def test_ended_shell_leaves_the_module_shell_listing(monkeypatch, linked_module):
     patch_terminal_runtime(monkeypatch)
-    agent_run_id = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
+    agent_run_id = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
 
     terminals_api.terminate_terminal(agent_run_id)
 
@@ -204,9 +190,7 @@ def test_reconciliation_records_a_shell_exit_without_an_agent_outcome(
 ):
     runtime = InMemoryTerminalRuntime()
     monkeypatch.setattr(terminal_launch, "terminal_runtime", runtime)
-    agent_run_id = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
+    agent_run_id = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
     runtime.finish(agent_run_id, exit_code=130)
 
     result = TerminalReconciler(runtime).reconcile()
@@ -227,9 +211,7 @@ def test_ending_a_shell_announces_completion_and_advances_no_campaign(
     monkeypatch, linked_module
 ):
     patch_terminal_runtime(monkeypatch)
-    agent_run_id = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
+    agent_run_id = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
 
     announced: list[str] = []
 
@@ -267,9 +249,7 @@ def test_a_shell_exit_publishes_its_code_as_pushed_completion_state(
     monkeypatch.setattr(runs_bus, "publish_status", capture)
     runtime = InMemoryTerminalRuntime()
     monkeypatch.setattr(terminal_launch, "terminal_runtime", runtime)
-    agent_run_id = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
+    agent_run_id = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
     runtime.finish(agent_run_id, exit_code=exit_code)
     frames.clear()
 
@@ -313,9 +293,7 @@ def test_a_reconciled_shell_exit_announces_completion_and_advances_no_campaign(
 
     runtime = InMemoryTerminalRuntime()
     monkeypatch.setattr(terminal_launch, "terminal_runtime", runtime)
-    agent_run_id = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
+    agent_run_id = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
     runtime.finish(agent_run_id, exit_code=1)
 
     announced: list[str] = []
@@ -345,15 +323,11 @@ def test_restarting_a_shell_mints_a_new_run_and_never_revives_the_dead_one(
 
     runtime = InMemoryTerminalRuntime()
     monkeypatch.setattr(terminal_launch, "terminal_runtime", runtime)
-    dead = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
+    dead = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
     runtime.finish(dead, exit_code=2)
     TerminalReconciler(runtime).reconcile()
 
-    restarted = shell_api.create_module_shell(
-        shell_api.CreateModuleShellBody(module_id=linked_module)
-    )["agent_run_id"]
+    restarted = shell_api.create_module_shell(module_id=linked_module)["agent_run_id"]
 
     assert restarted != dead
     assert [entry["agent_run_id"] for entry in shell_api.list_module_shells(

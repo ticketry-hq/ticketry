@@ -21,20 +21,31 @@ import {
     IssueTypeTransitionToJSON,
 } from '../models/IssueTypeTransition.js';
 import {
+    type IssueTypeTransitionCreate,
+    IssueTypeTransitionCreateFromJSON,
+    IssueTypeTransitionCreateToJSON,
+} from '../models/IssueTypeTransitionCreate.js';
+import {
     type PatchedIssueTypeTransition,
     PatchedIssueTypeTransitionFromJSON,
     PatchedIssueTypeTransitionToJSON,
 } from '../models/PatchedIssueTypeTransition.js';
+import {
+    type WorkflowRevision,
+    WorkflowRevisionFromJSON,
+    WorkflowRevisionToJSON,
+} from '../models/WorkflowRevision.js';
 
 export interface CreateIssueTypeTransitionRequest {
     typeId: string;
-    issueTypeTransition: Omit<IssueTypeTransition, 'id'|'issue_type'>;
+    issueTypeTransitionCreate: IssueTypeTransitionCreate;
 }
 
 export interface DeleteIssueTypeTransitionRequest {
     fromStateId: string;
     toStateId: string;
     typeId: string;
+    workflowRevision: WorkflowRevision;
 }
 
 export interface ListIssueTypeTransitionsRequest {
@@ -44,13 +55,14 @@ export interface ListIssueTypeTransitionsRequest {
 export interface RemoveStateFromIssueTypeWorkflowRequest {
     stateId: string;
     typeId: string;
+    workflowRevision: WorkflowRevision;
 }
 
 export interface UpdateIssueTypeTransitionRequest {
     fromStateId: string;
     toStateId: string;
     typeId: string;
-    patchedIssueTypeTransition?: Omit<PatchedIssueTypeTransition, 'id'|'issue_type'>;
+    patchedIssueTypeTransition: PatchedIssueTypeTransition;
 }
 
 /**
@@ -63,16 +75,16 @@ export interface WorkflowsApiInterface {
     /**
      * Creates request options for createIssueTypeTransition without sending the request
      * @param {string} typeId
-     * @param {IssueTypeTransition} issueTypeTransition
+     * @param {IssueTypeTransitionCreate} issueTypeTransitionCreate
      * @throws {RequiredError}
      * @memberof WorkflowsApiInterface
      */
     createIssueTypeTransitionRequestOpts(requestParameters: CreateIssueTypeTransitionRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Canonical transition collection read and revision-guarded create.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      * @param {string} typeId
-     * @param {IssueTypeTransition} issueTypeTransition
+     * @param {IssueTypeTransitionCreate} issueTypeTransitionCreate
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof WorkflowsApiInterface
@@ -80,7 +92,7 @@ export interface WorkflowsApiInterface {
     createIssueTypeTransitionRaw(requestParameters: CreateIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<IssueTypeTransition>>;
 
     /**
-     * Canonical transition collection read and revision-guarded create.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     createIssueTypeTransition(requestParameters: CreateIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<IssueTypeTransition>;
 
@@ -89,16 +101,18 @@ export interface WorkflowsApiInterface {
      * @param {string} fromStateId
      * @param {string} toStateId
      * @param {string} typeId
+     * @param {WorkflowRevision} workflowRevision
      * @throws {RequiredError}
      * @memberof WorkflowsApiInterface
      */
     deleteIssueTypeTransitionRequestOpts(requestParameters: DeleteIssueTypeTransitionRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Permission update/delete at a transition\'s composite domain key.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      * @param {string} fromStateId
      * @param {string} toStateId
      * @param {string} typeId
+     * @param {WorkflowRevision} workflowRevision
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof WorkflowsApiInterface
@@ -106,7 +120,7 @@ export interface WorkflowsApiInterface {
     deleteIssueTypeTransitionRaw(requestParameters: DeleteIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>>;
 
     /**
-     * Permission update/delete at a transition\'s composite domain key.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     deleteIssueTypeTransition(requestParameters: DeleteIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void>;
 
@@ -119,7 +133,7 @@ export interface WorkflowsApiInterface {
     listIssueTypeTransitionsRequestOpts(requestParameters: ListIssueTypeTransitionsRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Canonical transition collection read and revision-guarded create.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      * @param {string} typeId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -128,7 +142,7 @@ export interface WorkflowsApiInterface {
     listIssueTypeTransitionsRaw(requestParameters: ListIssueTypeTransitionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<IssueTypeTransition>>>;
 
     /**
-     * Canonical transition collection read and revision-guarded create.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     listIssueTypeTransitions(requestParameters: ListIssueTypeTransitionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<IssueTypeTransition>>;
 
@@ -136,6 +150,7 @@ export interface WorkflowsApiInterface {
      * Creates request options for removeStateFromIssueTypeWorkflow without sending the request
      * @param {string} stateId
      * @param {string} typeId
+     * @param {WorkflowRevision} workflowRevision
      * @throws {RequiredError}
      * @memberof WorkflowsApiInterface
      */
@@ -145,6 +160,7 @@ export interface WorkflowsApiInterface {
      * Prune membership represented only by a type\'s graph reachability.
      * @param {string} stateId
      * @param {string} typeId
+     * @param {WorkflowRevision} workflowRevision
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof WorkflowsApiInterface
@@ -161,18 +177,18 @@ export interface WorkflowsApiInterface {
      * @param {string} fromStateId
      * @param {string} toStateId
      * @param {string} typeId
-     * @param {PatchedIssueTypeTransition} [patchedIssueTypeTransition]
+     * @param {PatchedIssueTypeTransition} patchedIssueTypeTransition
      * @throws {RequiredError}
      * @memberof WorkflowsApiInterface
      */
     updateIssueTypeTransitionRequestOpts(requestParameters: UpdateIssueTypeTransitionRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Permission update/delete at a transition\'s composite domain key.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      * @param {string} fromStateId
      * @param {string} toStateId
      * @param {string} typeId
-     * @param {PatchedIssueTypeTransition} [patchedIssueTypeTransition]
+     * @param {PatchedIssueTypeTransition} patchedIssueTypeTransition
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof WorkflowsApiInterface
@@ -180,7 +196,7 @@ export interface WorkflowsApiInterface {
     updateIssueTypeTransitionRaw(requestParameters: UpdateIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<IssueTypeTransition>>;
 
     /**
-     * Permission update/delete at a transition\'s composite domain key.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     updateIssueTypeTransition(requestParameters: UpdateIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<IssueTypeTransition>;
 
@@ -202,10 +218,10 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
             );
         }
 
-        if (requestParameters['issueTypeTransition'] == null) {
+        if (requestParameters['issueTypeTransitionCreate'] == null) {
             throw new runtime.RequiredError(
-                'issueTypeTransition',
-                'Required parameter "issueTypeTransition" was null or undefined when calling createIssueTypeTransition().'
+                'issueTypeTransitionCreate',
+                'Required parameter "issueTypeTransitionCreate" was null or undefined when calling createIssueTypeTransition().'
             );
         }
 
@@ -228,12 +244,12 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: IssueTypeTransitionToJSON(requestParameters['issueTypeTransition']),
+            body: IssueTypeTransitionCreateToJSON(requestParameters['issueTypeTransitionCreate']),
         };
     }
 
     /**
-     * Canonical transition collection read and revision-guarded create.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     async createIssueTypeTransitionRaw(requestParameters: CreateIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<IssueTypeTransition>> {
         const requestOptions = await this.createIssueTypeTransitionRequestOpts(requestParameters);
@@ -243,7 +259,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
     }
 
     /**
-     * Canonical transition collection read and revision-guarded create.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     async createIssueTypeTransition(requestParameters: CreateIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<IssueTypeTransition> {
         const response = await this.createIssueTypeTransitionRaw(requestParameters, initOverrides);
@@ -275,9 +291,18 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
             );
         }
 
+        if (requestParameters['workflowRevision'] == null) {
+            throw new runtime.RequiredError(
+                'workflowRevision',
+                'Required parameter "workflowRevision" was null or undefined when calling deleteIssueTypeTransition().'
+            );
+        }
+
         const queryParameters: any = {};
 
         const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
 
         if (this.configuration && this.configuration.apiKey) {
             headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
@@ -294,11 +319,12 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
             method: 'DELETE',
             headers: headerParameters,
             query: queryParameters,
+            body: WorkflowRevisionToJSON(requestParameters['workflowRevision']),
         };
     }
 
     /**
-     * Permission update/delete at a transition\'s composite domain key.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     async deleteIssueTypeTransitionRaw(requestParameters: DeleteIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
         const requestOptions = await this.deleteIssueTypeTransitionRequestOpts(requestParameters);
@@ -308,7 +334,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
     }
 
     /**
-     * Permission update/delete at a transition\'s composite domain key.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     async deleteIssueTypeTransition(requestParameters: DeleteIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
         await this.deleteIssueTypeTransitionRaw(requestParameters, initOverrides);
@@ -346,7 +372,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
     }
 
     /**
-     * Canonical transition collection read and revision-guarded create.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     async listIssueTypeTransitionsRaw(requestParameters: ListIssueTypeTransitionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<IssueTypeTransition>>> {
         const requestOptions = await this.listIssueTypeTransitionsRequestOpts(requestParameters);
@@ -356,7 +382,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
     }
 
     /**
-     * Canonical transition collection read and revision-guarded create.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     async listIssueTypeTransitions(requestParameters: ListIssueTypeTransitionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<IssueTypeTransition>> {
         const response = await this.listIssueTypeTransitionsRaw(requestParameters, initOverrides);
@@ -381,9 +407,18 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
             );
         }
 
+        if (requestParameters['workflowRevision'] == null) {
+            throw new runtime.RequiredError(
+                'workflowRevision',
+                'Required parameter "workflowRevision" was null or undefined when calling removeStateFromIssueTypeWorkflow().'
+            );
+        }
+
         const queryParameters: any = {};
 
         const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
 
         if (this.configuration && this.configuration.apiKey) {
             headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
@@ -399,6 +434,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
             method: 'DELETE',
             headers: headerParameters,
             query: queryParameters,
+            body: WorkflowRevisionToJSON(requestParameters['workflowRevision']),
         };
     }
 
@@ -444,6 +480,13 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
             );
         }
 
+        if (requestParameters['patchedIssueTypeTransition'] == null) {
+            throw new runtime.RequiredError(
+                'patchedIssueTypeTransition',
+                'Required parameter "patchedIssueTypeTransition" was null or undefined when calling updateIssueTypeTransition().'
+            );
+        }
+
         const queryParameters: any = {};
 
         const headerParameters: runtime.HTTPHeaders = {};
@@ -470,7 +513,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
     }
 
     /**
-     * Permission update/delete at a transition\'s composite domain key.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     async updateIssueTypeTransitionRaw(requestParameters: UpdateIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<IssueTypeTransition>> {
         const requestOptions = await this.updateIssueTypeTransitionRequestOpts(requestParameters);
@@ -480,7 +523,7 @@ export class WorkflowsApi extends runtime.BaseAPI implements WorkflowsApiInterfa
     }
 
     /**
-     * Permission update/delete at a transition\'s composite domain key.
+     * Issue-type-scoped transition CRUD with revision-guarded writes.
      */
     async updateIssueTypeTransition(requestParameters: UpdateIssueTypeTransitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<IssueTypeTransition> {
         const response = await this.updateIssueTypeTransitionRaw(requestParameters, initOverrides);

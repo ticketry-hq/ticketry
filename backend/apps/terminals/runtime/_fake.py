@@ -32,6 +32,8 @@ class _FakeTerminal:
     dimensions: TerminalDimensions | None = None
     scrolls: list[tuple[str, int]] = field(default_factory=list)
     attachments: list[_FakeAttachment] = field(default_factory=list)
+    submitted_text: list[str] = field(default_factory=list)
+    staged_text: list[str] = field(default_factory=list)
     lock: Lock = field(default_factory=Lock)
 
 
@@ -148,6 +150,38 @@ class InMemoryTerminalRuntime:
             ) from terminal.observation_error
         with terminal.lock:
             return bytes(terminal.screen)
+
+    def submit_text(self, agent_run_id: str, text: str) -> None:
+        terminal = self._terminals.get(agent_run_id)
+        if terminal is None:
+            raise TerminalNotFound(agent_run_id)
+        with terminal.lock:
+            terminal.submitted_text.append(text)
+            terminal.output.extend(text.encode("utf-8") + b"\n")
+            terminal.screen.extend(text.encode("utf-8") + b"\n")
+
+    def stage_text(self, agent_run_id: str, text: str) -> None:
+        terminal = self._terminals.get(agent_run_id)
+        if terminal is None:
+            raise TerminalNotFound(agent_run_id)
+        with terminal.lock:
+            terminal.staged_text.append(text)
+            terminal.output.extend(text.encode("utf-8"))
+            terminal.screen.extend(text.encode("utf-8"))
+
+    def submitted_text(self, agent_run_id: str) -> tuple[str, ...]:
+        terminal = self._terminals.get(agent_run_id)
+        if terminal is None:
+            raise TerminalNotFound(agent_run_id)
+        with terminal.lock:
+            return tuple(terminal.submitted_text)
+
+    def staged_text(self, agent_run_id: str) -> tuple[str, ...]:
+        terminal = self._terminals.get(agent_run_id)
+        if terminal is None:
+            raise TerminalNotFound(agent_run_id)
+        with terminal.lock:
+            return tuple(terminal.staged_text)
 
     def terminate(self, agent_run_id: str) -> TerminationResult:
         with self._lock:

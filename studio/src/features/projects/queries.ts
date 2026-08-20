@@ -1,14 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import * as api from "../../shared/api/client";
-import {
-  applyCanonicalModuleOrder,
-  usesManualModuleOrder,
-} from "./utilities/canonicalModuleOrder";
-import {
-  forgetAcceptedManualModuleOrder,
-  hasAcceptedManualModuleOrder,
-} from "./internal/acceptedManualModuleOrder";
-import { forgetNewlyCreatedModules } from "./internal/newlyCreatedModules";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import type {
@@ -29,50 +20,11 @@ async function fetchProjects(): Promise<Project[]> {
   return api.listProjects();
 }
 
-/**
- * Resolve the project's durable module ordering mode (#359, #363).
- *
- * The mode is revalidated on every module fetch rather than answered from the
- * cached project list. Nothing else refreshes that list on a running client, so
- * a teammate or another device flipping the project to Manual module order
- * would otherwise stay invisible here indefinitely, and recency would keep
- * layering itself back over the server's persisted rank order.
- *
- * The two reads are issued together by `fetchModules`, so neither can outrun
- * the other. An authoritative read is final, and retires whatever the last
- * accepted reorder implied about the mode (#367).
- *
- * A failed read falls back, in order, to a reorder this client has already had
- * accepted — the server took the project manual to accept it, so recency must
- * not be layered back over the rank order that drag produced — then to whatever
- * the cache already knows. An empty cache leaves the project automatic, the
- * mode every project starts in.
- */
-async function fetchModuleOrderingMode(projectId: string): Promise<boolean> {
-  try {
-    const manualModuleOrder = usesManualModuleOrder(await loadProjects(), projectId);
-    forgetAcceptedManualModuleOrder(projectId);
-    return manualModuleOrder;
-  } catch {
-    return (
-      hasAcceptedManualModuleOrder(projectId) ||
-      usesManualModuleOrder(getProjectsSnapshot(), projectId)
-    );
-  }
-}
-
 // Modules are cached already in the Canonical module order: every consumer
 // (sidebar, module tabs, Epic derive, backlog groups, position shortcuts)
-// reads that one array (#831, #359). Automatic projects get activity recency
-// layered over the server's newest-created-first fallback; manual projects
-// keep the server's persisted rank order untouched.
-async function fetchModules(projectId: string): Promise<Module[]> {
-  const [modules, manualModuleOrder] = await Promise.all([
-    api.listModules(projectId),
-    fetchModuleOrderingMode(projectId),
-  ]);
-  return applyCanonicalModuleOrder(projectId, modules, manualModuleOrder);
-}
+// reads that one server-ordered array (#831, #359).
+const fetchModules = (projectId: string): Promise<Module[]> =>
+  api.listModules(projectId);
 
 /** Cached projects, [] before the first load resolves. */
 export function getProjectsSnapshot(): Project[] {
@@ -178,8 +130,6 @@ export async function deleteProjectRecord(id: string): Promise<void> {
     old?.filter((project) => project.id !== id),
   );
   queryClient.removeQueries({ queryKey: queryKeys.modules.byProject(id) });
-  forgetAcceptedManualModuleOrder(id);
-  forgetNewlyCreatedModules(id);
 }
 
 /** Test seam: seed the cached project list. */

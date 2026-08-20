@@ -15,7 +15,6 @@ const buttonClass =
 export default function OnboardingTour({ onSelectStory }: Props) {
   const step = useOnboardingTourStore((state) => state.step);
   const storyId = useOnboardingTourStore((state) => state.storyId);
-  const showModuleCreate = useOnboardingTourStore((state) => state.showModuleCreate);
   const reset = useOnboardingTourStore((state) => state.reset);
   const addModuleOpen = useModalStore(
     (state) => state.modalStack.at(-1)?.type === "add-module",
@@ -68,21 +67,6 @@ export default function OnboardingTour({ onSelectStory }: Props) {
       {error}
     </p>
   ) : null;
-
-  if (step === "projects-pane") {
-    return (
-      <CoachMark
-        anchor="project-add"
-        title="Your projects"
-        description="Projects live here. Use Add Project whenever you need another one."
-      >
-        <button data-testid="onboarding-continue" className={buttonClass} onClick={showModuleCreate}>
-          Continue
-        </button>
-        {errorNode}
-      </CoachMark>
-    );
-  }
 
   if (step === "module-create") {
     if (addModuleOpen && moduleGuide === "name") {

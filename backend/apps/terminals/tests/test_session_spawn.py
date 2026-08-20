@@ -35,7 +35,6 @@ from apps.terminals.tests.fakes import FakeAdapter, patch_terminal_runtime
 from apps.terminals.launch import LaunchIntent
 from apps.terminals.tmux._core import TmuxSessionError
 from apps.worktrees import dao as worktrees_dao
-from apps.settings_store.config import NoConfigurationSelected
 from studio_server.contracts import ModuleSummary, TaskDetails, TaskState, TaskSummary
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
@@ -138,6 +137,7 @@ def _capture_create_session(monkeypatch) -> dict:
             cwd=str(request.working_directory),
             environment=dict(request.environment),
             dimensions=request.dimensions,
+            submitted=runtime.submitted,
         )
 
     monkeypatch.setattr(runtime, "create", capture_request)
@@ -146,17 +146,14 @@ def _capture_create_session(monkeypatch) -> dict:
     return created
 
 
-def _patch_argv(monkeypatch, factory=None) -> None:
+def _patch_argv(monkeypatch) -> None:
     """Override the "claude" adapter (the slug the suite's intents spawn) so
     ``session.spawn`` produces a deterministic argv without a real CLI.
 
-    The suite kept a ``(agent, prompt)`` factory shape; adapt it to the
-    adapter's ``command(prompt)`` by pinning the slug to "claude".
+    The prompt is carried by the provider command as it was before typed prompt
+    delivery was introduced.
     """
-    factory = factory or (lambda agent, prompt: ["claude", "--prompt", prompt])
-    fake = FakeAdapter(
-        slug="claude", command_fn=lambda prompt: factory("claude", prompt)
-    )
+    fake = FakeAdapter(slug="claude", command_fn=lambda prompt: ["claude", prompt])
     monkeypatch.setitem(registry._REGISTRY, "claude", fake)
 
 
@@ -250,7 +247,41 @@ async def test_spawn_resolves_required_skills_against_live_worktree(
     assert created["cwd"] == str(worktree_folder)
 
 
-async def test_spawn_materializes_an_oversized_tmux_command(
+async def test_spawn_passes_full_prompt_in_argv_and_types_only_entry_skill(
+    tmp_config, tmp_path, monkeypatch
+):
+    module_folder = tmp_path / "repo"
+    module_folder.mkdir()
+    _profile(tmp_config, module_folder)
+    _patch_worktracker(monkeypatch)
+    created = _capture_create_session(monkeypatch)
+    _patch_argv(monkeypatch)
+    monkeypatch.setattr(
+        session_module,
+        "resolve_required_skills",
+        lambda **kwargs: ResolvedSkills(
+            ("to-spec",), (), frozenset(), "a" * 40
+        ),
+    )
+
+    run_id = await session_module.launch_agent_run(
+        _intent(
+            launch_configuration=ResolvedLaunchConfiguration(
+                prompt="Write the specification.",
+                agent="claude",
+                model=None,
+                reasoning=None,
+                required_skills=("to-spec",),
+                entry_skill="to-spec",
+            )
+        )
+    )
+
+    assert "Write the specification." in created["command"]
+    assert created["submitted"] == [(run_id, "/to-spec")]
+
+
+async def test_spawn_materializes_an_oversized_prompt_command(
     tmp_config, tmp_path, monkeypatch
 ):
     module_folder = tmp_path / "repo"
@@ -273,9 +304,7 @@ async def test_spawn_materializes_an_oversized_tmux_command(
     wrapper_text = wrapper.read_text(encoding="utf-8")
     assert wrapper_text.startswith("#!/bin/sh\nexec env -u NO_COLOR ")
     assert "large task context" in wrapper_text
-    assert len(created["command"].encode("utf-8")) <= (
-        launch._TMUX_DIRECT_COMMAND_MAX_BYTES
-    )
+    assert created["submitted"] == []
 
     registry.cleanup_temporary_artifacts_for_run(run_id)
     assert not wrapper.exists()
@@ -315,6 +344,7 @@ async def test_spawn_resolves_the_active_profiles_module_link(
     assert created["cwd"] == str(active_folder)
     assert str(inactive_folder) not in created["command"]
     assert str(active_folder) in created["command"]
+    assert created["submitted"] == []
 
 
 async def test_spawn_publishes_a_starting_lifecycle_delta(
@@ -376,20 +406,16 @@ async def test_spawn_threads_initial_prompt(tmp_config, tmp_path, monkeypatch):
     module_folder.mkdir()
     _profile(tmp_config, module_folder)
     _patch_worktracker(monkeypatch)
-    _capture_create_session(monkeypatch)
+    created = _capture_create_session(monkeypatch)
+    _patch_argv(monkeypatch)
 
-    seen: dict = {}
-
-    def argv(agent, prompt):
-        seen["prompt"] = prompt
-        return ["claude", "--prompt", prompt]
-
-    _patch_argv(monkeypatch, argv)
-
-    await session_module.launch_agent_run(_intent(initial_prompt="do the thing"))
+    await session_module.launch_agent_run(
+        _intent(initial_prompt="do the thing")
+    )
 
     # initial_prompt is threaded through build_context_prompt(additional_prompt=…).
-    assert "do the thing" in seen["prompt"]
+    assert "do the thing" in created["command"]
+    assert created["submitted"] == []
 
 
 async def test_spawn_roots_in_worktree_when_present(tmp_config, tmp_path, monkeypatch):
@@ -458,14 +484,6 @@ async def test_spawn_tmux_failure_raises_and_no_orphan(
     assert runtime.terminated
     artifact_parent = tmp_path / "ticketry-agent-runs"
     assert not artifact_parent.exists() or list(artifact_parent.iterdir()) == []
-
-
-async def test_spawn_no_profile_raises(tmp_config, monkeypatch):
-    # tmp_config writes no profiles → no profile selected.
-    with pytest.raises(NoConfigurationSelected):
-        await session_module.launch_agent_run(_intent())
-
-    assert await AgentRun.objects.acount() == 0
 
 
 async def test_spawn_without_a_module_link_uses_the_home_fallback(

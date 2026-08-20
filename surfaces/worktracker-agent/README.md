@@ -4,6 +4,10 @@ A standalone [FastMCP](https://github.com/jlowin/fastmcp) server wired directly
 to the owned worktracker backend. The run-scoped `terminate_current_run` tool
 also forwards its request authorization to Studio's terminal authority.
 
+Ticketry exposes one installation project in this version. Studio launch
+prompts supply its Project ID. `list_projects` remains available for other MCP
+clients, but returns only that project and is not a project-selection step.
+
 ## Backend
 
 All calls go to the owned worktracker HTTP API:

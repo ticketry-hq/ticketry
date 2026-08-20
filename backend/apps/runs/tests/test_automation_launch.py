@@ -23,7 +23,6 @@ from worktracker.models import (
     Provider,
     ReasoningLevel,
     State,
-    Workspace,
 )
 from worktracker.services.projects import create_project
 from worktracker.signals import issue_state_changed
@@ -50,12 +49,7 @@ def _catalog_selection(provider_slug, model_name, reasoning_name=None):
 
 
 def _automation_policy(*, auto_start=True):
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(), slug="automation", name="Automation"
-    )
-    project = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="Automation", slug="AUTO"
-    )
+    project = Project.objects.create(id=uuid.uuid4(), name="Automation", slug="AUTO")
     issue_type = IssueType.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -107,6 +101,13 @@ def _automation_policy(*, auto_start=True):
     return issue, after
 
 
+@override_settings(WORKTRACKER_DISABLE_AUTH=False, WORKTRACKER_API_TOKEN="secret")
+def test_automation_retry_requires_the_installation_api_key():
+    response = runs_client.post(f"/api/automation-attempts/{uuid.uuid4()}/retry")
+
+    assert response.status_code == 401
+
+
 def test_auto_start_state_launches_once_after_the_destination_commits(monkeypatch):
     issue, after = _automation_policy()
     launches = []
@@ -146,14 +147,7 @@ def test_auto_start_state_launches_once_after_the_destination_commits(monkeypatc
 def test_fresh_story_auto_starts_spec_and_tickets_then_stops_at_implement(
     monkeypatch,
 ):
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(), slug="matt-defaults", name="Matt defaults"
-    )
-    project = create_project(
-        name="Matt defaults",
-        slug="MAT",
-        workspace_slug=workspace.slug,
-    )
+    project = create_project(name="Matt defaults", slug="MAT")
     _catalog_selection("codex", "gpt-5.4")
     AppSetting.objects.create(
         scope="host",
@@ -576,3 +570,28 @@ def test_required_skill_failure_is_actionable_and_retryable(monkeypatch):
     assert response.json()["status"] == "failed"
     assert response.json()["retryable"] is True
     assert AutomationAttempt.objects.filter(issue=issue).count() == 2
+
+
+def test_prompt_delivery_failure_is_distinct_and_retryable(monkeypatch):
+    from apps.terminals.launch import PromptDeliveryFailed
+
+    issue, after = _automation_policy()
+
+    async def failed_delivery(**kwargs):
+        raise PromptDeliveryFailed(reason="readiness_timeout")
+
+    monkeypatch.setattr("apps.execution.driver.spawn_run", failed_delivery)
+    monkeypatch.setattr(
+        "apps.execution.signals.publish_automation_attempt_sync", lambda attempt: None
+    )
+    issue.state = after
+    issue.save(update_fields=["state", "updated_at"])
+
+    failed = AutomationAttempt.objects.get(issue=issue)
+    assert failed.status == AutomationAttempt.Status.FAILED
+    assert failed.retryable is True
+    assert failed.error_details == {
+        "detail": "prompt_delivery_failed",
+        "code": "prompt_delivery_failed",
+        "reason": "readiness_timeout",
+    }

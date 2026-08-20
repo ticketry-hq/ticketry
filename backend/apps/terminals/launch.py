@@ -53,8 +53,7 @@ from apps.terminals.agents.skills.preflight import (
 )
 from apps.documents import watch as documents_watch
 from apps.runs.bus import publish_backend_session_sync, publish_document, publish_status
-from apps.settings_store import config as cfgmod
-from apps.settings_store.config import NoConfigurationSelected, module_link_path
+from apps.settings_store.module_links import resolve_module_path
 from apps.terminals.durable_launch import (
     LaunchUnavailable as LaunchUnavailable,
     create_durable_run,
@@ -67,9 +66,16 @@ from apps.terminals.persistence import (
     LaunchRecords,
     load_resume_launch,
     persist_termination,
+    persist_prompt_delivery_failure,
     termination_context,
 )
-from apps.terminals.prompt_builder import _build_prompt, _resolve_profile_index
+from apps.terminals.prompt_delivery import (
+    PROMPT_READINESS_TIMEOUT_SECONDS,
+    PromptDeliveryTimeout,
+    stage_resume_prompt,
+    submit_entry_skill,
+)
+from apps.terminals.prompt_builder import _build_prompt
 from apps.terminals.runtime import (
     TerminalRuntime,
     TmuxTerminalRuntime,
@@ -97,6 +103,7 @@ _TMUX_DIRECT_COMMAND_MAX_BYTES = 8 * 1024
 # Application callers depend on the public runtime protocol.  Tests replace
 # this instance with the in-memory runtime or a recording fake.
 terminal_runtime: TerminalRuntime = TmuxTerminalRuntime()
+RESUME_CONTINUATION_TEXT = "continue"
 
 
 @dataclass(frozen=True)
@@ -200,6 +207,19 @@ class ResumeUnavailable(Exception):
         self.reason = reason
 
 
+class PromptDeliveryFailed(LaunchUnavailable):
+    """A live provider pane did not accept its launch-time input."""
+
+    code = "prompt_delivery_failed"
+
+    def __init__(self, *, reason: str):
+        self.reason = reason
+        super().__init__(self.code)
+
+    def as_payload(self) -> dict[str, str]:
+        return {"detail": self.code, "code": self.code, "reason": self.reason}
+
+
 async def _launch(
     *,
     adapter: AgentAdapter,
@@ -215,6 +235,9 @@ async def _launch(
     launch_state: Optional[str] = None,
     launch_model: Optional[str] = None,
     resolved_skills: ResolvedSkills | None = None,
+    initial_prompt: str | None = None,
+    submitted_prompt: str | None = None,
+    staged_prompt: str | None = None,
 ) -> str:
     """Persist and start one agent run inside a detached terminal runtime.
 
@@ -238,10 +261,16 @@ async def _launch(
         once here and never updated (#693).
     :param launch_model: the model launch configuration actually resolved for
         this run, or ``None`` when none was resolved. Also write-once.
+    :param initial_prompt: the fresh launch message already carried by ``argv``.
+    :param submitted_prompt: a short manual command to type and submit after launch.
+    :param staged_prompt: resume text to type without submitting.
     :return: ``agent_run_id`` — the persisted, live run.
     :raises LaunchUnavailable: on persistence/runtime failure; launch records
         are deleted after runtime cleanup is confirmed or retained for retry.
     """
+
+    if submitted_prompt is not None and staged_prompt is not None:
+        raise ValueError("terminal input cannot be both submitted and staged")
 
     started_at = datetime.now(timezone.utc).isoformat()
     agent = adapter.slug
@@ -311,11 +340,57 @@ async def _launch(
             provider_session_id=provider_session_id,
             launch_state=launch_state,
             launch_model=launch_model,
+            initial_prompt=initial_prompt,
         ),
         command=command,
         environment=augmentation.environment,
         temporary_artifacts=temporary_artifacts,
     )
+
+    if submitted_prompt is not None or staged_prompt is not None:
+        try:
+            if submitted_prompt is not None:
+                await submit_entry_skill(
+                    runtime=terminal_runtime,
+                    agent_run_id=agent_run_id,
+                    command=submitted_prompt,
+                    is_ready=adapter.is_prompt_ready,
+                    timeout=PROMPT_READINESS_TIMEOUT_SECONDS,
+                )
+            elif staged_prompt is not None:
+                await stage_resume_prompt(
+                    runtime=terminal_runtime,
+                    agent_run_id=agent_run_id,
+                    prompt=staged_prompt,
+                    is_ready=adapter.is_prompt_ready,
+                    timeout=PROMPT_READINESS_TIMEOUT_SECONDS,
+                )
+        except Exception as exc:
+            ended_at = datetime.now(timezone.utc).isoformat()
+            cleanup_pending = False
+            try:
+                await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
+            except Exception:
+                cleanup_pending = True
+                logger.warning(
+                    "prompt-delivery cleanup failed run=%s",
+                    agent_run_id,
+                    exc_info=True,
+                )
+            if not cleanup_pending:
+                cleanup_temporary_artifacts(temporary_artifacts)
+            await asyncio.to_thread(
+                persist_prompt_delivery_failure,
+                agent_run_id,
+                ended_at=ended_at,
+                runtime_cleanup_pending=cleanup_pending,
+            )
+            reason = (
+                "readiness_timeout"
+                if isinstance(exc, PromptDeliveryTimeout)
+                else "terminal_input_failed"
+            )
+            raise PromptDeliveryFailed(reason=reason) from exc
 
     # The run row exists and the agent is live inside tmux: tell connected
     # /ws/status clients about the spawn (or resume — it shares this path)
@@ -385,11 +460,10 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         _enforce_provider_activation, effective_agent
     )
 
-    profile_index = _resolve_profile_index()
-    if profile_index is None:
-        raise NoConfigurationSelected("No profile selected.")
-    profile = cfgmod.Config().profiles[profile_index]
-    module_folder: Optional[str] = module_link_path(profile, intent.module_id)
+    module_folder: Optional[str] = await asyncio.to_thread(
+        resolve_module_path,
+        intent.module_id,
+    )
     if module_folder and not os.path.isdir(module_folder):
         module_folder = None
     cwd = module_folder or os.path.expanduser("~")
@@ -405,7 +479,6 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         else ()
     )
     prompt, design_dir, worktree_cwd, err = await _build_prompt(
-        profile_index,
         is_planning=intent.scope == "plan",
         is_instant=intent.scope == "instant",
         instant_prompt=intent.initial_prompt if intent.scope == "instant" else None,
@@ -427,8 +500,6 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         agent=effective_agent,
     )
     if err is not None:
-        if err == "no_profile_selected":
-            raise NoConfigurationSelected("No profile selected.")
         raise ValueError(err)
     if worktree_cwd:
         cwd = worktree_cwd
@@ -444,6 +515,11 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
     envelope = skill_prompt_envelope(resolved_skills)
     if envelope:
         prompt = f"{prompt}\n\n{envelope}"
+    manual_entry_skill = adapter.entry_skill_command(
+        launch_configuration.entry_skill
+        if launch_configuration is not None
+        else None,
+    )
     argv = adapter.command(
         prompt,
         model=(
@@ -478,6 +554,8 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
             launch_configuration.model if launch_configuration is not None else None
         ),
         resolved_skills=resolved_skills,
+        initial_prompt=prompt,
+        submitted_prompt=manual_entry_skill,
     )
 
 
@@ -521,7 +599,6 @@ async def resume_provider_conversation(agent_run_id: str) -> str:
         raise ResumeUnavailable("no_provider_session_id")
     if not facts.cwd or not os.path.isdir(facts.cwd):
         raise ResumeUnavailable("cwd_missing")
-
     adapter = get_adapter(facts.agent)
     argv = adapter.resume_command(facts.provider_session_id)
     new_run_id = uuid.uuid4().hex
@@ -543,4 +620,5 @@ async def resume_provider_conversation(agent_run_id: str) -> str:
         launch_state=facts.launch_state,
         launch_model=facts.launch_model,
         resolved_skills=ResolvedSkills((), (), frozenset(), ""),
+        staged_prompt=RESUME_CONTINUATION_TEXT,
     )

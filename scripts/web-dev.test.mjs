@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +19,7 @@ import {
   buildWebDevelopmentEnvironment,
   cleanupTemporaryWebLaunch,
   parseWebDevOptions,
+  readProvisionedApiToken,
   selectTemporaryMcpPort,
   selectWebMcpPort,
   selectWebPort,
@@ -212,11 +219,33 @@ test("web services share one backend and the pinned MCP endpoint", () => {
   assert.equal(environment.MCP_HOST, "127.0.0.1");
   assert.equal(environment.MCP_PORT, "8123");
   assert.equal(environment.WORKTRACKER_API_KEY, "development-token");
+  assert.equal(environment.WORKTRACKER_API_TOKEN, "development-token");
+  assert.equal(environment.VITE_WT_API_KEY, "development-token");
   assert.equal(
     environment.WORKTRACKER_BASE_URL,
     "http://127.0.0.1:8788/api/work-tracker",
   );
   assert.equal(environment.WORKTRACKER_MCP_URL, "http://127.0.0.1:8123/mcp");
+});
+
+test("web development reuses the token written during provisioning", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ticketry-web-token-"));
+  const tokenPath = path.join(directory, "worktracker_token");
+  writeFileSync(tokenPath, "provisioned-token\n");
+
+  assert.equal(
+    readProvisionedApiToken({ dataDirectory: directory, environment: {} }),
+    "provisioned-token",
+  );
+  assert.equal(
+    readProvisionedApiToken({
+      dataDirectory: directory,
+      environment: { WORKTRACKER_API_TOKEN: "configured-token" },
+    }),
+    "configured-token",
+  );
+
+  rmSync(directory, { recursive: true });
 });
 
 test("temporary web MCP tries 8123 once and skips when it is occupied", async () => {

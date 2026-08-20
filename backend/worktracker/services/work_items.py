@@ -67,35 +67,12 @@ def retrieve_work_item(issue_id):
         raise NotFoundError("Work item not found.") from exc
 
 
-def _pathfind_subtree_ids(*, project_id=None, module_id=None):
-    roots = Issue.objects.filter(type="task", issue_type__is_pathfind=True)
-    if project_id is not None:
-        roots = roots.filter(project_id=project_id)
-    if module_id is not None:
-        roots = roots.filter(module_id=module_id)
-    seen = set(roots.values_list("id", flat=True))
-    frontier = set(seen)
-    while frontier:
-        children = (
-            set(
-                Issue.objects.filter(type="task", parent_id__in=frontier).values_list(
-                    "id", flat=True
-                )
-            )
-            - seen
-        )
-        seen.update(children)
-        frontier = children
-    return seen
-
-
 def list_work_items(
     *,
     project_id=None,
     module_id=None,
     state_id=None,
     include_archived=False,
-    include_pathfind=False,
 ):
     """Return the canonical filtered task collection in stable rank order."""
 
@@ -108,14 +85,7 @@ def list_work_items(
         queryset = queryset.filter(state_id=state_id)
     if not include_archived:
         queryset = queryset.exclude(is_archived=True)
-    if not include_pathfind:
-        queryset = queryset.exclude(
-            id__in=_pathfind_subtree_ids(
-                project_id=project_id,
-                module_id=module_id,
-            )
-        )
-    return list(queryset)
+    return queryset
 
 
 def batch_work_items(ids):

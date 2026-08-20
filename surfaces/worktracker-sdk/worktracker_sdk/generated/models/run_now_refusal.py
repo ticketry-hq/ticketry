@@ -28,7 +28,7 @@ from pydantic_core import to_jsonable_python
 
 class RunNowRefusal(BaseModel):
     """
-    RunNowRefusal
+    Stable partial-outcome envelope returned by every Run Now refusal.
     """ # noqa: E501
     target_id: StrictStr
     committed_state: Optional[CommittedState]

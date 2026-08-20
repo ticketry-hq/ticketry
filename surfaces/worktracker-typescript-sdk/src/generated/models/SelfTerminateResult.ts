@@ -26,25 +26,25 @@ export interface SelfTerminateResult {
      * @type {string}
      * @memberof SelfTerminateResult
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
     /**
      *
      * @type {boolean}
      * @memberof SelfTerminateResult
      */
-    terminated: boolean;
+    readonly terminated: boolean;
     /**
      *
      * @type {boolean}
      * @memberof SelfTerminateResult
      */
-    ok: boolean;
+    readonly ok: boolean;
     /**
      *
      * @type {boolean}
      * @memberof SelfTerminateResult
      */
-    already_terminated: boolean;
+    readonly already_terminated: boolean;
 }
 
 /**
@@ -79,16 +79,12 @@ export function SelfTerminateResultToJSON(json: any): SelfTerminateResult {
     return SelfTerminateResultToJSONTyped(json, false);
 }
 
-export function SelfTerminateResultToJSONTyped(value?: SelfTerminateResult | null, ignoreDiscriminator: boolean = false): any {
+export function SelfTerminateResultToJSONTyped(value?: Omit<SelfTerminateResult, 'agent_run_id'|'terminated'|'ok'|'already_terminated'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
-        'terminated': value['terminated'],
-        'ok': value['ok'],
-        'already_terminated': value['already_terminated'],
     };
 }

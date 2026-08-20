@@ -13,7 +13,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from worktracker.models import Issue, IssueType, Project, State, Workspace
+from worktracker.models import Issue, IssueType, Project, State
 from apps.worktrees import dao, service, signals
 
 
@@ -29,9 +29,8 @@ def sync_executor(monkeypatch):
 
 @pytest.fixture
 def project():
-    ws = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
     project = Project.objects.create(
-        id=uuid.uuid4(), workspace=ws, name="Coding", slug="CODIN", seq_counter=10
+        id=uuid.uuid4(), name="Coding", slug="CODIN", seq_counter=10
     )
     IssueType.objects.create(
         id=uuid.uuid4(), project=project, name="Story", level="task"

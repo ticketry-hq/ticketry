@@ -21,7 +21,7 @@ from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.validation import SpawnRequest
 from apps.runs.models import AgentRun
 from apps.runs.run_scopes import SHELL_SCOPE
-from worktracker.models import Issue, IssueType, Project, Workspace
+from worktracker.models import Issue, IssueType, Project
 from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_uuid
 
 
@@ -36,11 +36,8 @@ def terminal_runtime(monkeypatch):
 
 
 def _create_module_issue() -> Issue:
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(), slug=f"ws-{uuid.uuid4().hex}", name="Workspace"
-    )
     project = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="Project", slug="PROJ"
+        id=uuid.uuid4(), name="Project", slug=f"PROJ-{uuid.uuid4().hex}"
     )
     module_type = IssueType.objects.create(
         id=uuid.uuid4(), project=project, name="Module", level="module"
@@ -462,6 +459,15 @@ def test_resume_terminal_returns_new_and_old_ids(client, monkeypatch):
             launch.LaunchUnavailable("tmux failed"),
             500,
             {"detail": "tmux failed", "code": "launch_unavailable"},
+        ),
+        (
+            launch.PromptDeliveryFailed(reason="readiness_timeout"),
+            503,
+            {
+                "detail": "prompt_delivery_failed",
+                "code": "prompt_delivery_failed",
+                "reason": "readiness_timeout",
+            },
         ),
         (
             registry.UnknownAgent("bogus"),

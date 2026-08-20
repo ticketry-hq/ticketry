@@ -16,8 +16,9 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import StrictStr
+from pydantic import Field, StrictStr
 from typing import Optional
+from typing_extensions import Annotated
 from worktracker_sdk.generated.models.create_worktree import CreateWorktree
 from worktracker_sdk.generated.models.discard import Discard
 from worktracker_sdk.generated.models.worktree_status import WorktreeStatus
@@ -60,6 +61,7 @@ class WorktreesApi:
     ) -> WorktreeStatus:
         """worktrees_create_create
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str
@@ -130,6 +132,7 @@ class WorktreesApi:
     ) -> ApiResponse[WorktreeStatus]:
         """worktrees_create_create
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str
@@ -200,6 +203,7 @@ class WorktreesApi:
     ) -> RESTResponseType:
         """worktrees_create_create
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str
@@ -332,8 +336,8 @@ class WorktreesApi:
     def worktrees_discard_create(
         self,
         task_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
-        parent_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        parent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -349,6 +353,7 @@ class WorktreesApi:
     ) -> Discard:
         """worktrees_discard_create
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str
@@ -406,8 +411,8 @@ class WorktreesApi:
     def worktrees_discard_create_with_http_info(
         self,
         task_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
-        parent_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        parent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -423,6 +428,7 @@ class WorktreesApi:
     ) -> ApiResponse[Discard]:
         """worktrees_discard_create
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str
@@ -480,8 +486,8 @@ class WorktreesApi:
     def worktrees_discard_create_without_preload_content(
         self,
         task_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
-        parent_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        parent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -497,6 +503,7 @@ class WorktreesApi:
     ) -> RESTResponseType:
         """worktrees_discard_create
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str
@@ -623,9 +630,9 @@ class WorktreesApi:
     @validate_call
     def worktrees_retrieve(
         self,
-        task_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
-        parent_id: Optional[StrictStr] = None,
+        task_id: Annotated[str, Field(min_length=1, strict=True)],
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        parent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -641,6 +648,7 @@ class WorktreesApi:
     ) -> WorktreeStatus:
         """worktrees_retrieve
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str
@@ -697,9 +705,9 @@ class WorktreesApi:
     @validate_call
     def worktrees_retrieve_with_http_info(
         self,
-        task_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
-        parent_id: Optional[StrictStr] = None,
+        task_id: Annotated[str, Field(min_length=1, strict=True)],
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        parent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -715,6 +723,7 @@ class WorktreesApi:
     ) -> ApiResponse[WorktreeStatus]:
         """worktrees_retrieve
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str
@@ -771,9 +780,9 @@ class WorktreesApi:
     @validate_call
     def worktrees_retrieve_without_preload_content(
         self,
-        task_id: StrictStr,
-        module_id: Optional[StrictStr] = None,
-        parent_id: Optional[StrictStr] = None,
+        task_id: Annotated[str, Field(min_length=1, strict=True)],
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        parent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -789,6 +798,7 @@ class WorktreesApi:
     ) -> RESTResponseType:
         """worktrees_retrieve
 
+        Read, create, and discard task-scoped git worktrees.
 
         :param task_id: (required)
         :type task_id: str

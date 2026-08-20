@@ -12,25 +12,9 @@ notifyManager.setScheduler((callback) => callback());
 // (ADR-0015). Default every test to the server's first-run answer — the three
 // built-in providers activated, `agy` absent as the payload always omits it —
 // so only tests that are *about* activation have to set this themselves.
-//
-// The reasoning levels mirror `worktracker/launch_capabilities.py`, including
-// the fact that they do *not* all overlap: `max` is claude-only, `minimal` is
-// codex-only, and gemini declares none. Seeding every provider with an empty
-// list made it impossible for any test to exercise a reasoning value at all,
-// which is why nothing caught a provider switch carrying one across.
-const PROVIDER_REASONING_LEVELS: Record<string, string[]> = {
-  claude: ["low", "medium", "high", "xhigh", "max"],
-  codex: ["minimal", "low", "medium", "high", "xhigh"],
-  gemini: [],
-};
-
 const FIRST_RUN_CAPABILITIES = ["claude", "codex", "gemini"].map((agent) => ({
   agent,
-  accepts_model: true,
-  accepts_any_model: false,
-  model_aliases: [],
-  model_prefixes: [],
-  reasoning_levels: PROVIDER_REASONING_LEVELS[agent] ?? [],
+  models: [],
 }));
 
 // This jsdom build ships without localStorage (which is why the app guards every

@@ -16,11 +16,6 @@
 
 import * as runtime from '../runtime.js';
 import {
-    type AgentStatusResponse,
-    AgentStatusResponseFromJSON,
-    AgentStatusResponseToJSON,
-} from '../models/AgentStatusResponse.js';
-import {
     type AutomationAttempt,
     AutomationAttemptFromJSON,
     AutomationAttemptToJSON,
@@ -49,16 +44,6 @@ export interface LifecycleEventsCreateRequest {
     lifecycleEvent: LifecycleEvent;
 }
 
-export interface RunsAgentStatusRetrieveRequest {
-    projectId: string;
-    taskId?: string;
-}
-
-export interface RunsModuleActivityRetrieveRequest {
-    projectId: string;
-    windowDays?: number;
-}
-
 /**
  * RunsApi - interface
  *
@@ -75,7 +60,7 @@ export interface RunsApiInterface {
     automationAttemptsRetryCreateRequestOpts(requestParameters: AutomationAttemptsRetryCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for durable automated-launch attempts.
      * @param {string} attemptId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -84,6 +69,7 @@ export interface RunsApiInterface {
     automationAttemptsRetryCreateRaw(requestParameters: AutomationAttemptsRetryCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AutomationAttempt>>;
 
     /**
+     * Owning ViewSet for durable automated-launch attempts.
      */
     automationAttemptsRetryCreate(requestParameters: AutomationAttemptsRetryCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AutomationAttempt>;
 
@@ -96,7 +82,7 @@ export interface RunsApiInterface {
     lifecycleEventsCreateRequestOpts(requestParameters: LifecycleEventsCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for run lifecycle and status operations.
      * @param {LifecycleEvent} lifecycleEvent
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -105,54 +91,9 @@ export interface RunsApiInterface {
     lifecycleEventsCreateRaw(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LifecycleAccepted>>;
 
     /**
+     * Owning ViewSet for run lifecycle and status operations.
      */
     lifecycleEventsCreate(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LifecycleAccepted>;
-
-    /**
-     * Creates request options for runsAgentStatusRetrieve without sending the request
-     * @param {string} projectId
-     * @param {string} [taskId]
-     * @throws {RequiredError}
-     * @memberof RunsApiInterface
-     */
-    runsAgentStatusRetrieveRequestOpts(requestParameters: RunsAgentStatusRetrieveRequest): Promise<runtime.RequestOpts>;
-
-    /**
-     *
-     * @param {string} projectId
-     * @param {string} [taskId]
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof RunsApiInterface
-     */
-    runsAgentStatusRetrieveRaw(requestParameters: RunsAgentStatusRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentStatusResponse>>;
-
-    /**
-     */
-    runsAgentStatusRetrieve(requestParameters: RunsAgentStatusRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentStatusResponse>;
-
-    /**
-     * Creates request options for runsModuleActivityRetrieve without sending the request
-     * @param {string} projectId
-     * @param {number} [windowDays]
-     * @throws {RequiredError}
-     * @memberof RunsApiInterface
-     */
-    runsModuleActivityRetrieveRequestOpts(requestParameters: RunsModuleActivityRetrieveRequest): Promise<runtime.RequestOpts>;
-
-    /**
-     *
-     * @param {string} projectId
-     * @param {number} [windowDays]
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof RunsApiInterface
-     */
-    runsModuleActivityRetrieveRaw(requestParameters: RunsModuleActivityRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<{ [key: string]: string; }>>;
-
-    /**
-     */
-    runsModuleActivityRetrieve(requestParameters: RunsModuleActivityRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<{ [key: string]: string; }>;
 
 }
 
@@ -193,6 +134,7 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
     }
 
     /**
+     * Owning ViewSet for durable automated-launch attempts.
      */
     async automationAttemptsRetryCreateRaw(requestParameters: AutomationAttemptsRetryCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AutomationAttempt>> {
         const requestOptions = await this.automationAttemptsRetryCreateRequestOpts(requestParameters);
@@ -202,6 +144,7 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
     }
 
     /**
+     * Owning ViewSet for durable automated-launch attempts.
      */
     async automationAttemptsRetryCreate(requestParameters: AutomationAttemptsRetryCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AutomationAttempt> {
         const response = await this.automationAttemptsRetryCreateRaw(requestParameters, initOverrides);
@@ -238,6 +181,7 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
     }
 
     /**
+     * Owning ViewSet for run lifecycle and status operations.
      */
     async lifecycleEventsCreateRaw(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LifecycleAccepted>> {
         const requestOptions = await this.lifecycleEventsCreateRequestOpts(requestParameters);
@@ -247,117 +191,10 @@ export class RunsApi extends runtime.BaseAPI implements RunsApiInterface {
     }
 
     /**
+     * Owning ViewSet for run lifecycle and status operations.
      */
     async lifecycleEventsCreate(requestParameters: LifecycleEventsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LifecycleAccepted> {
         const response = await this.lifecycleEventsCreateRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * Creates request options for runsAgentStatusRetrieve without sending the request
-     */
-    async runsAgentStatusRetrieveRequestOpts(requestParameters: RunsAgentStatusRetrieveRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['projectId'] == null) {
-            throw new runtime.RequiredError(
-                'projectId',
-                'Required parameter "projectId" was null or undefined when calling runsAgentStatusRetrieve().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        if (requestParameters['projectId'] != null) {
-            queryParameters['project_id'] = requestParameters['projectId'];
-        }
-
-        if (requestParameters['taskId'] != null) {
-            queryParameters['task_id'] = requestParameters['taskId'];
-        }
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
-        }
-
-
-        let urlPath = `/runs/agent-status`;
-
-        return {
-            path: urlPath,
-            method: 'GET',
-            headers: headerParameters,
-            query: queryParameters,
-        };
-    }
-
-    /**
-     */
-    async runsAgentStatusRetrieveRaw(requestParameters: RunsAgentStatusRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentStatusResponse>> {
-        const requestOptions = await this.runsAgentStatusRetrieveRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => AgentStatusResponseFromJSON(jsonValue));
-    }
-
-    /**
-     */
-    async runsAgentStatusRetrieve(requestParameters: RunsAgentStatusRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentStatusResponse> {
-        const response = await this.runsAgentStatusRetrieveRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * Creates request options for runsModuleActivityRetrieve without sending the request
-     */
-    async runsModuleActivityRetrieveRequestOpts(requestParameters: RunsModuleActivityRetrieveRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['projectId'] == null) {
-            throw new runtime.RequiredError(
-                'projectId',
-                'Required parameter "projectId" was null or undefined when calling runsModuleActivityRetrieve().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        if (requestParameters['projectId'] != null) {
-            queryParameters['project_id'] = requestParameters['projectId'];
-        }
-
-        if (requestParameters['windowDays'] != null) {
-            queryParameters['window_days'] = requestParameters['windowDays'];
-        }
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["x-api-key"] = await this.configuration.apiKey("x-api-key"); // ApiKeyAuth authentication
-        }
-
-
-        let urlPath = `/runs/module-activity`;
-
-        return {
-            path: urlPath,
-            method: 'GET',
-            headers: headerParameters,
-            query: queryParameters,
-        };
-    }
-
-    /**
-     */
-    async runsModuleActivityRetrieveRaw(requestParameters: RunsModuleActivityRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<{ [key: string]: string; }>> {
-        const requestOptions = await this.runsModuleActivityRetrieveRequestOpts(requestParameters);
-        const response = await this.request(requestOptions, initOverrides);
-
-        return new runtime.JSONApiResponse<any>(response);
-    }
-
-    /**
-     */
-    async runsModuleActivityRetrieve(requestParameters: RunsModuleActivityRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<{ [key: string]: string; }> {
-        const response = await this.runsModuleActivityRetrieveRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

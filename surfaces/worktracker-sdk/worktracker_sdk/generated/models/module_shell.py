@@ -26,7 +26,7 @@ from pydantic_core import to_jsonable_python
 
 class ModuleShell(BaseModel):
     """
-    ModuleShell
+    Read-only public projection of a durable login shell.
     """ # noqa: E501
     agent_run_id: StrictStr
     module_id: StrictStr
@@ -63,8 +63,14 @@ class ModuleShell(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
+            "agent_run_id",
+            "module_id",
+            "created_at",
         ])
 
         _dict = self.model_dump(

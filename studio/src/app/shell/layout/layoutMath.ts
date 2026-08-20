@@ -1,4 +1,10 @@
-import type { SidebarPaneComposition } from "../../../features/studio/stores/configStore";
+export type SidebarPaneComposition =
+  | "absent"
+  | "modules"
+  | "projects-and-modules";
+
+export const DEFAULT_SIDEBAR_PANE_COMPOSITION: SidebarPaneComposition =
+  "modules";
 
 // Persisted layout order: projects, modules, tasks, workspace.
 export const DEFAULT_PANEL_LAYOUT = [18, 18, 36, 28];

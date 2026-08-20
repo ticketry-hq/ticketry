@@ -1,4 +1,4 @@
-import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
+import { validateModuleFolder as validateThroughSdk } from "../../../shared/api/client";
 
 export type ModuleFolderRefusal =
   | "module_folder_not_absolute"
@@ -13,12 +13,5 @@ export interface ModuleFolderValidation {
 export async function validateModuleFolder(
   path: string,
 ): Promise<ModuleFolderValidation> {
-  const response = await authenticatedHostFetch("/api/config/folders/validate", {
-    method: "POST",
-    body: JSON.stringify({ path }),
-  });
-  if (!response.ok) {
-    throw new Error(`module folder validation failed (HTTP ${response.status})`);
-  }
-  return (await response.json()) as ModuleFolderValidation;
+  return (await validateThroughSdk(path)) as ModuleFolderValidation;
 }

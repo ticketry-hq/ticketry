@@ -14,7 +14,7 @@ import {
   openModule,
   openWorkItem,
   responseJson,
-  selectModuleForProfile,
+  linkModuleFolder,
   type ApiRow,
   type ModuleRow,
   type ProjectRow,
@@ -99,9 +99,8 @@ async function seedProject(request: APIRequestContext): Promise<void> {
     `/api/work-tracker/projects/${fixture.project.id}/modules`,
     { data: { name: names.secondModule, issue_type_id: moduleType!.id } },
   ));
-  await selectModuleForProfile(
+  await linkModuleFolder(
     request,
-    fixture.project.id,
     fixture.module.id,
     fixture.folder,
   );

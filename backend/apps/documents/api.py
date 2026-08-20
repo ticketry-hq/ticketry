@@ -22,15 +22,8 @@ import hashlib
 from dataclasses import dataclass
 from typing import Optional
 
-from pydantic import BaseModel
-
 from apps.errors import ApplicationError
 from apps.documents import service
-
-
-class SaveDocumentIn(BaseModel):
-    content: str
-    digest: str
 
 
 @dataclass(frozen=True)
@@ -51,7 +44,6 @@ async def list_documents(
     scope: Optional[str] = None,
     project_id: Optional[str] = None,
     module_id: Optional[str] = None,
-    profile: Optional[int] = None,
 ):
     """List a workspace's design documents, rescanning their directories.
 
@@ -71,7 +63,7 @@ async def list_documents(
         raise ApplicationError(400, "task_id_required", code="task_id_required")
 
     documents = await service.list_task_documents(
-        task_id, project_id=project_id, module_id=module_id, profile=profile
+        task_id, project_id=project_id, module_id=module_id
     )
     return {"documents": documents}
 
@@ -94,11 +86,16 @@ async def read_document_asset(doc_id: str, asset_path: str) -> DocumentAsset:
     return DocumentAsset(content=content, media_type=media_type, etag=etag)
 
 
-async def save_document(doc_id: str, payload: SaveDocumentIn) -> SavedDocument:
+async def save_document(
+    doc_id: str,
+    *,
+    content: str,
+    digest: str,
+) -> SavedDocument:
     """Digest-guarded save of a registered primary Markdown document."""
 
     result = await service.save_primary_markdown(
-        doc_id, payload.content.encode("utf-8"), payload.digest
+        doc_id, content.encode("utf-8"), digest
     )
     if result is None:
         raise ApplicationError(404, "not_found", code="not_found")

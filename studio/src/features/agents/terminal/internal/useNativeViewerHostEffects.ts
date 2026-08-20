@@ -5,6 +5,7 @@ import { clippedNativeTerminalFrame } from "./nativeTerminalFrame";
 import { traceViewerFocus } from "./focusTrace";
 import { registerTerminalFocus } from "./terminalRegistry";
 import type { NativeTerminalStatus } from "./nativeViewerFailure";
+import { useOcclusionAwareFocusSignal } from "./useOcclusionAwareFocusSignal";
 
 // `native_terminal_focus` rejects a viewer whose reveal has not committed, and
 // hides/shows are serialized through the presentation queue while focus is not.
@@ -109,7 +110,8 @@ export function useNativeViewerFocusSignal({
   visible: boolean;
   modalOpen: boolean;
 }): void {
-  const handledFocusSignalRef = useRef(0);
+  const { discardedFocusSignalRef, handledFocusSignalRef } =
+    useOcclusionAwareFocusSignal(focusSignal, modalOpen);
 
   useEffect(() => {
     if (!handle || !presented || !visible || modalOpen) return;
@@ -124,9 +126,12 @@ export function useNativeViewerFocusSignal({
       focusSignal,
     });
     void invoke("native_terminal_focus", { handle }).catch((error) => {
-      // A refused request must not spend the signal: releasing it lets the next
-      // reveal of this viewer carry the same request through.
-      if (handledFocusSignalRef.current === focusSignal) {
+      // A refused request normally remains pending for the next reveal. A modal
+      // opening in the meantime ends that request, so it must stay spent.
+      if (
+        handledFocusSignalRef.current === focusSignal &&
+        discardedFocusSignalRef.current !== focusSignal
+      ) {
         handledFocusSignalRef.current = 0;
       }
       traceViewerFocus("focus request FAILED", {

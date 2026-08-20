@@ -39,10 +39,10 @@ pytestmark = pytest.mark.django_db(transaction=True)
 
 
 _EXPECTED_COMMAND = {
-    "claude": ["claude", "--permission-mode", "auto", "hello"],
-    "agy": ["agy", "--dangerously-skip-permissions", "-i", "hello"],
-    "codex": ["codex", "hello"],
-    "gemini": ["gemini", "--approval-mode", "yolo", "hello"],
+    "claude": ["claude", "--permission-mode", "auto", "task prompt"],
+    "agy": ["agy", "--dangerously-skip-permissions", "-i", "task prompt"],
+    "codex": ["codex", "task prompt"],
+    "gemini": ["gemini", "--approval-mode", "yolo", "task prompt"],
 }
 
 _EXPECTED_RESUME_COMMAND = {
@@ -74,6 +74,8 @@ def provider_catalog():
         ("claude", "sonnet", "high"),
         ("agy", "vendor/model", None),
         ("codex", "gpt-5.4", "xhigh"),
+        ("codex", "gpt-5.6-terra", "low"),
+        ("codex", "gpt-5.6-luna", "low"),
         ("gemini", "gemini-3.1-pro-preview", None),
     )
     for provider_slug, model_name, reasoning_name in selections:
@@ -92,7 +94,21 @@ def provider_catalog():
 
 @pytest.mark.parametrize("slug", ALL_SLUGS)
 def test_command_matches_table(slug):
-    assert get_adapter(slug).command("hello") == _EXPECTED_COMMAND[slug]
+    assert get_adapter(slug).command("task prompt") == _EXPECTED_COMMAND[slug]
+    assert get_adapter(slug).prompt_readiness is not None
+
+
+@pytest.mark.parametrize(
+    ("slug", "expected"),
+    (
+        ("claude", "/to-spec"),
+        ("codex", "$to-spec"),
+        ("agy", "/to-spec"),
+        ("gemini", "/to-spec"),
+    ),
+)
+def test_entry_skill_command_matches_provider_syntax(slug, expected):
+    assert get_adapter(slug).entry_skill_command("to-spec") == expected
 
 
 @pytest.mark.parametrize(
@@ -110,7 +126,7 @@ def test_command_matches_table(slug):
                 "sonnet",
                 "--effort",
                 "high",
-                "hello",
+                "task prompt",
             ],
         ),
         (
@@ -123,7 +139,7 @@ def test_command_matches_table(slug):
                 "--model",
                 "vendor/model",
                 "-i",
-                "hello",
+                "task prompt",
             ],
         ),
         (
@@ -136,7 +152,7 @@ def test_command_matches_table(slug):
                 "gpt-5.4",
                 "-c",
                 'model_reasoning_effort="xhigh"',
-                "hello",
+                "task prompt",
             ],
         ),
         (
@@ -149,20 +165,45 @@ def test_command_matches_table(slug):
                 "yolo",
                 "--model",
                 "gemini-3.1-pro-preview",
-                "hello",
+                "task prompt",
             ],
         ),
     ],
 )
 def test_command_maps_validated_provider_options(slug, model, reasoning, expected):
     assert get_adapter(slug).command(
-        "hello", model=model, reasoning=reasoning
+        "task prompt", model=model, reasoning=reasoning
     ) == expected
+
+
+@pytest.mark.parametrize("model", ("gpt-5.6-terra", "gpt-5.6-luna"))
+def test_codex_command_preserves_low_reasoning_for_selected_model(model):
+    assert get_adapter("codex").command(
+        "task prompt", model=model, reasoning="low"
+    ) == [
+        "codex",
+        "--model",
+        model,
+        "-c",
+        'model_reasoning_effort="low"',
+        "task prompt",
+    ]
+
+
+def test_codex_command_omits_reasoning_override_when_unset():
+    assert get_adapter("codex").command(
+        "task prompt", model="gpt-5.6-luna", reasoning=None
+    ) == [
+        "codex",
+        "--model",
+        "gpt-5.6-luna",
+        "task prompt",
+    ]
 
 
 def test_command_rejects_unsupported_provider_options():
     with pytest.raises(ValueError, match="model_required"):
-        get_adapter("gemini").command("hello", reasoning="high")
+        get_adapter("gemini").command("task prompt", reasoning="high")
 
 
 @pytest.mark.parametrize("slug", ALL_SLUGS)
@@ -192,7 +233,7 @@ def test_resume_command_rejects_empty_session_id(provider_session_id):
         get_adapter("claude").resume_command(provider_session_id)  # type: ignore[arg-type]
 
 
-async def _command(slug: str, prompt: str = "hello") -> list[str]:
+async def _command(slug: str) -> list[str]:
     """Build launch argv from an async test.
 
     ``AgentAdapter.command`` is closed by default: with no activation set
@@ -201,7 +242,7 @@ async def _command(slug: str, prompt: str = "hello") -> list[str]:
     off-thread; a test that only wants the argv takes the thread hop instead.
     """
 
-    return await asyncio.to_thread(get_adapter(slug).command, prompt)
+    return await asyncio.to_thread(get_adapter(slug).command, "task prompt")
 
 
 async def _launch_and_capture(monkeypatch, slug, argv):
@@ -376,7 +417,7 @@ def _injected_mcp_authorization(slug: str, argv: list[str]) -> str:
 def test_mcp_enabled_adapter_resume_receives_a_fresh_run_authorization(slug):
     adapter = get_adapter(slug)
     first = adapter.inject(
-        adapter.command("hello"),
+        adapter.command("task prompt"),
         "run-original",
         lifecycle_url="http://x/lifecycle",
         mcp_url="http://x/mcp",
@@ -477,7 +518,7 @@ def test_adapter_routes_only_its_own_slug(slug):
     # adapter, so cross-calling is structurally impossible.
     adapter = get_adapter(slug)
     assert adapter.slug == slug
-    argv = adapter.command("hello")
+    argv = adapter.command("task prompt")
     injected = adapter.inject(
         argv, "run1", lifecycle_url="http://x/lifecycle", mcp_url="http://x/mcp"
     )

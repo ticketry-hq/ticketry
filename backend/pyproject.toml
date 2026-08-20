@@ -5,8 +5,8 @@ description = "Django ASGI backend for muxed."
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
-    "django>=5.2",
-    "djangorestframework>=3.16",
+    "django>=5.2.16,<6.1",
+    "djangorestframework>=3.16,<3.18",
     "drf-spectacular>=0.28",
     "channels>=4",
     "uvicorn[standard]>=0.29.0",
@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8",
+    "pytest>=8,<9",
     "pytest-asyncio>=0.23",
     "pytest-django",
     "daphne>=4",
@@ -49,6 +49,12 @@ include = [
 [tool.uv.sources]
 worktracker-sdk = { path = "../surfaces/worktracker-sdk", editable = true }
 worktracker-agent = { path = "../surfaces/worktracker-agent", editable = true }
+
+[tool.uv]
+constraint-dependencies = [
+    "cryptography>=50.0.0",
+    "sqlparse>=0.6.0",
+]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "studio_server.test_settings"

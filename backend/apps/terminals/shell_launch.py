@@ -12,7 +12,7 @@ hands them to the shared durable-launch transaction, so a shell run inherits
 the same all-or-nothing guarantee as an agent run.
 
 It deliberately diverges from agent launch on one point: the working directory
-is the profile's module folder and **nothing else**. Agent launch falls back to
+is the module's linked folder and **nothing else**. Agent launch falls back to
 the home directory when a module folder is unset or stale, because an agent
 carries a prompt that can explain where it is. A bare shell cannot, and a shell
 that appears to be in your repository but is not fails silently and
@@ -29,11 +29,7 @@ from datetime import datetime, timezone
 
 from apps.runs.bus import publish_status
 from apps.runs.run_scopes import SHELL_SCOPE
-from apps.settings_store.config import (
-    NoConfigurationSelected,
-    module_link_path,
-    resolve_profile,
-)
+from apps.settings_store.module_links import resolve_module_path
 from apps.terminals.durable_launch import create_durable_run
 from apps.terminals.persistence import LaunchRecords
 from studio_server.contracts import AgentLifecycleFrame, RunRecord
@@ -59,11 +55,7 @@ def resolve_module_shell_directory(module_id: str) -> str:
     what was configured is not a directory at all. None of them falls back.
     """
 
-    try:
-        profile = resolve_profile(None)
-    except NoConfigurationSelected as exc:
-        raise ShellLaunchRefused("no_profile_selected") from exc
-    module_folder = module_link_path(profile, module_id)
+    module_folder = resolve_module_path(module_id)
     if not module_folder:
         raise ShellLaunchRefused("module_folder_unset")
     if not os.path.isabs(module_folder):

@@ -123,7 +123,7 @@ def test_install_accepts_existing_skill_in_alias_directory(tmp_path):
     assert (alias / "SKILL.md").read_text().endswith("local\n")
 
 
-def test_install_keeps_existing_managed_version_when_catalog_changes(
+def test_install_updates_unedited_managed_version_when_catalog_changes(
     monkeypatch, tmp_path
 ):
     home = tmp_path / "home"
@@ -161,7 +161,53 @@ def test_install_keeps_existing_managed_version_when_catalog_changes(
 
     install_packaged_skills(providers=("codex",), home=home, environ={})
 
-    assert tree_digest(root / "to-spec") == old_digest
+    assert tree_digest(root / "to-spec") == new_digest
+    assert json.loads(manifest_path.read_text())["packages"]["to-spec"] == new_digest
+
+
+def test_install_preserves_edited_managed_version_with_warning(
+    caplog, monkeypatch, tmp_path
+):
+    home = tmp_path / "home"
+    root = provider_skill_root("codex", home=home, environ={})
+    install_packaged_skills(providers=("codex",), home=home, environ={})
+    manifest_path = root / MANIFEST_NAME
+    recorded_digest = json.loads(manifest_path.read_text())["packages"]["to-spec"]
+    skill_file = root / "to-spec/SKILL.md"
+    skill_file.write_text(skill_file.read_text() + "\nuser edit\n")
+    edited_digest = tree_digest(root / "to-spec")
+
+    replacement = tmp_path / "replacement"
+    shutil.copytree(package_path("to-spec"), replacement)
+    (replacement / "EXTRA").write_text("new pinned bytes\n")
+    new_digest = tree_digest(replacement)
+    real_verify = verify_catalog
+
+    def changed_catalog():
+        lock = real_verify()
+        changed = json.loads(json.dumps(lock))
+        for package in changed["packages"]:
+            if package["name"] == "to-spec":
+                package["path"] = str(replacement)
+                package["digest"] = new_digest
+        return changed
+
+    monkeypatch.setattr(
+        "apps.terminals.agents.skills.installation.verify_catalog",
+        changed_catalog,
+    )
+    monkeypatch.setattr(
+        "apps.terminals.agents.skills.installation.catalog_root",
+        lambda: tmp_path,
+    )
+
+    install_packaged_skills(providers=("codex",), home=home, environ={})
+
+    assert tree_digest(root / "to-spec") == edited_digest
+    assert (
+        json.loads(manifest_path.read_text())["packages"]["to-spec"] == recorded_digest
+    )
+    assert "was edited by the user and will be preserved" in caplog.text
 
 
 def test_verification_accepts_modified_existing_skill(tmp_path):

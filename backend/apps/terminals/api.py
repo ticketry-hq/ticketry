@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from asgiref.sync import async_to_sync
 from django.db import close_old_connections
-from pydantic import BaseModel
-
 from apps.errors import ApplicationError
 import apps.terminals.agents.registry as registry
 import apps.terminals.launch as terminal_launch
@@ -18,13 +16,10 @@ from apps.terminals.models import AgentTerminalSession
 from apps.terminals.output_activity import report_native_output
 from apps.terminals.launch import (
     LaunchUnavailable,
+    PromptDeliveryFailed,
     ResumeUnavailable,
     resume_provider_conversation,
     terminate_agent_run,
-)
-from apps.terminals.authorization import (
-    RunAuthorizationError,
-    verify_run_authorization,
 )
 from apps.terminals.reconciliation_scheduler import (
     schedule_terminal_reconciliation,
@@ -32,42 +27,8 @@ from apps.terminals.reconciliation_scheduler import (
 from apps.terminals.runtime import TerminalRuntimeError
 from apps.terminals.validation import SpawnRequest, _validate_init
 from apps.terminals import viewer_leases
-from apps.settings_store.config import NoConfigurationSelected
 from apps.runs.models import AgentRun
 from apps.runs.run_scopes import SHELL_SCOPE
-
-
-class CreateTerminalRunBody(BaseModel):
-    """Transport-independent inputs for one new durable terminal run."""
-
-    agent: str
-    project_id: str
-    module_id: str
-    task_id: Optional[str] = None
-    initial_prompt: Optional[str] = None
-    is_planning: bool = False
-    is_instant: bool = False
-    instant_prompt: Optional[str] = None
-    is_doc_chat: bool = False
-    doc_rel_path: Optional[str] = None
-    doc_id: Optional[str] = None
-
-
-class ViewerLeaseBody(BaseModel):
-    agent_run_id: str
-    viewer_id: str
-    transport: str
-
-
-class ViewerLeaseReleaseBody(BaseModel):
-    agent_run_id: str
-    viewer_id: str
-
-
-class ViewerOutputReportBody(BaseModel):
-    """One native viewer's report that its durable session produced output."""
-
-    agent_run_id: str
 
 
 def _viewer_lease_payload(lease: viewer_leases.ViewerLease) -> dict[str, Any]:
@@ -86,28 +47,28 @@ def _viewer_lease_payload(lease: viewer_leases.ViewerLease) -> dict[str, Any]:
     }
 
 
-def acquire_viewer_lease(body: ViewerLeaseBody):
+def acquire_viewer_lease(*, agent_run_id: str, viewer_id: str, transport: str):
     """Acquire the durable newest-viewer-wins lease for a terminal run."""
 
-    if body.transport not in {"browser", "desktop"}:
+    if transport not in {"browser", "desktop"}:
         raise ApplicationError(400, "invalid_transport", code="invalid_transport")
     try:
         lease = viewer_leases.acquire(
-            agent_run_id=body.agent_run_id,
-            viewer_id=body.viewer_id,
-            transport=body.transport,
+            agent_run_id=agent_run_id,
+            viewer_id=viewer_id,
+            transport=transport,
         )
     except viewer_leases.ViewerLeaseRunNotFound:
         raise ApplicationError(404, "session_not_found", code="session_not_found")
     return _viewer_lease_payload(lease)
 
 
-def renew_viewer_lease(body: ViewerLeaseReleaseBody):
+def renew_viewer_lease(*, agent_run_id: str, viewer_id: str):
     """Renew a lease or tell a displaced viewer why it must detach."""
 
     lease = viewer_leases.renew(
-        agent_run_id=body.agent_run_id,
-        viewer_id=body.viewer_id,
+        agent_run_id=agent_run_id,
+        viewer_id=viewer_id,
     )
     if lease is None:
         raise ApplicationError(
@@ -118,17 +79,17 @@ def renew_viewer_lease(body: ViewerLeaseReleaseBody):
     return _viewer_lease_payload(lease)
 
 
-def release_viewer_lease(body: ViewerLeaseReleaseBody):
+def release_viewer_lease(*, agent_run_id: str, viewer_id: str):
     """Release only this viewer's lease; never terminate the tmux run."""
 
     released = viewer_leases.release(
-        agent_run_id=body.agent_run_id,
-        viewer_id=body.viewer_id,
+        agent_run_id=agent_run_id,
+        viewer_id=viewer_id,
     )
     return {"released": released}
 
 
-def report_viewer_output(body: ViewerOutputReportBody):
+def report_viewer_output(*, agent_run_id: str):
     """Record one native viewer's output observation for its durable session.
 
     The native renderer owns its own PTY, so it reports only that output
@@ -142,13 +103,11 @@ def report_viewer_output(body: ViewerOutputReportBody):
     handle.
     """
 
-    observed = async_to_sync(report_native_output)(body.agent_run_id)
-    return {"agent_run_id": body.agent_run_id, "observed": observed}
+    observed = async_to_sync(report_native_output)(agent_run_id)
+    return {"agent_run_id": agent_run_id, "observed": observed}
 
 
-def _create_request_as_spawn_init(
-    body: CreateTerminalRunBody,
-) -> tuple[SpawnRequest | None, str | None]:
+def _create_request_as_spawn_init(body: dict[str, Any]) -> tuple[SpawnRequest | None, str | None]:
     """Validate control-plane input with the established spawn contract."""
 
     # Creation has no viewer geometry. Supply harmless dimensions solely to
@@ -159,7 +118,7 @@ def _create_request_as_spawn_init(
             "mode": "spawn",
             "cols": 1,
             "rows": 1,
-            **body.model_dump(),
+            **body,
         }
     )
 
@@ -174,10 +133,37 @@ def _terminal_session_payload(session) -> dict[str, Any]:
     }
 
 
-def create_terminal(body: CreateTerminalRunBody):
+def create_terminal(
+    *,
+    agent: str,
+    project_id: str,
+    module_id: str,
+    task_id: str | None = None,
+    initial_prompt: str | None = None,
+    is_planning: bool = False,
+    is_instant: bool = False,
+    instant_prompt: str | None = None,
+    is_doc_chat: bool = False,
+    doc_rel_path: str | None = None,
+    doc_id: str | None = None,
+):
     """Create a durable run and terminal runtime before a viewer attaches."""
 
-    init, error = _create_request_as_spawn_init(body)
+    init, error = _create_request_as_spawn_init(
+        {
+            "agent": agent,
+            "project_id": project_id,
+            "module_id": module_id,
+            "task_id": task_id,
+            "initial_prompt": initial_prompt,
+            "is_planning": is_planning,
+            "is_instant": is_instant,
+            "instant_prompt": instant_prompt,
+            "is_doc_chat": is_doc_chat,
+            "doc_rel_path": doc_rel_path,
+            "doc_id": doc_id,
+        }
+    )
     if error is not None:
         raise ApplicationError(400, error, code=error)
 
@@ -185,8 +171,6 @@ def create_terminal(body: CreateTerminalRunBody):
         agent_run_id = async_to_sync(create_terminal_run)(init)
     except RequiredSkillUnavailable as exc:
         raise ApplicationError(409, exc.message, body=exc.as_payload()) from exc
-    except NoConfigurationSelected:
-        raise ApplicationError(400, "no_profile_selected", code="no_profile_selected")
     except LaunchUnavailable as exc:
         raise ApplicationError(500, str(exc), code="launch_unavailable") from exc
     except ValueError as exc:
@@ -259,6 +243,13 @@ def resume_terminal(agent_run_id: str):
         raise ApplicationError(status, exc.reason, code=exc.reason) from exc
     except registry.ResumeUnsupported:
         raise ApplicationError(409, "resume_unsupported", code="resume_unsupported")
+    except PromptDeliveryFailed as exc:
+        raise ApplicationError(
+            503,
+            exc.code,
+            code=exc.code,
+            body=exc.as_payload(),
+        ) from exc
     except LaunchUnavailable as exc:
         raise ApplicationError(500, str(exc), code="launch_unavailable") from exc
     except registry.UnknownAgent:
@@ -403,13 +394,8 @@ def terminate_terminal(agent_run_id: str):
     return {"agent_run_id": agent_run_id, "terminated": True}
 
 
-def self_terminate_terminal(authorization: str | None):
-    """Terminate only the run named by Studio-issued request authorization."""
-
-    try:
-        agent_run_id = verify_run_authorization(authorization)
-    except RunAuthorizationError as exc:
-        raise ApplicationError(401, str(exc), code="caller_run_unbound") from exc
+def self_terminate_terminal(agent_run_id: str):
+    """Terminate only the run established by the authenticated transport."""
 
     def _run_state() -> tuple[bool, bool]:
         known = AgentRun.objects.filter(id=agent_run_id).exists()

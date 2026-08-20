@@ -1,5 +1,3 @@
-import json
-
 import pytest
 from django.test import Client
 
@@ -30,15 +28,16 @@ def seeded_agent_run_issues(request):
 
 @pytest.fixture
 def tmp_config(tmp_path, monkeypatch):
-    """Redirect profile storage to a temporary file."""
+    """Provide an isolated typed Module-link lookup for launch tests."""
 
-    config_dir = tmp_path / "settings"
-    config_file = config_dir / "profiles.json"
-    from apps.settings_store import config as config_module
+    from apps.terminals import shell_launch, task_launch_preflight
 
-    monkeypatch.setattr(config_module, "CONFIG_DIR", config_dir)
-    monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
-    return config_file
+    links = {}
+    resolver = lambda module_id: links.get(str(module_id))
+    monkeypatch.setattr(session_module, "resolve_module_path", resolver)
+    monkeypatch.setattr(shell_launch, "resolve_module_path", resolver)
+    monkeypatch.setattr(task_launch_preflight, "resolve_module_path", resolver)
+    return links
 
 
 @pytest.fixture(autouse=True)
@@ -62,10 +61,11 @@ def default_task_launch_configuration(monkeypatch):
 
 
 def write_profiles(config_file, profiles, recent=None):
-    config_file.parent.mkdir(parents=True, exist_ok=True)
-    config_file.write_text(
-        json.dumps({"recent_profile_index": recent, "profiles": profiles})
-    )
+    del recent
+    config_file.clear()
+    for profile in profiles:
+        for link in profile.get("module_links", []):
+            config_file[str(link["module_id"])] = link.get("path")
 
 
 @pytest.fixture

@@ -33,6 +33,7 @@ class LaunchRecords:
     doc_rel_path: str | None
     runtime_namespace: str
     provider_session_id: str | None = None
+    initial_prompt: str | None = None
     # Write-once launch snapshots (#693). ``None`` for a launch that has no
     # workflow state or no resolved model; never a substituted default.
     launch_state: str | None = None
@@ -119,6 +120,7 @@ def persist_launch(records: LaunchRecords) -> LaunchRouting:
                 design_dir=records.design_dir,
                 resumed_from=records.resumed_from,
                 provider_session_id=records.provider_session_id,
+                initial_prompt=records.initial_prompt,
                 launch_state=records.launch_state,
                 launch_model=records.launch_model,
                 scope=records.scope,
@@ -188,6 +190,39 @@ def compensate_launch(agent_run_id: str) -> None:
 
     try:
         AgentRun.objects.filter(id=agent_run_id).delete()
+    finally:
+        close_old_connections()
+
+
+def persist_prompt_delivery_failure(
+    agent_run_id: str,
+    *,
+    ended_at: str,
+    runtime_cleanup_pending: bool = False,
+) -> None:
+    """End a run whose provider never accepted its launch-time input."""
+
+    try:
+        with transaction.atomic():
+            terminal_updates = {"runtime_cleanup_pending": runtime_cleanup_pending}
+            if not runtime_cleanup_pending:
+                terminal_updates["terminated_at"] = ended_at
+            AgentTerminalSession.objects.filter(
+                agent_run_id=agent_run_id,
+                terminated_at__isnull=True,
+            ).update(**terminal_updates)
+            updated = AgentRun.objects.filter(
+                id=agent_run_id,
+                ended_at__isnull=True,
+            ).update(
+                status="error",
+                ended_at=ended_at,
+                error="prompt_delivery_failed",
+                lifecycle_state="error",
+                lifecycle_updated_at=ended_at,
+            )
+            if updated:
+                publish_agent_run_terminated(agent_run_id)
     finally:
         close_old_connections()
 

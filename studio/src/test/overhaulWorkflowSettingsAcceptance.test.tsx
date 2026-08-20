@@ -18,8 +18,8 @@ const workflow = {
   start_state_id: "todo",
   workflow_revision: 4,
   transitions: [
-    { from_state_id: "todo", to_state_id: "review", agent_allowed: true },
-    { from_state_id: "review", to_state_id: "done", agent_allowed: true },
+    { from_state_id: "todo", to_state_id: "build", agent_allowed: true },
+    { from_state_id: "build", to_state_id: "done", agent_allowed: true },
   ],
   launch_bindings: [],
   warnings: [],
@@ -38,6 +38,27 @@ describe("workflow settings acceptance", () => {
     fetchMock.mockReset().mockImplementation(
       async (input: RequestInfo | URL) => {
         const url = String(input);
+        if (url.endsWith("/work-tracker/projects/project-1/issue-types")) {
+          return jsonResponse([
+            {
+              id: "story",
+              name: "Story",
+              level: "task",
+              sort_order: 0,
+              start_state: "todo",
+              workflow_revision: 4,
+            },
+            {
+              id: "pathfind",
+              name: "PathFind",
+              level: "task",
+              sort_order: 1,
+              is_pathfind: true,
+              start_state: "review",
+              workflow_revision: 2,
+            },
+          ]);
+        }
         if (url.endsWith("/work-tracker/issue-types/story")) {
           return jsonResponse({
             id: "story",
@@ -46,6 +67,17 @@ describe("workflow settings acceptance", () => {
             sort_order: 0,
             start_state: "todo",
             workflow_revision: 4,
+          });
+        }
+        if (url.endsWith("/work-tracker/issue-types/pathfind")) {
+          return jsonResponse({
+            id: "pathfind",
+            name: "PathFind",
+            level: "task",
+            sort_order: 1,
+            is_pathfind: true,
+            start_state: "review",
+            workflow_revision: 2,
           });
         }
         if (url.endsWith("/work-tracker/projects/project-1/states")) {
@@ -59,6 +91,9 @@ describe("workflow settings acceptance", () => {
             to_state: transition.to_state_id,
             agent_allowed: transition.agent_allowed,
           })));
+        }
+        if (url.endsWith("/work-tracker/issue-types/pathfind/transitions")) {
+          return jsonResponse([]);
         }
         if (url.endsWith("/work-tracker/projects/project-1/launch-bindings")) {
           return jsonResponse([]);
@@ -114,6 +149,7 @@ describe("workflow settings acceptance", () => {
 
     const urls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(urls).toContain("/api/work-tracker/issue-types/story/transitions");
+    expect(urls).toContain("/api/work-tracker/issue-types/pathfind/transitions");
     expect(urls).toContain("/api/work-tracker/projects/project-1/launch-bindings");
     expect(urls.some((url) => url.includes("/states/review/impact"))).toBe(false);
     expect(urls.some((url) => url.endsWith("/workflow-settings"))).toBe(false);

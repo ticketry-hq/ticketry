@@ -110,6 +110,27 @@ fn take_native_entry(
         .remove(handle)
 }
 
+/// Runs a queued AppKit operation only while its handle still owns the same
+/// native view. Tauri commands execute concurrently: a presentation command
+/// can capture a raw NSView pointer, then an explicit detach can remove and
+/// free that view before the AppKit closure runs. Rechecking under the registry
+/// lock on the main thread makes removal the fence for every late command.
+fn with_live_native_entry<R>(
+    entries: &Arc<Mutex<HashMap<String, NativeEntry>>>,
+    handle: &str,
+    view: usize,
+    operation: impl FnOnce(&mut NativeEntry) -> R,
+) -> Option<R> {
+    let mut registry = entries
+        .lock()
+        .expect("native terminal registry poisoned");
+    let entry = registry.get_mut(handle)?;
+    if entry.view != view {
+        return None;
+    }
+    Some(operation(entry))
+}
+
 /// Removes the native view on AppKit's main thread. Callbacks are disabled
 /// first and their contexts released last, so each context outlives every
 /// event the view could still emit.
@@ -241,4 +262,3 @@ fn apply_frame(
         .map_err(|_| "timed out applying the native terminal frame".to_owned())?;
     TerminalGrid::new(size.columns, size.rows).map_err(str::to_owned)
 }
-

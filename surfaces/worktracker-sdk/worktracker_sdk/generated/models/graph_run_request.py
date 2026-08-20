@@ -27,7 +27,7 @@ from pydantic_core import to_jsonable_python
 
 class GraphRunRequest(BaseModel):
     """
-    Graph-run create body: provider override plus execution mode.
+    Optional launch context for arming or advancing a graph run.
     """ # noqa: E501
     agent: Optional[StrictStr] = None
     mode: Optional[GraphRunExecutionModeEnum] = None
@@ -72,6 +72,16 @@ class GraphRunRequest(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # set to None if agent (nullable) is None
+        # and model_fields_set contains the field
+        if self.agent is None and "agent" in self.model_fields_set:
+            _dict['agent'] = None
+
+        # set to None if mode (nullable) is None
+        # and model_fields_set contains the field
+        if self.mode is None and "mode" in self.model_fields_set:
+            _dict['mode'] = None
+
         return _dict
 
     @classmethod

@@ -7,6 +7,7 @@ import pytest
 
 def test_hand_rolled_surface_is_not_public() -> None:
     import worktracker_sdk
+    import worktracker_sdk.generated as generated
 
     legacy_exports = (
         "ApiError",
@@ -16,6 +17,8 @@ def test_hand_rolled_surface_is_not_public() -> None:
     )
 
     assert all(not hasattr(worktracker_sdk, name) for name in legacy_exports)
+    assert not hasattr(worktracker_sdk, "WorkspaceApi")
+    assert not hasattr(generated, "Workspace")
 
 
 def test_generated_client_and_tag_apis_are_public() -> None:
@@ -27,7 +30,6 @@ def test_generated_client_and_tag_apis_are_public() -> None:
         ProjectsApi,
         StatesApi,
         WorkItemsApi,
-        WorkspaceApi,
     )
 
     assert all(
@@ -40,7 +42,6 @@ def test_generated_client_and_tag_apis_are_public() -> None:
             ProjectsApi,
             StatesApi,
             WorkItemsApi,
-            WorkspaceApi,
         )
     )
 
@@ -53,6 +54,8 @@ def test_generated_model_round_trips() -> None:
         name="Memory Lane",
         slug="MEML",
         description="Generated model smoke test",
+        manual_module_order=False,
+        onboarding_required=False,
     )
 
     assert Project.model_validate_json(project.model_dump_json()) == project
@@ -74,7 +77,8 @@ def test_generated_api_uses_stubbed_http_layer() -> None:
     client.rest_client.pool_manager.request = lambda *args, **kwargs: _StubHttpResponse(
         200,
         b'[{"id":"11111111-1111-1111-1111-111111111111",'
-        b'"name":"Memory Lane","slug":"MEML","description":""}]',
+        b'"name":"Memory Lane","slug":"MEML","description":"",'
+        b'"manual_module_order":false,"onboarding_required":false}]',
         "OK",
     )
 

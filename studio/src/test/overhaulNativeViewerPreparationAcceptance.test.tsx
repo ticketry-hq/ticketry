@@ -226,7 +226,15 @@ describe("native viewer attachment acceptance", () => {
     expect(attachFrames[1]).toEqual(attachFrames[0]);
     reopened.unmount();
 
-    const requestsBeforeFailedAttach = vi.mocked(fetch).mock.calls.length;
+    const leaseAcquireRequests = () =>
+      vi
+        .mocked(fetch)
+        .mock.calls.filter(([input]) =>
+          String(input instanceof Request ? input.url : input).endsWith(
+            "/api/terminals/viewers/lease/",
+          ),
+        ).length;
+    const acquisitionsBeforeFailedAttach = leaseAcquireRequests();
     const fallback = render(<Terminal sessionId="session-1" />);
     await waitFor(() => {
       expect(fallback.getByTestId("native-terminal-fallback-notice")).toHaveTextContent(
@@ -235,7 +243,7 @@ describe("native viewer attachment acceptance", () => {
     });
     expect(fallback.getByTestId("terminal-host")).toBeVisible();
     expect(attachFrames).toHaveLength(3);
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(requestsBeforeFailedAttach);
+    expect(leaseAcquireRequests()).toBe(acquisitionsBeforeFailedAttach);
     expect(releasePooledTransport).toHaveBeenCalledTimes(2);
     expect(resizeRegistrations).toBe(2);
   });

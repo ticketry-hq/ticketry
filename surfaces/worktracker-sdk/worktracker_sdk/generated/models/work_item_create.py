@@ -28,7 +28,7 @@ from pydantic_core import to_jsonable_python
 
 class WorkItemCreate(BaseModel):
     """
-    Input for the one project-scoped work-item create.
+    Model-derived input for the project-scoped work-item create.
     """ # noqa: E501
     name: Annotated[str, Field(strict=True, max_length=512)]
     description: Optional[StrictStr] = None

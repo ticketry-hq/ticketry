@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -11,12 +12,14 @@ from typing import Iterable, Mapping
 
 from studio_server.atomic_files import atomic_write_json
 
-from .catalog import catalog_root, verify_catalog
+from .catalog import CatalogValidationError, catalog_root, tree_digest, verify_catalog
 
 
 MANIFEST_NAME = ".ticketry-managed-skills.json"
 MANIFEST_SCHEMA_VERSION = 1
 SUPPORTED_PROVIDERS = ("claude", "codex", "agy", "gemini")
+
+logger = logging.getLogger(__name__)
 
 
 class SkillInstallationError(RuntimeError):
@@ -223,13 +226,42 @@ def _replace_managed_package(
         raise
 
 
+def _managed_package_is_unedited(
+    *, provider: str, name: str, destination: Path, recorded_digest: object
+) -> bool:
+    """Return whether Ticketry can replace its recorded copy without data loss."""
+
+    try:
+        current_digest = tree_digest(destination)
+    except (CatalogValidationError, OSError) as exc:
+        logger.warning(
+            "Ticketry-managed skill %s for %s at %s could not be verified and "
+            "will be preserved because it may contain user edits: %s",
+            name,
+            provider,
+            destination,
+            exc,
+        )
+        return False
+    if current_digest == recorded_digest:
+        return True
+    logger.warning(
+        "Ticketry-managed skill %s for %s at %s was edited by the user and will "
+        "be preserved; its current digest does not match the Ticketry manifest",
+        name,
+        provider,
+        destination,
+    )
+    return False
+
+
 def install_packaged_skills(
     *,
     providers: Iterable[str] = SUPPORTED_PROVIDERS,
     home: Path | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, Path]:
-    """Idempotently fill missing skills from the bundled offline catalog."""
+    """Install missing skills and update unedited Ticketry-managed copies."""
 
     lock = verify_catalog()
     package_names = {package["name"] for package in lock["packages"]}
@@ -293,14 +325,47 @@ def install_packaged_skills(
         )
         previous = _load_manifest(root).get("packages", {})
         managed = {
-            name: digest for name, digest in previous.items() if (root / name).is_dir()
+            name: digest
+            for name, digest in previous.items()
+            if (root / name).is_dir() and not (root / name).is_symlink()
         }
         for package in lock["packages"]:
             name = package["name"]
+            destination = root / name
+            recorded_digest = managed.get(name)
+            if recorded_digest is not None and destination in available[name]:
+                if not _managed_package_is_unedited(
+                    provider=provider,
+                    name=name,
+                    destination=destination,
+                    recorded_digest=recorded_digest,
+                ):
+                    continue
+                if recorded_digest != package["digest"]:
+                    source = (catalog_root() / package["path"]).resolve()
+                    try:
+                        _replace_managed_package(
+                            root=root,
+                            provider=provider,
+                            name=name,
+                            source=source,
+                            destination=destination,
+                        )
+                    except SkillInstallationError:
+                        raise
+                    except OSError as exc:
+                        raise SkillInstallationError(
+                            provider=provider,
+                            skill=name,
+                            reason="unwritable",
+                            path=destination,
+                            message=f"The managed skill could not be updated: {exc}",
+                        ) from exc
+                    managed[name] = package["digest"]
+                continue
             if available[name]:
                 continue
             source = (catalog_root() / package["path"]).resolve()
-            destination = root / name
             if destination.is_symlink() or (
                 destination.exists() and not destination.is_dir()
             ):

@@ -1,27 +1,12 @@
 import { QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  AgentStatusSnapshot,
-  WorkItemStateFrame,
-} from "@worktracker/typescript-sdk/agent-status";
+import type { WorkItemStateFrame } from "@worktracker/typescript-sdk/agent-status";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
 import { useClientStore } from "../../../state/clientStore";
 import { useAgentStatusStore } from "./store";
 import { dispatchStatusFrame, statusFeed } from "./statusFeed";
 import { getStatesSnapshot, seedStates } from "../../../shared/query/stateCatalog";
-
-const getAgentStatus = vi.fn<() => Promise<AgentStatusSnapshot>>();
-
-vi.mock("@worktracker/typescript-sdk/agent-status", async (load) => {
-  const actual = await load<
-    typeof import("@worktracker/typescript-sdk/agent-status")
-  >();
-  return {
-    ...actual,
-    createAgentStatusClient: () => ({ getAgentStatus }),
-  };
-});
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -58,12 +43,6 @@ beforeEach(() => {
   vi.useFakeTimers();
   FakeWebSocket.instances = [];
   vi.stubGlobal("WebSocket", FakeWebSocket);
-  getAgentStatus.mockReset().mockResolvedValue({
-    scope: { project_id: "project-1", task_id: null },
-    runs: [],
-    automation_attempts: [],
-    at: "2026-08-06T12:00:00Z",
-  });
   useClientStore.setState({ workItemCursorsByProject: {} });
   useAgentStatusStore.setState({
     projectId: null,

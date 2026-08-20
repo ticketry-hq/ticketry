@@ -39,6 +39,11 @@ Development frontend, backend, and MCP output is persisted at
 `npm run logs:follow` while reproducing a problem, and `npm run logs:clear` to
 start a clean capture. This directory is generated and must not be committed.
 
+Ticketry currently exposes one installation project. Agents using WorkTracker
+MCP must use the Project ID from their launch context. Do not list projects,
+ask the user to choose one, or look for another project. `list_projects` exists
+only for clients without launch context and returns the installation project.
+
 Every user-visible Studio UI behavior change must add or update an automated
 acceptance case in `studio/src/test/*Acceptance.test.tsx`. Keep the numbered
 overhaul gate current and run `npm run test:overhaul --workspace

@@ -1,4 +1,5 @@
-import { authenticatedHostFetch } from "../../../../shared/api/authenticatedHostFetch";
+import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
+import { apiBase, apiKey } from "../../../../shared/api/client";
 
 /**
  * The native renderer's report of the shared terminal-output observation.
@@ -43,9 +44,11 @@ export function reportNativeViewerAttached(
 /** Desktop's companion to the viewer lease on the same authenticated surface. */
 export const desktopOutputActivity: OutputActivityClient = {
   async report(agentRunId) {
-    await authenticatedHostFetch("/api/terminals/viewers/output", {
-      method: "POST",
-      body: JSON.stringify({ agent_run_id: agentRunId }),
+    await createWorkTrackerClient({
+      baseUrl: apiBase(),
+      apiKey: apiKey(),
+    }).terminals.terminalsViewersOutputCreate({
+      viewerOutputReport: { agent_run_id: agentRunId },
     });
   },
 };

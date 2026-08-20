@@ -17,11 +17,6 @@
 import { mapValues } from '../runtime.js';
 /**
  * The single read shape for every task work-item response.
- *
- * The two model relations consumers resolve most often are deliberately
- * primary keys.  The four computed fields satisfy the read-field rule: each
- * is derived from this row or one of its own relations, is read-only, and is
- * declared here rather than assembled in a view.
  * @export
  * @interface WorkItem
  */

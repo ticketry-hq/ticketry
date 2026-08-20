@@ -40,19 +40,19 @@ const savedCatalog = {
 const providerCapabilities = [
   {
     agent: "claude",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: ["sonnet", "opus", "haiku"],
-    model_prefixes: ["claude-"],
-    reasoning_levels: ["low", "medium", "high"],
+    models: [
+      { name: "sonnet", reasoning_levels: ["low", "medium", "high"] },
+      { name: "opus", reasoning_levels: ["low", "medium", "high"] },
+      { name: "haiku", reasoning_levels: ["low", "medium"] },
+    ],
   },
   {
     agent: "codex",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: ["gpt-5.6-luna"],
-    model_prefixes: ["gpt-"],
-    reasoning_levels: ["low", "medium", "high"],
+    models: [
+      { name: "gpt-5.6-sol", reasoning_levels: ["high", "low", "max", "medium", "ultra", "xhigh"] },
+      { name: "gpt-5.6-terra", reasoning_levels: ["high", "low", "max", "medium", "ultra", "xhigh"] },
+      { name: "gpt-5.6-luna", reasoning_levels: ["high", "low", "max", "medium", "xhigh"] },
+    ],
   },
 ];
 
@@ -168,6 +168,28 @@ describe("overhaul acceptance — settings", () => {
         name: "Effective keyboard bindings by action and Keymap context",
       }),
     ).toBeInTheDocument();
+    expect(
+      within(dialog).getAllByText("Choose provider for task"),
+    ).toHaveLength(2);
+    expect(
+      within(dialog).getByText("Show or launch task terminal"),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("Open task with prompt outside Stories"),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getAllByText("Enter edit-view selection"),
+    ).toHaveLength(2);
+    expect(within(dialog).queryByText("tasks.choose-provider"))
+      .not.toBeInTheDocument();
+    expect(within(dialog).queryByText("edit-view.choose-provider"))
+      .not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Open task"))
+      .not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Open with prompt"))
+      .not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Engage body"))
+      .not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("tab", { name: "Models" }));
     expect(
@@ -195,12 +217,7 @@ describe("overhaul acceptance — settings", () => {
     const discard = within(dialog).getByRole("button", { name: "Discard" });
     const save = within(dialog).getByRole("button", { name: "Save changes" });
 
-    fireEvent.change(model, { target: { value: "not-a-claude-model" } });
-    expect(
-      await within(dialog).findByText(
-        "Model 'not-a-claude-model' is not compatible with agent/provider 'claude'.",
-      ),
-    ).toBeInTheDocument();
+    fireEvent.change(model, { target: { value: "opus" } });
     expect(within(dialog).getByText("1 unsaved change")).toBeInTheDocument();
     expect(discard).toBeEnabled();
     expect(save).toBeEnabled();
@@ -248,6 +265,68 @@ describe("overhaul acceptance — settings", () => {
     expect(settingsApi.putProviderCatalog).toHaveBeenCalledTimes(2);
     expect(within(applied).getAllByText("Models")).toHaveLength(3);
     expect(within(applied).queryByText("Workflow")).not.toBeInTheDocument();
+  });
+
+  it("[overhaul-127] preserves the Codex model matrix and round-trips low", async () => {
+    const opener = renderAndOpenSettings();
+    let dialog = await screen.findByRole("dialog", { name: "Studio settings" });
+    const provider = within(dialog).getByRole("combobox", {
+      name: "Agent/provider",
+    });
+    const model = within(dialog).getByRole("combobox", { name: "Model" });
+    const reasoning = within(dialog).getByRole("combobox", { name: "Reasoning" });
+
+    fireEvent.change(provider, { target: { value: "codex" } });
+    expect(model).toHaveValue("");
+    expect(within(reasoning).getAllByRole("option")).toHaveLength(1);
+
+    fireEvent.change(model, { target: { value: "gpt-5.6-sol" } });
+    expect(within(reasoning).getAllByRole("option").map((option) => option.textContent))
+      .toEqual(["Model default", "low", "medium", "high", "xhigh", "max", "ultra"]);
+    fireEvent.change(reasoning, { target: { value: "ultra" } });
+
+    fireEvent.change(model, { target: { value: "gpt-5.6-luna" } });
+    expect(reasoning).toHaveValue("");
+    expect(within(reasoning).queryByRole("option", { name: "ultra" }))
+      .not.toBeInTheDocument();
+    expect(within(reasoning).getByRole("option", { name: "max" }))
+      .toBeInTheDocument();
+    fireEvent.change(reasoning, { target: { value: "low" } });
+
+    fireEvent.change(model, { target: { value: "gpt-5.6-terra" } });
+    expect(reasoning).toHaveValue("low");
+    expect(within(reasoning).getByRole("option", { name: "ultra" }))
+      .toBeInTheDocument();
+    fireEvent.change(model, { target: { value: "gpt-5.6-luna" } });
+    expect(reasoning).toHaveValue("low");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(settingsApi.putProviderCatalog).toHaveBeenCalledWith({
+      activated_providers: ["claude", "codex"],
+      global_default: {
+        provider: "codex",
+        model: "gpt-5.6-luna",
+        reasoning: "low",
+      },
+    }));
+
+    settingsApi.getProviderCatalog.mockResolvedValue({
+      value: {
+        activated_providers: ["claude", "codex"],
+        global_default: {
+          provider: "codex",
+          model: "gpt-5.6-luna",
+          reasoning: "low",
+        },
+      },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close dialog" }));
+    fireEvent.click(opener);
+    dialog = await screen.findByRole("dialog", { name: "Studio settings" });
+    expect(await within(dialog).findByRole("combobox", { name: "Model" }))
+      .toHaveValue("gpt-5.6-luna");
+    expect(within(dialog).getByRole("combobox", { name: "Reasoning" }))
+      .toHaveValue("low");
   });
 
   it("preserves close, Escape, focus restoration, and focus containment", async () => {

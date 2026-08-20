@@ -12,11 +12,7 @@ from worktracker.services.projects import create_project
 def test_new_project_seeds_known_bindings_as_explicit_rows_and_nothing_wildcard(
     project,
 ):
-    created = create_project(
-        name="Seeded",
-        slug="seeded",
-        workspace_slug=project.workspace.slug,
-    )
+    created = create_project(name="Seeded", slug="seeded")
     story = IssueType.objects.get(project=created, name="Story")
     implement = State.objects.get(project=created, name="Implement")
     seeded = LaunchBinding.objects.get(issue_type=story, state=implement)
@@ -49,10 +45,13 @@ def test_new_project_seeds_known_bindings_as_explicit_rows_and_nothing_wildcard(
     assert "`Grill`" in ideas.prompt
     assert "`Spec`" in ideas.prompt
     assert grill.required_skills == ["grill-with-docs"]
+    assert grill.entry_skill == "grill-with-docs"
     assert grill.auto_start is False
     assert spec.required_skills == ["to-spec"]
+    assert spec.entry_skill == "to-spec"
     assert spec.auto_start is True
     assert tickets.required_skills == ["to-tickets"]
+    assert tickets.entry_skill == "to-tickets"
     assert tickets.auto_start is True
     assert "grill-with-docs" in grill.prompt
     assert "to-spec" not in grill.prompt

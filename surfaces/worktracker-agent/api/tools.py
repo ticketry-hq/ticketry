@@ -25,17 +25,26 @@ class WorktrackerToolset:
         self.service = service or get_worktracker_service()
 
     def list_projects_tool(self, ctx: Any) -> List[WorktrackerProject]:
-        """List all projects in the worktracker."""
+        """Return Ticketry's sole installation project.
+
+        Ticketry has no project choice in this version. Agents should normally
+        use the Project ID supplied in their launch context. This compatibility
+        read exists for MCP clients that started without launch context.
+        """
         return self.service.list_projects()
 
     def list_modules_tool(self, ctx: Any, project_id: str) -> List[WorktrackerModule]:
-        """List a project's modules (issues of level ``module``, e.g. Epics)."""
+        """List the installation project's modules.
+
+        Pass the Project ID from launch context or ``list_projects``. Do not
+        ask the user to choose a project.
+        """
         return self.service.list_modules(project_id)
 
     def list_issue_types_tool(
         self, ctx: Any, project_id: str
     ) -> List[WorktrackerIssueType]:
-        """List a project's configurable issue types.
+        """List the installation project's configurable issue types.
 
         Each row carries its ``level`` bucket (``module`` vs ``task``). Use it
         to map a selected type name to the id the create tools require."""
@@ -49,7 +58,11 @@ class WorktrackerToolset:
         state_name: Optional[str] = None,
         include_description: bool = False,
     ) -> List[WorktrackerTask]:
-        """List tasks (work items) in a project, optionally filtered by module or state."""
+        """List work items in Ticketry's installation project.
+
+        The project is fixed in this version. Filter by module or state when
+        useful; do not search for another project.
+        """
         return self.service.list_tasks(project_id, module_id, state_name, include_description)
 
     def get_issue_type_workflow_settings_tool(
@@ -136,6 +149,7 @@ class WorktrackerToolset:
         model: Optional[str] = None,
         reasoning: Optional[str] = None,
         required_skills: Optional[List[str]] = None,
+        entry_skill: Optional[str] = None,
     ) -> Any:
         """Create or replace one state's launch binding at the supplied revision."""
         return self.service.upsert_issue_type_workflow_launch_binding(
@@ -147,6 +161,7 @@ class WorktrackerToolset:
             model,
             reasoning,
             required_skills,
+            entry_skill,
         )
 
     def clear_issue_type_workflow_launch_binding_tool(

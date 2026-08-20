@@ -275,12 +275,10 @@ More importantly, the product has no transcript for Virtual to render:
 - The frontend agent types describe lifecycle and terminal sessions, and the
   workspace tab kinds are `details`, `doc`, and `terminal`; there is no Chat tab
   or message model. ([agent types](../../studio/src/features/agents/types.ts#L1-L46))
-- The existing chat architecture spike already establishes that a Chat run must
-  consume a structured managed-subprocess protocol rather than parse PTY bytes,
-  and that Chat and Terminal remain distinct run kinds. It also records that
-  the current “document chat” is a terminal rather than a message UI.
-  ([T62 research spike](../../spec/agents-sdk--173b3d9e/T62--i-wanna-build-a-chat-interface-for-the-c/SPEC.md#L16-L27),
-  [current-state findings](../../spec/agents-sdk--173b3d9e/T62--i-wanna-build-a-chat-interface-for-the-c/SPEC.md#L115-L161))
+- The existing chat architecture decision requires Chat runs to consume a
+  structured managed-subprocess protocol rather than parse PTY bytes. Chat and
+  Terminal remain distinct run kinds. The current document-chat command opens
+  a terminal rather than a message UI.
 
 TanStack Virtual therefore solves one downstream presentation concern. It does
 not change the core chat architecture decision.

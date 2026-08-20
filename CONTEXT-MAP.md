@@ -2,8 +2,9 @@
 
 ## Contexts
 
-- **Work Management** owns workspaces, projects, work items, types, workflows,
-  launch bindings, and the durable planning database.
+- **Work Management** owns projects, work items, types, workflows,
+  launch bindings, and the durable planning database. (Workspaces are
+  removed as of the #803 decision; the project is the largest thing.)
 - **Agent Execution** owns dependency-graph runs, launch readiness, retry
   attempts, and durable agent-run lifecycle.
 - **Workspace Runtime** owns tmux-backed terminal sessions, document access, and

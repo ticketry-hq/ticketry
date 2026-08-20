@@ -33,6 +33,17 @@ export type ModalDescriptor =
   | StandardModalDescriptor
   | NotifyUserModalDescriptor;
 
+function isSameModuleFolderModal(
+  current: ModalDescriptor,
+  candidate: StandardModalDescriptor,
+): boolean {
+  return (
+    current.type === "module-folder" &&
+    candidate.type === "module-folder" &&
+    current.payload?.moduleId === candidate.payload?.moduleId
+  );
+}
+
 export interface ModalKeyBinding {
   actionId: string | readonly string[];
   label: string;
@@ -54,7 +65,11 @@ export const useModalStore = create<ModalState>((set) => ({
   // in-app recovery refresh stay silent in the document that replaces it.
   presentedNoticeIds: new Set(readPresentedNoticeIds()),
   pushModal: (modal) =>
-    set((state) => ({ modalStack: [...state.modalStack, modal] })),
+    set((state) =>
+      state.modalStack.some((current) => isSameModuleFolderModal(current, modal))
+        ? state
+        : { modalStack: [...state.modalStack, modal] },
+    ),
   notifyUser: (candidate) =>
     set((state) => {
       const notice = validateUserNotice(candidate);

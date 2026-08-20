@@ -26,7 +26,6 @@ from worktracker.models import (
     LaunchBinding,
     Project,
     State,
-    Workspace,
 )
 from worktracker.signals import issue_state_changed
 
@@ -80,10 +79,7 @@ def detach_seam_receiver():
 def graph_project():
     """One project, module, armable root, and the states satisfaction reads."""
 
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    project = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
-    )
+    project = Project.objects.create(id=uuid.uuid4(), name="meml", slug="MEML")
     states = {
         "todo": State.objects.create(
             id=uuid.uuid4(), project=project, name="Todo", group="unstarted"

@@ -28,15 +28,15 @@ from pydantic_core import to_jsonable_python
 
 class Project(BaseModel):
     """
-    The single project shape; workspace selection is create-only input.
+    The installation-wide project shape.
     """ # noqa: E501
     id: UUID
     name: Annotated[str, Field(strict=True, max_length=255)]
     slug: Annotated[str, Field(strict=True, max_length=64)]
     description: Optional[StrictStr] = None
-    workspace_slug: Optional[Annotated[str, Field(strict=True, max_length=64)]] = None
     manual_module_order: StrictBool
-    __properties: ClassVar[List[str]] = ["id", "name", "slug", "description", "workspace_slug", "manual_module_order"]
+    onboarding_required: StrictBool
+    __properties: ClassVar[List[str]] = ["id", "name", "slug", "description", "manual_module_order", "onboarding_required"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -70,10 +70,12 @@ class Project(BaseModel):
           are ignored.
         * OpenAPI `readOnly` fields are excluded.
         * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
             "id",
             "manual_module_order",
+            "onboarding_required",
         ])
 
         _dict = self.model_dump(
@@ -97,7 +99,7 @@ class Project(BaseModel):
             "name": obj.get("name"),
             "slug": obj.get("slug"),
             "description": obj.get("description"),
-            "workspace_slug": obj.get("workspace_slug"),
-            "manual_module_order": obj.get("manual_module_order")
+            "manual_module_order": obj.get("manual_module_order"),
+            "onboarding_required": obj.get("onboarding_required")
         })
         return _obj

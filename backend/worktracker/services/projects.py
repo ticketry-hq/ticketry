@@ -11,7 +11,6 @@ from worktracker.models import (
     LaunchBinding,
     Project,
     State,
-    Workspace,
 )
 from worktracker.seed import (
     ensure_issue_types,
@@ -23,27 +22,11 @@ from worktracker.seed import (
 from worktracker.services.errors import ConflictError, NotFoundError
 
 
-def _resolve_workspace(workspace_slug=None):
-    if workspace_slug:
-        try:
-            return Workspace.objects.get(slug=workspace_slug)
-        except Workspace.DoesNotExist:
-            raise NotFoundError("Workspace not found.")
-
-    workspace = Workspace.objects.order_by("created_at").first()
-    if workspace is None:
-        raise NotFoundError("No workspace to create the project under.")
-    return workspace
-
-
-def create_project(*, name, slug, description=None, workspace_slug=None):
-    workspace = _resolve_workspace(workspace_slug)
-
+def create_project(*, name, slug, description=None):
     try:
         with transaction.atomic():
             project = Project.objects.create(
                 id=uuid.uuid4(),
-                workspace=workspace,
                 name=name,
                 slug=slug,
                 description=description or "",

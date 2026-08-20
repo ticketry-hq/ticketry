@@ -11,6 +11,7 @@ import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import * as api from "../../shared/api/client";
 import { loadProviderCapabilities } from "./providerQueries";
+import { visibleIssueTypes } from "../settings";
 import {
   getProviderCapabilitiesSnapshot,
   setProviderCapabilities,
@@ -85,7 +86,10 @@ export function setWorkflowIssueTypes(
   projectId: string,
   issueTypes: IssueType[],
 ): void {
-  queryClient.setQueryData(queryKeys.issueTypes.byProject(projectId), issueTypes);
+  queryClient.setQueryData(
+    queryKeys.issueTypes.byProject(projectId),
+    visibleIssueTypes(issueTypes),
+  );
 }
 
 export function getWorkflowIssueTypesSnapshot(projectId: string): IssueType[] {
@@ -147,7 +151,7 @@ export async function loadWorkflowEditorResources(
   const [issueTypes, states, providerCapabilities, workItems] = await Promise.all([
     queryClient.fetchQuery({
       queryKey: queryKeys.issueTypes.byProject(projectId),
-      queryFn: () => api.getIssueTypes(projectId),
+      queryFn: async () => visibleIssueTypes(await api.getIssueTypes(projectId)),
       staleTime: 0,
     }),
     queryClient.fetchQuery({
@@ -282,7 +286,9 @@ export async function loadStateImpact(
   );
   if (!state) throw new Error("State not found.");
 
-  const issueTypeIds = getWorkflowIssueTypesSnapshot(projectId).map(
+  // The editor catalog omits internal types such as PathFind, but the backend
+  // state-delete guard checks workflow references across every issue type.
+  const issueTypeIds = (await api.getIssueTypes(projectId)).map(
     (issueType) => issueType.id,
   );
   const workflows = await loadAllWorkflowSettings(projectId, issueTypeIds);

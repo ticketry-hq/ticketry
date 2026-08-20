@@ -300,6 +300,14 @@ to the un-engaged active tab body, still the focused navigation zone. Left then
 returns to the Stories list.
 _Avoid_: Insert mode, terminal focus, raw input mode
 
+**Workspace tab order**:
+The arrangement of a work item's Task workspace tabs — Details, documents and
+terminal tabs alike — as set by dragging tabs horizontally within the strip.
+Stored per work item and shared by every client of the installation. New tabs
+join at the right end; a reopened tab returns to its remembered place. The
+live-terminal cycle visits terminals in this order.
+_Avoid_: Tab order (unqualified), launch order (that's only the default)
+
 **Active tab**:
 The tab each ticket remembers as last-selected in its Task workspace. Entering
 a ticket restores it: Enter — or Right on a story with nothing left to expand —

@@ -34,7 +34,6 @@ from worktracker.models import (
     Project,
     Provider,
     State,
-    Workspace,
 )
 
 from .conftest import write_profiles
@@ -53,10 +52,7 @@ def workflow():
     Provider.objects.filter(slug="claude").update(activated=True)
     sonnet, _ = AgentModel.objects.get_or_create(provider=provider, name="sonnet")
     opus, _ = AgentModel.objects.get_or_create(provider=provider, name="opus")
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    project = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
-    )
+    project = Project.objects.create(id=uuid.uuid4(), name="meml", slug="MEML")
     issue_type = IssueType.objects.create(
         id=uuid.uuid4(), project=project, name="Story", level="task"
     )

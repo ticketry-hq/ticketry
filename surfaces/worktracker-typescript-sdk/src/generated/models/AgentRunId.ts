@@ -26,7 +26,7 @@ export interface AgentRunId {
      * @type {string}
      * @memberof AgentRunId
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
 }
 
 /**
@@ -55,13 +55,12 @@ export function AgentRunIdToJSON(json: any): AgentRunId {
     return AgentRunIdToJSONTyped(json, false);
 }
 
-export function AgentRunIdToJSONTyped(value?: AgentRunId | null, ignoreDiscriminator: boolean = false): any {
+export function AgentRunIdToJSONTyped(value?: Omit<AgentRunId, 'agent_run_id'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
     };
 }

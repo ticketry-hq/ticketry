@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import override_settings
 
-from worktracker.models import Issue, IssueType, Project, State, Workspace
+from worktracker.models import Issue, IssueType, Project, State
 
 
 def _run(token_file, *, admin_enabled=True):
@@ -31,19 +31,20 @@ def _run(token_file, *, admin_enabled=True):
 
 
 @pytest.mark.django_db
-def test_fresh_run_creates_installation_rows_without_domain_data(tmp_path):
-    """Fresh provision creates the installation shell, not a domain project."""
+def test_fresh_run_creates_default_project_with_pending_onboarding(tmp_path):
+    """Fresh provision creates the operational root and marks onboarding once."""
 
     profile = _run(tmp_path / "token")
 
-    assert Workspace.objects.count() == 1
-    assert Workspace.objects.get().onboarding_required is True
-    assert Project.objects.count() == 0
-    assert State.objects.count() == 0
-    assert IssueType.objects.count() == 0
+    assert Project.objects.count() == 1
+    project = Project.objects.get()
+    assert project.slug == "CDN"
+    assert project.onboarding_required is True
+    assert State.objects.filter(project=project).count() == 8
+    assert IssueType.objects.filter(project=project).count() > 0
     assert Issue.objects.count() == 0
     assert get_user_model().objects.filter(is_superuser=True).count() == 1
-    assert profile["project_id"] is None
+    assert profile["project_id"] == str(project.id)
     assert profile["token"]
 
 
@@ -55,14 +56,12 @@ def test_second_run_is_noop(tmp_path):
     first = _run(token_file)
     second = _run(token_file)
 
-    assert Workspace.objects.count() == 1
-    assert Project.objects.count() == 0
-    assert State.objects.count() == 0
-    assert IssueType.objects.count() == 0
+    assert Project.objects.count() == 1
+    assert State.objects.count() == 8
+    assert IssueType.objects.count() > 0
     assert Issue.objects.count() == 0
     assert get_user_model().objects.count() == 1
-    assert first["project_id"] is None
-    assert second["project_id"] is None
+    assert first["project_id"] == second["project_id"]
     assert first["token"] == second["token"]
 
 
@@ -73,7 +72,6 @@ def test_admin_disabled_provision_is_idempotent_without_a_superuser(tmp_path):
     first = _run(token_file, admin_enabled=False)
     second = _run(token_file, admin_enabled=False)
 
-    assert Workspace.objects.count() == 1
     assert get_user_model().objects.count() == 0
     assert first == second
 
@@ -118,28 +116,21 @@ def test_admin_disabled_provision_leaves_ordinary_accounts_alone(tmp_path):
 def test_rerun_preserves_acknowledged_onboarding(tmp_path):
     token_file = tmp_path / "token"
     _run(token_file)
-    workspace = Workspace.objects.get()
-    workspace.onboarding_required = False
-    workspace.save(update_fields=["onboarding_required"])
+    project = Project.objects.get()
+    project.onboarding_required = False
+    project.save(update_fields=["onboarding_required"])
 
     _run(token_file)
 
-    workspace.refresh_from_db()
-    assert workspace.onboarding_required is False
+    project.refresh_from_db()
+    assert project.onboarding_required is False
 
 
 @pytest.mark.django_db
 def test_rerun_leaves_existing_projects_untouched(tmp_path):
     token_file = tmp_path / "token"
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(),
-        slug="meml",
-        name="Existing workspace",
-        onboarding_required=False,
-    )
     project = Project.objects.create(
         id=uuid.uuid4(),
-        workspace=workspace,
         name="Existing project",
         slug="KEEP",
         description="Do not modify",
@@ -151,4 +142,4 @@ def test_rerun_leaves_existing_projects_untouched(tmp_path):
 
     assert Project.objects.count() == 1
     assert Project.objects.values().get(pk=project.id) == before
-    assert profile["project_id"] is None
+    assert profile["project_id"] == str(project.id)

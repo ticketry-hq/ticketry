@@ -34,31 +34,31 @@ export interface ViewerLeaseResult {
      * @type {string}
      * @memberof ViewerLeaseResult
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
     /**
      *
      * @type {string}
      * @memberof ViewerLeaseResult
      */
-    viewer_id: string;
+    readonly viewer_id: string;
     /**
      *
      * @type {string}
      * @memberof ViewerLeaseResult
      */
-    transport: string;
+    readonly transport: string;
     /**
      *
      * @type {string}
      * @memberof ViewerLeaseResult
      */
-    expires_at: string;
+    readonly expires_at: string;
     /**
      *
      * @type {ReplacedViewer}
      * @memberof ViewerLeaseResult
      */
-    replaced: ReplacedViewer | null;
+    readonly replaced: ReplacedViewer | null;
 }
 
 /**
@@ -95,17 +95,12 @@ export function ViewerLeaseResultToJSON(json: any): ViewerLeaseResult {
     return ViewerLeaseResultToJSONTyped(json, false);
 }
 
-export function ViewerLeaseResultToJSONTyped(value?: ViewerLeaseResult | null, ignoreDiscriminator: boolean = false): any {
+export function ViewerLeaseResultToJSONTyped(value?: Omit<ViewerLeaseResult, 'agent_run_id'|'viewer_id'|'transport'|'expires_at'|'replaced'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
-        'viewer_id': value['viewer_id'],
-        'transport': value['transport'],
-        'expires_at': value['expires_at'],
-        'replaced': ReplacedViewerToJSON(value['replaced']),
     };
 }

@@ -11,7 +11,6 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 from apps.execution import auto_start_suppression, driver
 from apps.execution.work_item_liveness import has_live_work
-from apps.settings_store.config import NoConfigurationSelected
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.launch import LaunchUnavailable
 from apps.terminals.task_launch_preflight import preflight_task_launch
@@ -142,7 +141,6 @@ def execute(
             )
         except (
             LaunchUnavailable,
-            NoConfigurationSelected,
             RequiredSkillUnavailable,
             ValueError,
         ) as exc:

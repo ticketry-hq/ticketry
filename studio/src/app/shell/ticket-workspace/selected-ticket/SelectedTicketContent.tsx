@@ -18,10 +18,6 @@ import {
   useTaskWorkspaceTabNavigation,
   type TaskWorkspaceTabIdentity,
 } from "./internal/useTaskWorkspaceTabNavigation";
-import {
-  isSidebarEnabled,
-  useConfig,
-} from "../../../../features/studio/stores/configStore";
 import { useClientStore } from "../../../../state/clientStore";
 import { WorkspaceTabStrip } from "./internal/WorkspaceTabStrip";
 import { DormantWorkspaceTabs } from "./internal/DormantWorkspaceTabs";
@@ -109,7 +105,6 @@ export function SelectedTicketContent({
   const [highlightedTab, setHighlightedTab] =
     useState<TaskWorkspaceTabIdentity>({ kind: "details" });
   const sidebarVisible = useClientStore((state) => state.sidebarVisible);
-  const sidebarEnabled = isSidebarEnabled(useConfig());
   const editViewZone = useClientStore((state) => state.editViewZone);
   const editViewBodyEngaged = useClientStore(
     (state) => state.editViewBodyEngaged,
@@ -120,7 +115,7 @@ export function SelectedTicketContent({
     (state) => state.setEditViewBodyEngaged,
   );
   const isEditView =
-    owner === "studio" && (!sidebarEnabled || !sidebarVisible);
+    owner === "studio" && !sidebarVisible;
 
   const engageWorkspaceTab = useCallback((tab: TaskWorkspaceTabIdentity): void => {
     setEditViewBodyEngaged(true);

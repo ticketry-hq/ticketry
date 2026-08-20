@@ -13,9 +13,9 @@ from worktracker_sdk.generated import (
     ApiClient,
     AttachmentsApi,
     Configuration,
-    IssueTypeTransition,
+    IssueTypeTransitionCreate,
     IssueTypesApi,
-    LaunchBinding,
+    LaunchBindingWrite,
     LaunchBindingsApi,
     ModelsApi,
     ModulesApi,
@@ -31,9 +31,12 @@ from worktracker_sdk.generated import (
     WorkItemsApi,
     WorkflowsApi,
 )
+
+
 from worktracker_sdk.generated.exceptions import ApiException, NotFoundException
 from worktracker_sdk.root_api import ExecutionApi, LaunchApi, RevisionedDeleteApi
 
+from worktracker_agent.api.project_scope import select_installation_project
 from worktracker_agent.api.schemas import (
     WorktrackerAttachmentInfo,
     WorktrackerIssueType,
@@ -44,6 +47,17 @@ from worktracker_agent.api.schemas import (
     WorktrackerState,
     WorktrackerTask,
     WorktrackerTaskDetail,
+)
+
+
+_USER_INVOKE_ONLY_REQUIRED_SKILLS = frozenset(
+    {
+        "grill-with-docs",
+        "implement",
+        "setup-matt-pocock-skills",
+        "to-spec",
+        "to-tickets",
+    }
 )
 
 # Owned backend used when no base url is supplied.
@@ -119,7 +133,6 @@ class WorktrackerService:
         self,
         base_url: Optional[str] = None,
         api_key: Optional[str] = None,
-        workspace_slug: Optional[str] = None,
         sdk: Optional[GeneratedSdk] = None,
     ) -> None:
         resolved_base_url = (
@@ -136,7 +149,6 @@ class WorktrackerService:
         # that setter, so the strip has to happen here too.
         self.base_url = resolved_base_url.rstrip("/").removesuffix("/work-tracker")
         self.api_key = resolved_api_key
-        self.workspace_slug = workspace_slug
         self.sdk = sdk or GeneratedSdk.connect(self.base_url, resolved_api_key)
 
     def _resolve_project_id(self, project_id_or_identifier: str) -> Optional[str]:
@@ -159,6 +171,15 @@ class WorktrackerService:
             color=it.color,
             sort_order=it.sort_order,
         )
+
+    def _agent_issue_types(self, project_id: UUID):
+        """Read issue types agents may list or select for creation."""
+
+        return [
+            item
+            for item in self.sdk.issue_types.list_issue_types(project_id)
+            if not item.is_pathfind
+        ]
 
     def _issue_types_by_id(self, project_id: UUID) -> Dict[str, WorktrackerIssueType]:
         """Read the type rows used to enrich bare work-item type ids."""
@@ -197,13 +218,17 @@ class WorktrackerService:
             return getattr(result, "task", result).id
 
     def list_projects(self) -> List[WorktrackerProject]:
+        """Return the installation project exposed to Ticketry agents."""
+
+        project = select_installation_project(self.sdk.projects.list_projects())
+        if project is None:
+            return []
         return [
             WorktrackerProject(
-                id=p.id,
-                name=p.name,
-                identifier=p.slug,
+                id=project.id,
+                name=project.name,
+                identifier=project.slug,
             )
-            for p in self.sdk.projects.list_projects()
         ]
 
     def list_modules(self, project_id: str) -> List[WorktrackerModule]:
@@ -237,7 +262,7 @@ class WorktrackerService:
             return []
         return [
             self._map_issue_type(item)
-            for item in self.sdk.issue_types.list_issue_types(UUID(resolved))
+            for item in self._agent_issue_types(UUID(resolved))
         ]
 
     def _resolve_task_issue_type_id(self, project_id: str, issue_type: str) -> UUID:
@@ -247,7 +272,7 @@ class WorktrackerService:
 
         task_types = [
             item
-            for item in self.sdk.issue_types.list_issue_types(UUID(project_id))
+            for item in self._agent_issue_types(UUID(project_id))
             if item.level == "task"
         ]
         try:
@@ -560,9 +585,7 @@ class WorktrackerService:
 
         def assemble():
             issue_type = self.sdk.issue_types.get_issue_type(UUID(type_id))
-            transitions = self.sdk.workflows.list_issue_type_transitions(
-                UUID(type_id)
-            )
+            transitions = self.sdk.workflows.list_issue_type_transitions(UUID(type_id))
             bindings = [
                 item
                 for item in self.sdk.launch_bindings.list_launch_bindings(
@@ -574,7 +597,8 @@ class WorktrackerService:
             providers = {item.id: item for item in self.sdk.providers.list_providers()}
             models = {item.id: item for item in self.sdk.models.list_agent_models()}
             reasoning_levels = {
-                item.id: item for item in self.sdk.reasoning_levels.list_reasoning_levels()
+                item.id: item
+                for item in self.sdk.reasoning_levels.list_reasoning_levels()
             }
 
             adjacency: Dict[UUID, set[UUID]] = {}
@@ -627,6 +651,25 @@ class WorktrackerService:
                 model_row = models.get(binding.model)
                 provider = providers.get(model_row.provider) if model_row else None
                 reasoning = reasoning_levels.get(binding.reasoning)
+                misplaced_entry_skills = [
+                    skill
+                    for skill in binding.required_skills
+                    if skill in _USER_INVOKE_ONLY_REQUIRED_SKILLS
+                    and skill != binding.entry_skill
+                ]
+                if misplaced_entry_skills:
+                    state_name = state_by_id.get(binding.state)
+                    warnings.append(
+                        {
+                            "code": "user_invoke_only_skill_not_entry",
+                            "state_id": binding.state,
+                            "message": (
+                                f"{state_name.name if state_name else 'This state'} requires "
+                                f"{', '.join(misplaced_entry_skills)}, but user-invoke-only "
+                                "skills must be selected as the entry skill."
+                            ),
+                        }
+                    )
                 if provider is not None and not provider.activated:
                     state_name = state_by_id.get(binding.state)
                     warnings.append(
@@ -645,6 +688,7 @@ class WorktrackerService:
                         "state_id": binding.state,
                         "prompt": binding.prompt,
                         "required_skills": binding.required_skills,
+                        "entry_skill": binding.entry_skill,
                         "agent": provider.slug if provider else None,
                         "model": model_row.name if model_row else None,
                         "reasoning": reasoning.name if reasoning else None,
@@ -682,9 +726,7 @@ class WorktrackerService:
         return self._workflow_request(
             self.sdk.workflows.create_issue_type_transition,
             UUID(type_id),
-            IssueTypeTransition.model_construct(
-                id=0,
-                issue_type=UUID(type_id),
+            IssueTypeTransitionCreate(
                 from_state=UUID(from_state_id),
                 to_state=UUID(to_state_id),
                 agent_allowed=agent_allowed,
@@ -751,18 +793,16 @@ class WorktrackerService:
         model: Optional[str] = None,
         reasoning: Optional[str] = None,
         required_skills: Optional[List[str]] = None,
+        entry_skill: Optional[str] = None,
     ):
         def upsert():
             issue_type = self.sdk.issue_types.get_issue_type(UUID(type_id))
-            bindings = self.sdk.launch_bindings.list_launch_bindings(
-                issue_type.project
-            )
+            bindings = self.sdk.launch_bindings.list_launch_bindings(issue_type.project)
             current = next(
                 (
                     item
                     for item in bindings
-                    if item.issue_type == UUID(type_id)
-                    and item.state == UUID(state_id)
+                    if item.issue_type == UUID(type_id) and item.state == UUID(state_id)
                 ),
                 None,
             )
@@ -786,7 +826,9 @@ class WorktrackerService:
                     )
                 model_id = matches[0].id
             elif agent is not None and current is None:
-                raise ValueError("A provider is represented by its model row; supply model.")
+                raise ValueError(
+                    "A provider is represented by its model row; supply model."
+                )
 
             reasoning_id = current.reasoning if current else None
             if reasoning is not None:
@@ -797,23 +839,25 @@ class WorktrackerService:
                     )
                 reasoning_id = matches[0].id
 
-            payload = LaunchBinding.model_construct(
-                id=current.id if current else 0,
-                issue_type=UUID(type_id),
-                state=UUID(state_id),
-                prompt=prompt if prompt is not None else (current.prompt if current else None),
+            payload = LaunchBindingWrite(
+                prompt=prompt
+                if prompt is not None
+                else (current.prompt if current else None),
                 required_skills=(
                     required_skills
                     if required_skills is not None
                     else (current.required_skills if current else [])
+                ),
+                entry_skill=(
+                    entry_skill
+                    if entry_skill is not None
+                    else (current.entry_skill if current else None)
                 ),
                 model=model_id,
                 reasoning=reasoning_id,
                 auto_start=current.auto_start if current else False,
                 subtree_run_enabled=current.subtree_run_enabled if current else False,
                 workflow_revision=workflow_revision,
-                created_at=getattr(current, "created_at", None),
-                updated_at=getattr(current, "updated_at", None),
             )
             return self.sdk.launch_bindings.upsert_launch_binding(
                 UUID(state_id), UUID(type_id), payload
@@ -849,18 +893,24 @@ class WorktrackerService:
                     for item in self.sdk.launch_bindings.list_launch_bindings(
                         issue_type.project
                     )
-                    if item.issue_type == UUID(type_id)
-                    and item.state == UUID(state_id)
+                    if item.issue_type == UUID(type_id) and item.state == UUID(state_id)
                 ),
                 None,
             )
             if current is None:
-                raise ValueError("Configure a launch binding before changing auto-start.")
-            payload_data = current.model_dump()
-            payload_data.update(
-                auto_start=auto_start, workflow_revision=workflow_revision
+                raise ValueError(
+                    "Configure a launch binding before changing auto-start."
+                )
+            payload = LaunchBindingWrite(
+                prompt=current.prompt,
+                required_skills=current.required_skills,
+                entry_skill=current.entry_skill,
+                model=current.model,
+                reasoning=current.reasoning,
+                auto_start=auto_start,
+                subtree_run_enabled=current.subtree_run_enabled,
+                workflow_revision=workflow_revision,
             )
-            payload = LaunchBinding.model_construct(**payload_data)
             return self.sdk.launch_bindings.upsert_launch_binding(
                 UUID(state_id), UUID(type_id), payload
             )
@@ -1309,7 +1359,7 @@ class WorktrackerService:
         task_uuid = self._sdk_resolve_task_id(task_id)
         try:
             attachment = self.sdk.attachments.upload_attachment(
-                task_uuid, (path.name, path.read_bytes())
+                str(task_uuid), (path.name, path.read_bytes())
             )
         except ApiException as error:
             return WorktrackerOperationResult(

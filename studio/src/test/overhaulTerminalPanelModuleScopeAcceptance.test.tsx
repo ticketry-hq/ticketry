@@ -21,7 +21,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../shared/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../shared/api/client")>()),
   getTasks: vi.fn(),
-  putProfile: vi.fn(),
 }));
 
 import { StudioFooter } from "../app/shell/StudioFooter";
@@ -30,10 +29,7 @@ import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useStudioStore } from "../features/projects/store";
-import {
-  getConfigSnapshot,
-  seedConfig,
-} from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
 import { useModuleShellStore } from "../features/terminal-panel/moduleShellStore";
 import { PANEL_OPEN_KEY } from "../features/terminal-panel/panelOpenMemory";
 import { useTerminalPanelStore } from "../features/terminal-panel/panelStore";
@@ -75,7 +71,6 @@ vi.mock(
 );
 
 const getTasks = api.getTasks as ReturnType<typeof vi.fn>;
-const putProfile = api.putProfile as ReturnType<typeof vi.fn>;
 
 class ResizeObserverStub {
   observe() {}
@@ -131,11 +126,6 @@ describe("terminal panel module scope acceptance", () => {
       states: [],
       workItems: [],
     });
-    putProfile.mockReset().mockImplementation(async (_index, profile) => ({
-      recent_profile_index: 0,
-      features: getConfigSnapshot().features,
-      profiles: [profile],
-    }));
     useTerminalStore.setState({ sessions: {}, sessionByRun: {} });
     useTerminalForegroundStore.setState({ claims: {}, hostTargets: {} });
     shellApi.createModuleShell.mockReset();
@@ -160,22 +150,22 @@ describe("terminal panel module scope acceptance", () => {
       modalStack: [],
     });
     useStudioStore.setState({ selectedProjectId: "project-1" });
-    seedConfig({
-      profiles: [
-        {
-          name: "local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [
-            { module_id: "module-1", path: "/repo/module-1" },
-            { module_id: "module-2", path: "/repo/module-2" },
-          ],
-          recent_project_id: "project-1",
-        },
-      ],
-      recentProfileIndex: 0,
-    });
+    seedModuleLinks([
+      {
+        id: "link-1",
+        module_id: "module-1",
+        local_path: "/repo/module-1",
+        created_at: "2026-08-19T00:00:00Z",
+        updated_at: "2026-08-19T00:00:00Z",
+      },
+      {
+        id: "link-2",
+        module_id: "module-2",
+        local_path: "/repo/module-2",
+        created_at: "2026-08-19T00:00:00Z",
+        updated_at: "2026-08-19T00:00:00Z",
+      },
+    ]);
   });
 
   afterEach(() => {

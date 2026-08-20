@@ -3,8 +3,12 @@ from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 
-from apps.settings_store.config import CONFIG_DIR
 from studio_server.database import default_database_settings
+
+
+CONFIG_DIR = Path(
+    os.environ.get("MUXED_DATA_DIR", Path.home() / ".config" / "worktracker-studio")
+).expanduser()
 
 
 # Muxed is a localhost developer tool; these defaults match that posture.
@@ -140,5 +144,9 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "0.1.0",
     "SCHEMA_PATH_PREFIX": r"^/api",
     "SCHEMA_PATH_PREFIX_TRIM": True,
+    # OpenAPI Generator emits invalid Python for a standalone enum containing
+    # only null. Keep nullable choice fields nullable on their property schema
+    # instead of splitting null into a synthetic NullEnum component.
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "SERVERS": [{"url": "/api"}],
 }

@@ -5,11 +5,7 @@ import { expect, vi } from "vitest";
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
 import { useAgentStatusStore } from "../features/agents/status";
-import {
-  getModulesSnapshot,
-  registerModuleRecencyProvider,
-  resetAcceptedManualModuleOrder,
-} from "../features/projects";
+import { getModulesSnapshot } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
 import { groupBacklog } from "../features/work-items";
 import * as api from "../shared/api/client";
@@ -118,8 +114,6 @@ export function resetModuleReorderHarness(): void {
   listModules.mockReset();
   listProjects.mockReset();
   reorderWorkItem.mockReset().mockResolvedValue(moved("module-c"));
-  registerModuleRecencyProvider(async () => ({}));
-  resetAcceptedManualModuleOrder();
   useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
   useAgentStatusStore.setState({ runs: {} });
   useClientStore.setState({
@@ -129,14 +123,10 @@ export function resetModuleReorderHarness(): void {
   });
 }
 
-/** The recency-sorted order an automatic project actually shows: a, b, c. */
+/** Render the server-ordered module collection used by reorder cases. */
 export async function renderAutomaticProject(): Promise<void> {
-  listModules.mockResolvedValue(modules("module-c", "module-b", "module-a"));
+  listModules.mockResolvedValue(modules("module-a", "module-b", "module-c"));
   listProjects.mockResolvedValue([project(false)]);
-  registerModuleRecencyProvider(async () => ({
-    "module-a": "2026-08-09T12:00:00Z",
-    "module-b": "2026-08-09T09:00:00Z",
-  }));
 
   render(<ModuleSurfaces />);
   await waitFor(() =>

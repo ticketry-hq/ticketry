@@ -11,6 +11,10 @@ from typing import Any
 import ptyprocess
 
 from apps.terminals.tmux import client as tmux_client
+from apps.terminals.tmux.input import (
+    stage_text as stage_tmux_text,
+    submit_text as submit_tmux_text,
+)
 from apps.terminals.tmux._core import (
     _server,
     _session_name,
@@ -335,6 +339,22 @@ class TmuxTerminalRuntime:
                 f"could not capture terminal for AgentRun {agent_run_id}"
             )
         return "\n".join(captured.stdout or []).encode("utf-8", "replace")
+
+    def submit_text(self, agent_run_id: str, text: str) -> None:
+        try:
+            submit_tmux_text(agent_run_id, text)
+        except Exception as exc:
+            raise TerminalRuntimeError(
+                f"could not submit terminal input for AgentRun {agent_run_id}"
+            ) from exc
+
+    def stage_text(self, agent_run_id: str, text: str) -> None:
+        try:
+            stage_tmux_text(agent_run_id, text)
+        except Exception as exc:
+            raise TerminalRuntimeError(
+                f"could not stage terminal input for AgentRun {agent_run_id}"
+            ) from exc
 
     def terminate(self, agent_run_id: str) -> TerminationResult:
         name = _session_name(agent_run_id)

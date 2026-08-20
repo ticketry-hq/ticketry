@@ -49,9 +49,14 @@ def test_terminate_current_run_is_zero_argument_and_forwards_request_identity(
 def test_fastmcp_registers_termination_with_an_empty_input_schema():
     from worktracker_agent.mcp.server import mcp
 
-    registered = asyncio.run(mcp.get_tools())["terminate_current_run"]
+    registered = asyncio.run(mcp.get_tool("terminate_current_run"))
 
-    assert registered.parameters == {"properties": {}, "type": "object"}
+    assert registered is not None
+    assert registered.parameters == {
+        "additionalProperties": False,
+        "properties": {},
+        "type": "object",
+    }
 
 
 def test_termination_service_forwards_authorization_to_studio():

@@ -143,6 +143,21 @@ def validate_required_skills(
     return normalized
 
 
+def validate_entry_skill(
+    *,
+    entry_skill: str | None,
+    required_skills: list[str],
+) -> str | None:
+    entry_skill = _optional_text(entry_skill)
+    if entry_skill is not None and entry_skill not in required_skills:
+        raise LaunchBindingError(
+            "entry_skill_must_be_required",
+            "The entry skill must also appear in required skills.",
+            field="entry_skill",
+        )
+    return entry_skill
+
+
 def apply_global_launch_default(
     *,
     agent: str | None,
@@ -154,9 +169,9 @@ def apply_global_launch_default(
 
     Read at launch time and never snapshotted into a binding, so changing the
     default in Settings takes effect on the next launch with no migration. The
-    default is one (provider, model, reasoning) triple: its model and reasoning
-    only apply to its own provider, so a binding that names a different provider
-    keeps CLI defaults rather than inheriting options validated for another CLI.
+    default is one (provider, model, reasoning) triple. Its reasoning only
+    applies with its model, so a binding that names a different model keeps the
+    CLI default rather than inheriting reasoning validated for another model.
     """
 
     if catalog is None:
@@ -170,11 +185,11 @@ def apply_global_launch_default(
         return default.provider, default.model, default.reasoning
     if agent != default.provider:
         return agent, model, reasoning
-    return (
-        agent,
-        default.model if model is None else model,
-        default.reasoning if reasoning is None else reasoning,
-    )
+    resolved_model = default.model if model is None else model
+    resolved_reasoning = reasoning
+    if resolved_reasoning is None and resolved_model == default.model:
+        resolved_reasoning = default.reasoning
+    return agent, resolved_model, resolved_reasoning
 
 
 def list_launch_bindings(project_id) -> list[LaunchBinding]:
@@ -216,6 +231,9 @@ def _validated_binding_candidate(issue_type, state, current, changes):
         prompt=changes.get("prompt", current.prompt if current else ""),
         required_skills=changes.get(
             "required_skills", current.required_skills if current else []
+        ),
+        entry_skill=changes.get(
+            "entry_skill", current.entry_skill if current else None
         ),
         model=changes.get("model", current.model if current else None),
         reasoning=changes.get("reasoning", current.reasoning if current else None),
@@ -265,6 +283,7 @@ def upsert_launch_binding(
             for field in (
                 "prompt",
                 "required_skills",
+                "entry_skill",
                 "model",
                 "reasoning",
                 "auto_start",

@@ -45,6 +45,7 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "0.1.0",
     "SCHEMA_PATH_PREFIX": r"^/api",
     "SCHEMA_PATH_PREFIX_TRIM": True,
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "SERVERS": [{"url": "/api"}],
     # Name the graph-run scheduling enum for what it is, not for its field.
     "ENUM_NAME_OVERRIDES": {

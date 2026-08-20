@@ -21,12 +21,6 @@ from django.db import close_old_connections
 from apps.documents import dao as documents_dao
 from apps.documents import design_docs
 from apps import worktracker_queries
-from apps.settings_store import config as cfgmod
-from apps.settings_store.config import (
-    NoConfigurationSelected,
-    module_link_path,
-    resolve_profile_index,
-)
 from apps.terminals.agents.prompts import (
     build_context_prompt,
     build_doc_chat_prompt,
@@ -40,14 +34,6 @@ from apps.worktrees import service as worktrees_service
 
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_profile_index() -> Optional[int]:
-    cfg = cfgmod.Config()
-    try:
-        return resolve_profile_index(cfg, None)
-    except NoConfigurationSelected:
-        return None
 
 
 def _prepare_design_dir(module_folder: Optional[str], rel: str) -> Optional[str]:
@@ -100,7 +86,6 @@ def _worktree_root(
 
 
 async def _build_prompt(
-    profile_index: int,
     *,
     is_planning: bool,
     is_instant: bool,
@@ -126,12 +111,6 @@ async def _build_prompt(
     worktree (#587), else ``None`` so the caller keeps the module-folder cwd.
     On error, prompt is None and error is a code string.
     """
-    config = cfgmod.Config()
-    config.current_profile_index = profile_index
-    profile = config.current_profile
-    if profile is None:
-        return None, None, None, "no_profile_selected"
-
     if is_doc_chat:
         # #625: a fresh, dedicated agent scoped to one generated document.
         # The frontend's doc_rel_path is relative to the doc's design dir
@@ -170,7 +149,7 @@ async def _build_prompt(
             doc_rel_path=resolved_rel,
             module_id=module_id,
             user_input=initial_prompt,
-            profile=profile,
+            resolved_module_folder=module_folder,
         )
         return prompt, design_abs, cwd, None
 
@@ -182,14 +161,12 @@ async def _build_prompt(
         module = next((m for m in modules if m.id == module_id), None)
         if module is None:
             return None, None, None, "module_not_found"
-        folder = module_link_path(profile, module_id)
         design_rel = design_docs.planning_design_dir(module, agent_run_id)
         design_abs = _prepare_design_dir(module_folder, design_rel)
         prompt = build_instant_change_prompt(
             module=module,
-            workspace_slug=profile.workspace_slug,
             project_id=project_id,
-            folder=folder,
+            folder=module_folder,
             user_input=instant_prompt or "",
             design_dir=design_rel if design_abs else None,
             allow_self_termination=get_adapter(agent).supports_worktracker_mcp,
@@ -210,15 +187,13 @@ async def _build_prompt(
             )
         except Exception as e:
             return None, None, None, f"task_fetch_failed: {e!s}"
-        folder = module_link_path(profile, module_id)
         design_rel = design_docs.planning_design_dir(module, agent_run_id)
         design_abs = _prepare_design_dir(module_folder, design_rel)
         prompt = build_planning_context_prompt(
             module=module,
             tasks=tasks,
-            workspace_slug=profile.workspace_slug,
             project_id=project_id,
-            folder=folder,
+            folder=module_folder,
             design_dir=design_rel if design_abs else None,
         )
         if initial_prompt:
@@ -272,7 +247,7 @@ async def _build_prompt(
         module_id=module_id,
         additional_prompt=initial_prompt,
         design_dir=design_rel if design_abs else None,
-        profile=profile,
+        resolved_module_folder=module_folder,
         workflow_prompt=workflow_prompt,
     )
     return prompt, design_abs, cwd, None

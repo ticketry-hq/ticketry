@@ -24,7 +24,7 @@ from studio_server.asgi import application
 from studio_server.contracts import AutomationAttemptRecord, LifecycleEvent
 from django.db import OperationalError, close_old_connections, transaction
 from django.utils import timezone
-from worktracker.models import Issue, IssueType, Project, State, Workspace
+from worktracker.models import Issue, IssueType, Project, State
 from worktracker.services import workflow_config
 from worktracker.tests.factories import fixture_issue_id, fixture_uuid
 
@@ -163,11 +163,8 @@ async def test_snapshot_stamp_precedes_run_rows_read(monkeypatch) -> None:
 
 
 async def test_state_group_change_is_published_to_active_project_client() -> None:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="catalog-live", name="Catalog live"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Catalog", slug="CATALOG"
+        id=uuid.uuid4(), name="Catalog", slug="CATALOG"
     )
     state = await sync_to_async(State.objects.create)(
         id=uuid.uuid4(),
@@ -218,11 +215,8 @@ async def test_state_group_change_is_published_to_active_project_client() -> Non
 
 
 async def _catalog_project(slug: str) -> Project:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug=slug, name=slug
-    )
     return await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Catalog", slug=slug.upper()
+        id=uuid.uuid4(), name="Catalog", slug=slug.upper()
     )
 
 
@@ -330,11 +324,8 @@ async def test_save_leaving_projection_unchanged_publishes_nothing() -> None:
 
 
 async def test_connect_reconciles_unresolved_automation_attempts() -> None:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="attempt-status", name="attempt-status"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Attempt status", slug="ATTEMPT"
+        id=uuid.uuid4(), name="Attempt status", slug="ATTEMPT"
     )
     issue_type = await _issue_type(project)
     issue = await sync_to_async(Issue.objects.create)(
@@ -377,11 +368,8 @@ async def test_connect_reconciles_unresolved_automation_attempts() -> None:
 
 
 async def test_connect_omits_dismissed_automation_attempts() -> None:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="dismissed-attempt", name="dismissed-attempt"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Dismissed attempt", slug="DISMISS"
+        id=uuid.uuid4(), name="Dismissed attempt", slug="DISMISS"
     )
     issue_type = await _issue_type(project)
     issue = await sync_to_async(Issue.objects.create)(
@@ -540,11 +528,8 @@ async def test_automation_attempt_frame_is_typed_and_project_scoped() -> None:
 async def test_committed_state_change_publishes_complete_project_delta() -> None:
     """The post-commit worktracker seam uses the existing project feed."""
 
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="status-feed", name="status-feed"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Status feed", slug="STATUS"
+        id=uuid.uuid4(), name="Status feed", slug="STATUS"
     )
     before = await sync_to_async(State.objects.create)(
         id=uuid.uuid4(), project=project, name="Todo", group="unstarted"
@@ -600,11 +585,8 @@ async def test_committed_state_change_publishes_complete_project_delta() -> None
 
 
 async def test_create_and_field_edit_publish_distinct_change_revisions() -> None:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="changed", name="changed"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Changed", slug="CHANGED"
+        id=uuid.uuid4(), name="Changed", slug="CHANGED"
     )
     state = await sync_to_async(State.objects.create)(
         id=uuid.uuid4(), project=project, name="Todo", group="unstarted"
@@ -646,14 +628,11 @@ async def test_create_and_field_edit_publish_distinct_change_revisions() -> None
 
 
 async def test_cursor_reconnect_replays_latest_project_projections_in_order() -> None:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="replay", name="replay"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Replay", slug="REPLAY"
+        id=uuid.uuid4(), name="Replay", slug="REPLAY"
     )
     other_project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Other", slug="OTHER"
+        id=uuid.uuid4(), name="Other", slug="OTHER"
     )
     todo = await sync_to_async(State.objects.create)(
         id=uuid.uuid4(), project=project, name="Todo", group="unstarted"
@@ -737,11 +716,8 @@ async def test_cursor_reconnect_replays_latest_project_projections_in_order() ->
 
 
 async def test_concurrent_project_transitions_publish_distinct_revisions() -> None:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="concurrent", name="concurrent"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Concurrent", slug="CONCUR"
+        id=uuid.uuid4(), name="Concurrent", slug="CONCUR"
     )
     states = [
         await sync_to_async(State.objects.create)(
@@ -797,11 +773,8 @@ async def test_concurrent_project_transitions_publish_distinct_revisions() -> No
 
 
 async def test_one_transaction_publishes_each_frozen_destination_after_commit() -> None:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="frozen", name="frozen"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Frozen", slug="FROZEN"
+        id=uuid.uuid4(), name="Frozen", slug="FROZEN"
     )
     states = [
         await sync_to_async(State.objects.create)(
@@ -846,11 +819,8 @@ async def test_one_transaction_publishes_each_frozen_destination_after_commit() 
 
 
 async def test_unset_destination_is_live_and_replayable() -> None:
-    workspace = await sync_to_async(Workspace.objects.create)(
-        id=uuid.uuid4(), slug="unset", name="unset"
-    )
     project = await sync_to_async(Project.objects.create)(
-        id=uuid.uuid4(), workspace=workspace, name="Unset", slug="UNSET"
+        id=uuid.uuid4(), name="Unset", slug="UNSET"
     )
     state = await sync_to_async(State.objects.create)(
         id=uuid.uuid4(), project=project, name="Todo", group="unstarted"

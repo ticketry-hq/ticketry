@@ -170,7 +170,6 @@ describe("terminal panel tab acceptance", () => {
       profiles: [
         {
           name: "local",
-          workspace_slug: "meml",
           agent_prompt: null,
           agent_prompts: {},
           module_links: [

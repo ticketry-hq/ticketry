@@ -10,8 +10,10 @@ Runtime code never invokes `npx` or downloads skill content. A valid existing
 provider-visible skill satisfies a workflow requirement regardless of its
 content digest. When a required name is absent, Ticketry installs its bundled
 snapshot as an offline fallback in the provider's normal persistent skill
-directory. Existing skills are never overwritten merely because the bundled
-snapshot changed. Installation is idempotent and can also be run manually with:
+directory. When the bundled snapshot changes, Ticketry updates copies whose
+bytes still match their recorded installation digest. It preserves user-owned
+and edited copies, and warns when a managed copy contains edits. Installation
+is idempotent and can also be run manually with:
 
 ```sh
 muxed-backend skills install

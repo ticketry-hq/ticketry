@@ -42,6 +42,9 @@ import {
   selectedTaskIndex,
   selectTaskAt,
 } from "../navigationContext";
+import {
+  activateSelectedWorkItem,
+} from "../workItemActivation";
 
 const FOCUSED_PANE_ACTIONS: Record<FocusedPane, ReadonlySet<string>> = {
   projects: new Set(["projects.next", "projects.previous", "projects.activate"]),
@@ -50,6 +53,7 @@ const FOCUSED_PANE_ACTIONS: Record<FocusedPane, ReadonlySet<string>> = {
     "tasks.next",
     "tasks.previous",
     "tasks.activate",
+    "tasks.choose-provider",
     "tasks.expand",
     "tasks.collapse",
   ]),
@@ -228,7 +232,9 @@ function routeTasksPane(
     case "tasks.previous":
       return moveTaskSelection(ctx, -1);
     case "tasks.activate":
-      return openAgentPicker(ctx);
+      return activateTask(ctx);
+    case "tasks.choose-provider":
+      return chooseTaskProvider(ctx);
     case "tasks.expand":
       return expandOrEnterTask(ctx);
     case "tasks.collapse":
@@ -236,6 +242,54 @@ function routeTasksPane(
     default:
       return false;
   }
+}
+
+function activateTask(ctx: NavigationContext): boolean {
+  const row = currentTaskRow(ctx);
+  if (!row) {
+    consume(ctx.event);
+    return true;
+  }
+  const { selectedProjectId, selectedModuleId } = ctx.tasks;
+  if (
+    selectedProjectId &&
+    selectedModuleId &&
+    ctx.tasks.itemsById[row.id] &&
+    activateSelectedWorkItem(
+      {
+        projectId: selectedProjectId,
+        moduleId: selectedModuleId,
+        taskId: row.id,
+      },
+      "open-default-terminal",
+    )
+  ) {
+    consume(ctx.event);
+    return true;
+  }
+  return openAgentPicker(ctx);
+}
+
+function chooseTaskProvider(ctx: NavigationContext): boolean {
+  consume(ctx.event);
+  const row = currentTaskRow(ctx);
+  const { selectedProjectId, selectedModuleId } = ctx.tasks;
+  if (
+    row &&
+    selectedProjectId &&
+    selectedModuleId &&
+    ctx.tasks.itemsById[row.id]
+  ) {
+    activateSelectedWorkItem(
+      {
+        projectId: selectedProjectId,
+        moduleId: selectedModuleId,
+        taskId: row.id,
+      },
+      "choose-provider",
+    );
+  }
+  return true;
 }
 
 function openAgentPicker(ctx: NavigationContext): boolean {
@@ -254,20 +308,10 @@ function openAgentPicker(ctx: NavigationContext): boolean {
     taskId: row.id,
   };
 
-  if (ctx.event.shiftKey) {
-    useModalStore.getState().pushModal({
-      type: "prompt-input",
-      payload: {
-        next: "agent-picker",
-        nextPayload: { mode: "open-with-prompt", ...launchContext },
-      },
-    });
-  } else {
-    useModalStore.getState().pushModal({
-      type: "agent-picker",
-      payload: { mode: "open", ...launchContext },
-    });
-  }
+  useModalStore.getState().pushModal({
+    type: "agent-picker",
+    payload: { mode: "open", ...launchContext },
+  });
   return true;
 }
 

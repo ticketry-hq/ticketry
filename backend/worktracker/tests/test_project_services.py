@@ -7,9 +7,8 @@ from worktracker.models import (
     IssueTypeTransition,
     Project,
     State,
-    Workspace,
 )
-from worktracker.services.errors import ConflictError, NotFoundError, ServiceError
+from worktracker.services.errors import ConflictError, ServiceError
 from worktracker.services.projects import (
     create_project,
     delete_project,
@@ -24,7 +23,6 @@ def test_create_project_seeds_defaults_and_persists_description(project):
         name="Second",
         slug="SEC",
         description="# Goals\n\nShip it.",
-        workspace_slug="meml",
     )
 
     assert created.slug == "SEC"
@@ -77,7 +75,7 @@ def test_create_project_seeds_defaults_and_persists_description(project):
 @pytest.mark.django_db
 def test_create_project_rejects_duplicate_slug(project):
     with pytest.raises(ServiceError) as excinfo:
-        create_project(name="Dup", slug="MEML", workspace_slug="meml")
+        create_project(name="Dup", slug="MEML")
 
     assert excinfo.value.status_code == 409
     assert Project.objects.filter(slug="MEML").count() == 1
@@ -119,34 +117,18 @@ def test_delete_project_cascades_owned_rows(project):
 
 
 @pytest.mark.django_db
-def test_create_project_missing_workspace_404():
-    with pytest.raises(NotFoundError):
-        create_project(name="NoWs", slug="NWS")
+def test_ordinary_project_creation_does_not_enter_onboarding():
+    created = create_project(name="First chosen project", slug="FIRST")
+    assert created.onboarding_required is False
 
 
 @pytest.mark.django_db
-def test_first_successful_project_creation_preserves_workspace_onboarding():
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(),
-        slug="meml",
-        name="meml",
-        onboarding_required=True,
-    )
-
-    create_project(name="First chosen project", slug="FIRST", workspace_slug="meml")
-
-    workspace.refresh_from_db()
-    assert Project.objects.filter(workspace=workspace).count() == 1
-    assert workspace.onboarding_required is True
-
-
-@pytest.mark.django_db
-def test_failed_project_creation_preserves_workspace_onboarding(project):
-    workspace = project.workspace
-    workspace.onboarding_required = True
-    workspace.save(update_fields=["onboarding_required"])
+def test_failed_project_creation_preserves_default_project_onboarding(project):
+    project.onboarding_required = True
+    project.save(update_fields=["onboarding_required"])
 
     with pytest.raises(ConflictError):
-        create_project(name="Duplicate", slug=project.slug, workspace_slug="meml")
+        create_project(name="Duplicate", slug=project.slug)
 
-    assert Workspace.objects.get(pk=workspace.id).onboarding_required is True
+    project.refresh_from_db()
+    assert project.onboarding_required is True

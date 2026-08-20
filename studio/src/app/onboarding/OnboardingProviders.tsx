@@ -41,11 +41,7 @@ function pickerValueFrom(catalog: ProviderCatalog): LaunchDefaultPickerValue {
 function permissiveCapability(provider: ConfigurableProvider): ProviderCapabilities {
   return {
     agent: provider,
-    accepts_model: true,
-    accepts_any_model: true,
-    model_aliases: [],
-    model_prefixes: [],
-    reasoning_levels: [],
+    models: [],
   };
 }
 

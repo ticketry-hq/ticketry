@@ -17,6 +17,7 @@ const ACTION_LABELS: Record<string, string> = {
   "edit-view.left": "Move left in edit view",
   "edit-view.right": "Move right in edit view",
   "edit-view.commit": "Enter edit-view selection",
+  "edit-view.choose-provider": "Choose provider for task",
   "edit-view.body-disengage": "Disengage body",
   "cycle-terminal-forward": "Cycle terminal forward",
   "toggle-terminal-panel": "Toggle terminal panel",
@@ -36,7 +37,8 @@ const ACTION_LABELS: Record<string, string> = {
   "modules.activate": "Open module",
   "tasks.next": "Next task",
   "tasks.previous": "Previous task",
-  "tasks.activate": "Open task",
+  "tasks.activate": "Show or launch task terminal",
+  "tasks.choose-provider": "Choose provider for task",
   "tasks.expand": "Expand task",
   "tasks.collapse": "Collapse task",
   search: "Search",
@@ -54,7 +56,7 @@ const ACTION_LABELS: Record<string, string> = {
   settings: "Settings",
   "set-folder": "Set Folder",
   "close-tab": "Close Tab",
-  "open-with-prompt": "Open with prompt",
+  "open-with-prompt": "Open task with prompt outside Stories",
 };
 
 const CONTEXT_LABELS: Record<EffectiveBinding["context"], string> = {

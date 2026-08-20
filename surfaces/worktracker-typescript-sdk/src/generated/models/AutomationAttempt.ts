@@ -24,7 +24,7 @@ import {
 } from './StatusEnum.js';
 
 /**
- *
+ * Public projection of one durable automated-launch attempt.
  * @export
  * @interface AutomationAttempt
  */
@@ -34,61 +34,61 @@ export interface AutomationAttempt {
      * @type {string}
      * @memberof AutomationAttempt
      */
-    attempt_id: string;
+    readonly attempt_id: string;
     /**
      *
      * @type {string}
      * @memberof AutomationAttempt
      */
-    root_attempt_id: string;
+    readonly root_attempt_id: string;
     /**
      *
      * @type {string}
      * @memberof AutomationAttempt
      */
-    retry_of_attempt_id: string | null;
+    readonly retry_of_attempt_id: string | null;
     /**
      *
      * @type {string}
      * @memberof AutomationAttempt
      */
-    work_item_id: string;
+    readonly work_item_id: string;
     /**
      *
      * @type {StatusEnum}
      * @memberof AutomationAttempt
      */
-    status: StatusEnum;
+    readonly status: StatusEnum;
     /**
      *
      * @type {string}
      * @memberof AutomationAttempt
      */
-    error: string | null;
+    readonly error: string | null;
     /**
      *
      * @type {any}
      * @memberof AutomationAttempt
      */
-    failure: any | null;
+    readonly failure: any | null;
     /**
      *
      * @type {boolean}
      * @memberof AutomationAttempt
      */
-    retryable: boolean;
+    readonly retryable: boolean;
     /**
      *
      * @type {string}
      * @memberof AutomationAttempt
      */
-    agent_run_id: string | null;
+    readonly agent_run_id: string | null;
     /**
      *
      * @type {string}
      * @memberof AutomationAttempt
      */
-    updated_at: string;
+    readonly updated_at: string;
 }
 
 
@@ -137,22 +137,12 @@ export function AutomationAttemptToJSON(json: any): AutomationAttempt {
     return AutomationAttemptToJSONTyped(json, false);
 }
 
-export function AutomationAttemptToJSONTyped(value?: AutomationAttempt | null, ignoreDiscriminator: boolean = false): any {
+export function AutomationAttemptToJSONTyped(value?: Omit<AutomationAttempt, 'attempt_id'|'root_attempt_id'|'retry_of_attempt_id'|'work_item_id'|'status'|'error'|'failure'|'retryable'|'agent_run_id'|'updated_at'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'attempt_id': value['attempt_id'],
-        'root_attempt_id': value['root_attempt_id'],
-        'retry_of_attempt_id': value['retry_of_attempt_id'],
-        'work_item_id': value['work_item_id'],
-        'status': StatusEnumToJSON(value['status']),
-        'error': value['error'],
-        'failure': value['failure'],
-        'retryable': value['retryable'],
-        'agent_run_id': value['agent_run_id'],
-        'updated_at': value['updated_at'],
     };
 }

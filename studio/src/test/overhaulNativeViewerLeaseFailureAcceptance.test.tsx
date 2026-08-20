@@ -108,7 +108,7 @@ describe("native viewer attachment acceptance", () => {
     });
   });
 
-  it("[overhaul-32] releases viewer ownership when the native attachment process exits", async () => {
+  it("[overhaul-32] releases viewer ownership without reporting a renderer failure when the native attachment process exits", async () => {
     const listeners = new Map<string, (event: { payload: unknown }) => void>();
     tauri.listen.mockImplementation(
       async (event: string, listener: (event: { payload: unknown }) => void) => {
@@ -151,9 +151,7 @@ describe("native viewer attachment acceptance", () => {
     await waitFor(() => {
       expect(requests.some((url) => url.endsWith("/release"))).toBe(true);
     });
-    expect(unavailable).toHaveBeenCalledWith(
-      "the native terminal attachment process exited",
-    );
+    expect(unavailable).not.toHaveBeenCalled();
     expect(tauri.invoke).not.toHaveBeenCalledWith("native_terminal_detach", {
       handle: "native-1",
     });

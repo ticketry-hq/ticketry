@@ -18,9 +18,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
-from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt
+from typing import Any, ClassVar, Dict, List
 from uuid import UUID
 from typing import Optional, Set
 from typing_extensions import Self
@@ -28,15 +27,14 @@ from pydantic_core import to_jsonable_python
 
 class IssueTypeTransition(BaseModel):
     """
-    One transition row plus the revision guard carried by write bodies.
+    One persisted transition row returned by reads and writes.
     """ # noqa: E501
     id: StrictInt
     issue_type: UUID
     from_state: UUID
     to_state: UUID
-    agent_allowed: Optional[StrictBool] = None
-    workflow_revision: Annotated[int, Field(strict=True, ge=0)]
-    __properties: ClassVar[List[str]] = ["id", "issue_type", "from_state", "to_state", "agent_allowed", "workflow_revision"]
+    agent_allowed: StrictBool
+    __properties: ClassVar[List[str]] = ["id", "issue_type", "from_state", "to_state", "agent_allowed"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -70,10 +68,16 @@ class IssueTypeTransition(BaseModel):
           are ignored.
         * OpenAPI `readOnly` fields are excluded.
         * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
             "id",
             "issue_type",
+            "from_state",
+            "to_state",
+            "agent_allowed",
         ])
 
         _dict = self.model_dump(
@@ -97,7 +101,6 @@ class IssueTypeTransition(BaseModel):
             "issue_type": obj.get("issue_type"),
             "from_state": obj.get("from_state"),
             "to_state": obj.get("to_state"),
-            "agent_allowed": obj.get("agent_allowed"),
-            "workflow_revision": obj.get("workflow_revision")
+            "agent_allowed": obj.get("agent_allowed")
         })
         return _obj

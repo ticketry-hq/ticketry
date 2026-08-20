@@ -134,7 +134,7 @@ def test_neighbor_from_another_project_rejected(client, project, auth):
 
     a = _make(client, project, auth, "A")
     other = Project.objects.create(
-        id=uuid.uuid4(), workspace=project.workspace, name="other", slug="OTHER"
+        id=uuid.uuid4(), name="other", slug="OTHER"
     )
     foreign_type = IssueType.objects.create(
         id=uuid.uuid4(), project=other, name="Task", level="task"

@@ -159,7 +159,6 @@ describe("terminal panel zone acceptance", () => {
       profiles: [
         {
           name: "local",
-          workspace_slug: "meml",
           agent_prompt: null,
           agent_prompts: {},
           module_links: [{ module_id: "module-1", path: "/repo/module-1" }],

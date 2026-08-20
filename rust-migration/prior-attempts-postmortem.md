@@ -24,13 +24,12 @@ cutover. The smaller attempt has the cleaner WorkTracker boundary, but creates a
 new standalone HTTP product and incompatible schema rather than replacing
 Ticketry in place.
 
-Ticketry's own earlier [`../WORKTRACKER_RUST_LLD.md`](../WORKTRACKER_RUST_LLD.md)
-explains the appeal of a standalone, agent-neutral tracker and maps many of the
-same WorkTracker rules. Its deliberate exclusion of launch bindings and coding
-agent concerns is useful for a domain library, but is also why that shape cannot
-be the whole Ticketry migration destination. Where that design or either Rust
-attempt differs from the current Django models/services, current Ticketry is
-the compatibility source of truth.
+An earlier standalone-tracker design explained the appeal of an agent-neutral
+domain library and mapped many of the same WorkTracker rules. Its deliberate
+exclusion of launch bindings and coding-agent concerns is useful for a domain
+library, but that shape cannot be the whole Ticketry migration destination.
+Where that design or either Rust attempt differs from the current Django models
+and services, current Ticketry is the compatibility source of truth.
 
 ## At-a-glance comparison
 

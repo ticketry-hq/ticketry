@@ -170,7 +170,6 @@ describe("terminal panel acceptance", () => {
       profiles: [
         {
           name: "local",
-          workspace_slug: "meml",
           agent_prompt: null,
           agent_prompts: {},
           module_links: [{ module_id: "module-1", path: "/repo/module-1" }],
@@ -356,5 +355,55 @@ describe("terminal panel acceptance", () => {
     // that lifecycle's own fallback, which the native viewer cases pin.
     const nativeHost = await screen.findByTestId("native-terminal-host");
     expect(nativeHost.getAttribute("data-terminal-renderer")).toBe("libghostty");
+  });
+
+  it("discards a compatibility-renderer focus signal raised while Settings is open", async () => {
+    useTerminalStore.setState({
+      sessions: { "session-agent": agentSession() },
+      sessionByRun: { "run-agent": "session-agent" },
+    });
+    const view = render(
+      <Terminal
+        sessionId="session-agent"
+        owner="studio"
+        focusSignal={0}
+        active
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId("terminal-host")).toBeTruthy());
+
+    act(() => useModalStore.getState().openSettings());
+    view.rerender(
+      <Terminal
+        sessionId="session-agent"
+        owner="studio"
+        focusSignal={1}
+        active
+      />,
+    );
+    expect(pool.entryFor("session-agent").focusCalls).toBe(0);
+
+    act(() => useModalStore.getState().popModal());
+    view.rerender(
+      <Terminal
+        sessionId="session-agent"
+        owner="studio"
+        focusSignal={1}
+        active
+      />,
+    );
+    expect(pool.entryFor("session-agent").focusCalls).toBe(0);
+
+    view.rerender(
+      <Terminal
+        sessionId="session-agent"
+        owner="studio"
+        focusSignal={2}
+        active
+      />,
+    );
+    await waitFor(() => {
+      expect(pool.entryFor("session-agent").focusCalls).toBe(1);
+    });
   });
 });

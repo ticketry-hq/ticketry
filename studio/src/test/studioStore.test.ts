@@ -7,7 +7,6 @@ vi.mock("../shared/api/client", async () => {
     listProjects: vi.fn(),
     listModules: vi.fn(),
     getTasks: vi.fn(),
-    putProfile: vi.fn(),
     createProject: vi.fn(),
     updateProject: vi.fn(),
     deleteProject: vi.fn(),
@@ -16,7 +15,6 @@ vi.mock("../shared/api/client", async () => {
 
 import * as api from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
-import { registerModuleRecencyProvider } from "../features/projects/utilities/moduleRecency";
 import { normalizeView, useStudioStore } from "../features/projects/store";
 import {
   getModulesSnapshot,
@@ -26,12 +24,12 @@ import {
 import { useClientStore } from "../state/clientStore";
 import { queryClient } from "../shared/query/queryClient";
 import type { Module, Project } from "../shared/api/types";
-import { seedConfig } from "../features/studio/stores/configStore";
+import { seedModuleLinks } from "../features/module-links";
+import { LAST_SELECTED_MODULE_KEY } from "../state/persistence";
 
 const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
 const listModules = api.listModules as ReturnType<typeof vi.fn>;
 const getTasks = api.getTasks as ReturnType<typeof vi.fn>;
-const putProfile = api.putProfile as ReturnType<typeof vi.fn>;
 const createProject = api.createProject as ReturnType<typeof vi.fn>;
 const updateProject = api.updateProject as ReturnType<typeof vi.fn>;
 const deleteProject = api.deleteProject as ReturnType<typeof vi.fn>;
@@ -40,17 +38,15 @@ const P = (id: string): Project => ({
   id,
   name: id,
   slug: id.toUpperCase(),
-  description: "",
-  manual_module_order: false,
+    description: "",
+    manual_module_order: false,
+    onboarding_required: false,
 });
 
 beforeEach(() => {
   localStorage.clear();
   queryClient.clear();
-  // Default: no recency provider registered → empty activity map → API order
-  // preserved (the generic-without-overlay behavior). Individual tests below
-  // register a provider to exercise the recency-ordered path.
-  registerModuleRecencyProvider(async () => ({}));
+  seedModuleLinks([]);
   listProjects.mockReset();
   listModules.mockReset().mockResolvedValue([]);
   getTasks.mockReset().mockResolvedValue({
@@ -60,7 +56,6 @@ beforeEach(() => {
     states: [],
     workItems: [],
   });
-  putProfile.mockReset();
   createProject.mockReset();
   updateProject.mockReset();
   deleteProject.mockReset();
@@ -102,24 +97,12 @@ describe("studioStore", () => {
     expect(listModules).toHaveBeenCalledWith("p1");
   });
 
-  it("restores the profile's recent module when its project loads", async () => {
+  it("restores the last selected module when its project loads", async () => {
     listModules.mockResolvedValue([
       { id: "m1", name: "Studio", project_id: "p1" },
     ]);
-    seedConfig({
-      recentProfileIndex: 0,
-      profiles: [
-        {
-          name: "Local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [{ module_id: "m1", path: "/repos/m1" }],
-          recent_project_id: "p1",
-          recent_module_ids: { p1: "m1" },
-        },
-      ],
-    });
+    localStorage.setItem(LAST_SELECTED_MODULE_KEY, "m1");
+    seedModuleLinks([{ id: "l1", module_id: "m1", local_path: "/repos/m1", created_at: "", updated_at: "" }]);
 
     await useStudioStore.getState().selectProject("p1");
 
@@ -142,20 +125,8 @@ describe("studioStore", () => {
       "studio.selectedTaskByModule:v1",
       JSON.stringify({ m1: "story-1" }),
     );
-    seedConfig({
-      recentProfileIndex: 0,
-      profiles: [
-        {
-          name: "Local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [{ module_id: "m1", path: "/repos/m1" }],
-          recent_project_id: "p1",
-          recent_module_ids: { p1: "m1" },
-        },
-      ],
-    });
+    localStorage.setItem(LAST_SELECTED_MODULE_KEY, "m1");
+    seedModuleLinks([{ id: "l1", module_id: "m1", local_path: "/repos/m1", created_at: "", updated_at: "" }]);
 
     await useStudioStore.getState().selectProject("p1");
 
@@ -164,20 +135,7 @@ describe("studioStore", () => {
 
   it("does not restore a remembered task missing from the loaded module", async () => {
     useStudioStore.setState({ selectedProjectId: "p1" });
-    seedConfig({
-      recentProfileIndex: 0,
-      profiles: [
-        {
-          name: "Local",
-          workspace_slug: "meml",
-          agent_prompt: null,
-          agent_prompts: {},
-          module_links: [{ module_id: "m1", path: "/repos/m1" }],
-          recent_project_id: "p1",
-          recent_module_ids: { p1: "m1" },
-        },
-      ],
-    });
+    seedModuleLinks([{ id: "l1", module_id: "m1", local_path: "/repos/m1", created_at: "", updated_at: "" }]);
     getTasks.mockResolvedValue({
       rootIds: [],
       children: {},
@@ -195,33 +153,13 @@ describe("studioStore", () => {
     expect(useClientStore.getState().selectedTaskId).toBeNull();
   });
 
-  it("persists a module selection in the active profile", async () => {
-    const profile = {
-      name: "Local",
-      workspace_slug: "meml",
-      agent_prompt: null,
-      agent_prompts: {},
-      module_links: [{ module_id: "m1", path: "/repos/m1" }],
-      recent_project_id: "p1",
-      recent_module_ids: {},
-    };
-    seedConfig({ recentProfileIndex: 0, profiles: [profile] });
+  it("persists a module selection as one frontend-only value", async () => {
+    seedModuleLinks([{ id: "l1", module_id: "m1", local_path: "/repos/m1", created_at: "", updated_at: "" }]);
     useStudioStore.setState({ selectedProjectId: "p1" });
-    putProfile.mockImplementation(async (_index, body) => ({
-      recent_profile_index: 0,
-      profiles: [body],
-      features: { sidebar: false, projects: false },
-    }));
 
     await useClientStore.getState().selectModule("m1");
 
-    expect(putProfile).toHaveBeenCalledWith(
-      0,
-      expect.objectContaining({
-        recent_project_id: "p1",
-        recent_module_ids: { p1: "m1" },
-      }),
-    );
+    expect(localStorage.getItem(LAST_SELECTED_MODULE_KEY)).toBe("m1");
   });
 
   it("does not refetch modules for the already-selected project", async () => {
@@ -238,29 +176,10 @@ describe("studioStore", () => {
     expect(getProjectsSnapshot()).toEqual([]);
   });
 
-  it("selectProject orders modules newest-activity-first via the recency provider (#831)", async () => {
-    const M = (id: string): Module =>
-      ({ id, name: id, project_id: "p1" }) as unknown as Module;
-    listModules.mockResolvedValue([M("a"), M("b"), M("c"), M("d")]);
-    registerModuleRecencyProvider(async () => ({
-      b: "2026-06-12T09:00:00+00:00",
-      d: "2026-06-18T09:00:00+00:00",
-    }));
-    await useStudioStore.getState().selectProject("p1");
-    // d (newest) then b (older) lead; a then c (no activity) keep API order.
-    expect(getModulesSnapshot("p1").map((m) => m.id)).toEqual([
-      "d",
-      "b",
-      "a",
-      "c",
-    ]);
-  });
-
-  it("selectProject keeps the API module order when no provider is registered", async () => {
+  it("selectProject keeps the server's module order", async () => {
     const M = (id: string): Module =>
       ({ id, name: id, project_id: "p1" }) as unknown as Module;
     listModules.mockResolvedValue([M("a"), M("b"), M("c")]);
-    // beforeEach registered the no-op provider (empty map) — API order stands.
     await useStudioStore.getState().selectProject("p1");
     expect(getModulesSnapshot("p1").map((m) => m.id)).toEqual([
       "a",
@@ -269,29 +188,10 @@ describe("studioStore", () => {
     ]);
   });
 
-  it("selectProject falls back to the API order when the provider errors", async () => {
-    const M = (id: string): Module =>
-      ({ id, name: id, project_id: "p1" }) as unknown as Module;
-    listModules.mockResolvedValue([M("a"), M("b"), M("c")]);
-    registerModuleRecencyProvider(async () => {
-      throw new Error("runs endpoint down");
-    });
-    await useStudioStore.getState().selectProject("p1");
-    expect(getModulesSnapshot("p1").map((m) => m.id)).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
-    expect(useStudioStore.getState().error).toBeNull();
-  });
-
-  it("selectProject fronts the project in the recent-project MRU list", async () => {
+  it("selectProject does not create a recent-project MRU list", async () => {
     await useStudioStore.getState().selectProject("p1");
     await useStudioStore.getState().selectProject("p2");
-    expect(JSON.parse(localStorage.getItem("studio.recentProjects")!)).toEqual([
-      "p2",
-      "p1",
-    ]);
+    expect(localStorage.getItem("studio.recentProjects")).toBeNull();
   });
 });
 

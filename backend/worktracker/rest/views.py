@@ -6,7 +6,6 @@ from django.shortcuts import get_object_or_404
 from rest_framework import mixins, viewsets
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.views import APIView
 
 from worktracker.models import (
     AgentModel,
@@ -17,37 +16,33 @@ from worktracker.models import (
     State,
 )
 from worktracker.module_order import canonical_module_queryset
+from worktracker.rest.domain_ops import (
+    IssueTypeDomainActionMixin,
+    StateReorderActionMixin,
+    ProjectOnboardingActionMixin,
+)
 from worktracker.rest.serializers import (
     AgentModelSerializer,
     IssueTypeSerializer,
     IssueTypeDeleteSerializer,
-    IssueTypeTransitionSerializer,
-    LaunchBindingSerializer,
     ModuleCreateSerializer,
     ModuleSerializer,
     ProjectSerializer,
     ProviderSerializer,
     ReasoningLevelSerializer,
     StateSerializer,
-    WorkflowRevisionSerializer,
-    WorkspaceSerializer,
 )
 from worktracker.rest.schema import DeleteRequestBodyAutoSchema
-from worktracker.services import launch_bindings, scoped_workflows, workflow_config
-from worktracker.services.errors import ConflictError, ValidationError
+from worktracker.rest.workflow_views import (
+    IssueTypeTransitionDetailView,
+    IssueTypeTransitionListView,
+    LaunchBindingDetailView,
+    LaunchBindingListView,
+)
+from worktracker.services import workflow_config
+from worktracker.services.errors import ConflictError
 from worktracker.services.modules import create_module
 from worktracker.services.projects import create_project, delete_project, update_project
-from worktracker.services.workspaces import get_installation_workspace
-
-
-@extend_schema_view(get=extend_schema(tags=["Workspace"]))
-class WorkspaceRetrieveView(APIView):
-    """Retrieve the installation workspace before project selection."""
-
-    @extend_schema(operation_id="retrieveWorkspace", responses=WorkspaceSerializer)
-    def get(self, request):
-        workspace = get_installation_workspace()
-        return Response(WorkspaceSerializer(workspace).data)
 
 
 @extend_schema_view(
@@ -57,6 +52,7 @@ class WorkspaceRetrieveView(APIView):
     destroy=extend_schema(operation_id="deleteProject", tags=["Projects"]),
 )
 class ProjectViewSet(
+    ProjectOnboardingActionMixin,
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
     mixins.UpdateModelMixin,
@@ -220,7 +216,7 @@ class ProjectConfigurationViewSet(
     partial_update=extend_schema(operation_id="updateState", tags=["States"]),
     destroy=extend_schema(operation_id="deleteState", tags=["States"]),
 )
-class StateViewSet(ProjectConfigurationViewSet):
+class StateViewSet(StateReorderActionMixin, ProjectConfigurationViewSet):
     queryset = State.objects.order_by("sort_order", "created_at")
     serializer_class = StateSerializer
     lookup_url_kwarg = "state_id"
@@ -255,7 +251,7 @@ class StateViewSet(ProjectConfigurationViewSet):
         responses={204: None},
     ),
 )
-class IssueTypeViewSet(ProjectConfigurationViewSet):
+class IssueTypeViewSet(IssueTypeDomainActionMixin, ProjectConfigurationViewSet):
     schema = DeleteRequestBodyAutoSchema()
     queryset = IssueType.objects.order_by("sort_order", "created_at")
     serializer_class = IssueTypeSerializer
@@ -286,146 +282,5 @@ class IssueTypeViewSet(ProjectConfigurationViewSet):
         serializer.is_valid(raise_exception=True)
         workflow_config.delete_issue_type(
             self.kwargs["type_id"], serializer.validated_data.get("reassign_to")
-        )
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class IssueTypeTransitionListView(APIView):
-    """Canonical transition collection read and revision-guarded create."""
-
-    @extend_schema(
-        operation_id="listIssueTypeTransitions",
-        tags=["Workflows"],
-        responses=IssueTypeTransitionSerializer(many=True),
-    )
-    def get(self, request, type_id):
-        transitions = scoped_workflows.list_transitions(type_id)
-        return Response(IssueTypeTransitionSerializer(transitions, many=True).data)
-
-    @extend_schema(
-        operation_id="createIssueTypeTransition",
-        tags=["Workflows"],
-        request=IssueTypeTransitionSerializer,
-        responses=IssueTypeTransitionSerializer,
-    )
-    def post(self, request, type_id):
-        serializer = IssueTypeTransitionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        edge = scoped_workflows.add_transition(
-            type_id,
-            from_state_id=data["from_state"].id,
-            to_state_id=data["to_state"].id,
-            agent_allowed=data.get("agent_allowed", True),
-            workflow_revision=data["workflow_revision"],
-        )
-        return Response(
-            IssueTypeTransitionSerializer(edge).data,
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class IssueTypeTransitionDetailView(APIView):
-    """Permission update/delete at a transition's composite domain key."""
-
-    @extend_schema(
-        operation_id="updateIssueTypeTransition",
-        tags=["Workflows"],
-        request=IssueTypeTransitionSerializer,
-        responses=IssueTypeTransitionSerializer,
-    )
-    def patch(self, request, type_id, from_state_id, to_state_id):
-        unexpected = set(request.data) - {"agent_allowed", "workflow_revision"}
-        if unexpected:
-            raise ValidationError(
-                "Only agent_allowed and workflow_revision may be updated."
-            )
-        serializer = IssueTypeTransitionSerializer(data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        if "agent_allowed" not in data:
-            raise ValidationError("agent_allowed is required.")
-        if "workflow_revision" not in data:
-            raise ValidationError("workflow_revision is required.")
-        edge = scoped_workflows.set_transition_permission(
-            type_id,
-            from_state_id,
-            to_state_id,
-            agent_allowed=data["agent_allowed"],
-            workflow_revision=data["workflow_revision"],
-        )
-        return Response(IssueTypeTransitionSerializer(edge).data)
-
-    @extend_schema(
-        operation_id="deleteIssueTypeTransition",
-        tags=["Workflows"],
-        request={"application/json": {"type": "object"}},
-        responses={204: None},
-    )
-    def delete(self, request, type_id, from_state_id, to_state_id):
-        serializer = WorkflowRevisionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        scoped_workflows.remove_transition(
-            type_id,
-            from_state_id,
-            to_state_id,
-            workflow_revision=serializer.validated_data["workflow_revision"],
-        )
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class LaunchBindingListView(APIView):
-    """Canonical project-scoped collection read."""
-
-    @extend_schema(
-        operation_id="listLaunchBindings",
-        tags=["Launch Bindings"],
-        responses=LaunchBindingSerializer(many=True),
-    )
-    def get(self, request, project_id):
-        bindings = launch_bindings.list_launch_bindings(project_id)
-        return Response(LaunchBindingSerializer(bindings, many=True).data)
-
-
-class LaunchBindingDetailView(APIView):
-    """Revision-guarded upsert/delete at the row's composite domain key."""
-
-    @extend_schema(
-        operation_id="upsertLaunchBinding",
-        tags=["Launch Bindings"],
-        request=LaunchBindingSerializer,
-        responses=LaunchBindingSerializer,
-    )
-    def put(self, request, type_id, state_id):
-        serializer = LaunchBindingSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = dict(serializer.validated_data)
-        workflow_revision = data.pop("workflow_revision")
-        result = launch_bindings.upsert_launch_binding(
-            type_id,
-            state_id,
-            workflow_revision=workflow_revision,
-            **data,
-        )
-        return Response(
-            LaunchBindingSerializer(result.binding).data,
-            status=(
-                status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
-            ),
-        )
-
-    @extend_schema(
-        operation_id="deleteLaunchBinding",
-        tags=["Launch Bindings"],
-        request={"application/json": {"type": "object"}},
-        responses={204: None},
-    )
-    def delete(self, request, type_id, state_id):
-        guard = WorkflowRevisionSerializer(data=request.data)
-        guard.is_valid(raise_exception=True)
-        launch_bindings.delete_launch_binding(
-            type_id,
-            state_id,
-            workflow_revision=guard.validated_data["workflow_revision"],
         )
         return Response(status=status.HTTP_204_NO_CONTENT)

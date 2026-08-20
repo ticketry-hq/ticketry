@@ -16,10 +16,12 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 from worktracker_sdk.generated.models.issue_type_transition import IssueTypeTransition
+from worktracker_sdk.generated.models.issue_type_transition_create import IssueTypeTransitionCreate
 from worktracker_sdk.generated.models.patched_issue_type_transition import PatchedIssueTypeTransition
+from worktracker_sdk.generated.models.workflow_revision import WorkflowRevision
 
 from worktracker_sdk.generated.api_client import ApiClient, RequestSerialized
 from worktracker_sdk.generated.api_response import ApiResponse
@@ -43,7 +45,7 @@ class WorkflowsApi:
     def create_issue_type_transition(
         self,
         type_id: UUID,
-        issue_type_transition: IssueTypeTransition,
+        issue_type_transition_create: IssueTypeTransitionCreate,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -59,12 +61,12 @@ class WorkflowsApi:
     ) -> IssueTypeTransition:
         """create_issue_type_transition
 
-        Canonical transition collection read and revision-guarded create.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param type_id: (required)
         :type type_id: UUID
-        :param issue_type_transition: (required)
-        :type issue_type_transition: IssueTypeTransition
+        :param issue_type_transition_create: (required)
+        :type issue_type_transition_create: IssueTypeTransitionCreate
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -89,7 +91,7 @@ class WorkflowsApi:
 
         _param = self._create_issue_type_transition_serialize(
             type_id=type_id,
-            issue_type_transition=issue_type_transition,
+            issue_type_transition_create=issue_type_transition_create,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -97,7 +99,7 @@ class WorkflowsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeTransition",
+            '201': "IssueTypeTransition",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -114,7 +116,7 @@ class WorkflowsApi:
     def create_issue_type_transition_with_http_info(
         self,
         type_id: UUID,
-        issue_type_transition: IssueTypeTransition,
+        issue_type_transition_create: IssueTypeTransitionCreate,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -130,12 +132,12 @@ class WorkflowsApi:
     ) -> ApiResponse[IssueTypeTransition]:
         """create_issue_type_transition
 
-        Canonical transition collection read and revision-guarded create.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param type_id: (required)
         :type type_id: UUID
-        :param issue_type_transition: (required)
-        :type issue_type_transition: IssueTypeTransition
+        :param issue_type_transition_create: (required)
+        :type issue_type_transition_create: IssueTypeTransitionCreate
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -160,7 +162,7 @@ class WorkflowsApi:
 
         _param = self._create_issue_type_transition_serialize(
             type_id=type_id,
-            issue_type_transition=issue_type_transition,
+            issue_type_transition_create=issue_type_transition_create,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -168,7 +170,7 @@ class WorkflowsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeTransition",
+            '201': "IssueTypeTransition",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -185,7 +187,7 @@ class WorkflowsApi:
     def create_issue_type_transition_without_preload_content(
         self,
         type_id: UUID,
-        issue_type_transition: IssueTypeTransition,
+        issue_type_transition_create: IssueTypeTransitionCreate,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -201,12 +203,12 @@ class WorkflowsApi:
     ) -> RESTResponseType:
         """create_issue_type_transition
 
-        Canonical transition collection read and revision-guarded create.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param type_id: (required)
         :type type_id: UUID
-        :param issue_type_transition: (required)
-        :type issue_type_transition: IssueTypeTransition
+        :param issue_type_transition_create: (required)
+        :type issue_type_transition_create: IssueTypeTransitionCreate
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -231,7 +233,7 @@ class WorkflowsApi:
 
         _param = self._create_issue_type_transition_serialize(
             type_id=type_id,
-            issue_type_transition=issue_type_transition,
+            issue_type_transition_create=issue_type_transition_create,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -239,7 +241,7 @@ class WorkflowsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "IssueTypeTransition",
+            '201': "IssueTypeTransition",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -251,7 +253,7 @@ class WorkflowsApi:
     def _create_issue_type_transition_serialize(
         self,
         type_id,
-        issue_type_transition,
+        issue_type_transition_create,
         _request_auth,
         _content_type,
         _headers,
@@ -279,8 +281,8 @@ class WorkflowsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if issue_type_transition is not None:
-            _body_params = issue_type_transition
+        if issue_type_transition_create is not None:
+            _body_params = issue_type_transition_create
 
 
         # set the HTTP header `Accept`
@@ -336,6 +338,7 @@ class WorkflowsApi:
         from_state_id: UUID,
         to_state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -351,7 +354,7 @@ class WorkflowsApi:
     ) -> None:
         """delete_issue_type_transition
 
-        Permission update/delete at a transition's composite domain key.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param from_state_id: (required)
         :type from_state_id: UUID
@@ -359,6 +362,8 @@ class WorkflowsApi:
         :type to_state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -385,6 +390,7 @@ class WorkflowsApi:
             from_state_id=from_state_id,
             to_state_id=to_state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -411,6 +417,7 @@ class WorkflowsApi:
         from_state_id: UUID,
         to_state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -426,7 +433,7 @@ class WorkflowsApi:
     ) -> ApiResponse[None]:
         """delete_issue_type_transition
 
-        Permission update/delete at a transition's composite domain key.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param from_state_id: (required)
         :type from_state_id: UUID
@@ -434,6 +441,8 @@ class WorkflowsApi:
         :type to_state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -460,6 +469,7 @@ class WorkflowsApi:
             from_state_id=from_state_id,
             to_state_id=to_state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -486,6 +496,7 @@ class WorkflowsApi:
         from_state_id: UUID,
         to_state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -501,7 +512,7 @@ class WorkflowsApi:
     ) -> RESTResponseType:
         """delete_issue_type_transition
 
-        Permission update/delete at a transition's composite domain key.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param from_state_id: (required)
         :type from_state_id: UUID
@@ -509,6 +520,8 @@ class WorkflowsApi:
         :type to_state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -535,6 +548,7 @@ class WorkflowsApi:
             from_state_id=from_state_id,
             to_state_id=to_state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -556,6 +570,7 @@ class WorkflowsApi:
         from_state_id,
         to_state_id,
         type_id,
+        workflow_revision,
         _request_auth,
         _content_type,
         _headers,
@@ -587,9 +602,26 @@ class WorkflowsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
+        if workflow_revision is not None:
+            _body_params = workflow_revision
 
 
 
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
 
         # authentication setting
         _auth_settings: List[str] = [
@@ -633,7 +665,7 @@ class WorkflowsApi:
     ) -> List[IssueTypeTransition]:
         """list_issue_type_transitions
 
-        Canonical transition collection read and revision-guarded create.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param type_id: (required)
         :type type_id: UUID
@@ -700,7 +732,7 @@ class WorkflowsApi:
     ) -> ApiResponse[List[IssueTypeTransition]]:
         """list_issue_type_transitions
 
-        Canonical transition collection read and revision-guarded create.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param type_id: (required)
         :type type_id: UUID
@@ -767,7 +799,7 @@ class WorkflowsApi:
     ) -> RESTResponseType:
         """list_issue_type_transitions
 
-        Canonical transition collection read and revision-guarded create.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param type_id: (required)
         :type type_id: UUID
@@ -880,6 +912,7 @@ class WorkflowsApi:
         self,
         state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -901,6 +934,8 @@ class WorkflowsApi:
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -926,6 +961,7 @@ class WorkflowsApi:
         _param = self._remove_state_from_issue_type_workflow_serialize(
             state_id=state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -951,6 +987,7 @@ class WorkflowsApi:
         self,
         state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -972,6 +1009,8 @@ class WorkflowsApi:
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -997,6 +1036,7 @@ class WorkflowsApi:
         _param = self._remove_state_from_issue_type_workflow_serialize(
             state_id=state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1022,6 +1062,7 @@ class WorkflowsApi:
         self,
         state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1043,6 +1084,8 @@ class WorkflowsApi:
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1068,6 +1111,7 @@ class WorkflowsApi:
         _param = self._remove_state_from_issue_type_workflow_serialize(
             state_id=state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1088,6 +1132,7 @@ class WorkflowsApi:
         self,
         state_id,
         type_id,
+        workflow_revision,
         _request_auth,
         _content_type,
         _headers,
@@ -1117,9 +1162,26 @@ class WorkflowsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
+        if workflow_revision is not None:
+            _body_params = workflow_revision
 
 
 
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
 
         # authentication setting
         _auth_settings: List[str] = [
@@ -1150,7 +1212,7 @@ class WorkflowsApi:
         from_state_id: UUID,
         to_state_id: UUID,
         type_id: UUID,
-        patched_issue_type_transition: Optional[PatchedIssueTypeTransition] = None,
+        patched_issue_type_transition: PatchedIssueTypeTransition,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1166,7 +1228,7 @@ class WorkflowsApi:
     ) -> IssueTypeTransition:
         """update_issue_type_transition
 
-        Permission update/delete at a transition's composite domain key.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param from_state_id: (required)
         :type from_state_id: UUID
@@ -1174,7 +1236,7 @@ class WorkflowsApi:
         :type to_state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
-        :param patched_issue_type_transition:
+        :param patched_issue_type_transition: (required)
         :type patched_issue_type_transition: PatchedIssueTypeTransition
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -1229,7 +1291,7 @@ class WorkflowsApi:
         from_state_id: UUID,
         to_state_id: UUID,
         type_id: UUID,
-        patched_issue_type_transition: Optional[PatchedIssueTypeTransition] = None,
+        patched_issue_type_transition: PatchedIssueTypeTransition,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1245,7 +1307,7 @@ class WorkflowsApi:
     ) -> ApiResponse[IssueTypeTransition]:
         """update_issue_type_transition
 
-        Permission update/delete at a transition's composite domain key.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param from_state_id: (required)
         :type from_state_id: UUID
@@ -1253,7 +1315,7 @@ class WorkflowsApi:
         :type to_state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
-        :param patched_issue_type_transition:
+        :param patched_issue_type_transition: (required)
         :type patched_issue_type_transition: PatchedIssueTypeTransition
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -1308,7 +1370,7 @@ class WorkflowsApi:
         from_state_id: UUID,
         to_state_id: UUID,
         type_id: UUID,
-        patched_issue_type_transition: Optional[PatchedIssueTypeTransition] = None,
+        patched_issue_type_transition: PatchedIssueTypeTransition,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1324,7 +1386,7 @@ class WorkflowsApi:
     ) -> RESTResponseType:
         """update_issue_type_transition
 
-        Permission update/delete at a transition's composite domain key.
+        Issue-type-scoped transition CRUD with revision-guarded writes.
 
         :param from_state_id: (required)
         :type from_state_id: UUID
@@ -1332,7 +1394,7 @@ class WorkflowsApi:
         :type to_state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
-        :param patched_issue_type_transition:
+        :param patched_issue_type_transition: (required)
         :type patched_issue_type_transition: PatchedIssueTypeTransition
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request

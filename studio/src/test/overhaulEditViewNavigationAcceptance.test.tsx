@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalKeymap } from "../app/navigation/useGlobalKeymap";
+import { StudioFooter } from "../app/shell/StudioFooter";
 import { SelectedTicketContent } from "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent";
 import type {
   ScratchRow,
@@ -224,6 +225,7 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
           agent_run_id: "run-1",
           task_id: "story-1",
           module_id: "module-1",
+          agent: "codex",
           scope: "task",
           state: "working",
           started_at: "2026-08-07T12:00:00Z",
@@ -294,29 +296,42 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
   });
 
-  it("lands Right where Enter lands", async () => {
+  it("[overhaul-148] names the Stories Enter actions without losing the Right Arrow body route", () => {
+    render(
+      <>
+        <KeymapHarness rows={EXPANDED_ROWS} />
+        <StudioFooter />
+      </>,
+    );
+
+    expect(screen.getByText("— Expand / Dive").previousElementSibling)
+      .toHaveTextContent("→");
+    expect(screen.getByText("— Open Terminal").previousElementSibling)
+      .toHaveTextContent("Enter");
+    expect(screen.getByText("— Choose Agent").previousElementSibling)
+      .toHaveTextContent("⇧Enter");
+    expect(screen.queryByText("— Dive")).toBeNull();
+  });
+
+  it("keeps Right as the explicit body dive while Enter reveals the live terminal", async () => {
     await renderEditViewWorkspace(EXPANDED_ROWS);
 
     press("ArrowRight");
-    const afterRight = {
-      zone: useClientStore.getState().editViewZone,
-      engaged: useClientStore.getState().editViewBodyEngaged,
-      active: useClientStore.getState().workspaces["story-1"]?.active,
-      focused: document.activeElement,
-    };
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
 
     useClientStore.getState().setEditViewZone("stories");
+    useClientStore.getState().setActive("story-1", "details");
     press("Enter");
 
-    expect({
-      zone: useClientStore.getState().editViewZone,
-      engaged: useClientStore.getState().editViewBodyEngaged,
-      active: useClientStore.getState().workspaces["story-1"]?.active,
-      focused: document.activeElement,
-    }).toEqual(afterRight);
+    expect(useClientStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+    expect(useClientStore.getState().workspaces["story-1"]?.active).toBe(
+      "terminal",
+    );
   });
 
-  it("lands Right where Enter lands on the scratch workspace row", async () => {
+  it("keeps Right as the scratch workspace dive while Enter does nothing", async () => {
     await renderScratchWorkspace();
 
     // The scratch row has nothing to expand, so Right dives immediately.
@@ -334,11 +349,8 @@ describe("overhaul acceptance — Edit view navigation zones", () => {
     useClientStore.getState().setEditViewZone("stories");
     press("Enter");
 
-    expect({
-      zone: useClientStore.getState().editViewZone,
-      engaged: useClientStore.getState().editViewBodyEngaged,
-      focused: document.activeElement,
-    }).toEqual(afterRight);
+    expect(useClientStore.getState().editViewZone).toBe("stories");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
   });
 
   it("keeps Right in the Stories zone when no navigable Task workspace is mounted", () => {

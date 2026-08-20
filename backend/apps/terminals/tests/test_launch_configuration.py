@@ -25,7 +25,6 @@ from worktracker.models import (
     Provider,
     ReasoningLevel,
     State,
-    Workspace,
 )
 
 from .conftest import write_profiles
@@ -43,10 +42,7 @@ def launch_policy():
     model, _ = AgentModel.objects.get_or_create(provider=provider, name="sonnet")
     model.permitted_reasoning_levels.add(reasoning)
     AgentModel.objects.get_or_create(provider=provider, name="opus")
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    project = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
-    )
+    project = Project.objects.create(id=uuid.uuid4(), name="meml", slug="MEML")
     issue_type = IssueType.objects.create(
         id=uuid.uuid4(), project=project, name="Implementation", level="task"
     )
@@ -81,6 +77,7 @@ def launch_policy():
         model=model,
         reasoning=reasoning,
         required_skills=["to-spec"],
+        entry_skill="to-spec",
     )
     return issue, binding
 
@@ -132,6 +129,33 @@ def test_blank_configuration_launches_the_global_default(
     assert resolved.agent == "codex"
     assert resolved.model == "gpt-5.4"
     assert resolved.reasoning == "high"
+
+
+def test_binding_model_does_not_inherit_another_models_default_reasoning(
+    launch_policy, provider_catalog
+):
+    issue, binding = launch_policy
+    provider = Provider.objects.get(slug="codex")
+    binding.model = AgentModel.objects.get_or_create(
+        provider=provider, name="gpt-5.6-luna"
+    )[0]
+    binding.reasoning = None
+    binding.save(update_fields=["model", "reasoning"])
+    provider_catalog(
+        global_default={
+            "provider": "codex",
+            "model": "gpt-5.6-sol",
+            "reasoning": "ultra",
+        }
+    )
+
+    resolved = real_resolve_task_launch_configuration(str(issue.id))
+
+    assert (resolved.agent, resolved.model, resolved.reasoning) == (
+        "codex",
+        "gpt-5.6-luna",
+        None,
+    )
 
 
 def test_changing_the_default_takes_effect_on_the_next_launch(
@@ -187,6 +211,61 @@ def test_explicit_binding_overrides_the_global_default(launch_policy, provider_c
     assert resolved.model == "sonnet"
     assert resolved.reasoning == "high"
     assert resolved.required_skills == ("to-spec",)
+    assert resolved.entry_skill == "to-spec"
+
+
+@pytest.mark.parametrize(
+    ("source", "model_name", "reasoning_name"),
+    (
+        ("global_default", "gpt-5.6-terra", "low"),
+        ("global_default", "gpt-5.6-luna", "low"),
+        ("workflow_binding", "gpt-5.6-terra", "low"),
+        ("workflow_binding", "gpt-5.6-luna", "low"),
+        ("workflow_binding", "gpt-5.6-luna", None),
+    ),
+)
+def test_codex_catalog_selection_reaches_launch_resolution_unchanged(
+    launch_policy,
+    provider_catalog,
+    source,
+    model_name,
+    reasoning_name,
+):
+    issue, binding = launch_policy
+    provider = Provider.objects.get(slug="codex")
+    model, _ = AgentModel.objects.get_or_create(provider=provider, name=model_name)
+    reasoning = (
+        ReasoningLevel.objects.get_or_create(name=reasoning_name)[0]
+        if reasoning_name is not None
+        else None
+    )
+    if reasoning is not None:
+        model.permitted_reasoning_levels.add(reasoning)
+
+    if source == "global_default":
+        binding.model = None
+        binding.reasoning = None
+        binding.save(update_fields=["model", "reasoning"])
+        provider_catalog(
+            global_default={
+                "provider": "codex",
+                "model": model_name,
+                "reasoning": reasoning_name,
+            }
+        )
+    else:
+        binding.model = model
+        binding.reasoning = reasoning
+        binding.save(update_fields=["model", "reasoning"])
+        provider_catalog(global_default=None)
+
+    resolved = real_resolve_task_launch_configuration(str(issue.id))
+
+    assert (resolved.agent, resolved.model, resolved.reasoning) == (
+        "codex",
+        model_name,
+        reasoning_name,
+    )
 
 
 def test_deactivated_provider_binding_is_blocked_not_substituted(
@@ -341,6 +420,7 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
         unexpected_reresolution,
     )
     runtime = patch_terminal_runtime(monkeypatch)
+    monkeypatch.setattr(runtime, "capture_screen", lambda _run_id: "❯ ".encode())
     monkeypatch.setattr(launch.documents_watch, "start_watch", lambda **kwargs: None)
     monkeypatch.setattr(
         session_module,
@@ -361,9 +441,12 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
     )
 
     command = runtime.requests[0].command
+    submitted_message = runtime.submitted[0][1]
     assert fetched_tasks == [(str(issue.project_id), str(issue.id))]
+    assert submitted_message == "/to-spec"
     assert "Configured workflow prompt" in command
     assert "Required skills available for this invocation: to-spec" in command
+    assert "Edited after launch resolution" not in command
     assert "Additional user instructions:" not in command
     assert "--plugin-dir" not in command
     assert "LEGACY PROFILE PROMPT" not in command

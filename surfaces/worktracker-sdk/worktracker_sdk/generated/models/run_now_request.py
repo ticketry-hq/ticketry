@@ -27,7 +27,7 @@ from pydantic_core import to_jsonable_python
 
 class RunNowRequest(BaseModel):
     """
-    RunNowRequest
+    Caller origin accepted by the guarded workflow transition.
     """ # noqa: E501
     origin: Optional[OriginEnum] = None
     __properties: ClassVar[List[str]] = ["origin"]

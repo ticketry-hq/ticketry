@@ -29,7 +29,7 @@ from pydantic_core import to_jsonable_python
 
 class PatchedWorkItemPatch(BaseModel):
     """
-    Fields supported by the domain service's guarded partial update.
+    Model-derived allowlist for the guarded work-item partial update.
     """ # noqa: E501
     name: Optional[Annotated[str, Field(strict=True, max_length=512)]] = None
     description: Optional[StrictStr] = None

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LaunchConfigurationForm } from "../features/workflows/LaunchConfigurationForm";
 import type {
   IssueType,
+  LaunchBindingInput,
   ProviderCapabilities,
   State,
 } from "../shared/api/types";
@@ -10,33 +11,34 @@ import type {
 const capabilities: ProviderCapabilities[] = [
   {
     agent: "claude",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: ["opus", "sonnet"],
-    model_prefixes: ["claude-"],
-    reasoning_levels: ["low", "medium", "high", "xhigh", "max"],
+    models: [
+      { name: "opus", reasoning_levels: ["low", "medium", "high"] },
+      { name: "sonnet", reasoning_levels: ["low", "medium"] },
+    ],
   },
   {
     agent: "gemini",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: [],
-    model_prefixes: ["gemini-"],
-    // Gemini declares no reasoning levels at all, so any value is invalid.
-    reasoning_levels: [],
+    models: [],
   },
 ];
 
 const issueType = { id: "story", name: "Story" } as IssueType;
 const state = { id: "ready", name: "Ready" } as State;
 
-function renderForm(save: ReturnType<typeof vi.fn>) {
+type SaveBinding = (binding: LaunchBindingInput) => Promise<unknown>;
+
+function createSave() {
+  return vi.fn<SaveBinding>().mockResolvedValue(undefined);
+}
+
+function renderForm(save: SaveBinding) {
   render(
     <LaunchConfigurationForm
       binding={{
         state_id: "ready",
         prompt: "do the thing",
         required_skills: [],
+        entry_skill: null,
         agent: "claude",
         model: "opus",
         reasoning: "high",
@@ -57,7 +59,7 @@ describe("LaunchConfigurationForm", () => {
     // the setState calls from the same event had not landed and the write
     // carried the previous reasoning — a pair the server 422s, losing the save
     // while the form already showed the new provider.
-    const save = vi.fn().mockResolvedValue(undefined);
+    const save = createSave();
     renderForm(save);
 
     fireEvent.change(screen.getByRole("combobox", { name: "Agent/provider" }), {
@@ -67,6 +69,7 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "do the thing",
+      entry_skill: null,
       agent: "gemini",
       model: null,
       reasoning: null,
@@ -74,7 +77,7 @@ describe("LaunchConfigurationForm", () => {
   });
 
   it("writes a reasoning change against the provider on screen", async () => {
-    const save = vi.fn().mockResolvedValue(undefined);
+    const save = createSave();
     renderForm(save);
 
     fireEvent.change(screen.getByRole("combobox", { name: "Reasoning" }), {
@@ -84,9 +87,28 @@ describe("LaunchConfigurationForm", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save).toHaveBeenCalledWith({
       prompt: "do the thing",
+      entry_skill: null,
       agent: "claude",
       model: "opus",
       reasoning: "low",
+    });
+  });
+
+  it("writes a model change with its normalized reasoning, not stale render values", async () => {
+    const save = createSave();
+    renderForm(save);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Model" }), {
+      target: { value: "sonnet" },
+    });
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save).toHaveBeenCalledWith({
+      prompt: "do the thing",
+      entry_skill: null,
+      agent: "claude",
+      model: "sonnet",
+      reasoning: null,
     });
   });
 });

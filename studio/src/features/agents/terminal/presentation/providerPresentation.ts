@@ -51,26 +51,35 @@ export function isTerminalProvider(
 }
 
 /**
- * The tab/chip colour classes for one terminal run.
+ * Provider colour classes shared by terminal tabs, dormant run chips, and the
+ * pre-launch agent picker.
  *
  * A live run wears its provider hue: filled with near-black ink when selected,
  * pane ground with provider-coloured ink when not. An ended run (exited, lost,
  * errored) drops the hue entirely for neutral grey in both states — colour means
  * the run is still going. A run whose provider Studio does not recognise is
  * presented the same neutral way rather than guessing a hue.
+ *
+ * The picker has no run yet. It passes `live: true` to mean "about to run" so
+ * every choice keeps its provider hue. Its filtered provider slugs must remain
+ * recognised here: an unknown slug uses the same neutral fallback as an ended
+ * run and would silently grey out that picker choice.
  */
 export function providerToneClasses({
   agent,
   live,
   selected,
+  ground,
 }: {
   agent: string | null | undefined;
   live: boolean;
   selected: boolean;
+  ground: "pane-bg" | "pane-panel";
 }): string {
   const classes =
     live && isTerminalProvider(agent) ? PROVIDER_CLASSES[agent] : ENDED_CLASSES;
+  const groundClass = ground === "pane-panel" ? "bg-pane-panel" : "bg-pane-bg";
   return selected
     ? `${classes.fill} ${classes.edge} text-provider-ink`
-    : `bg-pane-bg ${classes.edge} ${classes.text}`;
+    : `${groundClass} ${classes.edge} ${classes.text}`;
 }

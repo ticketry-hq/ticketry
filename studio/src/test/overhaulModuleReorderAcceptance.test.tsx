@@ -13,12 +13,11 @@ vi.mock("../shared/api/client", async () => {
   };
 });
 
-import { loadModules, loadProjects } from "../features/projects";
+import { loadProjects } from "../features/projects";
 import type { WorkItem } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 import { dragModule } from "./moduleDragGestures";
 import {
-  PROJECT_ID,
   deferred,
   listModules,
   listProjects,
@@ -42,8 +41,8 @@ describe("module sidebar reorder acceptance", () => {
     const settle = deferred<WorkItem>();
     reorderWorkItem.mockReturnValue(settle.promise);
 
-    // Drag the last module above the first. The order the user can see is the
-    // activity-sorted one, which only Studio knows — so it must be the baseline.
+    // Drag the last module above the first. The visible server order is the
+    // first-drag baseline.
     dragModule("module-c", "module-a", "near");
 
     await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
@@ -65,8 +64,7 @@ describe("module sidebar reorder acceptance", () => {
 
     const settle = deferred<WorkItem>();
     reorderWorkItem.mockReturnValue(settle.promise);
-    // The server has taken the project manual and now owns the whole order.
-    listProjects.mockResolvedValue([project(true)]);
+    // The server now owns the whole order.
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
     dragModule("module-c", "module-a", "near");
@@ -80,9 +78,6 @@ describe("module sidebar reorder acceptance", () => {
 
     settle.resolve(moved("module-c"));
 
-    // Recency still reports a as the most recent module; a manual project must
-    // ignore it and keep the server's persisted order.
-    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
     );
@@ -90,64 +85,26 @@ describe("module sidebar reorder acceptance", () => {
     expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true);
   });
 
-  it("keeps an accepted first drag when the project refresh fails", async () => {
+  it("[overhaul-59] keeps module order independent of an older projects read", async () => {
     await renderAutomaticProject();
 
-    // The write is accepted — which is what takes the project manual — and the
-    // server now returns its persisted rank order. Only the project read fails,
-    // so the sole thing left claiming "automatic" is the stale cached project.
-    const settle = deferred<WorkItem>();
-    reorderWorkItem.mockReturnValue(settle.promise);
-    listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
-    listProjects.mockRejectedValue(new Error("offline"));
-
-    dragModule("module-c", "module-a", "near");
-    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
-    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
-
-    settle.resolve(moved("module-c"));
-
-    // Recency still names a the most recent module. Layering it back on would
-    // restore a, b, c and visually undo the drag the server just accepted.
-    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
-    await waitFor(() =>
-      expect(rows().every((row) => row.getAttribute("draggable") === "true")).toBe(true),
-    );
-    expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]);
-    expect(tabStripOrder()).toEqual(["C", "A", "B"]);
-
-    // Once the project list is readable again it is authoritative, and the
-    // remembered reorder steps aside for it.
-    listProjects.mockResolvedValue([project(false)]);
-    listModules.mockResolvedValue(modules("module-c", "module-b", "module-a"));
-    await loadModules(PROJECT_ID);
-
-    await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]),
-    );
-  });
-
-  it("[overhaul-59] ignores a projects read that predates an accepted first drag", async () => {
-    await renderAutomaticProject();
-
-    // Another consumer starts refreshing projects while the project is still
-    // automatic. Keep that old answer in flight across the accepted reorder.
+    // Another consumer has a projects read in flight across the accepted reorder.
     const staleProjects = deferred<ReturnType<typeof project>[]>();
     listProjects.mockReturnValueOnce(staleProjects.promise);
     const staleLoad = loadProjects().catch(() => undefined);
-    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(1));
 
     const settle = deferred<WorkItem>();
     reorderWorkItem.mockReturnValue(settle.promise);
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
-    listProjects.mockResolvedValue([project(true)]);
 
     dragModule("module-c", "module-a", "near");
     await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
     settle.resolve(moved("module-c"));
 
-    // Settlement must retire the pre-reorder request and start a new mode read.
-    await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(3));
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["module-c", "module-a", "module-b"]),
+    );
     staleProjects.resolve([project(false)]);
     await staleLoad;
 
@@ -179,7 +136,6 @@ describe("module sidebar reorder acceptance", () => {
 
     // Retry: the same gesture is accepted and the authoritative order arrives.
     reorderWorkItem.mockResolvedValue(moved("module-c"));
-    listProjects.mockResolvedValue([project(true)]);
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
     dragModule("module-c", "module-a", "near");

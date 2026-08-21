@@ -10,7 +10,14 @@ from rest_framework import serializers
 
 
 class WorkItemReorderSerializer(serializers.Serializer):
-    """The moved work item's neighbors, plus a module's first-drag baseline.
+    """The moved task's neighbors."""
+
+    before_id = serializers.UUIDField(required=False, allow_null=True)
+    after_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class ModulePresentationReorderSerializer(serializers.Serializer):
+    """The moved module's neighbors, plus its first-drag baseline.
 
     ``initial_order_ids`` is the complete module order the user could see when
     they started the very first drag in an automatic project. The server

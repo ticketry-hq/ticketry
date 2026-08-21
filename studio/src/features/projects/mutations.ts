@@ -7,7 +7,7 @@ import { queryKeys } from "../../shared/query/keys";
 import { toast } from "../../state/clientStore";
 import { getModulesSnapshot } from "./queries";
 import { planModuleReorder, type ModuleReorderPlan } from "./internal/moduleReorder";
-import type { Module, WorkItem } from "../../shared/api/types";
+import type { Module, ModulePresentation } from "../../shared/api/types";
 
 interface ReorderModuleVariables {
   projectId: string;
@@ -49,7 +49,7 @@ const MODULE_REORDER_KEY = ["module-reorder"] as const;
 export function useReorderModule(projectId: string | null): ModuleReorderControls {
   const isPending = useIsMutating({ mutationKey: MODULE_REORDER_KEY }, queryClient) > 0;
   const mutation = useMutation<
-    WorkItem,
+    ModulePresentation,
     Error,
     ReorderModuleVariables,
     ReorderModuleContext
@@ -57,7 +57,7 @@ export function useReorderModule(projectId: string | null): ModuleReorderControl
     {
       mutationKey: MODULE_REORDER_KEY,
       mutationFn: ({ moduleId, plan }) =>
-        api.reorderWorkItem(moduleId, {
+        api.reorderModulePresentation(moduleId, {
           before_id: plan.beforeId,
           after_id: plan.afterId,
           initial_order_ids: plan.initialOrderIds,

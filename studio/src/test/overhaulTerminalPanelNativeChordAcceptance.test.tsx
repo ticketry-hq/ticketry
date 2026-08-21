@@ -146,6 +146,29 @@ describe("terminal panel — native chord", () => {
     keymap.unmount();
   });
 
+  it("[overhaul-169] leaves typing mode when the native terminal reports Cmd+Escape", async () => {
+    const keymap = renderHook(() => useGlobalKeymap());
+    await act(async () => {});
+    useClientStore.setState({
+      editViewBodyEngaged: true,
+      navigationModality: "pointer",
+    });
+
+    // AppKit delivers Cmd+Escape to the engaged view, so the WebView sees no
+    // keydown at all; the chord is the only way Studio's state can follow the
+    // keyboard the view just handed back.
+    act(() => {
+      host.reportChord("body-disengage");
+    });
+
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+    expect(useClientStore.getState().navigationModality).toBe("keyboard");
+    // The zone the developer was typing in stays the current zone.
+    expect(useClientStore.getState().editViewZone).toBe("active-tab-body");
+
+    keymap.unmount();
+  });
+
   it("[overhaul-91-native] leaves the browser build with no host subscription", async () => {
     runtime.desktop = false;
     renderHook(() => useGlobalKeymap());

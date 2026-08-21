@@ -16,14 +16,14 @@ def test_workspace_route_is_removed(client, auth):
 
 
 @pytest.mark.django_db
-def test_workspace_is_absent_from_the_generated_drf_schema(client, auth):
+def test_legacy_global_workspace_is_absent_from_the_generated_drf_schema(client, auth):
     schema_response = client.get(
         f"{BASE}/schema", headers={**auth, "accept": "application/json"}
     )
     assert schema_response.status_code == 200
     schema = schema_response.json()
-    assert all("workspace" not in path.lower() for path in schema["paths"])
-    assert all("workspace" not in name.lower() for name in schema["components"]["schemas"])
+    assert "/workspace" not in schema["paths"]
+    assert "Workspace" not in schema["components"]["schemas"]
 
 
 def test_global_drf_handler_preserves_structured_service_error_bodies():

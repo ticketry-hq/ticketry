@@ -19,6 +19,7 @@ import { routeTerminalPanelToggle } from "../../features/terminal-panel";
 import { subscribeNativeTerminalChords } from "./nativeTerminalChords";
 import type { TreeRow } from "../shell/ticket-workspace/tasks/TasksPane";
 import { studioKeymapRegistry } from "./keymapRegistry";
+import { useRestoreAndSelectModule } from "../../features/module-tabs";
 
 const EMPTY_TASK_ROWS: TreeRow[] = [];
 
@@ -34,10 +35,16 @@ function hasOpenModal(
 /** Installs the application-wide keyboard precedence and delegates actions. */
 export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
   const taskRowsRef = useRef(taskRows);
+  const restoreAndSelectModule = useRestoreAndSelectModule();
+  const restoreAndSelectModuleRef = useRef(restoreAndSelectModule);
 
   useEffect(() => {
     taskRowsRef.current = taskRows;
   }, [taskRows]);
+
+  useEffect(() => {
+    restoreAndSelectModuleRef.current = restoreAndSelectModule;
+  }, [restoreAndSelectModule]);
 
   useEffect(() => {
     function onCaptureKeyDown(event: KeyboardEvent): void {
@@ -117,6 +124,7 @@ export function useGlobalKeymap(taskRows: TreeRow[] = EMPTY_TASK_ROWS): void {
             event,
             focusedPaneActionIds(ui.focusedPane),
           ),
+          restoreAndSelectModuleRef.current,
         )
       ) {
         return;

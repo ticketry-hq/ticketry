@@ -7,6 +7,7 @@ from worktracker.models import (
     AgentModel,
     Issue,
     IssueType,
+    ModulePresentation,
     Project,
     Provider,
     ReasoningLevel,
@@ -38,14 +39,9 @@ class ProjectSerializer(serializers.ModelSerializer):
             "name",
             "slug",
             "description",
-            "manual_module_order",
             "onboarding_required",
         )
-        # The ordering mode is a durable project fact clients read to decide
-        # which server-owned module ordering rule applies. It flips only through
-        # the module reorder domain operation, never through this general-purpose
-        # project update.
-        read_only_fields = ("id", "manual_module_order", "onboarding_required")
+        read_only_fields = ("id", "onboarding_required")
         extra_kwargs = {"slug": {"validators": []}}
 
     def validate_slug(self, value):
@@ -97,6 +93,30 @@ class ModuleCreateSerializer(serializers.Serializer):
 
     name = serializers.CharField(max_length=512)
     issue_type_id = serializers.UUIDField()
+
+
+class ModulePresentationSerializer(serializers.ModelSerializer):
+    """Server-owned presentation state addressed by module identity."""
+
+    module_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = ModulePresentation
+        fields = ("module_id", "rank", "tab_hidden")
+        read_only_fields = ("module_id", "rank", "tab_hidden")
+
+
+class ModulePresentationWriteSerializer(serializers.ModelSerializer):
+    """Generated PUT body containing only caller-owned tab visibility."""
+
+    tab_hidden = serializers.BooleanField()
+
+    class Meta:
+        model = ModulePresentation
+        fields = ("tab_hidden",)
+
+    def to_representation(self, instance):
+        return ModulePresentationSerializer(instance).data
 
 
 class StateSerializer(serializers.ModelSerializer):

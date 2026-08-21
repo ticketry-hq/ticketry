@@ -7,14 +7,16 @@ vi.mock("../shared/api/client", async () => {
   );
   return {
     ...actual,
+    listModulePresentations: vi.fn(),
     listModules: vi.fn(),
     listProjects: vi.fn(),
-    reorderWorkItem: vi.fn(),
+    reorderModulePresentation: vi.fn(),
+    updateModulePresentation: vi.fn(),
   };
 });
 
 import { loadProjects } from "../features/projects";
-import type { WorkItem } from "../shared/api/types";
+import type { ModulePresentation } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 import { dragModule } from "./moduleDragGestures";
 import {
@@ -25,7 +27,7 @@ import {
   moved,
   project,
   renderAutomaticProject,
-  reorderWorkItem,
+  reorderModulePresentation,
   resetModuleReorderHarness,
   rowFor,
   rows,
@@ -38,15 +40,15 @@ describe("module sidebar reorder acceptance", () => {
 
   it("[overhaul-42] freezes the visible module order on the first sidebar drag", async () => {
     await renderAutomaticProject();
-    const settle = deferred<WorkItem>();
-    reorderWorkItem.mockReturnValue(settle.promise);
+    const settle = deferred<ModulePresentation>();
+    reorderModulePresentation.mockReturnValue(settle.promise);
 
     // Drag the last module above the first. The visible server order is the
     // first-drag baseline.
     dragModule("module-c", "module-a", "near");
 
-    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
-    expect(reorderWorkItem).toHaveBeenCalledWith("module-c", {
+    await waitFor(() => expect(reorderModulePresentation).toHaveBeenCalled());
+    expect(reorderModulePresentation).toHaveBeenCalledWith("module-c", {
       before_id: null,
       after_id: "module-a",
       initial_order_ids: ["module-a", "module-b", "module-c"],
@@ -62,8 +64,8 @@ describe("module sidebar reorder acceptance", () => {
   it("[overhaul-43] converges on authoritative project and module data after a drag", async () => {
     await renderAutomaticProject();
 
-    const settle = deferred<WorkItem>();
-    reorderWorkItem.mockReturnValue(settle.promise);
+    const settle = deferred<ModulePresentation>();
+    reorderModulePresentation.mockReturnValue(settle.promise);
     // The server now owns the whole order.
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
@@ -94,12 +96,12 @@ describe("module sidebar reorder acceptance", () => {
     const staleLoad = loadProjects().catch(() => undefined);
     await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(1));
 
-    const settle = deferred<WorkItem>();
-    reorderWorkItem.mockReturnValue(settle.promise);
+    const settle = deferred<ModulePresentation>();
+    reorderModulePresentation.mockReturnValue(settle.promise);
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
     dragModule("module-c", "module-a", "near");
-    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
+    await waitFor(() => expect(reorderModulePresentation).toHaveBeenCalled());
     settle.resolve(moved("module-c"));
 
     await waitFor(() =>
@@ -117,7 +119,7 @@ describe("module sidebar reorder acceptance", () => {
   it("[overhaul-44] restores the previous order when a reorder is refused, and retries", async () => {
     await renderAutomaticProject();
 
-    reorderWorkItem.mockRejectedValueOnce(new Error("nope"));
+    reorderModulePresentation.mockRejectedValueOnce(new Error("nope"));
     dragModule("module-c", "module-a", "near");
 
     // The optimistic order is shown first, then withdrawn with an explanation.
@@ -135,7 +137,7 @@ describe("module sidebar reorder acceptance", () => {
     ).toBe(true);
 
     // Retry: the same gesture is accepted and the authoritative order arrives.
-    reorderWorkItem.mockResolvedValue(moved("module-c"));
+    reorderModulePresentation.mockResolvedValue(moved("module-c"));
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
 
     dragModule("module-c", "module-a", "near");
@@ -162,7 +164,7 @@ describe("module sidebar reorder acceptance", () => {
     dragModule("module-b", "module-a", "far");
     dragModule("module-a", "module-a", "far");
 
-    expect(reorderWorkItem).not.toHaveBeenCalled();
+    expect(reorderModulePresentation).not.toHaveBeenCalled();
     expect(sidebarOrder()).toEqual(["module-a", "module-b", "module-c"]);
 
     // A drop must not select the module it landed on, but an ordinary click must.
@@ -170,7 +172,9 @@ describe("module sidebar reorder acceptance", () => {
     fireEvent.click(target);
     expect(useClientStore.getState().modulesCursorId).toBeNull();
 
-    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(reorderModulePresentation).toHaveBeenCalledTimes(1),
+    );
     fireEvent.click(rowFor("module-b"));
     expect(useClientStore.getState().modulesCursorId).toBe("module-b");
   });

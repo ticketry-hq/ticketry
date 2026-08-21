@@ -23,6 +23,7 @@ __all__ = [
     "IssueTypesApi",
     "LaunchBindingsApi",
     "ModelsApi",
+    "ModulePresentationsApi",
     "ModulesApi",
     "ProjectsApi",
     "ProvidersApi",
@@ -78,19 +79,22 @@ __all__ = [
     "IssueTypeDelete",
     "IssueTypeTransition",
     "IssueTypeTransitionCreate",
-    "KindEnum",
     "LaunchBinding",
     "LaunchBindingWrite",
     "LaunchedAgentResponse",
     "LevelEnum",
     "LifecycleAccepted",
     "LifecycleEvent",
+    "LifecycleEventKindEnum",
     "Module",
     "ModuleCreate",
     "ModuleFolderValidation",
     "ModuleFolderValidationResult",
     "ModuleLink",
     "ModuleLinkWrite",
+    "ModulePresentation",
+    "ModulePresentationReorder",
+    "ModulePresentationWrite",
     "ModuleShell",
     "Open",
     "OriginEnum",
@@ -135,6 +139,9 @@ __all__ = [
     "WorkItemCreate",
     "WorkItemReorder",
     "WorkflowRevision",
+    "WorkspaceTabIdentity",
+    "WorkspaceTabIdentityKindEnum",
+    "WorkspaceTabOrder",
     "WorktreeStatus",
 ]
 
@@ -143,6 +150,7 @@ from worktracker_sdk.generated.api.attachments_api import AttachmentsApi as Atta
 from worktracker_sdk.generated.api.issue_types_api import IssueTypesApi as IssueTypesApi
 from worktracker_sdk.generated.api.launch_bindings_api import LaunchBindingsApi as LaunchBindingsApi
 from worktracker_sdk.generated.api.models_api import ModelsApi as ModelsApi
+from worktracker_sdk.generated.api.module_presentations_api import ModulePresentationsApi as ModulePresentationsApi
 from worktracker_sdk.generated.api.modules_api import ModulesApi as ModulesApi
 from worktracker_sdk.generated.api.projects_api import ProjectsApi as ProjectsApi
 from worktracker_sdk.generated.api.providers_api import ProvidersApi as ProvidersApi
@@ -202,19 +210,22 @@ from worktracker_sdk.generated.models.issue_type import IssueType as IssueType
 from worktracker_sdk.generated.models.issue_type_delete import IssueTypeDelete as IssueTypeDelete
 from worktracker_sdk.generated.models.issue_type_transition import IssueTypeTransition as IssueTypeTransition
 from worktracker_sdk.generated.models.issue_type_transition_create import IssueTypeTransitionCreate as IssueTypeTransitionCreate
-from worktracker_sdk.generated.models.kind_enum import KindEnum as KindEnum
 from worktracker_sdk.generated.models.launch_binding import LaunchBinding as LaunchBinding
 from worktracker_sdk.generated.models.launch_binding_write import LaunchBindingWrite as LaunchBindingWrite
 from worktracker_sdk.generated.models.launched_agent_response import LaunchedAgentResponse as LaunchedAgentResponse
 from worktracker_sdk.generated.models.level_enum import LevelEnum as LevelEnum
 from worktracker_sdk.generated.models.lifecycle_accepted import LifecycleAccepted as LifecycleAccepted
 from worktracker_sdk.generated.models.lifecycle_event import LifecycleEvent as LifecycleEvent
+from worktracker_sdk.generated.models.lifecycle_event_kind_enum import LifecycleEventKindEnum as LifecycleEventKindEnum
 from worktracker_sdk.generated.models.module import Module as Module
 from worktracker_sdk.generated.models.module_create import ModuleCreate as ModuleCreate
 from worktracker_sdk.generated.models.module_folder_validation import ModuleFolderValidation as ModuleFolderValidation
 from worktracker_sdk.generated.models.module_folder_validation_result import ModuleFolderValidationResult as ModuleFolderValidationResult
 from worktracker_sdk.generated.models.module_link import ModuleLink as ModuleLink
 from worktracker_sdk.generated.models.module_link_write import ModuleLinkWrite as ModuleLinkWrite
+from worktracker_sdk.generated.models.module_presentation import ModulePresentation as ModulePresentation
+from worktracker_sdk.generated.models.module_presentation_reorder import ModulePresentationReorder as ModulePresentationReorder
+from worktracker_sdk.generated.models.module_presentation_write import ModulePresentationWrite as ModulePresentationWrite
 from worktracker_sdk.generated.models.module_shell import ModuleShell as ModuleShell
 from worktracker_sdk.generated.models.open import Open as Open
 from worktracker_sdk.generated.models.origin_enum import OriginEnum as OriginEnum
@@ -259,4 +270,7 @@ from worktracker_sdk.generated.models.work_item_batch import WorkItemBatch as Wo
 from worktracker_sdk.generated.models.work_item_create import WorkItemCreate as WorkItemCreate
 from worktracker_sdk.generated.models.work_item_reorder import WorkItemReorder as WorkItemReorder
 from worktracker_sdk.generated.models.workflow_revision import WorkflowRevision as WorkflowRevision
+from worktracker_sdk.generated.models.workspace_tab_identity import WorkspaceTabIdentity as WorkspaceTabIdentity
+from worktracker_sdk.generated.models.workspace_tab_identity_kind_enum import WorkspaceTabIdentityKindEnum as WorkspaceTabIdentityKindEnum
+from worktracker_sdk.generated.models.workspace_tab_order import WorkspaceTabOrder as WorkspaceTabOrder
 from worktracker_sdk.generated.models.worktree_status import WorktreeStatus as WorktreeStatus

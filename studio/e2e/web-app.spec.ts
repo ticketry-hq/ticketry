@@ -171,7 +171,8 @@ test.describe("complete browser application", () => {
     page,
   }) => {
     await openModule(page, names.module);
-    await page.getByRole("button", { name: "Add module" }).click();
+    await page.getByRole("button", { name: "Open module picker" }).click();
+    await page.getByRole("option", { name: "Create new module" }).click();
 
     const dialog = page.getByRole("dialog", { name: "Add Module" });
     await expect(dialog).toBeVisible();

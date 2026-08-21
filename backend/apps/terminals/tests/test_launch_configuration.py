@@ -445,7 +445,7 @@ async def test_task_spawn_carries_one_resolved_snapshot_to_provider_command(
     assert fetched_tasks == [(str(issue.project_id), str(issue.id))]
     assert submitted_message == "/to-spec"
     assert "Configured workflow prompt" in command
-    assert "Required skills available for this invocation: to-spec" in command
+    assert "Required skills available for this invocation: /to-spec" in command
     assert "Edited after launch resolution" not in command
     assert "Additional user instructions:" not in command
     assert "--plugin-dir" not in command

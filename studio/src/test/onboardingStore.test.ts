@@ -28,7 +28,6 @@ const project = (onboarding_required: boolean) => ({
   name: "Coding",
   slug: "CDN",
   description: "",
-  manual_module_order: false,
   onboarding_required,
 });
 

@@ -1,6 +1,6 @@
 import { readVersionedItem } from "../shared/storage/versioned";
 
-export const SIDEBAR_KEY = "studio.sidebarVisible:v1";
+export const SIDEBAR_KEY = "studio.sidebarVisible:v2";
 export const PANEL_LAYOUT_KEY = "studio.panelLayout:v1";
 export const EXPANDED_IDS_KEY = "studio.expandedSubtasks:v1";
 export const COLLAPSED_STATE_IDS_KEY = "studio.collapsedStates:v2";
@@ -33,6 +33,14 @@ export function readLastSelectedModule(): string | null {
 export function writeLastSelectedModule(moduleId: string): void {
   try {
     localStorage.setItem(LAST_SELECTED_MODULE_KEY, moduleId);
+  } catch {
+    /* unavailable storage leaves the current in-memory selection intact */
+  }
+}
+
+export function clearLastSelectedModule(): void {
+  try {
+    localStorage.removeItem(LAST_SELECTED_MODULE_KEY);
   } catch {
     /* unavailable storage leaves the current in-memory selection intact */
   }

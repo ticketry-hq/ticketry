@@ -104,7 +104,7 @@ def inject_codex_lifecycle_settings(
     argv: list[str],
     agent_run_id: str,
     lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
-    mcp_url: str = DEFAULT_MCP_URL,
+    mcp_url: str | None = DEFAULT_MCP_URL,
 ) -> list[str]:
     """Splice invocation-level lifecycle hooks and MCP config into Codex.
 
@@ -129,37 +129,24 @@ def inject_codex_lifecycle_settings(
 
     hooks = build_codex_lifecycle_hooks(agent_run_id, lifecycle_url)
     hooks_toml = _to_toml_inline(hooks)
-    authorization = issue_run_authorization(agent_run_id)
-    mcp_servers_toml = _to_toml_inline(
-        build_codex_mcp_servers(mcp_url, authorization)
-    )
+    injected = ["-c", f"hooks={hooks_toml}"]
+    if mcp_url is not None:
+        authorization = issue_run_authorization(agent_run_id)
+        mcp_servers_toml = _to_toml_inline(
+            build_codex_mcp_servers(mcp_url, authorization)
+        )
+        injected += ["-c", f"mcp_servers={mcp_servers_toml}"]
+    injected += [
+        "-c",
+        'approvals_reviewer="auto_review"',
+        "--dangerously-bypass-hook-trust",
+    ]
 
     # Resume parses its own options after the subcommand, so keep the injected
     # config there and preserve the session id positional argument.
     if len(argv) > 1 and argv[1] == "resume":
-        return [
-            argv[0],
-            argv[1],
-            "-c",
-            f"hooks={hooks_toml}",
-            "-c",
-            f"mcp_servers={mcp_servers_toml}",
-            "-c",
-            'approvals_reviewer="auto_review"',
-            "--dangerously-bypass-hook-trust",
-            *argv[2:],
-        ]
+        return [argv[0], argv[1], *injected, *argv[2:]]
 
     # Insert right after the executable so Codex's own flags still follow.
 
-    return [
-        argv[0],
-        "-c",
-        f"hooks={hooks_toml}",
-        "-c",
-        f"mcp_servers={mcp_servers_toml}",
-        "-c",
-        'approvals_reviewer="auto_review"',
-        "--dangerously-bypass-hook-trust",
-        *argv[1:],
-    ]
+    return [argv[0], *injected, *argv[1:]]

@@ -11,9 +11,9 @@ to manual mode on behalf of a module nobody can see.
 
 import pytest
 
-from worktracker.models import Issue
+from worktracker.models import ModulePresentation
 from worktracker.services.errors import ValidationError
-from worktracker.services.work_items import reorder_work_item
+from worktracker.services.module_reorder import reorder_module
 from worktracker.tests.module_reorder_fixtures import (
     baseline,
     make_module,
@@ -32,9 +32,7 @@ def archived(project, module_type):
 def assert_untouched(project):
     """The project never left automatic mode and no rank was written."""
 
-    project.refresh_from_db()
-    assert project.manual_module_order is False
-    assert set(ranks_by_name(project).values()) == {""}
+    assert not ModulePresentation.objects.filter(module__project=project).exists()
 
 
 # --- the moved module ------------------------------------------------------
@@ -45,7 +43,7 @@ def test_dragging_an_archived_module_is_rejected_on_the_first_drag(
     project, modules, archived
 ):
     with pytest.raises(ValidationError):
-        reorder_work_item(
+        reorder_module(
             archived.id,
             before_id=None,
             after_id=modules["c"].id,
@@ -59,7 +57,7 @@ def test_dragging_an_archived_module_is_rejected_on_the_first_drag(
 def test_dragging_an_archived_module_is_rejected_in_a_manual_project(
     project, modules, archived
 ):
-    reorder_work_item(
+    reorder_module(
         modules["a"].id,
         before_id=modules["b"].id,
         after_id=None,
@@ -68,9 +66,7 @@ def test_dragging_an_archived_module_is_rejected_in_a_manual_project(
     seeded = ranks_by_name(project)
 
     with pytest.raises(ValidationError):
-        reorder_work_item(
-            archived.id, before_id=None, after_id=modules["c"].id
-        )
+        reorder_module(archived.id, before_id=None, after_id=modules["c"].id)
 
     assert ranks_by_name(project) == seeded
     assert module_names(project) == ["c", "b", "a"]
@@ -85,7 +81,7 @@ def test_an_archived_neighbor_is_rejected_on_the_first_drag(
     project, modules, archived, side
 ):
     with pytest.raises(ValidationError):
-        reorder_work_item(
+        reorder_module(
             modules["a"].id,
             initial_order_ids=baseline(modules, "c", "b", "a"),
             **{side: archived.id},
@@ -99,18 +95,17 @@ def test_an_archived_neighbor_is_rejected_on_the_first_drag(
 def test_an_archived_neighbor_is_rejected_in_a_manual_project(
     project, modules, archived, side
 ):
-    reorder_work_item(
+    reorder_module(
         modules["a"].id,
         before_id=modules["b"].id,
         after_id=None,
         initial_order_ids=baseline(modules, "c", "b", "a"),
     )
     seeded = ranks_by_name(project)
-    archived.rank = "V"
-    archived.save(update_fields=["rank"])
+    ModulePresentation.objects.create(module=archived, rank="V")
 
     with pytest.raises(ValidationError):
-        reorder_work_item(modules["a"].id, **{side: archived.id})
+        reorder_module(modules["a"].id, **{side: archived.id})
 
     assert ranks_by_name(project) == {**seeded, "archived": "V"}
     assert module_names(project) == ["c", "b", "a"]
@@ -136,7 +131,7 @@ def test_the_reorder_route_rejects_an_archived_module(
 
     assert response.status_code == 422
     assert_untouched(project)
-    assert Issue.objects.get(pk=archived.id).rank == ""
+    assert not ModulePresentation.objects.filter(module=archived).exists()
 
 
 @pytest.mark.django_db

@@ -129,3 +129,29 @@ def test_termination_service_preserves_structured_studio_failure():
         "error": "caller_run_unbound",
         "reason": "authorization_invalid",
     }
+
+
+def test_termination_service_states_a_refusal_as_not_ok():
+    """Studio's DRF error body has no ``ok`` flag; the agent's result must."""
+
+    service = StudioRunControlService(
+        url="http://studio.test/api/terminals/self-terminate",
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                409,
+                json={
+                    "detail": "run_owned_by_other_runtime",
+                    "code": "run_owned_by_other_runtime",
+                    "owner_runtime": "tmux-other-instance",
+                },
+            )
+        ),
+    )
+
+    assert service.terminate_current_run("Bearer signed-run-1") == {
+        "ok": False,
+        "error": "run_owned_by_other_runtime",
+        "detail": "run_owned_by_other_runtime",
+        "code": "run_owned_by_other_runtime",
+        "owner_runtime": "tmux-other-instance",
+    }

@@ -168,7 +168,7 @@ class AgentAdapter:
     _inject: Callable[..., list[str]]
     _resume_command: Callable[[str], list[str]] | None = None
     prompt_readiness: PromptReadiness | None = None
-    entry_skill_prefix: str = "/"
+    invocation_prefix: str = "/"
     supports_worktracker_mcp: bool = False
     supports_required_skills: bool = True
     #: Providers with no inline settings flag write a run-scoped settings file
@@ -218,12 +218,15 @@ class AgentAdapter:
         agent_run_id: str,
         *,
         lifecycle_url: str,
-        mcp_url: str,
+        mcp_url: str | None,
     ) -> list[str]:
         """Splice this run's lifecycle hooks (and MCP config) into ``argv``.
 
-        Both URLs are required — the caller (``terminals.launch``) resolves
-        them before any durable launch state is created.
+        Both arguments are required — the caller (``terminals.launch``) resolves
+        them before any durable launch state is created. ``mcp_url`` is ``None``
+        when this Studio instance has no MCP service of its own, in which case
+        the run is launched without a WorkTracker MCP server rather than with
+        one that belongs to another install.
         """
         return self._inject(argv, agent_run_id, lifecycle_url=lifecycle_url, mcp_url=mcp_url)
 
@@ -237,7 +240,7 @@ class AgentAdapter:
         agent_run_id: str,
         *,
         lifecycle_url: str,
-        mcp_url: str,
+        mcp_url: str | None,
         skills: ResolvedSkills,
     ) -> LaunchAugmentation:
         """Return argv, environment, and owned temp artifacts for one launch.
@@ -309,7 +312,7 @@ class AgentAdapter:
 
         return format_entry_skill_command(
             entry_skill,
-            prefix=self.entry_skill_prefix,
+            prefix=self.invocation_prefix,
         )
 
 
@@ -405,7 +408,7 @@ _REGISTRY: dict[str, AgentAdapter] = {
         prompt_readiness=PromptReadiness(
             re.compile(r"(?:^|\n)\s*›\s+Ask Codex\b", re.MULTILINE)
         ),
-        entry_skill_prefix="$",
+        invocation_prefix="$",
         supports_worktracker_mcp=True,
     ),
     "gemini": AgentAdapter(

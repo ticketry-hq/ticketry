@@ -8,6 +8,7 @@ that a fresh collection read agrees with the drag.
 
 import pytest
 
+from worktracker.models import ModulePresentation
 from worktracker.tests.conftest import BASE
 from worktracker.tests.module_reorder_fixtures import (  # noqa: F401 - pytest fixture
     modules,
@@ -31,13 +32,17 @@ def test_the_reorder_route_accepts_the_first_drag_baseline(
     )
 
     assert response.status_code == 200
-    assert response.json()["id"] == str(modules["a"].id)
+    assert response.json()["module_id"] == str(modules["a"].id)
 
     # A fresh read of the collection returns the same order the drag produced.
-    listed = client.get(
-        f"{BASE}/projects/{project.id}/modules", headers=auth
-    ).json()
+    listed = client.get(f"{BASE}/projects/{project.id}/modules", headers=auth).json()
     assert [module["name"] for module in listed] == ["a", "c", "b"]
+
+    presentations = client.get(f"{BASE}/module-presentations", headers=auth).json()
+    assert {row["module_id"] for row in presentations} == {
+        str(module.id) for module in modules.values()
+    }
+    assert all(row["rank"] and row["tab_hidden"] is False for row in presentations)
 
 
 @pytest.mark.django_db
@@ -56,5 +61,4 @@ def test_the_reorder_route_rejects_an_incomplete_baseline(
     )
 
     assert response.status_code == 422
-    project.refresh_from_db()
-    assert project.manual_module_order is False
+    assert not ModulePresentation.objects.filter(module__project=project).exists()

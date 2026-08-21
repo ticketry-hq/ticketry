@@ -6,6 +6,7 @@ const api = vi.hoisted(() => ({
   getKeybindingOverrides: vi.fn(),
   getTasks: vi.fn(),
   listModuleLinks: vi.fn(),
+  listModulePresentations: vi.fn(),
   listModules: vi.fn(),
   listProjects: vi.fn(),
 }));
@@ -27,7 +28,6 @@ const defaultProject = {
   name: "Coding",
   slug: "CDN",
   description: "",
-  manual_module_order: false,
   onboarding_required: false,
 };
 const extraProject = {
@@ -86,6 +86,7 @@ describe("default-project Module-link navigation acceptance", () => {
         updated_at: "2026-08-19T00:00:00Z",
       },
     ]);
+    api.listModulePresentations.mockReset().mockResolvedValue([]);
     api.listModules.mockReset().mockResolvedValue(modules);
     api.listProjects.mockReset().mockResolvedValue([
       extraProject,
@@ -93,7 +94,9 @@ describe("default-project Module-link navigation acceptance", () => {
     ]);
   });
 
-  it("[overhaul-132] loads the default project's modules while keeping the left panel disabled", async () => {
+  it("[overhaul-132] loads the default project's modules without changing a closed sidebar choice", async () => {
+    useClientStore.getState().setSidebarVisible(false);
+
     expect(await bootstrapStudio()).toBe("ready");
 
     expect(api.getConfig).not.toHaveBeenCalled();
@@ -101,6 +104,7 @@ describe("default-project Module-link navigation acceptance", () => {
     expect(useStudioStore.getState().selectedProjectId).toBe(defaultProject.id);
     expect(api.listModules).toHaveBeenCalledWith(defaultProject.id);
     expect(useClientStore.getState().sidebarVisible).toBe(false);
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
   });
 
   it("[overhaul-133] restores one frontend-only last-module value", async () => {
@@ -150,5 +154,25 @@ describe("default-project Module-link navigation acceptance", () => {
         payload: { moduleId: "module-b", resumeModuleSelection: true },
       },
     ]);
+  });
+
+  it("[overhaul-168] honors a stored-open sidebar preference after an upgrade", async () => {
+    localStorage.setItem("studio.sidebarVisible:v1", "false");
+    localStorage.setItem("studio.sidebarVisible:v2", "true");
+    vi.resetModules();
+
+    const [
+      { bootstrapStudio: bootstrapReloaded },
+      { useClientStore: reloadedStore },
+    ] = await Promise.all([
+      import("../app/startup/bootstrapStudio"),
+      import("../state/clientStore"),
+    ]);
+
+    expect(await bootstrapReloaded()).toBe("ready");
+    expect(reloadedStore.getState().sidebarVisible).toBe(true);
+    expect(reloadedStore.getState().focusedPane).toBe("modules");
+    expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("false");
+    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("true");
   });
 });

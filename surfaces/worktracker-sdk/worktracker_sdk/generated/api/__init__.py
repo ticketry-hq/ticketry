@@ -6,6 +6,7 @@ from worktracker_sdk.generated.api.attachments_api import AttachmentsApi
 from worktracker_sdk.generated.api.issue_types_api import IssueTypesApi
 from worktracker_sdk.generated.api.launch_bindings_api import LaunchBindingsApi
 from worktracker_sdk.generated.api.models_api import ModelsApi
+from worktracker_sdk.generated.api.module_presentations_api import ModulePresentationsApi
 from worktracker_sdk.generated.api.modules_api import ModulesApi
 from worktracker_sdk.generated.api.projects_api import ProjectsApi
 from worktracker_sdk.generated.api.providers_api import ProvidersApi

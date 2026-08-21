@@ -27,7 +27,7 @@
  * @export
  * @enum {string}
  */
-export enum KindEnum {
+export enum LifecycleEventKindEnum {
     session_start = 'session_start',
     turn_start = 'turn_start',
     tool_use = 'tool_use',
@@ -40,10 +40,10 @@ export enum KindEnum {
 }
 
 
-export function instanceOfKindEnum(value: any): boolean {
-    for (const key in KindEnum) {
-        if (Object.prototype.hasOwnProperty.call(KindEnum, key)) {
-            if (KindEnum[key as keyof typeof KindEnum] === value) {
+export function instanceOfLifecycleEventKindEnum(value: any): boolean {
+    for (const key in LifecycleEventKindEnum) {
+        if (Object.prototype.hasOwnProperty.call(LifecycleEventKindEnum, key)) {
+            if (LifecycleEventKindEnum[key as keyof typeof LifecycleEventKindEnum] === value) {
                 return true;
             }
         }
@@ -51,18 +51,18 @@ export function instanceOfKindEnum(value: any): boolean {
     return false;
 }
 
-export function KindEnumFromJSON(json: any): KindEnum {
-    return KindEnumFromJSONTyped(json, false);
+export function LifecycleEventKindEnumFromJSON(json: any): LifecycleEventKindEnum {
+    return LifecycleEventKindEnumFromJSONTyped(json, false);
 }
 
-export function KindEnumFromJSONTyped(json: any, ignoreDiscriminator: boolean): KindEnum {
-    return json as KindEnum;
+export function LifecycleEventKindEnumFromJSONTyped(json: any, ignoreDiscriminator: boolean): LifecycleEventKindEnum {
+    return json as LifecycleEventKindEnum;
 }
 
-export function KindEnumToJSON(value?: KindEnum | null): any {
+export function LifecycleEventKindEnumToJSON(value?: LifecycleEventKindEnum | null): any {
     return value as any;
 }
 
-export function KindEnumToJSONTyped(value: any, ignoreDiscriminator: boolean): KindEnum {
-    return value as KindEnum;
+export function LifecycleEventKindEnumToJSONTyped(value: any, ignoreDiscriminator: boolean): LifecycleEventKindEnum {
+    return value as LifecycleEventKindEnum;
 }

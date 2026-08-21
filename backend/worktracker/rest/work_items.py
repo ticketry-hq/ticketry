@@ -15,6 +15,7 @@ from worktracker.rest.work_item_serializers import (
     WorkItemFilterSerializer,
     WorkItemPatchSerializer,
     WorkItemSerializer,
+    WorkspaceTabOrderSerializer,
 )
 from worktracker.services.attachments import create_attachment, list_attachments
 from worktracker.services.work_items import (
@@ -23,6 +24,7 @@ from worktracker.services.work_items import (
     list_work_items,
     retrieve_work_item,
     update_work_item,
+    update_workspace_tab_order,
 )
 
 
@@ -117,6 +119,39 @@ class WorkItemViewSet(
 
     def perform_destroy(self, instance):
         delete_work_item(instance.id)
+
+
+@extend_schema_view(
+    retrieve=extend_schema(
+        operation_id="getWorkspaceTabOrder",
+        tags=["Work Items"],
+    ),
+    update=extend_schema(
+        operation_id="updateWorkspaceTabOrder",
+        tags=["Work Items"],
+    ),
+)
+class WorkspaceTabOrderViewSet(
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Retrieve or replace the tab order owned by one task work item."""
+
+    serializer_class = WorkspaceTabOrderSerializer
+    lookup_url_kwarg = "issue_id"
+
+    def get_queryset(self):
+        return list_work_items(include_archived=True)
+
+    def get_object(self):
+        return retrieve_work_item(self.kwargs["issue_id"])
+
+    def perform_update(self, serializer):
+        serializer.instance = update_workspace_tab_order(
+            self.kwargs["issue_id"],
+            serializer.validated_data["workspace_tab_order"],
+        )
 
 
 @extend_schema_view(

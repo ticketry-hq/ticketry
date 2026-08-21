@@ -26,7 +26,6 @@ export async function bootstrapStudio(): Promise<BootstrapOutcome> {
 
     const project = await resolveDefaultProject();
     await useStudioStore.getState().selectProject(project.id);
-    useClientStore.getState().setSidebarVisible(true);
     focusVisiblePane("modules");
     return "ready";
   } catch (error) {

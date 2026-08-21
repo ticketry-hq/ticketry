@@ -16,6 +16,10 @@ export const queryKeys = {
     byProject: (projectId: string) => ["modules", projectId] as const,
   },
 
+  modulePresentations: {
+    all: ["module-presentations"] as const,
+  },
+
   moduleLinks: {
     all: ["module-links"] as const,
   },
@@ -47,6 +51,10 @@ export const queryKeys = {
     children: (parentId: string) => ["work-items", "children", parentId] as const,
     byProject: (projectId: string, filters: object = {}) =>
       ["work-items", "project", projectId, filters] as const,
+  },
+
+  workspaceTabs: {
+    byWorkItem: (id: string) => ["workItem", id, "workspace-tab-order"] as const,
   },
 
   onboarding: ["onboarding"] as const,

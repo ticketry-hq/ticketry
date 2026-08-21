@@ -50,12 +50,6 @@ export interface PatchedProject {
      * @type {boolean}
      * @memberof PatchedProject
      */
-    readonly manual_module_order?: boolean;
-    /**
-     *
-     * @type {boolean}
-     * @memberof PatchedProject
-     */
     readonly onboarding_required?: boolean;
 }
 
@@ -80,7 +74,6 @@ export function PatchedProjectFromJSONTyped(json: any, ignoreDiscriminator: bool
         'name': json['name'] == null ? undefined : json['name'],
         'slug': json['slug'] == null ? undefined : json['slug'],
         'description': json['description'] == null ? undefined : json['description'],
-        'manual_module_order': json['manual_module_order'] == null ? undefined : json['manual_module_order'],
         'onboarding_required': json['onboarding_required'] == null ? undefined : json['onboarding_required'],
     };
 }
@@ -89,7 +82,7 @@ export function PatchedProjectToJSON(json: any): PatchedProject {
     return PatchedProjectToJSONTyped(json, false);
 }
 
-export function PatchedProjectToJSONTyped(value?: Omit<PatchedProject, 'id'|'manual_module_order'|'onboarding_required'> | null, ignoreDiscriminator: boolean = false): any {
+export function PatchedProjectToJSONTyped(value?: Omit<PatchedProject, 'id'|'onboarding_required'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }

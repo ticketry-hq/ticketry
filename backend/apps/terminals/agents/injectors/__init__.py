@@ -35,6 +35,13 @@ DEFAULT_MCP_PORT = 8123
 
 DEFAULT_MCP_URL = f"http://127.0.0.1:{DEFAULT_MCP_PORT}/mcp"
 
+# Set by the desktop supervisor when its own MCP service could not start (most
+# often because another Studio install already holds the port). It makes the
+# absence explicit, so the launcher can inject no MCP endpoint rather than fall
+# back to a default port that belongs to that other install.
+
+MCP_UNAVAILABLE_ENV = "WORKTRACKER_MCP_UNAVAILABLE"
+
 # The Tauri shell publishes the absolute sandbox-safe native hook runner here.
 # Source launches leave it unset and execute the bundled Python shim directly.
 

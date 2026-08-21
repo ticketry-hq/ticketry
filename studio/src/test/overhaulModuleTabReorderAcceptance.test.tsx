@@ -7,14 +7,16 @@ vi.mock("../shared/api/client", async () => {
   );
   return {
     ...actual,
+    listModulePresentations: vi.fn(),
     listModules: vi.fn(),
     listProjects: vi.fn(),
-    reorderWorkItem: vi.fn(),
+    reorderModulePresentation: vi.fn(),
+    updateModulePresentation: vi.fn(),
   };
 });
 
 import { useAgentStatusStore } from "../features/agents/status";
-import type { WorkItem } from "../shared/api/types";
+import type { ModulePresentation } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 import {
   dataTransfer,
@@ -35,7 +37,7 @@ import {
   moved,
   project,
   renderAutomaticProject,
-  reorderWorkItem,
+  reorderModulePresentation,
   resetModuleReorderHarness,
   rows,
   sidebarOrder,
@@ -51,8 +53,8 @@ describe("module tab strip reorder acceptance", () => {
   it("[overhaul-51] places a module by the tab half it is dropped on, and every surface follows", async () => {
     await renderAutomaticProject();
 
-    const settle = deferred<WorkItem>();
-    reorderWorkItem.mockReturnValue(settle.promise);
+    const settle = deferred<ModulePresentation>();
+    reorderModulePresentation.mockReturnValue(settle.promise);
     // The server has taken the project manual and now owns the whole order.
     listProjects.mockResolvedValue([project(true)]);
     listModules.mockResolvedValue(modules("module-c", "module-a", "module-b"));
@@ -70,8 +72,8 @@ describe("module tab strip reorder acceptance", () => {
     // activity-sorted order the user could actually see.
     dragTab("module-c", "module-a", "near");
 
-    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalled());
-    expect(reorderWorkItem).toHaveBeenCalledWith("module-c", {
+    await waitFor(() => expect(reorderModulePresentation).toHaveBeenCalled());
+    expect(reorderModulePresentation).toHaveBeenCalledWith("module-c", {
       before_id: null,
       after_id: "module-a",
       initial_order_ids: ["module-a", "module-b", "module-c"],
@@ -104,8 +106,10 @@ describe("module tab strip reorder acceptance", () => {
     listModules.mockResolvedValue(modules("module-a", "module-c", "module-b"));
     dragTab("module-c", "module-a", "far");
 
-    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(2));
-    expect(reorderWorkItem).toHaveBeenLastCalledWith("module-c", {
+    await waitFor(() =>
+      expect(reorderModulePresentation).toHaveBeenCalledTimes(2),
+    );
+    expect(reorderModulePresentation).toHaveBeenLastCalledWith("module-c", {
       before_id: "module-a",
       after_id: "module-b",
       initial_order_ids: ["module-c", "module-a", "module-b"],
@@ -133,8 +137,10 @@ describe("module tab strip reorder acceptance", () => {
 
     dragTabAboveStrip("module-b", "module-a", "near");
 
-    await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledTimes(3));
-    expect(reorderWorkItem).toHaveBeenLastCalledWith("module-b", {
+    await waitFor(() =>
+      expect(reorderModulePresentation).toHaveBeenCalledTimes(3),
+    );
+    expect(reorderModulePresentation).toHaveBeenLastCalledWith("module-b", {
       before_id: null,
       after_id: "module-a",
       initial_order_ids: ["module-a", "module-c", "module-b"],
@@ -160,11 +166,11 @@ describe("module tab strip reorder acceptance", () => {
     await waitFor(() => expect(tabBadges("module-c")).toHaveLength(1));
 
     const strip = screen.getByRole("tablist");
-    const addButton = screen.getByLabelText("Add module");
+    const addButton = screen.getByLabelText("Open module picker");
 
     // Creation is pinned to the left edge and is not one of the project's
     // Modules: it cannot be picked up, and it cannot receive one.
-    expect(strip.firstElementChild).toBe(addButton);
+    expect(strip.parentElement?.firstElementChild).toContainElement(addButton);
     expect(addButton.getAttribute("draggable")).toBeNull();
 
     const transfer = dataTransfer();
@@ -188,7 +194,7 @@ describe("module tab strip reorder acceptance", () => {
     expect(tabFor("module-c").getAttribute("aria-selected")).toBe("false");
     expect(tabBadges("module-c")).toHaveLength(1);
     expect(tabBadges("module-a")).toEqual([]);
-    expect(strip.firstElementChild).toBe(addButton);
+    expect(strip.parentElement?.firstElementChild).toContainElement(addButton);
 
     // The selected tab kept its id but changed position, so it must be scrolled
     // back into the strip's horizontal viewport (#369).
@@ -240,8 +246,10 @@ describe("module tab strip reorder acceptance", () => {
 
       // Every drag sends the order visible when it started. There is no
       // client-side automatic/manual ordering branch.
-      await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledOnce());
-      expect(reorderWorkItem).toHaveBeenCalledWith("module-c", {
+      await waitFor(() =>
+        expect(reorderModulePresentation).toHaveBeenCalledOnce(),
+      );
+      expect(reorderModulePresentation).toHaveBeenCalledWith("module-c", {
         before_id: "module-a",
         after_id: "module-b",
         initial_order_ids: ["module-a", "module-b", "module-c"],
@@ -257,7 +265,7 @@ describe("module tab strip reorder acceptance", () => {
         ).toBe(true),
       );
 
-      reorderWorkItem.mockClear();
+      reorderModulePresentation.mockClear();
       listModules.mockResolvedValue(modules("module-b", "module-a", "module-c"));
 
       const laidOutRows = layoutRows();
@@ -291,8 +299,10 @@ describe("module tab strip reorder acceptance", () => {
 
       // A consecutive drag uses the current visible order as its new baseline
       // while the neighbor ids continue to express the fractional insertion.
-      await waitFor(() => expect(reorderWorkItem).toHaveBeenCalledOnce());
-      expect(reorderWorkItem).toHaveBeenCalledWith("module-b", {
+      await waitFor(() =>
+        expect(reorderModulePresentation).toHaveBeenCalledOnce(),
+      );
+      expect(reorderModulePresentation).toHaveBeenCalledWith("module-b", {
         before_id: null,
         after_id: "module-a",
         initial_order_ids: ["module-a", "module-c", "module-b"],

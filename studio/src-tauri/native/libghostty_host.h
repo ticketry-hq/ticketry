@@ -48,6 +48,9 @@ typedef enum {
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_8 = 10,
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_9 = 11,
   MUXED_GHOSTTY_CHORD_MODULE_POSITION_10 = 12,
+  // The edit-view body disengage chord (Cmd+Escape). The view hands the
+  // keyboard back for this one too, so Studio's engaged state can follow it.
+  MUXED_GHOSTTY_CHORD_BODY_DISENGAGE = 13,
 } muxed_ghostty_chord_e;
 
 // Reported when the hosted view recognises a Studio chord instead of

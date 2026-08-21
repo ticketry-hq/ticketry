@@ -109,6 +109,26 @@ mod tests {
     }
 
     #[test]
+    fn command_escape_is_the_disengage_chord_and_bare_escape_is_not() {
+        assert_eq!(
+            studio_chord(COMMAND, ESCAPE_KEY),
+            Some(StudioChord::BodyDisengage)
+        );
+        assert_eq!(
+            studio_chord(COMMAND | CAPS_LOCK, ESCAPE_KEY),
+            Some(StudioChord::BodyDisengage)
+        );
+
+        // A bare Escape is the key an agent prompt needs most, so it stays
+        // terminal input; so does every other modifier combination.
+        assert_eq!(studio_chord(0, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(SHIFT, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(OPTION, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(COMMAND | SHIFT, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(COMMAND | CONTROL, ESCAPE_KEY), None);
+    }
+
+    #[test]
     fn command_e_is_the_settings_chord_and_typing_e_is_not() {
         assert_eq!(studio_chord(COMMAND, E_KEY), Some(StudioChord::Settings));
         assert_eq!(

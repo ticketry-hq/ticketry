@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from asgiref.sync import async_to_sync
@@ -25,10 +26,14 @@ from apps.terminals.reconciliation_scheduler import (
     schedule_terminal_reconciliation,
 )
 from apps.terminals.runtime import TerminalRuntimeError
+from apps.terminals.runtime_ownership import ForeignRuntimeRun
 from apps.terminals.validation import SpawnRequest, _validate_init
 from apps.terminals import viewer_leases
 from apps.runs.models import AgentRun
 from apps.runs.run_scopes import SHELL_SCOPE
+
+
+logger = logging.getLogger(__name__)
 
 
 def _viewer_lease_payload(lease: viewer_leases.ViewerLease) -> dict[str, Any]:
@@ -380,12 +385,35 @@ def list_scratch_terminals(
     return payload
 
 
+def _foreign_runtime_error(exc: ForeignRuntimeRun) -> ApplicationError:
+    """Report another runtime's ownership instead of a termination that lied.
+
+    The refusal is a conflict, not a missing run: the run exists and is
+    terminable — just not from here. Naming the owning runtime lets an operator
+    see which instance to ask, without publishing that runtime's socket path.
+    """
+
+    logger.warning(
+        "refused termination of a foreign runtime run agent_run_id=%s owner=%s",
+        exc.agent_run_id,
+        exc.owner_namespace,
+    )
+    return ApplicationError(
+        409,
+        exc.code,
+        code=exc.code,
+        metadata={"owner_runtime": exc.owner_namespace},
+    )
+
+
 def terminate_terminal(agent_run_id: str):
     """Explicitly terminate a runtime and soft-delete its metadata row."""
 
     try:
         known = AgentTerminalSession.objects.filter(agent_run_id=agent_run_id).exists()
         terminate_agent_run(agent_run_id)
+    except ForeignRuntimeRun as exc:
+        raise _foreign_runtime_error(exc) from exc
     except TerminalRuntimeError as exc:
         raise ApplicationError(500, str(exc), code="terminate_failed") from exc
     if not known:
@@ -413,6 +441,8 @@ def self_terminate_terminal(agent_run_id: str):
         raise ApplicationError(404, "caller_run_unknown", code="caller_run_unknown")
     try:
         terminate_agent_run(agent_run_id)
+    except ForeignRuntimeRun as exc:
+        raise _foreign_runtime_error(exc) from exc
     except TerminalRuntimeError as exc:
         raise ApplicationError(500, str(exc), code="terminate_failed") from exc
 

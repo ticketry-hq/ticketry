@@ -619,3 +619,31 @@ def test_non_numeric_backend_port_is_ignored(monkeypatch):
     monkeypatch.setenv("MUXED_BACKEND_PORT", "not-a-port")
 
     assert launch._resolve_lifecycle_url() == launch.DEFAULT_LIFECYCLE_URL
+
+
+def test_explicit_mcp_url_wins(monkeypatch):
+    monkeypatch.setenv("WORKTRACKER_MCP_URL", "http://127.0.0.1:43219/mcp")
+    monkeypatch.setenv(launch.MCP_UNAVAILABLE_ENV, "1")
+
+    assert launch._resolve_mcp_url() == "http://127.0.0.1:43219/mcp"
+
+
+def test_no_mcp_url_is_injected_when_this_instance_has_no_mcp_service(monkeypatch):
+    """The default port may belong to another install; inject nothing instead.
+
+    Both installs sign run credentials with the same install secret and read the
+    same records, so a run-scoped call answered by the other instance is
+    accepted and acted on there — against a runtime that never launched it.
+    """
+
+    monkeypatch.delenv("WORKTRACKER_MCP_URL", raising=False)
+    monkeypatch.setenv(launch.MCP_UNAVAILABLE_ENV, "1")
+
+    assert launch._resolve_mcp_url() is None
+
+
+def test_mcp_url_falls_back_to_the_loopback_default(monkeypatch):
+    monkeypatch.delenv("WORKTRACKER_MCP_URL", raising=False)
+    monkeypatch.delenv(launch.MCP_UNAVAILABLE_ENV, raising=False)
+
+    assert launch._resolve_mcp_url() == launch.DEFAULT_MCP_URL

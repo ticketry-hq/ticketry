@@ -4,6 +4,10 @@ import {
   useModuleReorderDrag,
   useModulesQuery,
 } from "../../../../features/projects";
+import {
+  useModulePresentationsQuery,
+  useRestoreAndSelectModule,
+} from "../../../../features/module-tabs";
 import { useStudioStore } from "../../../../features/projects/store";
 import {
   resolveCursorId,
@@ -16,9 +20,10 @@ export function ModulesPane() {
   const selectedProjectId = useStudioStore((s) => s.selectedProjectId);
   const modulesQuery = useModulesQuery(selectedProjectId);
   const modules = modulesQuery.data ?? [];
+  const presentationsQuery = useModulePresentationsQuery();
   const selectedModuleId = useClientStore((s) => s.selectedModuleId);
-  const selectModule = useClientStore((s) => s.selectModule);
-  const loading = modulesQuery.isPending;
+  const restoreAndSelectModule = useRestoreAndSelectModule();
+  const loading = modulesQuery.isPending || presentationsQuery.isPending;
 
   const cursorId = useClientStore((s) => s.modulesCursorId);
   const setCursor = useClientStore((s) => s.setModulesCursor);
@@ -30,9 +35,9 @@ export function ModulesPane() {
     (moduleId: string) => {
       if (dragDrop.consumePostDropClick()) return;
       setCursor(moduleId);
-      void selectModule(moduleId);
+      restoreAndSelectModule(moduleId);
     },
-    [dragDrop, selectModule, setCursor],
+    [dragDrop, restoreAndSelectModule, setCursor],
   );
 
   // Centered "+ Add Module" trigger, always rendered after the list. It is

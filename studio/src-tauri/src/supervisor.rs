@@ -29,6 +29,7 @@ use crate::owned_sidecar::OwnedSidecar;
 const CREDENTIAL_ENV: &str = "MUXED_SIDECAR_CREDENTIAL";
 const DESKTOP_ORIGIN_ENV: &str = "MUXED_DESKTOP_ORIGIN";
 const MCP_URL_ENV: &str = "WORKTRACKER_MCP_URL";
+const MCP_UNAVAILABLE_ENV: &str = "WORKTRACKER_MCP_UNAVAILABLE";
 const READINESS_PREFIX: &str = "MUXED_READY service=backend port=";
 const FAILURE_PREFIX: &str = "MUXED_FAILURE ";
 const SIDECAR_LOG_FILE_NAME: &str = "sidecar.log";
@@ -1077,8 +1078,18 @@ impl Supervisor {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         sanitize_packaged_process_environment(&mut command);
-        if let Some(mcp_port) = mcp_port {
-            command.env(MCP_URL_ENV, format!("http://127.0.0.1:{mcp_port}/mcp"));
+        // State the absence, do not leave it to be inferred. Without an MCP
+        // service of our own the backend would otherwise inject its hardcoded
+        // default endpoint, which is exactly the port another Studio install
+        // holds when our own bind failed - and that install answers our agents'
+        // run-scoped calls against a runtime that never launched them.
+        match mcp_port {
+            Some(mcp_port) => {
+                command.env(MCP_URL_ENV, format!("http://127.0.0.1:{mcp_port}/mcp"));
+            }
+            None => {
+                command.env(MCP_UNAVAILABLE_ENV, "1");
+            }
         }
         let mut sidecar = if self.commands.backend.requires_owner_liveness {
             OwnedSidecar::spawn_backend(command)
@@ -2076,8 +2087,10 @@ mod tests {
         options.mcp_port_candidates = vec![blocked_port];
         options.mcp_required = false;
         let mut table = stub_table_with_mcp();
-        table.backend.environment =
-            vec![(OsString::from("MUXED_STUB_MODE"), OsString::from("ready"))];
+        table.backend.environment = vec![(
+            OsString::from("MUXED_STUB_MODE"),
+            OsString::from("ready-reporting-mcp-absence"),
+        )];
         let mut supervisor = Supervisor::new(table, options);
 
         supervisor
@@ -2086,6 +2099,14 @@ mod tests {
 
         assert!(supervisor.port().is_some());
         assert_eq!(supervisor.mcp_port(), None);
+        // The backend must be told there is no MCP endpoint, so it launches
+        // agents without one instead of falling back to the default port that
+        // the install we just collided with is holding.
+        assert!(supervisor
+            .logs()
+            .iter()
+            .any(|line| line == "stub-mcp-unavailable=1"));
+        assert!(supervisor.logs().iter().any(|line| line == "stub-mcp-url="));
         assert!(supervisor.events().iter().any(|event| matches!(
             event,
             SupervisorEvent::Failed {
@@ -3572,6 +3593,13 @@ mod tests {
                     println!("stub-mcp-url={mcp_url}");
                     serve_health(&port);
                 }
+            }
+            "ready-reporting-mcp-absence" => {
+                let unavailable = env::var(MCP_UNAVAILABLE_ENV).unwrap_or_default();
+                let url = env::var(MCP_URL_ENV).unwrap_or_default();
+                println!("stub-mcp-unavailable={unavailable}");
+                println!("stub-mcp-url={url}");
+                serve_health(&port);
             }
             "ready-with-mcp-then-crash-once" => {
                 let mcp_url = env::var(MCP_URL_ENV).unwrap_or_default();

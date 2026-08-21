@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, type RefObject } from "react";
 
+import { notifyNativeTerminalKeyboardEngaged } from "../../../../runtime/nativeTerminalKeyboard";
 import { clippedNativeTerminalFrame } from "./nativeTerminalFrame";
 import { traceViewerFocus } from "./focusTrace";
 import { registerTerminalFocus } from "./terminalRegistry";
@@ -27,6 +28,7 @@ export function useNativeViewerFocusRegistration({
     if (!handle || !presented || !visible || modalOpen) return;
     return registerTerminalFocus(sessionId, () => {
       traceViewerFocus("focus requested by registry", { session: sessionId });
+      notifyNativeTerminalKeyboardEngaged();
       void invoke("native_terminal_focus", { handle }).catch((error) => {
         traceViewerFocus("focus request FAILED", {
           session: sessionId,
@@ -125,6 +127,7 @@ export function useNativeViewerFocusSignal({
       session: sessionId,
       focusSignal,
     });
+    notifyNativeTerminalKeyboardEngaged();
     void invoke("native_terminal_focus", { handle }).catch((error) => {
       // A refused request normally remains pending for the next reveal. A modal
       // opening in the meantime ends that request, so it must stay spent.

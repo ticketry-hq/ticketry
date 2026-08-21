@@ -11,11 +11,13 @@ const api = vi.hoisted(() => ({
   getTasks: vi.fn(),
   listIssueTypes: vi.fn(),
   listModuleLinks: vi.fn(),
+  listModulePresentations: vi.fn(),
   listModules: vi.fn(),
   listProjects: vi.fn(),
   putProfile: vi.fn(),
   putProviderCatalog: vi.fn(),
   upsertModuleLink: vi.fn(),
+  updateModulePresentation: vi.fn(),
   validateModuleFolder: vi.fn(),
 }));
 
@@ -40,6 +42,7 @@ import OnboardingTour from "../app/onboarding/OnboardingTour";
 import OnboardingWelcome from "../app/onboarding/OnboardingWelcome";
 import { useOnboardingTourStore } from "../app/onboarding/onboardingTourStore";
 import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
+import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
 import { useStudioStore } from "../features/projects/store";
 import { AddModule } from "../features/studio/modals/AddModule";
 import { seedModuleLinks } from "../features/module-links";
@@ -123,6 +126,7 @@ beforeEach(() => {
     { id: "module-type", name: "Module", level: "module", sort_order: 0 },
   ]);
   api.listModules.mockReset().mockResolvedValue([]);
+  api.listModulePresentations.mockReset().mockResolvedValue([]);
   api.listModuleLinks.mockReset().mockResolvedValue([]);
   api.listProjects.mockReset().mockResolvedValue([]);
   api.putProfile.mockReset();
@@ -165,7 +169,6 @@ describe("onboarding and module-folder acceptance", () => {
       name: "Coding",
       slug: "CDN",
       description: "",
-      manual_module_order: false,
       onboarding_required: true,
     };
     queryClient.setQueryData(queryKeys.projects.all, [project]);
@@ -350,6 +353,30 @@ describe("onboarding and module-folder acceptance", () => {
       screen.getByRole("heading", { name: "Add your first module" }),
     ).toBeVisible();
     expect(useOnboardingTourStore.getState().step).toBe("module-create");
+  });
+
+  it("[overhaul-179] does not anchor module onboarding to the picker trigger", async () => {
+    useStudioStore.setState({ selectedProjectId: "project-1" });
+    useOnboardingTourStore.getState().start("project-1");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ModuleTabStrip />
+        <OnboardingTour onSelectStory={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Add your first module" }),
+    ).toBeVisible();
+    const pickerTrigger = await screen.findByRole("button", {
+      name: "Open module picker",
+    });
+    expect(pickerTrigger).not.toHaveAttribute("data-coach-anchor");
+    expect(pickerTrigger).not.toHaveAttribute("data-coach-highlight");
+    expect(
+      document.querySelector('[data-coach-anchor="module-add"]'),
+    ).toBeNull();
   });
 
   it("[overhaul-29b] keeps the desktop folder picker beside the described CWD input", () => {

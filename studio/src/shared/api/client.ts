@@ -9,6 +9,7 @@ import type {
   IssueTypeCreate,
   IssueTypePatch,
   Module,
+  ModulePresentation,
   ModuleLink,
   Project,
   ProjectCreate,
@@ -30,6 +31,7 @@ import type {
   WorkItemDetail,
   WorkItemFilters,
   WorkItemPatch,
+  WorkspaceTabOrder,
 } from "./types";
 import {
   instanceOfRunNowRefusal,
@@ -302,6 +304,28 @@ export const getWorkItemAttachments = (
     )) as unknown as Attachment[],
   );
 
+export const getWorkspaceTabOrder = (
+  workItemId: string,
+  signal?: AbortSignal,
+) =>
+  call<WorkspaceTabOrder>(() =>
+    sdk().workItems.getWorkspaceTabOrder(
+      { issueId: workItemId },
+      signal ? { signal } : undefined,
+    ) as unknown as Promise<WorkspaceTabOrder>,
+  );
+
+export const updateWorkspaceTabOrder = (
+  workItemId: string,
+  workspaceTabOrder: WorkspaceTabOrder,
+) =>
+  call<WorkspaceTabOrder>(() =>
+    sdk().workItems.updateWorkspaceTabOrder({
+      issueId: workItemId,
+      workspaceTabOrder,
+    }) as unknown as Promise<WorkspaceTabOrder>,
+  );
+
 export const createWorkItem = (projectId: string, body: WorkItemCreate) =>
   call<WorkItem>(async () =>
     (await sdk().workItems.createWorkItem({
@@ -340,6 +364,39 @@ export const reorderWorkItem = (
       issueId: id,
       workItemReorder: neighbors,
     })) as unknown as WorkItem
+  );
+
+export const reorderModulePresentation = (
+  moduleId: string,
+  neighbors: {
+    before_id: string | null;
+    after_id: string | null;
+    initial_order_ids?: string[] | null;
+  },
+) =>
+  call<ModulePresentation>(async () =>
+    (await sdk().modulePresentations.reorderModulePresentation({
+      moduleId,
+      modulePresentationReorder: neighbors,
+    })) as unknown as ModulePresentation
+  );
+
+export const listModulePresentations = (signal?: AbortSignal) =>
+  call<ModulePresentation[]>(async () =>
+    (await sdk().modulePresentations.listModulePresentations({
+      signal,
+    })) as unknown as ModulePresentation[]
+  );
+
+export const updateModulePresentation = (
+  moduleId: string,
+  body: { tab_hidden: boolean },
+) =>
+  call<ModulePresentation>(async () =>
+    (await sdk().modulePresentations.updateModulePresentation({
+      moduleId,
+      modulePresentationWrite: body,
+    })) as unknown as ModulePresentation
   );
 
 export const getTasks = async (projectId: string, moduleId: string) => {

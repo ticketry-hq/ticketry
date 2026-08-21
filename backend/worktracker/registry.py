@@ -94,6 +94,22 @@ MODEL_ROUTES = {
             ),
         ),
     },
+    "ModulePresentation": {
+        "reads": (
+            RouteDeclaration(
+                "GET",
+                "/api/work-tracker/module-presentations",
+                "List installation-wide module presentation records.",
+            ),
+        ),
+        "writes": (
+            RouteDeclaration(
+                "PUT",
+                "/api/work-tracker/module-presentations/{module_id}",
+                "Set one module tab's installation-wide visibility.",
+            ),
+        ),
+    },
     "State": {
         "reads": (
             RouteDeclaration(
@@ -229,6 +245,22 @@ MODEL_ROUTES = {
             ),
         ),
     },
+    "WorkspaceTabOrder": {
+        "reads": (
+            RouteDeclaration(
+                "GET",
+                "/api/work-tracker/work-items/{issue_id}/workspace-tab-order",
+                "Retrieve the server-owned workspace tab order for one work item.",
+            ),
+        ),
+        "writes": (
+            RouteDeclaration(
+                "PUT",
+                "/api/work-tracker/work-items/{issue_id}/workspace-tab-order",
+                "Replace one work item's workspace tab order.",
+            ),
+        ),
+    },
     "Provider": {
         "reads": (
             RouteDeclaration(
@@ -311,6 +343,11 @@ MODEL_ROUTES = {
 }
 
 DOMAIN_OPERATIONS = (
+    RouteDeclaration(
+        "POST",
+        "/api/work-tracker/module-presentations/{module_id}/reorder",
+        "The server seeds and allocates presentation ranks under one project lock.",
+    ),
     RouteDeclaration(
         "POST",
         "/api/work-tracker/work-items/{issue_id}/reorder",

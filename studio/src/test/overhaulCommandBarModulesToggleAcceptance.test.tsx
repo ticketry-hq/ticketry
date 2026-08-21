@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { PanelGroup } from "react-resizable-panels";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -77,6 +77,8 @@ function pressGlobalChord(
 }
 
 describe("overhaul acceptance — command-bar Modules toggle", () => {
+  const savedPanelLayout = [12, 24, 36, 28];
+
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
@@ -86,10 +88,11 @@ describe("overhaul acceptance — command-bar Modules toggle", () => {
       focusedPane: "details-or-terminal",
       editViewZone: "active-tab-body",
       editViewBodyEngaged: true,
+      panelLayout: savedPanelLayout,
     });
   });
 
-  it("[overhaul-139] keeps the Modules pane hard-disabled", () => {
+  it("[overhaul-139] opens and closes the Modules pane through every shared route", () => {
     let sidebarChanges = 0;
     const unsubscribe = useClientStore.subscribe((state, previous) => {
       if (state.sidebarVisible !== previous.sidebarVisible) sidebarChanges += 1;
@@ -98,17 +101,46 @@ describe("overhaul acceptance — command-bar Modules toggle", () => {
     renderCommandBar();
 
     expect(screen.queryByTestId("pane-modules")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Modules pane/ }),
-    ).not.toBeInTheDocument();
+    const openButton = screen.getByRole("button", {
+      name: "Open Modules pane",
+    });
+    expect(openButton).toHaveAttribute("aria-expanded", "false");
+    expect(openButton).toHaveTextContent("\\");
 
     act(() => useClientStore.getState().setSidebarVisible(true));
-    expect(sidebarChanges).toBe(0);
-    expect(useClientStore.getState().sidebarVisible).toBe(false);
+    expect(sidebarChanges).toBe(1);
+    expect(screen.getByTestId("pane-modules")).toBeInTheDocument();
+    const closeButton = screen.getByRole("button", {
+      name: "Close Modules pane",
+    });
+    expect(closeButton).toHaveAttribute("aria-expanded", "true");
+    expect(useClientStore.getState().editViewBodyEngaged).toBe(false);
+
+    fireEvent.click(closeButton);
+    expect(sidebarChanges).toBe(2);
+    expect(useClientStore.getState()).toMatchObject({
+      sidebarVisible: false,
+      focusedPane: "tasks",
+      editViewZone: "stories",
+      editViewBodyEngaged: false,
+    });
 
     pressGlobalChord("\\");
-    expect(sidebarChanges).toBe(0);
-    expect(useClientStore.getState().sidebarVisible).toBe(false);
+    expect(sidebarChanges).toBe(3);
+    expect(screen.getByTestId("pane-modules")).toBeInTheDocument();
+    pressGlobalChord("\\");
+    expect(sidebarChanges).toBe(4);
+    expect(screen.queryByTestId("pane-modules")).not.toBeInTheDocument();
+
+    act(() => useClientStore.getState().focusLeft());
+    expect(sidebarChanges).toBe(5);
+    expect(useClientStore.getState()).toMatchObject({
+      sidebarVisible: true,
+      focusedPane: "modules",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close Modules pane" }),
+    );
 
     act(() => {
       studioKeymapRegistry.setOverrides([
@@ -125,10 +157,20 @@ describe("overhaul acceptance — command-bar Modules toggle", () => {
         },
       ]);
     });
+    const overriddenButton = screen.getByRole("button", {
+      name: "Open Modules pane",
+    });
+    expect(overriddenButton).toHaveTextContent("⌥m");
     pressGlobalChord("m", { altKey: true });
-    expect(sidebarChanges).toBe(0);
+    expect(sidebarChanges).toBe(7);
+    expect(screen.getByTestId("pane-modules")).toBeInTheDocument();
+    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("true");
+    expect(useClientStore.getState().panelLayout).toEqual(savedPanelLayout);
+
+    pressGlobalChord("m", { altKey: true });
+    expect(sidebarChanges).toBe(8);
     expect(screen.queryByTestId("pane-modules")).not.toBeInTheDocument();
-    expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("false");
+    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("false");
 
     unsubscribe();
   });

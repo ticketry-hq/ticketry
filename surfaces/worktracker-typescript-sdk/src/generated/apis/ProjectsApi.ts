@@ -31,7 +31,7 @@ export interface AcknowledgeProjectOnboardingRequest {
 }
 
 export interface CreateProjectRequest {
-    project: Omit<Project, 'id'|'manual_module_order'|'onboarding_required'>;
+    project: Omit<Project, 'id'|'onboarding_required'>;
 }
 
 export interface DeleteProjectRequest {
@@ -40,7 +40,7 @@ export interface DeleteProjectRequest {
 
 export interface UpdateProjectRequest {
     projectId: string;
-    patchedProject?: Omit<PatchedProject, 'id'|'manual_module_order'|'onboarding_required'>;
+    patchedProject?: Omit<PatchedProject, 'id'|'onboarding_required'>;
 }
 
 /**

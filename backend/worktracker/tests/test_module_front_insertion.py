@@ -11,7 +11,7 @@ import uuid
 
 import pytest
 
-from worktracker.models import Issue, Project
+from worktracker.models import Issue, ModulePresentation
 from worktracker.services.errors import NotFoundError
 from worktracker.services.modules import create_module
 from worktracker.services.queries import list_modules
@@ -37,14 +37,23 @@ def seed_module(project, module_type, name, *, rank="", is_archived=False):
 def go_manual(project):
     """Put a project into Manual module order, as a first drag would."""
 
-    Project.objects.filter(pk=project.id).update(manual_module_order=True)
+    ModulePresentation.objects.bulk_create(
+        [
+            ModulePresentation(module=module, rank=module.rank or "V")
+            for module in Issue.objects.filter(project=project, type="module")
+        ]
+    )
+
+
+def presentation_rank(module):
+    return ModulePresentation.objects.get(module=module).rank
 
 
 @pytest.mark.django_db
 def test_automatic_create_leads_the_collection(client, project, module_type, auth):
     seed_module(project, module_type, "older")
 
-    create_module(project.id, "newest", module_type.id)
+    created = create_module(project.id, "newest", module_type.id)
 
     assert listed_names(client, project, auth) == ["newest", "older"]
 
@@ -58,9 +67,7 @@ def test_automatic_create_stays_automatic_without_a_rank(project, module_type):
     # Automatic front placement comes from the collection read's
     # newest-created-first fallback, so creation writes no rank at all and
     # leaves the project's one-way ordering decision untouched.
-    assert created.rank == ""
-    project.refresh_from_db()
-    assert project.manual_module_order is False
+    assert not ModulePresentation.objects.filter(module=created).exists()
 
 
 @pytest.mark.django_db
@@ -77,8 +84,7 @@ def test_manual_create_ranks_before_the_first_active_module(
     # before every key, so an unranked module would *look* first while holding
     # no position at all — the next module created would tie with it and the
     # identifier fallback, not the user's arrangement, would break it.
-    assert created.rank != ""
-    assert created.rank < "8r8r8r8r8r8r"
+    assert presentation_rank(created) < "8r8r8r8r8r8r"
     assert listed_names(client, project, auth) == ["newest", "first", "second"]
 
 
@@ -87,10 +93,9 @@ def test_manual_create_stays_manual(project, module_type):
     seed_module(project, module_type, "first", rank="8r8r8r8r8r8r")
     go_manual(project)
 
-    create_module(project.id, "newest", module_type.id)
+    created = create_module(project.id, "newest", module_type.id)
 
-    project.refresh_from_db()
-    assert project.manual_module_order is True
+    assert ModulePresentation.objects.filter(module=created).exclude(rank="").exists()
 
 
 @pytest.mark.django_db
@@ -104,7 +109,7 @@ def test_manual_creates_stay_in_front_of_each_other(client, project, module_type
     # Each create reads the *current* front, so repeated creates keep stacking
     # up on distinct keys rather than colliding on one bound and falling back
     # to the identifier tiebreak.
-    assert latest.rank < earlier.rank
+    assert presentation_rank(latest) < presentation_rank(earlier)
     assert listed_names(client, project, auth) == ["newest", "second-newest", "first"]
 
 
@@ -118,18 +123,13 @@ def test_manual_create_ignores_archived_modules_when_it_ranks(project, module_ty
 
     created = create_module(project.id, "newest", module_type.id)
 
-    assert "0z" < created.rank < "8r8r8r8r8r8r"
+    assert "0z" < presentation_rank(created) < "8r8r8r8r8r8r"
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("manual_module_order", [False, True])
 def test_create_leads_the_first_module_of_an_empty_project(
-    client, project, module_type, auth, manual_module_order
+    client, project, module_type, auth
 ):
-    Project.objects.filter(pk=project.id).update(
-        manual_module_order=manual_module_order
-    )
-
     create_module(project.id, "only", module_type.id)
 
     assert listed_names(client, project, auth) == ["only"]
@@ -142,9 +142,8 @@ def test_http_created_module_leads_a_fresh_read_in_both_modes(
 ):
     seed_module(project, module_type, "first", rank="8r8r8r8r8r8r")
     seed_module(project, module_type, "second", rank="QZQZQZQZQZQZ")
-    Project.objects.filter(pk=project.id).update(
-        manual_module_order=manual_module_order
-    )
+    if manual_module_order:
+        go_manual(project)
 
     response = client.post(
         f"{BASE}/projects/{project.id}/modules",
@@ -159,9 +158,10 @@ def test_http_created_module_leads_a_fresh_read_in_both_modes(
     assert listed_names(client, project, auth)[0] == "newest"
     assert [module["name"] for module in list_modules(project.id)][0] == "newest"
     created = Issue.objects.get(project=project, name="newest")
-    assert bool(created.rank) is manual_module_order
-    project.refresh_from_db()
-    assert project.manual_module_order is manual_module_order
+    assert (
+        ModulePresentation.objects.filter(module=created).exists()
+        is manual_module_order
+    )
 
 
 @pytest.mark.django_db

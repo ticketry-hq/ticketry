@@ -11,6 +11,7 @@ from worktracker.models.project import Project
 from worktracker.models.state import State
 from worktracker.models.issue_type import IssueType
 from worktracker.models.issue import Issue
+from worktracker.models.module_presentation import ModulePresentation
 from worktracker.models.attachment import Attachment
 from worktracker.models.workflow import IssueTypeTransition
 from worktracker.models.launch_binding import LaunchBinding
@@ -33,6 +34,7 @@ __all__ = [
     "State",
     "IssueType",
     "Issue",
+    "ModulePresentation",
     "Attachment",
     "IssueTypeTransition",
     "LaunchBinding",

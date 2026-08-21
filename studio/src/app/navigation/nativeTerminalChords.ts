@@ -16,6 +16,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useModalStore } from "../modal/modalStore";
 import { toggleTerminalPanel } from "../../features/terminal-panel";
 import { selectModuleAtPosition } from "./sharedNavigation";
+import { disengageEditViewBody } from "./three-zone/threeZoneNavigation";
 
 /** Emitted by the native host for one recognised chord. */
 export const NATIVE_TERMINAL_CHORD_EVENT = "native-terminal-chord";
@@ -24,17 +25,24 @@ export const NATIVE_TERMINAL_CHORD_EVENT = "native-terminal-chord";
 export type NativeTerminalChord =
   | "panel-toggle"
   | "settings"
+  | "body-disengage"
   | `module-position-${number}`;
 
 interface NativeTerminalChordEvent {
   payload?: { chord?: string };
 }
 
-const CHORD_ACTIONS: Record<"panel-toggle" | "settings", () => void> = {
+const CHORD_ACTIONS: Record<
+  "panel-toggle" | "settings" | "body-disengage",
+  () => void
+> = {
   "panel-toggle": toggleTerminalPanel,
   // Settings stays the singleton overlay the footer and the global binding
   // both open; the chord only reaches the same store action (#718).
   settings: () => useModalStore.getState().openSettings(),
+  // The native view has already handed the keyboard back by the time this
+  // arrives; disengaging is what lets Studio's own state follow it (#753).
+  "body-disengage": disengageEditViewBody,
 };
 
 function runChord(chord: string | undefined): void {

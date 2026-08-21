@@ -839,6 +839,16 @@
                         },
                         "description": ""
                     },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
                     "500": {
                         "content": {
                             "application/json": {
@@ -1058,6 +1068,16 @@
                         "description": ""
                     },
                     "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2107,6 +2127,148 @@
                 "responses": {
                     "204": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/work-tracker/module-presentations": {
+            "get": {
+                "operationId": "listModulePresentations",
+                "description": "List and update presentation rows, and apply module rank moves.",
+                "tags": [
+                    "Module Presentations"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ModulePresentation"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/module-presentations/{module_id}": {
+            "put": {
+                "operationId": "updateModulePresentation",
+                "description": "List and update presentation rows, and apply module rank moves.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Module Presentations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationWrite"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationWrite"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationWrite"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModulePresentation"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/module-presentations/{module_id}/reorder": {
+            "post": {
+                "operationId": "reorderModulePresentation",
+                "description": "List and update presentation rows, and apply module rank moves.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Module Presentations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationReorder"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationReorder"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationReorder"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModulePresentation"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -3845,6 +4007,98 @@
                 }
             }
         },
+        "/work-tracker/work-items/{issue_id}/workspace-tab-order": {
+            "get": {
+                "operationId": "getWorkspaceTabOrder",
+                "description": "Retrieve or replace the tab order owned by one task work item.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Work Items"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkspaceTabOrder"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "updateWorkspaceTabOrder",
+                "description": "Retrieve or replace the tab order owned by one task work item.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Work Items"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkspaceTabOrder"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkspaceTabOrder"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkspaceTabOrder"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkspaceTabOrder"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/work-tracker/work-items/batch": {
             "post": {
                 "operationId": "batchWorkItems",
@@ -4752,21 +5006,6 @@
                     "workflow_revision"
                 ]
             },
-            "KindEnum": {
-                "enum": [
-                    "session_start",
-                    "turn_start",
-                    "tool_use",
-                    "awaiting_input",
-                    "permission_required",
-                    "turn_complete",
-                    "idle",
-                    "error",
-                    "session_end"
-                ],
-                "type": "string",
-                "description": "* `session_start` - session_start\n* `turn_start` - turn_start\n* `tool_use` - tool_use\n* `awaiting_input` - awaiting_input\n* `permission_required` - permission_required\n* `turn_complete` - turn_complete\n* `idle` - idle\n* `error` - error\n* `session_end` - session_end"
-            },
             "LaunchBinding": {
                 "type": "object",
                 "description": "One persisted launch binding returned by reads and writes.",
@@ -4934,7 +5173,7 @@
                         "$ref": "#/components/schemas/AgentEnum"
                     },
                     "kind": {
-                        "$ref": "#/components/schemas/KindEnum"
+                        "$ref": "#/components/schemas/LifecycleEventKindEnum"
                     },
                     "ts": {
                         "type": "string"
@@ -4957,6 +5196,21 @@
                     "kind",
                     "ts"
                 ]
+            },
+            "LifecycleEventKindEnum": {
+                "enum": [
+                    "session_start",
+                    "turn_start",
+                    "tool_use",
+                    "awaiting_input",
+                    "permission_required",
+                    "turn_complete",
+                    "idle",
+                    "error",
+                    "session_end"
+                ],
+                "type": "string",
+                "description": "* `session_start` - session_start\n* `turn_start` - turn_start\n* `tool_use` - tool_use\n* `awaiting_input` - awaiting_input\n* `permission_required` - permission_required\n* `turn_complete` - turn_complete\n* `idle` - idle\n* `error` - error\n* `session_end` - session_end"
             },
             "Module": {
                 "type": "object",
@@ -5099,6 +5353,66 @@
                 },
                 "required": [
                     "local_path"
+                ]
+            },
+            "ModulePresentation": {
+                "type": "object",
+                "description": "Server-owned presentation state addressed by module identity.",
+                "properties": {
+                    "module_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "rank": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "tab_hidden": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "module_id",
+                    "rank",
+                    "tab_hidden"
+                ]
+            },
+            "ModulePresentationReorder": {
+                "type": "object",
+                "description": "The moved module's neighbors, plus its first-drag baseline.\n\n``initial_order_ids`` is the complete module order the user could see when\nthey started the very first drag in an automatic project. The server\nfreezes it into ranks before applying the move, so a client never has to\ninfer the durable ordering mode from its own history (#360).",
+                "properties": {
+                    "before_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "after_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "initial_order_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "nullable": true
+                    }
+                }
+            },
+            "ModulePresentationWrite": {
+                "type": "object",
+                "description": "Generated PUT body containing only caller-owned tab visibility.",
+                "properties": {
+                    "tab_hidden": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "tab_hidden"
                 ]
             },
             "ModuleShell": {
@@ -5256,10 +5570,6 @@
                     "description": {
                         "type": "string"
                     },
-                    "manual_module_order": {
-                        "type": "boolean",
-                        "readOnly": true
-                    },
                     "onboarding_required": {
                         "type": "boolean",
                         "readOnly": true
@@ -5405,10 +5715,6 @@
                     "description": {
                         "type": "string"
                     },
-                    "manual_module_order": {
-                        "type": "boolean",
-                        "readOnly": true
-                    },
                     "onboarding_required": {
                         "type": "boolean",
                         "readOnly": true
@@ -5416,7 +5722,6 @@
                 },
                 "required": [
                     "id",
-                    "manual_module_order",
                     "name",
                     "onboarding_required",
                     "slug"
@@ -6135,7 +6440,7 @@
             },
             "WorkItemReorder": {
                 "type": "object",
-                "description": "The moved work item's neighbors, plus a module's first-drag baseline.\n\n``initial_order_ids`` is the complete module order the user could see when\nthey started the very first drag in an automatic project. The server\nfreezes it into ranks before applying the move, so a client never has to\ninfer the durable ordering mode from its own history (#360).",
+                "description": "The moved task's neighbors.",
                 "properties": {
                     "before_id": {
                         "type": "string",
@@ -6145,14 +6450,6 @@
                     "after_id": {
                         "type": "string",
                         "format": "uuid",
-                        "nullable": true
-                    },
-                    "initial_order_ids": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "format": "uuid"
-                        },
                         "nullable": true
                     }
                 }
@@ -6168,6 +6465,45 @@
                 },
                 "required": [
                     "workflow_revision"
+                ]
+            },
+            "WorkspaceTabIdentity": {
+                "type": "object",
+                "description": "One stable identity in a task workspace's heterogeneous tab order.",
+                "properties": {
+                    "kind": {
+                        "$ref": "#/components/schemas/WorkspaceTabIdentityKindEnum"
+                    },
+                    "id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "kind"
+                ]
+            },
+            "WorkspaceTabIdentityKindEnum": {
+                "enum": [
+                    "details",
+                    "doc",
+                    "terminal"
+                ],
+                "type": "string",
+                "description": "* `details` - details\n* `doc` - doc\n* `terminal` - terminal"
+            },
+            "WorkspaceTabOrder": {
+                "type": "object",
+                "description": "The server-owned workspace tab order for one work item.",
+                "properties": {
+                    "order": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WorkspaceTabIdentity"
+                        }
+                    }
+                },
+                "required": [
+                    "order"
                 ]
             },
             "WorktreeStatus": {

@@ -73,6 +73,7 @@ class TerminalDomainActionMixin:
         responses={
             200: TerminateResultSerializer,
             404: ErrorEnvelopeSerializer,
+            409: ErrorEnvelopeSerializer,
             500: ErrorEnvelopeSerializer,
         },
     )
@@ -226,6 +227,7 @@ class TerminalDomainActionMixin:
             200: SelfTerminateResultSerializer,
             401: OpenSerializer,
             404: OpenSerializer,
+            409: OpenSerializer,
             500: OpenSerializer,
         },
     )

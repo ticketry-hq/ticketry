@@ -1,19 +1,16 @@
 """The one place the server's Canonical module order is expressed.
 
-A project's module ordering mode is the durable boolean
-``Project.manual_module_order``:
+A project's module ordering mode is encoded by module presentation rows:
 
 * **Automatic** (the default, and what every existing project migrates into)
   orders newest-created-first. A module created a moment ago leads the list
   before it has any agent activity at all, and Studio layers agent-activity
   recency on top of this deterministic fallback.
-* **Manual module order** orders by the module work items' ascending fractional
-  ``Issue.rank`` — the durable arrangement a user dragged into place. Agent
-  activity never participates.
+* **Manual module order** has a non-empty ``ModulePresentation.rank`` and orders
+  modules by that ascending fractional key. Agent activity never participates.
 
 Both modes break ties on ``id`` so the order is total and stable for rows that
-share a rank (a project that has never been reordered has every module on the
-empty-string rank) — no read ever depends on the database's row order.
+share a rank. No read depends on the database's row order.
 
 Every module collection read — the REST route and the in-process query service
 alike — orders through :func:`canonical_module_queryset`, so no surface can
@@ -24,7 +21,7 @@ from django.db import connection
 from django.db.models import F
 from django.db.models.functions import Collate
 
-from worktracker.models import Issue, Project
+from worktracker.models import Issue, ModulePresentation
 from worktracker.ranking import key_between
 
 # Newest created first. ``sequence_id`` is the project's shared monotonic
@@ -32,7 +29,7 @@ from worktracker.ranking import key_between
 AUTOMATIC_ORDER = ("-sequence_id", "id")
 
 
-def rank_ascending():
+def rank_ascending(field):
     """Order module ranks by their base-62 value, not by locale rules.
 
     ``worktracker.ranking`` keys are fractions over an ASCII-sorted base-62
@@ -47,32 +44,20 @@ def rank_ascending():
     """
 
     if connection.vendor == "postgresql":
-        return Collate(F("rank"), "C").asc()
-    return F("rank").asc()
-
-
-def module_ordering(manual_module_order: bool):
-    """Return the ``order_by`` arguments for a project in this ordering mode."""
-
-    if manual_module_order:
-        # Ascending fractional rank, with the deterministic identifier fallback.
-        return (rank_ascending(), "id")
-    return AUTOMATIC_ORDER
+        return Collate(F(field), "C").asc()
+    return F(field).asc()
 
 
 def uses_manual_module_order(project_id) -> bool:
-    """Read one project's durable ordering mode, defaulting to automatic.
-
-    An unknown project is automatic rather than an error: the collection reads
-    below answer an empty list for it, and inventing a lookup failure here
-    would give the module routes a second not-found path.
-    """
+    """Return whether ranked presentation records define this project's order."""
 
     return (
-        Project.objects.filter(pk=project_id)
-        .values_list("manual_module_order", flat=True)
-        .first()
-        or False
+        ModulePresentation.objects.filter(
+            module__project_id=project_id,
+            module__type="module",
+        )
+        .exclude(rank="")
+        .exists()
     )
 
 
@@ -82,7 +67,9 @@ def canonical_module_queryset(project_id, *, include_archived: bool = False):
     queryset = Issue.objects.filter(project_id=project_id, type="module")
     if not include_archived:
         queryset = queryset.exclude(is_archived=True)
-    return queryset.order_by(*module_ordering(uses_manual_module_order(project_id)))
+    if uses_manual_module_order(project_id):
+        return queryset.order_by(rank_ascending("presentation__rank"), "id")
+    return queryset.order_by(*AUTOMATIC_ORDER)
 
 
 def front_module_rank(project_id) -> str:
@@ -106,6 +93,8 @@ def front_module_rank(project_id) -> str:
     """
 
     first_rank = (
-        canonical_module_queryset(project_id).values_list("rank", flat=True).first()
+        canonical_module_queryset(project_id)
+        .values_list("presentation__rank", flat=True)
+        .first()
     )
     return key_between(None, first_rank or None)

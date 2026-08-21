@@ -20,7 +20,7 @@ import {
   createNavigationContext,
   type NavigationContext,
 } from "./navigationContext";
-import { getModulesSnapshot } from "../../features/projects";
+import { getVisibleModulesSnapshot } from "../../features/module-tabs";
 import { useStudioStore } from "../../features/projects/store";
 import { useClientStore } from "../../state/clientStore";
 import { startRunNowForSelectedItem } from "../../features/work-items";
@@ -51,7 +51,7 @@ export function selectModuleAtPosition(position: number): boolean {
 
   const projectId = useStudioStore.getState().selectedProjectId;
   const ui = useClientStore.getState();
-  const module = getModulesSnapshot(projectId)[position - 1];
+  const module = getVisibleModulesSnapshot(projectId)[position - 1];
   if (!module || module.id === ui.selectedModuleId) return false;
 
   void ui.selectModule(module.id);

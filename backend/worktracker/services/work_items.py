@@ -9,7 +9,6 @@ from worktracker.models import Issue, IssueType, Project
 from worktracker.ranking import key_between
 from worktracker.sequences import allocate_sequence_id
 from worktracker.services.errors import ConflictError, NotFoundError, ValidationError
-from worktracker.services.module_reorder import reorder_module
 from worktracker.work_items import (
     append_rank,
     blocker_would_cycle,
@@ -65,6 +64,15 @@ def retrieve_work_item(issue_id):
         return task_qs().get(pk=uuid.UUID(value))
     except (Issue.DoesNotExist, ValueError) as exc:
         raise NotFoundError("Work item not found.") from exc
+
+
+def update_workspace_tab_order(issue_id, order):
+    """Replace one task's durable workspace tab order."""
+
+    issue = retrieve_work_item(issue_id)
+    issue.workspace_tab_order = order
+    issue.save(update_fields=("workspace_tab_order", "updated_at"))
+    return issue
 
 
 def list_work_items(
@@ -365,24 +373,16 @@ def update_work_item(issue_id: uuid.UUID, **data):
     return issue
 
 
-def reorder_work_item(
-    issue_id: uuid.UUID, before_id=None, after_id=None, initial_order_ids=None
-):
+def reorder_work_item(issue_id: uuid.UUID, before_id=None, after_id=None):
     """Move an issue between same-project neighbors and persist the new rank.
 
-    Module work items carry a second order — the project's Manual module order
-    — whose first drag has to freeze a baseline and flip the project's ordering
-    mode atomically. That belongs to ``module_reorder``; the task path below is
-    the plain fractional-rank move it has always been (#360).
+    Module ordering has its own presentation-record API. This operation owns
+    only task ranks.
     """
 
     issue = get_issue(issue_id)
     if issue.type == "module":
-        return reorder_module(issue, before_id, after_id, initial_order_ids)
-    if initial_order_ids:
-        raise ValidationError(
-            "initial_order_ids applies only to module work items."
-        )
+        raise ValidationError("Use the module presentation reorder operation.")
 
     before = _reorder_neighbor(issue, before_id)
     after = _reorder_neighbor(issue, after_id)

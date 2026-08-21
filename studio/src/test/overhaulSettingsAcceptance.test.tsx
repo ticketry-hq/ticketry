@@ -329,6 +329,45 @@ describe("overhaul acceptance — settings", () => {
       .toHaveValue("low");
   });
 
+  it("[overhaul-166] allows choosing gpt-5.3-codex-spark with model-default reasoning", async () => {
+    settingsApi.getLaunchProviderCapabilities.mockResolvedValueOnce([
+      providerCapabilities[0],
+      {
+        ...providerCapabilities[1],
+        models: [
+          ...providerCapabilities[1].models,
+          { name: "gpt-5.3-codex-spark", reasoning_levels: [] },
+        ],
+      },
+    ]);
+
+    renderAndOpenSettings();
+
+    const dialog = await screen.findByRole("dialog", { name: "Studio settings" });
+    const provider = within(dialog).getByRole("combobox", { name: "Agent/provider" });
+    const model = within(dialog).getByRole("combobox", { name: "Model" });
+    const reasoning = within(dialog).getByRole("combobox", { name: "Reasoning" });
+
+    fireEvent.change(provider, { target: { value: "codex" } });
+    fireEvent.change(model, { target: { value: "gpt-5.3-codex-spark" } });
+
+    expect(model).toHaveValue("gpt-5.3-codex-spark");
+    expect(reasoning).toHaveValue("");
+    expect(
+      within(reasoning).getAllByRole("option").map((option) => option.textContent),
+    ).toEqual(["Model default"]);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(settingsApi.putProviderCatalog).toHaveBeenCalledWith({
+      activated_providers: ["claude", "codex"],
+      global_default: {
+        provider: "codex",
+        model: "gpt-5.3-codex-spark",
+        reasoning: null,
+      },
+    }));
+  });
+
   it("preserves close, Escape, focus restoration, and focus containment", async () => {
     const opener = renderAndOpenSettings();
 

@@ -20,13 +20,6 @@ class Project(models.Model):
     # boundary allocates from this counter while holding the project row lock,
     # in the same transaction as the write.
     state_revision = models.PositiveBigIntegerField(default=0)
-    # The project's module ordering mode. False (the default every project
-    # starts and is migrated into) is automatic ordering: the canonical module
-    # order is the collection read's newest-created-first order. True is Manual
-    # module order: the persisted fractional ``Issue.rank`` of the module work
-    # items is the canonical order. A project flips to manual on its first
-    # module drag and, in this version, never back.
-    manual_module_order = models.BooleanField(default=False)
     onboarding_required = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

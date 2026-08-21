@@ -3,21 +3,20 @@ import type {
   GraphRunExecutionModeEnum as GeneratedGraphRunExecutionMode,
   GraphRunResult as GeneratedGraphRunResult,
   Module as GeneratedModule,
+  ModulePresentation as GeneratedModulePresentation,
   ModuleLink as GeneratedModuleLink,
   Project as GeneratedProject,
   PatchedProject as GeneratedProjectPatch,
   WorkItem as GeneratedWorkItem,
   WorkItemCreate as GeneratedWorkItemCreate,
   PatchedWorkItemPatch as GeneratedWorkItemPatch,
+  WorkspaceTabOrder as GeneratedWorkspaceTabOrder,
 } from "@worktracker/typescript-sdk";
 
 export type Project = GeneratedProject;
-// `manual_module_order` joins `id` as server-owned: a project's module
-// ordering mode is set by the module reorder domain operation, never by a
-// create or update body.
 export type ProjectCreate = Omit<
   GeneratedProject,
-  "id" | "manual_module_order" | "onboarding_required"
+  "id" | "onboarding_required"
 >;
 export type ProjectPatch = GeneratedProjectPatch;
 export interface LaunchBinding extends LaunchBindingInput {
@@ -77,6 +76,7 @@ export type GraphRunExecutionMode = `${GeneratedGraphRunExecutionMode}`;
 export type GraphRunResult = GeneratedGraphRunResult;
 
 export type Module = GeneratedModule;
+export type ModulePresentation = GeneratedModulePresentation;
 export type ModuleLink = GeneratedModuleLink;
 
 export type IssueLevel = "module" | "task";
@@ -104,6 +104,7 @@ export interface State {
 }
 
 export type WorkItem = GeneratedWorkItem;
+export type WorkspaceTabOrder = GeneratedWorkspaceTabOrder;
 
 export interface ModuleTree {
   rootIds: string[];

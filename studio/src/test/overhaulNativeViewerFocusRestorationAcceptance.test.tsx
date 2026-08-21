@@ -5,6 +5,7 @@ import { NativeGhosttyTerminal } from "../features/agents/terminal/NativeGhostty
 import { useModalStore } from "../app/modal/modalStore";
 import { useTerminalForegroundStore } from "../features/agents/terminal/internal/foregroundStore";
 import { useTerminalStore } from "../features/agents/terminal/internal/sessionStore";
+import { onNativeTerminalKeyboardEngaged } from "../runtime/nativeTerminalKeyboard";
 import { useClientStore } from "../state/clientStore";
 
 const tauri = vi.hoisted(() => ({
@@ -95,6 +96,9 @@ describe("native viewer focus restoration acceptance", () => {
   // must never be requested before the reveal resolves.
   it("holds a focus request until the viewer is presented, then focuses it", async () => {
     const pendingShow: { finish: (() => void) | null } = { finish: null };
+    const keyboardEngaged = vi.fn();
+    const stopKeyboardEngagementWatch =
+      onNativeTerminalKeyboardEngaged(keyboardEngaged);
     tauri.invoke.mockImplementation((command: string) => {
       if (command === "native_terminal_available") return Promise.resolve(true);
       if (command === "native_terminal_attach") {
@@ -128,7 +132,9 @@ describe("native viewer focus restoration acceptance", () => {
 
     pendingShow.finish?.();
     await waitFor(() => expect(focusCalls()).toHaveLength(1));
+    expect(keyboardEngaged).toHaveBeenCalledTimes(1);
 
+    stopKeyboardEngagementWatch();
     view.unmount();
   });
 });

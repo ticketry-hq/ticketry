@@ -34,9 +34,8 @@ class PatchedProject(BaseModel):
     name: Optional[Annotated[str, Field(strict=True, max_length=255)]] = None
     slug: Optional[Annotated[str, Field(strict=True, max_length=64)]] = None
     description: Optional[StrictStr] = None
-    manual_module_order: Optional[StrictBool] = None
     onboarding_required: Optional[StrictBool] = None
-    __properties: ClassVar[List[str]] = ["id", "name", "slug", "description", "manual_module_order", "onboarding_required"]
+    __properties: ClassVar[List[str]] = ["id", "name", "slug", "description", "onboarding_required"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -70,11 +69,9 @@ class PatchedProject(BaseModel):
           are ignored.
         * OpenAPI `readOnly` fields are excluded.
         * OpenAPI `readOnly` fields are excluded.
-        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
             "id",
-            "manual_module_order",
             "onboarding_required",
         ])
 
@@ -99,7 +96,6 @@ class PatchedProject(BaseModel):
             "name": obj.get("name"),
             "slug": obj.get("slug"),
             "description": obj.get("description"),
-            "manual_module_order": obj.get("manual_module_order"),
             "onboarding_required": obj.get("onboarding_required")
         })
         return _obj

@@ -19,7 +19,7 @@ from enum import Enum
 from typing_extensions import Self
 
 
-class KindEnum(str, Enum):
+class LifecycleEventKindEnum(str, Enum):
     """
     * `session_start` - session_start * `turn_start` - turn_start * `tool_use` - tool_use * `awaiting_input` - awaiting_input * `permission_required` - permission_required * `turn_complete` - turn_complete * `idle` - idle * `error` - error * `session_end` - session_end
     """
@@ -39,5 +39,5 @@ class KindEnum(str, Enum):
 
     @classmethod
     def from_json(cls, json_str: str) -> Self:
-        """Create an instance of KindEnum from a JSON string"""
+        """Create an instance of LifecycleEventKindEnum from a JSON string"""
         return cls(json.loads(json_str))

@@ -7,6 +7,48 @@ from rest_framework import serializers
 from worktracker.models import Attachment, Issue
 
 
+class WorkspaceTabIdentitySerializer(serializers.Serializer):
+    """One stable identity in a task workspace's heterogeneous tab order."""
+
+    kind = serializers.ChoiceField(choices=("details", "doc", "terminal"))
+    id = serializers.CharField(required=False)
+
+    def validate(self, attrs):
+        kind = attrs["kind"]
+        identity = attrs.get("id")
+        if kind == "details" and identity is not None:
+            raise serializers.ValidationError(
+                {"id": "Details must not include an id."}
+            )
+        if kind != "details" and not identity:
+            raise serializers.ValidationError(
+                {"id": f"{kind.title()} tabs require an id."}
+            )
+        return attrs
+
+
+class WorkspaceTabOrderSerializer(serializers.ModelSerializer):
+    """The server-owned workspace tab order for one work item."""
+
+    order = WorkspaceTabIdentitySerializer(
+        many=True,
+        source="workspace_tab_order",
+    )
+
+    class Meta:
+        model = Issue
+        fields = ("order",)
+
+    def validate_order(self, order):
+        identities = [
+            (entry["kind"], entry.get("id"))
+            for entry in order
+        ]
+        if len(identities) != len(set(identities)):
+            raise serializers.ValidationError("Tab identities must be unique.")
+        return order
+
+
 class WorkItemSerializer(serializers.ModelSerializer):
     """The single read shape for every task work-item response."""
 

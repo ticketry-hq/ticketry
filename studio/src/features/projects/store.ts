@@ -21,6 +21,10 @@ import type {
 } from "../../shared/api/types";
 import { loadIssueTypes } from "../settings";
 import { readLastSelectedModule } from "../../state/persistence";
+import {
+  getVisibleModulesSnapshot,
+  loadModulePresentations,
+} from "../module-tabs/queries";
 
 const VIEWS: View[] = ["backlog", "settings"];
 
@@ -96,13 +100,22 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       workspaceSelection: { kind: "task" },
     });
     try {
-      await loadModules(id);
+      await Promise.all([loadModules(id), loadModulePresentations()]);
       const recentModuleId = readLastSelectedModule();
-      if (
-        recentModuleId &&
-        getModulesSnapshot(id).some((module) => module.id === recentModuleId)
-      ) {
-        await useClientStore.getState().selectModule(recentModuleId);
+      const modules = getModulesSnapshot(id);
+      const visible = getVisibleModulesSnapshot(id);
+      const rememberedModule = modules.find(
+        (module) => module.id === recentModuleId,
+      );
+      if (rememberedModule) {
+        const target = visible.some((module) => module.id === rememberedModule.id)
+          ? rememberedModule
+          : visible[0];
+        if (target) {
+          await useClientStore.getState().selectModule(target.id);
+        } else {
+          useClientStore.getState().deselectModule();
+        }
       }
     } catch (e) {
       set({ error: errMessage(e) });

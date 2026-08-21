@@ -138,14 +138,14 @@ named gate before the full Studio suite, typecheck, and build.
 | 129 | The internal PathFind orchestration role never appears in Studio's issue-type choices, while existing PathFind work items show their type as a read-only label. |
 | 130 | Module drags on the horizontal tab strip and vertical sidebar clear stale seams across a transient document leave, then resolve by their active axis outside the cross-axis bounds, commit exactly once, and expose one Canonical module order. |
 | 131 | Finishing the exactly-once onboarding tour acknowledges the installation's default Project and clears its project-owned onboarding state without workspace scope. |
-| 132 | Studio loads the default Project and its Modules without reading profile or feature configuration, creating a replacement Project, or modifying extra Project rows, while the left panel remains disabled. |
+| 132 | Studio loads the default Project and its Modules without reading profile or feature configuration, creating a replacement Project, modifying extra Project rows, or changing the saved sidebar visibility choice. |
 | 133 | Studio restores the last selected Module from one frontend-only value and does not write the retired recent-Project or per-Project recent maps. |
 | 134 | Choosing or changing a Module folder validates the candidate and round-trips the accepted value through the typed Module link resource before selection resumes. |
 | 135 | An engaged native Ghostty terminal gives `Cmd+V` to Ghostty's standard binding, reads the current text from the macOS general pasteboard, and completes the request against its originating surface and opaque request state while `Ctrl+V` stays terminal input. |
 | 136 | Concurrent retained native terminals keep separate paste owners, and teardown invalidates only the departing viewer before its Ghostty surface is destroyed so unavailable viewers cannot complete a request or retain clipboard text. |
 | 137 | An engaged native terminal preserves `Cmd+1` through `Cmd+0` as module-tab position shortcuts and switches through the same canonical module order as the WebView keymap. |
 | 138 | Only the focused native terminal routes `Cmd+V` through Ghostty's binding path; an unfocused native surface cannot claim or receive the chord. |
-| 139 | The Modules left panel is hard-disabled: startup, persisted preferences, direct store requests, and the effective global shortcut cannot reveal it, and the footer does not advertise its control. |
+| 139 | The persistent footer control, direct visibility requests, focus-left navigation, and the effective global shortcut open and close the Modules pane through shared state transitions; the control reports its next action and expanded state, and displays configured shortcut overrides. |
 | 140 | A workflow launch binding can select one required skill as its entry skill or clear the selection, and each change is saved with the rest of the launch configuration. |
 | 141 | Enter on a real work item reveals its selected or newest live task terminal in both Stories layouts, restores a closed viewer from durable metadata, or starts and attaches one configured default run when only ended history exists. Pending activation cannot duplicate the request or tab, refusal preserves the previous tab and permits retry, and Stories keeps navigation ownership without entering terminal typing mode. |
 | 142 | Ideas, Grill, and Review use distinct gray, red, and teal workflow colors on state headers and work-item identifiers. |
@@ -155,6 +155,37 @@ named gate before the full Studio suite, typecheck, and build.
 | 146 | If hiding a Task workspace's native viewer fails while Settings opens, Settings stays mounted and interactive, the compatibility fallback reports the failure, and the incident does not schedule a Studio reload. |
 | 147 | Exact Shift+Enter on a real work item opens the activated-provider picker directly in both Stories layouts; cancelling preserves the workspace and run set, while choosing a provider launches one overridden task run. In the Edit view tab strip, active body, and terminal panel, the same chord keeps the existing prompt-bearing launch route. |
 | 148 | Stories labels Right Arrow as Expand / Dive, Enter as Open Terminal, and Shift+Enter as Choose Agent without changing the Right Arrow body route. |
+| 149 | A work item's server-owned Workspace tab order controls Details, document, and terminal placement and is restored after reload. |
+| 150 | Module selection uses one shared operation: a visible Module selects without a presentation write, while a hidden Module clears only `tab_hidden`, preserves canonical order and module-backed consumers, and becomes selected. |
+| 151 | Agent activity does not reopen a hidden Module tab, and its lifecycle badge remains visible on that Module's sidebar row. |
+| 152 | Hiding the selected Module tab chooses the nearest visible tab to the right. |
+| 153 | Workspace tab order survives document close and reopen, terminal dismissal and restore, appends new tabs at the right edge, and drives live-terminal cycling through mixed tab kinds. |
+| 154 | Details, document, and terminal workspace tabs stay locked until saved order loads, then reorder on a horizontal drag with a visible insertion edge, Escape cancellation, post-drop click suppression, pending-save lockout, full identity persistence, optimistic display, rollback on failure, and active-tab scroll retention. |
+| 155 | The last visible Module tab can be hidden; the empty strip retains module creation and the workspace points to the Modules sidebar for restoration. |
+| 156 | Module position shortcuts count only visible tabs in canonical order, so hidden Modules have no position shortcut. |
+| 157 | Hiding the rightmost selected Module tab falls back to the nearest visible tab on the left. |
+| 158 | Hiding a Module tab that is not selected leaves the current selection unchanged. |
+| 159 | Hidden Modules retain canonical order while visible tabs reorder, and restoration returns a hidden tab at its canonical position. |
+| 160 | Live-terminal cycling loads the saved Workspace tab order for every work item with a current stop, including unopened workspaces after reload, before choosing the next terminal. |
+| 161 | A project with no modules keeps the Stories and selected-ticket panes mounted instead of showing instructions to restore a tab that never existed. |
+| 162 | Startup never restores a hidden remembered Module: it selects the first visible tab instead, and hiding the last visible tab clears the remembered Module together with the in-memory selection. |
+| 163 | Pressing Enter on a hidden Module's focused sidebar row restores its tab at the canonical position and selects the Module. |
+| 164 | Holding Command alone shows non-interactive jump badges on the first ten visible Module tabs in visual order. Releasing it, adding Shift, Control, or Alt, blurring the window, handing keyboard ownership to a native terminal, changing document visibility, pressing a pointer, opening a modal, or losing the effective platform binding clears them. A new hold follows hidden and reordered tabs, and the matching position binding still selects its tab. |
+| 165 | With every Module tab hidden, the shell tells the user to open the closed Modules pane and keeps Add module available. Once the footer opens the pane, the guidance points to selecting a visible Module instead. Sidebar selection restores tabs in canonical order and selects the chosen Module, and closing the pane leaves the restored tabs visible. Together with case 139, the effective global binding and an override follow the same open and close transitions. |
+| 166 | Settings accepts a Codex model that uses model-default reasoning, shows no invented reasoning levels, and saves a null reasoning value. |
+| 167 | Ordinary typing does not re-render a consumer of Module jump badges when the held modifiers are unchanged, and keyboard events do no badge-tracking work while a modal disables the feature. |
+| 168 | Startup honors a stored-open Modules sidebar preference under the current key and ignores the poisoned closed value left under the retired key. |
+| 169 | Cmd+Escape reported by an engaged native terminal leaves typing mode, so Studio's engaged state follows the keyboard the native view handed back. |
+| 170 | The fixed plus trigger opens the Module picker without opening creation, and its first action opens the existing Module creation flow. |
+| 171 | The Module picker lists only non-archived Hidden module tabs in Canonical module order; mixed-case search filters only those choices, keeps their order, leaves creation available, and adds no empty-state choice. |
+| 172 | Pointer selection closes the Module picker, restores and selects the chosen Module at its canonical position, and writes no Module order. |
+| 173 | When every eligible Module tab is visible, the picker retains only Module search and creation. |
+| 174 | When every Hidden module tab belongs to an archived Module, the picker retains only Module search and creation. |
+| 175 | Opening the Module picker focuses its named search field; the trigger, creation action, and restore choices expose clear names, and Escape closes the picker, returns focus to the trigger, and leaves the next opening with an empty query. |
+| 176 | Arrow Down and Arrow Up move the active option through the currently filtered Module picker listbox while the focused search combobox exposes it through `aria-activedescendant`, and Enter on creation closes the picker and opens the existing creation flow. |
+| 177 | Enter on an active Hidden module choice closes the picker, restores its tab, and selects that Module. |
+| 178 | Moving focus from the Module picker to a Module tab closes the picker and leaves focus on the tab. |
+| 179 | With the Modules pane closed, the onboarding Module step does not anchor to or highlight the Module picker's trigger as though it opened Module creation. |
 
 Each executable case carries one stable `[overhaul-NN]` marker. The gate has a
 contract test that fails if a marker is missing or duplicated. When a Studio UI

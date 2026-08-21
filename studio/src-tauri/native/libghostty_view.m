@@ -56,6 +56,12 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   if (key_code == kMuxedEKeyCode && chord == NSEventModifierFlagCommand) {
     return MUXED_GHOSTTY_CHORD_SETTINGS;
   }
+  // Cmd+Escape leaves typing mode. The view has always handed the keyboard
+  // back for it; reporting it as a chord is what lets Studio's engaged state
+  // follow the keyboard instead of being left behind (#753).
+  if (key_code == kMuxedEscapeKeyCode && chord == NSEventModifierFlagCommand) {
+    return MUXED_GHOSTTY_CHORD_BODY_DISENGAGE;
+  }
   if (chord == NSEventModifierFlagCommand) {
     for (uint8_t index = 0; index < 10; index++) {
       if (key_code == kMuxedModulePositionKeyCodes[index]) {
@@ -242,12 +248,6 @@ static ghostty_input_key_s muxed_ghostty_key_event(NSEvent *event,
 
 - (void)keyDown:(NSEvent *)event {
   if (!_acceptsInput || _surface == NULL) return;
-  if ((event.modifierFlags & NSEventModifierFlagCommand) &&
-      event.keyCode == kMuxedEscapeKeyCode) {
-    muxed_focus_trace(self, "disengaged by cmd-escape", _acceptsInput);
-    [self.window makeFirstResponder:self.superview];
-    return;
-  }
   // Studio chords must survive an engaged terminal (#667, #735): the WebView
   // never sees a key while this view is first responder, so each chord is
   // recognised here, hands the keyboard back, and is reported to Studio.

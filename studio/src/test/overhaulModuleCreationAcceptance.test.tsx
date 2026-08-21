@@ -7,10 +7,12 @@ const api = vi.hoisted(() => ({
   getTasks: vi.fn(),
   listIssueTypes: vi.fn(),
   listModuleLinks: vi.fn(),
+  listModulePresentations: vi.fn(),
   listModules: vi.fn(),
   listProjects: vi.fn(),
   putProfile: vi.fn(),
   updateProject: vi.fn(),
+  updateModulePresentation: vi.fn(),
   upsertModuleLink: vi.fn(),
   validateModuleFolder: vi.fn(),
 }));
@@ -68,13 +70,12 @@ function module(id: string, name: string, sequence_id: number): Module {
 const EXISTING = [module("module-b", "Bravo", 2), module("module-a", "Alpha", 1)];
 const CREATED = module(NEW_MODULE_ID, "Newest", 3);
 
-function project(manual_module_order: boolean): Project {
+function project(_manualModuleOrder: boolean): Project {
   return {
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
-    manual_module_order,
   } as Project;
 }
 
@@ -150,12 +151,9 @@ function expectCreationFlowIntact(): void {
 }
 
 /** Creation never changes the project's one-way ordering decision. */
-function expectOrderingModeUnchanged(manual: boolean): void {
+function expectOrderingModeUnchanged(): void {
   expect(api.updateProject).not.toHaveBeenCalled();
-  expect(
-    getProjectsSnapshot().find((entry) => entry.id === PROJECT_ID)
-      ?.manual_module_order,
-  ).toBe(manual);
+  expect(getProjectsSnapshot().map((entry) => entry.id)).toContain(PROJECT_ID);
 }
 
 describe("module creation front-placement acceptance", () => {
@@ -185,6 +183,7 @@ describe("module creation front-placement acceptance", () => {
         { id: "module-type", name: "Module", level: "module", sort_order: 0 },
       ]);
     api.listModules.mockReset().mockResolvedValue(EXISTING);
+    api.listModulePresentations.mockReset().mockResolvedValue([]);
     api.listModuleLinks.mockReset().mockResolvedValue([]);
     api.updateProject.mockReset();
     api.putProfile
@@ -237,7 +236,7 @@ describe("module creation front-placement acceptance", () => {
       "Bravo",
       "Alpha",
     ]);
-    expectOrderingModeUnchanged(false);
+    expectOrderingModeUnchanged();
     expectCreationFlowIntact();
   });
 
@@ -256,7 +255,7 @@ describe("module creation front-placement acceptance", () => {
       expect(sidebarOrder()).toEqual(["Bravo", "Newest", "Alpha"]),
     );
     expect(tabStripOrder()).toEqual(["Bravo", "Newest", "Alpha"]);
-    expectOrderingModeUnchanged(false);
+    expectOrderingModeUnchanged();
   });
 
   it("[overhaul-47] leads a manual project's module surfaces without leaving Manual module order", async () => {
@@ -273,7 +272,7 @@ describe("module creation front-placement acceptance", () => {
       "Bravo",
       "Alpha",
     ]);
-    expectOrderingModeUnchanged(true);
+    expectOrderingModeUnchanged();
     expectCreationFlowIntact();
 
     // A later read continues to follow the server's response exactly.

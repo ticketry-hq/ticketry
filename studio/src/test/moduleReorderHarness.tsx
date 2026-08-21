@@ -10,7 +10,7 @@ import { useStudioStore } from "../features/projects/store";
 import { groupBacklog } from "../features/work-items";
 import * as api from "../shared/api/client";
 import { queryClient } from "../shared/query/queryClient";
-import type { Module, Project, WorkItem } from "../shared/api/types";
+import type { Module, ModulePresentation, Project } from "../shared/api/types";
 import { useClientStore } from "../state/clientStore";
 
 /**
@@ -21,7 +21,12 @@ import { useClientStore } from "../state/clientStore";
 
 export const listModules = api.listModules as ReturnType<typeof vi.fn>;
 export const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
-export const reorderWorkItem = api.reorderWorkItem as ReturnType<typeof vi.fn>;
+export const listModulePresentations =
+  api.listModulePresentations as ReturnType<typeof vi.fn>;
+export const reorderModulePresentation =
+  api.reorderModulePresentation as ReturnType<typeof vi.fn>;
+export const updateModulePresentation =
+  api.updateModulePresentation as ReturnType<typeof vi.fn>;
 
 export const PROJECT_ID = "project-1";
 
@@ -37,13 +42,12 @@ export function modules(...ids: string[]): Module[] {
   })) as unknown as Module[];
 }
 
-export function project(manual_module_order: boolean): Project {
+export function project(_manualModuleOrder: boolean): Project {
   return {
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
-    manual_module_order,
   } as Project;
 }
 
@@ -97,8 +101,8 @@ export function backlogGroupOrder(): string[] {
     .filter((name): name is string => name !== undefined);
 }
 
-export function moved(id: string): WorkItem {
-  return { id, rank: "V" } as unknown as WorkItem;
+export function moved(id: string): ModulePresentation {
+  return { module_id: id, rank: "V", tab_hidden: false };
 }
 
 export function deferred<T>() {
@@ -113,7 +117,15 @@ export function resetModuleReorderHarness(): void {
   queryClient.clear();
   listModules.mockReset();
   listProjects.mockReset();
-  reorderWorkItem.mockReset().mockResolvedValue(moved("module-c"));
+  listModulePresentations.mockReset().mockResolvedValue([]);
+  reorderModulePresentation.mockReset().mockResolvedValue(moved("module-c"));
+  updateModulePresentation.mockReset().mockImplementation(
+    async (moduleId: string, body: { tab_hidden: boolean }) => ({
+      module_id: moduleId,
+      rank: "",
+      tab_hidden: body.tab_hidden,
+    }),
+  );
   useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
   useAgentStatusStore.setState({ runs: {} });
   useClientStore.setState({

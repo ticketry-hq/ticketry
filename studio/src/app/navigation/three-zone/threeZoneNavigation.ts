@@ -80,17 +80,26 @@ export function routeThreeZoneBodyEngagement(event: KeyboardEvent): boolean {
   ) {
     event.preventDefault();
     event.stopImmediatePropagation();
-    ui.setEditViewBodyEngaged(false);
-    ui.setNavigationModality("keyboard");
-    // Focus lands on the zone the developer was typing in, so the panel stays
-    // open and stays the current zone.
-    document
-      .querySelector<HTMLElement>(
-        `[data-navigation-zone="${ui.editViewZone}"]`,
-      )
-      ?.focus({ preventScroll: true });
+    disengageEditViewBody();
   }
   return true;
+}
+
+/**
+ * Leaves typing mode without closing anything. The desktop build reaches this
+ * from the native chord bridge instead of a keydown: an engaged native
+ * terminal is first responder, so AppKit delivers Cmd+Escape to it and the
+ * WebView never sees the key (#753).
+ */
+export function disengageEditViewBody(): void {
+  const ui = useClientStore.getState();
+  ui.setEditViewBodyEngaged(false);
+  ui.setNavigationModality("keyboard");
+  // Focus lands on the zone the developer was typing in, so the panel stays
+  // open and stays the current zone.
+  document
+    .querySelector<HTMLElement>(`[data-navigation-zone="${ui.editViewZone}"]`)
+    ?.focus({ preventScroll: true });
 }
 
 /**

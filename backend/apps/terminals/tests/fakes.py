@@ -113,6 +113,7 @@ class FakeAdapter:
     command_fn: Optional[Callable[[str], list[str]]] = None
     resume_fn: Optional[Callable[[str], list[str]]] = None
     supports_worktracker_mcp: bool = True
+    invocation_prefix: str = "/"
     inject_calls: list = field(default_factory=list)
 
     def command(
@@ -141,8 +142,7 @@ class FakeAdapter:
     def entry_skill_command(self, entry_skill: str | None) -> str | None:
         if entry_skill is None:
             return None
-        prefix = "$" if self.slug == "codex" else "/"
-        return f"{prefix}{entry_skill}"
+        return f"{self.invocation_prefix}{entry_skill}"
 
     def inject(
         self,

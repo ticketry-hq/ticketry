@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -39,6 +40,10 @@ import {
 } from "./internal/useWorkspaceTabFocus";
 import { useWorkspaceTabPresentation } from "./internal/useWorkspaceTabPresentation";
 import { useActivatedProviders } from "../../../../features/workflows/launchProviderCatalog";
+import { useWorkspaceTabOrder } from "../../../../features/workspace-tabs/queries";
+import { useWorkspaceTabReorderDrag } from "../../../../features/workspace-tabs/internal/useWorkspaceTabReorderDrag";
+import { workspaceTabIdentityKey } from "../../../../features/workspace-tabs/ordering";
+import { useWorkspaceTabLifecycleOrder } from "../../../../features/workspace-tabs/useWorkspaceTabLifecycleOrder";
 
 export type {
   ScratchLaunchMode,
@@ -202,6 +207,9 @@ export function SelectedTicketContent({
   });
 
   const sessionByRun = useTerminalStore((s) => s.sessionByRun);
+  const savedTabOrder = useWorkspaceTabOrder(
+    bucket && !isScratchBucket(bucket) ? bucket : null,
+  );
 
   useEffect(() => {
     const request = restoreRequestRef.current;
@@ -244,6 +252,67 @@ export function SelectedTicketContent({
     terminalTabs: tabs,
     activeTerminalId: activeTermId,
     resumableSessions,
+    savedTabOrder: savedTabOrder.order,
+  });
+
+  const toPersistentTabIdentity = useCallback(
+    (identity: TaskWorkspaceTabIdentity): TaskWorkspaceTabIdentity => {
+      if (identity.kind !== "terminal") return identity;
+      const terminal = tabs.find((tab) => tab.id === identity.id);
+      return {
+        kind: "terminal",
+        id: terminal?.meta.agentRunId ?? identity.id,
+      };
+    },
+    [tabs],
+  );
+  const knownPersistentTabs = useMemo(() => {
+    const identities: TaskWorkspaceTabIdentity[] = [
+      { kind: "details" },
+      ...documentQuery.documents.map((document) => ({
+        kind: "doc" as const,
+        id: document.id,
+      })),
+      ...persistedSessions.map((session) => ({
+        kind: "terminal" as const,
+        id: session.agent_run_id,
+      })),
+      ...resumableSessions.map((session) => ({
+        kind: "terminal" as const,
+        id: session.agent_run_id,
+      })),
+      ...tabs.map((tab) => ({
+        kind: "terminal" as const,
+        id: tab.meta.agentRunId ?? tab.id,
+      })),
+    ];
+    return [...new Map(
+      identities.map((identity) => [workspaceTabIdentityKey(identity), identity]),
+    ).values()];
+  }, [documentQuery.documents, persistedSessions, resumableSessions, tabs]);
+  const workspaceTabReorder = useWorkspaceTabReorderDrag({
+    workItemId: bucket && !isScratchBucket(bucket) ? bucket : null,
+    visibleOrder: navigableTabs,
+    savedOrder: savedTabOrder,
+    knownIdentities: knownPersistentTabs,
+    toPersistentIdentity: toPersistentTabIdentity,
+  });
+  useWorkspaceTabLifecycleOrder({
+    workItemId: bucket && !isScratchBucket(bucket) ? bucket : null,
+    savedOrder: savedTabOrder.order,
+    orderReady: savedTabOrder.isReady,
+    visibleIdentities: [
+      { kind: "details" },
+      ...openDocs.map((document) => ({
+        kind: "doc" as const,
+        id: document.id,
+      })),
+      ...tabs.flatMap((tab) =>
+        tab.meta.agentRunId
+          ? [{ kind: "terminal" as const, id: tab.meta.agentRunId }]
+          : [],
+      ),
+    ],
   });
 
   useEditViewWorkspaceFocus({
@@ -342,6 +411,9 @@ export function SelectedTicketContent({
         activeTerminalId={activeTermId}
         documents={openDocs}
         terminalTabs={tabs}
+        orderedTabs={navigableTabs}
+        activeTab={activeTab}
+        reorderDrag={workspaceTabReorder}
         bucket={bucket}
         launchContext={launchContext}
         activatedProviders={activatedProviders}

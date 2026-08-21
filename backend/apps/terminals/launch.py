@@ -35,6 +35,7 @@ from typing import Optional
 from apps.terminals.agents.injectors import (
     DEFAULT_LIFECYCLE_URL,
     DEFAULT_MCP_URL,
+    MCP_UNAVAILABLE_ENV,
     lifecycle_url_for_port,
 )
 from apps.terminals.agents.registry import (
@@ -80,6 +81,7 @@ from apps.terminals.runtime import (
     TerminalRuntime,
     TmuxTerminalRuntime,
 )
+from apps.terminals.runtime_ownership import assert_runtime_owns_run
 from apps.terminals.task_launch_preflight import (
     enforce_provider_activation as _enforce_provider_activation,
 )
@@ -182,6 +184,26 @@ def _resolve_lifecycle_url() -> str:
     return DEFAULT_LIFECYCLE_URL
 
 
+def _resolve_mcp_url() -> Optional[str]:
+    """Resolve the WorkTracker MCP endpoint to inject, or ``None`` for no MCP.
+
+    Prefers an explicit ``WORKTRACKER_MCP_URL`` (the desktop supervisor sets it
+    from the port its own MCP service bound). When the supervisor reports that
+    this instance has no MCP service, no endpoint is injected at all: the
+    hardcoded default port may well be held by a *different* Studio install,
+    and pointing this instance's agents at another install's MCP surface sends
+    run-scoped calls — ticket writes, self-termination — to the wrong runtime.
+    A source checkout sets neither variable and keeps the loopback default.
+    """
+
+    explicit = _env_url("WORKTRACKER_MCP_URL")
+    if explicit:
+        return explicit
+    if os.getenv(MCP_UNAVAILABLE_ENV, "").strip().lower() in {"1", "true", "yes"}:
+        return None
+    return DEFAULT_MCP_URL
+
+
 def _approved_agent_argv(agent: str, argv: list[str]) -> list[str]:
     """Replace the named agent command with the Rust-approved absolute path.
 
@@ -281,7 +303,7 @@ async def _launch(
     # (adapters are env-free). Carrying the adapter itself keeps agent identity
     # and argv transformation in one route.
     lifecycle_url = _resolve_lifecycle_url()
-    mcp_url = _env_url("WORKTRACKER_MCP_URL") or DEFAULT_MCP_URL
+    mcp_url = _resolve_mcp_url()
     argv = _approved_agent_argv(agent, argv)
     resolved_skills = resolved_skills or ResolvedSkills((), (), frozenset(), "")
     try:
@@ -512,7 +534,10 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         supports_required_skills=adapter.supports_required_skills,
         available_tools=adapter.available_worktracker_tools,
     )
-    envelope = skill_prompt_envelope(resolved_skills)
+    envelope = skill_prompt_envelope(
+        resolved_skills,
+        invocation_prefix=adapter.invocation_prefix,
+    )
     if envelope:
         prompt = f"{prompt}\n\n{envelope}"
     manual_entry_skill = adapter.entry_skill_command(
@@ -560,8 +585,16 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
 
 
 def terminate_agent_run(agent_run_id: str) -> None:
-    """Explicitly terminate runtime mechanics, then persist application state."""
+    """Explicitly terminate runtime mechanics, then persist application state.
 
+    Refuses a run whose pane belongs to another Studio runtime *before* any
+    state is written: this runtime's socket cannot reach that pane, so killing
+    nothing and then recording an ending would report a live agent as exited.
+
+    :raises ForeignRuntimeRun: when another runtime owns this run's terminal.
+    """
+
+    assert_runtime_owns_run(agent_run_id, runtime=terminal_runtime)
     ended_at = datetime.now(timezone.utc).isoformat()
     context = termination_context(agent_run_id)
     terminal_runtime.terminate(agent_run_id)

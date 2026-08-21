@@ -4,24 +4,25 @@ from django.urls import path
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from drf_spectacular.views import SpectacularAPIView
 
+from worktracker.rest.module_presentations import ModulePresentationViewSet
 from worktracker.rest.views import (
     AgentModelViewSet,
-    LaunchBindingDetailView,
-    LaunchBindingListView,
-    ModuleViewSet,
     IssueTypeTransitionDetailView,
     IssueTypeTransitionListView,
     IssueTypeViewSet,
-    ProviderViewSet,
+    LaunchBindingDetailView,
+    LaunchBindingListView,
+    ModuleViewSet,
     ProjectViewSet,
+    ProviderViewSet,
     ReasoningLevelViewSet,
     StateViewSet,
 )
 from worktracker.rest.work_items import (
     AttachmentViewSet,
     WorkItemViewSet,
+    WorkspaceTabOrderViewSet,
 )
-
 
 app_name = "worktracker-rest"
 
@@ -57,6 +58,9 @@ project_onboarding_acknowledge = ProjectViewSet.as_view(
     {"post": "acknowledge_onboarding"}
 )
 module_collection = ModuleViewSet.as_view({"get": "list", "post": "create"})
+module_presentation_collection = ModulePresentationViewSet.as_view({"get": "list"})
+module_presentation_detail = ModulePresentationViewSet.as_view({"put": "update"})
+module_presentation_reorder = ModulePresentationViewSet.as_view({"post": "reorder"})
 issue_type_transition_collection = IssueTypeTransitionListView.as_view(
     {"get": "list", "post": "create"}
 )
@@ -82,6 +86,9 @@ work_item_attachments = AttachmentViewSet.as_view(
     {"get": "list", "post": "create"}
 )
 work_item_reorder = WorkItemViewSet.as_view({"post": "reorder"})
+workspace_tab_order = WorkspaceTabOrderViewSet.as_view(
+    {"get": "retrieve", "put": "update"}
+)
 
 urlpatterns = [
     path("schema", WorkTrackerSchemaView.as_view(), name="schema"),
@@ -96,6 +103,21 @@ urlpatterns = [
         "projects/<uuid:project_id>/modules",
         module_collection,
         name="module-list",
+    ),
+    path(
+        "module-presentations",
+        module_presentation_collection,
+        name="module-presentation-list",
+    ),
+    path(
+        "module-presentations/<uuid:module_id>",
+        module_presentation_detail,
+        name="module-presentation-detail",
+    ),
+    path(
+        "module-presentations/<uuid:module_id>/reorder",
+        module_presentation_reorder,
+        name="module-presentation-reorder",
     ),
     path(
         "projects/<uuid:project_id>/states",
@@ -155,6 +177,11 @@ urlpatterns = [
         "work-items/<uuid:issue_id>/reorder",
         work_item_reorder,
         name="work-item-reorder",
+    ),
+    path(
+        "work-items/<uuid:issue_id>/workspace-tab-order",
+        workspace_tab_order,
+        name="workspace-tab-order",
     ),
     path(
         "work-items/<str:issue_id>",

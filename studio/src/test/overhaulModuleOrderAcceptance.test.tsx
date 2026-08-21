@@ -6,7 +6,13 @@ vi.mock("../shared/api/client", async () => {
   const actual = await vi.importActual<typeof import("../shared/api/client")>(
     "../shared/api/client",
   );
-  return { ...actual, listModules: vi.fn(), listProjects: vi.fn() };
+  return {
+    ...actual,
+    listModulePresentations: vi.fn(),
+    listModules: vi.fn(),
+    listProjects: vi.fn(),
+    updateModulePresentation: vi.fn(),
+  };
 });
 
 import { ModuleTabStrip } from "../app/shell/ticket-workspace/ModuleTabStrip";
@@ -24,6 +30,8 @@ import { useClientStore } from "../state/clientStore";
 
 const listModules = api.listModules as ReturnType<typeof vi.fn>;
 const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
+const listModulePresentations =
+  api.listModulePresentations as ReturnType<typeof vi.fn>;
 
 const PROJECT_ID = "project-1";
 
@@ -40,13 +48,12 @@ const SERVER_ORDER: Module[] = [
   issue_type: "module",
 })) as unknown as Module[];
 
-function project(manual_module_order: boolean): Project {
+function project(_manualModuleOrder: boolean): Project {
   return {
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
-    manual_module_order,
   } as Project;
 }
 
@@ -99,6 +106,7 @@ describe("canonical module order acceptance", () => {
     queryClient.clear();
     listModules.mockReset().mockResolvedValue(SERVER_ORDER);
     listProjects.mockReset().mockResolvedValue([project(false)]);
+    listModulePresentations.mockReset().mockResolvedValue([]);
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
     useClientStore.setState({ selectedModuleId: null, modulesCursorId: null });
   });

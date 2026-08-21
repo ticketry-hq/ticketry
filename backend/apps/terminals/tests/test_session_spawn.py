@@ -146,15 +146,27 @@ def _capture_create_session(monkeypatch) -> dict:
     return created
 
 
-def _patch_argv(monkeypatch) -> None:
-    """Override the "claude" adapter (the slug the suite's intents spawn) so
-    ``session.spawn`` produces a deterministic argv without a real CLI.
+def _patch_argv(
+    monkeypatch,
+    *,
+    provider="claude",
+    invocation_prefix: str | None = None,
+) -> None:
+    """Override one adapter so launches produce deterministic argv without a CLI.
 
     The prompt is carried by the provider command as it was before typed prompt
     delivery was introduced.
     """
-    fake = FakeAdapter(slug="claude", command_fn=lambda prompt: ["claude", prompt])
-    monkeypatch.setitem(registry._REGISTRY, "claude", fake)
+    fake = FakeAdapter(
+        slug=provider,
+        command_fn=lambda prompt: [provider, prompt],
+        invocation_prefix=(
+            registry.get_adapter(provider).invocation_prefix
+            if invocation_prefix is None
+            else invocation_prefix
+        ),
+    )
+    monkeypatch.setitem(registry._REGISTRY, provider, fake)
 
 
 # ---------- happy path ----------
@@ -201,6 +213,8 @@ async def test_spawn_happy_path_returns_id_and_persists(
     assert created["dimensions"] == durable_launch.INITIAL_TERMINAL_DIMENSIONS
     assert "claude" in created["command"]
     assert created["command"].startswith("env -u NO_COLOR ")
+    assert "Ticketry invocation resources:" not in created["command"]
+    assert created["submitted"] == []
 
 
 async def test_spawn_resolves_required_skills_against_live_worktree(
@@ -247,7 +261,50 @@ async def test_spawn_resolves_required_skills_against_live_worktree(
     assert created["cwd"] == str(worktree_folder)
 
 
-async def test_spawn_passes_full_prompt_in_argv_and_types_only_entry_skill(
+@pytest.mark.parametrize(
+    ("provider", "invocation_prefix"),
+    (("codex", "$"), ("claude", "/")),
+)
+async def test_spawn_prefixes_required_skills_and_types_only_entry_skill(
+    tmp_config, tmp_path, monkeypatch, provider, invocation_prefix
+):
+    module_folder = tmp_path / "repo"
+    module_folder.mkdir()
+    _profile(tmp_config, module_folder)
+    _patch_worktracker(monkeypatch)
+    created = _capture_create_session(monkeypatch)
+    _patch_argv(monkeypatch, provider=provider)
+    monkeypatch.setattr(
+        session_module,
+        "resolve_required_skills",
+        lambda **kwargs: ResolvedSkills(
+            ("to-spec", "to-tickets"), (), frozenset(), "a" * 40
+        ),
+    )
+
+    run_id = await session_module.launch_agent_run(
+        _intent(
+            launch_configuration=ResolvedLaunchConfiguration(
+                prompt="Write the specification.",
+                agent=provider,
+                model=None,
+                reasoning=None,
+                required_skills=("to-spec", "to-tickets"),
+                entry_skill="to-spec",
+            )
+        )
+    )
+
+    assert "Write the specification." in created["command"]
+    assert (
+        "Required skills available for this invocation: "
+        f"{invocation_prefix}to-spec, {invocation_prefix}to-tickets"
+    ) in created["command"]
+    assert created["submitted"] == [(run_id, f"{invocation_prefix}to-spec")]
+    assert f"{invocation_prefix}to-tickets" not in created["submitted"][0][1]
+
+
+async def test_spawn_with_required_skills_and_no_entry_skill_submits_nothing(
     tmp_config, tmp_path, monkeypatch
 ):
     module_folder = tmp_path / "repo"
@@ -259,12 +316,10 @@ async def test_spawn_passes_full_prompt_in_argv_and_types_only_entry_skill(
     monkeypatch.setattr(
         session_module,
         "resolve_required_skills",
-        lambda **kwargs: ResolvedSkills(
-            ("to-spec",), (), frozenset(), "a" * 40
-        ),
+        lambda **kwargs: ResolvedSkills(("to-spec",), (), frozenset(), "a" * 40),
     )
 
-    run_id = await session_module.launch_agent_run(
+    await session_module.launch_agent_run(
         _intent(
             launch_configuration=ResolvedLaunchConfiguration(
                 prompt="Write the specification.",
@@ -272,13 +327,45 @@ async def test_spawn_passes_full_prompt_in_argv_and_types_only_entry_skill(
                 model=None,
                 reasoning=None,
                 required_skills=("to-spec",),
-                entry_skill="to-spec",
             )
         )
     )
 
-    assert "Write the specification." in created["command"]
-    assert created["submitted"] == [(run_id, "/to-spec")]
+    assert (
+        "Required skills available for this invocation: /to-spec" in created["command"]
+    )
+    assert created["submitted"] == []
+
+
+async def test_spawn_rejects_unknown_prefix_without_an_entry_skill(
+    tmp_config, tmp_path, monkeypatch
+):
+    module_folder = tmp_path / "repo"
+    module_folder.mkdir()
+    _profile(tmp_config, module_folder)
+    _patch_worktracker(monkeypatch)
+    created = _capture_create_session(monkeypatch)
+    _patch_argv(monkeypatch, invocation_prefix="!")
+    monkeypatch.setattr(
+        session_module,
+        "resolve_required_skills",
+        lambda **kwargs: ResolvedSkills(("to-spec",), (), frozenset(), "a" * 40),
+    )
+
+    with pytest.raises(ValueError, match="entry skill prefix"):
+        await session_module.launch_agent_run(
+            _intent(
+                launch_configuration=ResolvedLaunchConfiguration(
+                    prompt="Write the specification.",
+                    agent="claude",
+                    model=None,
+                    reasoning=None,
+                    required_skills=("to-spec",),
+                )
+            )
+        )
+
+    assert created == {}
 
 
 async def test_spawn_materializes_an_oversized_prompt_command(

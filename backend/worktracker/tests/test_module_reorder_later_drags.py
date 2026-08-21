@@ -9,6 +9,7 @@ directions.
 import pytest
 
 from worktracker.services.errors import ValidationError
+from worktracker.services.module_reorder import reorder_module
 from worktracker.services.work_items import reorder_work_item
 from worktracker.tests.module_reorder_fixtures import (  # noqa: F401 - pytest fixture
     modules,
@@ -28,9 +29,7 @@ def test_a_later_drag_writes_only_the_moved_module_rank(project, modules):
     seed_manual(modules, "c", "b", "a")
     before = ranks_by_name(project)
 
-    reorder_work_item(
-        modules["a"].id, before_id=None, after_id=modules["c"].id
-    )
+    reorder_module(modules["a"].id, before_id=None, after_id=modules["c"].id)
 
     after = ranks_by_name(project)
     assert after["b"] == before["b"] and after["c"] == before["c"]
@@ -44,7 +43,7 @@ def test_repeated_drags_between_the_same_neighbors_never_rebalance(project, modu
     fixed = ranks_by_name(project)
 
     for _ in range(40):
-        reorder_work_item(
+        reorder_module(
             modules["a"].id, before_id=modules["c"].id, after_id=modules["b"].id
         )
         moved = ranks_by_name(project)
@@ -58,7 +57,7 @@ def test_a_later_drag_rejects_a_cross_project_neighbor(project, modules):
     foreign = make_foreign_module(project)
 
     with pytest.raises(ValidationError):
-        reorder_work_item(modules["a"].id, before_id=foreign.id, after_id=None)
+        reorder_module(modules["a"].id, before_id=foreign.id, after_id=None)
 
 
 @pytest.mark.django_db
@@ -67,7 +66,7 @@ def test_a_module_may_not_be_ranked_against_a_task(project, modules, task_type):
     task = make_task(project, task_type, rank="V")
 
     with pytest.raises(ValidationError):
-        reorder_work_item(modules["a"].id, before_id=task.id, after_id=None)
+        reorder_module(modules["a"].id, before_id=task.id, after_id=None)
 
 
 @pytest.mark.django_db
@@ -79,13 +78,10 @@ def test_a_task_may_not_be_ranked_against_a_module(project, modules, task_type):
 
 
 @pytest.mark.django_db
-def test_a_task_reorder_rejects_a_module_baseline(project, modules, task_type):
-    task = make_task(project, task_type, rank="V")
-
-    with pytest.raises(ValidationError):
+def test_generic_work_item_reorder_rejects_a_module(project, modules):
+    with pytest.raises(ValidationError, match="module presentation"):
         reorder_work_item(
-            task.id,
+            modules["a"].id,
             before_id=None,
-            after_id=None,
-            initial_order_ids=baseline(modules, "c", "b", "a"),
+            after_id=modules["c"].id,
         )

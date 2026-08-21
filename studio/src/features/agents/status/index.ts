@@ -18,6 +18,7 @@ export type {
 } from "./selectors";
 export { isAgentlessRun, SHELL_RUN_SCOPE } from "./runScopes";
 export { useAgentStatusStore } from "./store";
+export { ModuleLifecycleChicklets } from "./ModuleLifecycleChicklets";
 export type { AgentStatusStore } from "./store";
 export {
   projectRunPresentation,

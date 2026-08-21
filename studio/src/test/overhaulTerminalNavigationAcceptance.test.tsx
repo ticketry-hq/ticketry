@@ -26,9 +26,20 @@ const terminalApi = vi.hoisted(() => ({
   terminateTerminal: vi.fn(),
 }));
 
+const workspaceTabApi = vi.hoisted(() => ({
+  getWorkspaceTabOrder: vi.fn(),
+  updateWorkspaceTabOrder: vi.fn(),
+}));
+
 vi.mock("../features/agents/api/agentApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../features/agents/api/agentApi")>()),
   ...terminalApi,
+}));
+
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
+  getWorkspaceTabOrder: workspaceTabApi.getWorkspaceTabOrder,
+  updateWorkspaceTabOrder: workspaceTabApi.updateWorkspaceTabOrder,
 }));
 
 vi.mock(
@@ -119,9 +130,13 @@ describe("overhaul acceptance — terminals", () => {
     terminalApi.getDocuments.mockResolvedValue({ documents: [] });
     terminalApi.getTerminals.mockResolvedValue([]);
     terminalApi.listResumableTerminals.mockResolvedValue([]);
+    workspaceTabApi.getWorkspaceTabOrder.mockResolvedValue({ order: [] });
+    workspaceTabApi.updateWorkspaceTabOrder.mockImplementation(
+      async (_taskId, order) => order,
+    );
   });
 
-  it("[overhaul-08] cycles live terminals by keyboard into a collapsed branch", () => {
+  it("[overhaul-08] cycles live terminals by keyboard into a collapsed branch", async () => {
     const parent = workItem({
       id: "story-1",
       name: "Parent",
@@ -184,9 +199,78 @@ describe("overhaul acceptance — terminals", () => {
       }));
     });
 
-    expect(useClientStore.getState().selectedTaskId).toBe("child-1");
+    await waitFor(() => expect(useClientStore.getState().selectedTaskId)
+      .toBe("child-1"));
     expect(useClientStore.getState().activeByTask["child-1"]).toBe("session-child");
     expect(useClientStore.getState().collapsedStateIds.has("todo")).toBe(false);
+  });
+
+  it("[overhaul-160] loads unopened workspaces before cycling in their saved terminal order", async () => {
+    const first = workItem({
+      id: "story-1",
+      name: "First",
+      state: TODO.id,
+      rank: "A",
+    });
+    const unopened = workItem({
+      id: "story-2",
+      name: "Unopened",
+      state: TODO.id,
+      rank: "B",
+    });
+    queryClient.setQueryData(queryKeys.tasks.byModule("project-1", "module-1"), {
+      rootIds: ["story-1", "story-2"],
+      children: { "story-1": [], "story-2": [] },
+      order: ["story-1", "story-2"],
+    });
+    queryClient.setQueryData(queryKeys.workItems.byId(first.id), first);
+    queryClient.setQueryData(queryKeys.workItems.byId(unopened.id), unopened);
+    setStatesSorted("project-1", [TODO]);
+    useTerminalStore.setState({
+      sessions: {
+        "session-first": session("session-first", "story-1", "run-first"),
+        "session-a": session("session-a", "story-2", "run-a"),
+        "session-b": session("session-b", "story-2", "run-b"),
+      },
+      sessionByRun: {
+        "run-first": "session-first",
+        "run-a": "session-a",
+        "run-b": "session-b",
+      },
+    });
+    useClientStore.setState({ activeByTask: { "story-1": "session-first" } });
+    useAgentStatusStore.setState({
+      runs: {
+        "run-first": run("run-first", "story-1"),
+        "run-a": run("run-a", "story-2"),
+        "run-b": run("run-b", "story-2"),
+      },
+    });
+    workspaceTabApi.getWorkspaceTabOrder.mockImplementation(async (taskId) => ({
+      order: taskId === "story-2"
+        ? [
+            { kind: "terminal", id: "run-b" },
+            { kind: "terminal", id: "run-a" },
+          ]
+        : [],
+    }));
+    render(<KeymapHarness rows={[]} />);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "\\",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    await waitFor(() => expect(useClientStore.getState().activeByTask["story-2"])
+      .toBe("session-b"));
+    expect(workspaceTabApi.getWorkspaceTabOrder).toHaveBeenCalledWith(
+      "story-2",
+      expect.any(AbortSignal),
+    );
   });
 
   it("[overhaul-16] closes, refreshes, and resumes a provider conversation in place", async () => {

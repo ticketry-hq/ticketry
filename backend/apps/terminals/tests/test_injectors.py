@@ -249,3 +249,90 @@ def test_inject_settings_for_agy_writes_temp_settings_layer():
         assert verify_run_authorization(authorization) == "run-xyz"
     finally:
         os.unlink(settings_path)
+
+
+# --- No MCP service of our own -------------------------------------------
+#
+# An instance whose own MCP service could not start must launch agents with no
+# WorkTracker MCP server at all. The alternative — the shared default port —
+# belongs to whichever Studio install happens to hold it, and run-scoped calls
+# sent there act on the wrong runtime.
+
+
+def test_claude_injects_no_mcp_server_without_an_endpoint():
+    out = claude_injector.inject_claude_lifecycle_settings(
+        ["claude", "--permission-mode", "auto", "do it"],
+        "run-xyz",
+        "http://h/api",
+        mcp_url=None,
+    )
+
+    assert "--mcp-config" not in out
+    assert out[1] == "--settings"
+    assert json.loads(out[2])["env"]["MUXED_AGENT_RUN_ID"] == "run-xyz"
+    assert out[3:] == ["--permission-mode", "auto", "do it"]
+
+
+def test_codex_injects_no_mcp_server_without_an_endpoint():
+    out = codex_injector.inject_codex_lifecycle_settings(
+        ["codex", "do it"],
+        "run-xyz",
+        "http://h/api",
+        mcp_url=None,
+    )
+
+    overrides = [
+        out[index + 1] for index, value in enumerate(out[:-1]) if value == "-c"
+    ]
+    assert not any(override.startswith("mcp_servers=") for override in overrides)
+    assert any(override.startswith("hooks=") for override in overrides)
+    assert 'approvals_reviewer="auto_review"' in overrides
+    assert out[-1] == "do it"
+
+
+def test_codex_resume_injects_no_mcp_server_without_an_endpoint():
+    out = codex_injector.inject_codex_lifecycle_settings(
+        ["codex", "resume", "sid-xyz"],
+        "run-xyz",
+        "http://h/api",
+        mcp_url=None,
+    )
+
+    assert out[:2] == ["codex", "resume"]
+    assert not any(value.startswith("mcp_servers=") for value in out)
+    assert out[-1] == "sid-xyz"
+
+
+def test_gemini_writes_settings_without_mcp_servers_when_there_is_no_endpoint():
+    out = gemini_injector.inject_gemini_lifecycle_settings(
+        ["gemini", "--yolo", "do it"],
+        "run-xyz",
+        "http://h/api",
+        mcp_url=None,
+    )
+
+    settings_path = out[1].split("=", 1)[1]
+    try:
+        with open(settings_path) as handle:
+            written = json.load(handle)
+        assert "mcpServers" not in written
+        assert "AfterAgent" in written["hooks"]
+    finally:
+        os.unlink(settings_path)
+
+
+def test_agy_writes_settings_without_mcp_servers_when_there_is_no_endpoint():
+    out = agy_injector.inject_agy_lifecycle_settings(
+        ["agy", "-i", "do it"],
+        "run-xyz",
+        "http://h/api",
+        mcp_url=None,
+    )
+
+    settings_path = out[1].split("=", 1)[1]
+    try:
+        with open(settings_path) as handle:
+            written = json.load(handle)
+        assert "mcpServers" not in written
+    finally:
+        os.unlink(settings_path)

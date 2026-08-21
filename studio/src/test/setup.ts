@@ -3,6 +3,10 @@ import { afterEach, beforeEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { notifyManager } from "@tanstack/react-query";
 
+// jsdom does not implement scrolling, but tab strips use this browser method
+// to keep their active item visible.
+Element.prototype.scrollIntoView ??= () => {};
+
 // TanStack Query defers subscriber notifications to a scheduler tick; the
 // suite's interaction patterns (act + synchronous assertion) predate that and
 // assume zustand's synchronous set→render. Notify synchronously under test.

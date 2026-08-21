@@ -9,7 +9,7 @@ import uuid
 
 import pytest
 
-from worktracker.models import Issue, Project
+from worktracker.models import Issue, ModulePresentation
 from worktracker.services.modules import create_module
 from worktracker.services.queries import list_modules
 from worktracker.tests.conftest import BASE
@@ -40,9 +40,18 @@ def listed_names(client, project, auth, **params):
     return [module["name"] for module in response.json()]
 
 
+def set_manual(*modules):
+    ModulePresentation.objects.bulk_create(
+        [
+            ModulePresentation(module=module, rank=module.rank or "V")
+            for module in modules
+        ]
+    )
+
+
 @pytest.mark.django_db
 def test_new_project_starts_in_automatic_ordering_mode(project):
-    assert project.manual_module_order is False
+    assert not ModulePresentation.objects.filter(module__project=project).exists()
 
 
 @pytest.mark.django_db
@@ -63,15 +72,13 @@ def test_automatic_reads_ignore_persisted_rank(client, project, module_type, aut
 
 
 @pytest.mark.django_db
-def test_manual_reads_use_ascending_persisted_rank(
-    client, project, module_type, auth
-):
+def test_manual_reads_use_ascending_persisted_rank(client, project, module_type, auth):
     # Real keys from ``ranking.rebalance``: mixed case, so a locale collation
     # that folds case would read "iHiH…" as smaller than "QZQZ…".
-    make_module(project, module_type, "first", rank="QZQZQZQZQZQZ")
-    make_module(project, module_type, "second", rank="8r8r8r8r8r8r")
-    make_module(project, module_type, "third", rank="iHiHiHiHiHiH")
-    Project.objects.filter(pk=project.id).update(manual_module_order=True)
+    first = make_module(project, module_type, "first", rank="QZQZQZQZQZQZ")
+    second = make_module(project, module_type, "second", rank="8r8r8r8r8r8r")
+    third = make_module(project, module_type, "third", rank="iHiHiHiHiHiH")
+    set_manual(first, second, third)
 
     assert listed_names(client, project, auth) == ["second", "first", "third"]
 
@@ -84,9 +91,9 @@ def test_manual_reads_break_equal_ranks_on_identifier(
     # default rank, so the identifier fallback is what keeps the read total.
     low = uuid.UUID("00000000-0000-4000-8000-000000000001")
     high = uuid.UUID("ffffffff-0000-4000-8000-000000000001")
-    make_module(project, module_type, "high-id", module_id=high)
-    make_module(project, module_type, "low-id", module_id=low)
-    Project.objects.filter(pk=project.id).update(manual_module_order=True)
+    high_module = make_module(project, module_type, "high-id", module_id=high)
+    low_module = make_module(project, module_type, "low-id", module_id=low)
+    set_manual(high_module, low_module)
 
     assert listed_names(client, project, auth) == ["low-id", "high-id"]
 
@@ -96,11 +103,10 @@ def test_manual_reads_break_equal_ranks_on_identifier(
 def test_both_modes_still_hide_archived_modules(
     client, project, module_type, auth, manual_module_order
 ):
-    make_module(project, module_type, "live")
-    make_module(project, module_type, "retired", is_archived=True)
-    Project.objects.filter(pk=project.id).update(
-        manual_module_order=manual_module_order
-    )
+    live = make_module(project, module_type, "live")
+    retired = make_module(project, module_type, "retired", is_archived=True)
+    if manual_module_order:
+        set_manual(live, retired)
 
     assert listed_names(client, project, auth) == ["live"]
     assert set(listed_names(client, project, auth, include_archived="true")) == {
@@ -114,12 +120,11 @@ def test_both_modes_still_hide_archived_modules(
 def test_query_service_shares_the_route_order(
     client, project, module_type, auth, manual_module_order
 ):
-    make_module(project, module_type, "first", rank="QZQZQZQZQZQZ")
-    make_module(project, module_type, "second", rank="8r8r8r8r8r8r")
-    make_module(project, module_type, "third", rank="iHiHiHiHiHiH")
-    Project.objects.filter(pk=project.id).update(
-        manual_module_order=manual_module_order
-    )
+    first = make_module(project, module_type, "first", rank="QZQZQZQZQZQZ")
+    second = make_module(project, module_type, "second", rank="8r8r8r8r8r8r")
+    third = make_module(project, module_type, "third", rank="iHiHiHiHiHiH")
+    if manual_module_order:
+        set_manual(first, second, third)
 
     assert [m["name"] for m in list_modules(project.id)] == listed_names(
         client, project, auth
@@ -127,10 +132,7 @@ def test_query_service_shares_the_route_order(
 
 
 @pytest.mark.django_db
-def test_creating_a_module_leaves_the_project_ordering_mode_alone(
-    project, module_type
-):
+def test_creating_a_module_leaves_the_project_ordering_mode_alone(project, module_type):
     create_module(project.id, "Epic", module_type.id)
 
-    project.refresh_from_db()
-    assert project.manual_module_order is False
+    assert not ModulePresentation.objects.filter(module__project=project).exists()

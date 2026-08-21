@@ -68,7 +68,7 @@ def inject_agy_launch(
     agent_run_id: str,
     *,
     lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
-    mcp_url: str = DEFAULT_MCP_URL,
+    mcp_url: str | None = DEFAULT_MCP_URL,
     settings_path: Path | None = None,
 ) -> InjectedLaunch:
     """Relocate agy's settings layer to a temp file wiring hooks and MCP."""
@@ -87,7 +87,7 @@ def inject_agy_lifecycle_settings(
     argv: list[str],
     agent_run_id: str,
     lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
-    mcp_url: str = DEFAULT_MCP_URL,
+    mcp_url: str | None = DEFAULT_MCP_URL,
     settings_path: Path | None = None,
 ) -> list[str]:
     """:func:`inject_agy_launch` encoded as a shell ``env`` wrapper argv."""

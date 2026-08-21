@@ -14,6 +14,7 @@ import { IssueTypesApi } from "./generated/apis/IssueTypesApi.js";
 import { LaunchBindingsApi } from "./generated/apis/LaunchBindingsApi.js";
 import { ModelsApi } from "./generated/apis/ModelsApi.js";
 import { ModuleLinksApi } from "./generated/apis/ModuleLinksApi.js";
+import { ModulePresentationsApi } from "./generated/apis/ModulePresentationsApi.js";
 import { ModulesApi } from "./generated/apis/ModulesApi.js";
 import { ProjectsApi } from "./generated/apis/ProjectsApi.js";
 import { ProvidersApi } from "./generated/apis/ProvidersApi.js";
@@ -43,6 +44,7 @@ export interface WorkTrackerClient {
   launchBindings: LaunchBindingsApi;
   models: ModelsApi;
   moduleLinks: ModuleLinksApi;
+  modulePresentations: ModulePresentationsApi;
   modules: ModulesApi;
   projects: ProjectsApi;
   providers: ProvidersApi;
@@ -107,6 +109,7 @@ export function createWorkTrackerClient(
     launchBindings: new LaunchBindingsApi(configuration),
     models: new ModelsApi(configuration),
     moduleLinks: new ModuleLinksApi(configuration),
+    modulePresentations: new ModulePresentationsApi(configuration),
     modules: new ModulesApi(configuration),
     projects: new ProjectsApi(configuration),
     providers: new ProvidersApi(configuration),

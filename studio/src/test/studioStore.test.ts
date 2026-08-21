@@ -6,6 +6,7 @@ vi.mock("../shared/api/client", async () => {
     ...actual,
     listProjects: vi.fn(),
     listModules: vi.fn(),
+    listModulePresentations: vi.fn(),
     getTasks: vi.fn(),
     createProject: vi.fn(),
     updateProject: vi.fn(),
@@ -29,6 +30,9 @@ import { LAST_SELECTED_MODULE_KEY } from "../state/persistence";
 
 const listProjects = api.listProjects as ReturnType<typeof vi.fn>;
 const listModules = api.listModules as ReturnType<typeof vi.fn>;
+const listModulePresentations = api.listModulePresentations as ReturnType<
+  typeof vi.fn
+>;
 const getTasks = api.getTasks as ReturnType<typeof vi.fn>;
 const createProject = api.createProject as ReturnType<typeof vi.fn>;
 const updateProject = api.updateProject as ReturnType<typeof vi.fn>;
@@ -39,7 +43,6 @@ const P = (id: string): Project => ({
   name: id,
   slug: id.toUpperCase(),
     description: "",
-    manual_module_order: false,
     onboarding_required: false,
 });
 
@@ -49,6 +52,7 @@ beforeEach(() => {
   seedModuleLinks([]);
   listProjects.mockReset();
   listModules.mockReset().mockResolvedValue([]);
+  listModulePresentations.mockReset().mockResolvedValue([]);
   getTasks.mockReset().mockResolvedValue({
     rootIds: [],
     children: {},

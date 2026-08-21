@@ -21,6 +21,7 @@ import {
   useTerminalPanelStore,
 } from "../features/terminal-panel/panelStore";
 import {
+  clearLastSelectedModule,
   finishCollapsedStateMigration,
   isPanelLayout,
   persistPanelLayout,
@@ -35,7 +36,6 @@ import {
   writeLastSelectedModule,
   writeSidebarVisible,
 } from "./persistence";
-import { MODULES_SIDEBAR_ENABLED } from "./sidebarAvailability";
 
 export type FocusedPane =
   | "projects"
@@ -147,6 +147,7 @@ export interface ClientState {
   workItemCursorsByProject: Record<string, number>;
 
   selectModule: (id: string) => Promise<void>;
+  deselectModule: () => void;
   selectTask: (id: string) => void;
   toggleStateConfiguration: (projectId: string, stateId: string) => void;
   dismissStateConfiguration: () => void;
@@ -357,7 +358,7 @@ export const useClientStore = create<ClientState>((set, get) => ({
   navigationModality: "keyboard",
   projectsCursorId: null,
   modulesCursorId: null,
-  sidebarVisible: MODULES_SIDEBAR_ENABLED && readSidebarVisible(),
+  sidebarVisible: readSidebarVisible(),
   panelLayout: readPanelLayout(),
   modalStack: [],
   bindingsStack: [DEFAULT_BINDINGS],
@@ -414,6 +415,15 @@ export const useClientStore = create<ClientState>((set, get) => ({
     }));
     get().setSidebarVisible(false);
     get().setFocusedPane("tasks");
+  },
+
+  deselectModule() {
+    set({
+      selectedModuleId: null,
+      selectedTaskId: null,
+      workspaceSelection: { kind: "task" },
+    });
+    clearLastSelectedModule();
   },
 
   selectTask(id) {
@@ -623,10 +633,9 @@ export const useClientStore = create<ClientState>((set, get) => ({
   },
 
   setSidebarVisible(sidebarVisible) {
-    const nextSidebarVisible = MODULES_SIDEBAR_ENABLED && sidebarVisible;
-    writeSidebarVisible(nextSidebarVisible);
+    writeSidebarVisible(sidebarVisible);
     set(
-      nextSidebarVisible
+      sidebarVisible
         ? { sidebarVisible: true, editViewBodyEngaged: false }
         : {
             sidebarVisible: false,

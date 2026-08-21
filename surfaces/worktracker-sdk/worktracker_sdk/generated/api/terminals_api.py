@@ -394,6 +394,7 @@ class TerminalsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "TerminateResult",
             '404': "ErrorEnvelope",
+            '409': "ErrorEnvelope",
             '500': "ErrorEnvelope",
         }
         response_data = self.api_client.call_api(
@@ -463,6 +464,7 @@ class TerminalsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "TerminateResult",
             '404': "ErrorEnvelope",
+            '409': "ErrorEnvelope",
             '500': "ErrorEnvelope",
         }
         response_data = self.api_client.call_api(
@@ -532,6 +534,7 @@ class TerminalsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "TerminateResult",
             '404': "ErrorEnvelope",
+            '409': "ErrorEnvelope",
             '500': "ErrorEnvelope",
         }
         response_data = self.api_client.call_api(
@@ -1772,6 +1775,7 @@ class TerminalsApi:
             '200': "SelfTerminateResult",
             '401': "Open",
             '404': "Open",
+            '409': "Open",
             '500': "Open",
         }
         response_data = self.api_client.call_api(
@@ -1838,6 +1842,7 @@ class TerminalsApi:
             '200': "SelfTerminateResult",
             '401': "Open",
             '404': "Open",
+            '409': "Open",
             '500': "Open",
         }
         response_data = self.api_client.call_api(
@@ -1904,6 +1909,7 @@ class TerminalsApi:
             '200': "SelfTerminateResult",
             '401': "Open",
             '404': "Open",
+            '409': "Open",
             '500': "Open",
         }
         response_data = self.api_client.call_api(

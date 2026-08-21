@@ -9,6 +9,7 @@ export * from './IssueTypesApi.js';
 export * from './LaunchBindingsApi.js';
 export * from './ModelsApi.js';
 export * from './ModuleLinksApi.js';
+export * from './ModulePresentationsApi.js';
 export * from './ModulesApi.js';
 export * from './ProjectsApi.js';
 export * from './ProvidersApi.js';

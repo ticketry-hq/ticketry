@@ -22,6 +22,7 @@ pub enum StudioChord {
     PanelToggle,
     Settings,
     ModulePosition(u8),
+    BodyDisengage,
 }
 
 impl StudioChord {
@@ -33,6 +34,7 @@ impl StudioChord {
             1 => Some(Self::PanelToggle),
             2 => Some(Self::Settings),
             3..=12 => Some(Self::ModulePosition(code - 2)),
+            13 => Some(Self::BodyDisengage),
             _ => None,
         }
     }
@@ -53,6 +55,7 @@ impl StudioChord {
             Self::ModulePosition(9) => "module-position-9",
             Self::ModulePosition(10) => "module-position-10",
             Self::ModulePosition(_) => unreachable!("module positions are validated at the bridge"),
+            Self::BodyDisengage => "body-disengage",
         }
     }
 }
@@ -116,6 +119,7 @@ mod tests {
         assert_eq!(StudioChord::Settings.as_str(), "settings");
         assert_eq!(StudioChord::PanelToggle.as_str(), "panel-toggle");
         assert_eq!(StudioChord::ModulePosition(4).as_str(), "module-position-4");
+        assert_eq!(StudioChord::BodyDisengage.as_str(), "body-disengage");
     }
 
     #[test]
@@ -131,8 +135,12 @@ mod tests {
             StudioChord::from_native(12),
             Some(StudioChord::ModulePosition(10))
         );
+        assert_eq!(
+            StudioChord::from_native(13),
+            Some(StudioChord::BodyDisengage)
+        );
         // A code this build does not know is not acted on as another chord.
-        assert_eq!(StudioChord::from_native(13), None);
+        assert_eq!(StudioChord::from_native(14), None);
     }
 
     #[test]

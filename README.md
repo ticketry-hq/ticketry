@@ -4,6 +4,17 @@ Ticketry is a macOS desktop application for planning work and running coding
 agents. This repository contains the Django backend, React frontend, Tauri
 shell, generated SDKs, MCP service, and local development tools.
 
+<p align="center">
+  <a href="https://github.com/ticketry-hq/ticketry/releases/download/0.2.0/Ticketry_0.2.0_aarch64.dmg">
+    <img src="https://img.shields.io/badge/Download_Ticketry_0.2.0-macOS_Apple_silicon-2675f5?style=for-the-badge&logo=apple&logoColor=white" alt="Download Ticketry 0.2.0 for Apple silicon Macs">
+  </a>
+</p>
+
+The current build requires macOS 11 or newer on an Apple silicon Mac. Release
+downloads are available to repository collaborators.
+
+## Repository layout
+
 ```text
 backend/                             Django ASGI host, application code, and worktracker
 studio/                              React/Vite frontend and Tauri desktop shell
@@ -12,6 +23,14 @@ surfaces/worktracker-typescript-sdk/ Generated TypeScript API client
 surfaces/worktracker-agent/          FastMCP service
 scripts/                             Bootstrap, development, and contract tooling
 ```
+
+## Screenshots
+
+![An agent reviewing a completed work item and filing its findings](screenshots/agent-review.png)
+
+![A work item with its description, acceptance criteria, and agent controls](screenshots/work-item-details.png)
+
+![The rich-text spec editor open inside a work item](screenshots/spec-editor.png)
 
 ## Local development
 

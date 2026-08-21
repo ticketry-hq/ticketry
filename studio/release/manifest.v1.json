@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "release_version": "0.1.0",
+  "release_version": "0.2.0",
   "product": "ticketry",
   "artifacts": {
     "frontend": {
@@ -92,8 +92,8 @@
         "tmux": "external-prerequisite",
         "runtime_protocol": "1",
         "database_schema": "forward-migrations-required",
-        "app_version": "0.1.0",
-        "sidecar_version": "0.1.0"
+        "app_version": "0.2.0",
+        "sidecar_version": "0.2.0"
       }
     }
   ]

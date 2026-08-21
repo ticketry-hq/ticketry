@@ -482,15 +482,9 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
             f"{base_url}/projects", headers=headers, timeout=30
         )
         assert projects_response.status_code == 200
-        assert any(project["slug"] == "meml" for project in projects_response.json())
-        project_response = httpx.post(
-            f"{base_url}/projects",
-            headers=headers,
-            json={"name": "Packaged hook", "slug": "PKG"},
-            timeout=5,
-        )
-        assert project_response.status_code == 200
-        project_id = project_response.json()["id"]
+        projects = projects_response.json()
+        assert len(projects) == 1
+        project_id = projects[0]["id"]
 
         issue_types_response = httpx.get(
             f"{base_url}/projects/{project_id}/issue-types",
@@ -516,7 +510,7 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
             json={"name": "Packaged hook", "issue_type_id": module_type_id},
             timeout=5,
         )
-        assert module_response.status_code == 200
+        assert module_response.status_code == 201
         module_id = module_response.json()["id"]
         task_response = httpx.post(
             f"{base_url}/projects/{project_id}/work-items",
@@ -528,7 +522,7 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
             },
             timeout=5,
         )
-        assert task_response.status_code == 200
+        assert task_response.status_code == 201
         task_id = task_response.json()["id"]
 
         with sqlite3.connect(tmp_path / "state.db") as database:
@@ -554,8 +548,9 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
                 """
                 INSERT INTO agent_terminal_sessions (
                     agent_run_id, tmux_session_name, task_id, module_id,
-                    project_id, agent, created_at, scope
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    project_id, agent, created_at, scope,
+                    runtime_cleanup_pending, output_sequence
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -566,6 +561,8 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
                     "codex",
                     "2020-01-01T00:00:00+00:00",
                     "task",
+                    False,
+                    0,
                 ),
             )
 

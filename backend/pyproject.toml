@@ -1,6 +1,6 @@
 [project]
 name = "studio-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "Django ASGI backend for muxed."
 license = "MIT"
 requires-python = ">=3.11"
@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "mcp>=1.29,<2",
     "pytest>=8,<9",
     "pytest-asyncio>=0.23",
     "pytest-django",

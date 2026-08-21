@@ -6,6 +6,7 @@ from django.db.migrations.executor import MigrationExecutor
 
 
 APP = "worktracker"
+CATALOG_BEFORE = "0043_story_run_now_workflow"
 BEFORE = "0050_module_presentation"
 AFTER = "0051_codex_5_3_model_catalog"
 MODEL_NAME = "gpt-5.3-codex-spark"
@@ -13,15 +14,21 @@ MODEL_NAME = "gpt-5.3-codex-spark"
 
 def _migrate_to_before():
     executor = MigrationExecutor(connection)
-    executor.migrate([(APP, BEFORE)])
+    executor.migrate([(APP, CATALOG_BEFORE)])
     executor.loader.build_graph()
-    apps = executor.loader.project_state((APP, BEFORE)).apps
+    apps = executor.loader.project_state((APP, CATALOG_BEFORE)).apps
     Provider = apps.get_model(APP, "Provider")
-    AgentModel = apps.get_model(APP, "AgentModel")
-    codex, _ = Provider.objects.get_or_create(
+    Provider.objects.get_or_create(
         slug="codex",
         defaults={"id": uuid.uuid4(), "activated": True, "supports_unattended": True},
     )
+
+    executor = MigrationExecutor(connection)
+    executor.migrate([(APP, BEFORE)])
+    executor.loader.build_graph()
+    apps = executor.loader.project_state((APP, BEFORE)).apps
+    AgentModel = apps.get_model(APP, "AgentModel")
+    codex = apps.get_model(APP, "Provider").objects.get(slug="codex")
     AgentModel.objects.filter(provider=codex, name=MODEL_NAME).delete()
     assert not AgentModel.objects.filter(
         provider=codex, name=MODEL_NAME

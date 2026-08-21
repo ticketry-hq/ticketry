@@ -108,7 +108,7 @@ cd studio
 export MUXED_DESKTOP_ACCEPTANCE_DRIVER=/absolute/path/to/installed-app-driver
 export GITHUB_REPOSITORY='owner/private-repository'
 export GITHUB_TOKEN='a-scoped-token-with-private-repository-contents-write-access'
-export MUXED_RELEASE_PUBLISH_COMMAND='["node","scripts/github-release-publisher.mjs","--target","macos-aarch64","--tag","0.1.0"]'
+export MUXED_RELEASE_PUBLISH_COMMAND='["node","scripts/github-release-publisher.mjs","--target","macos-aarch64","--tag","0.2.0"]'
 npm run release:publish -- --target macos-aarch64
 ```
 
@@ -116,12 +116,12 @@ The destination repository must be private. This is a publish-time guard
 only: the publisher checks repository visibility when an actual publish is
 attempted and refuses to publish unsigned artifacts to a repository that is
 not private. `release:validate` and CI never consult repository visibility,
-so a public source repository keeps a green pipeline. While this repository
-is public and no signing credentials exist, no binary releases are published
-at all — the application is distributed as source only. Keep `GITHUB_TOKEN`
-in the environment only; the publisher never includes it in logs or release
-notes.
-The local and remote `0.1.0` tags must already exist, and an existing release
+so a public source repository keeps a green pipeline. This repository is
+private, so its unsigned releases are available only to collaborators with
+repository access. If it becomes public, the publisher refuses to upload an
+unsigned build. Keep `GITHUB_TOKEN` in the environment only; the publisher
+never includes it in logs or release notes.
+The local and remote `0.2.0` tags must already exist, and an existing release
 on that tag is never overwritten. Publishing the supported unsigned developer
 build requires a separate acknowledgement:
 
@@ -130,7 +130,7 @@ cd studio
 export MUXED_DESKTOP_ACCEPTANCE_DRIVER=/absolute/path/to/installed-app-driver
 export GITHUB_REPOSITORY='owner/private-repository'
 export GITHUB_TOKEN='a-scoped-token-with-private-repository-contents-write-access'
-export MUXED_RELEASE_PUBLISH_COMMAND='["node","scripts/github-release-publisher.mjs","--target","macos-aarch64","--tag","0.1.0"]'
+export MUXED_RELEASE_PUBLISH_COMMAND='["node","scripts/github-release-publisher.mjs","--target","macos-aarch64","--tag","0.2.0"]'
 npm run release:publish -- --target macos-aarch64 --acknowledge-unsigned
 ```
 

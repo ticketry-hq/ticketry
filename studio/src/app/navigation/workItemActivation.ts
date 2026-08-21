@@ -7,11 +7,11 @@ import {
 } from "../../features/agents/status";
 import { getTerminals } from "../../features/agents/api/agentApi";
 import {
+  launchFailureMessage,
   useTerminalStore,
   useWorkspaceTabsStore,
   type SessionMeta,
 } from "../../features/agents/terminal/appNavigation";
-import { launchFailureMessage } from "../../features/agents/terminal/internal/launchFailure";
 import { agentApiBase, apiKey } from "../../shared/api/client";
 import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";

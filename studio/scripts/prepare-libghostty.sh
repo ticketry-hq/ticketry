@@ -13,8 +13,14 @@ SOURCE_DIR="$CACHE_DIR/ghostty"
 ZIG_DIR="$CACHE_DIR/zig-$ZIG_VERSION"
 
 case "$(uname -s)-$(uname -m)" in
-  Darwin-arm64) ZIG_ARCHIVE="zig-aarch64-macos-$ZIG_VERSION" ;;
-  Darwin-x86_64) ZIG_ARCHIVE="zig-x86_64-macos-$ZIG_VERSION" ;;
+  Darwin-arm64)
+    ZIG_ARCHIVE="zig-aarch64-macos-$ZIG_VERSION"
+    ZIG_SHA256="3cc2bab367e185cdfb27501c4b30b1b0653c28d9f73df8dc91488e66ece5fa6b"
+    ;;
+  Darwin-x86_64)
+    ZIG_ARCHIVE="zig-x86_64-macos-$ZIG_VERSION"
+    ZIG_SHA256="375b6909fc1495d16fc2c7db9538f707456bfc3373b14ee83fdd3e22b3d43f7f"
+    ;;
   *)
     echo "Skipping native libghostty preparation: macOS only"
     exit 0
@@ -31,12 +37,18 @@ if [ -f "$VENDOR_DIR/REVISION" ] &&
   exit 0
 fi
 
-if [ ! -x "$ZIG_DIR/zig" ]; then
+ZIG_CHECKSUM_FILE="$ZIG_DIR/.ticketry-sha256"
+if [ ! -x "$ZIG_DIR/zig" ] ||
+    [ ! -f "$ZIG_CHECKSUM_FILE" ] ||
+    [ "$(tr -d '\r\n' < "$ZIG_CHECKSUM_FILE")" != "$ZIG_SHA256" ]; then
   mkdir -p "$CACHE_DIR"
   ARCHIVE_PATH="$CACHE_DIR/$ZIG_ARCHIVE.tar.xz"
   curl -fL "https://ziglang.org/download/$ZIG_VERSION/$ZIG_ARCHIVE.tar.xz" -o "$ARCHIVE_PATH"
+  printf '%s  %s\n' "$ZIG_SHA256" "$ARCHIVE_PATH" | shasum -a 256 -c -
+  rm -rf "$ZIG_DIR"
   tar -xf "$ARCHIVE_PATH" -C "$CACHE_DIR"
   mv "$CACHE_DIR/$ZIG_ARCHIVE" "$ZIG_DIR"
+  printf '%s\n' "$ZIG_SHA256" > "$ZIG_CHECKSUM_FILE"
 fi
 
 if [ ! -d "$SOURCE_DIR/.git" ]; then

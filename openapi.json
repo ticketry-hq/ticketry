@@ -9,6 +9,7 @@
         "/automation-attempts/{attempt_id}/retry": {
             "post": {
                 "operationId": "automation_attempts_retry_create",
+                "description": "Owning ViewSet for durable automated-launch attempts.",
                 "parameters": [
                     {
                         "in": "path",
@@ -61,86 +62,10 @@
                 }
             }
         },
-        "/config": {
-            "get": {
-                "operationId": "config_retrieve",
-                "tags": [
-                    "configuration"
-                ],
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Config"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            },
-            "patch": {
-                "operationId": "config_partial_update",
-                "tags": [
-                    "configuration"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PatchedRecentIndex"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PatchedRecentIndex"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PatchedRecentIndex"
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Config"
-                                }
-                            }
-                        },
-                        "description": ""
-                    },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorEnvelope"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/config/folders/validate": {
             "post": {
                 "operationId": "config_folders_validate_create",
+                "description": "Stateless settings operations that do not own a model resource.",
                 "tags": [
                     "settings"
                 ],
@@ -183,162 +108,10 @@
                 }
             }
         },
-        "/config/profiles": {
-            "post": {
-                "operationId": "config_profiles_create",
-                "tags": [
-                    "configuration"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Profile"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Profile"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Profile"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Config"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/config/profiles/{index}": {
-            "put": {
-                "operationId": "config_profiles_update",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "index",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "configuration"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Profile"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Profile"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Profile"
-                            }
-                        }
-                    },
-                    "required": true
-                },
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Config"
-                                }
-                            }
-                        },
-                        "description": ""
-                    },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorEnvelope"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            },
-            "delete": {
-                "operationId": "config_profiles_destroy",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "index",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "configuration"
-                ],
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Config"
-                                }
-                            }
-                        },
-                        "description": ""
-                    },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ErrorEnvelope"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/docs/{doc_id}": {
             "put": {
                 "operationId": "docs_update",
+                "description": "List, update, and serve registered documents.",
                 "parameters": [
                     {
                         "in": "path",
@@ -402,7 +175,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                    "$ref": "#/components/schemas/DocumentConflict"
                                 }
                             }
                         },
@@ -414,6 +187,7 @@
         "/docs/{doc_id}/{asset_path}": {
             "get": {
                 "operationId": "docs_retrieve",
+                "description": "List, update, and serve registered documents.",
                 "parameters": [
                     {
                         "in": "path",
@@ -466,40 +240,38 @@
         "/documents": {
             "get": {
                 "operationId": "documents_retrieve",
+                "description": "List, update, and serve registered documents.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "module_id",
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "in": "query",
-                        "name": "profile",
-                        "schema": {
-                            "type": "integer"
+                            "type": "string",
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "project_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "scope",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "task_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         }
                     }
                 ],
@@ -538,12 +310,14 @@
         "/fs/complete": {
             "get": {
                 "operationId": "fs_complete_retrieve",
+                "description": "List, update, and serve registered documents.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "path",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "default": ""
                         }
                     }
                 ],
@@ -572,6 +346,7 @@
         "/healthz": {
             "get": {
                 "operationId": "healthz_retrieve",
+                "description": "Process-level system operations with no persistence dependency.",
                 "tags": [
                     "system"
                 ],
@@ -595,7 +370,7 @@
         "/lifecycle/events": {
             "post": {
                 "operationId": "lifecycle_events_create",
-                "description": "Lifecycle ingress for agent hooks, guarded by run-scoped authorization.\n\nThe view skips DRF's static-API-key authentication because its callers are\nhook subprocesses that never hold the desktop credential. Instead each\nlaunch injects a Studio-signed Bearer credential bound to exactly one run\n(the same scheme :class:`SelfTerminateView` uses), so an arbitrary local\nprocess cannot spoof lifecycle state or hijack another run's\n``provider_session_id``.",
+                "description": "Owning ViewSet for run lifecycle and status operations.",
                 "tags": [
                     "runs"
                 ],
@@ -646,28 +421,12 @@
                 }
             }
         },
-        "/runs/agent-status": {
+        "/module-links": {
             "get": {
-                "operationId": "runs_agent_status_retrieve",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "project_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "task_id",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
+                "operationId": "module_links_list",
+                "description": "List and mutate host-local links addressed by their module identity.",
                 "tags": [
-                    "runs"
+                    "module-links"
                 ],
                 "security": [
                     {
@@ -679,51 +438,9 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/AgentStatusResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/runs/module-activity": {
-            "get": {
-                "operationId": "runs_module_activity_retrieve",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "project_id",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "window_days",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "tags": [
-                    "runs"
-                ],
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                        "type": "string"
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ModuleLink"
                                     }
                                 }
                             }
@@ -733,9 +450,95 @@
                 }
             }
         },
+        "/module-links/{module_id}": {
+            "put": {
+                "operationId": "module_links_upsert",
+                "description": "List and mutate host-local links addressed by their module identity.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "module-links"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleLinkWrite"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleLinkWrite"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModuleLinkWrite"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModuleLink"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "module_links_delete",
+                "description": "List and mutate host-local links addressed by their module identity.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "module-links"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/settings/keybindings": {
             "get": {
                 "operationId": "settings_keybindings_retrieve",
+                "description": "Retrieve or replace the installation's singleton keybindings value.",
                 "tags": [
                     "settings"
                 ],
@@ -759,6 +562,7 @@
             },
             "put": {
                 "operationId": "settings_keybindings_update",
+                "description": "Retrieve or replace the installation's singleton keybindings value.",
                 "tags": [
                     "settings"
                 ],
@@ -882,12 +686,14 @@
         "/terminals": {
             "get": {
                 "operationId": "terminals_list",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "task_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "required": true
                     }
@@ -918,6 +724,7 @@
             },
             "post": {
                 "operationId": "terminals_create",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "tags": [
                     "terminals"
                 ],
@@ -967,6 +774,16 @@
                         },
                         "description": ""
                     },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
                     "500": {
                         "content": {
                             "application/json": {
@@ -981,12 +798,14 @@
             },
             "delete": {
                 "operationId": "terminals_destroy",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "agent_run_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "required": true
                     }
@@ -1020,6 +839,16 @@
                         },
                         "description": ""
                     },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
                     "500": {
                         "content": {
                             "application/json": {
@@ -1036,26 +865,33 @@
         "/terminals/resumable": {
             "get": {
                 "operationId": "terminals_resumable_list",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "module_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "project_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "task_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
                         }
                     }
                 ],
@@ -1087,12 +923,14 @@
         "/terminals/resume": {
             "post": {
                 "operationId": "terminals_resume_create",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "agent_run_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "required": true
                     }
@@ -1152,19 +990,23 @@
         "/terminals/scratch": {
             "get": {
                 "operationId": "terminals_scratch_list",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "module_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "project_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "required": true
                     }
@@ -1197,6 +1039,7 @@
         "/terminals/self-terminate": {
             "post": {
                 "operationId": "terminals_self_terminate_create",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "tags": [
                     "terminals"
                 ],
@@ -1234,6 +1077,16 @@
                         },
                         "description": ""
                     },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Open"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
                     "500": {
                         "content": {
                             "application/json": {
@@ -1250,13 +1103,14 @@
         "/terminals/shells": {
             "get": {
                 "operationId": "terminals_shells_list",
-                "description": "A module's durable login shells, which are runs with no agent.",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "module_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "required": true
                     }
@@ -1287,7 +1141,7 @@
             },
             "post": {
                 "operationId": "terminals_shells_create",
-                "description": "A module's durable login shells, which are runs with no agent.",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "tags": [
                     "terminals"
                 ],
@@ -1353,6 +1207,7 @@
         "/terminals/viewers/lease": {
             "post": {
                 "operationId": "terminals_viewers_lease_create",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "tags": [
                     "terminals"
                 ],
@@ -1360,17 +1215,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLease"
+                                "$ref": "#/components/schemas/ViewerLeaseRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLease"
+                                "$ref": "#/components/schemas/ViewerLeaseRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLease"
+                                "$ref": "#/components/schemas/ViewerLeaseRequest"
                             }
                         }
                     },
@@ -1418,6 +1273,7 @@
         "/terminals/viewers/lease/release": {
             "post": {
                 "operationId": "terminals_viewers_lease_release_create",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "tags": [
                     "terminals"
                 ],
@@ -1425,17 +1281,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                                "$ref": "#/components/schemas/ViewerLeaseIdentity"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                                "$ref": "#/components/schemas/ViewerLeaseIdentity"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                                "$ref": "#/components/schemas/ViewerLeaseIdentity"
                             }
                         }
                     },
@@ -1463,6 +1319,7 @@
         "/terminals/viewers/lease/renew": {
             "post": {
                 "operationId": "terminals_viewers_lease_renew_create",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "tags": [
                     "terminals"
                 ],
@@ -1470,17 +1327,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                                "$ref": "#/components/schemas/ViewerLeaseIdentity"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                                "$ref": "#/components/schemas/ViewerLeaseIdentity"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/ViewerLeaseRelease"
+                                "$ref": "#/components/schemas/ViewerLeaseIdentity"
                             }
                         }
                     },
@@ -1518,6 +1375,7 @@
         "/terminals/viewers/output": {
             "post": {
                 "operationId": "terminals_viewers_output_create",
+                "description": "Owning ViewSet for terminal sessions and their commands.",
                 "tags": [
                     "terminals"
                 ],
@@ -1701,7 +1559,7 @@
         "/work-tracker/issue-types/{type_id}/transitions": {
             "get": {
                 "operationId": "listIssueTypeTransitions",
-                "description": "Canonical transition collection read and revision-guarded create.",
+                "description": "Issue-type-scoped transition CRUD with revision-guarded writes.",
                 "parameters": [
                     {
                         "in": "path",
@@ -1739,7 +1597,7 @@
             },
             "post": {
                 "operationId": "createIssueTypeTransition",
-                "description": "Canonical transition collection read and revision-guarded create.",
+                "description": "Issue-type-scoped transition CRUD with revision-guarded writes.",
                 "parameters": [
                     {
                         "in": "path",
@@ -1758,17 +1616,92 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/IssueTypeTransition"
+                                "$ref": "#/components/schemas/IssueTypeTransitionCreate"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/IssueTypeTransition"
+                                "$ref": "#/components/schemas/IssueTypeTransitionCreate"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/IssueTypeTransition"
+                                "$ref": "#/components/schemas/IssueTypeTransitionCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IssueTypeTransition"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}": {
+            "patch": {
+                "operationId": "updateIssueTypeTransition",
+                "description": "Issue-type-scoped transition CRUD with revision-guarded writes.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "from_state_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "to_state_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "type_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedIssueTypeTransition"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedIssueTypeTransition"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedIssueTypeTransition"
                             }
                         }
                     },
@@ -1791,12 +1724,10 @@
                         "description": ""
                     }
                 }
-            }
-        },
-        "/work-tracker/issue-types/{type_id}/transitions/{from_state_id}/{to_state_id}": {
-            "patch": {
-                "operationId": "updateIssueTypeTransition",
-                "description": "Permission update/delete at a transition's composite domain key.",
+            },
+            "delete": {
+                "operationId": "deleteIssueTypeTransition",
+                "description": "Issue-type-scoped transition CRUD with revision-guarded writes.",
                 "parameters": [
                     {
                         "in": "path",
@@ -1833,74 +1764,22 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedIssueTypeTransition"
+                                "$ref": "#/components/schemas/WorkflowRevision"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedIssueTypeTransition"
+                                "$ref": "#/components/schemas/WorkflowRevision"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedIssueTypeTransition"
+                                "$ref": "#/components/schemas/WorkflowRevision"
                             }
                         }
-                    }
+                    },
+                    "required": true
                 },
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/IssueTypeTransition"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            },
-            "delete": {
-                "operationId": "deleteIssueTypeTransition",
-                "description": "Permission update/delete at a transition's composite domain key.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "from_state_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "path",
-                        "name": "to_state_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "path",
-                        "name": "type_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "Workflows"
-                ],
                 "security": [
                     {
                         "ApiKeyAuth": []
@@ -1916,7 +1795,7 @@
         "/work-tracker/issue-types/{type_id}/workflow-settings/launch-bindings/{state_id}": {
             "put": {
                 "operationId": "upsertLaunchBinding",
-                "description": "Revision-guarded upsert/delete at the row's composite domain key.",
+                "description": "Project reads and revision-guarded composite-key upsert/delete.",
                 "parameters": [
                     {
                         "in": "path",
@@ -1944,17 +1823,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/LaunchBinding"
+                                "$ref": "#/components/schemas/LaunchBindingWrite"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/LaunchBinding"
+                                "$ref": "#/components/schemas/LaunchBindingWrite"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/LaunchBinding"
+                                "$ref": "#/components/schemas/LaunchBindingWrite"
                             }
                         }
                     },
@@ -1980,7 +1859,7 @@
             },
             "delete": {
                 "operationId": "deleteLaunchBinding",
-                "description": "Revision-guarded upsert/delete at the row's composite domain key.",
+                "description": "Project reads and revision-guarded composite-key upsert/delete.",
                 "parameters": [
                     {
                         "in": "path",
@@ -2004,6 +1883,26 @@
                 "tags": [
                     "Launch Bindings"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkflowRevision"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkflowRevision"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkflowRevision"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "ApiKeyAuth": []
@@ -2043,6 +1942,26 @@
                 "tags": [
                     "Workflows"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkflowRevision"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkflowRevision"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkflowRevision"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {
                         "ApiKeyAuth": []
@@ -2208,6 +2127,148 @@
                 "responses": {
                     "204": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/work-tracker/module-presentations": {
+            "get": {
+                "operationId": "listModulePresentations",
+                "description": "List and update presentation rows, and apply module rank moves.",
+                "tags": [
+                    "Module Presentations"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ModulePresentation"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/module-presentations/{module_id}": {
+            "put": {
+                "operationId": "updateModulePresentation",
+                "description": "List and update presentation rows, and apply module rank moves.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Module Presentations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationWrite"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationWrite"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationWrite"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModulePresentation"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/module-presentations/{module_id}/reorder": {
+            "post": {
+                "operationId": "reorderModulePresentation",
+                "description": "List and update presentation rows, and apply module rank moves.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "module_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Module Presentations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationReorder"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationReorder"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ModulePresentationReorder"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModulePresentation"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -2527,7 +2588,7 @@
         "/work-tracker/projects/{project_id}/launch-bindings": {
             "get": {
                 "operationId": "listLaunchBindings",
-                "description": "Canonical project-scoped collection read.",
+                "description": "Project reads and revision-guarded composite-key upsert/delete.",
                 "parameters": [
                     {
                         "in": "path",
@@ -2659,6 +2720,43 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Module"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/work-tracker/projects/{project_id}/onboarding/acknowledge": {
+            "post": {
+                "operationId": "acknowledgeProjectOnboarding",
+                "description": "Perform the default project's monotonic onboarding acknowledgement.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "project_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Projects"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Project"
                                 }
                             }
                         },
@@ -2825,7 +2923,7 @@
         "/work-tracker/projects/{project_id}/work-items": {
             "post": {
                 "operationId": "createWorkItem",
-                "description": "Create an ordinary task or an absorbed review finding.",
+                "description": "Task CRUD with service-owned workflow and hierarchy invariants.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3208,7 +3306,7 @@
         "/work-tracker/work-items": {
             "get": {
                 "operationId": "listWorkItems",
-                "description": "The only task collection read, narrowed by declared query parameters.",
+                "description": "Task CRUD with service-owned workflow and hierarchy invariants.",
                 "parameters": [
                     {
                         "in": "query",
@@ -3263,7 +3361,7 @@
         "/work-tracker/work-items/{issue_id}": {
             "get": {
                 "operationId": "getWorkItem",
-                "description": "Retrieve, update, or delete one bare work item.",
+                "description": "Task CRUD with service-owned workflow and hierarchy invariants.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3297,7 +3395,7 @@
             },
             "patch": {
                 "operationId": "updateWorkItem",
-                "description": "Retrieve, update, or delete one bare work item.",
+                "description": "Task CRUD with service-owned workflow and hierarchy invariants.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3350,7 +3448,7 @@
             },
             "delete": {
                 "operationId": "deleteWorkItem",
-                "description": "Retrieve, update, or delete one bare work item.",
+                "description": "Task CRUD with service-owned workflow and hierarchy invariants.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3379,7 +3477,7 @@
         "/work-tracker/work-items/{issue_id}/attachments": {
             "get": {
                 "operationId": "listWorkItemAttachments",
-                "description": "Read or append attachment rows without re-reading their work item.",
+                "description": "Nested attachment collection for one work item.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3416,7 +3514,7 @@
             },
             "post": {
                 "operationId": "uploadAttachment",
-                "description": "Read or append attachment rows without re-reading their work item.",
+                "description": "Nested attachment collection for one work item.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3473,6 +3571,7 @@
         "/work-tracker/work-items/{issue_id}/graph-run": {
             "get": {
                 "operationId": "workItemsGraphRunRetrieve",
+                "description": "A work-item-scoped singleton graph-run campaign.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3516,6 +3615,7 @@
             },
             "post": {
                 "operationId": "workItemsGraphRunCreate",
+                "description": "A work-item-scoped singleton graph-run campaign.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3598,6 +3698,7 @@
             },
             "delete": {
                 "operationId": "workItemsGraphRunDestroy",
+                "description": "A work-item-scoped singleton graph-run campaign.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3643,6 +3744,7 @@
         "/work-tracker/work-items/{issue_id}/launch-agent": {
             "post": {
                 "operationId": "workItemsLaunchAgentCreate",
+                "description": "Execution commands scoped to one work item.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3711,6 +3813,16 @@
                         },
                         "description": ""
                     },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorEnvelope"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
                     "422": {
                         "content": {
                             "application/json": {
@@ -3737,7 +3849,7 @@
         "/work-tracker/work-items/{issue_id}/reorder": {
             "post": {
                 "operationId": "reorderWorkItem",
-                "description": "Allocate the moved row's server-owned fractional rank.",
+                "description": "Task CRUD with service-owned workflow and hierarchy invariants.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3793,6 +3905,7 @@
         "/work-tracker/work-items/{issue_id}/run-now": {
             "post": {
                 "operationId": "workItemsRunNowCreate",
+                "description": "Execution commands scoped to one work item.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3894,10 +4007,102 @@
                 }
             }
         },
+        "/work-tracker/work-items/{issue_id}/workspace-tab-order": {
+            "get": {
+                "operationId": "getWorkspaceTabOrder",
+                "description": "Retrieve or replace the tab order owned by one task work item.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Work Items"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkspaceTabOrder"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "updateWorkspaceTabOrder",
+                "description": "Retrieve or replace the tab order owned by one task work item.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "issue_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Work Items"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkspaceTabOrder"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkspaceTabOrder"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WorkspaceTabOrder"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WorkspaceTabOrder"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/work-tracker/work-items/batch": {
             "post": {
                 "operationId": "batchWorkItems",
-                "description": "Read up to one hundred task work items by exact id in one request.",
+                "description": "Read at most one hundred exact ids while preserving caller order.",
                 "tags": [
                     "Work Items"
                 ],
@@ -3943,81 +4148,35 @@
                 }
             }
         },
-        "/work-tracker/workspace": {
-            "get": {
-                "operationId": "retrieveWorkspace",
-                "description": "Retrieve the installation workspace before project selection.",
-                "tags": [
-                    "Workspace"
-                ],
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Workspace"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/work-tracker/workspace/onboarding/acknowledge": {
-            "post": {
-                "operationId": "acknowledgeWorkspaceOnboarding",
-                "description": "Perform the installation's monotonic onboarding acknowledgement.",
-                "tags": [
-                    "Workspace"
-                ],
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Workspace"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/worktrees": {
             "get": {
                 "operationId": "worktrees_retrieve",
+                "description": "Read, create, and discard task-scoped git worktrees.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "module_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "parent_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "task_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "required": true
                     }
@@ -4047,6 +4206,7 @@
         "/worktrees/{task_id}/create": {
             "post": {
                 "operationId": "worktrees_create_create",
+                "description": "Read, create, and discard task-scoped git worktrees.",
                 "parameters": [
                     {
                         "in": "path",
@@ -4101,19 +4261,24 @@
         "/worktrees/{task_id}/discard": {
             "post": {
                 "operationId": "worktrees_discard_create",
+                "description": "Read, create, and discard task-scoped git worktrees.",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "module_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
                         }
                     },
                     {
                         "in": "query",
                         "name": "parent_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true,
+                            "minLength": 1
                         }
                     },
                     {
@@ -4194,7 +4359,8 @@
                 "type": "object",
                 "properties": {
                     "agent": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     }
                 }
             },
@@ -4202,124 +4368,12 @@
                 "type": "object",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "agent_run_id"
-                ]
-            },
-            "AgentRunRecord": {
-                "type": "object",
-                "properties": {
-                    "agent_run_id": {
-                        "type": "string"
-                    },
-                    "project_id": {
-                        "type": "string"
-                    },
-                    "task_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "module_id": {
-                        "type": "string"
-                    },
-                    "agent": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "scope": {
-                        "$ref": "#/components/schemas/ScopeEnum"
-                    },
-                    "launch_state": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "launch_model": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "started_at": {
-                        "type": "string"
-                    },
-                    "state": {
-                        "type": "string"
-                    },
-                    "updated_at": {
-                        "type": "string"
-                    },
-                    "output_sequence": {
-                        "type": "integer"
-                    },
-                    "last_output_at": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "effective_state": {
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "agent",
-                    "agent_run_id",
-                    "effective_state",
-                    "last_output_at",
-                    "launch_model",
-                    "launch_state",
-                    "module_id",
-                    "output_sequence",
-                    "project_id",
-                    "scope",
-                    "started_at",
-                    "state",
-                    "task_id",
-                    "updated_at"
-                ]
-            },
-            "AgentStatusResponse": {
-                "type": "object",
-                "properties": {
-                    "scope": {
-                        "$ref": "#/components/schemas/AgentStatusScopeResponse"
-                    },
-                    "runs": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/AgentRunRecord"
-                        }
-                    },
-                    "automation_attempts": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/AutomationAttempt"
-                        }
-                    },
-                    "at": {
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "at",
-                    "automation_attempts",
-                    "runs",
-                    "scope"
-                ]
-            },
-            "AgentStatusScopeResponse": {
-                "type": "object",
-                "properties": {
-                    "project_id": {
-                        "type": "string"
-                    },
-                    "task_id": {
-                        "type": "string",
-                        "nullable": true
-                    }
-                },
-                "required": [
-                    "project_id",
-                    "task_id"
                 ]
             },
             "Attachment": {
@@ -4371,39 +4425,54 @@
             },
             "AutomationAttempt": {
                 "type": "object",
+                "description": "Public projection of one durable automated-launch attempt.",
                 "properties": {
                     "attempt_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "root_attempt_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "retry_of_attempt_id": {
                         "type": "string",
+                        "readOnly": true,
                         "nullable": true
                     },
                     "work_item_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "status": {
-                        "$ref": "#/components/schemas/StatusEnum"
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true
                     },
                     "error": {
                         "type": "string",
+                        "readOnly": true,
                         "nullable": true
                     },
                     "failure": {
+                        "readOnly": true,
                         "nullable": true
                     },
                     "retryable": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     },
                     "agent_run_id": {
                         "type": "string",
+                        "readOnly": true,
                         "nullable": true
                     },
                     "updated_at": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -4432,29 +4501,6 @@
                 "required": [
                     "id",
                     "name"
-                ]
-            },
-            "Config": {
-                "type": "object",
-                "properties": {
-                    "recent_profile_index": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "profiles": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Profile"
-                        }
-                    },
-                    "features": {
-                        "$ref": "#/components/schemas/Features"
-                    }
-                },
-                "required": [
-                    "features",
-                    "profiles",
-                    "recent_profile_index"
                 ]
             },
             "ConfigurationReorder": {
@@ -4505,17 +4551,20 @@
                         "nullable": true
                     },
                     "is_planning": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "default": false
                     },
                     "is_instant": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "default": false
                     },
                     "instant_prompt": {
                         "type": "string",
                         "nullable": true
                     },
                     "is_doc_chat": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "default": false
                     },
                     "doc_rel_path": {
                         "type": "string",
@@ -4561,7 +4610,8 @@
                 "type": "object",
                 "properties": {
                     "digest": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -4585,36 +4635,47 @@
             },
             "Document": {
                 "type": "object",
+                "description": "Read-only public projection of a registered design document.",
                 "properties": {
                     "id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "rel_path": {
-                        "type": "string"
-                    },
-                    "root_dir": {
-                        "type": "string"
-                    },
-                    "title": {
                         "type": "string",
-                        "nullable": true
+                        "readOnly": true
                     },
-                    "kind": {
-                        "type": "string"
-                    },
-                    "scope": {
-                        "type": "string"
-                    },
-                    "module_id": {
-                        "type": "string"
-                    },
-                    "task_id": {
-                        "type": "string"
+                    "label": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "id",
+                    "label",
                     "rel_path"
+                ]
+            },
+            "DocumentConflict": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "digest": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "detail",
+                    "digest"
                 ]
             },
             "DocumentList": {
@@ -4624,7 +4685,8 @@
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/Document"
-                        }
+                        },
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -4643,21 +4705,6 @@
                     "detail"
                 ]
             },
-            "Features": {
-                "type": "object",
-                "properties": {
-                    "sidebar": {
-                        "type": "boolean"
-                    },
-                    "projects": {
-                        "type": "boolean"
-                    }
-                },
-                "required": [
-                    "projects",
-                    "sidebar"
-                ]
-            },
             "FsEntries": {
                 "type": "object",
                 "properties": {
@@ -4665,7 +4712,8 @@
                         "type": "array",
                         "items": {
                             "type": "string"
-                        }
+                        },
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -4764,13 +4812,19 @@
             },
             "GraphRunRequest": {
                 "type": "object",
-                "description": "Graph-run create body: provider override plus execution mode.",
+                "description": "Optional launch context for arming or advancing a graph run.",
                 "properties": {
                     "agent": {
-                        "type": "string"
+                        "type": "string",
+                        "nullable": true
                     },
                     "mode": {
-                        "$ref": "#/components/schemas/GraphRunExecutionModeEnum"
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/GraphRunExecutionModeEnum"
+                            }
+                        ],
+                        "nullable": true
                     }
                 }
             },
@@ -4891,7 +4945,7 @@
             },
             "IssueTypeTransition": {
                 "type": "object",
-                "description": "One transition row plus the revision guard carried by write bodies.",
+                "description": "One persisted transition row returned by reads and writes.",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -4902,6 +4956,33 @@
                         "format": "uuid",
                         "readOnly": true
                     },
+                    "from_state": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "to_state": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "agent_allowed": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "agent_allowed",
+                    "from_state",
+                    "id",
+                    "issue_type",
+                    "to_state"
+                ]
+            },
+            "IssueTypeTransitionCreate": {
+                "type": "object",
+                "description": "Transition create fields plus the mandatory revision guard.",
+                "properties": {
                     "from_state": {
                         "type": "string",
                         "format": "uuid"
@@ -4921,30 +5002,13 @@
                 },
                 "required": [
                     "from_state",
-                    "id",
-                    "issue_type",
                     "to_state",
                     "workflow_revision"
                 ]
             },
-            "KindEnum": {
-                "enum": [
-                    "session_start",
-                    "turn_start",
-                    "tool_use",
-                    "awaiting_input",
-                    "permission_required",
-                    "turn_complete",
-                    "idle",
-                    "error",
-                    "session_end"
-                ],
-                "type": "string",
-                "description": "* `session_start` - session_start\n* `turn_start` - turn_start\n* `tool_use` - tool_use\n* `awaiting_input` - awaiting_input\n* `permission_required` - permission_required\n* `turn_complete` - turn_complete\n* `idle` - idle\n* `error` - error\n* `session_end` - session_end"
-            },
             "LaunchBinding": {
                 "type": "object",
-                "description": "The one row shape for reads and composite-key writes.",
+                "description": "One persisted launch binding returned by reads and writes.",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -4961,9 +5025,76 @@
                         "readOnly": true
                     },
                     "prompt": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "required_skills": {
+                        "readOnly": true
+                    },
+                    "entry_skill": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "model": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "auto_start": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "subtree_run_enabled": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "auto_start",
+                    "created_at",
+                    "entry_skill",
+                    "id",
+                    "issue_type",
+                    "model",
+                    "prompt",
+                    "reasoning",
+                    "required_skills",
+                    "state",
+                    "subtree_run_enabled",
+                    "updated_at"
+                ]
+            },
+            "LaunchBindingWrite": {
+                "type": "object",
+                "description": "Mutable launch policy fields plus the mandatory revision guard.",
+                "properties": {
+                    "prompt": {
                         "type": "string"
                     },
                     "required_skills": {},
+                    "entry_skill": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                    },
                     "model": {
                         "type": "string",
                         "format": "uuid",
@@ -4984,24 +5115,9 @@
                         "type": "integer",
                         "minimum": 0,
                         "writeOnly": true
-                    },
-                    "created_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true
-                    },
-                    "updated_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true
                     }
                 },
                 "required": [
-                    "created_at",
-                    "id",
-                    "issue_type",
-                    "state",
-                    "updated_at",
                     "workflow_revision"
                 ]
             },
@@ -5057,7 +5173,7 @@
                         "$ref": "#/components/schemas/AgentEnum"
                     },
                     "kind": {
-                        "$ref": "#/components/schemas/KindEnum"
+                        "$ref": "#/components/schemas/LifecycleEventKindEnum"
                     },
                     "ts": {
                         "type": "string"
@@ -5080,6 +5196,21 @@
                     "kind",
                     "ts"
                 ]
+            },
+            "LifecycleEventKindEnum": {
+                "enum": [
+                    "session_start",
+                    "turn_start",
+                    "tool_use",
+                    "awaiting_input",
+                    "permission_required",
+                    "turn_complete",
+                    "idle",
+                    "error",
+                    "session_end"
+                ],
+                "type": "string",
+                "description": "* `session_start` - session_start\n* `turn_start` - turn_start\n* `tool_use` - tool_use\n* `awaiting_input` - awaiting_input\n* `permission_required` - permission_required\n* `turn_complete` - turn_complete\n* `idle` - idle\n* `error` - error\n* `session_end` - session_end"
             },
             "Module": {
                 "type": "object",
@@ -5163,15 +5294,12 @@
                         "type": "boolean"
                     },
                     "reason": {
-                        "nullable": true,
-                        "oneOf": [
+                        "allOf": [
                             {
                                 "$ref": "#/components/schemas/ReasonEnum"
-                            },
-                            {
-                                "$ref": "#/components/schemas/NullEnum"
                             }
-                        ]
+                        ],
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -5181,41 +5309,133 @@
             },
             "ModuleLink": {
                 "type": "object",
+                "description": "Explicit public allowlist for a host-local Module link.",
                 "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
                     "module_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "local_path": {
                         "type": "string"
                     },
-                    "path": {
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "local_path",
+                    "module_id",
+                    "updated_at"
+                ]
+            },
+            "ModuleLinkWrite": {
+                "type": "object",
+                "description": "Generated PUT body containing only the caller-owned field.",
+                "properties": {
+                    "local_path": {
                         "type": "string"
                     }
                 },
                 "required": [
+                    "local_path"
+                ]
+            },
+            "ModulePresentation": {
+                "type": "object",
+                "description": "Server-owned presentation state addressed by module identity.",
+                "properties": {
+                    "module_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "rank": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "tab_hidden": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
                     "module_id",
-                    "path"
+                    "rank",
+                    "tab_hidden"
+                ]
+            },
+            "ModulePresentationReorder": {
+                "type": "object",
+                "description": "The moved module's neighbors, plus its first-drag baseline.\n\n``initial_order_ids`` is the complete module order the user could see when\nthey started the very first drag in an automatic project. The server\nfreezes it into ranks before applying the move, so a client never has to\ninfer the durable ordering mode from its own history (#360).",
+                "properties": {
+                    "before_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "after_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "initial_order_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "nullable": true
+                    }
+                }
+            },
+            "ModulePresentationWrite": {
+                "type": "object",
+                "description": "Generated PUT body containing only caller-owned tab visibility.",
+                "properties": {
+                    "tab_hidden": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "tab_hidden"
                 ]
             },
             "ModuleShell": {
                 "type": "object",
+                "description": "Read-only public projection of a durable login shell.",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "module_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "created_at": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "agent_run_id",
                     "created_at",
                     "module_id"
-                ]
-            },
-            "NullEnum": {
-                "enum": [
-                    null
                 ]
             },
             "Open": {
@@ -5314,25 +5534,8 @@
             },
             "PatchedIssueTypeTransition": {
                 "type": "object",
-                "description": "One transition row plus the revision guard carried by write bodies.",
+                "description": "The mutable transition field plus its mandatory revision guard.",
                 "properties": {
-                    "id": {
-                        "type": "integer",
-                        "readOnly": true
-                    },
-                    "issue_type": {
-                        "type": "string",
-                        "format": "uuid",
-                        "readOnly": true
-                    },
-                    "from_state": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "to_state": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
                     "agent_allowed": {
                         "type": "boolean"
                     },
@@ -5341,11 +5544,15 @@
                         "minimum": 0,
                         "writeOnly": true
                     }
-                }
+                },
+                "required": [
+                    "agent_allowed",
+                    "workflow_revision"
+                ]
             },
             "PatchedProject": {
                 "type": "object",
-                "description": "The single project shape; workspace selection is create-only input.",
+                "description": "The installation-wide project shape.",
                 "properties": {
                     "id": {
                         "type": "string",
@@ -5363,12 +5570,7 @@
                     "description": {
                         "type": "string"
                     },
-                    "workspace_slug": {
-                        "type": "string",
-                        "writeOnly": true,
-                        "maxLength": 64
-                    },
-                    "manual_module_order": {
+                    "onboarding_required": {
                         "type": "boolean",
                         "readOnly": true
                     }
@@ -5406,14 +5608,6 @@
                     "name": {
                         "type": "string",
                         "maxLength": 32
-                    }
-                }
-            },
-            "PatchedRecentIndex": {
-                "type": "object",
-                "properties": {
-                    "recent_profile_index": {
-                        "type": "integer"
                     }
                 }
             },
@@ -5464,7 +5658,7 @@
             },
             "PatchedWorkItemPatch": {
                 "type": "object",
-                "description": "Fields supported by the domain service's guarded partial update.",
+                "description": "Model-derived allowlist for the guarded work-item partial update.",
                 "properties": {
                     "name": {
                         "type": "string",
@@ -5501,46 +5695,9 @@
                     }
                 }
             },
-            "Profile": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string"
-                    },
-                    "workspace_slug": {
-                        "type": "string"
-                    },
-                    "agent_prompt": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "agent_prompts": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "module_links": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/ModuleLink"
-                        }
-                    },
-                    "recent_project_id": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "recent_module_ids": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    }
-                },
-                "required": [
-                    "name",
-                    "workspace_slug"
-                ]
-            },
             "Project": {
                 "type": "object",
-                "description": "The single project shape; workspace selection is create-only input.",
+                "description": "The installation-wide project shape.",
                 "properties": {
                     "id": {
                         "type": "string",
@@ -5558,20 +5715,15 @@
                     "description": {
                         "type": "string"
                     },
-                    "workspace_slug": {
-                        "type": "string",
-                        "writeOnly": true,
-                        "maxLength": 64
-                    },
-                    "manual_module_order": {
+                    "onboarding_required": {
                         "type": "boolean",
                         "readOnly": true
                     }
                 },
                 "required": [
                     "id",
-                    "manual_module_order",
                     "name",
+                    "onboarding_required",
                     "slug"
                 ]
             },
@@ -5665,7 +5817,8 @@
                 "type": "object",
                 "properties": {
                     "released": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -5676,10 +5829,12 @@
                 "type": "object",
                 "properties": {
                     "viewer_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "transport": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -5689,35 +5844,49 @@
             },
             "ResumableTerminal": {
                 "type": "object",
+                "description": "Derived resumable-run projection after history de-duplication.",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "agent": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "status": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "started_at": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "launch_state": {
                         "type": "string",
+                        "readOnly": true,
                         "nullable": true
                     },
                     "launch_model": {
                         "type": "string",
+                        "readOnly": true,
                         "nullable": true
                     },
                     "scope": {
-                        "$ref": "#/components/schemas/ScopeEnum"
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ScopeEnum"
+                            }
+                        ],
+                        "readOnly": true
                     },
                     "provider_session_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "resumed_from": {
                         "type": "string",
+                        "readOnly": true,
                         "nullable": true
                     }
                 },
@@ -5737,10 +5906,12 @@
                 "type": "object",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "resumed_from": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -5750,6 +5921,7 @@
             },
             "RunNowRefusal": {
                 "type": "object",
+                "description": "Stable partial-outcome envelope returned by every Run Now refusal.",
                 "properties": {
                     "target_id": {
                         "type": "string"
@@ -5787,9 +5959,15 @@
             },
             "RunNowRequest": {
                 "type": "object",
+                "description": "Caller origin accepted by the guarded workflow transition.",
                 "properties": {
                     "origin": {
-                        "$ref": "#/components/schemas/OriginEnum"
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OriginEnum"
+                            }
+                        ],
+                        "default": "human"
                     }
                 }
             },
@@ -5842,16 +6020,20 @@
                 "type": "object",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "terminated": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     },
                     "ok": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     },
                     "already_terminated": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -5863,6 +6045,7 @@
             },
             "SettingValue": {
                 "type": "object",
+                "description": "Decoded value envelope for the singleton keybindings setting.",
                 "properties": {
                     "value": {
                         "nullable": true
@@ -5943,34 +6126,42 @@
                     "failed"
                 ],
                 "type": "string",
-                "description": "* `pending` - pending\n* `succeeded` - succeeded\n* `failed` - failed"
+                "description": "* `pending` - Pending\n* `succeeded` - Succeeded\n* `failed` - Failed"
             },
             "TerminalRun": {
                 "type": "object",
+                "description": "Read-only public projection of one durable terminal session.",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "doc_rel_path": {
                         "type": "string",
+                        "readOnly": true,
                         "nullable": true
                     },
                     "created_at": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
-                    "agent_run_id"
+                    "agent_run_id",
+                    "created_at",
+                    "doc_rel_path"
                 ]
             },
             "TerminateResult": {
                 "type": "object",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "terminated": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -5986,7 +6177,7 @@
                 "type": "string",
                 "description": "* `browser` - browser\n* `desktop` - desktop"
             },
-            "ViewerLease": {
+            "ViewerLeaseIdentity": {
                 "type": "object",
                 "properties": {
                     "agent_run_id": {
@@ -5994,6 +6185,23 @@
                     },
                     "viewer_id": {
                         "type": "string"
+                    }
+                },
+                "required": [
+                    "agent_run_id",
+                    "viewer_id"
+                ]
+            },
+            "ViewerLeaseRequest": {
+                "type": "object",
+                "description": "Caller-owned fields for acquiring the viewer lease singleton.",
+                "properties": {
+                    "agent_run_id": {
+                        "type": "string"
+                    },
+                    "viewer_id": {
+                        "type": "string",
+                        "maxLength": 64
                     },
                     "transport": {
                         "$ref": "#/components/schemas/TransportEnum"
@@ -6005,35 +6213,24 @@
                     "viewer_id"
                 ]
             },
-            "ViewerLeaseRelease": {
-                "type": "object",
-                "properties": {
-                    "agent_run_id": {
-                        "type": "string"
-                    },
-                    "viewer_id": {
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "agent_run_id",
-                    "viewer_id"
-                ]
-            },
             "ViewerLeaseResult": {
                 "type": "object",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "viewer_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "transport": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "expires_at": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "replaced": {
                         "allOf": [
@@ -6041,6 +6238,7 @@
                                 "$ref": "#/components/schemas/ReplacedViewer"
                             }
                         ],
+                        "readOnly": true,
                         "nullable": true
                     }
                 },
@@ -6067,10 +6265,12 @@
                 "type": "object",
                 "properties": {
                     "agent_run_id": {
-                        "type": "string"
+                        "type": "string",
+                        "readOnly": true
                     },
                     "observed": {
-                        "type": "boolean"
+                        "type": "boolean",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -6080,7 +6280,7 @@
             },
             "WorkItem": {
                 "type": "object",
-                "description": "The single read shape for every task work-item response.\n\nThe two model relations consumers resolve most often are deliberately\nprimary keys.  The four computed fields satisfy the read-field rule: each\nis derived from this row or one of its own relations, is read-only, and is\ndeclared here rather than assembled in a view.",
+                "description": "The single read shape for every task work-item response.",
                 "properties": {
                     "id": {
                         "type": "string",
@@ -6208,7 +6408,7 @@
             },
             "WorkItemCreate": {
                 "type": "object",
-                "description": "Input for the one project-scoped work-item create.",
+                "description": "Model-derived input for the project-scoped work-item create.",
                 "properties": {
                     "name": {
                         "type": "string",
@@ -6240,7 +6440,7 @@
             },
             "WorkItemReorder": {
                 "type": "object",
-                "description": "The moved work item's neighbors, plus a module's first-drag baseline.\n\n``initial_order_ids`` is the complete module order the user could see when\nthey started the very first drag in an automatic project. The server\nfreezes it into ranks before applying the move, so a client never has to\ninfer the durable ordering mode from its own history (#360).",
+                "description": "The moved task's neighbors.",
                 "properties": {
                     "before_id": {
                         "type": "string",
@@ -6251,44 +6451,59 @@
                         "type": "string",
                         "format": "uuid",
                         "nullable": true
-                    },
-                    "initial_order_ids": {
-                        "type": "array",
-                        "items": {
-                            "type": "string",
-                            "format": "uuid"
-                        },
-                        "nullable": true
                     }
                 }
             },
-            "Workspace": {
+            "WorkflowRevision": {
                 "type": "object",
-                "description": "The installation-wide workspace singleton.",
+                "description": "Revision guard for workflow writes with no model-field body.",
                 "properties": {
-                    "id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "readOnly": true
-                    },
-                    "slug": {
-                        "type": "string",
-                        "readOnly": true
-                    },
-                    "name": {
-                        "type": "string",
-                        "readOnly": true
-                    },
-                    "onboarding_required": {
-                        "type": "boolean",
-                        "readOnly": true
+                    "workflow_revision": {
+                        "type": "integer",
+                        "minimum": 0
                     }
                 },
                 "required": [
-                    "id",
-                    "name",
-                    "onboarding_required",
-                    "slug"
+                    "workflow_revision"
+                ]
+            },
+            "WorkspaceTabIdentity": {
+                "type": "object",
+                "description": "One stable identity in a task workspace's heterogeneous tab order.",
+                "properties": {
+                    "kind": {
+                        "$ref": "#/components/schemas/WorkspaceTabIdentityKindEnum"
+                    },
+                    "id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "kind"
+                ]
+            },
+            "WorkspaceTabIdentityKindEnum": {
+                "enum": [
+                    "details",
+                    "doc",
+                    "terminal"
+                ],
+                "type": "string",
+                "description": "* `details` - details\n* `doc` - doc\n* `terminal` - terminal"
+            },
+            "WorkspaceTabOrder": {
+                "type": "object",
+                "description": "The server-owned workspace tab order for one work item.",
+                "properties": {
+                    "order": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/WorkspaceTabIdentity"
+                        }
+                    }
+                },
+                "required": [
+                    "order"
                 ]
             },
             "WorktreeStatus": {

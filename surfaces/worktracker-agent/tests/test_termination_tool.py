@@ -49,9 +49,14 @@ def test_terminate_current_run_is_zero_argument_and_forwards_request_identity(
 def test_fastmcp_registers_termination_with_an_empty_input_schema():
     from worktracker_agent.mcp.server import mcp
 
-    registered = asyncio.run(mcp.get_tools())["terminate_current_run"]
+    registered = asyncio.run(mcp.get_tool("terminate_current_run"))
 
-    assert registered.parameters == {"properties": {}, "type": "object"}
+    assert registered is not None
+    assert registered.parameters == {
+        "additionalProperties": False,
+        "properties": {},
+        "type": "object",
+    }
 
 
 def test_termination_service_forwards_authorization_to_studio():
@@ -123,4 +128,30 @@ def test_termination_service_preserves_structured_studio_failure():
         "ok": False,
         "error": "caller_run_unbound",
         "reason": "authorization_invalid",
+    }
+
+
+def test_termination_service_states_a_refusal_as_not_ok():
+    """Studio's DRF error body has no ``ok`` flag; the agent's result must."""
+
+    service = StudioRunControlService(
+        url="http://studio.test/api/terminals/self-terminate",
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                409,
+                json={
+                    "detail": "run_owned_by_other_runtime",
+                    "code": "run_owned_by_other_runtime",
+                    "owner_runtime": "tmux-other-instance",
+                },
+            )
+        ),
+    )
+
+    assert service.terminate_current_run("Bearer signed-run-1") == {
+        "ok": False,
+        "error": "run_owned_by_other_runtime",
+        "detail": "run_owned_by_other_runtime",
+        "code": "run_owned_by_other_runtime",
+        "owner_runtime": "tmux-other-instance",
     }

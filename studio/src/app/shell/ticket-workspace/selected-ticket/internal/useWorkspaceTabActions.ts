@@ -28,18 +28,20 @@ import type {
   WorkspaceLauncherContext,
 } from "./WorkspaceLauncher";
 
+function resumeErrorCode(error: unknown): string {
+  if (!(error instanceof AgentApiError)) return "";
+  if (!error.body || typeof error.body !== "object") return "";
+  const body = error.body as Record<string, unknown>;
+  if (typeof body.code === "string") return body.code;
+  if (typeof body.detail === "string") return body.detail;
+  if (body.detail && typeof body.detail === "object" && "error" in body.detail) {
+    return String((body.detail as { error?: unknown }).error);
+  }
+  return "error" in body ? String(body.error) : "";
+}
+
 function resumeErrorMessage(error: unknown): string {
-  const body = error instanceof AgentApiError ? error.body : null;
-  const detail =
-    body && typeof body === "object"
-      ? (body as { detail?: unknown }).detail
-      : null;
-  const code =
-    detail && typeof detail === "object" && "error" in detail
-      ? String((detail as { error?: unknown }).error)
-      : body && typeof body === "object" && "error" in body
-        ? String((body as { error?: unknown }).error)
-        : "";
+  const code = resumeErrorCode(error);
   if (code === "cwd_missing") return "Working directory no longer exists";
   if (code === "run_still_active") {
     return "Session is still running - attach instead";

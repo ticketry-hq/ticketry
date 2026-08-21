@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import net from "node:net";
 import path from "node:path";
@@ -141,7 +141,13 @@ export function buildWebRuntimeEnvironment({
 
   const runtimeEnvironment = {
     ...environment,
-    ...(apiKey ? { WORKTRACKER_API_KEY: apiKey } : {}),
+    ...(apiKey
+      ? {
+          VITE_WT_API_KEY: apiKey,
+          WORKTRACKER_API_KEY: apiKey,
+          WORKTRACKER_API_TOKEN: apiKey,
+        }
+      : {}),
     MUXED_BACKEND_PORT: String(backendPort),
     MUXED_VITE_BACKEND_ORIGIN: backendOrigin,
     MUXED_WEB_BACKEND_PORT: String(backendPort),
@@ -160,6 +166,12 @@ export function buildWebRuntimeEnvironment({
     runtimeEnvironment.WORKTRACKER_MCP_URL = `http://127.0.0.1:${mcpPort}/mcp`;
   }
   return runtimeEnvironment;
+}
+
+export function readProvisionedApiToken({ dataDirectory, environment }) {
+  const configured = environment.WORKTRACKER_API_TOKEN;
+  if (configured) return configured;
+  return readFileSync(path.join(dataDirectory, "worktracker_token"), "utf8").trim();
 }
 
 function start(name, command, environment, { optional = false } = {}) {
@@ -321,19 +333,7 @@ async function prepareDjango(environment) {
       "admin",
     ],
     environment,
-    "Provisioning the isolated development workspace",
-  );
-  await runDjangoCommand(
-    [
-      "shell",
-      "-c",
-      [
-        "from apps.settings_store.service import ensure_local_profile",
-        "ensure_local_profile(name='Local', workspace_slug='meml')",
-      ].join("; "),
-    ],
-    environment,
-    "Ensuring the local development profile",
+    "Provisioning the isolated development project",
   );
 }
 
@@ -427,6 +427,7 @@ export async function main() {
   try {
     await prepareDjango(launch.environment);
     if (!stopping) {
+      const provisionedApiToken = readProvisionedApiToken(launch);
       const backendPort = await selectWebPort({
         name: "backend port",
         requestedPort: launch.environment.MUXED_WEB_BACKEND_PORT,
@@ -445,7 +446,10 @@ export async function main() {
       const backendOrigin = `http://127.0.0.1:${backendPort}`;
       const frontendOrigin = `http://127.0.0.1:${frontendPort}`;
       const runtimeEnvironment = buildWebRuntimeEnvironment({
-        environment: launch.environment,
+        environment: {
+          ...launch.environment,
+          WORKTRACKER_API_TOKEN: provisionedApiToken,
+        },
         backendPort,
         mcpPort,
       });

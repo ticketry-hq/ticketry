@@ -93,7 +93,6 @@ def test_serial_breaks_a_sequence_tie_on_the_opaque_task_id(graph_project):
     project, _, root, states, story_type = graph_project
     other_project = Project.objects.create(
         id=uuid.uuid4(),
-        workspace=project.workspace,
         name="imported",
         slug="IMPORTED",
     )

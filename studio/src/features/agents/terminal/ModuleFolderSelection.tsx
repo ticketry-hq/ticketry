@@ -1,28 +1,24 @@
 import { useState } from "react";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
-import { isAbsoluteFolderPath } from "../../studio/lib/moduleFolderPath";
+import { isAbsoluteFolderPath } from "../../module-links";
 
-interface FolderProfile {
-  module_links?: Array<{ module_id: string; path: string }>;
+interface FolderLink {
+  local_path: string;
 }
 
 export function useModuleFolderSelection({
-  profiles,
-  recentProfileIndex,
+  moduleLinks,
   initialValue = "",
   runtime = studioRuntime(),
 }: {
-  profiles: FolderProfile[];
-  recentProfileIndex: number | null;
+  moduleLinks: FolderLink[];
   initialValue?: string;
   runtime?: StudioRuntime;
 }) {
-  const profile =
-    recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
   const recentFolders = Array.from(
     new Set(
-      (profile?.module_links ?? [])
-        .map((link) => link.path)
+      moduleLinks
+        .map((link) => link.local_path)
         .reverse()
         .filter(isAbsoluteFolderPath),
     ),

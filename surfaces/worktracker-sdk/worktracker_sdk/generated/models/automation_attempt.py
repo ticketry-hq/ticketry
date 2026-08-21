@@ -27,7 +27,7 @@ from pydantic_core import to_jsonable_python
 
 class AutomationAttempt(BaseModel):
     """
-    AutomationAttempt
+    Public projection of one durable automated-launch attempt.
     """ # noqa: E501
     attempt_id: StrictStr
     root_attempt_id: StrictStr
@@ -71,8 +71,28 @@ class AutomationAttempt(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
+            "attempt_id",
+            "root_attempt_id",
+            "retry_of_attempt_id",
+            "work_item_id",
+            "status",
+            "error",
+            "failure",
+            "retryable",
+            "agent_run_id",
+            "updated_at",
         ])
 
         _dict = self.model_dump(

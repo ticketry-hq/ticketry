@@ -161,3 +161,33 @@ or a missing terminal session, but it is not reattachment to the old terminal
 runtime and is not implemented by the terminal module. The provider conversation
 identity is the only continuity between the old and new runs.
 _Avoid_: Terminal reconnect, viewer reattachment, reviving a dead pane
+
+**Entry-skill delivery**:
+Passing a fresh run's full prompt to the provider command while separately
+typing its configured manual skill command into the ready terminal. Claude
+uses `/<entry-skill>` and Codex uses `$<entry-skill>`. The
+short terminal message is genuine user input, so it invokes skills that forbid
+model invocation without depending on a large prompt rendering verbatim in the
+TUI. Runs without an entry skill receive no typed launch input.
+Provider resumes never replay the source prompt. After the provider restores
+the conversation, Ticketry types `continue` into the ready composer without
+submitting it so the user can review it and press Enter. Both actions happen
+before launch or resume returns and never create a general mid-session input
+channel.
+_Avoid_: typed full prompt, combined `/skill <prompt>` message, replayed prompt
+
+**Prompt delivery readiness**:
+The observed condition that an agent's terminal is ready to accept a manual
+entry-skill command or staged resume text, recognised per provider from pane
+content. A skill-bearing run whose readiness is never observed within the
+timeout enters an explicit failure state.
+_Avoid_: fixed launch delay, agent idle status, TUI heuristic
+
+**Managed skill**:
+A workflow skill Ticketry installed from its bundled snapshot into a
+provider's skill directory and recorded in its manifest with a digest. A
+managed skill is updated when the pinned snapshot changes unless its digest
+shows the user edited it, in which case it is left alone with a warning. A
+same-named skill the user installed themselves is never managed and always
+wins.
+_Avoid_: bundled skill, snapshot skill, user skill, pinned skill copy

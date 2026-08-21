@@ -350,7 +350,6 @@ def test_reorder_work_item_allocates_rank_between_neighbors(project):
 def test_reorder_work_item_rejects_foreign_neighbor(project):
     other_project = Project.objects.create(
         id=uuid.uuid4(),
-        workspace=project.workspace,
         name="Other",
     )
     moving = _issue(

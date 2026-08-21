@@ -19,24 +19,19 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, StrictStr
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
 class Document(BaseModel):
     """
-    Document
+    Read-only public projection of a registered design document.
     """ # noqa: E501
     id: StrictStr
     rel_path: StrictStr
-    root_dir: Optional[StrictStr] = None
-    title: Optional[StrictStr] = None
-    kind: Optional[StrictStr] = None
-    scope: Optional[StrictStr] = None
-    module_id: Optional[StrictStr] = None
-    task_id: Optional[StrictStr] = None
-    __properties: ClassVar[List[str]] = ["id", "rel_path", "root_dir", "title", "kind", "scope", "module_id", "task_id"]
+    label: StrictStr
+    __properties: ClassVar[List[str]] = ["id", "rel_path", "label"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -68,8 +63,14 @@ class Document(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
+            "id",
+            "rel_path",
+            "label",
         ])
 
         _dict = self.model_dump(
@@ -77,11 +78,6 @@ class Document(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # set to None if title (nullable) is None
-        # and model_fields_set contains the field
-        if self.title is None and "title" in self.model_fields_set:
-            _dict['title'] = None
-
         return _dict
 
     @classmethod
@@ -96,11 +92,6 @@ class Document(BaseModel):
         _obj = cls.model_validate({
             "id": obj.get("id"),
             "rel_path": obj.get("rel_path"),
-            "root_dir": obj.get("root_dir"),
-            "title": obj.get("title"),
-            "kind": obj.get("kind"),
-            "scope": obj.get("scope"),
-            "module_id": obj.get("module_id"),
-            "task_id": obj.get("task_id")
+            "label": obj.get("label")
         })
         return _obj

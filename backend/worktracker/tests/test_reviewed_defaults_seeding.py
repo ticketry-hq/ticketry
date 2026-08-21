@@ -16,7 +16,6 @@ from worktracker.models import (
     Provider,
     ReasoningLevel,
     State,
-    Workspace,
 )
 from worktracker.seed import ensure_state_order as canonical_state_order
 from worktracker.required_skills import DEFAULT_REQUIRED_SKILLS
@@ -236,16 +235,7 @@ def test_agents_guidance_matches_reviewed_artifact():
 
 @pytest.mark.django_db
 def test_fresh_project_materializes_the_reviewed_artifact():
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(),
-        slug="reviewed-defaults",
-        name="Reviewed defaults",
-    )
-    created = create_project(
-        name="Reviewed defaults",
-        slug="RVD",
-        workspace_slug=workspace.slug,
-    )
+    created = create_project(name="Reviewed defaults", slug="RVD")
     issue_types = list(
         IssueType.objects.filter(project=created, level="task").order_by("sort_order")
     )
@@ -289,6 +279,11 @@ def test_fresh_project_materializes_the_reviewed_artifact():
             for state_name, binding in bindings.items()
         } == REVIEWED_DEFAULTS["requiredSkills"]
         assert {
+            state_name: binding.entry_skill
+            for state_name, binding in bindings.items()
+            if binding.entry_skill is not None
+        } == REVIEWED_DEFAULTS["entrySkills"]
+        assert {
             state_name: binding.subtree_run_enabled
             for state_name, binding in bindings.items()
         } == {
@@ -316,17 +311,7 @@ def test_fresh_project_materializes_declared_non_default_policy_fixture(
         False,
     )
     monkeypatch.setitem(DEFAULT_AUTO_START_BY_STATE, "Grill", True)
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(),
-        slug="declared-policy",
-        name="Declared policy",
-    )
-
-    created = create_project(
-        name="Declared policy",
-        slug="DPL",
-        workspace_slug=workspace.slug,
-    )
+    created = create_project(name="Declared policy", slug="DPL")
 
     assert (
         IssueTypeTransition.objects.get(
@@ -349,11 +334,6 @@ def test_fresh_project_materializes_declared_non_default_policy_fixture(
 
 @pytest.mark.django_db
 def test_project_creation_only_adds_missing_seed_rows(monkeypatch):
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(),
-        slug="additive-defaults",
-        name="Additive defaults",
-    )
     seeded = {}
 
     def insert_existing_rows(created, StateModel):
@@ -407,11 +387,7 @@ def test_project_creation_only_adds_missing_seed_rows(monkeypatch):
         insert_existing_rows,
     )
 
-    created = create_project(
-        name="Additive defaults",
-        slug="ADD",
-        workspace_slug=workspace.slug,
-    )
+    created = create_project(name="Additive defaults", slug="ADD")
 
     for instance, before in seeded.values():
         instance.refresh_from_db()

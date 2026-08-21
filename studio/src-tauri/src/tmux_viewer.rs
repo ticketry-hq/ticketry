@@ -11,6 +11,8 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::process_spawn;
+
 const DEFAULT_TMUX_SOCKET: &str = "muxed";
 const TMUX_SOCKET_ENV: &str = "MUXED_TMUX_SOCKET";
 const VIEWER_TERM: &str = "xterm-256color";
@@ -156,7 +158,8 @@ impl TmuxViewer {
         let writer = pair.master.take_writer().map_err(pty_error)?;
         let socket = tmux_socket()?;
         let command = tmux_attach_command(&tmux, &socket, &session);
-        let mut client = pair.slave.spawn_command(command).map_err(pty_error)?;
+        let mut client =
+            process_spawn::with_lock(|| pair.slave.spawn_command(command)).map_err(pty_error)?;
 
         // A session can disappear after the preflight check. Surface that race
         // as a recoverable ended-session error, rather than a stuck viewer.
@@ -422,13 +425,13 @@ fn shell_quote(value: &str) -> String {
 
 fn session_exists(tmux: &Path, session: &str) -> Result<bool, TmuxViewerError> {
     let socket = tmux_socket()?;
-    let status = Command::new(tmux)
+    let mut command = Command::new(tmux);
+    command
         .args(["-L", &socket, "has-session", "-t", session])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(io_error)?;
+        .stderr(Stdio::null());
+    let status = process_spawn::status(&mut command).map_err(io_error)?;
     Ok(status.success())
 }
 
@@ -439,7 +442,8 @@ fn resize_tmux_window(
     rows: u16,
 ) -> Result<(), TmuxViewerError> {
     let socket = tmux_socket()?;
-    let output = Command::new(tmux)
+    let mut command = Command::new(tmux);
+    command
         .args([
             "-L",
             &socket,
@@ -452,8 +456,9 @@ fn resize_tmux_window(
             &rows.to_string(),
         ])
         .stdin(Stdio::null())
-        .output()
-        .map_err(io_error)?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let output = process_spawn::output(&mut command).map_err(io_error)?;
     if output.status.success() {
         return Ok(());
     }
@@ -489,12 +494,14 @@ fn scroll_tmux(
 
 fn run_tmux_control(tmux: &Path, session: &str, arguments: &[&str]) -> Result<(), TmuxViewerError> {
     let socket = tmux_socket()?;
-    let output = Command::new(tmux)
+    let mut command = Command::new(tmux);
+    command
         .args(["-L", &socket])
         .args(arguments)
         .stdin(Stdio::null())
-        .output()
-        .map_err(io_error)?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let output = process_spawn::output(&mut command).map_err(io_error)?;
     if output.status.success() {
         return Ok(());
     }

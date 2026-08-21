@@ -107,7 +107,7 @@ def launch_task_agent(
 
     :raises ValueError: ``task_not_found`` (unknown/non-task target) or
         ``module_id_required`` (no module ancestor).
-    :raises NoConfigurationSelected / LaunchUnavailable: from the terminal seam,
+    :raises LaunchUnavailable: from the terminal seam,
         preserved verbatim so the caller maps the terminal-launch prerequisites.
     """
 

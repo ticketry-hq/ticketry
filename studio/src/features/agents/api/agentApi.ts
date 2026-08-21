@@ -1,10 +1,17 @@
+import { createWorkTrackerClient } from "@worktracker/typescript-sdk/client";
+import { WorkTrackerApiError } from "@worktracker/typescript-sdk/errors";
 import type {
   DesignDoc,
   PersistedTerminalSession,
   ResumableTerminalSession,
 } from "../types";
-import { authenticatedHostFetch } from "../../../shared/api/authenticatedHostFetch";
+import { apiBase, apiKey } from "../../../shared/api/client";
 export { documentUrl as docUrl } from "../../../shared/api/documentUrl";
+
+const documentsApi = () =>
+  createWorkTrackerClient({ baseUrl: apiBase(), apiKey: apiKey() }).documents;
+const terminalsApi = () =>
+  createWorkTrackerClient({ baseUrl: apiBase(), apiKey: apiKey() }).terminals;
 
 export class ApiError extends Error {
   constructor(
@@ -17,58 +24,48 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await authenticatedHostFetch(path, init);
-  const text = await response.text();
-  let body: unknown = null;
-  if (text) {
-    try { body = JSON.parse(text); } catch { body = text; }
+async function terminalCall<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof WorkTrackerApiError) {
+      throw new ApiError(error.status, error.message, error.body);
+    }
+    throw error;
   }
-  if (!response.ok) {
-    const message = body && typeof body === "object" && "message" in body
-      ? String((body as { message?: string }).message)
-      : `HTTP ${response.status}`;
-    throw new ApiError(response.status, message, body);
-  }
-  return body as T;
 }
 
-export const getModuleActivity = (projectId: string): Promise<Record<string, string>> =>
-  request<Record<string, string>>(`/api/runs/module-activity?project_id=${encodeURIComponent(projectId)}`).catch(() => ({}));
-export const getTerminals = (taskId: string, signal?: AbortSignal) => {
-  const url = `/api/terminals?task_id=${encodeURIComponent(taskId)}`;
-  return request<PersistedTerminalSession[]>(url, { signal });
-};
+export const getTerminals = (taskId: string, signal?: AbortSignal) =>
+  terminalCall(
+    () => terminalsApi().terminalsList({ taskId }, { signal }),
+  ) as Promise<PersistedTerminalSession[]>;
 export const listResumableTerminals = (
   taskId?: string,
   projectId?: string,
   moduleId?: string,
   signal?: AbortSignal,
-) => {
-  const params = new URLSearchParams();
-  if (taskId) params.set("task_id", taskId);
-  if (projectId) params.set("project_id", projectId);
-  if (moduleId) params.set("module_id", moduleId);
-  return request<ResumableTerminalSession[]>(
-    `/api/terminals/resumable?${params}`,
-    { signal },
-  );
-};
+) =>
+  terminalCall(() =>
+    terminalsApi().terminalsResumableList(
+      { taskId, projectId, moduleId },
+      { signal },
+    ),
+  ) as Promise<ResumableTerminalSession[]>;
 export const getScratchTerminals = (
   projectId: string,
   moduleId?: string,
   signal?: AbortSignal,
-) => {
-  const url = `/api/terminals/scratch?project_id=${encodeURIComponent(projectId)}${moduleId ? `&module_id=${encodeURIComponent(moduleId)}` : ""}`;
-  return request<PersistedTerminalSession[]>(url, { signal });
-};
+) =>
+  terminalCall(() =>
+    terminalsApi().terminalsScratchList(
+      { projectId, moduleId },
+      { signal },
+    ),
+  ) as Promise<PersistedTerminalSession[]>;
 export const terminateTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; terminated: boolean }>(`/api/terminals?agent_run_id=${encodeURIComponent(agentRunId)}`, { method: "DELETE" });
+  terminalCall(() => terminalsApi().terminalsDestroy({ agentRunId }));
 export const resumeTerminal = (agentRunId: string) =>
-  request<{ agent_run_id: string; resumed_from: string }>(
-    `/api/terminals/resume?agent_run_id=${encodeURIComponent(agentRunId)}`,
-    { method: "POST" },
-  );
+  terminalCall(() => terminalsApi().terminalsResumeCreate({ agentRunId }));
 export interface CreateTerminalRunRequest {
   agent: "claude" | "agy" | "codex" | "gemini";
   project_id: string;
@@ -81,26 +78,22 @@ export interface CreateTerminalRunRequest {
 }
 
 export const createTerminalRun = (body: CreateTerminalRunRequest) =>
-  request<{ agent_run_id: string }>("/api/terminals", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  terminalCall(() => terminalsApi().terminalsCreate({ createTerminal: body }));
 
 export const getDocuments = (
   taskId: string,
   projectId?: string,
   moduleId?: string,
   signal?: AbortSignal,
-) => {
-  const params = new URLSearchParams({ task_id: taskId });
-  if (projectId) params.set("project_id", projectId);
-  if (moduleId) params.set("module_id", moduleId);
-  const url = `/api/documents?${params}`;
-  return request<{ documents: DesignDoc[] }>(url, { signal });
-};
-export const getScratchDocuments = (moduleId: string, signal?: AbortSignal) => {
-  const url = `/api/documents?scope=scratch&module_id=${encodeURIComponent(moduleId)}`;
-  return request<{ documents: DesignDoc[] }>(url, { signal });
-};
+) =>
+  documentsApi().documentsRetrieve(
+    { taskId, projectId, moduleId },
+    { signal },
+  ) as Promise<{ documents: DesignDoc[] }>;
+export const getScratchDocuments = (moduleId: string, signal?: AbortSignal) =>
+  documentsApi().documentsRetrieve(
+    { scope: "scratch", moduleId },
+    { signal },
+  ) as Promise<{ documents: DesignDoc[] }>;
 export const fsComplete = (path: string, signal?: AbortSignal) =>
-  request<{ entries: string[] }>(`/api/fs/complete?path=${encodeURIComponent(path)}`, { signal });
+  documentsApi().fsCompleteRetrieve({ path }, { signal });

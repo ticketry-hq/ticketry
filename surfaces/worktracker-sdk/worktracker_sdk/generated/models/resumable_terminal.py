@@ -27,7 +27,7 @@ from pydantic_core import to_jsonable_python
 
 class ResumableTerminal(BaseModel):
     """
-    ResumableTerminal
+    Derived resumable-run projection after history de-duplication.
     """ # noqa: E501
     agent_run_id: StrictStr
     agent: StrictStr
@@ -70,8 +70,26 @@ class ResumableTerminal(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
+            "agent_run_id",
+            "agent",
+            "status",
+            "started_at",
+            "launch_state",
+            "launch_model",
+            "scope",
+            "provider_session_id",
+            "resumed_from",
         ])
 
         _dict = self.model_dump(

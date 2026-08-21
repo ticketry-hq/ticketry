@@ -1,11 +1,12 @@
 import { readVersionedItem } from "../shared/storage/versioned";
 
-export const SIDEBAR_KEY = "studio.sidebarVisible:v1";
+export const SIDEBAR_KEY = "studio.sidebarVisible:v2";
 export const PANEL_LAYOUT_KEY = "studio.panelLayout:v1";
 export const EXPANDED_IDS_KEY = "studio.expandedSubtasks:v1";
 export const COLLAPSED_STATE_IDS_KEY = "studio.collapsedStates:v2";
 export const TASK_SELECTIONS_KEY = "studio.selectedTaskByModule:v1";
 export const TERMINAL_PANEL_KEY = "studio.terminalPanel:v1";
+export const LAST_SELECTED_MODULE_KEY = "studio.lastSelectedModule:v1";
 
 const LEGACY_SIDEBAR_KEYS = ["plane-tui:sidebar-visible"];
 const LEGACY_PANEL_LAYOUT_KEYS = ["plane-tui:panel-layout"];
@@ -19,6 +20,31 @@ const LEGACY_TASK_SELECTIONS_KEYS = [
 ] as const;
 
 const MAX_TASK_SELECTION_ENTRIES = 100;
+
+export function readLastSelectedModule(): string | null {
+  try {
+    const value = localStorage.getItem(LAST_SELECTED_MODULE_KEY);
+    return value?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeLastSelectedModule(moduleId: string): void {
+  try {
+    localStorage.setItem(LAST_SELECTED_MODULE_KEY, moduleId);
+  } catch {
+    /* unavailable storage leaves the current in-memory selection intact */
+  }
+}
+
+export function clearLastSelectedModule(): void {
+  try {
+    localStorage.removeItem(LAST_SELECTED_MODULE_KEY);
+  } catch {
+    /* unavailable storage leaves the current in-memory selection intact */
+  }
+}
 
 export const PANEL_LAYOUT_SAVE_DELAY_MS = 400;
 export const TERMINAL_PANEL_SAVE_DELAY_MS = PANEL_LAYOUT_SAVE_DELAY_MS;

@@ -20,7 +20,6 @@ from worktracker.models import (
     Provider,
     ReasoningLevel,
     State,
-    Workspace,
 )
 
 
@@ -46,10 +45,7 @@ def client():
 
 @pytest.fixture
 def project():
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    return Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
-    )
+    return Project.objects.create(id=uuid.uuid4(), name="meml", slug="MEML")
 
 
 def _issue_type(project, name, level):
@@ -339,6 +335,20 @@ def test_execute_graph_missing_task_returns_404(client):
     assert response.json()["code"] == "task_not_found"
 
 
+@override_settings(
+    WORKTRACKER_DISABLE_AUTH=False,
+    WORKTRACKER_API_TOKEN="graph-run-secret",
+)
+def test_graph_run_uses_default_api_key_authentication(client):
+    path = f"/api/work-tracker/work-items/{uuid.uuid4()}/graph-run"
+
+    rejected = client.get(path)
+    accepted = client.get(path, HTTP_X_API_KEY="graph-run-secret")
+
+    assert rejected.status_code == 401
+    assert accepted.status_code == 404
+
+
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_execute_graph_empty_direct_child_set_returns_422(
     client, project, module, todo
@@ -494,6 +504,37 @@ def test_get_dependency_graph_returns_not_found_for_unknown_or_archived_root(
         response = client.get(f"/api/work-tracker/work-items/{root_id}/graph-run")
         assert response.status_code == 404
     assert response.json()["code"] == "task_not_found"
+
+
+@override_settings(
+    WORKTRACKER_DISABLE_AUTH=False,
+    WORKTRACKER_API_TOKEN="launch-agent-secret",
+)
+def test_launch_agent_requires_the_default_api_key(client):
+    path = f"/api/work-tracker/work-items/{uuid.uuid4()}/launch-agent"
+
+    rejected = client.post(path, data={}, content_type="application/json")
+    accepted = client.post(
+        path,
+        data={},
+        content_type="application/json",
+        HTTP_X_API_KEY="launch-agent-secret",
+    )
+
+    assert rejected.status_code == 401
+    assert accepted.status_code == 404
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_launch_agent_rejects_non_string_override_through_the_drf_serializer(client):
+    response = client.post(
+        f"/api/work-tracker/work-items/{uuid.uuid4()}/launch-agent",
+        data={"agent": 7},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 422
+    assert "agent" in response.json()
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -671,28 +712,6 @@ def test_launch_agent_no_module_ancestry_returns_422(
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
-def test_launch_agent_no_profile_returns_400(
-    client, project, module, todo, monkeypatch
-):
-    from apps.settings_store.config import NoConfigurationSelected
-
-    issue = task(project, module, todo)
-
-    async def no_profile_spawn(**kwargs):
-        raise NoConfigurationSelected("No profile selected.")
-
-    monkeypatch.setattr(driver, "spawn_run", no_profile_spawn)
-    response = client.post(
-        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
-        data={"agent": "codex"},
-        content_type="application/json",
-    )
-
-    assert response.status_code == 400
-    assert response.json()["code"] == "no_profile_selected"
-
-
-@override_settings(WORKTRACKER_DISABLE_AUTH=True)
 def test_launch_agent_launch_unavailable_returns_503(
     client, project, module, todo, monkeypatch
 ):
@@ -712,6 +731,32 @@ def test_launch_agent_launch_unavailable_returns_503(
 
     assert response.status_code == 503
     assert response.json()["code"] == "launch_unavailable"
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_launch_agent_prompt_delivery_failure_returns_distinct_503(
+    client, project, module, todo, monkeypatch
+):
+    from apps.terminals.launch import PromptDeliveryFailed
+
+    issue = task(project, module, todo)
+
+    async def failed_delivery(**kwargs):
+        raise PromptDeliveryFailed(reason="readiness_timeout")
+
+    monkeypatch.setattr(driver, "spawn_run", failed_delivery)
+    response = client.post(
+        f"/api/work-tracker/work-items/{issue.id}/launch-agent",
+        data={"agent": "codex"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "prompt_delivery_failed",
+        "code": "prompt_delivery_failed",
+        "reason": "readiness_timeout",
+    }
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)

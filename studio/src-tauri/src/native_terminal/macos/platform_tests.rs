@@ -78,6 +78,10 @@ mod tests {
     const GRAVE_KEY: u16 = 0x32;
     const ESCAPE_KEY: u16 = 0x35;
     const E_KEY: u16 = 0x0E;
+    const V_KEY: u16 = 0x09;
+    const NUMBER_KEYS: [u16; 10] = [
+        0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19, 0x1D,
+    ];
 
     fn studio_chord(modifier_flags: u64, key_code: u16) -> Option<StudioChord> {
         StudioChord::from_native(unsafe { muxed_ghostty_studio_chord(modifier_flags, key_code) })
@@ -105,6 +109,26 @@ mod tests {
     }
 
     #[test]
+    fn command_escape_is_the_disengage_chord_and_bare_escape_is_not() {
+        assert_eq!(
+            studio_chord(COMMAND, ESCAPE_KEY),
+            Some(StudioChord::BodyDisengage)
+        );
+        assert_eq!(
+            studio_chord(COMMAND | CAPS_LOCK, ESCAPE_KEY),
+            Some(StudioChord::BodyDisengage)
+        );
+
+        // A bare Escape is the key an agent prompt needs most, so it stays
+        // terminal input; so does every other modifier combination.
+        assert_eq!(studio_chord(0, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(SHIFT, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(OPTION, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(COMMAND | SHIFT, ESCAPE_KEY), None);
+        assert_eq!(studio_chord(COMMAND | CONTROL, ESCAPE_KEY), None);
+    }
+
+    #[test]
     fn command_e_is_the_settings_chord_and_typing_e_is_not() {
         assert_eq!(studio_chord(COMMAND, E_KEY), Some(StudioChord::Settings));
         assert_eq!(
@@ -123,6 +147,24 @@ mod tests {
     }
 
     #[test]
+    fn paste_chords_remain_owned_by_ghostty() {
+        assert_eq!(studio_chord(CONTROL, V_KEY), None);
+        assert_eq!(studio_chord(COMMAND, V_KEY), None);
+    }
+
+    #[test]
+    fn command_number_selects_the_matching_module_position() {
+        for (index, key_code) in NUMBER_KEYS.into_iter().enumerate() {
+            assert_eq!(
+                studio_chord(COMMAND, key_code),
+                Some(StudioChord::ModulePosition((index + 1) as u8))
+            );
+            assert_eq!(studio_chord(0, key_code), None);
+            assert_eq!(studio_chord(COMMAND | SHIFT, key_code), None);
+        }
+    }
+
+    #[test]
     fn a_recognised_chord_reaches_the_chord_sink() {
         let (reported, chords) = mpsc::channel();
         let sink = ChordSink::new(move |chord| {
@@ -132,9 +174,11 @@ mod tests {
 
         unsafe { report_studio_chord(context, 1) };
         unsafe { report_studio_chord(context, 2) };
+        unsafe { report_studio_chord(context, 5) };
 
         assert_eq!(chords.try_recv(), Ok(StudioChord::PanelToggle));
         assert_eq!(chords.try_recv(), Ok(StudioChord::Settings));
+        assert_eq!(chords.try_recv(), Ok(StudioChord::ModulePosition(3)));
         release_chord_context(context as usize);
     }
 
@@ -236,6 +280,36 @@ mod tests {
     }
 
     #[test]
+    fn queued_native_operation_is_fenced_after_detach_removes_its_view() {
+        let entries = Arc::new(Mutex::new(HashMap::new()));
+        let (worker, _commands) = mpsc::channel();
+        entries.lock().expect("registry").insert(
+            "native-stale".to_owned(),
+            NativeEntry {
+                run_id: "run-stale".to_owned(),
+                view: 41,
+                worker: worker.clone(),
+                scroll_sink: ScrollGestureSink::new(worker),
+                chord_sink: ChordSink::new(|_| {}),
+                contexts: NativeViewContexts::default(),
+                visibility: NativeTerminalVisibility::visible(),
+                preparation_phase: Arc::new(AtomicU8::new(PRESENTED)),
+            },
+        );
+
+        let captured_view = 41;
+        take_native_entry(&entries, "native-stale").expect("detached entry");
+        let touched = with_live_native_entry(
+            &entries,
+            "native-stale",
+            captured_view,
+            |_| true,
+        );
+
+        assert_eq!(touched, None);
+    }
+
+    #[test]
     fn visibility_changes_keep_the_native_entry_and_worker_registered() {
         let entries = Arc::new(Mutex::new(HashMap::new()));
         let (worker, commands) = mpsc::channel();
@@ -323,4 +397,3 @@ mod tests {
         assert!(entries.lock().expect("registry").is_empty());
     }
 }
-

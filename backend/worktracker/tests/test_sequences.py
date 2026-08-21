@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from worktracker.models import Project, Workspace
+from worktracker.models import Project
 from worktracker.sequences import allocate_sequence_id
 
 
@@ -28,9 +28,7 @@ def test_monotonic_per_project(project):
 def test_independent_across_projects(project):
     """Each project keeps its own counter (C5)."""
 
-    other = Project.objects.create(
-        id=uuid.uuid4(), workspace=project.workspace, name="other", slug="OTHER"
-    )
+    other = Project.objects.create(id=uuid.uuid4(), name="other", slug="OTHER")
 
     assert allocate_sequence_id(project.id) == 1
     assert allocate_sequence_id(other.id) == 1

@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "xterm/css/xterm.css";
 
 import {
@@ -16,6 +16,8 @@ import { useTerminalStore } from "./internal/sessionStore";
 import { useTerminalOwnership } from "./internal/useTerminalOwnership";
 import { useTerminalPresentation } from "./internal/useTerminalPresentation";
 import { registerTerminalFocus } from "./internal/terminalRegistry";
+import { useModalOcclusionActive } from "./internal/modalOcclusion";
+import { useOcclusionAwareFocusSignal } from "./internal/useOcclusionAwareFocusSignal";
 import { NativeGhosttyTerminal } from "./NativeGhosttyTerminal";
 import { nativeGhosttyAvailable } from "./internal/nativeGhosttyAvailability";
 import { reportNativeRenderFailure } from "./internal/nativeRenderRecovery";
@@ -51,6 +53,7 @@ export function Terminal({
     sessionId ? state.sessions[sessionId] ?? null : null,
   );
   const desktop = isTauri();
+  const modalOpen = useModalOcclusionActive();
   const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(() =>
     desktop ? null : false,
   );
@@ -86,6 +89,10 @@ export function Terminal({
   useEffect(() => {
     if (!desktop || !nativeAvailable || !nativeFailureReason) return;
     if (!session?.agentRunId || !nativeViewerSessionIsLive(session.status)) return;
+    // Occlusion failures already leave the native viewer hidden behind the
+    // compatibility renderer. Do not let their recovery campaign refresh the
+    // WebView while Settings or another window-level overlay owns it.
+    if (modalOpen) return;
     // A host with no visible frame before attachment never reaches the
     // renderer. Refreshing rebuilds the same layout, so the campaign would
     // escalate to its cap and reload forever without a renderer ever failing.
@@ -97,6 +104,7 @@ export function Terminal({
     return reportNativeRenderFailure(session.agentRunId, nativeFailureReason);
   }, [
     desktop,
+    modalOpen,
     nativeAvailable,
     nativeFailureReason,
     session?.agentRunId,
@@ -160,7 +168,11 @@ function XtermTerminal({
   const sessions = useTerminalStore((state) => state.sessions);
   const registerHost = useTerminalForegroundStore((state) => state.registerHost);
   const unregisterHost = useTerminalForegroundStore((state) => state.unregisterHost);
-  const handledFocusSignalRef = useRef(0);
+  const modalOpen = useModalOcclusionActive();
+  const { handledFocusSignalRef } = useOcclusionAwareFocusSignal(
+    focusSignal,
+    modalOpen,
+  );
 
   useEffect(() => syncEntries(sessions), [sessions]);
 
@@ -198,6 +210,7 @@ function XtermTerminal({
       focusSignal !== handledFocusSignalRef.current;
     if (
       !pendingSignal ||
+      modalOpen ||
       !visibleSessionId ||
       mountedIdRef.current !== visibleSessionId
     ) {
@@ -210,7 +223,7 @@ function XtermTerminal({
       handledFocusSignalRef.current = focusSignal;
     }
     entry.term.focus?.();
-  }, [focusSignal, mountedIdRef, visibleSessionId]);
+  }, [focusSignal, modalOpen, mountedIdRef, visibleSessionId]);
 
   const presentedElsewhere = session !== null && resolvedOwner !== owner;
 

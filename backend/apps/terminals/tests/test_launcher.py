@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 from apps.terminals.agents.prompts import (
@@ -11,7 +9,6 @@ from apps.terminals.agents.prompts import (
     build_doc_chat_prompt,
     build_planning_context_prompt,
 )
-from apps.settings_store.config import config
 from worktracker.launch_seeds import DEFAULT_AGENT_PROMPTS
 from studio_server.contracts import ModuleSummary, TaskState, TaskSummary
 
@@ -61,24 +58,18 @@ def test_build_doc_chat_prompt_forbids_creating_new_docs():
     assert "Do not create" in prompt
 
 
-def test_build_doc_chat_prompt_uses_the_supplied_profiles_module_link():
-    profile = SimpleNamespace(
-        module_links=[{"module_id": "module-1", "path": "/active/repo"}]
-    )
-
+def test_build_doc_chat_prompt_uses_the_resolved_module_link():
     prompt = build_doc_chat_prompt(
-        doc_rel_path="LLD.html", module_id="module-1", profile=profile
+        doc_rel_path="LLD.html",
+        module_id="module-1",
+        resolved_module_folder="/active/repo",
     )
 
     assert "Local Module Folder: /active/repo" in prompt
 
 
 def test_build_doc_chat_prompt_keeps_missing_link_explicit():
-    prompt = build_doc_chat_prompt(
-        doc_rel_path="LLD.html",
-        module_id="module-1",
-        profile=SimpleNamespace(module_links=[]),
-    )
+    prompt = build_doc_chat_prompt(doc_rel_path="LLD.html", module_id="module-1")
 
     assert "Local Module Folder: \n" in prompt
 
@@ -93,21 +84,29 @@ def test_build_context_prompt_keeps_factual_context_and_tools_neutral():
     assert "Priority:" not in prompt
 
 
+def test_build_context_prompt_pins_mcp_calls_to_the_launch_project():
+    prompt = build_context_prompt(_task("Implement", "Implementation"))
+
+    assert "Ticketry has one installation project" in prompt
+    assert "Use the Project ID above" in prompt
+    assert "Do not list projects" in prompt
+
+
 def test_planning_prompt_does_not_request_work_item_priority():
     prompt = build_planning_context_prompt(
         ModuleSummary(id="module-1", name="Module", project_id="project-1"),
         [],
-        "workspace",
         "project-1",
         "/tmp/module",
     )
 
     assert "appropriate priority" not in prompt
+    assert "Ticketry has one installation project" in prompt
+    assert "Do not list projects" in prompt
 
 
-def test_seeded_prompts_are_exposed_for_migration_not_launch_fallbacks(monkeypatch):
+def test_seeded_prompts_are_not_launch_fallbacks():
     assert "Implement" in DEFAULT_AGENT_PROMPTS
-    monkeypatch.setattr(config, "profiles", [])
 
     prompt = build_context_prompt(_task("Implement", "Implementation"))
 
@@ -115,39 +114,10 @@ def test_seeded_prompts_are_exposed_for_migration_not_launch_fallbacks(monkeypat
     assert "Selected workflow prompt:" not in prompt
 
 
-def test_profile_default_prompt_is_not_launch_authority(monkeypatch):
-    monkeypatch.setattr(
-        config,
-        "profiles",
-        [
-            SimpleNamespace(
-                agent_prompts={},
-                agent_prompt="CUSTOM DEFAULT: follow our operations handbook.",
-                workspace_slug="",
-                module_links=[],
-            )
-        ],
-    )
-    monkeypatch.setattr(config, "current_profile_index", 0)
-
-    prompt = build_context_prompt(_task("A domain-specific state", "Incident"))
-
-    assert "CUSTOM DEFAULT: follow our operations handbook." not in prompt
-    assert "Selected workflow prompt:" not in prompt
-
-
-def test_resolved_binding_prompt_overrides_legacy_profile_prompt():
-    profile = SimpleNamespace(
-        agent_prompts={"Implement": "LEGACY PROFILE PROMPT"},
-        agent_prompt="LEGACY DEFAULT",
-        workspace_slug="meml",
-        module_links=[{"module_id": "module-1", "path": "/repo"}],
-    )
-
+def test_resolved_binding_prompt_is_the_only_prompt_authority():
     prompt = build_context_prompt(
         _task("Implement", "Implementation"),
         module_id="module-1",
-        profile=profile,
         workflow_prompt="RESOLVED TYPE/STATE PROMPT",
     )
 
@@ -164,39 +134,22 @@ def test_type_is_always_visible_in_prompt(issue_type):
     assert f"Type: {issue_type}" in prompt
 
 
-def test_selected_workflow_prompt_is_opaque_over_neutral_framing(monkeypatch):
+def test_selected_workflow_prompt_is_opaque_over_neutral_framing():
     """Selected guidance is preserved without injected workflow policy."""
-    monkeypatch.setattr(
-        config,
-        "profiles",
-        [
-            SimpleNamespace(
-                agent_prompts={
-                    "Implement": "CUSTOM: use our support-playbook language."
-                },
-                agent_prompt=None,
-                workspace_slug="workspace",
-                module_links=[
-                    {"module_id": "module-1", "path": "/code/module"}
-                ],
-            )
-        ],
-    )
-    monkeypatch.setattr(config, "current_profile_index", 0)
-
     prompt = build_context_prompt(
         _task("Implement", "Implementation", sequence_id=1115),
         module_id="module-1",
         additional_prompt="Keep the change local.",
         design_dir="spec/module/T1115--caller-neutral",
         workflow_prompt="CUSTOM: use our support-playbook language.",
+        resolved_module_folder="/code/module",
     )
 
     assert "Selected workflow prompt:\nCUSTOM: use our support-playbook language." in prompt
     assert "Task: Launch workflow" in prompt
     assert "Work Item ID: task-1" in prompt
     assert "Project ID: project-1" in prompt
-    assert "Workspace Slug: workspace" in prompt
+    assert "Workspace" not in prompt
     assert "Module ID: module-1" in prompt
     assert "Local Module Folder: /code/module" in prompt
     assert "State: Implement" in prompt
@@ -243,21 +196,7 @@ def test_refinement_launch_keeps_design_directory_block():
     assert "Design directory: spec/x/T943--example" in prompt
 
 
-def test_project_binding_wins_for_ideas_state(monkeypatch):
-    monkeypatch.setattr(
-        config,
-        "profiles",
-        [
-            SimpleNamespace(
-                agent_prompts={"Ideas": "CUSTOM IDEAS PROMPT"},
-                agent_prompt=None,
-                workspace_slug="",
-                module_links=[],
-            )
-        ],
-    )
-    monkeypatch.setattr(config, "current_profile_index", 0)
-
+def test_project_binding_is_used_for_ideas_state():
     prompt = build_context_prompt(
         _task("Ideas", "Story"), workflow_prompt="PROJECT IDEAS PROMPT"
     )
@@ -267,22 +206,8 @@ def test_project_binding_wins_for_ideas_state(monkeypatch):
     assert "This task is in `Ideas`" not in prompt
 
 
-def test_custom_ideas_prompt_is_not_supplemented_with_hard_constraints(monkeypatch):
+def test_custom_ideas_prompt_is_not_supplemented_with_hard_constraints():
     """A project binding's Ideas prompt fully owns its stage guidance."""
-
-    monkeypatch.setattr(
-        config,
-        "profiles",
-        [
-            SimpleNamespace(
-                agent_prompts={"Ideas": "CUSTOM IDEAS PROMPT: transition when ready"},
-                agent_prompt=None,
-                workspace_slug="",
-                module_links=[],
-            )
-        ],
-    )
-    monkeypatch.setattr(config, "current_profile_index", 0)
 
     prompt = build_context_prompt(
         _task("Ideas", "Story"),
@@ -296,21 +221,7 @@ def test_custom_ideas_prompt_is_not_supplemented_with_hard_constraints(monkeypat
     assert "Leave the ticket in `Ideas`" not in prompt
 
 
-def test_custom_non_ideas_prompt_gets_no_ideas_boundary(monkeypatch):
-    monkeypatch.setattr(
-        config,
-        "profiles",
-        [
-            SimpleNamespace(
-                agent_prompts={"Review": "CUSTOM REVIEW PROMPT"},
-                agent_prompt=None,
-                workspace_slug="",
-                module_links=[],
-            )
-        ],
-    )
-    monkeypatch.setattr(config, "current_profile_index", 0)
-
+def test_custom_non_ideas_prompt_gets_no_ideas_boundary():
     prompt = build_context_prompt(
         _task("Review", "Story"), workflow_prompt="CUSTOM REVIEW PROMPT"
     )

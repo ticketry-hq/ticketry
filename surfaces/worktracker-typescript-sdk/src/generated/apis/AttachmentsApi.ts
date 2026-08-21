@@ -47,7 +47,7 @@ export interface AttachmentsApiInterface {
     listWorkItemAttachmentsRequestOpts(requestParameters: ListWorkItemAttachmentsRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Read or append attachment rows without re-reading their work item.
+     * Nested attachment collection for one work item.
      * @param {string} issueId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -56,7 +56,7 @@ export interface AttachmentsApiInterface {
     listWorkItemAttachmentsRaw(requestParameters: ListWorkItemAttachmentsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<Attachment>>>;
 
     /**
-     * Read or append attachment rows without re-reading their work item.
+     * Nested attachment collection for one work item.
      */
     listWorkItemAttachments(requestParameters: ListWorkItemAttachmentsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<Attachment>>;
 
@@ -71,7 +71,7 @@ export interface AttachmentsApiInterface {
     uploadAttachmentRequestOpts(requestParameters: UploadAttachmentRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * Read or append attachment rows without re-reading their work item.
+     * Nested attachment collection for one work item.
      * @param {string} issueId
      * @param {Blob} file
      * @param {string} [name]
@@ -82,7 +82,7 @@ export interface AttachmentsApiInterface {
     uploadAttachmentRaw(requestParameters: UploadAttachmentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Attachment>>;
 
     /**
-     * Read or append attachment rows without re-reading their work item.
+     * Nested attachment collection for one work item.
      */
     uploadAttachment(requestParameters: UploadAttachmentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Attachment>;
 
@@ -125,7 +125,7 @@ export class AttachmentsApi extends runtime.BaseAPI implements AttachmentsApiInt
     }
 
     /**
-     * Read or append attachment rows without re-reading their work item.
+     * Nested attachment collection for one work item.
      */
     async listWorkItemAttachmentsRaw(requestParameters: ListWorkItemAttachmentsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<Attachment>>> {
         const requestOptions = await this.listWorkItemAttachmentsRequestOpts(requestParameters);
@@ -135,7 +135,7 @@ export class AttachmentsApi extends runtime.BaseAPI implements AttachmentsApiInt
     }
 
     /**
-     * Read or append attachment rows without re-reading their work item.
+     * Nested attachment collection for one work item.
      */
     async listWorkItemAttachments(requestParameters: ListWorkItemAttachmentsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<Attachment>> {
         const response = await this.listWorkItemAttachmentsRaw(requestParameters, initOverrides);
@@ -206,7 +206,7 @@ export class AttachmentsApi extends runtime.BaseAPI implements AttachmentsApiInt
     }
 
     /**
-     * Read or append attachment rows without re-reading their work item.
+     * Nested attachment collection for one work item.
      */
     async uploadAttachmentRaw(requestParameters: UploadAttachmentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Attachment>> {
         const requestOptions = await this.uploadAttachmentRequestOpts(requestParameters);
@@ -216,7 +216,7 @@ export class AttachmentsApi extends runtime.BaseAPI implements AttachmentsApiInt
     }
 
     /**
-     * Read or append attachment rows without re-reading their work item.
+     * Nested attachment collection for one work item.
      */
     async uploadAttachment(requestParameters: UploadAttachmentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Attachment> {
         const response = await this.uploadAttachmentRaw(requestParameters, initOverrides);

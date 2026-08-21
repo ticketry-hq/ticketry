@@ -350,22 +350,58 @@ export function findRunningInstalledTicketry({
     .map((match) => ({ pid: Number(match[1]), executable: match[2] }));
 }
 
+export function stopInstalledTicketryProcesses(
+  processes,
+  { runner = execFileSync } = {},
+) {
+  for (const { pid, executable } of processes) {
+    try {
+      runner("kill", ["-15", String(pid)], { stdio: "ignore" });
+    } catch (error) {
+      console.warn(`Could not stop ${executable} (PID ${pid}): ${error.message}`);
+    }
+  }
+}
+
+export function describeInstalledTicketryProcesses(processes) {
+  return processes.map(({ pid, executable }) => `${executable} (PID ${pid})`).join(", ");
+}
+
 export function assertInstalledTicketryIsNotRunning(options) {
-  const running = findRunningInstalledTicketry(options);
+  const {
+    terminateInstalled = false,
+    platform = process.platform,
+    runner = execFileSync,
+  } = options ?? {};
+  const running = findRunningInstalledTicketry({ platform, runner });
   if (running.length === 0) return;
 
-  const processes = running
-    .map(({ pid, executable }) => `${executable} (PID ${pid})`)
-    .join(", ");
+  if (terminateInstalled) {
+    stopInstalledTicketryProcesses(running, { runner });
+    const remaining = findRunningInstalledTicketry({ platform, runner });
+    if (remaining.length > 0) {
+      throw new Error(
+        `could not stop the installed Ticketry app(s): ${describeInstalledTicketryProcesses(remaining)}`,
+      );
+    }
+    console.log(`Stopped installed Ticketry process(es): ${describeInstalledTicketryProcesses(running)}`);
+    return;
+  }
+
+  const processes = describeInstalledTicketryProcesses(running);
   throw new Error(
     `the installed Ticketry app is still running: ${processes}. ` +
-    "Quit it with Command-Q; closing its window is not enough. Then rerun pnpm run dev",
+    "Quit it with Command-Q; closing its window is not enough. " +
+    "Then rerun pnpm run dev, or set MUXED_DEV_KILL_INSTALLED_TICKETRY=1",
   );
 }
 
 export async function main() {
-  assertInstalledTicketryIsNotRunning();
   const options = parseDesktopDevOptions(process.argv.slice(2));
+  assertInstalledTicketryIsNotRunning({
+    terminateInstalled:
+      process.env.MUXED_DEV_KILL_INSTALLED_TICKETRY === "1",
+  });
   if (options.mode === connectMode) {
     const launch = buildConnectLaunch();
     console.log(

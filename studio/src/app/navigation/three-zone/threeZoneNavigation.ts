@@ -9,6 +9,9 @@ import {
   currentTaskRow,
   moveTaskSelection,
 } from "../navigationContext";
+import {
+  activateSelectedWorkItem,
+} from "../workItemActivation";
 
 export const EDIT_VIEW_BODY_DISENGAGE_CHORD = {
   key: "Escape",
@@ -77,17 +80,26 @@ export function routeThreeZoneBodyEngagement(event: KeyboardEvent): boolean {
   ) {
     event.preventDefault();
     event.stopImmediatePropagation();
-    ui.setEditViewBodyEngaged(false);
-    ui.setNavigationModality("keyboard");
-    // Focus lands on the zone the developer was typing in, so the panel stays
-    // open and stays the current zone.
-    document
-      .querySelector<HTMLElement>(
-        `[data-navigation-zone="${ui.editViewZone}"]`,
-      )
-      ?.focus({ preventScroll: true });
+    disengageEditViewBody();
   }
   return true;
+}
+
+/**
+ * Leaves typing mode without closing anything. The desktop build reaches this
+ * from the native chord bridge instead of a keydown: an engaged native
+ * terminal is first responder, so AppKit delivers Cmd+Escape to it and the
+ * WebView never sees the key (#753).
+ */
+export function disengageEditViewBody(): void {
+  const ui = useClientStore.getState();
+  ui.setEditViewBodyEngaged(false);
+  ui.setNavigationModality("keyboard");
+  // Focus lands on the zone the developer was typing in, so the panel stays
+  // open and stays the current zone.
+  document
+    .querySelector<HTMLElement>(`[data-navigation-zone="${ui.editViewZone}"]`)
+    ?.focus({ preventScroll: true });
 }
 
 /**
@@ -154,13 +166,62 @@ function routeStoriesZone(
       return setTaskExpanded(ctx, false);
     case "edit-view.right":
       return expandTaskOrDiveActiveBody(ctx);
-    case "edit-view.commit":
+    case "edit-view.choose-provider":
+      return chooseStoryProvider(ctx);
+    case "edit-view.commit": {
+      const row = currentTaskRow(ctx);
+      if (!row) {
+        consume(ctx.event);
+        return true;
+      }
+      const { selectedProjectId, selectedModuleId } = ctx.tasks;
+      if (
+        selectedProjectId &&
+        selectedModuleId &&
+        ctx.tasks.itemsById[row.id] &&
+        activateSelectedWorkItem(
+          {
+            projectId: selectedProjectId,
+            moduleId: selectedModuleId,
+            taskId: row.id,
+          },
+          "open-default-terminal",
+        )
+      ) {
+        consume(ctx.event);
+        return true;
+      }
       return workspaceActionHandled(
         routeTaskWorkspaceEditViewAction(ctx.event, "dive-active"),
       );
+    }
     default:
       return false;
   }
+}
+
+function chooseStoryProvider(
+  ctx: ReturnType<typeof createNavigationContext>,
+): boolean {
+  consume(ctx.event);
+  const row = currentTaskRow(ctx);
+  const { selectedProjectId, selectedModuleId } = ctx.tasks;
+  if (
+    row &&
+    selectedProjectId &&
+    selectedModuleId &&
+    ctx.tasks.itemsById[row.id]
+  ) {
+    activateSelectedWorkItem(
+      {
+        projectId: selectedProjectId,
+        moduleId: selectedModuleId,
+        taskId: row.id,
+      },
+      "choose-provider",
+    );
+  }
+  return true;
 }
 
 function routeTabStripZone(
@@ -200,12 +261,11 @@ function workspaceActionHandled(
 
 /**
  * Right expands while expansion remains; otherwise it dives straight into the
- * remembered Active tab body, exactly where Enter lands. The workspace tab
- * strip is a sibling navigation zone, not a waypoint on this route.
+ * remembered Active tab body. The workspace tab strip is a sibling navigation
+ * zone, not a waypoint on this route.
  *
  * Only the expand branch needs a work-item row: rows without expansion of
- * their own (the scratch workspace row) fall through to the same dive Enter
- * takes, so Right always lands where Enter lands.
+ * their own (the scratch workspace row) fall through to the same dive.
  */
 function expandTaskOrDiveActiveBody(
   ctx: ReturnType<typeof createNavigationContext>,

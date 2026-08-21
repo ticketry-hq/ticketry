@@ -84,6 +84,9 @@ describe("overhaul acceptance — documents and persisted layout", () => {
     fireEvent.change(await screen.findByLabelText("Document content"), {
       target: { value: "# Unsaved design" },
     });
+    expect(
+      screen.queryByText("Unable to load this document."),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Unsaved changes")).toBeVisible();
 
     fireEvent.click(screen.getByRole("tab", { name: "Notes" }));

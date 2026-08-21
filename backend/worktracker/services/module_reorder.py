@@ -5,10 +5,10 @@ This module owns the one write that can change that answer: dragging a module
 into a new place.
 
 A project reaches Manual module order exactly once, on its first module drag.
-Until then its modules are ordered by the automatic fallback plus whatever
-agent-activity recency Studio layers on top, and their persisted ranks mean
-nothing. The first drag therefore carries a *baseline*: the complete list of
-module ids in the order the user could actually see. Freezing that baseline
+Until then its modules use the server's automatic newest-created-first order,
+and their persisted ranks mean nothing. The first drag therefore carries a
+*baseline*: the complete list of module ids in the order the user could
+actually see. Freezing that baseline
 into ranks, applying the requested move, and flipping the project to manual
 mode all happen inside one transaction behind a project-row lock, so a project
 can never persist a half-seeded arrangement.
@@ -22,14 +22,18 @@ order overwrite the winner's.
 
 from django.db import transaction
 
-from worktracker.models import Issue, Project
+from worktracker.models import Issue, ModulePresentation, Project
 from worktracker.module_order import canonical_module_queryset
 from worktracker.ranking import key_between, rebalance
 from worktracker.services.errors import NotFoundError, ValidationError
 
 
-def reorder_module(issue, before_id=None, after_id=None, initial_order_ids=None):
+def reorder_module(module_id, before_id=None, after_id=None, initial_order_ids=None):
     """Place one module between its neighbors, seeding manual mode if needed."""
+
+    issue = Issue.objects.filter(pk=module_id, type="module").first()
+    if issue is None:
+        raise NotFoundError("Module not found.")
 
     if before_id is None and after_id is None:
         raise ValidationError("A module reorder requires at least one neighbor.")
@@ -48,23 +52,30 @@ def reorder_module(issue, before_id=None, after_id=None, initial_order_ids=None)
         if project is None:
             raise NotFoundError("Project not found.")
 
-        if not project.manual_module_order:
+        if (
+            not ModulePresentation.objects.filter(
+                module__project_id=project.id,
+                module__type="module",
+            )
+            .exclude(rank="")
+            .exists()
+        ):
             _seed_manual_order(project.id, initial_order_ids)
-            Project.objects.filter(pk=project.id).update(manual_module_order=True)
 
         before = _module_neighbor(issue, before_id)
         after = _module_neighbor(issue, after_id)
+        presentation = ModulePresentation.objects.get(module=issue)
         try:
-            issue.rank = key_between(
-                (before.rank or None) if before else None,
-                (after.rank or None) if after else None,
+            presentation.rank = key_between(
+                _presentation_rank(before),
+                _presentation_rank(after),
             )
         except ValueError as exc:
             raise ValidationError("before/after are not ordered neighbors.") from exc
 
-        issue.save(update_fields=["rank", "updated_at"])
+        presentation.save(update_fields=["rank"])
 
-    return issue
+    return presentation
 
 
 def _seed_manual_order(project_id, initial_order_ids):
@@ -94,19 +105,25 @@ def _seed_manual_order(project_id, initial_order_ids):
     }
     if set(ordered) != active:
         raise ValidationError(
-            "The module order baseline must list exactly this project's "
-            "active modules."
+            "The module order baseline must list exactly this project's active modules."
         )
 
-    modules_by_id = {
-        str(module.id): module for module in Issue.objects.filter(pk__in=ordered)
+    presentations_by_module_id = {
+        str(presentation.module_id): presentation
+        for presentation in ModulePresentation.objects.filter(module_id__in=ordered)
     }
-    seeded = []
+    created = []
+    updated = []
     for rank, module_id in zip(rebalance(len(ordered)), ordered):
-        module = modules_by_id[module_id]
-        module.rank = rank
-        seeded.append(module)
-    Issue.objects.bulk_update(seeded, ["rank"])
+        presentation = presentations_by_module_id.get(module_id)
+        if presentation is None:
+            presentation = ModulePresentation(module_id=module_id)
+            created.append(presentation)
+        else:
+            updated.append(presentation)
+        presentation.rank = rank
+    ModulePresentation.objects.bulk_create(created)
+    ModulePresentation.objects.bulk_update(updated, ["rank"])
 
 
 def _module_neighbor(issue, neighbor_id):
@@ -127,3 +144,12 @@ def _module_neighbor(issue, neighbor_id):
         # moved module against a position nobody can see.
         raise ValidationError("An archived module is not a drop neighbor.")
     return neighbor
+
+
+def _presentation_rank(issue):
+    if issue is None:
+        return None
+    try:
+        return issue.presentation.rank or None
+    except ModulePresentation.DoesNotExist as exc:
+        raise ValidationError("A module order neighbor has no rank.") from exc

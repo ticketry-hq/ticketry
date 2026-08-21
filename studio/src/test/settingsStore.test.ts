@@ -60,6 +60,14 @@ const STORY: IssueType = {
   color: null,
   sort_order: 2,
 };
+const PATHFIND: IssueType = {
+  id: "pathfind",
+  name: "PathFind",
+  level: "task",
+  color: null,
+  sort_order: 1,
+  is_pathfind: true,
+};
 
 const STATE = (id: string, order: number): State => ({
   id,
@@ -214,6 +222,26 @@ describe("settingsStore", () => {
     await useSettingsStore.getState().deleteType("story");
     expect(issueTypes().map((t) => t.id)).toContain("story");
     expect(useSettingsStore.getState().error).toContain("409");
+  });
+
+  it("reorderTypes includes hidden issue types in the backend request", async () => {
+    fn(api.listIssueTypes).mockResolvedValue([EPIC, PATHFIND, TASK, STORY]);
+    fn(api.reorderIssueTypes).mockResolvedValue([
+      { ...STORY, sort_order: 0 },
+      { ...PATHFIND, sort_order: 1 },
+      { ...TASK, sort_order: 2 },
+      { ...EPIC, sort_order: 3 },
+    ]);
+
+    await useSettingsStore.getState().reorderTypes(["story", "task", "epic"]);
+
+    expect(api.reorderIssueTypes).toHaveBeenCalledWith("p1", [
+      "story",
+      "pathfind",
+      "task",
+      "epic",
+    ]);
+    expect(issueTypes().map((type) => type.id)).toEqual(["story", "task", "epic"]);
   });
 
   it("reorderStates applies the given order then reconciles with the server", async () => {

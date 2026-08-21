@@ -159,23 +159,22 @@ binding exists, so automation can never be armed without launch configuration.
 _Avoid_: per-edge auto_launch, launch trigger edge
 
 **Resolved project**:
-The single project that owns every module and work item while the Projects
-surface is gated off. It is identified by a fixed key rather than chosen by a
-person, and it is created — fully configured with the standard states, issue
-types, workflows and launch bindings — the first time it is asked for. Other
-project rows continue to exist and remain reachable over the API; they are
-simply not what the surface resolves to.
+The installation project that owns the modules and work items shown in Studio
+and exposed to agents. Resolution prefers `CDN`, accepts legacy `CODING`, then
+uses the oldest existing project; a fresh installation provisions `CDN` with
+the standard states, issue types, workflows and launch bindings. A person does
+not choose it. Other project rows continue to exist and remain reachable over
+REST, but Studio and WorkTracker MCP project discovery do not expose them.
 _Avoid_: current selection, implicit workspace, hidden project, fallback project
 
 **Module ordering mode**:
 The durable, project-owned fact that decides how a module collection read is
 ordered. Every project begins and migrates into *automatic*, where the read is
-newest-created-first and clients may layer agent-activity recency on top. A
-project acquires *Manual module order* on its first module drag, after which
-the read is the module work items' ascending fractional rank and no activity
-may rearrange it. It is a one-way decision in this version, and it belongs to
+newest-created-first. A project acquires *Manual module order* on its first
+module drag, after which the read is the module work items' ascending
+fractional rank. It is a one-way decision in this version, and it belongs to
 the project rather than to a user, device, or module surface.
-_Avoid_: sort preference, per-user order, recency toggle, pinned modules
+_Avoid_: sort preference, per-user order, pinned modules
 
 **Work-item change revision**:
 The project-monotonic counter stamped on a work item whenever a committed change
@@ -224,8 +223,8 @@ _Avoid_: URL conf, API docs, OpenAPI document, endpoint list
 **Canonical collection read**:
 The one read that returns a model's rows for a given scope. Narrower views are
 requested by declared filter parameters on that same route — for work items,
-project, module, state, archived visibility, and PathFind visibility — rather
-than by adding another overlapping collection endpoint. Every filtered response
+project, module, and state — rather than by adding another overlapping
+collection endpoint. Every filtered response
 merges rows into the same normalized client store by id; filters describe
 membership, never a second record location.
 _Avoid_: list variant, nested work-item list, request-keyed record cache
@@ -238,3 +237,11 @@ named place apart from the CRUD surface, so exceptions stay countable instead
 of hiding among equally-bespoke handlers. Transition rows themselves are CRUD.
 There are exactly five, and the route registry records why each cannot be CRUD.
 _Avoid_: custom action, unreasoned RPC endpoint, ad-hoc view
+
+**Entry skill**:
+The single skill a launch binding designates to open the run: the initial
+message begins by invoking it, with the rest of the launch prompt as its
+argument. Other required skills stay available but are only referenced in
+prose; a skill that forbids model invocation is only usable as the entry
+skill, and binding validation warns when one is referenced anywhere else.
+_Avoid_: required skill list, pinned skill, default skill, first skill

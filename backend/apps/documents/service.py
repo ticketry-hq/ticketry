@@ -25,7 +25,7 @@ from apps.documents.models import DesignDocument
 from apps.runs import dao as runs_dao
 from apps.terminals.dao import SCRATCH_TASK_ID
 from apps import worktracker_queries
-from apps.settings_store.config import module_link_path, resolve_profile
+from apps.settings_store.module_links import resolve_module_path
 from studio_server.atomic_files import atomic_write_bytes
 
 
@@ -144,7 +144,6 @@ async def list_task_documents(
     *,
     project_id: Optional[str] = None,
     module_id: Optional[str] = None,
-    profile: Optional[int] = None,
 ) -> list[dict]:
     """List a task's design documents, rescanning their directories.
 
@@ -163,8 +162,7 @@ async def list_task_documents(
     resolved_module_id = module_id
     if project_id and module_id:
         try:
-            prof = resolve_profile(profile)
-            folder = module_link_path(prof, module_id)
+            folder = await asyncio.to_thread(resolve_module_path, module_id)
             if folder and os.path.isdir(folder):
                 modules = await worktracker_queries.get_modules(project_id)
                 module = next((m for m in modules if m.id == module_id), None)

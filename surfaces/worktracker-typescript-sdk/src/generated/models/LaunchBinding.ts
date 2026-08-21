@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * The one row shape for reads and composite-key writes.
+ * One persisted launch binding returned by reads and writes.
  * @export
  * @interface LaunchBinding
  */
@@ -44,43 +44,43 @@ export interface LaunchBinding {
      * @type {string}
      * @memberof LaunchBinding
      */
-    prompt?: string;
+    readonly prompt: string;
     /**
      *
      * @type {any}
      * @memberof LaunchBinding
      */
-    required_skills?: any | null;
+    readonly required_skills: any | null;
     /**
      *
      * @type {string}
      * @memberof LaunchBinding
      */
-    model?: string | null;
+    readonly entry_skill: string | null;
     /**
      *
      * @type {string}
      * @memberof LaunchBinding
      */
-    reasoning?: string | null;
+    readonly model: string | null;
+    /**
+     *
+     * @type {string}
+     * @memberof LaunchBinding
+     */
+    readonly reasoning: string | null;
     /**
      *
      * @type {boolean}
      * @memberof LaunchBinding
      */
-    auto_start?: boolean;
+    readonly auto_start: boolean;
     /**
      *
      * @type {boolean}
      * @memberof LaunchBinding
      */
-    subtree_run_enabled?: boolean;
-    /**
-     *
-     * @type {number}
-     * @memberof LaunchBinding
-     */
-    workflow_revision: number;
+    readonly subtree_run_enabled: boolean;
     /**
      *
      * @type {string}
@@ -102,7 +102,13 @@ export function instanceOfLaunchBinding(value: object): value is LaunchBinding {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('issue_type' in value) || value['issue_type'] === undefined) return false;
     if (!('state' in value) || value['state'] === undefined) return false;
-    if (!('workflow_revision' in value) || value['workflow_revision'] === undefined) return false;
+    if (!('prompt' in value) || value['prompt'] === undefined) return false;
+    if (!('required_skills' in value) || value['required_skills'] === undefined) return false;
+    if (!('entry_skill' in value) || value['entry_skill'] === undefined) return false;
+    if (!('model' in value) || value['model'] === undefined) return false;
+    if (!('reasoning' in value) || value['reasoning'] === undefined) return false;
+    if (!('auto_start' in value) || value['auto_start'] === undefined) return false;
+    if (!('subtree_run_enabled' in value) || value['subtree_run_enabled'] === undefined) return false;
     if (!('created_at' in value) || value['created_at'] === undefined) return false;
     if (!('updated_at' in value) || value['updated_at'] === undefined) return false;
     return true;
@@ -121,13 +127,13 @@ export function LaunchBindingFromJSONTyped(json: any, ignoreDiscriminator: boole
         'id': json['id'],
         'issue_type': json['issue_type'],
         'state': json['state'],
-        'prompt': json['prompt'] == null ? undefined : json['prompt'],
-        'required_skills': json['required_skills'] == null ? undefined : json['required_skills'],
-        'model': json['model'] == null ? undefined : json['model'],
-        'reasoning': json['reasoning'] == null ? undefined : json['reasoning'],
-        'auto_start': json['auto_start'] == null ? undefined : json['auto_start'],
-        'subtree_run_enabled': json['subtree_run_enabled'] == null ? undefined : json['subtree_run_enabled'],
-        'workflow_revision': json['workflow_revision'],
+        'prompt': json['prompt'],
+        'required_skills': json['required_skills'],
+        'entry_skill': json['entry_skill'],
+        'model': json['model'],
+        'reasoning': json['reasoning'],
+        'auto_start': json['auto_start'],
+        'subtree_run_enabled': json['subtree_run_enabled'],
         'created_at': json['created_at'],
         'updated_at': json['updated_at'],
     };
@@ -137,19 +143,12 @@ export function LaunchBindingToJSON(json: any): LaunchBinding {
     return LaunchBindingToJSONTyped(json, false);
 }
 
-export function LaunchBindingToJSONTyped(value?: Omit<LaunchBinding, 'id'|'issue_type'|'state'|'created_at'|'updated_at'> | null, ignoreDiscriminator: boolean = false): any {
+export function LaunchBindingToJSONTyped(value?: Omit<LaunchBinding, 'id'|'issue_type'|'state'|'prompt'|'required_skills'|'entry_skill'|'model'|'reasoning'|'auto_start'|'subtree_run_enabled'|'created_at'|'updated_at'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'prompt': value['prompt'],
-        'required_skills': value['required_skills'],
-        'model': value['model'],
-        'reasoning': value['reasoning'],
-        'auto_start': value['auto_start'],
-        'subtree_run_enabled': value['subtree_run_enabled'],
-        'workflow_revision': value['workflow_revision'],
     };
 }

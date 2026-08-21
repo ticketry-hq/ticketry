@@ -23,6 +23,7 @@ from fake_sdk import (
     make_flat_module,
     make_flat_work_item,
     make_issue_type,
+    make_project,
     make_state,
     make_work_item,
     raises,
@@ -37,6 +38,42 @@ MODULE = "33333333-3333-3333-3333-333333333333"
 TASK = "44444444-4444-4444-4444-444444444444"
 EPIC_TYPE = "55555555-5555-5555-5555-555555555555"
 STORY_TYPE = "66666666-6666-6666-6666-666666666666"
+PATHFIND_TYPE = "77777777-7777-7777-7777-777777777777"
+
+
+def test_list_projects_returns_only_the_installation_project():
+    client = FakeGeneratedSdk()
+    client.projects.returns["list_projects"] = [
+        make_project(
+            id="11111111-1111-1111-1111-111111111111",
+            name="Old project",
+            slug="OLD",
+        ),
+        make_project(name="Coding", slug="CDN"),
+        make_project(
+            id="99999999-9999-9999-9999-999999999999",
+            name="Other project",
+            slug="OTHER",
+        ),
+    ]
+    service = WorktrackerService(base_url="http://example.test", sdk=client)
+
+    projects = service.list_projects()
+
+    assert len(projects) == 1
+    assert projects[0].identifier == "CDN"
+
+
+def test_list_projects_falls_back_to_the_api_order_for_legacy_installs():
+    client = FakeGeneratedSdk()
+    client.projects.returns["list_projects"] = [
+        make_project(name="Existing", slug="EXISTING")
+    ]
+    service = WorktrackerService(base_url="http://example.test", sdk=client)
+
+    projects = service.list_projects()
+
+    assert [project.identifier for project in projects] == ["EXISTING"]
 
 
 def _service():
@@ -229,6 +266,12 @@ def test_list_issue_types_reads_typed_rows_off_the_sdk():
     client = FakeGeneratedSdk()
     client.issue_types.returns["list_issue_types"] = [
         make_issue_type(id=EPIC_TYPE, name="Epic", level="module"),
+        make_issue_type(
+            id=PATHFIND_TYPE,
+            name="Discovery",
+            level="task",
+            is_pathfind=True,
+        ),
         make_issue_type(id=STORY_TYPE, name="Story", level="task"),
     ]
     service = WorktrackerService(base_url="http://example.test", sdk=client)
@@ -412,37 +455,33 @@ def test_create_task_resolves_implementation_type_and_ready_state_into_sdk_paylo
     }
 
 
-def test_create_sub_task_resolves_canonical_birth_state_into_sdk_payload():
+@pytest.mark.parametrize("issue_type", ["pathfind", PATHFIND_TYPE])
+def test_create_sub_task_rejects_pathfind_type_by_name_or_id(issue_type):
     client = FakeGeneratedSdk()
-    pathfind_type = "77777777-7777-7777-7777-777777777777"
-    refinement_state = "88888888-8888-8888-8888-888888888888"
     client.issue_types.returns["list_issue_types"] = [
-        make_issue_type(id=pathfind_type, name="PathFind", level="task"),
-    ]
-    client.states.returns["list_states"] = [
-        make_state(id=refinement_state, name="Refinement"),
+        make_issue_type(
+            id=PATHFIND_TYPE,
+            name="PathFind",
+            level="task",
+            is_pathfind=True,
+        ),
+        make_issue_type(id=STORY_TYPE, name="Story", level="task"),
     ]
     client.work_items.returns["create_work_item"] = make_work_item()
     service = WorktrackerService(base_url="http://example.test", sdk=client)
 
-    service.create_sub_task(
-        PROJECT,
-        TASK,
-        "Discover API constraints",
-        issue_type="pathfind",
-        state_name="refinement",
-    )
+    with pytest.raises(
+        ValueError,
+        match=r"Unknown task issue type .* Valid task-level types: Story\.",
+    ):
+        service.create_sub_task(
+            PROJECT,
+            TASK,
+            "Discover API constraints",
+            issue_type=issue_type,
+        )
 
-    name, args, kwargs = client.work_items.calls[0]
-    assert name == "create_work_item" and args[0] == UUID(PROJECT) and kwargs == {}
-    assert isinstance(args[1], WorkItemCreate)
-    assert args[1].model_dump(mode="json", exclude_none=True) == {
-        "name": "Discover API constraints",
-        "description": "",
-        "parent_id": TASK,
-        "issue_type_id": pathfind_type,
-        "state_id": refinement_state,
-    }
+    assert client.work_items.calls == []
 
 
 def test_module_task_and_sub_task_include_resolved_issue_type_id():

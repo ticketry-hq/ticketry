@@ -17,3 +17,4 @@ REVIEWED_REQUIRED_SKILLS = {
     state_name: tuple(required_skills)
     for state_name, required_skills in REVIEWED_DEFAULTS["requiredSkills"].items()
 }
+REVIEWED_ENTRY_SKILLS = REVIEWED_DEFAULTS["entrySkills"]

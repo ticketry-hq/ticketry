@@ -60,7 +60,7 @@ def test_create_project_seeds_states(client, project, auth):
     r = post_json(
         client,
         f"{BASE}/projects",
-        {"name": "Second", "slug": "SEC", "workspace_slug": "meml"},
+        {"name": "Second", "slug": "SEC"},
         auth,
     )
     assert r.status_code == 201
@@ -97,36 +97,23 @@ def test_create_project_seeds_states(client, project, auth):
 
 
 @pytest.mark.django_db
-def test_create_project_resolves_sole_workspace(client, project, auth):
-    # workspace_slug omitted → resolves the only workspace (the fixture's).
+def test_create_project_needs_no_parent_identity(client, project, auth):
     r = post_json(client, f"{BASE}/projects", {"name": "NoWs", "slug": "NWS"}, auth)
     assert r.status_code == 201
     assert Project.objects.filter(slug="NWS").exists()
 
 
 @pytest.mark.django_db
-def test_create_project_unknown_workspace_404(client, project, auth):
-    r = post_json(
-        client,
-        f"{BASE}/projects",
-        {"name": "X", "slug": "XXX", "workspace_slug": "nope"},
-        auth,
-    )
-    assert r.status_code == 404
-
-
-@pytest.mark.django_db
 def test_create_project_duplicate_slug_409(client, project, auth):
     Project.objects.create(
         id=uuid.uuid4(),
-        workspace=project.workspace,
         name="Existing",
         slug="DUP",
     )
     r = post_json(
         client,
         f"{BASE}/projects",
-        {"name": "Dup", "slug": "DUP", "workspace_slug": "meml"},
+        {"name": "Dup", "slug": "DUP"},
         auth,
     )
     assert r.status_code == 409

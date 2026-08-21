@@ -96,7 +96,6 @@ async def _build(
     instant_prompt=None,
 ):
     return await consumers._build_prompt(
-        0,
         is_planning=is_planning,
         is_instant=is_instant,
         instant_prompt=instant_prompt,

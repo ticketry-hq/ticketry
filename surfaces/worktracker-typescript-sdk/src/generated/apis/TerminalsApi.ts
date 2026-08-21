@@ -76,15 +76,15 @@ import {
     TerminateResultToJSON,
 } from '../models/TerminateResult.js';
 import {
-    type ViewerLease,
-    ViewerLeaseFromJSON,
-    ViewerLeaseToJSON,
-} from '../models/ViewerLease.js';
+    type ViewerLeaseIdentity,
+    ViewerLeaseIdentityFromJSON,
+    ViewerLeaseIdentityToJSON,
+} from '../models/ViewerLeaseIdentity.js';
 import {
-    type ViewerLeaseRelease,
-    ViewerLeaseReleaseFromJSON,
-    ViewerLeaseReleaseToJSON,
-} from '../models/ViewerLeaseRelease.js';
+    type ViewerLeaseRequest,
+    ViewerLeaseRequestFromJSON,
+    ViewerLeaseRequestToJSON,
+} from '../models/ViewerLeaseRequest.js';
 import {
     type ViewerLeaseResult,
     ViewerLeaseResultFromJSON,
@@ -114,9 +114,9 @@ export interface TerminalsListRequest {
 }
 
 export interface TerminalsResumableListRequest {
-    moduleId?: string;
-    projectId?: string;
-    taskId?: string;
+    moduleId?: string | null;
+    projectId?: string | null;
+    taskId?: string | null;
 }
 
 export interface TerminalsResumeCreateRequest {
@@ -125,7 +125,7 @@ export interface TerminalsResumeCreateRequest {
 
 export interface TerminalsScratchListRequest {
     projectId: string;
-    moduleId?: string;
+    moduleId?: string | null;
 }
 
 export interface TerminalsShellsCreateRequest {
@@ -137,15 +137,15 @@ export interface TerminalsShellsListRequest {
 }
 
 export interface TerminalsViewersLeaseCreateRequest {
-    viewerLease: ViewerLease;
+    viewerLeaseRequest: ViewerLeaseRequest;
 }
 
 export interface TerminalsViewersLeaseReleaseCreateRequest {
-    viewerLeaseRelease: ViewerLeaseRelease;
+    viewerLeaseIdentity: ViewerLeaseIdentity;
 }
 
 export interface TerminalsViewersLeaseRenewCreateRequest {
-    viewerLeaseRelease: ViewerLeaseRelease;
+    viewerLeaseIdentity: ViewerLeaseIdentity;
 }
 
 export interface TerminalsViewersOutputCreateRequest {
@@ -168,7 +168,7 @@ export interface TerminalsApiInterface {
     terminalsCreateRequestOpts(requestParameters: TerminalsCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {CreateTerminal} createTerminal
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -177,6 +177,7 @@ export interface TerminalsApiInterface {
     terminalsCreateRaw(requestParameters: TerminalsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentRunId>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsCreate(requestParameters: TerminalsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentRunId>;
 
@@ -189,7 +190,7 @@ export interface TerminalsApiInterface {
     terminalsDestroyRequestOpts(requestParameters: TerminalsDestroyRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {string} agentRunId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -198,6 +199,7 @@ export interface TerminalsApiInterface {
     terminalsDestroyRaw(requestParameters: TerminalsDestroyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<TerminateResult>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsDestroy(requestParameters: TerminalsDestroyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TerminateResult>;
 
@@ -210,7 +212,7 @@ export interface TerminalsApiInterface {
     terminalsListRequestOpts(requestParameters: TerminalsListRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {string} taskId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -219,6 +221,7 @@ export interface TerminalsApiInterface {
     terminalsListRaw(requestParameters: TerminalsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<TerminalRun>>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsList(requestParameters: TerminalsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<TerminalRun>>;
 
@@ -233,7 +236,7 @@ export interface TerminalsApiInterface {
     terminalsResumableListRequestOpts(requestParameters: TerminalsResumableListRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {string} [moduleId]
      * @param {string} [projectId]
      * @param {string} [taskId]
@@ -244,6 +247,7 @@ export interface TerminalsApiInterface {
     terminalsResumableListRaw(requestParameters: TerminalsResumableListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ResumableTerminal>>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsResumableList(requestParameters: TerminalsResumableListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ResumableTerminal>>;
 
@@ -256,7 +260,7 @@ export interface TerminalsApiInterface {
     terminalsResumeCreateRequestOpts(requestParameters: TerminalsResumeCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {string} agentRunId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -265,6 +269,7 @@ export interface TerminalsApiInterface {
     terminalsResumeCreateRaw(requestParameters: TerminalsResumeCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ResumeResult>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsResumeCreate(requestParameters: TerminalsResumeCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ResumeResult>;
 
@@ -278,7 +283,7 @@ export interface TerminalsApiInterface {
     terminalsScratchListRequestOpts(requestParameters: TerminalsScratchListRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {string} projectId
      * @param {string} [moduleId]
      * @param {*} [options] Override http request option.
@@ -288,6 +293,7 @@ export interface TerminalsApiInterface {
     terminalsScratchListRaw(requestParameters: TerminalsScratchListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<TerminalRun>>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsScratchList(requestParameters: TerminalsScratchListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<TerminalRun>>;
 
@@ -299,7 +305,7 @@ export interface TerminalsApiInterface {
     terminalsSelfTerminateCreateRequestOpts(): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TerminalsApiInterface
@@ -307,6 +313,7 @@ export interface TerminalsApiInterface {
     terminalsSelfTerminateCreateRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SelfTerminateResult>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsSelfTerminateCreate(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SelfTerminateResult>;
 
@@ -319,7 +326,7 @@ export interface TerminalsApiInterface {
     terminalsShellsCreateRequestOpts(requestParameters: TerminalsShellsCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * A module\'s durable login shells, which are runs with no agent.
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {CreateModuleShell} createModuleShell
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -328,7 +335,7 @@ export interface TerminalsApiInterface {
     terminalsShellsCreateRaw(requestParameters: TerminalsShellsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentRunId>>;
 
     /**
-     * A module\'s durable login shells, which are runs with no agent.
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsShellsCreate(requestParameters: TerminalsShellsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentRunId>;
 
@@ -341,7 +348,7 @@ export interface TerminalsApiInterface {
     terminalsShellsListRequestOpts(requestParameters: TerminalsShellsListRequest): Promise<runtime.RequestOpts>;
 
     /**
-     * A module\'s durable login shells, which are runs with no agent.
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {string} moduleId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -350,21 +357,21 @@ export interface TerminalsApiInterface {
     terminalsShellsListRaw(requestParameters: TerminalsShellsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ModuleShell>>>;
 
     /**
-     * A module\'s durable login shells, which are runs with no agent.
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsShellsList(requestParameters: TerminalsShellsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ModuleShell>>;
 
     /**
      * Creates request options for terminalsViewersLeaseCreate without sending the request
-     * @param {ViewerLease} viewerLease
+     * @param {ViewerLeaseRequest} viewerLeaseRequest
      * @throws {RequiredError}
      * @memberof TerminalsApiInterface
      */
     terminalsViewersLeaseCreateRequestOpts(requestParameters: TerminalsViewersLeaseCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
-     * @param {ViewerLease} viewerLease
+     * Owning ViewSet for terminal sessions and their commands.
+     * @param {ViewerLeaseRequest} viewerLeaseRequest
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TerminalsApiInterface
@@ -372,20 +379,21 @@ export interface TerminalsApiInterface {
     terminalsViewersLeaseCreateRaw(requestParameters: TerminalsViewersLeaseCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ViewerLeaseResult>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsViewersLeaseCreate(requestParameters: TerminalsViewersLeaseCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerLeaseResult>;
 
     /**
      * Creates request options for terminalsViewersLeaseReleaseCreate without sending the request
-     * @param {ViewerLeaseRelease} viewerLeaseRelease
+     * @param {ViewerLeaseIdentity} viewerLeaseIdentity
      * @throws {RequiredError}
      * @memberof TerminalsApiInterface
      */
     terminalsViewersLeaseReleaseCreateRequestOpts(requestParameters: TerminalsViewersLeaseReleaseCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
-     * @param {ViewerLeaseRelease} viewerLeaseRelease
+     * Owning ViewSet for terminal sessions and their commands.
+     * @param {ViewerLeaseIdentity} viewerLeaseIdentity
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TerminalsApiInterface
@@ -393,20 +401,21 @@ export interface TerminalsApiInterface {
     terminalsViewersLeaseReleaseCreateRaw(requestParameters: TerminalsViewersLeaseReleaseCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReleaseResult>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsViewersLeaseReleaseCreate(requestParameters: TerminalsViewersLeaseReleaseCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReleaseResult>;
 
     /**
      * Creates request options for terminalsViewersLeaseRenewCreate without sending the request
-     * @param {ViewerLeaseRelease} viewerLeaseRelease
+     * @param {ViewerLeaseIdentity} viewerLeaseIdentity
      * @throws {RequiredError}
      * @memberof TerminalsApiInterface
      */
     terminalsViewersLeaseRenewCreateRequestOpts(requestParameters: TerminalsViewersLeaseRenewCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
-     * @param {ViewerLeaseRelease} viewerLeaseRelease
+     * Owning ViewSet for terminal sessions and their commands.
+     * @param {ViewerLeaseIdentity} viewerLeaseIdentity
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof TerminalsApiInterface
@@ -414,6 +423,7 @@ export interface TerminalsApiInterface {
     terminalsViewersLeaseRenewCreateRaw(requestParameters: TerminalsViewersLeaseRenewCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ViewerLeaseResult>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsViewersLeaseRenewCreate(requestParameters: TerminalsViewersLeaseRenewCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerLeaseResult>;
 
@@ -426,7 +436,7 @@ export interface TerminalsApiInterface {
     terminalsViewersOutputCreateRequestOpts(requestParameters: TerminalsViewersOutputCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Owning ViewSet for terminal sessions and their commands.
      * @param {ViewerOutputReport} viewerOutputReport
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -435,6 +445,7 @@ export interface TerminalsApiInterface {
     terminalsViewersOutputCreateRaw(requestParameters: TerminalsViewersOutputCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ViewerOutputReportResult>>;
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     terminalsViewersOutputCreate(requestParameters: TerminalsViewersOutputCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerOutputReportResult>;
 
@@ -479,6 +490,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsCreateRaw(requestParameters: TerminalsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentRunId>> {
         const requestOptions = await this.terminalsCreateRequestOpts(requestParameters);
@@ -488,6 +500,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsCreate(requestParameters: TerminalsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentRunId> {
         const response = await this.terminalsCreateRaw(requestParameters, initOverrides);
@@ -529,6 +542,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsDestroyRaw(requestParameters: TerminalsDestroyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<TerminateResult>> {
         const requestOptions = await this.terminalsDestroyRequestOpts(requestParameters);
@@ -538,6 +552,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsDestroy(requestParameters: TerminalsDestroyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TerminateResult> {
         const response = await this.terminalsDestroyRaw(requestParameters, initOverrides);
@@ -579,6 +594,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsListRaw(requestParameters: TerminalsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<TerminalRun>>> {
         const requestOptions = await this.terminalsListRequestOpts(requestParameters);
@@ -588,6 +604,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsList(requestParameters: TerminalsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<TerminalRun>> {
         const response = await this.terminalsListRaw(requestParameters, initOverrides);
@@ -630,6 +647,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsResumableListRaw(requestParameters: TerminalsResumableListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ResumableTerminal>>> {
         const requestOptions = await this.terminalsResumableListRequestOpts(requestParameters);
@@ -639,6 +657,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsResumableList(requestParameters: TerminalsResumableListRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ResumableTerminal>> {
         const response = await this.terminalsResumableListRaw(requestParameters, initOverrides);
@@ -680,6 +699,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsResumeCreateRaw(requestParameters: TerminalsResumeCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ResumeResult>> {
         const requestOptions = await this.terminalsResumeCreateRequestOpts(requestParameters);
@@ -689,6 +709,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsResumeCreate(requestParameters: TerminalsResumeCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ResumeResult> {
         const response = await this.terminalsResumeCreateRaw(requestParameters, initOverrides);
@@ -734,6 +755,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsScratchListRaw(requestParameters: TerminalsScratchListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<TerminalRun>>> {
         const requestOptions = await this.terminalsScratchListRequestOpts(requestParameters);
@@ -743,6 +765,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsScratchList(requestParameters: TerminalsScratchListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<TerminalRun>> {
         const response = await this.terminalsScratchListRaw(requestParameters, initOverrides);
@@ -769,6 +792,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsSelfTerminateCreateRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<SelfTerminateResult>> {
         const requestOptions = await this.terminalsSelfTerminateCreateRequestOpts();
@@ -778,6 +802,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsSelfTerminateCreate(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<SelfTerminateResult> {
         const response = await this.terminalsSelfTerminateCreateRaw(initOverrides);
@@ -818,7 +843,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
-     * A module\'s durable login shells, which are runs with no agent.
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsShellsCreateRaw(requestParameters: TerminalsShellsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentRunId>> {
         const requestOptions = await this.terminalsShellsCreateRequestOpts(requestParameters);
@@ -828,7 +853,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
-     * A module\'s durable login shells, which are runs with no agent.
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsShellsCreate(requestParameters: TerminalsShellsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentRunId> {
         const response = await this.terminalsShellsCreateRaw(requestParameters, initOverrides);
@@ -870,7 +895,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
-     * A module\'s durable login shells, which are runs with no agent.
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsShellsListRaw(requestParameters: TerminalsShellsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<ModuleShell>>> {
         const requestOptions = await this.terminalsShellsListRequestOpts(requestParameters);
@@ -880,7 +905,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
-     * A module\'s durable login shells, which are runs with no agent.
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsShellsList(requestParameters: TerminalsShellsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<ModuleShell>> {
         const response = await this.terminalsShellsListRaw(requestParameters, initOverrides);
@@ -891,10 +916,10 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
      * Creates request options for terminalsViewersLeaseCreate without sending the request
      */
     async terminalsViewersLeaseCreateRequestOpts(requestParameters: TerminalsViewersLeaseCreateRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['viewerLease'] == null) {
+        if (requestParameters['viewerLeaseRequest'] == null) {
             throw new runtime.RequiredError(
-                'viewerLease',
-                'Required parameter "viewerLease" was null or undefined when calling terminalsViewersLeaseCreate().'
+                'viewerLeaseRequest',
+                'Required parameter "viewerLeaseRequest" was null or undefined when calling terminalsViewersLeaseCreate().'
             );
         }
 
@@ -916,11 +941,12 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: ViewerLeaseToJSON(requestParameters['viewerLease']),
+            body: ViewerLeaseRequestToJSON(requestParameters['viewerLeaseRequest']),
         };
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsViewersLeaseCreateRaw(requestParameters: TerminalsViewersLeaseCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ViewerLeaseResult>> {
         const requestOptions = await this.terminalsViewersLeaseCreateRequestOpts(requestParameters);
@@ -930,6 +956,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsViewersLeaseCreate(requestParameters: TerminalsViewersLeaseCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerLeaseResult> {
         const response = await this.terminalsViewersLeaseCreateRaw(requestParameters, initOverrides);
@@ -940,10 +967,10 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
      * Creates request options for terminalsViewersLeaseReleaseCreate without sending the request
      */
     async terminalsViewersLeaseReleaseCreateRequestOpts(requestParameters: TerminalsViewersLeaseReleaseCreateRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['viewerLeaseRelease'] == null) {
+        if (requestParameters['viewerLeaseIdentity'] == null) {
             throw new runtime.RequiredError(
-                'viewerLeaseRelease',
-                'Required parameter "viewerLeaseRelease" was null or undefined when calling terminalsViewersLeaseReleaseCreate().'
+                'viewerLeaseIdentity',
+                'Required parameter "viewerLeaseIdentity" was null or undefined when calling terminalsViewersLeaseReleaseCreate().'
             );
         }
 
@@ -965,11 +992,12 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: ViewerLeaseReleaseToJSON(requestParameters['viewerLeaseRelease']),
+            body: ViewerLeaseIdentityToJSON(requestParameters['viewerLeaseIdentity']),
         };
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsViewersLeaseReleaseCreateRaw(requestParameters: TerminalsViewersLeaseReleaseCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReleaseResult>> {
         const requestOptions = await this.terminalsViewersLeaseReleaseCreateRequestOpts(requestParameters);
@@ -979,6 +1007,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsViewersLeaseReleaseCreate(requestParameters: TerminalsViewersLeaseReleaseCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReleaseResult> {
         const response = await this.terminalsViewersLeaseReleaseCreateRaw(requestParameters, initOverrides);
@@ -989,10 +1018,10 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
      * Creates request options for terminalsViewersLeaseRenewCreate without sending the request
      */
     async terminalsViewersLeaseRenewCreateRequestOpts(requestParameters: TerminalsViewersLeaseRenewCreateRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['viewerLeaseRelease'] == null) {
+        if (requestParameters['viewerLeaseIdentity'] == null) {
             throw new runtime.RequiredError(
-                'viewerLeaseRelease',
-                'Required parameter "viewerLeaseRelease" was null or undefined when calling terminalsViewersLeaseRenewCreate().'
+                'viewerLeaseIdentity',
+                'Required parameter "viewerLeaseIdentity" was null or undefined when calling terminalsViewersLeaseRenewCreate().'
             );
         }
 
@@ -1014,11 +1043,12 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: ViewerLeaseReleaseToJSON(requestParameters['viewerLeaseRelease']),
+            body: ViewerLeaseIdentityToJSON(requestParameters['viewerLeaseIdentity']),
         };
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsViewersLeaseRenewCreateRaw(requestParameters: TerminalsViewersLeaseRenewCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ViewerLeaseResult>> {
         const requestOptions = await this.terminalsViewersLeaseRenewCreateRequestOpts(requestParameters);
@@ -1028,6 +1058,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsViewersLeaseRenewCreate(requestParameters: TerminalsViewersLeaseRenewCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerLeaseResult> {
         const response = await this.terminalsViewersLeaseRenewCreateRaw(requestParameters, initOverrides);
@@ -1068,6 +1099,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsViewersOutputCreateRaw(requestParameters: TerminalsViewersOutputCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ViewerOutputReportResult>> {
         const requestOptions = await this.terminalsViewersOutputCreateRequestOpts(requestParameters);
@@ -1077,6 +1109,7 @@ export class TerminalsApi extends runtime.BaseAPI implements TerminalsApiInterfa
     }
 
     /**
+     * Owning ViewSet for terminal sessions and their commands.
      */
     async terminalsViewersOutputCreate(requestParameters: TerminalsViewersOutputCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ViewerOutputReportResult> {
         const response = await this.terminalsViewersOutputCreateRaw(requestParameters, initOverrides);

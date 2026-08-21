@@ -62,6 +62,8 @@ vi.doMock("@xterm/addon-web-links", () => ({
 const { SelectedTicketContent } = await import(
   "../app/shell/ticket-workspace/selected-ticket/SelectedTicketContent"
 );
+const { ModalHost } = await import("../app/modal/ModalHost");
+const { useModalStore } = await import("../app/modal/modalStore");
 const { useTerminalStore } = await import("../features/agents/terminal");
 const { seedConfig } = await import("../features/studio/stores/configStore");
 const { setProviderCapabilities } = await import(
@@ -78,11 +80,7 @@ class TestResizeObserver {
 const defaultCapabilities = [
   {
     agent: "codex",
-    accepts_model: true,
-    accepts_any_model: false,
-    model_aliases: [],
-    model_prefixes: [],
-    reasoning_levels: ["low", "medium", "high", "xhigh"],
+    models: [],
   },
 ];
 
@@ -157,11 +155,7 @@ function workspaceView({
 
 const providerCapability = (agent: string) => ({
   agent,
-  accepts_model: true,
-  accepts_any_model: false,
-  model_aliases: [],
-  model_prefixes: [],
-  reasoning_levels: [],
+  models: [],
 });
 
 export {
@@ -169,9 +163,11 @@ export {
   providerCapability,
   queryClient,
   setProviderCapabilities,
+  ModalHost,
   terminalApi,
   terminalTransport,
   useTerminalStore,
+  useModalStore,
   workspaceView,
 };
 export type { WorkspaceLauncherContext, WorkspaceViewOptions };

@@ -11,8 +11,8 @@ DRF adapters. Django runs the adapter in a threadpool under ASGI, so
 the synchronous git engine and ORM are called directly without an
 ``asyncio.to_thread`` dance.
 
-The working path + record metadata come from the local profile's
-``module_links`` (the same source W2 uses at launch); the browser supplies
+The working path comes from the typed Module link (the same source W2 uses at
+launch); the browser supplies
 ``module_id`` (to find the folder) and, for create, the task's
 ``ticket_seq`` + ``task_name`` it already holds — so this app stays free of
 any worktracker/repository coupling.
@@ -22,16 +22,10 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from typing import Optional
 
-from pydantic import BaseModel
-
-from apps.settings_store import config as cfgmod
-from apps.settings_store.config import (
-    NoConfigurationSelected,
-    module_link_path,
-    resolve_profile_index,
-)
+from apps.settings_store.module_links import resolve_module_path
 from apps.worktrees import dao, service
 
 
@@ -42,7 +36,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class WorktreeStatusOut(BaseModel):
+@dataclass(frozen=True)
+class WorktreeStatusOut:
     """Discriminated on ``kind``: worktree | no_repo | none."""
 
     kind: str
@@ -62,44 +57,23 @@ class WorktreeStatusOut(BaseModel):
     reason: Optional[str] = None
 
 
-class CreateWorktreeIn(BaseModel):
-    parent_id: Optional[str] = None
-    module_id: Optional[str] = None
-    project_id: Optional[str] = None
-    ticket_seq: Optional[int] = None
-    task_name: Optional[str] = None
-
-
-class DiscardOut(BaseModel):
+@dataclass(frozen=True)
+class DiscardOut:
     removed: bool
     reason: str = ""
 
 
 # ---------------------------------------------------------------------------
-# Profile / folder resolution (local config, no repository round-trip)
+# Folder resolution (typed local persistence, no repository round-trip)
 # ---------------------------------------------------------------------------
 
 
-def _current_profile():
-    """The selected local profile, or ``None`` when none is configured."""
-
-    cfg = cfgmod.Config()
-    try:
-        idx = resolve_profile_index(cfg, None)
-    except NoConfigurationSelected:
-        return None
-    try:
-        return cfg.profiles[idx]
-    except (IndexError, TypeError):
-        return None
-
-
-def _module_folder(profile, module_id: Optional[str]) -> Optional[str]:
+def _module_folder(module_id: Optional[str]) -> Optional[str]:
     """The local repo folder configured for ``module_id``, if it exists."""
 
-    if profile is None or not module_id:
+    if not module_id:
         return None
-    folder = module_link_path(profile, module_id)
+    folder = resolve_module_path(module_id)
     if folder and os.path.isdir(folder):
         return folder
     return None
@@ -178,8 +152,7 @@ def get_worktree(
     tlt = service.top_level_task_id(
         task_id=task_id, parent_id=parent_id, module_id=module_id
     )
-    profile = _current_profile()
-    working_path = _module_folder(profile, module_id)
+    working_path = _module_folder(module_id)
     return _status_payload(
         task_id=task_id,
         tlt=tlt,
@@ -188,14 +161,21 @@ def get_worktree(
     )
 
 
-def create_worktree(task_id: str, payload: CreateWorktreeIn):
+def create_worktree(
+    task_id: str,
+    *,
+    parent_id: Optional[str] = None,
+    module_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    ticket_seq: Optional[int] = None,
+    task_name: Optional[str] = None,
+):
     """Opt in: cut a worktree off HEAD for the top-level task. Idempotent."""
 
     tlt = service.top_level_task_id(
-        task_id=task_id, parent_id=payload.parent_id, module_id=payload.module_id
+        task_id=task_id, parent_id=parent_id, module_id=module_id
     )
-    profile = _current_profile()
-    working_path = _module_folder(profile, payload.module_id)
+    working_path = _module_folder(module_id)
 
     if working_path is None:
         # No configured/existing folder → nothing encloses the task.
@@ -210,11 +190,10 @@ def create_worktree(task_id: str, payload: CreateWorktreeIn):
     result = service.create(
         task_id=tlt,
         working_path=working_path,
-        task_name=payload.task_name,
-        ticket_seq=payload.ticket_seq,
-        workspace_slug=getattr(profile, "workspace_slug", None),
-        project_id=payload.project_id,
-        module_id=payload.module_id,
+        task_name=task_name,
+        ticket_seq=ticket_seq,
+        project_id=project_id,
+        module_id=module_id,
     )
     if isinstance(result, service.NoWorktree):
         return WorktreeStatusOut(

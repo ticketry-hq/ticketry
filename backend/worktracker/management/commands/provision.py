@@ -1,6 +1,5 @@
 import json
 import secrets
-import uuid
 from pathlib import Path
 
 from django.conf import settings
@@ -8,13 +7,15 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 
-from worktracker.models import Workspace
+from worktracker.services.onboarding import get_installation_default_project
+from worktracker.services.projects import create_project
+from worktracker.services.errors import NotFoundError
 
 
 class Command(BaseCommand):
-    """Idempotently provision a workspace, optional admin, and token (C8).
+    """Idempotently provision the default project, optional admin, and token.
 
-    Creates the minimum a fresh install needs and prints the profile fields
+    Creates the minimum a fresh install needs and prints the connection fields
     the bootstrap (#539, S5) consumes. A second run is a no-op that re-prints
     the same values. Domain projects are created explicitly by users.
     """
@@ -22,24 +23,20 @@ class Command(BaseCommand):
     help = "Provision the owned worktracker backend (idempotent)."
 
     def add_arguments(self, parser):
-        parser.add_argument("--workspace-slug", default="meml")
-        parser.add_argument("--workspace-name", default="meml")
         parser.add_argument("--admin-username")
         parser.add_argument("--admin-password")
 
     def handle(self, *args, **options):
-        """Run the idempotent installation steps and print the profile."""
+        """Run the idempotent installation steps and print the connection data."""
 
-        # Step 1: workspace.
-
-        workspace, _ = Workspace.objects.get_or_create(
-            slug=options["workspace_slug"],
-            defaults={
-                "id": uuid.uuid4(),
-                "name": options["workspace_name"],
-                "onboarding_required": True,
-            },
-        )
+        # Step 1: ensure the installation's operational root. Existing rows
+        # remain untouched; only a project created here enters onboarding.
+        try:
+            project = get_installation_default_project()
+        except NotFoundError:
+            project = create_project(name="Coding", slug="CDN")
+            project.onboarding_required = True
+            project.save(update_fields=["onboarding_required"])
 
         # Step 2: development-only admin superuser.
 
@@ -70,7 +67,7 @@ class Command(BaseCommand):
 
         token = self._ensure_token()
 
-        # Step 4: print the profile fields (read-only).
+        # Step 4: print the connection fields.
 
         self.stdout.write(
             json.dumps(
@@ -80,8 +77,7 @@ class Command(BaseCommand):
                         "WORKTRACKER_API_URL",
                         "http://127.0.0.1:8787/api",
                     ),
-                    "workspace_slug": workspace.slug,
-                    "project_id": None,
+                    "project_id": str(project.id),
                     "token": token,
                 }
             )

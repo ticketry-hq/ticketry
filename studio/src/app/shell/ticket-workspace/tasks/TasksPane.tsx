@@ -294,8 +294,9 @@ export function TasksPane() {
     const root = block.rows[0];
     const rootId = planningRowId(root);
     // Expansion is persisted on every real toggle. During a drag, hide only
-    // the active root's descendants in this view so every drag termination
-    // path restores them when the controller clears its payload.
+    // the active root's descendants in this view. They stay hidden across a
+    // transient document leave and return when drop, source drag end, Escape,
+    // disablement, or teardown clears the controller payload.
     const renderedRows =
       dragDrop.payload?.taskId === rootId
         ? block.rows.slice(0, 1)

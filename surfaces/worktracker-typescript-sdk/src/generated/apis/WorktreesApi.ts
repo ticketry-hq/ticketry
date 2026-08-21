@@ -38,14 +38,14 @@ export interface WorktreesCreateCreateRequest {
 
 export interface WorktreesDiscardCreateRequest {
     taskId: string;
-    moduleId?: string;
-    parentId?: string;
+    moduleId?: string | null;
+    parentId?: string | null;
 }
 
 export interface WorktreesRetrieveRequest {
     taskId: string;
-    moduleId?: string;
-    parentId?: string;
+    moduleId?: string | null;
+    parentId?: string | null;
 }
 
 /**
@@ -65,7 +65,7 @@ export interface WorktreesApiInterface {
     worktreesCreateCreateRequestOpts(requestParameters: WorktreesCreateCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Read, create, and discard task-scoped git worktrees.
      * @param {string} taskId
      * @param {CreateWorktree} [createWorktree]
      * @param {*} [options] Override http request option.
@@ -75,6 +75,7 @@ export interface WorktreesApiInterface {
     worktreesCreateCreateRaw(requestParameters: WorktreesCreateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorktreeStatus>>;
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     worktreesCreateCreate(requestParameters: WorktreesCreateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorktreeStatus>;
 
@@ -89,7 +90,7 @@ export interface WorktreesApiInterface {
     worktreesDiscardCreateRequestOpts(requestParameters: WorktreesDiscardCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Read, create, and discard task-scoped git worktrees.
      * @param {string} taskId
      * @param {string} [moduleId]
      * @param {string} [parentId]
@@ -100,6 +101,7 @@ export interface WorktreesApiInterface {
     worktreesDiscardCreateRaw(requestParameters: WorktreesDiscardCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Discard>>;
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     worktreesDiscardCreate(requestParameters: WorktreesDiscardCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Discard>;
 
@@ -114,7 +116,7 @@ export interface WorktreesApiInterface {
     worktreesRetrieveRequestOpts(requestParameters: WorktreesRetrieveRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Read, create, and discard task-scoped git worktrees.
      * @param {string} taskId
      * @param {string} [moduleId]
      * @param {string} [parentId]
@@ -125,6 +127,7 @@ export interface WorktreesApiInterface {
     worktreesRetrieveRaw(requestParameters: WorktreesRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorktreeStatus>>;
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     worktreesRetrieve(requestParameters: WorktreesRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorktreeStatus>;
 
@@ -170,6 +173,7 @@ export class WorktreesApi extends runtime.BaseAPI implements WorktreesApiInterfa
     }
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     async worktreesCreateCreateRaw(requestParameters: WorktreesCreateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorktreeStatus>> {
         const requestOptions = await this.worktreesCreateCreateRequestOpts(requestParameters);
@@ -179,6 +183,7 @@ export class WorktreesApi extends runtime.BaseAPI implements WorktreesApiInterfa
     }
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     async worktreesCreateCreate(requestParameters: WorktreesCreateCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorktreeStatus> {
         const response = await this.worktreesCreateCreateRaw(requestParameters, initOverrides);
@@ -225,6 +230,7 @@ export class WorktreesApi extends runtime.BaseAPI implements WorktreesApiInterfa
     }
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     async worktreesDiscardCreateRaw(requestParameters: WorktreesDiscardCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Discard>> {
         const requestOptions = await this.worktreesDiscardCreateRequestOpts(requestParameters);
@@ -234,6 +240,7 @@ export class WorktreesApi extends runtime.BaseAPI implements WorktreesApiInterfa
     }
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     async worktreesDiscardCreate(requestParameters: WorktreesDiscardCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Discard> {
         const response = await this.worktreesDiscardCreateRaw(requestParameters, initOverrides);
@@ -283,6 +290,7 @@ export class WorktreesApi extends runtime.BaseAPI implements WorktreesApiInterfa
     }
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     async worktreesRetrieveRaw(requestParameters: WorktreesRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<WorktreeStatus>> {
         const requestOptions = await this.worktreesRetrieveRequestOpts(requestParameters);
@@ -292,6 +300,7 @@ export class WorktreesApi extends runtime.BaseAPI implements WorktreesApiInterfa
     }
 
     /**
+     * Read, create, and discard task-scoped git worktrees.
      */
     async worktreesRetrieve(requestParameters: WorktreesRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<WorktreeStatus> {
         const response = await this.worktreesRetrieveRaw(requestParameters, initOverrides);

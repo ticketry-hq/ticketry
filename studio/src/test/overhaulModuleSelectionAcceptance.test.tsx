@@ -1,157 +1,178 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../shared/api/client", async () => {
-  const actual = await vi.importActual<typeof import("../shared/api/client")>(
-    "../shared/api/client",
-  );
-  return {
-    ...actual,
-    getTasks: vi.fn(),
-    putProfile: vi.fn(),
-  };
-});
+const api = vi.hoisted(() => ({
+  createProject: vi.fn(),
+  getConfig: vi.fn(),
+  getKeybindingOverrides: vi.fn(),
+  getTasks: vi.fn(),
+  listModuleLinks: vi.fn(),
+  listModulePresentations: vi.fn(),
+  listModules: vi.fn(),
+  listProjects: vi.fn(),
+}));
 
-import { ModalHost, useModalStore } from "../app/modal";
+vi.mock("../shared/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/api/client")>()),
+  ...api,
+}));
+
+import { bootstrapStudio } from "../app/startup/bootstrapStudio";
+import { useModalStore } from "../app/modal";
 import { useStudioStore } from "../features/projects/store";
-import {
-  getConfigSnapshot,
-  seedConfig,
-} from "../features/studio/stores/configStore";
 import { queryClient } from "../shared/query/queryClient";
-import * as api from "../shared/api/client";
+import { LAST_SELECTED_MODULE_KEY } from "../state/persistence";
 import { useClientStore } from "../state/clientStore";
 
-const getTasks = api.getTasks as ReturnType<typeof vi.fn>;
-const putProfile = api.putProfile as ReturnType<typeof vi.fn>;
+const defaultProject = {
+  id: "project-default",
+  name: "Coding",
+  slug: "CDN",
+  description: "",
+  onboarding_required: false,
+};
+const extraProject = {
+  ...defaultProject,
+  id: "project-extra",
+  name: "Unrelated",
+  slug: "EXT",
+};
+const modules = [
+  {
+    id: "module-a",
+    name: "A",
+    project_id: defaultProject.id,
+    sequence_id: 1,
+    key: "CDN-1",
+  },
+  {
+    id: "module-b",
+    name: "B",
+    project_id: defaultProject.id,
+    sequence_id: 2,
+    key: "CDN-2",
+  },
+];
 
-function seedActiveProfile(): void {
-  seedConfig({
-    recentProfileIndex: 0,
-    profiles: [
-      {
-        name: "Local",
-        workspace_slug: "meml",
-        agent_prompt: null,
-        agent_prompts: {},
-        module_links: [
-          { module_id: "module-current", path: "/repos/current" },
-        ],
-        recent_project_id: "project-1",
-        recent_module_ids: { "project-1": "module-current" },
-      },
-    ],
-  });
-}
-
-describe("module-folder selection acceptance", () => {
+describe("default-project Module-link navigation acceptance", () => {
   beforeEach(() => {
+    localStorage.clear();
     queryClient.clear();
-    getTasks.mockReset().mockResolvedValue({
+    useStudioStore.setState({ selectedProjectId: null, error: null });
+    useClientStore.setState({ selectedModuleId: null, selectedTaskId: null });
+    useModalStore.setState({ modalStack: [] });
+    api.createProject.mockReset();
+    api.getConfig.mockReset();
+    api.getKeybindingOverrides.mockReset().mockResolvedValue({ value: [] });
+    api.getTasks.mockReset().mockResolvedValue({
       rootIds: [],
       children: {},
       order: [],
       states: [],
       workItems: [],
     });
-    putProfile.mockReset().mockImplementation(async (_index, profile) => ({
-      recent_profile_index: 0,
-      features: getConfigSnapshot().features,
-      profiles: [profile],
-    }));
-    seedActiveProfile();
-    useStudioStore.setState({ selectedProjectId: "project-1" });
-    useClientStore.setState({
-      selectedModuleId: "module-current",
-      selectedTaskId: "task-current",
-    });
-    useModalStore.setState({ modalStack: [] });
+    api.listModuleLinks.mockReset().mockResolvedValue([
+      {
+        id: "link-a",
+        module_id: "module-a",
+        local_path: "/repos/a",
+        created_at: "2026-08-19T00:00:00Z",
+        updated_at: "2026-08-19T00:00:00Z",
+      },
+      {
+        id: "link-b",
+        module_id: "module-b",
+        local_path: "/repos/b",
+        created_at: "2026-08-19T00:00:00Z",
+        updated_at: "2026-08-19T00:00:00Z",
+      },
+    ]);
+    api.listModulePresentations.mockReset().mockResolvedValue([]);
+    api.listModules.mockReset().mockResolvedValue(modules);
+    api.listProjects.mockReset().mockResolvedValue([
+      extraProject,
+      defaultProject,
+    ]);
   });
 
-  it("preserves the current module when the pathless-module prompt is cancelled", async () => {
-    seedConfig((state) => ({
-      recentProfileIndex: 1,
-      profiles: [
-        {
-          ...state.profiles[0],
-          module_links: [
-            ...state.profiles[0].module_links,
-            { module_id: "module-new", path: "/repos/inactive" },
-          ],
-        },
-        { ...state.profiles[0], name: "Active" },
-      ],
-    }));
-    await useClientStore.getState().selectModule("module-new");
+  it("[overhaul-132] loads the default project's modules without changing a closed sidebar choice", async () => {
+    useClientStore.getState().setSidebarVisible(false);
 
-    expect(useClientStore.getState().selectedModuleId).toBe("module-current");
-    expect(getTasks).not.toHaveBeenCalled();
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(api.getConfig).not.toHaveBeenCalled();
+    expect(api.createProject).not.toHaveBeenCalled();
+    expect(useStudioStore.getState().selectedProjectId).toBe(defaultProject.id);
+    expect(api.listModules).toHaveBeenCalledWith(defaultProject.id);
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
+    expect(useClientStore.getState().focusedPane).toBe("tasks");
+  });
+
+  it("[overhaul-133] restores one frontend-only last-module value", async () => {
+    localStorage.setItem(LAST_SELECTED_MODULE_KEY, "module-b");
+
+    expect(await bootstrapStudio()).toBe("ready");
+
+    expect(useClientStore.getState().selectedModuleId).toBe("module-b");
+    expect(api.getTasks).toHaveBeenCalledWith(defaultProject.id, "module-b");
+    expect(localStorage.getItem(LAST_SELECTED_MODULE_KEY)).toBe("module-b");
+    expect(localStorage.getItem("studio.recentProjects")).toBeNull();
+  });
+
+  it("[overhaul-144] waits for Module links and keeps a missing-folder prompt singular", async () => {
+    useStudioStore.setState({ selectedProjectId: defaultProject.id });
+    let resolveLinks!: (links: Awaited<ReturnType<typeof api.listModuleLinks>>) => void;
+    api.listModuleLinks.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveLinks = resolve;
+      }),
+    );
+
+    const selectLinkedModule = useClientStore.getState().selectModule("module-a");
+    expect(useModalStore.getState().modalStack).toEqual([]);
+
+    resolveLinks([
+      {
+        id: "link-a",
+        module_id: "module-a",
+        local_path: "/repos/a",
+        created_at: "2026-08-19T00:00:00Z",
+        updated_at: "2026-08-19T00:00:00Z",
+      },
+    ]);
+    await selectLinkedModule;
+
+    expect(useClientStore.getState().selectedModuleId).toBe("module-a");
+    expect(useModalStore.getState().modalStack).toEqual([]);
+
+    await Promise.all([
+      useClientStore.getState().selectModule("module-b"),
+      useClientStore.getState().selectModule("module-b"),
+    ]);
     expect(useModalStore.getState().modalStack).toEqual([
       {
         type: "module-folder",
-        payload: {
-          moduleId: "module-new",
-          resumeModuleSelection: true,
-        },
+        payload: { moduleId: "module-b", resumeModuleSelection: true },
       },
     ]);
-
-    render(<ModalHost />);
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(useClientStore.getState().selectedModuleId).toBe("module-current");
-    expect(useClientStore.getState().selectedTaskId).toBe("task-current");
   });
 
-  it("preserves the current module when the folder link cannot be saved", async () => {
-    putProfile.mockRejectedValueOnce(new Error("save failed"));
-    await useClientStore.getState().selectModule("module-new");
-    render(<ModalHost />);
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
+  it("[overhaul-168] honors a stored-open sidebar preference after an upgrade", async () => {
+    localStorage.setItem("studio.sidebarVisible:v1", "false");
+    localStorage.setItem("studio.sidebarVisible:v2", "true");
+    vi.resetModules();
 
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "/repos/new" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const [
+      { bootstrapStudio: bootstrapReloaded },
+      { useClientStore: reloadedStore },
+    ] = await Promise.all([
+      import("../app/startup/bootstrapStudio"),
+      import("../state/clientStore"),
+    ]);
 
-    expect(
-      await screen.findByRole("alert"),
-    ).toHaveTextContent("Could not save the module folder");
-    expect(useClientStore.getState().selectedModuleId).toBe("module-current");
-    expect(getTasks).not.toHaveBeenCalled();
-  });
-
-  it("resumes module selection only after the active profile link is saved", async () => {
-    await useClientStore.getState().selectModule("module-new");
-    render(<ModalHost />);
-    await act(async () => {
-      await vi.dynamicImportSettled();
-    });
-
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "/repos/new" },
-    });
-    expect(useClientStore.getState().selectedModuleId).toBe("module-current");
-
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => {
-      expect(useClientStore.getState().selectedModuleId).toBe("module-new");
-    });
-    expect(putProfile).toHaveBeenCalledWith(
-      0,
-      expect.objectContaining({
-        module_links: [
-          { module_id: "module-current", path: "/repos/current" },
-          { module_id: "module-new", path: "/repos/new" },
-        ],
-      }),
-    );
-    expect(getTasks).toHaveBeenCalledWith("project-1", "module-new");
+    expect(await bootstrapReloaded()).toBe("ready");
+    expect(reloadedStore.getState().sidebarVisible).toBe(true);
+    expect(reloadedStore.getState().focusedPane).toBe("modules");
+    expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("false");
+    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("true");
   });
 });

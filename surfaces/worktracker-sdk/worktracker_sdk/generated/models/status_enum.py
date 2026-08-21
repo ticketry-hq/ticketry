@@ -21,7 +21,7 @@ from typing_extensions import Self
 
 class StatusEnum(str, Enum):
     """
-    * `pending` - pending * `succeeded` - succeeded * `failed` - failed
+    * `pending` - Pending * `succeeded` - Succeeded * `failed` - Failed
     """
 
     """

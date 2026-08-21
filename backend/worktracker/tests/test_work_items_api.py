@@ -186,7 +186,7 @@ def test_one_list_route_narrows_by_project_module_and_state(
         state_id=str(other_state.id),
     )
     other = Project.objects.create(
-        id=uuid.uuid4(), workspace=project.workspace, name="Other", slug="OTHER"
+        id=uuid.uuid4(), name="Other", slug="OTHER"
     )
     other_type = IssueType.objects.create(
         id=uuid.uuid4(), project=other, name="Task", level="task"

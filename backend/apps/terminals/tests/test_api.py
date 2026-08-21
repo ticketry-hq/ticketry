@@ -21,7 +21,7 @@ from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.validation import SpawnRequest
 from apps.runs.models import AgentRun
 from apps.runs.run_scopes import SHELL_SCOPE
-from worktracker.models import Issue, IssueType, Project, Workspace
+from worktracker.models import Issue, IssueType, Project
 from worktracker.tests.factories import ensure_issue, fixture_issue_id, fixture_uuid
 
 
@@ -36,11 +36,8 @@ def terminal_runtime(monkeypatch):
 
 
 def _create_module_issue() -> Issue:
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(), slug=f"ws-{uuid.uuid4().hex}", name="Workspace"
-    )
     project = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="Project", slug="PROJ"
+        id=uuid.uuid4(), name="Project", slug=f"PROJ-{uuid.uuid4().hex}"
     )
     module_type = IssueType.objects.create(
         id=uuid.uuid4(), project=project, name="Module", level="module"
@@ -462,6 +459,15 @@ def test_resume_terminal_returns_new_and_old_ids(client, monkeypatch):
             launch.LaunchUnavailable("tmux failed"),
             500,
             {"detail": "tmux failed", "code": "launch_unavailable"},
+        ),
+        (
+            launch.PromptDeliveryFailed(reason="readiness_timeout"),
+            503,
+            {
+                "detail": "prompt_delivery_failed",
+                "code": "prompt_delivery_failed",
+                "reason": "readiness_timeout",
+            },
         ),
         (
             registry.UnknownAgent("bogus"),
@@ -972,6 +978,114 @@ def test_self_terminate_is_idempotent_for_an_inactive_run(
         "agent_run_id": "run-ended",
     }
     assert terminal_runtime.terminated == ["run-ended"]
+
+
+def test_self_terminate_refuses_a_run_owned_by_another_runtime(
+    client, terminal_runtime
+):
+    """A second Studio instance shares the records but not the tmux socket.
+
+    Its socket cannot reach this pane, so the request must be refused rather
+    than kill nothing and record an ending for a still-live agent.
+    """
+
+    _insert_run("run-foreign")
+    _insert_session(
+        "run-foreign",
+        task_id="task-1",
+        created_at="2026-05-29T10:00:00",
+        agent="claude",
+        runtime_namespace="tmux-other-instance",
+    )
+
+    response = client.post(
+        "/api/terminals/self-terminate",
+        HTTP_AUTHORIZATION=issue_run_authorization("run-foreign"),
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "run_owned_by_other_runtime",
+        "code": "run_owned_by_other_runtime",
+        "owner_runtime": "tmux-other-instance",
+    }
+    assert terminal_runtime.terminated == []
+    assert AgentRun.objects.get(id="run-foreign").status == "running"
+    assert (
+        AgentTerminalSession.objects.get(agent_run_id="run-foreign").terminated_at
+        is None
+    )
+
+
+def test_delete_refuses_a_run_owned_by_another_runtime(client, terminal_runtime):
+    _insert_run("run-foreign")
+    _insert_session(
+        "run-foreign",
+        task_id="task-1",
+        created_at="2026-05-29T10:00:00",
+        agent="claude",
+        runtime_namespace="tmux-other-instance",
+    )
+
+    response = client.delete("/api/terminals?agent_run_id=run-foreign")
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "run_owned_by_other_runtime"
+    assert terminal_runtime.terminated == []
+    assert (
+        AgentTerminalSession.objects.get(agent_run_id="run-foreign").terminated_at
+        is None
+    )
+
+
+def test_self_terminate_ends_a_run_this_runtime_adopted_before_namespaces(
+    client, terminal_runtime
+):
+    """A row predating namespace recording stays terminable from here."""
+
+    _insert_run("run-legacy")
+    _insert_session(
+        "run-legacy",
+        task_id="task-1",
+        created_at="2026-05-29T10:00:00",
+        agent="claude",
+        runtime_namespace=None,
+    )
+    terminal_runtime.present.add("run-legacy")
+
+    response = client.post(
+        "/api/terminals/self-terminate",
+        HTTP_AUTHORIZATION=issue_run_authorization("run-legacy"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["terminated"] is True
+    assert terminal_runtime.terminated == ["run-legacy"]
+
+
+def test_self_terminate_ends_a_run_recorded_under_a_legacy_namespace(
+    client, terminal_runtime
+):
+    """This runtime still owns the sockets it used under an older name."""
+
+    terminal_runtime.legacy_namespaces = ("tmux-previous-name",)
+    _insert_run("run-adopted")
+    _insert_session(
+        "run-adopted",
+        task_id="task-1",
+        created_at="2026-05-29T10:00:00",
+        agent="claude",
+        runtime_namespace="tmux-previous-name",
+    )
+    terminal_runtime.present.add("run-adopted")
+
+    response = client.post(
+        "/api/terminals/self-terminate",
+        HTTP_AUTHORIZATION=issue_run_authorization("run-adopted"),
+    )
+
+    assert response.status_code == 200
+    assert terminal_runtime.terminated == ["run-adopted"]
 
 
 @pytest.mark.parametrize(

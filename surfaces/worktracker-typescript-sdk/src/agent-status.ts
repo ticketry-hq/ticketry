@@ -214,12 +214,6 @@ export type AgentStatusFrame =
   | StatusCursorFrame
   | StatusDocumentFrame;
 
-export interface GetAgentStatusRequest {
-  projectId: string;
-  taskId?: string;
-  signal?: AbortSignal;
-}
-
 export interface AgentStatusClientOptions {
   baseUrl: string;
   apiKey?: string;
@@ -237,7 +231,6 @@ export interface LaunchAgentRequest {
 }
 
 export interface AgentStatusClient {
-  getAgentStatus(request: GetAgentStatusRequest): Promise<AgentStatusSnapshot>;
   launchAgent(request: LaunchAgentRequest): Promise<LaunchedAgent>;
   retryAutomationAttempt(request: {
     attemptId: string;
@@ -250,12 +243,6 @@ export function createAgentStatusClient(
   const client = createWorkTrackerClient(options);
 
   return {
-    async getAgentStatus({ projectId, taskId, signal }) {
-      return (await client.runs.runsAgentStatusRetrieve(
-        { projectId, taskId },
-        signal ? { signal } : undefined,
-      )) as AgentStatusSnapshot;
-    },
     async launchAgent({ issueId }) {
       return (await client.execution.workItemsLaunchAgentCreate({
         issueId,

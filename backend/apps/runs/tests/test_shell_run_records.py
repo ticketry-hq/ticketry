@@ -7,7 +7,6 @@ accepts one, and that agent runs are projected exactly as before.
 
 import pytest
 
-from apps.rest_api import AgentRunRecordSerializer
 from apps.runs import dao
 from apps.runs.models import AgentRun
 from apps.runs.run_records import build_run_record
@@ -119,28 +118,6 @@ def test_the_record_contract_accepts_a_shell_run_without_an_agent() -> None:
 
     assert record.agent is None
     payload = record.model_dump()
-    assert payload["agent"] is None
-    assert payload["scope"] == SHELL_SCOPE
-
-
-def test_the_serialized_wire_shape_carries_a_null_agent_not_a_substitute() -> None:
-    payload = AgentRunRecordSerializer(
-        {
-            "agent_run_id": "run-shell",
-            "project_id": "proj-1",
-            "task_id": None,
-            "module_id": "mod-1",
-            "agent": None,
-            "scope": SHELL_SCOPE,
-            "started_at": "2026-08-15T10:00:00+00:00",
-            "state": "unknown",
-            "updated_at": "2026-08-15T10:00:00+00:00",
-            "output_sequence": 0,
-            "last_output_at": None,
-            "effective_state": "unknown",
-        }
-    ).data
-
     assert payload["agent"] is None
     assert payload["scope"] == SHELL_SCOPE
 

@@ -4,7 +4,7 @@ import uuid
 
 from django.db import transaction
 
-from worktracker.models import Issue, Project
+from worktracker.models import Issue, ModulePresentation, Project
 from worktracker.module_order import front_module_rank, uses_manual_module_order
 from worktracker.sequences import allocate_sequence_id
 from worktracker.services.errors import NotFoundError
@@ -42,17 +42,22 @@ def create_module(project_id: uuid.UUID, name: str, issue_type_id):
 
     with transaction.atomic():
         sequence_id = allocate_sequence_id(project.id)
-        rank = (
+        presentation_rank = (
             front_module_rank(project.id)
             if uses_manual_module_order(project.id)
-            else ""
+            else None
         )
-        return Issue.objects.create(
+        module = Issue.objects.create(
             id=uuid.uuid4(),
             project=project,
             type="module",
             name=name,
             sequence_id=sequence_id,
             issue_type=issue_type,
-            rank=rank,
         )
+        if presentation_rank is not None:
+            ModulePresentation.objects.create(
+                module=module,
+                rank=presentation_rank,
+            )
+        return module

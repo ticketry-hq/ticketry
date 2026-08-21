@@ -7,7 +7,6 @@ import {
   type KeyChord,
   type KeymapContext,
 } from "./keymapBindings";
-import { isSidebarEnabled } from "../../features/studio/stores/configStore";
 import { studioRuntime, type StudioPlatform } from "../../runtime";
 
 const DEFAULT_BINDINGS_IN_CONTEXT_PRECEDENCE =
@@ -254,8 +253,8 @@ function isBindingRegistered(
   );
 }
 
-function availableInInstallation(binding: BindingDefinition): boolean {
-  return binding.actionId !== "toggle-sidebar" || isSidebarEnabled();
+function availableInInstallation(_binding: BindingDefinition): boolean {
+  return true;
 }
 
 const DEFAULT_BINDINGS_BY_CONTEXT = new Map<

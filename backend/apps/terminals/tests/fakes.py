@@ -15,6 +15,9 @@ from apps.terminals.runtime import (
 )
 
 
+READY_PROVIDER_SCREEN = "ready\n❯ \n> you: \n› \n> Type your message".encode()
+
+
 @dataclass
 class RecordingTerminalRuntime:
     """Small application-test fake for launch and cleanup orchestration."""
@@ -27,12 +30,16 @@ class RecordingTerminalRuntime:
     present: set[str] = field(default_factory=set)
     exited: dict[str, int | None] = field(default_factory=dict)
     unavailable: set[str] = field(default_factory=set)
+    screens: dict[str, bytes] = field(default_factory=dict)
+    submitted: list[tuple[str, str]] = field(default_factory=list)
+    staged: list[tuple[str, str]] = field(default_factory=list)
 
     def create(self, request: CreateTerminal) -> None:
         self.requests.append(request)
         if self.create_error is not None:
             raise self.create_error
         self.present.add(request.agent_run_id)
+        self.screens.setdefault(request.agent_run_id, READY_PROVIDER_SCREEN)
 
     def inspect(self, agent_run_id: str) -> TerminalObservation:
         if agent_run_id in self.unavailable:
@@ -57,6 +64,21 @@ class RecordingTerminalRuntime:
         self.present.discard(agent_run_id)
         self.exited.pop(agent_run_id, None)
         return TerminationResult(was_present=was_present)
+
+    def capture_screen(self, agent_run_id: str) -> bytes:
+        if agent_run_id not in self.present:
+            raise RuntimeError(agent_run_id)
+        return self.screens.get(agent_run_id, b"ready")
+
+    def submit_text(self, agent_run_id: str, text: str) -> None:
+        if agent_run_id not in self.present:
+            raise RuntimeError(agent_run_id)
+        self.submitted.append((agent_run_id, text))
+
+    def stage_text(self, agent_run_id: str, text: str) -> None:
+        if agent_run_id not in self.present:
+            raise RuntimeError(agent_run_id)
+        self.staged.append((agent_run_id, text))
 
     def finish(self, agent_run_id: str, exit_code: int | None = None) -> None:
         self.present.discard(agent_run_id)
@@ -91,6 +113,7 @@ class FakeAdapter:
     command_fn: Optional[Callable[[str], list[str]]] = None
     resume_fn: Optional[Callable[[str], list[str]]] = None
     supports_worktracker_mcp: bool = True
+    invocation_prefix: str = "/"
     inject_calls: list = field(default_factory=list)
 
     def command(
@@ -112,6 +135,14 @@ class FakeAdapter:
         if reasoning is not None:
             options.extend(["--reasoning", reasoning])
         return [self.slug, *options, "--prompt", prompt]
+
+    def is_prompt_ready(self, screen: bytes) -> bool:
+        return b"ready" in screen
+
+    def entry_skill_command(self, entry_skill: str | None) -> str | None:
+        if entry_skill is None:
+            return None
+        return f"{self.invocation_prefix}{entry_skill}"
 
     def inject(
         self,

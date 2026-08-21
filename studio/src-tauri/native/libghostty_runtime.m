@@ -47,23 +47,6 @@ static void runtime_wakeup(void *userdata) {
 static bool runtime_action(ghostty_app_t app, ghostty_target_s target,
                            ghostty_action_s action);
 
-static bool runtime_read_clipboard(void *userdata, ghostty_clipboard_e clipboard,
-                                   void *state) {
-  (void)userdata;
-  (void)clipboard;
-  (void)state;
-  return false;
-}
-
-static void runtime_confirm_clipboard(
-    void *userdata, const char *value, void *state,
-    ghostty_clipboard_request_e request) {
-  (void)userdata;
-  (void)value;
-  (void)state;
-  (void)request;
-}
-
 static void runtime_write_clipboard(
     void *userdata, ghostty_clipboard_e clipboard,
     const ghostty_clipboard_content_s *content, size_t count, bool confirm) {
@@ -162,5 +145,3 @@ void muxed_ghostty_runtime_free(void *opaque) {
   if (runtime->config != NULL) ghostty_config_free(runtime->config);
   free(runtime);
 }
-
-

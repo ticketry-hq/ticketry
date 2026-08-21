@@ -7,20 +7,12 @@ from worktracker.models import (
     LaunchBinding,
     Project,
     State,
-    Workspace,
 )
-
-
-@admin.register(Workspace)
-class WorkspaceAdmin(admin.ModelAdmin):
-    list_display = ("slug", "name")
-    search_fields = ("slug", "name")
 
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ("slug", "name", "workspace", "seq_counter")
-    list_filter = ("workspace",)
+    list_display = ("slug", "name", "seq_counter")
     search_fields = ("name", "slug")
 
 

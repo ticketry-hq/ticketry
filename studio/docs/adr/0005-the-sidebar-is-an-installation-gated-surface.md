@@ -1,4 +1,27 @@
-# The sidebar is an installation-gated surface, and pane flags are subordinate to it
+# Modules sidebar visibility is a persisted user layout choice
+
+> Superseded for the current Modules-only Studio sidebar. CODING-914 made this
+> pane the only route for restoring a hidden module tab, so disabling it now
+> removes a capability. Studio therefore treats Modules sidebar visibility as
+> a persisted user layout choice and no longer applies this installation gate.
+> The Projects pane remains retired.
+
+## Current decision
+
+The Modules pane is required for as long as Studio allows every Module tab to
+be hidden. The empty workspace directs the person to this pane, and selecting a
+hidden Module there restores its tab without changing the Module or its work.
+The footer control and the effective global binding must therefore keep the
+pane reachable even when no Module tab is visible.
+
+This requirement does not create a general feature system for sidebar panes.
+Studio currently has one sidebar composition, the Modules pane. The old
+installation gate stays retired, and the Projects pane stays retired with it.
+
+## Retired decision
+
+The rest of this document records the installation gate that Studio no longer
+applies. It is historical context, not current product behavior.
 
 [ADR 0004](0004-projects-behind-an-installation-feature-flag.md) gated the Projects surface behind an installation feature flag read from `features.json`, defaulting to hidden. This decision extends that model to the collapsible sidebar itself. Everything 0004 established — a config file rather than a database row, gating the rendered surface rather than the REST or MCP contract, one flag read once at process start — carries forward unchanged and is not restated here.
 
@@ -10,7 +33,7 @@ That makes `projects` **subordinate** to `sidebar`: it selects a pane *within* a
 
 A consequence we accepted deliberately: the guided tour no longer manipulates layout. It previously forced the sidebar visible and installed the default panel layout so its module-creation coach mark had an anchor, then restored the user's own layout when it ended. With the sidebar gated off by default, revealing it for one step would teach a surface the installation has switched off and cannot return to. The module-creation anchor therefore moves to the Module tab strip unconditionally — one anchor, one code path, the same tour in every flag combination — and the tour's layout capture-and-restore clause is deleted rather than made conditional.
 
-## Consequences
+### Consequences
 
 - With `sidebar` off, the Edit view is the only Studio layout. There is no key that reveals a sidebar, no footer chip, and no keyboard-shortcut entry advertising one: the affordances are absent rather than inert, so a switched-off sidebar reads as a configuration rather than a broken binding.
 - A webview that already persisted a visible sidebar — any installation upgrading across this change — has that preference overridden by the flag, not honoured. The stored value survives untouched, so turning the flag back on restores the sidebar the user last had.

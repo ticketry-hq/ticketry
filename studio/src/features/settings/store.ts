@@ -164,7 +164,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     );
     set({ error: null });
     try {
-      setIssueTypesSorted(projectId, await api.reorderIssueTypes(projectId, orderedIds));
+      const orderedIdSet = new Set(orderedIds);
+      let orderedIndex = 0;
+      const fullOrderedIds = (await api.listIssueTypes(projectId)).map((issueType) =>
+        orderedIdSet.has(issueType.id) ? orderedIds[orderedIndex++] : issueType.id,
+      );
+      setIssueTypesSorted(
+        projectId,
+        await api.reorderIssueTypes(projectId, fullOrderedIds),
+      );
     } catch (e) {
       setIssueTypes(projectId, snapshot);
       set({ error: errMessage(e) });

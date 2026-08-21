@@ -19,6 +19,7 @@ from worktracker.services.launch_bindings import (
     validate_provider_options,
     validate_unattended_launch_binding,
 )
+from worktracker.services.scoped_workflows import get_workflow
 
 
 @pytest.fixture
@@ -80,6 +81,59 @@ def test_required_skills_need_a_non_empty_prompt(project, launch_policy):
         )
 
     assert "prompt" in exc.value.message_dict
+
+
+@pytest.mark.django_db
+def test_entry_skill_is_optional_and_must_be_required(project, launch_policy):
+    issue_type, state = launch_policy
+    plain = _save_binding(issue_type, state, prompt="Plain launch")
+    assert plain.entry_skill is None
+
+    with pytest.raises(ValidationError) as exc:
+        _save_binding(
+            issue_type,
+            state,
+            prompt="Invoke a skill",
+            required_skills=["to-spec"],
+            entry_skill="to-tickets",
+        )
+
+    assert "entry_skill" in exc.value.message_dict
+
+
+@pytest.mark.django_db
+def test_workflow_warns_only_for_user_invoke_only_skills_outside_entry(
+    project, launch_policy
+):
+    issue_type, state = launch_policy
+    issue_type.start_state = state
+    issue_type.save(update_fields=["start_state"])
+    binding = _save_binding(
+        issue_type,
+        state,
+        prompt="Prepare the work",
+        required_skills=["to-spec", "tdd"],
+        entry_skill=None,
+    )
+
+    warnings = get_workflow(issue_type.id)["warnings"]
+    misplaced = [
+        warning
+        for warning in warnings
+        if warning["code"] == "user_invoke_only_skill_not_entry"
+    ]
+    assert len(misplaced) == 1
+    assert "to-spec" in misplaced[0]["message"]
+    assert "tdd" not in misplaced[0]["message"]
+
+    binding.entry_skill = "to-spec"
+    binding.full_clean()
+    binding.save(update_fields=["entry_skill"])
+
+    assert not any(
+        warning["code"] == "user_invoke_only_skill_not_entry"
+        for warning in get_workflow(issue_type.id)["warnings"]
+    )
 
 
 @pytest.mark.django_db
@@ -256,7 +310,6 @@ def test_binding_rejects_cross_project_type_state_pair(project, launch_policy):
     issue_type, _ = launch_policy
     other_project = project.__class__.objects.create(
         id=uuid.uuid4(),
-        workspace=project.workspace,
         name="Other",
         slug="other",
     )
@@ -281,7 +334,6 @@ def test_model_validation_protects_admin_and_other_direct_writes(
     issue_type, state = launch_policy
     other_project = project.__class__.objects.create(
         id=uuid.uuid4(),
-        workspace=project.workspace,
         name="Other direct",
         slug="other-direct",
     )

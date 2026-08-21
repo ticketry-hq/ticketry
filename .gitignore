@@ -39,3 +39,7 @@ studio/src-tauri/binaries/
 
 # Editor / OS
 .DS_Store
+*.swp
+*.swo
+*~
+.claude/settings.local.json

@@ -31,6 +31,7 @@ def test_create_and_get_round_trip():
     assert fetched.status == "active"
     assert fetched.ephemeral is False
     assert fetched.created_at == fetched.updated_at  # stamped together on insert
+    assert not hasattr(fetched, "workspace_slug")
 
 
 def test_task_id_unique():

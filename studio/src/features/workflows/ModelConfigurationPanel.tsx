@@ -177,9 +177,9 @@ export const ModelConfigurationPanel = forwardRef<
 
   // The capabilities payload only carries activated providers, so a provider
   // switched on but not yet saved still needs an entry to be selectable. The
-  // placeholder comes from the client-side mirror of the server's catalog, so
-  // its models and reasoning levels are offered immediately instead of only
-  // after a save round-trip. The authoritative payload wins once it arrives.
+  // placeholder keeps the newly activated provider selectable before a save
+  // round-trip. It deliberately carries no code-owned model matrix; catalog
+  // models and their reasoning links only come from the authoritative payload.
   const pickerCapabilities = useMemo<ProviderCapabilities[]>(
     () =>
       CONFIGURABLE_PROVIDERS.filter((provider) => activated.includes(provider))

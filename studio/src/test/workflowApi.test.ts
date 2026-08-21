@@ -3,6 +3,7 @@ import {
   addIssueTypeWorkflowTransition,
   deleteState,
   getIssueTypeWorkflowSettings,
+  getLaunchProviderCapabilities,
   removeIssueTypeWorkflowTransition,
   setIssueTypeWorkflowAutoStart,
   setIssueTypeWorkflowStartState,
@@ -130,6 +131,37 @@ describe("scoped workflow settings API", () => {
       "/api/work-tracker/reasoning-levels",
     ]));
     expect(urls.some((url) => url.endsWith("/workflow-settings"))).toBe(false);
+  });
+
+  it("keeps each catalog model with only its permitted reasoning rows", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/work-tracker/providers")) {
+        return jsonResponse([{ id: "provider-codex", slug: "codex", activated: true }]);
+      }
+      if (url.endsWith("/work-tracker/models")) {
+        return jsonResponse([
+          { id: "sol", provider: "provider-codex", name: "gpt-5.6-sol", permitted_reasoning_levels: ["low", "ultra"] },
+          { id: "luna", provider: "provider-codex", name: "gpt-5.6-luna", permitted_reasoning_levels: ["low", "max"] },
+        ]);
+      }
+      if (url.endsWith("/work-tracker/reasoning-levels")) {
+        return jsonResponse([
+          { id: "low", name: "low" },
+          { id: "max", name: "max" },
+          { id: "ultra", name: "ultra" },
+        ]);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await expect(getLaunchProviderCapabilities()).resolves.toMatchObject([{
+      agent: "codex",
+      models: [
+        { name: "gpt-5.6-sol", reasoning_levels: ["low", "ultra"] },
+        { name: "gpt-5.6-luna", reasoning_levels: ["low", "max"] },
+      ],
+    }]);
   });
 
   it("writes transitions and the start state through canonical row endpoints", async () => {

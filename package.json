@@ -31,7 +31,7 @@
     "prototype:supabase": "node backend/prototypes/supabase-migration/tui.mjs",
     "desktop:build": "npm run desktop:build --workspace @worktracker/studio",
     "desktop:deploy": "npm run desktop:deploy --workspace @worktracker/studio",
-    "deploy": "npm run desktop:deploy --workspace @worktracker/studio",
+    "deploy": "npm run desktop:deploy --workspace @worktracker/studio && open /Applications/Ticketry.app",
     "desktop:dev": "npm run desktop:dev --workspace @worktracker/studio",
     "desktop:smoke": "npm run desktop:smoke --workspace @worktracker/studio",
     "desktop:smoke:concurrent": "npm run desktop:smoke:concurrent --workspace @worktracker/studio",
@@ -43,10 +43,21 @@
     "logs:clear": "node scripts/dev-logs.mjs clear",
     "serve:dmg": "node scripts/serve-dmg.mjs",
     "test:sdk": "npm run test --workspace @worktracker/typescript-sdk",
+    "test:mcp:unit": "cd surfaces/worktracker-agent && env -u VIRTUAL_ENV uv run --group dev python -m pytest -q",
+    "test:mcp:integration": "cd backend && env -u VIRTUAL_ENV uv run --extra dev python -m pytest -q worktracker/tests/test_mcp_integration.py worktracker/tests/test_mcp_workflow_integration.py worktracker/tests/test_mcp_execution_integration.py packaging/tests/test_sidecar.py::test_mcp_owner_eof_after_initialize_releases_the_listener",
+    "test:mcp": "npm run test:mcp:unit && npm run test:mcp:integration",
     "typecheck": "npm run typecheck --workspace @worktracker/typescript-sdk && npm run typecheck --workspace @worktracker/studio",
     "build": "npm run build --workspace @worktracker/typescript-sdk && npm run build --workspace @worktracker/studio"
   },
   "devDependencies": {
-    "@openapitools/openapi-generator-cli": "2.39.0"
+    "@openapitools/openapi-generator-cli": "2.40.1"
+  },
+  "overrides": {
+    "@mdxeditor/editor": {
+      "js-yaml": "4.3.1"
+    },
+    "nanoid": "3.3.18",
+    "rolldown": "1.2.4",
+    "shell-quote": "1.9.0"
   }
 }

@@ -84,8 +84,8 @@ def test_full_live_route_table_matches_the_complete_declaration():
     assert unaccounted == set(), f"routes outside all registry tiers: {unaccounted!r}"
 
 
-def test_quarantine_contains_exactly_five_reasoned_operations():
-    assert len(DOMAIN_OPERATIONS) == 5
+def test_quarantine_contains_exactly_six_reasoned_operations():
+    assert len(DOMAIN_OPERATIONS) == 6
     assert all(operation.purpose.strip() for operation in DOMAIN_OPERATIONS)
 
 

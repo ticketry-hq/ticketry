@@ -34,7 +34,7 @@ export interface DocumentList {
      * @type {Array<Document>}
      * @memberof DocumentList
      */
-    documents: Array<Document>;
+    readonly documents: Array<Document>;
 }
 
 /**
@@ -63,13 +63,12 @@ export function DocumentListToJSON(json: any): DocumentList {
     return DocumentListToJSONTyped(json, false);
 }
 
-export function DocumentListToJSONTyped(value?: DocumentList | null, ignoreDiscriminator: boolean = false): any {
+export function DocumentListToJSONTyped(value?: Omit<DocumentList, 'documents'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'documents': ((value['documents'] as Array<any>).map(DocumentToJSON)),
     };
 }

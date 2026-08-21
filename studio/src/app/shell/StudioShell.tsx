@@ -25,9 +25,7 @@ export function StudioShell() {
 
   useEffect(() => {
     if (!selectedProjectId) return;
-    statusFeed.start(selectedProjectId, {
-      refreshSnapshotOnSocketOpen: true,
-    });
+    statusFeed.start(selectedProjectId);
     // The unchanged-output deadline lives with the status holding the feed
     // writes into, so a connected UI reaches Stalled at the boundary without
     // waiting for another server message.

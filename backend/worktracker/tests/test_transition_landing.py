@@ -7,7 +7,13 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from django.db import close_old_connections
 
-from worktracker.models import Issue, IssueType, IssueTypeTransition, State
+from worktracker.models import (
+    Issue,
+    IssueType,
+    IssueTypeTransition,
+    ModulePresentation,
+    State,
+)
 from worktracker.services.queries import list_modules
 from worktracker.tests.conftest import BASE, patch_json
 from worktracker.workflow import InvalidTransition, transition_state
@@ -63,17 +69,14 @@ def test_transition_lands_after_destination_tail_before_global_successor(
     first = make_task(project, task_type, destination, "first", "A")
     tail = make_task(project, task_type, destination, "tail", "M")
     successor = make_task(project, task_type, other, "successor", "Z")
-    ranks_before = {
-        item.id: item.rank for item in (first, tail, successor)
-    }
+    ranks_before = {item.id: item.rank for item in (first, tail, successor)}
 
     transitioned = transition_state(moving, destination.id, origin=origin)
 
     assert transitioned.state_id == destination.id
     assert tail.rank < transitioned.rank < successor.rank
     assert {
-        item.id: Issue.objects.get(pk=item.id).rank
-        for item in (first, tail, successor)
+        item.id: Issue.objects.get(pk=item.id).rank for item in (first, tail, successor)
     } == ranks_before
 
 
@@ -91,8 +94,6 @@ def test_transition_into_empty_destination_preserves_rank(project, workflow):
 @pytest.mark.django_db
 def test_module_transition_preserves_manual_module_order(project, workflow):
     source, destination, other, task_type = workflow
-    project.manual_module_order = True
-    project.save(update_fields=["manual_module_order"])
     module_type = IssueType.objects.create(
         id=uuid.uuid4(),
         project=project,
@@ -121,6 +122,9 @@ def test_module_transition_preserves_manual_module_order(project, workflow):
             (("first", "A"), ("moving", "M"), ("last", "Z")), start=1
         )
     ]
+    ModulePresentation.objects.bulk_create(
+        [ModulePresentation(module=module, rank=module.rank) for module in modules]
+    )
     moving = modules[1]
     make_task(project, task_type, destination, "destination tail", "M")
     make_task(project, task_type, other, "global successor", "Z")

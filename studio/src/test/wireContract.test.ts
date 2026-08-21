@@ -89,14 +89,13 @@ describe("wire-contract builders validate against the backend schema", () => {
 const openapiSchemas = (
   openapi as unknown as { components: { schemas: Record<string, object> } }
 ).components.schemas;
+const websocketSchemas = schema as unknown as {
+  $defs: { RunRecord: object };
+};
 const validateRunRecord: ValidateFunction = new Ajv({
   strict: false,
   allowUnionTypes: true,
-  schemas: openapiSchemas,
-}).compile({
-  ...openapiSchemas.AgentRunRecord,
-  components: { schemas: openapiSchemas },
-});
+}).compile(websocketSchemas.$defs.RunRecord);
 
 const AGENT_RUN: RunRecord = {
   agent_run_id: "run-agent",
@@ -167,10 +166,10 @@ describe("the run record wire contract covers agent and shell runs", () => {
     });
   });
 
-  it("rejects a run record with the agent key removed rather than nulled", () => {
+  it("accepts an omitted agent because the backend normalizes it to null", () => {
     const record: Record<string, unknown> = { ...AGENT_RUN };
     delete record.agent;
-    expect(validateRunRecord(record)).toBe(false);
+    expect(validateRunRecord(record)).toBe(true);
   });
 
   it("rejects an unknown scope", () => {

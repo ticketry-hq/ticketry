@@ -28,7 +28,7 @@ import pytest
 from django.db import OperationalError, connection
 
 from worktracker.services import module_reorder
-from worktracker.services.work_items import reorder_work_item
+from worktracker.services.module_reorder import reorder_module
 from worktracker.tests.module_reorder_fixtures import (  # noqa: F401 - pytest fixture
     modules,
 )
@@ -151,13 +151,13 @@ def test_a_first_drag_meeting_a_held_project_row_waits_for_the_winner(
     visible = baseline(modules, "c", "b", "a")
 
     contended_first_drag.run(
-        winner=lambda: reorder_work_item(
+        winner=lambda: reorder_module(
             modules["a"].id,
             before_id=None,
             after_id=modules["c"].id,
             initial_order_ids=visible,
         ),
-        loser=lambda: reorder_work_item(
+        loser=lambda: reorder_module(
             modules["c"].id,
             before_id=modules["a"].id,
             after_id=None,
@@ -165,8 +165,6 @@ def test_a_first_drag_meeting_a_held_project_row_waits_for_the_winner(
         ),
     )
 
-    project.refresh_from_db()
-    assert project.manual_module_order is True
     assert module_names(project) == ["a", "b", "c"]
 
     # The seed ran once: b, which neither request dragged, still holds the rank
@@ -190,7 +188,7 @@ def test_a_request_arriving_after_manual_mode_ignores_its_stale_baseline(
     """
 
     # Winner: seeds c, b, a and drags a to the top.
-    reorder_work_item(
+    reorder_module(
         modules["a"].id,
         before_id=None,
         after_id=modules["c"].id,
@@ -199,7 +197,7 @@ def test_a_request_arriving_after_manual_mode_ignores_its_stale_baseline(
     seeded = ranks_by_name(project)
 
     # Loser: same gesture era, a baseline that disagrees, dragging b to the top.
-    reorder_work_item(
+    reorder_module(
         modules["b"].id,
         before_id=None,
         after_id=modules["a"].id,

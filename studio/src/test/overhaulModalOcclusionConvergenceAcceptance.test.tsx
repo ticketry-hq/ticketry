@@ -160,10 +160,14 @@ function TwoSurfaceStudio({
   );
 }
 
-function SingleSurfaceStudio() {
+function SingleSurfaceStudio({ focusSignal }: { focusSignal?: number }) {
   return (
     <>
-      <NativeGhosttyTerminal sessionId="session-1" owner="studio" />
+      <NativeGhosttyTerminal
+        sessionId="session-1"
+        owner="studio"
+        focusSignal={focusSignal}
+      />
       <StudioFooter />
       <ModalHost />
     </>
@@ -455,6 +459,37 @@ describe("overhaul acceptance — modal occlusion convergence", () => {
 
     // The registry is still live: an explicit request now reaches the viewer.
     act(() => focusTerminal("session-1"));
+    await waitFor(() => {
+      expect(invocations("native_terminal_focus")).toHaveLength(1);
+    });
+
+    view.unmount();
+  });
+
+  it("drops a focus signal raised while Settings owns the foreground", async () => {
+    const view = render(<SingleSurfaceStudio focusSignal={0} />);
+    await waitFor(() => {
+      expect(showsOf("native-1")).toHaveLength(1);
+    });
+
+    const opener = screen.getByRole("button", { name: "Open Settings" });
+    act(() => opener.focus());
+    const dialog = await openSettings();
+    await waitFor(() => {
+      expect(hidesOf("native-1")).toHaveLength(1);
+    });
+
+    view.rerender(<SingleSurfaceStudio focusSignal={1} />);
+    expect(invocations("native_terminal_focus")).toHaveLength(0);
+
+    await closeSettings(dialog);
+    await waitFor(() => {
+      expect(showsOf("native-1")).toHaveLength(2);
+    });
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(invocations("native_terminal_focus")).toHaveLength(0);
+
+    view.rerender(<SingleSurfaceStudio focusSignal={2} />);
     await waitFor(() => {
       expect(invocations("native_terminal_focus")).toHaveLength(1);
     });

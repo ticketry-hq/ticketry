@@ -35,6 +35,7 @@ from typing import Optional
 from apps.terminals.agents.injectors import (
     DEFAULT_LIFECYCLE_URL,
     DEFAULT_MCP_URL,
+    MCP_UNAVAILABLE_ENV,
     lifecycle_url_for_port,
 )
 from apps.terminals.agents.registry import (
@@ -53,8 +54,7 @@ from apps.terminals.agents.skills.preflight import (
 )
 from apps.documents import watch as documents_watch
 from apps.runs.bus import publish_backend_session_sync, publish_document, publish_status
-from apps.settings_store import config as cfgmod
-from apps.settings_store.config import NoConfigurationSelected, module_link_path
+from apps.settings_store.module_links import resolve_module_path
 from apps.terminals.durable_launch import (
     LaunchUnavailable as LaunchUnavailable,
     create_durable_run,
@@ -67,13 +67,21 @@ from apps.terminals.persistence import (
     LaunchRecords,
     load_resume_launch,
     persist_termination,
+    persist_prompt_delivery_failure,
     termination_context,
 )
-from apps.terminals.prompt_builder import _build_prompt, _resolve_profile_index
+from apps.terminals.prompt_delivery import (
+    PROMPT_READINESS_TIMEOUT_SECONDS,
+    PromptDeliveryTimeout,
+    stage_resume_prompt,
+    submit_entry_skill,
+)
+from apps.terminals.prompt_builder import _build_prompt
 from apps.terminals.runtime import (
     TerminalRuntime,
     TmuxTerminalRuntime,
 )
+from apps.terminals.runtime_ownership import assert_runtime_owns_run
 from apps.terminals.task_launch_preflight import (
     enforce_provider_activation as _enforce_provider_activation,
 )
@@ -97,6 +105,7 @@ _TMUX_DIRECT_COMMAND_MAX_BYTES = 8 * 1024
 # Application callers depend on the public runtime protocol.  Tests replace
 # this instance with the in-memory runtime or a recording fake.
 terminal_runtime: TerminalRuntime = TmuxTerminalRuntime()
+RESUME_CONTINUATION_TEXT = "continue"
 
 
 @dataclass(frozen=True)
@@ -175,6 +184,26 @@ def _resolve_lifecycle_url() -> str:
     return DEFAULT_LIFECYCLE_URL
 
 
+def _resolve_mcp_url() -> Optional[str]:
+    """Resolve the WorkTracker MCP endpoint to inject, or ``None`` for no MCP.
+
+    Prefers an explicit ``WORKTRACKER_MCP_URL`` (the desktop supervisor sets it
+    from the port its own MCP service bound). When the supervisor reports that
+    this instance has no MCP service, no endpoint is injected at all: the
+    hardcoded default port may well be held by a *different* Studio install,
+    and pointing this instance's agents at another install's MCP surface sends
+    run-scoped calls — ticket writes, self-termination — to the wrong runtime.
+    A source checkout sets neither variable and keeps the loopback default.
+    """
+
+    explicit = _env_url("WORKTRACKER_MCP_URL")
+    if explicit:
+        return explicit
+    if os.getenv(MCP_UNAVAILABLE_ENV, "").strip().lower() in {"1", "true", "yes"}:
+        return None
+    return DEFAULT_MCP_URL
+
+
 def _approved_agent_argv(agent: str, argv: list[str]) -> list[str]:
     """Replace the named agent command with the Rust-approved absolute path.
 
@@ -200,6 +229,19 @@ class ResumeUnavailable(Exception):
         self.reason = reason
 
 
+class PromptDeliveryFailed(LaunchUnavailable):
+    """A live provider pane did not accept its launch-time input."""
+
+    code = "prompt_delivery_failed"
+
+    def __init__(self, *, reason: str):
+        self.reason = reason
+        super().__init__(self.code)
+
+    def as_payload(self) -> dict[str, str]:
+        return {"detail": self.code, "code": self.code, "reason": self.reason}
+
+
 async def _launch(
     *,
     adapter: AgentAdapter,
@@ -215,6 +257,9 @@ async def _launch(
     launch_state: Optional[str] = None,
     launch_model: Optional[str] = None,
     resolved_skills: ResolvedSkills | None = None,
+    initial_prompt: str | None = None,
+    submitted_prompt: str | None = None,
+    staged_prompt: str | None = None,
 ) -> str:
     """Persist and start one agent run inside a detached terminal runtime.
 
@@ -238,10 +283,16 @@ async def _launch(
         once here and never updated (#693).
     :param launch_model: the model launch configuration actually resolved for
         this run, or ``None`` when none was resolved. Also write-once.
+    :param initial_prompt: the fresh launch message already carried by ``argv``.
+    :param submitted_prompt: a short manual command to type and submit after launch.
+    :param staged_prompt: resume text to type without submitting.
     :return: ``agent_run_id`` — the persisted, live run.
     :raises LaunchUnavailable: on persistence/runtime failure; launch records
         are deleted after runtime cleanup is confirmed or retained for retry.
     """
+
+    if submitted_prompt is not None and staged_prompt is not None:
+        raise ValueError("terminal input cannot be both submitted and staged")
 
     started_at = datetime.now(timezone.utc).isoformat()
     agent = adapter.slug
@@ -252,7 +303,7 @@ async def _launch(
     # (adapters are env-free). Carrying the adapter itself keeps agent identity
     # and argv transformation in one route.
     lifecycle_url = _resolve_lifecycle_url()
-    mcp_url = _env_url("WORKTRACKER_MCP_URL") or DEFAULT_MCP_URL
+    mcp_url = _resolve_mcp_url()
     argv = _approved_agent_argv(agent, argv)
     resolved_skills = resolved_skills or ResolvedSkills((), (), frozenset(), "")
     try:
@@ -311,11 +362,57 @@ async def _launch(
             provider_session_id=provider_session_id,
             launch_state=launch_state,
             launch_model=launch_model,
+            initial_prompt=initial_prompt,
         ),
         command=command,
         environment=augmentation.environment,
         temporary_artifacts=temporary_artifacts,
     )
+
+    if submitted_prompt is not None or staged_prompt is not None:
+        try:
+            if submitted_prompt is not None:
+                await submit_entry_skill(
+                    runtime=terminal_runtime,
+                    agent_run_id=agent_run_id,
+                    command=submitted_prompt,
+                    is_ready=adapter.is_prompt_ready,
+                    timeout=PROMPT_READINESS_TIMEOUT_SECONDS,
+                )
+            elif staged_prompt is not None:
+                await stage_resume_prompt(
+                    runtime=terminal_runtime,
+                    agent_run_id=agent_run_id,
+                    prompt=staged_prompt,
+                    is_ready=adapter.is_prompt_ready,
+                    timeout=PROMPT_READINESS_TIMEOUT_SECONDS,
+                )
+        except Exception as exc:
+            ended_at = datetime.now(timezone.utc).isoformat()
+            cleanup_pending = False
+            try:
+                await asyncio.to_thread(terminal_runtime.terminate, agent_run_id)
+            except Exception:
+                cleanup_pending = True
+                logger.warning(
+                    "prompt-delivery cleanup failed run=%s",
+                    agent_run_id,
+                    exc_info=True,
+                )
+            if not cleanup_pending:
+                cleanup_temporary_artifacts(temporary_artifacts)
+            await asyncio.to_thread(
+                persist_prompt_delivery_failure,
+                agent_run_id,
+                ended_at=ended_at,
+                runtime_cleanup_pending=cleanup_pending,
+            )
+            reason = (
+                "readiness_timeout"
+                if isinstance(exc, PromptDeliveryTimeout)
+                else "terminal_input_failed"
+            )
+            raise PromptDeliveryFailed(reason=reason) from exc
 
     # The run row exists and the agent is live inside tmux: tell connected
     # /ws/status clients about the spawn (or resume — it shares this path)
@@ -385,11 +482,10 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         _enforce_provider_activation, effective_agent
     )
 
-    profile_index = _resolve_profile_index()
-    if profile_index is None:
-        raise NoConfigurationSelected("No profile selected.")
-    profile = cfgmod.Config().profiles[profile_index]
-    module_folder: Optional[str] = module_link_path(profile, intent.module_id)
+    module_folder: Optional[str] = await asyncio.to_thread(
+        resolve_module_path,
+        intent.module_id,
+    )
     if module_folder and not os.path.isdir(module_folder):
         module_folder = None
     cwd = module_folder or os.path.expanduser("~")
@@ -405,7 +501,6 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         else ()
     )
     prompt, design_dir, worktree_cwd, err = await _build_prompt(
-        profile_index,
         is_planning=intent.scope == "plan",
         is_instant=intent.scope == "instant",
         instant_prompt=intent.initial_prompt if intent.scope == "instant" else None,
@@ -427,8 +522,6 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         agent=effective_agent,
     )
     if err is not None:
-        if err == "no_profile_selected":
-            raise NoConfigurationSelected("No profile selected.")
         raise ValueError(err)
     if worktree_cwd:
         cwd = worktree_cwd
@@ -441,9 +534,17 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
         supports_required_skills=adapter.supports_required_skills,
         available_tools=adapter.available_worktracker_tools,
     )
-    envelope = skill_prompt_envelope(resolved_skills)
+    envelope = skill_prompt_envelope(
+        resolved_skills,
+        invocation_prefix=adapter.invocation_prefix,
+    )
     if envelope:
         prompt = f"{prompt}\n\n{envelope}"
+    manual_entry_skill = adapter.entry_skill_command(
+        launch_configuration.entry_skill
+        if launch_configuration is not None
+        else None,
+    )
     argv = adapter.command(
         prompt,
         model=(
@@ -478,12 +579,22 @@ async def launch_agent_run(intent: LaunchIntent) -> str:
             launch_configuration.model if launch_configuration is not None else None
         ),
         resolved_skills=resolved_skills,
+        initial_prompt=prompt,
+        submitted_prompt=manual_entry_skill,
     )
 
 
 def terminate_agent_run(agent_run_id: str) -> None:
-    """Explicitly terminate runtime mechanics, then persist application state."""
+    """Explicitly terminate runtime mechanics, then persist application state.
 
+    Refuses a run whose pane belongs to another Studio runtime *before* any
+    state is written: this runtime's socket cannot reach that pane, so killing
+    nothing and then recording an ending would report a live agent as exited.
+
+    :raises ForeignRuntimeRun: when another runtime owns this run's terminal.
+    """
+
+    assert_runtime_owns_run(agent_run_id, runtime=terminal_runtime)
     ended_at = datetime.now(timezone.utc).isoformat()
     context = termination_context(agent_run_id)
     terminal_runtime.terminate(agent_run_id)
@@ -521,7 +632,6 @@ async def resume_provider_conversation(agent_run_id: str) -> str:
         raise ResumeUnavailable("no_provider_session_id")
     if not facts.cwd or not os.path.isdir(facts.cwd):
         raise ResumeUnavailable("cwd_missing")
-
     adapter = get_adapter(facts.agent)
     argv = adapter.resume_command(facts.provider_session_id)
     new_run_id = uuid.uuid4().hex
@@ -543,4 +653,5 @@ async def resume_provider_conversation(agent_run_id: str) -> str:
         launch_state=facts.launch_state,
         launch_model=facts.launch_model,
         resolved_skills=ResolvedSkills((), (), frozenset(), ""),
+        staged_prompt=RESUME_CONTINUATION_TEXT,
     )

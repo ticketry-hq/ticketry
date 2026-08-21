@@ -57,6 +57,28 @@ def test_user_can_add_a_model_and_read_it_from_the_canonical_collection(client, 
     } in response.json()
 
 
+def test_catalog_reads_expose_the_exact_codex_5_6_reasoning_relationships(client, auth):
+    provider = Provider.objects.get(slug="codex")
+    levels_response = client.get("/api/work-tracker/reasoning-levels", headers=auth)
+    models_response = client.get("/api/work-tracker/models", headers=auth)
+
+    assert levels_response.status_code == 200
+    assert models_response.status_code == 200
+    level_names = {row["id"]: row["name"] for row in levels_response.json()}
+    matrix = {
+        row["name"]: {
+            level_names[level_id] for level_id in row["permitted_reasoning_levels"]
+        }
+        for row in models_response.json()
+        if row["provider"] == str(provider.id) and row["name"].startswith("gpt-5.6-")
+    }
+    assert matrix == {
+        "gpt-5.6-sol": {"low", "medium", "high", "xhigh", "max", "ultra"},
+        "gpt-5.6-terra": {"low", "medium", "high", "xhigh", "max", "ultra"},
+        "gpt-5.6-luna": {"low", "medium", "high", "xhigh", "max"},
+    }
+
+
 def test_provider_activation_patch_changes_the_launch_gate(client, auth):
     provider = Provider.objects.get(slug="claude")
 

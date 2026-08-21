@@ -26,7 +26,7 @@ export interface Digest {
      * @type {string}
      * @memberof Digest
      */
-    digest: string;
+    readonly digest: string;
 }
 
 /**
@@ -55,13 +55,12 @@ export function DigestToJSON(json: any): Digest {
     return DigestToJSONTyped(json, false);
 }
 
-export function DigestToJSONTyped(value?: Digest | null, ignoreDiscriminator: boolean = false): any {
+export function DigestToJSONTyped(value?: Omit<Digest, 'digest'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'digest': value['digest'],
     };
 }

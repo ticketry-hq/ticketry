@@ -17,6 +17,12 @@ class LaunchBinding(models.Model):
     )
     prompt = models.TextField(blank=True, default="")
     required_skills = models.JSONField(default=list, blank=True)
+    entry_skill = models.CharField(
+        max_length=128,
+        blank=True,
+        null=True,
+        default=None,
+    )
     model = models.ForeignKey(
         AgentModel,
         on_delete=models.PROTECT,
@@ -84,6 +90,7 @@ class LaunchBinding(models.Model):
 
         from worktracker.services.launch_bindings import (  # avoid import cycle
             LaunchBindingError,
+            validate_entry_skill,
             validate_required_skills,
         )
 
@@ -108,6 +115,10 @@ class LaunchBinding(models.Model):
             self.required_skills = validate_required_skills(
                 required_skills=self.required_skills,
                 prompt=self.prompt,
+            )
+            self.entry_skill = validate_entry_skill(
+                entry_skill=self.entry_skill,
+                required_skills=self.required_skills,
             )
         except LaunchBindingError as exc:
             errors[exc.field or "required_skills"] = exc.message

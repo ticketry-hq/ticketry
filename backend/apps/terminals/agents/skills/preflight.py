@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from apps.terminals.entry_skill import validate_entry_skill_prefix
+
 from .catalog import CatalogValidationError, verify_catalog
 from .installation import (
     SkillInstallationError,
@@ -275,12 +277,17 @@ def resolve_required_skills(
         ) from exc
 
 
-def skill_prompt_envelope(resolved: ResolvedSkills) -> str:
+def skill_prompt_envelope(
+    resolved: ResolvedSkills,
+    *,
+    invocation_prefix: str,
+) -> str:
     """Return the factual application-owned prompt block for a resolved launch."""
 
     if not resolved.requested:
         return ""
-    names = ", ".join(resolved.requested)
+    validate_entry_skill_prefix(invocation_prefix)
+    names = ", ".join(f"{invocation_prefix}{name}" for name in resolved.requested)
     return (
         "Ticketry invocation resources:\n"
         f"- Required skills available for this invocation: {names}"

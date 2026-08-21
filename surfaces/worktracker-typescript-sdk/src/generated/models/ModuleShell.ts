@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- *
+ * Read-only public projection of a durable login shell.
  * @export
  * @interface ModuleShell
  */
@@ -26,19 +26,19 @@ export interface ModuleShell {
      * @type {string}
      * @memberof ModuleShell
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
     /**
      *
      * @type {string}
      * @memberof ModuleShell
      */
-    module_id: string;
+    readonly module_id: string;
     /**
      *
      * @type {string}
      * @memberof ModuleShell
      */
-    created_at: string;
+    readonly created_at: string;
 }
 
 /**
@@ -71,15 +71,12 @@ export function ModuleShellToJSON(json: any): ModuleShell {
     return ModuleShellToJSONTyped(json, false);
 }
 
-export function ModuleShellToJSONTyped(value?: ModuleShell | null, ignoreDiscriminator: boolean = false): any {
+export function ModuleShellToJSONTyped(value?: Omit<ModuleShell, 'agent_run_id'|'module_id'|'created_at'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
-        'module_id': value['module_id'],
-        'created_at': value['created_at'],
     };
 }

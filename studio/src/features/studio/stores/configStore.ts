@@ -1,15 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import * as api from "../../../shared/api/client";
-import { type ConfigPayload, type Profile } from "../lib/types";
+import { type Profile } from "../lib/types";
 import { queryClient } from "../../../shared/query/queryClient";
 import { queryKeys } from "../../../shared/query/keys";
-import { isAbsoluteFolderPath } from "../lib/moduleFolderPath";
 
-// Server config (profiles + feature flags) lives in the TanStack Query cache
-// under queryKeys.config — this module is the one place that reads and writes
-// that entry. Components subscribe through useConfig(); non-React code
-// (bootstrap, stores) uses the imperative functions, which share the same
-// cache entry the hooks render from.
+// Retained only as an in-memory compatibility seam for older component tests.
+// Production code no longer imports this module or reads host configuration.
 
 export type SidebarPaneComposition =
   | "absent"
@@ -39,59 +33,11 @@ const EMPTY_CONFIG: ConfigSnapshot = {
   features: { sidebar: false, projects: false },
 };
 
-function toSnapshot(payload: ConfigPayload): ConfigSnapshot {
-  return {
-    profiles: payload.profiles,
-    recentProfileIndex: payload.recent_profile_index,
-    features: payload.features,
-  };
-}
-
-async function fetchConfig(): Promise<ConfigSnapshot> {
-  return toSnapshot(await api.getConfig());
-}
-
-// Profile mutations return the refreshed profile list; feature flags are not
-// part of every mutation payload, so the cached flags are preserved unless
-// the response actually carries them.
-function acceptConfig(payload: ConfigPayload): ConfigSnapshot {
-  const snapshot: ConfigSnapshot = {
-    profiles: payload.profiles,
-    recentProfileIndex: payload.recent_profile_index,
-    features: payload.features ?? getConfigSnapshot().features,
-  };
-  queryClient.setQueryData(queryKeys.config, snapshot);
-  return snapshot;
-}
-
 /** The cached config, or the empty default before the first load resolves. */
 export function getConfigSnapshot(): ConfigSnapshot {
   return (
     queryClient.getQueryData<ConfigSnapshot>(queryKeys.config) ?? EMPTY_CONFIG
   );
-}
-
-/** Explicit reload (page load, external change): always hits the server. */
-export async function loadConfig(): Promise<ConfigSnapshot> {
-  return queryClient.fetchQuery({
-    queryKey: queryKeys.config,
-    queryFn: fetchConfig,
-    staleTime: 0,
-  });
-}
-
-/** Subscribe to the config; renders the empty default until loaded. */
-export function useConfig(): ConfigSnapshot {
-  // The app-level queryClient is passed explicitly so the hook works without
-  // a provider in the tree (component tests, isolated hosts).
-  const { data } = useQuery(
-    {
-      queryKey: queryKeys.config,
-      queryFn: fetchConfig,
-    },
-    queryClient,
-  );
-  return data ?? EMPTY_CONFIG;
 }
 
 /**
@@ -108,57 +54,6 @@ export function seedConfig(
   const next = { ...current, ...partial };
   queryClient.setQueryData(queryKeys.config, next);
   return next;
-}
-
-export async function selectProfile(index: number): Promise<void> {
-  await api.patchConfig({ recent_profile_index: index });
-  queryClient.setQueryData<ConfigSnapshot>(queryKeys.config, (old) =>
-    old ? { ...old, recentProfileIndex: index } : old,
-  );
-  const { loadProjects } = await import("../../projects/queries");
-  await loadProjects();
-}
-
-export async function createProfile(body: Partial<Profile>): Promise<void> {
-  acceptConfig(await api.postProfile(body));
-}
-
-export async function updateProfile(
-  index: number,
-  body: Partial<Profile>,
-): Promise<void> {
-  acceptConfig(await api.putProfile(index, body));
-}
-
-export async function deleteProfile(index: number): Promise<void> {
-  acceptConfig(await api.deleteProfile(index));
-}
-
-export async function setModuleFolder(
-  moduleId: string,
-  path: string,
-): Promise<void> {
-  if (!isAbsoluteFolderPath(path)) {
-    throw new Error("Module folders require a complete filesystem path.");
-  }
-  const { recentProfileIndex, profiles } = getConfigSnapshot();
-  if (recentProfileIndex === null) return;
-  const profile = profiles[recentProfileIndex];
-  if (!profile) return;
-  const linkIndex = profile.module_links.findIndex(
-    (link) => link.module_id === moduleId,
-  );
-  const moduleLink = { module_id: moduleId, path };
-  const moduleLinks =
-    linkIndex === -1
-      ? [...profile.module_links, moduleLink]
-      : profile.module_links.map((link, index) =>
-          index === linkIndex ? moduleLink : link,
-        );
-  await updateProfile(recentProfileIndex, {
-    ...profile,
-    module_links: moduleLinks,
-  });
 }
 
 export function getModuleFolder(

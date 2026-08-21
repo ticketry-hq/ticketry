@@ -5,6 +5,46 @@ import { setStatesSorted } from "../shared/query/stateCatalog";
 import { dragWorkItem } from "./workItemDragGestures";
 
 describe("overhaul acceptance — Stories and details", () => {
+  it("[overhaul-129] keeps the internal PathFind role out of issue-type choices", async () => {
+    const http = fixture();
+    const pathfind = {
+      id: "pathfind",
+      name: "PathFind",
+      level: "task" as const,
+      color: null,
+      sort_order: 2,
+      is_pathfind: true,
+    };
+    http.tree("module-1", {
+      rootIds: ["story-1"],
+      children: { "story-1": ["pathfind-1"], "pathfind-1": [] },
+      order: ["story-1", "pathfind-1"],
+    });
+    http.workItems([
+      workItem({ id: "story-1", name: "Visible story" }),
+      workItem({
+        id: "pathfind-1",
+        name: "Internal investigation",
+        issue_type: pathfind,
+      }),
+    ]);
+    mountStudio({ http, selectedTaskId: "pathfind-1" });
+
+    const details = screen.getByRole("region", { name: "Details" });
+    const pathfindType = await within(details).findByText("PathFind");
+    expect(pathfindType).toHaveAttribute("data-testid", "issue-type-picker");
+    expect(within(details).queryByRole("button", { name: "PathFind" })).toBeNull();
+
+    const stories = screen.getByRole("region", { name: "Stories" });
+    fireEvent.click(within(stories).getByRole("treeitem", { name: /Visible story/ }));
+
+    const picker = await within(details).findByTestId("issue-type-picker");
+    fireEvent.click(within(picker).getByRole("button", { name: "Story" }));
+
+    expect(screen.getAllByRole("button", { name: "Story" })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "PathFind" })).toBeNull();
+  });
+
   it("[overhaul-25] keeps held work items in a state section after its catalog name changes", async () => {
     const http = fixture();
     http.tree("module-1", {

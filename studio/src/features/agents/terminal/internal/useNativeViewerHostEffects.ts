@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, type RefObject } from "react";
 
+import { notifyNativeTerminalKeyboardEngaged } from "../../../../runtime/nativeTerminalKeyboard";
 import { clippedNativeTerminalFrame } from "./nativeTerminalFrame";
 import { traceViewerFocus } from "./focusTrace";
 import { registerTerminalFocus } from "./terminalRegistry";
 import type { NativeTerminalStatus } from "./nativeViewerFailure";
+import { useOcclusionAwareFocusSignal } from "./useOcclusionAwareFocusSignal";
 
 // `native_terminal_focus` rejects a viewer whose reveal has not committed, and
 // hides/shows are serialized through the presentation queue while focus is not.
@@ -26,6 +28,7 @@ export function useNativeViewerFocusRegistration({
     if (!handle || !presented || !visible || modalOpen) return;
     return registerTerminalFocus(sessionId, () => {
       traceViewerFocus("focus requested by registry", { session: sessionId });
+      notifyNativeTerminalKeyboardEngaged();
       void invoke("native_terminal_focus", { handle }).catch((error) => {
         traceViewerFocus("focus request FAILED", {
           session: sessionId,
@@ -109,7 +112,8 @@ export function useNativeViewerFocusSignal({
   visible: boolean;
   modalOpen: boolean;
 }): void {
-  const handledFocusSignalRef = useRef(0);
+  const { discardedFocusSignalRef, handledFocusSignalRef } =
+    useOcclusionAwareFocusSignal(focusSignal, modalOpen);
 
   useEffect(() => {
     if (!handle || !presented || !visible || modalOpen) return;
@@ -123,10 +127,14 @@ export function useNativeViewerFocusSignal({
       session: sessionId,
       focusSignal,
     });
+    notifyNativeTerminalKeyboardEngaged();
     void invoke("native_terminal_focus", { handle }).catch((error) => {
-      // A refused request must not spend the signal: releasing it lets the next
-      // reveal of this viewer carry the same request through.
-      if (handledFocusSignalRef.current === focusSignal) {
+      // A refused request normally remains pending for the next reveal. A modal
+      // opening in the meantime ends that request, so it must stay spent.
+      if (
+        handledFocusSignalRef.current === focusSignal &&
+        discardedFocusSignalRef.current !== focusSignal
+      ) {
         handledFocusSignalRef.current = 0;
       }
       traceViewerFocus("focus request FAILED", {

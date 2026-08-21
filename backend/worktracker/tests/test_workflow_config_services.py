@@ -245,7 +245,6 @@ def test_create_state_automatic_palette_usage_is_project_scoped(project):
         )
     other = Project.objects.create(
         id=uuid.uuid4(),
-        workspace=project.workspace,
         name="Other",
         slug="OTHER",
     )

@@ -26,7 +26,7 @@ from pydantic_core import to_jsonable_python
 
 class SettingValue(BaseModel):
     """
-    SettingValue
+    Decoded value envelope for the singleton keybindings setting.
     """ # noqa: E501
     value: Optional[Any]
     __properties: ClassVar[List[str]] = ["value"]

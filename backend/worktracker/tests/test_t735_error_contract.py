@@ -138,7 +138,6 @@ def test_duplicate_project_slug_maps_to_http_409(client, project, auth):
     """ConflictError surfaces as HTTP 409 with its message at the boundary."""
     Project.objects.create(
         id=uuid.uuid4(),
-        workspace=project.workspace,
         name="Existing",
         slug="DUP",
     )

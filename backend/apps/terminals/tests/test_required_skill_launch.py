@@ -80,10 +80,26 @@ def test_resolution_freezes_dependency_closure_tools_and_revision(
     }
     assert resolved.required_tools == WORKTRACKER_TOOLS
     assert len(resolved.upstream_revision) == 40
-    envelope = skill_prompt_envelope(resolved)
-    assert "grill-with-docs, to-spec, to-tickets" in envelope
-    assert "available for this invocation" in envelope
-    assert "Pinned upstream" not in envelope
+    assert skill_prompt_envelope(resolved, invocation_prefix="$") == (
+        "Ticketry invocation resources:\n"
+        "- Required skills available for this invocation: "
+        "$grill-with-docs, $to-spec, $to-tickets"
+    )
+
+
+def test_empty_required_skills_have_no_prompt_envelope():
+    resolved = preflight.ResolvedSkills((), (), frozenset(), "a" * 40)
+
+    assert skill_prompt_envelope(resolved, invocation_prefix="!") == ""
+
+
+def test_prompt_envelope_rejects_unknown_invocation_prefix(
+    monkeypatch, tmp_path
+):
+    resolved = _resolved(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError, match="entry skill prefix"):
+        skill_prompt_envelope(resolved, invocation_prefix="!")
 
 
 @pytest.mark.parametrize(
@@ -308,7 +324,8 @@ def test_adapter_uses_persistent_exact_locked_installation(
     adapter = get_adapter(provider)
     augmentation = adapter.augment_launch(
         adapter.command(
-            "prompt", activated_providers={"claude", "agy", "codex", "gemini"}
+            "task prompt",
+            activated_providers={"claude", "agy", "codex", "gemini"}
         ),
         f"run-{provider}",
         lifecycle_url="http://127.0.0.1:8123/api/lifecycle/events",

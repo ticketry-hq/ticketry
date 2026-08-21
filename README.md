@@ -1,8 +1,8 @@
-# Studio application
+# Ticketry
 
-This directory is the complete application: Django backend, Studio frontend,
-SDKs, MCP service, and local development tooling. The `worktracker` Django app
-lives in `backend/`; Studio is its only browser frontend.
+Ticketry is a macOS desktop application for planning work and running coding
+agents. This repository contains the Django backend, React frontend, Tauri
+shell, generated SDKs, MCP service, and local development tools.
 
 ```text
 backend/                             Django ASGI host, application code, and worktracker
@@ -11,10 +11,14 @@ surfaces/worktracker-sdk/            Typed Python API client
 surfaces/worktracker-typescript-sdk/ Generated TypeScript API client
 surfaces/worktracker-agent/          FastMCP service
 scripts/                             Bootstrap, development, and contract tooling
-spec/                                Application design history
 ```
 
 ## Local development
+
+Development requires macOS 11 or newer, Node.js 22, Python 3.11 or newer,
+[`uv`](https://docs.astral.sh/uv/), Rust stable, Java 17, Xcode with the Metal
+compiler, and `tmux`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for repository
+structure and pull request requirements.
 
 Install the frontend and backend dependencies:
 
@@ -104,7 +108,7 @@ app, and the previous bundle is restored if the final move fails. Quit Ticketry
 before deploying so the next launch uses the new bundle.
 
 macOS desktop builds are currently **unsigned and not notarized**, and no
-binary releases are published yet — build from source with the commands above.
+binary releases are published yet. Build from source with the commands above.
 Gatekeeper will block a copied unsigned build; see
 [`studio/release/OPERATIONS.md`](studio/release/OPERATIONS.md) for the
 quarantine workaround and the full release policy.
@@ -130,6 +134,8 @@ port `8123`; when that port is occupied they continue without MCP.
 ```bash
 npm run typecheck
 npm run test --workspace @worktracker/studio
+npm run test:native-clipboard --workspace @worktracker/studio
+npm run test:mcp
 npm run build --workspace @worktracker/studio
 scripts/dev.sh test
 (cd backend && uv run --extra dev pytest -q)
@@ -154,4 +160,6 @@ The existing public configuration remains unchanged:
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Report suspected vulnerabilities through the process in
+[`SECURITY.md`](SECURITY.md).

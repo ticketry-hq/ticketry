@@ -6,7 +6,7 @@ import uuid
 
 from django.db.models import Max
 
-from worktracker.models import Issue, IssueType, Project, Workspace
+from worktracker.models import Issue, IssueType, Project
 
 
 _NAMESPACE = uuid.UUID("db7ca9dc-a441-49af-a268-6a620b416caf")
@@ -44,19 +44,11 @@ def ensure_issue(
     module_uuid = fixture_issue_id(
         project_id=project_id, module_id=module_id, task_id=None
     )
-    workspace, _ = Workspace.objects.get_or_create(
-        id=fixture_uuid(f"{project_uuid}:workspace"),
-        defaults={
-            "slug": f"test-{project_uuid}",
-            "name": f"Workspace {project_id}",
-        },
-    )
     project, _ = Project.objects.get_or_create(
         id=project_uuid,
         defaults={
-            "workspace": workspace,
             "name": f"Project {project_id}",
-            "slug": "TEST",
+            "slug": str(project_uuid),
         },
     )
     module_type, _ = IssueType.objects.get_or_create(

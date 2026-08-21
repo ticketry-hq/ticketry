@@ -4,19 +4,14 @@ import uuid
 
 import pytest
 
-from worktracker.models import Issue, IssueType, Project, State, Workspace
+from worktracker.models import Issue, IssueType, Project, State
 
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
 def test_publication_failure_does_not_undo_committed_transition(monkeypatch) -> None:
-    workspace = Workspace.objects.create(
-        id=uuid.uuid4(), slug="publish-failure", name="publish-failure"
-    )
-    project = Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="Publish failure", slug="FAIL"
-    )
+    project = Project.objects.create(id=uuid.uuid4(), name="Publish failure", slug="FAIL")
     before = State.objects.create(
         id=uuid.uuid4(), project=project, name="Todo", group="unstarted"
     )

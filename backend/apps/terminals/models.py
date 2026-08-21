@@ -44,7 +44,7 @@ class AgentTerminalSession(models.Model):
         indexes = [
             models.Index(
                 fields=["task_id", "terminated_at", "-created_at"],
-                name="idx_agent_terminal_sessions_task_created",
+                name="idx_terminal_task_created",
             ),
         ]
 

@@ -101,6 +101,24 @@ def test_runtime_contract_durable_detach_raw_io_and_controls(
 
 
 @pytest.mark.parametrize("runtime_kind", ["memory", "tmux"])
+def test_runtime_contract_can_stage_text_without_submitting(
+    runtime_kind: str,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    command = (
+        "sh -c 'IFS= read -r line; "
+        'printf "submitted:%s\\n" "$line"; sleep 2\''
+    )
+    with _runtime(runtime_kind, monkeypatch, command=command) as (runtime, run_id):
+        runtime.stage_text(run_id, "continue")
+
+        screen = runtime.capture_screen(run_id)
+        assert b"continue" in screen
+        assert b"submitted:continue" not in screen
+        assert runtime.inspect(run_id).state is TerminalState.RUNNING
+
+
+@pytest.mark.parametrize("runtime_kind", ["memory", "tmux"])
 def test_runtime_contract_retains_hosted_command_exit(
     runtime_kind: str,
     monkeypatch: pytest.MonkeyPatch,

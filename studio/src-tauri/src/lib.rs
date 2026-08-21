@@ -30,9 +30,15 @@ pub mod native_terminal_scroll;
 mod native_terminal_visibility;
 pub mod native_terminal_worker;
 mod owned_sidecar;
+#[cfg(all(test, unix))]
+mod owned_sidecar_owner_death_tests;
+mod owner_liveness;
 pub mod ownership;
+mod process_spawn;
 mod release_manifest;
 pub mod supervisor;
+#[cfg(all(test, unix))]
+mod supervisor_owner_liveness_tests;
 pub mod terminal_runtime;
 mod tmux_viewer;
 pub mod viewer_commands;
@@ -398,7 +404,9 @@ fn mcp_unavailable_notice(event: &SupervisorEvent) -> Option<UserNotice> {
         severity: UserNoticeSeverity::Warning,
         title: "External MCP unavailable".to_owned(),
         message: format!(
-            "Ticketry is running, but external MCP connections are unavailable: {message}. {recovery}"
+            "Ticketry is running, but external MCP connections are unavailable: {message}. \
+Agents launched until this is resolved start without WorkTracker MCP tools, rather than \
+being pointed at another install's MCP service. {recovery}"
         ),
         acknowledgement_label: "Continue without MCP".to_owned(),
     })
@@ -1348,6 +1356,9 @@ mod tests {
         assert_eq!(notice.title, "External MCP unavailable");
         assert!(notice.message.contains("Ticketry is running"));
         assert!(notice.message.contains("Port 8123 is already in use"));
+        assert!(notice
+            .message
+            .contains("start without WorkTracker MCP tools"));
         assert_eq!(notice.acknowledgement_label, "Continue without MCP");
     }
 

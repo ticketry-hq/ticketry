@@ -8,12 +8,13 @@ import {
   type Middleware,
 } from "./generated/runtime.js";
 import { AttachmentsApi } from "./generated/apis/AttachmentsApi.js";
-import { ConfigurationApi } from "./generated/apis/ConfigurationApi.js";
 import { DocumentsApi } from "./generated/apis/DocumentsApi.js";
 import { ExecutionApi } from "./generated/apis/ExecutionApi.js";
 import { IssueTypesApi } from "./generated/apis/IssueTypesApi.js";
 import { LaunchBindingsApi } from "./generated/apis/LaunchBindingsApi.js";
 import { ModelsApi } from "./generated/apis/ModelsApi.js";
+import { ModuleLinksApi } from "./generated/apis/ModuleLinksApi.js";
+import { ModulePresentationsApi } from "./generated/apis/ModulePresentationsApi.js";
 import { ModulesApi } from "./generated/apis/ModulesApi.js";
 import { ProjectsApi } from "./generated/apis/ProjectsApi.js";
 import { ProvidersApi } from "./generated/apis/ProvidersApi.js";
@@ -22,7 +23,6 @@ import { RunsApi } from "./generated/apis/RunsApi.js";
 import { SettingsApi } from "./generated/apis/SettingsApi.js";
 import { StatesApi } from "./generated/apis/StatesApi.js";
 import { WorkflowsApi } from "./generated/apis/WorkflowsApi.js";
-import { WorkspaceApi } from "./generated/apis/WorkspaceApi.js";
 import { WorkItemsApi } from "./generated/apis/WorkItemsApi.js";
 import { SystemApi } from "./generated/apis/SystemApi.js";
 import { TerminalsApi } from "./generated/apis/TerminalsApi.js";
@@ -38,12 +38,13 @@ export interface WorkTrackerClientOptions {
 
 export interface WorkTrackerClient {
   attachments: AttachmentsApi;
-  configuration: ConfigurationApi;
   documents: DocumentsApi;
   execution: ExecutionApi;
   issueTypes: IssueTypesApi;
   launchBindings: LaunchBindingsApi;
   models: ModelsApi;
+  moduleLinks: ModuleLinksApi;
+  modulePresentations: ModulePresentationsApi;
   modules: ModulesApi;
   projects: ProjectsApi;
   providers: ProvidersApi;
@@ -52,7 +53,6 @@ export interface WorkTrackerClient {
   settings: SettingsApi;
   states: StatesApi;
   workflows: WorkflowsApi;
-  workspace: WorkspaceApi;
   workItems: WorkItemsApi;
   system: SystemApi;
   terminals: TerminalsApi;
@@ -103,12 +103,13 @@ export function createWorkTrackerClient(
 
   return {
     attachments: new AttachmentsApi(configuration),
-    configuration: new ConfigurationApi(configuration),
     documents: new DocumentsApi(configuration),
     execution: new ExecutionApi(configuration),
     issueTypes: new IssueTypesApi(configuration),
     launchBindings: new LaunchBindingsApi(configuration),
     models: new ModelsApi(configuration),
+    moduleLinks: new ModuleLinksApi(configuration),
+    modulePresentations: new ModulePresentationsApi(configuration),
     modules: new ModulesApi(configuration),
     projects: new ProjectsApi(configuration),
     providers: new ProvidersApi(configuration),
@@ -117,7 +118,6 @@ export function createWorkTrackerClient(
     settings: new SettingsApi(configuration),
     states: new StatesApi(configuration),
     workflows: new WorkflowsApi(configuration),
-    workspace: new WorkspaceApi(configuration),
     workItems: new WorkItemsApi(configuration),
     system: new SystemApi(configuration),
     terminals: new TerminalsApi(configuration),

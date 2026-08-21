@@ -20,6 +20,11 @@ from pathlib import Path
 
 from studio_server.atomic_files import atomic_write_bytes
 
+if __package__:
+    from .owner_liveness import OwnerExited, OwnerLiveness
+else:
+    from owner_liveness import OwnerExited, OwnerLiveness
+
 
 CREDENTIAL_ENV = "MUXED_SIDECAR_CREDENTIAL"
 DEFAULT_DESKTOP_ORIGIN = "tauri://localhost"
@@ -43,6 +48,33 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Ticketry backend sidecar")
     parser.add_argument("--port", required=True, type=int)
     parser.add_argument("--data-dir", required=True, type=Path)
+    ownership = parser.add_mutually_exclusive_group(required=True)
+    ownership.add_argument(
+        "--owner-fd",
+        type=int,
+        help="inherited read end of the desktop owner's private liveness pipe",
+    )
+    ownership.add_argument(
+        "--unowned",
+        action="store_true",
+        help="run without a desktop owner for direct development or smoke testing",
+    )
+    return parser.parse_args(argv)
+
+
+def parse_mcp_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Ticketry MCP sidecar")
+    ownership = parser.add_mutually_exclusive_group(required=True)
+    ownership.add_argument(
+        "--owner-fd",
+        type=int,
+        help="inherited read end of the desktop owner's private liveness pipe",
+    )
+    ownership.add_argument(
+        "--unowned",
+        action="store_true",
+        help="run without a desktop owner for direct development or smoke testing",
+    )
     return parser.parse_args(argv)
 
 
@@ -183,7 +215,9 @@ def _database_migration_lock(connection):
         yield
     finally:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_unlock(%s)", [POSTGRES_MIGRATION_LOCK_ID])
+            cursor.execute(
+                "SELECT pg_advisory_unlock(%s)", [POSTGRES_MIGRATION_LOCK_ID]
+            )
 
 
 def migrate_and_provision() -> None:
@@ -209,7 +243,9 @@ def migrate_and_provision() -> None:
         provision_output = io.StringIO()
         call_command("provision", stdout=provision_output)
 
-        from apps.settings_store import service as settings_service
+        from apps.settings_store.legacy_module_link_import import (
+            import_legacy_module_links,
+        )
         from django.conf import settings
 
         provisioned = json.loads(provision_output.getvalue())
@@ -217,10 +253,7 @@ def migrate_and_provision() -> None:
         # loaded. Make that credential authoritative for the running process as
         # well as the persisted token file.
         settings.WORKTRACKER_API_TOKEN = provisioned["token"]
-        settings_service.ensure_local_profile(
-            name="Local",
-            workspace_slug=provisioned["workspace_slug"],
-        )
+        import_legacy_module_links(Path(os.environ["MUXED_DATA_DIR"]))
 
 
 def readiness_line(port: int) -> str:
@@ -235,7 +268,11 @@ def readiness_line(port: int) -> str:
     )
 
 
-def serve(port: int) -> None:
+def serve(
+    port: int,
+    owner_liveness: OwnerLiveness | None = None,
+    application=None,
+) -> None:
     import uvicorn
 
     class ReadyServer(uvicorn.Server):
@@ -257,16 +294,24 @@ def serve(port: int) -> None:
         async def startup(self, sockets=None):
             await super().startup(sockets=sockets)
             # ``uvicorn`` marks itself started only after the socket is bound.
-            print(readiness_line(port), flush=True)
+            if owner_liveness is not None and owner_liveness.owner_exited.is_set():
+                self.should_exit = True
+            if not self.should_exit:
+                print(readiness_line(port), flush=True)
 
     config = uvicorn.Config(
-        "studio_server.asgi:application",
+        application or "studio_server.asgi:application",
         host="127.0.0.1",
         port=port,
         log_level="info",
         access_log=False,
     )
-    ReadyServer(config).run()
+    server = ReadyServer(config)
+    if owner_liveness is not None:
+        # ``should_exit`` is Uvicorn's ordinary graceful completion path: the
+        # server stops accepting work and runs ASGI lifespan shutdown.
+        owner_liveness.bind_shutdown(lambda: setattr(server, "should_exit", True))
+    server.run()
 
 
 def run_hook(argv: list[str]) -> int:
@@ -282,11 +327,13 @@ def run_hook(argv: list[str]) -> int:
     return 0
 
 
-def run_mcp() -> int:
+def run_mcp(owner_liveness: OwnerLiveness | None = None) -> int:
     """Run the packaged WorkTracker MCP service from the same artifact."""
 
     from worktracker_agent.mcp.main import main as mcp_main
 
+    if owner_liveness is not None:
+        owner_liveness.bind_shutdown(lambda: os.kill(os.getpid(), signal.SIGTERM))
     mcp_main()
     return 0
 
@@ -352,7 +399,9 @@ def prepare_provider_skills() -> None:
                     "path": str(exc.path),
                 }
             )
-        print(json.dumps(diagnostic, separators=(",", ":")), file=sys.stderr, flush=True)
+        print(
+            json.dumps(diagnostic, separators=(",", ":")), file=sys.stderr, flush=True
+        )
 
 
 def verify_skill_installations() -> int:
@@ -363,11 +412,7 @@ def verify_skill_installations() -> int:
     installed = verify_all_installations()
     print(
         json.dumps(
-            {
-                "verified": {
-                    provider: str(path) for provider, path in installed.items()
-                }
-            },
+            {"verified": {provider: str(path) for provider, path in installed.items()}},
             separators=(",", ":"),
         )
     )
@@ -449,21 +494,17 @@ def smoke_skill_providers() -> int:
                         "worktracker-agent" in value for value in argv
                     )
                 elif provider == "agy":
-                    settings_path = Path(
-                        environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"]
-                    )
+                    settings_path = Path(environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"])
                     settings = json.loads(settings_path.read_text(encoding="utf-8"))
-                    mcp_configured[provider] = "worktracker-agent" in settings[
-                        "mcpServers"
-                    ]
+                    mcp_configured[provider] = (
+                        "worktracker-agent" in settings["mcpServers"]
+                    )
                 else:
-                    settings_path = Path(
-                        environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"]
-                    )
+                    settings_path = Path(environment["GEMINI_CLI_SYSTEM_SETTINGS_PATH"])
                     settings = json.loads(settings_path.read_text(encoding="utf-8"))
-                    mcp_configured[provider] = "worktracker-agent" in settings[
-                        "mcpServers"
-                    ]
+                    mcp_configured[provider] = (
+                        "worktracker-agent" in settings["mcpServers"]
+                    )
                 if names != set(resolved.names):
                     raise RuntimeError(
                         f"{provider} did not expose the complete packaged closure"
@@ -488,8 +529,17 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["hook"]:
         return run_hook(argv[1:])
-    if argv == ["mcp"]:
-        return run_mcp()
+    if argv[:1] == ["mcp"]:
+        args = parse_mcp_args(argv[1:])
+        if args.owner_fd is None:
+            return run_mcp()
+        try:
+            owner_liveness = OwnerLiveness(args.owner_fd)
+        except ValueError as exc:
+            print(f"invalid --owner-fd: {exc}", file=sys.stderr, flush=True)
+            return 2
+        with owner_liveness:
+            return run_mcp(owner_liveness)
     if argv == ["skills", "verify"]:
         return verify_skill_catalog()
     if argv == ["skills", "install"]:
@@ -501,6 +551,37 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if not 0 < args.port < 65536:
         raise SystemExit("--port must be between 1 and 65535")
+    try:
+        owner_liveness = (
+            OwnerLiveness(args.owner_fd) if args.owner_fd is not None else None
+        )
+    except ValueError as exc:
+        print(f"invalid --owner-fd: {exc}", file=sys.stderr, flush=True)
+        return 2
+
+    if owner_liveness is None:
+        return run_backend(args)
+
+    def stop_pre_serving(_signal_number, _frame):
+        raise OwnerExited()
+
+    previous_sigterm = signal.signal(signal.SIGTERM, stop_pre_serving)
+    try:
+        with owner_liveness:
+            try:
+                owner_liveness.bind_shutdown(
+                    lambda: os.kill(os.getpid(), signal.SIGTERM)
+                )
+                return run_backend(args, owner_liveness)
+            except OwnerExited:
+                return 0
+    finally:
+        signal.signal(signal.SIGTERM, previous_sigterm)
+
+
+def run_backend(
+    args: argparse.Namespace, owner_liveness: OwnerLiveness | None = None
+) -> int:
     # Environment setup can fail deterministically (an empty secret-key file,
     # an unwritable data dir). Outside a handler that raise printed no failure
     # line, so the supervisor saw only a readiness timeout and retried a start
@@ -508,7 +589,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         configure_environment(args)
     except BaseException as exc:
-        if isinstance(exc, KeyboardInterrupt):
+        if isinstance(exc, (KeyboardInterrupt, OwnerExited)):
             raise
         traceback.print_exc()
         print(STARTUP_FAILURE_LINE, flush=True)
@@ -518,13 +599,13 @@ def main(argv: list[str] | None = None) -> int:
     except BaseException as exc:
         # ``call_command`` can raise SystemExit, which is not an ``Exception``
         # and used to escape without a failure line — H5's symptom again.
-        if isinstance(exc, KeyboardInterrupt):
+        if isinstance(exc, (KeyboardInterrupt, OwnerExited)):
             raise
         traceback.print_exc()
         print(MIGRATION_FAILURE_LINE, flush=True)
         return 1
     prepare_provider_skills()
-    serve(args.port)
+    serve(args.port, owner_liveness)
     return 0
 
 

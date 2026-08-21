@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- *
+ * Explicit public allowlist for a host-local Module link.
  * @export
  * @interface ModuleLink
  */
@@ -26,21 +26,42 @@ export interface ModuleLink {
      * @type {string}
      * @memberof ModuleLink
      */
-    module_id: string;
+    readonly id: string;
     /**
      *
      * @type {string}
      * @memberof ModuleLink
      */
-    path: string;
+    readonly module_id: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ModuleLink
+     */
+    local_path: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ModuleLink
+     */
+    readonly created_at: string;
+    /**
+     *
+     * @type {string}
+     * @memberof ModuleLink
+     */
+    readonly updated_at: string;
 }
 
 /**
  * Check if a given object implements the ModuleLink interface.
  */
 export function instanceOfModuleLink(value: object): value is ModuleLink {
+    if (!('id' in value) || value['id'] === undefined) return false;
     if (!('module_id' in value) || value['module_id'] === undefined) return false;
-    if (!('path' in value) || value['path'] === undefined) return false;
+    if (!('local_path' in value) || value['local_path'] === undefined) return false;
+    if (!('created_at' in value) || value['created_at'] === undefined) return false;
+    if (!('updated_at' in value) || value['updated_at'] === undefined) return false;
     return true;
 }
 
@@ -54,8 +75,11 @@ export function ModuleLinkFromJSONTyped(json: any, ignoreDiscriminator: boolean)
     }
     return {
 
+        'id': json['id'],
         'module_id': json['module_id'],
-        'path': json['path'],
+        'local_path': json['local_path'],
+        'created_at': json['created_at'],
+        'updated_at': json['updated_at'],
     };
 }
 
@@ -63,14 +87,13 @@ export function ModuleLinkToJSON(json: any): ModuleLink {
     return ModuleLinkToJSONTyped(json, false);
 }
 
-export function ModuleLinkToJSONTyped(value?: ModuleLink | null, ignoreDiscriminator: boolean = false): any {
+export function ModuleLinkToJSONTyped(value?: Omit<ModuleLink, 'id'|'module_id'|'created_at'|'updated_at'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'module_id': value['module_id'],
-        'path': value['path'],
+        'local_path': value['local_path'],
     };
 }

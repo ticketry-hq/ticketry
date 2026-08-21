@@ -26,11 +26,11 @@ from pydantic_core import to_jsonable_python
 
 class TerminalRun(BaseModel):
     """
-    TerminalRun
+    Read-only public projection of one durable terminal session.
     """ # noqa: E501
     agent_run_id: StrictStr
-    doc_rel_path: Optional[StrictStr] = None
-    created_at: Optional[StrictStr] = None
+    doc_rel_path: Optional[StrictStr]
+    created_at: StrictStr
     __properties: ClassVar[List[str]] = ["agent_run_id", "doc_rel_path", "created_at"]
 
     model_config = ConfigDict(
@@ -63,8 +63,14 @@ class TerminalRun(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
+            "agent_run_id",
+            "doc_rel_path",
+            "created_at",
         ])
 
         _dict = self.model_dump(

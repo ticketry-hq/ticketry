@@ -106,7 +106,7 @@ export interface ExecutionApiInterface {
     workItemsGraphRunCreateRequestOpts(requestParameters: WorkItemsGraphRunCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * A work-item-scoped singleton graph-run campaign.
      * @param {string} issueId
      * @param {GraphRunRequest} [graphRunRequest]
      * @param {*} [options] Override http request option.
@@ -116,6 +116,7 @@ export interface ExecutionApiInterface {
     workItemsGraphRunCreateRaw(requestParameters: WorkItemsGraphRunCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<GraphRunResult>>;
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     workItemsGraphRunCreate(requestParameters: WorkItemsGraphRunCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<GraphRunResult>;
 
@@ -128,7 +129,7 @@ export interface ExecutionApiInterface {
     workItemsGraphRunDestroyRequestOpts(requestParameters: WorkItemsGraphRunDestroyRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * A work-item-scoped singleton graph-run campaign.
      * @param {string} issueId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -137,6 +138,7 @@ export interface ExecutionApiInterface {
     workItemsGraphRunDestroyRaw(requestParameters: WorkItemsGraphRunDestroyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<GraphResetResult>>;
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     workItemsGraphRunDestroy(requestParameters: WorkItemsGraphRunDestroyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<GraphResetResult>;
 
@@ -149,7 +151,7 @@ export interface ExecutionApiInterface {
     workItemsGraphRunRetrieveRequestOpts(requestParameters: WorkItemsGraphRunRetrieveRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * A work-item-scoped singleton graph-run campaign.
      * @param {string} issueId
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -158,6 +160,7 @@ export interface ExecutionApiInterface {
     workItemsGraphRunRetrieveRaw(requestParameters: WorkItemsGraphRunRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Graph>>;
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     workItemsGraphRunRetrieve(requestParameters: WorkItemsGraphRunRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Graph>;
 
@@ -171,7 +174,7 @@ export interface ExecutionApiInterface {
     workItemsLaunchAgentCreateRequestOpts(requestParameters: WorkItemsLaunchAgentCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Execution commands scoped to one work item.
      * @param {string} issueId
      * @param {AgentOverride} [agentOverride]
      * @param {*} [options] Override http request option.
@@ -181,6 +184,7 @@ export interface ExecutionApiInterface {
     workItemsLaunchAgentCreateRaw(requestParameters: WorkItemsLaunchAgentCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LaunchedAgentResponse>>;
 
     /**
+     * Execution commands scoped to one work item.
      */
     workItemsLaunchAgentCreate(requestParameters: WorkItemsLaunchAgentCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LaunchedAgentResponse>;
 
@@ -194,7 +198,7 @@ export interface ExecutionApiInterface {
     workItemsRunNowCreateRequestOpts(requestParameters: WorkItemsRunNowCreateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Execution commands scoped to one work item.
      * @param {string} issueId
      * @param {RunNowRequest} [runNowRequest]
      * @param {*} [options] Override http request option.
@@ -204,6 +208,7 @@ export interface ExecutionApiInterface {
     workItemsRunNowCreateRaw(requestParameters: WorkItemsRunNowCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RunNowResponse>>;
 
     /**
+     * Execution commands scoped to one work item.
      */
     workItemsRunNowCreate(requestParameters: WorkItemsRunNowCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RunNowResponse>;
 
@@ -249,6 +254,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     async workItemsGraphRunCreateRaw(requestParameters: WorkItemsGraphRunCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<GraphRunResult>> {
         const requestOptions = await this.workItemsGraphRunCreateRequestOpts(requestParameters);
@@ -258,6 +264,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     async workItemsGraphRunCreate(requestParameters: WorkItemsGraphRunCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<GraphRunResult> {
         const response = await this.workItemsGraphRunCreateRaw(requestParameters, initOverrides);
@@ -296,6 +303,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     async workItemsGraphRunDestroyRaw(requestParameters: WorkItemsGraphRunDestroyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<GraphResetResult>> {
         const requestOptions = await this.workItemsGraphRunDestroyRequestOpts(requestParameters);
@@ -305,6 +313,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     async workItemsGraphRunDestroy(requestParameters: WorkItemsGraphRunDestroyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<GraphResetResult> {
         const response = await this.workItemsGraphRunDestroyRaw(requestParameters, initOverrides);
@@ -343,6 +352,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     async workItemsGraphRunRetrieveRaw(requestParameters: WorkItemsGraphRunRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Graph>> {
         const requestOptions = await this.workItemsGraphRunRetrieveRequestOpts(requestParameters);
@@ -352,6 +362,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * A work-item-scoped singleton graph-run campaign.
      */
     async workItemsGraphRunRetrieve(requestParameters: WorkItemsGraphRunRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Graph> {
         const response = await this.workItemsGraphRunRetrieveRaw(requestParameters, initOverrides);
@@ -393,6 +404,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * Execution commands scoped to one work item.
      */
     async workItemsLaunchAgentCreateRaw(requestParameters: WorkItemsLaunchAgentCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LaunchedAgentResponse>> {
         const requestOptions = await this.workItemsLaunchAgentCreateRequestOpts(requestParameters);
@@ -402,6 +414,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * Execution commands scoped to one work item.
      */
     async workItemsLaunchAgentCreate(requestParameters: WorkItemsLaunchAgentCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LaunchedAgentResponse> {
         const response = await this.workItemsLaunchAgentCreateRaw(requestParameters, initOverrides);
@@ -443,6 +456,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * Execution commands scoped to one work item.
      */
     async workItemsRunNowCreateRaw(requestParameters: WorkItemsRunNowCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RunNowResponse>> {
         const requestOptions = await this.workItemsRunNowCreateRequestOpts(requestParameters);
@@ -452,6 +466,7 @@ export class ExecutionApi extends runtime.BaseAPI implements ExecutionApiInterfa
     }
 
     /**
+     * Execution commands scoped to one work item.
      */
     async workItemsRunNowCreate(requestParameters: WorkItemsRunNowCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RunNowResponse> {
         const response = await this.workItemsRunNowCreateRaw(requestParameters, initOverrides);

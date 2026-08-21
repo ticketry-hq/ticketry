@@ -21,3 +21,18 @@ class DeleteRequestBodyAutoSchema(AutoSchema):
             return super()._get_request_body(direction)
         finally:
             self.method = method
+
+
+class RequiredPatchAndDeleteRequestBodyAutoSchema(DeleteRequestBodyAutoSchema):
+    """Describe a PATCH whose transport contract requires its declared fields."""
+
+    def _get_request_body(self, direction="request"):
+        if self.method != "PATCH":
+            return super()._get_request_body(direction)
+
+        method = self.method
+        self.method = "PUT"
+        try:
+            return super()._get_request_body(direction)
+        finally:
+            self.method = method

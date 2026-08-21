@@ -11,8 +11,6 @@ export type LifecycleState =
   | "error"
   | "unknown";
 
-export type { Profile } from "../studio/lib/types";
-
 export type AgentName = "claude" | "agy" | "codex" | "gemini";
 export type TaskId = string;
 export type SessionId = string;

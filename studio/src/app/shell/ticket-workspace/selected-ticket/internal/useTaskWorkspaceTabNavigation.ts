@@ -1,11 +1,9 @@
 import { useEffect, useRef } from "react";
 import { isTypingTarget } from "../../../../../shared/utilities/keyboard";
 import { useClientStore } from "../../../../../state/clientStore";
+import type { WorkspaceTabIdentity } from "../../../../../features/workspace-tabs/types";
 
-export type TaskWorkspaceTabIdentity =
-  | { kind: "details" }
-  | { kind: "doc"; id: string }
-  | { kind: "terminal"; id: string };
+export type TaskWorkspaceTabIdentity = WorkspaceTabIdentity;
 
 function sameTab(
   left: TaskWorkspaceTabIdentity,

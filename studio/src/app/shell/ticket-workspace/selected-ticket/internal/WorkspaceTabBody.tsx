@@ -10,7 +10,10 @@ import type {
   DesignDoc,
   TabKind,
 } from "../../../../../features/agents/types";
-import type { ForegroundOwner } from "../../../../../features/agents/terminal";
+import {
+  useModalOcclusionActive,
+  type ForegroundOwner,
+} from "../../../../../features/agents/terminal";
 import {
   useClientStore,
   type EditViewZone,
@@ -71,9 +74,16 @@ export function WorkspaceTabBody({
   onEngageTab: (tab: TaskWorkspaceTabIdentity) => void;
   onSetEditViewZone: (zone: "active-tab-body") => void;
 }) {
+  // State configuration is a sibling WebView overlay over this workspace.
+  // Deactivate the Story viewer at its host boundary as well as through the
+  // window-level native occlusion gate while the workspace remains mounted.
+  const stateConfigurationOpen = useClientStore(
+    (state) => state.workspaceSelection.kind === "state-configuration",
+  );
   const [pendingNativeHides, setPendingNativeHides] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const modalOcclusionActive = useModalOcclusionActive();
   const handleNativeVisibilityPendingChange = useCallback(
     (runId: string, pending: boolean) => {
       setPendingNativeHides((current) => {
@@ -180,7 +190,11 @@ export function WorkspaceTabBody({
             <LazySelectedTicketTerminal
               bucket={bucket}
               owner={owner}
-              active={terminalIds.length > 0 && activeKind === "terminal"}
+              active={
+                terminalIds.length > 0 &&
+                activeKind === "terminal" &&
+                !stateConfigurationOpen
+              }
               focusSignal={
                 requestedTerminalId === activeTerminalId
                   ? terminalFocusSignal
@@ -216,7 +230,7 @@ export function WorkspaceTabBody({
           </div>
         )}
       </div>
-      {pendingNativeHides.size > 0 ? (
+      {pendingNativeHides.size > 0 && !modalOcclusionActive ? (
         <div
           aria-hidden="true"
           data-testid="native-viewer-transition-shield"

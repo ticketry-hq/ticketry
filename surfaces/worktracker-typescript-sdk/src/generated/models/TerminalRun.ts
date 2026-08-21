@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- *
+ * Read-only public projection of one durable terminal session.
  * @export
  * @interface TerminalRun
  */
@@ -26,19 +26,19 @@ export interface TerminalRun {
      * @type {string}
      * @memberof TerminalRun
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
     /**
      *
      * @type {string}
      * @memberof TerminalRun
      */
-    doc_rel_path?: string | null;
+    readonly doc_rel_path: string | null;
     /**
      *
      * @type {string}
      * @memberof TerminalRun
      */
-    created_at?: string;
+    readonly created_at: string;
 }
 
 /**
@@ -46,6 +46,8 @@ export interface TerminalRun {
  */
 export function instanceOfTerminalRun(value: object): value is TerminalRun {
     if (!('agent_run_id' in value) || value['agent_run_id'] === undefined) return false;
+    if (!('doc_rel_path' in value) || value['doc_rel_path'] === undefined) return false;
+    if (!('created_at' in value) || value['created_at'] === undefined) return false;
     return true;
 }
 
@@ -60,8 +62,8 @@ export function TerminalRunFromJSONTyped(json: any, ignoreDiscriminator: boolean
     return {
 
         'agent_run_id': json['agent_run_id'],
-        'doc_rel_path': json['doc_rel_path'] == null ? undefined : json['doc_rel_path'],
-        'created_at': json['created_at'] == null ? undefined : json['created_at'],
+        'doc_rel_path': json['doc_rel_path'],
+        'created_at': json['created_at'],
     };
 }
 
@@ -69,15 +71,12 @@ export function TerminalRunToJSON(json: any): TerminalRun {
     return TerminalRunToJSONTyped(json, false);
 }
 
-export function TerminalRunToJSONTyped(value?: TerminalRun | null, ignoreDiscriminator: boolean = false): any {
+export function TerminalRunToJSONTyped(value?: Omit<TerminalRun, 'agent_run_id'|'doc_rel_path'|'created_at'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
-        'doc_rel_path': value['doc_rel_path'],
-        'created_at': value['created_at'],
     };
 }

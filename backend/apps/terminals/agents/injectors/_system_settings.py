@@ -106,7 +106,7 @@ def inject(
     agent_run_id: str,
     *,
     lifecycle_url: str,
-    mcp_url: str,
+    mcp_url: str | None,
     settings_path: Path | None = None,
 ) -> InjectedLaunch:
     """Relocate this provider's settings layer to a file wiring hooks and MCP.
@@ -123,8 +123,9 @@ def inject(
     """
 
     settings = build_lifecycle_settings(provider, agent_run_id, lifecycle_url)
-    authorization = issue_run_authorization(agent_run_id)
-    settings["mcpServers"] = build_mcp_servers(mcp_url, authorization)
+    if mcp_url is not None:
+        authorization = issue_run_authorization(agent_run_id)
+        settings["mcpServers"] = build_mcp_servers(mcp_url, authorization)
 
     # Persist the hooks to a temp settings file for this run; it must outlive
     # this call since the CLI reads it on startup, so it is not auto-deleted.

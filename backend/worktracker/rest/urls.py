@@ -4,35 +4,25 @@ from django.urls import path
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from drf_spectacular.views import SpectacularAPIView
 
+from worktracker.rest.module_presentations import ModulePresentationViewSet
 from worktracker.rest.views import (
     AgentModelViewSet,
-    LaunchBindingDetailView,
-    LaunchBindingListView,
-    ModuleViewSet,
     IssueTypeTransitionDetailView,
     IssueTypeTransitionListView,
     IssueTypeViewSet,
-    ProviderViewSet,
+    LaunchBindingDetailView,
+    LaunchBindingListView,
+    ModuleViewSet,
     ProjectViewSet,
+    ProviderViewSet,
     ReasoningLevelViewSet,
     StateViewSet,
-    WorkspaceRetrieveView,
-)
-from worktracker.rest.domain_ops import (
-    AcknowledgeOnboardingView,
-    IssueTypeReorderView,
-    RemoveStateFromWorkflowView,
-    StateReorderView,
-    WorkItemReorderView,
 )
 from worktracker.rest.work_items import (
-    AttachmentCollectionView,
-    WorkItemBatchView,
-    WorkItemCreateView,
-    WorkItemDetailView,
-    WorkItemListView,
+    AttachmentViewSet,
+    WorkItemViewSet,
+    WorkspaceTabOrderViewSet,
 )
-
 
 app_name = "worktracker-rest"
 
@@ -64,22 +54,70 @@ project_collection = ProjectViewSet.as_view({"get": "list", "post": "create"})
 project_detail = ProjectViewSet.as_view(
     {"patch": "partial_update", "delete": "destroy"}
 )
+project_onboarding_acknowledge = ProjectViewSet.as_view(
+    {"post": "acknowledge_onboarding"}
+)
 module_collection = ModuleViewSet.as_view({"get": "list", "post": "create"})
+module_presentation_collection = ModulePresentationViewSet.as_view({"get": "list"})
+module_presentation_detail = ModulePresentationViewSet.as_view({"put": "update"})
+module_presentation_reorder = ModulePresentationViewSet.as_view({"post": "reorder"})
+issue_type_transition_collection = IssueTypeTransitionListView.as_view(
+    {"get": "list", "post": "create"}
+)
+issue_type_transition_detail = IssueTypeTransitionDetailView.as_view(
+    {"patch": "update", "delete": "destroy"}
+)
+launch_binding_list = LaunchBindingListView.as_view({"get": "list"})
+launch_binding_detail = LaunchBindingDetailView.as_view(
+    {"put": "update", "delete": "destroy"}
+)
+state_reorder = StateViewSet.as_view({"post": "reorder"})
+issue_type_reorder = IssueTypeViewSet.as_view({"post": "reorder"})
+remove_state_from_workflow = IssueTypeViewSet.as_view(
+    {"delete": "remove_state"}
+)
+work_item_collection = WorkItemViewSet.as_view({"get": "list"})
+work_item_batch = WorkItemViewSet.as_view({"post": "batch"})
+work_item_create = WorkItemViewSet.as_view({"post": "create"})
+work_item_detail = WorkItemViewSet.as_view(
+    {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
+)
+work_item_attachments = AttachmentViewSet.as_view(
+    {"get": "list", "post": "create"}
+)
+work_item_reorder = WorkItemViewSet.as_view({"post": "reorder"})
+workspace_tab_order = WorkspaceTabOrderViewSet.as_view(
+    {"get": "retrieve", "put": "update"}
+)
 
 urlpatterns = [
     path("schema", WorkTrackerSchemaView.as_view(), name="schema"),
-    path("workspace", WorkspaceRetrieveView.as_view(), name="workspace-retrieve"),
-    path(
-        "workspace/onboarding/acknowledge",
-        AcknowledgeOnboardingView.as_view(),
-        name="workspace-onboarding-acknowledge",
-    ),
     path("projects", project_collection, name="project-list"),
     path("projects/<uuid:project_id>", project_detail, name="project-detail"),
+    path(
+        "projects/<uuid:project_id>/onboarding/acknowledge",
+        project_onboarding_acknowledge,
+        name="project-onboarding-acknowledge",
+    ),
     path(
         "projects/<uuid:project_id>/modules",
         module_collection,
         name="module-list",
+    ),
+    path(
+        "module-presentations",
+        module_presentation_collection,
+        name="module-presentation-list",
+    ),
+    path(
+        "module-presentations/<uuid:module_id>",
+        module_presentation_detail,
+        name="module-presentation-detail",
+    ),
+    path(
+        "module-presentations/<uuid:module_id>/reorder",
+        module_presentation_reorder,
+        name="module-presentation-reorder",
     ),
     path(
         "projects/<uuid:project_id>/states",
@@ -89,7 +127,7 @@ urlpatterns = [
     path("states/<uuid:state_id>", state_detail, name="state-detail"),
     path(
         "projects/<uuid:project_id>/states/reorder",
-        StateReorderView.as_view(),
+        state_reorder,
         name="state-reorder",
     ),
     path(
@@ -104,45 +142,50 @@ urlpatterns = [
     ),
     path(
         "issue-types/<uuid:type_id>/transitions",
-        IssueTypeTransitionListView.as_view(),
+        issue_type_transition_collection,
         name="issue-type-transition-list",
     ),
     path(
         "issue-types/<uuid:type_id>/transitions/"
         "<uuid:from_state_id>/<uuid:to_state_id>",
-        IssueTypeTransitionDetailView.as_view(),
+        issue_type_transition_detail,
         name="issue-type-transition-detail",
     ),
     path(
         "issue-types/<uuid:type_id>/workflow-settings/states/<uuid:state_id>",
-        RemoveStateFromWorkflowView.as_view(),
+        remove_state_from_workflow,
         name="remove-state-from-workflow",
     ),
     path(
         "projects/<uuid:project_id>/issue-types/reorder",
-        IssueTypeReorderView.as_view(),
+        issue_type_reorder,
         name="issue-type-reorder",
     ),
-    path("work-items", WorkItemListView.as_view(), name="work-item-list"),
-    path("work-items/batch", WorkItemBatchView.as_view(), name="work-item-batch"),
+    path("work-items", work_item_collection, name="work-item-list"),
+    path("work-items/batch", work_item_batch, name="work-item-batch"),
     path(
         "projects/<uuid:project_id>/work-items",
-        WorkItemCreateView.as_view(),
+        work_item_create,
         name="work-item-create",
     ),
     path(
         "work-items/<str:issue_id>/attachments",
-        AttachmentCollectionView.as_view(),
+        work_item_attachments,
         name="work-item-attachment-list",
     ),
     path(
         "work-items/<uuid:issue_id>/reorder",
-        WorkItemReorderView.as_view(),
+        work_item_reorder,
         name="work-item-reorder",
     ),
     path(
+        "work-items/<uuid:issue_id>/workspace-tab-order",
+        workspace_tab_order,
+        name="workspace-tab-order",
+    ),
+    path(
         "work-items/<str:issue_id>",
-        WorkItemDetailView.as_view(),
+        work_item_detail,
         name="work-item-detail",
     ),
     path("providers", provider_collection, name="provider-list"),
@@ -151,12 +194,12 @@ urlpatterns = [
     path("models/<uuid:id>", model_detail, name="model-detail"),
     path(
         "projects/<uuid:project_id>/launch-bindings",
-        LaunchBindingListView.as_view(),
+        launch_binding_list,
         name="launch-binding-list",
     ),
     path(
         "issue-types/<uuid:type_id>/workflow-settings/launch-bindings/<uuid:state_id>",
-        LaunchBindingDetailView.as_view(),
+        launch_binding_detail,
         name="launch-binding-detail",
     ),
     path(

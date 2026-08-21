@@ -41,6 +41,7 @@ case "$cmd" in
     ;;
   test)
     (cd "$ROOT/surfaces/worktracker-sdk" && env -u VIRTUAL_ENV uv run --extra dev python -m pytest -q)
+    (cd "$ROOT/surfaces/worktracker-agent" && env -u VIRTUAL_ENV uv run --group dev python -m pytest -q)
     (cd "$ROOT/backend" && env -u VIRTUAL_ENV WORKTRACKER_DISABLE_AUTH=false uv run --extra dev python -m pytest -q)
     (cd "$ROOT/studio" && npm run typecheck && npm test)
     ;;

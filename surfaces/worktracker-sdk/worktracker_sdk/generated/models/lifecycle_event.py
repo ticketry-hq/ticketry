@@ -21,7 +21,7 @@ import json
 from pydantic import BaseModel, ConfigDict, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from worktracker_sdk.generated.models.agent_enum import AgentEnum
-from worktracker_sdk.generated.models.kind_enum import KindEnum
+from worktracker_sdk.generated.models.lifecycle_event_kind_enum import LifecycleEventKindEnum
 from worktracker_sdk.generated.models.source_enum import SourceEnum
 from typing import Optional, Set
 from typing_extensions import Self
@@ -33,7 +33,7 @@ class LifecycleEvent(BaseModel):
     """ # noqa: E501
     agent_run_id: StrictStr
     agent: AgentEnum
-    kind: KindEnum
+    kind: LifecycleEventKindEnum
     ts: StrictStr
     message: Optional[StrictStr] = None
     source: Optional[SourceEnum] = None

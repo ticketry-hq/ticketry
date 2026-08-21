@@ -73,14 +73,15 @@ class Issue(models.Model):
     # Fractional-index sort key for manual reorder (#626). A single global key
     # per issue (Jira/LexoRank model); each sibling group sorts only its own
     # members by it, so two issues in different groups are never compared. It
-    # carries two orders: a task's position within its planning-context column,
-    # and — for module work items — the module's position within its project's
-    # Manual module order. Reorder is the sole write path
-    # (worktracker.ranking.key_between); the migration backfills it in
-    # ``sequence_id`` order so nothing moves on first load. Module ranks are
-    # ignored entirely until ``Project.manual_module_order`` is true.
+    # carries a task's position within its planning-context column. Module
+    # ordering lives in ``ModulePresentation.rank``.
     rank = models.CharField(max_length=64, blank=True, default="", db_index=True)
     description = models.TextField(blank=True, default="")
+    # Server-owned ordering memory for the task workspace tab strip. Entries
+    # may include tabs that are temporarily hidden so reopening restores their
+    # prior position; Studio filters the projection against currently visible
+    # identities before rendering it.
+    workspace_tab_order = models.JSONField(default=list, blank=True)
     # A directed Issue↔Issue blocker relation (#624), orthogonal to the parent
     # tree. ``blocked_by`` = the issues blocking this one; the reverse
     # ``blocks`` manager (free, from related_name) = the issues this one blocks.

@@ -6,10 +6,15 @@ const api = vi.hoisted(() => ({
   createModule: vi.fn(),
   getTasks: vi.fn(),
   listIssueTypes: vi.fn(),
+  listModuleLinks: vi.fn(),
+  listModulePresentations: vi.fn(),
   listModules: vi.fn(),
   listProjects: vi.fn(),
   putProfile: vi.fn(),
   updateProject: vi.fn(),
+  updateModulePresentation: vi.fn(),
+  upsertModuleLink: vi.fn(),
+  validateModuleFolder: vi.fn(),
 }));
 
 const moduleFolderValidationApi = vi.hoisted(() => ({
@@ -34,11 +39,10 @@ import { ModulesPane } from "../app/shell/sidebar/modules/ModulesPane";
 import {
   getModulesSnapshot,
   getProjectsSnapshot,
-  registerModuleRecencyProvider,
-  resetNewlyCreatedModules,
   seedProjects,
 } from "../features/projects";
 import { useStudioStore } from "../features/projects/store";
+import { seedModuleLinks } from "../features/module-links";
 import {
   getConfigSnapshot,
   seedConfig,
@@ -66,13 +70,12 @@ function module(id: string, name: string, sequence_id: number): Module {
 const EXISTING = [module("module-b", "Bravo", 2), module("module-a", "Alpha", 1)];
 const CREATED = module(NEW_MODULE_ID, "Newest", 3);
 
-function project(manual_module_order: boolean): Project {
+function project(_manualModuleOrder: boolean): Project {
   return {
     id: PROJECT_ID,
     name: "Project",
     slug: "PRJ",
     description: "",
-    manual_module_order,
   } as Project;
 }
 
@@ -110,9 +113,7 @@ function tabStripOrder(): string[] {
 /**
  * Create "Newest" through the ordinary Add Module flow. The server answers the
  * follow-up collection read with the module in front, which is exactly what a
- * project in either ordering mode returns after this create. `initialOrder` is
- * what the project shows before the create, so a case can seed activity that
- * already rearranged the existing modules.
+ * project in either ordering mode returns after this create.
  */
 async function createNewestModule(initialOrder: string[]): Promise<void> {
   render(<ModuleCreationSurfaces />);
@@ -140,21 +141,19 @@ function expectCreationFlowIntact(): void {
   );
   // Selection and the module-folder link still follow the created module.
   expect(useClientStore.getState().selectedModuleId).toBe(NEW_MODULE_ID);
-  expect(api.putProfile.mock.calls[0][1].module_links).toEqual([
-    { module_id: NEW_MODULE_ID, path: "/repos/newest" },
-  ]);
+  expect(api.upsertModuleLink).toHaveBeenCalledWith(
+    NEW_MODULE_ID,
+    "/repos/newest",
+  );
   // The sidebar's add control stays after its module rows.
   expect(sidebarRows().at(-1)).toBe("+ Add Module");
   expect(screen.getByRole("button", { name: "+ Add Module" })).toBeVisible();
 }
 
 /** Creation never changes the project's one-way ordering decision. */
-function expectOrderingModeUnchanged(manual: boolean): void {
+function expectOrderingModeUnchanged(): void {
   expect(api.updateProject).not.toHaveBeenCalled();
-  expect(
-    getProjectsSnapshot().find((entry) => entry.id === PROJECT_ID)
-      ?.manual_module_order,
-  ).toBe(manual);
+  expect(getProjectsSnapshot().map((entry) => entry.id)).toContain(PROJECT_ID);
 }
 
 describe("module creation front-placement acceptance", () => {
@@ -184,6 +183,8 @@ describe("module creation front-placement acceptance", () => {
         { id: "module-type", name: "Module", level: "module", sort_order: 0 },
       ]);
     api.listModules.mockReset().mockResolvedValue(EXISTING);
+    api.listModulePresentations.mockReset().mockResolvedValue([]);
+    api.listModuleLinks.mockReset().mockResolvedValue([]);
     api.updateProject.mockReset();
     api.putProfile
       .mockReset()
@@ -192,13 +193,20 @@ describe("module creation front-placement acceptance", () => {
         features: getConfigSnapshot().features,
         profiles: [body],
       }));
-    registerModuleRecencyProvider(async () => ({}));
-    resetNewlyCreatedModules();
+    api.validateModuleFolder.mockReset().mockResolvedValue({ valid: true, reason: null });
+    api.upsertModuleLink.mockReset().mockImplementation(
+      async (moduleId: string, localPath: string) => ({
+        id: `link-${moduleId}`,
+        module_id: moduleId,
+        local_path: localPath,
+        created_at: "2026-08-19T00:00:00Z",
+        updated_at: "2026-08-19T00:00:00Z",
+      }),
+    );
     seedConfig({
       profiles: [
         {
           name: "Local",
-          workspace_slug: "meml",
           agent_prompt: null,
           agent_prompts: {},
           module_links: [],
@@ -208,6 +216,7 @@ describe("module creation front-placement acceptance", () => {
       ],
       recentProfileIndex: 0,
     });
+    seedModuleLinks([]);
     useStudioStore.setState({ selectedProjectId: PROJECT_ID, error: null });
     useClientStore.setState({ selectedModuleId: null, modulesCursorId: null });
     useModalStore.setState({ modalStack: [{ type: "add-module" }] });
@@ -216,68 +225,6 @@ describe("module creation front-placement acceptance", () => {
   it("[overhaul-46] leads an automatic project's module surfaces with the module just created", async () => {
     api.listProjects.mockReset().mockResolvedValue([project(false)]);
     seedProjects([project(false)]);
-    // The real integration: an automatic project whose older modules have agent
-    // activity. The server answers with the new inactive module in front, and
-    // the recency layer Studio puts over that fallback must not file it behind
-    // everything that has ever been worked in (#366).
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-    }));
-
-    await createNewestModule(["Alpha", "Bravo"]);
-
-    // Front placement holds, and recency still owns the modules behind it.
-    await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Alpha", "Bravo"]),
-    );
-    expect(tabStripOrder()).toEqual(["Newest", "Alpha", "Bravo"]);
-    expect(getModulesSnapshot(PROJECT_ID).map((entry) => entry.name)).toEqual([
-      "Newest",
-      "Alpha",
-      "Bravo",
-    ]);
-    expectOrderingModeUnchanged(false);
-    expectCreationFlowIntact();
-  });
-
-  it("[overhaul-55] hands the created module back to recency once it has activity of its own", async () => {
-    api.listProjects.mockReset().mockResolvedValue([project(false)]);
-    seedProjects([project(false)]);
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-    }));
-
-    await createNewestModule(["Alpha", "Bravo"]);
-    await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Newest", "Alpha", "Bravo"]),
-    );
-
-    // The new module is worked in, then another module is worked in after it.
-    // Front placement was only ever standing in for missing activity, so it
-    // retires here and recency alone decides the order.
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-      [NEW_MODULE_ID]: "2026-08-09T13:00:00Z",
-      "module-b": "2026-08-09T15:00:00Z",
-    }));
-    await useStudioStore.getState().reloadModules();
-
-    await waitFor(() =>
-      expect(sidebarOrder()).toEqual(["Bravo", "Newest", "Alpha"]),
-    );
-    expect(tabStripOrder()).toEqual(["Bravo", "Newest", "Alpha"]);
-    expectOrderingModeUnchanged(false);
-  });
-
-  it("[overhaul-47] leads a manual project's module surfaces without leaving Manual module order", async () => {
-    api.listProjects.mockReset().mockResolvedValue([project(true)]);
-    seedProjects([project(true)]);
-    // Activity that would pull an older module to the front of an automatic
-    // project must not disturb the rank the create just allocated.
-    registerModuleRecencyProvider(async () => ({
-      "module-a": "2026-08-09T12:00:00Z",
-    }));
-
     await createNewestModule(["Bravo", "Alpha"]);
 
     await waitFor(() =>
@@ -289,13 +236,48 @@ describe("module creation front-placement acceptance", () => {
       "Bravo",
       "Alpha",
     ]);
-    expectOrderingModeUnchanged(true);
+    expectOrderingModeUnchanged();
+    expectCreationFlowIntact();
+  });
+
+  it("[overhaul-55] adopts the server order on a later module refresh", async () => {
+    api.listProjects.mockReset().mockResolvedValue([project(false)]);
+    seedProjects([project(false)]);
+    await createNewestModule(["Bravo", "Alpha"]);
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+    );
+
+    api.listModules.mockResolvedValue([EXISTING[0], CREATED, EXISTING[1]]);
+    await useStudioStore.getState().reloadModules();
+
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["Bravo", "Newest", "Alpha"]),
+    );
+    expect(tabStripOrder()).toEqual(["Bravo", "Newest", "Alpha"]);
+    expectOrderingModeUnchanged();
+  });
+
+  it("[overhaul-47] leads a manual project's module surfaces without leaving Manual module order", async () => {
+    api.listProjects.mockReset().mockResolvedValue([project(true)]);
+    seedProjects([project(true)]);
+    await createNewestModule(["Bravo", "Alpha"]);
+
+    await waitFor(() =>
+      expect(sidebarOrder()).toEqual(["Newest", "Bravo", "Alpha"]),
+    );
+    expect(tabStripOrder()).toEqual(["Newest", "Bravo", "Alpha"]);
+    expect(getModulesSnapshot(PROJECT_ID).map((entry) => entry.name)).toEqual([
+      "Newest",
+      "Bravo",
+      "Alpha",
+    ]);
+    expectOrderingModeUnchanged();
     expectCreationFlowIntact();
 
-    // A manual read has already honored the server-owned front rank, so its
-    // local create pin must be gone. If a future version lets the project
-    // return to automatic ordering, recency must not resurrect that stale pin.
+    // A later read continues to follow the server's response exactly.
     api.listProjects.mockResolvedValue([project(false)]);
+    api.listModules.mockResolvedValue([EXISTING[1], CREATED, EXISTING[0]]);
     await useStudioStore.getState().reloadModules();
 
     await waitFor(() =>

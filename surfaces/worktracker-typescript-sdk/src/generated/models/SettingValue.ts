@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- *
+ * Decoded value envelope for the singleton keybindings setting.
  * @export
  * @interface SettingValue
  */

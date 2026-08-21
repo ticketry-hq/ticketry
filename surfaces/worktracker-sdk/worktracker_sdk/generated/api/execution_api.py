@@ -65,6 +65,7 @@ class ExecutionApi:
     ) -> GraphRunResult:
         """work_items_graph_run_create
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -138,6 +139,7 @@ class ExecutionApi:
     ) -> ApiResponse[GraphRunResult]:
         """work_items_graph_run_create
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -211,6 +213,7 @@ class ExecutionApi:
     ) -> RESTResponseType:
         """work_items_graph_run_create
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -361,6 +364,7 @@ class ExecutionApi:
     ) -> GraphResetResult:
         """work_items_graph_run_destroy
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -428,6 +432,7 @@ class ExecutionApi:
     ) -> ApiResponse[GraphResetResult]:
         """work_items_graph_run_destroy
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -495,6 +500,7 @@ class ExecutionApi:
     ) -> RESTResponseType:
         """work_items_graph_run_destroy
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -622,6 +628,7 @@ class ExecutionApi:
     ) -> Graph:
         """work_items_graph_run_retrieve
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -689,6 +696,7 @@ class ExecutionApi:
     ) -> ApiResponse[Graph]:
         """work_items_graph_run_retrieve
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -756,6 +764,7 @@ class ExecutionApi:
     ) -> RESTResponseType:
         """work_items_graph_run_retrieve
 
+        A work-item-scoped singleton graph-run campaign.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -884,6 +893,7 @@ class ExecutionApi:
     ) -> LaunchedAgentResponse:
         """work_items_launch_agent_create
 
+        Execution commands scoped to one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -924,6 +934,7 @@ class ExecutionApi:
             '201': "LaunchedAgentResponse",
             '400': "ErrorEnvelope",
             '404': "ErrorEnvelope",
+            '409': "ErrorEnvelope",
             '422': "ErrorEnvelope",
             '503': "ErrorEnvelope",
         }
@@ -958,6 +969,7 @@ class ExecutionApi:
     ) -> ApiResponse[LaunchedAgentResponse]:
         """work_items_launch_agent_create
 
+        Execution commands scoped to one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -998,6 +1010,7 @@ class ExecutionApi:
             '201': "LaunchedAgentResponse",
             '400': "ErrorEnvelope",
             '404': "ErrorEnvelope",
+            '409': "ErrorEnvelope",
             '422': "ErrorEnvelope",
             '503': "ErrorEnvelope",
         }
@@ -1032,6 +1045,7 @@ class ExecutionApi:
     ) -> RESTResponseType:
         """work_items_launch_agent_create
 
+        Execution commands scoped to one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1072,6 +1086,7 @@ class ExecutionApi:
             '201': "LaunchedAgentResponse",
             '400': "ErrorEnvelope",
             '404': "ErrorEnvelope",
+            '409': "ErrorEnvelope",
             '422': "ErrorEnvelope",
             '503': "ErrorEnvelope",
         }
@@ -1184,6 +1199,7 @@ class ExecutionApi:
     ) -> RunNowResponse:
         """work_items_run_now_create
 
+        Execution commands scoped to one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1259,6 +1275,7 @@ class ExecutionApi:
     ) -> ApiResponse[RunNowResponse]:
         """work_items_run_now_create
 
+        Execution commands scoped to one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -1334,6 +1351,7 @@ class ExecutionApi:
     ) -> RESTResponseType:
         """work_items_run_now_create
 
+        Execution commands scoped to one work item.
 
         :param issue_id: (required)
         :type issue_id: str

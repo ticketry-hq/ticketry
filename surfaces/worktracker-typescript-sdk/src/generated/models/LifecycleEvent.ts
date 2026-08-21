@@ -29,13 +29,13 @@ import {
     SourceEnumToJSON,
     SourceEnumToJSONTyped,
 } from './SourceEnum.js';
-import type { KindEnum } from './KindEnum.js';
+import type { LifecycleEventKindEnum } from './LifecycleEventKindEnum.js';
 import {
-    KindEnumFromJSON,
-    KindEnumFromJSONTyped,
-    KindEnumToJSON,
-    KindEnumToJSONTyped,
-} from './KindEnum.js';
+    LifecycleEventKindEnumFromJSON,
+    LifecycleEventKindEnumFromJSONTyped,
+    LifecycleEventKindEnumToJSON,
+    LifecycleEventKindEnumToJSONTyped,
+} from './LifecycleEventKindEnum.js';
 
 /**
  *
@@ -57,10 +57,10 @@ export interface LifecycleEvent {
     agent: AgentEnum;
     /**
      *
-     * @type {KindEnum}
+     * @type {LifecycleEventKindEnum}
      * @memberof LifecycleEvent
      */
-    kind: KindEnum;
+    kind: LifecycleEventKindEnum;
     /**
      *
      * @type {string}
@@ -112,7 +112,7 @@ export function LifecycleEventFromJSONTyped(json: any, ignoreDiscriminator: bool
 
         'agent_run_id': json['agent_run_id'],
         'agent': AgentEnumFromJSON(json['agent']),
-        'kind': KindEnumFromJSON(json['kind']),
+        'kind': LifecycleEventKindEnumFromJSON(json['kind']),
         'ts': json['ts'],
         'message': json['message'] == null ? undefined : json['message'],
         'source': json['source'] == null ? undefined : SourceEnumFromJSON(json['source']),
@@ -133,7 +133,7 @@ export function LifecycleEventToJSONTyped(value?: LifecycleEvent | null, ignoreD
 
         'agent_run_id': value['agent_run_id'],
         'agent': AgentEnumToJSON(value['agent']),
-        'kind': KindEnumToJSON(value['kind']),
+        'kind': LifecycleEventKindEnumToJSON(value['kind']),
         'ts': value['ts'],
         'message': value['message'],
         'source': SourceEnumToJSON(value['source']),

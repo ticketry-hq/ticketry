@@ -13,7 +13,6 @@ class Worktree(models.Model):
 
     id = models.CharField(primary_key=True)
     task_id = models.CharField(unique=True)
-    workspace_slug = models.CharField(null=True)
     project_id = models.CharField(null=True)
     module_id = models.CharField(null=True)
     ticket_seq = models.IntegerField(null=True)

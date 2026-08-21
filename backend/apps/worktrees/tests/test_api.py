@@ -8,10 +8,10 @@ under ``tmp_path``. Each AC maps to at least one test here.
 from __future__ import annotations
 
 import shutil
-import types
 
 import pytest
 from django.test import Client
+from django.test import override_settings
 
 from apps.worktrees import service
 
@@ -20,6 +20,7 @@ pytestmark = [
     pytest.mark.django_db(transaction=True),
     pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH"),
 ]
+
 
 class HostClient(Client):
     def get(self, path, *args, **kwargs):
@@ -36,16 +37,20 @@ client = HostClient()
 MODULE_ID = "mod-1"
 
 
+@pytest.fixture(autouse=True)
+def disable_api_auth(settings):
+    settings.WORKTRACKER_DISABLE_AUTH = True
+
+
 @pytest.fixture
 def profile(monkeypatch, repo):
-    """Stub the local profile so module 'mod-1' maps to the test repo."""
+    """Stub the typed Module link so module 'mod-1' maps to the test repo."""
 
-    fake = types.SimpleNamespace(
-        module_links=[{"module_id": MODULE_ID, "path": str(repo)}],
-        workspace_slug="meml",
+    monkeypatch.setattr(
+        "apps.worktrees.api.resolve_module_path",
+        lambda module_id: str(repo) if module_id == MODULE_ID else None,
     )
-    monkeypatch.setattr("apps.worktrees.api._current_profile", lambda: fake)
-    return fake
+    return repo
 
 
 def _create_record(task_id: str, repo) -> service.WorktreeStatus:
@@ -66,7 +71,9 @@ def _create_record(task_id: str, repo) -> service.WorktreeStatus:
 def test_get_status_none(profile, repo):
     """A task in a repo with no worktree → kind=none (offer Create)."""
 
-    resp = client.get(f"/worktrees?task_id=t1&parent_id={MODULE_ID}&module_id={MODULE_ID}")
+    resp = client.get(
+        f"/worktrees?task_id=t1&parent_id={MODULE_ID}&module_id={MODULE_ID}"
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["kind"] == "none"
@@ -75,16 +82,41 @@ def test_get_status_none(profile, repo):
     assert body["is_shared"] is False
 
 
+def test_get_status_requires_task_id():
+    resp = client.get("/worktrees")
+
+    assert resp.status_code == 400
+    assert "task_id" in resp.json()
+
+
+def test_get_status_with_malformed_module_id_returns_no_repo():
+    resp = client.get("/worktrees?task_id=t1&module_id=not-a-uuid")
+
+    assert resp.status_code == 200
+    assert resp.json()["kind"] == "no_repo"
+
+
+@override_settings(
+    WORKTRACKER_DISABLE_AUTH=False,
+    WORKTRACKER_API_TOKEN="worktree-secret",
+)
+def test_worktree_routes_use_default_api_key_authentication(profile):
+    rejected = client.get(f"/worktrees?task_id=t1&module_id={MODULE_ID}")
+    accepted = client.get(
+        f"/worktrees?task_id=t1&module_id={MODULE_ID}",
+        HTTP_X_API_KEY="worktree-secret",
+    )
+
+    assert rejected.status_code == 401
+    assert accepted.status_code == 200
+
+
 def test_get_status_no_repo(monkeypatch, tmp_path):
     """A task whose folder has no enclosing git repo → kind=no_repo."""
 
     bare = tmp_path / "not-a-repo"
     bare.mkdir()
-    fake = types.SimpleNamespace(
-        module_links=[{"module_id": MODULE_ID, "path": str(bare)}],
-        workspace_slug="meml",
-    )
-    monkeypatch.setattr("apps.worktrees.api._current_profile", lambda: fake)
+    monkeypatch.setattr("apps.worktrees.api.resolve_module_path", lambda _module_id: str(bare))
 
     resp = client.get(f"/worktrees?task_id=t1&module_id={MODULE_ID}")
     assert resp.status_code == 200
@@ -159,8 +191,7 @@ def test_create_idempotent(profile, repo):
 def test_create_no_folder(monkeypatch):
     """No configured local folder → kind=no_repo, never a 500."""
 
-    fake = types.SimpleNamespace(module_links=[], workspace_slug="meml")
-    monkeypatch.setattr("apps.worktrees.api._current_profile", lambda: fake)
+    monkeypatch.setattr("apps.worktrees.api.resolve_module_path", lambda _module_id: None)
 
     resp = client.post("/worktrees/t1/create", json={"module_id": MODULE_ID})
     assert resp.status_code == 200

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import selectors
 import signal
 import socket
@@ -13,6 +14,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -20,9 +22,15 @@ from pathlib import Path
 import httpx
 import pytest
 
+from packaging import sidecar as sidecar_entrypoint
+
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 SIDECAR = BACKEND_DIR / "packaging" / "sidecar.py"
+BACKEND_OWNER_LIVENESS = BACKEND_DIR / "packaging" / "owner_liveness.py"
+DESKTOP_OWNER_LIVENESS = (
+    BACKEND_DIR.parent / "studio" / "src-tauri" / "src" / "owner_liveness.rs"
+)
 SECRET_KEY_FILE = "django_secret_key"
 SNAPSHOT_GLOB = "state.db.pre-migration.*"
 
@@ -33,16 +41,60 @@ def _free_port() -> int:
         return listener.getsockname()[1]
 
 
-def _sidecar_command(port: int, data_dir: Path) -> list[str]:
+def _sidecar_command(
+    port: int, data_dir: Path, *, owner_fd: int | None = None
+) -> list[str]:
     binary = os.environ.get("MUXED_SIDECAR_BINARY")
     command = [binary] if binary else [sys.executable, str(SIDECAR)]
-    return [*command, "--port", str(port), "--data-dir", str(data_dir)]
+    ownership = ["--unowned"] if owner_fd is None else ["--owner-fd", str(owner_fd)]
+    return [
+        *command,
+        "--port",
+        str(port),
+        "--data-dir",
+        str(data_dir),
+        *ownership,
+    ]
 
 
 def _entrypoint_command(*args: str) -> list[str]:
     binary = os.environ.get("MUXED_SIDECAR_BINARY")
     command = [binary] if binary else [sys.executable, str(SIDECAR)]
     return [*command, *args]
+
+
+def test_desktop_and_packaged_backend_share_the_owner_descriptor_argument(tmp_path):
+    desktop_contract = DESKTOP_OWNER_LIVENESS.read_text()
+    argument_match = re.search(r'const ARGUMENT: &str = "([^"]+)";', desktop_contract)
+    assert argument_match is not None
+    argument = argument_match.group(1)
+
+    parsed = sidecar_entrypoint.parse_args(
+        ["--port", "43219", "--data-dir", str(tmp_path), argument, "19"]
+    )
+
+    assert parsed.owner_fd == 19
+
+
+def test_backend_owner_liveness_contract_has_no_heartbeat_polling_or_deadline():
+    backend_contract = BACKEND_OWNER_LIVENESS.read_text()
+
+    assert "while os.read(self.descriptor, 1)" in backend_contract
+    for forbidden in (
+        "os.write(",
+        "threading.Timer",
+        "time.sleep(",
+        "select.select(",
+        "selectors.",
+        "settimeout(",
+        "setblocking(False)",
+        "O_NONBLOCK",
+        "heartbeat",
+        "missed_heartbeat",
+        "read_deadline",
+        "owner_liveness_timeout",
+    ):
+        assert forbidden not in backend_contract
 
 
 def _isolated_sidecar_environment() -> dict[str, str]:
@@ -137,6 +189,78 @@ def test_sidecar_reports_provisioning_failure_as_migration_failure(tmp_path):
     (tmp_path / "worktracker_token").mkdir()
 
     _assert_database_startup_failure(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "ownership_args, expected_error",
+    [
+        ([], "one of the arguments --owner-fd --unowned is required"),
+        (["--owner-fd", "not-a-descriptor"], "invalid int value"),
+        (["--owner-fd", "999999"], "invalid --owner-fd"),
+    ],
+)
+def test_desktop_sidecar_rejects_missing_malformed_or_closed_owner_descriptor(
+    tmp_path, ownership_args, expected_error
+):
+    result = subprocess.run(
+        _entrypoint_command(
+            "--port",
+            "43219",
+            "--data-dir",
+            str(tmp_path),
+            *ownership_args,
+        ),
+        cwd=tmp_path,
+        env=_isolated_sidecar_environment(),
+        text=True,
+        capture_output=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert expected_error in result.stderr
+    assert '"event":"ready"' not in result.stdout
+
+
+def test_desktop_sidecar_rejects_a_pipe_write_end(tmp_path):
+    read_fd, write_fd = os.pipe()
+    try:
+        result = subprocess.run(
+            _sidecar_command(43_219, tmp_path, owner_fd=write_fd),
+            cwd=tmp_path,
+            env=_isolated_sidecar_environment(),
+            text=True,
+            capture_output=True,
+            pass_fds=(write_fd,),
+            timeout=10,
+        )
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+    assert result.returncode == 2
+    assert "is not a read end" in result.stderr
+    assert '"event":"ready"' not in result.stdout
+
+
+def test_owner_eof_before_startup_exits_without_readiness(tmp_path):
+    read_fd, write_fd = os.pipe()
+    os.close(write_fd)
+    process = subprocess.Popen(
+        _sidecar_command(43_219, tmp_path, owner_fd=read_fd),
+        cwd=tmp_path,
+        env=_isolated_sidecar_environment(),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        pass_fds=(read_fd,),
+    )
+    os.close(read_fd)
+
+    stdout, stderr = process.communicate(timeout=10)
+
+    assert process.returncode == 0, stderr
+    assert '"event":"ready"' not in stdout
 
 
 def test_sidecar_refuses_a_structurally_corrupt_database(tmp_path):
@@ -354,11 +478,11 @@ def test_packaged_hook_spool_updates_the_run_state(tmp_path):
     ) as port:
         headers = {"x-api-key": (tmp_path / "worktracker_token").read_text().strip()}
         base_url = f"http://127.0.0.1:{port}/api/work-tracker"
-        workspace_response = httpx.get(
-            f"{base_url}/workspace", headers=headers, timeout=30
+        projects_response = httpx.get(
+            f"{base_url}/projects", headers=headers, timeout=30
         )
-        assert workspace_response.status_code == 200
-        assert workspace_response.json()["slug"] == "meml"
+        assert projects_response.status_code == 200
+        assert any(project["slug"] == "meml" for project in projects_response.json())
         project_response = httpx.post(
             f"{base_url}/projects",
             headers=headers,
@@ -551,7 +675,7 @@ def test_packaged_sidecar_starts_mcp_and_completes_initialize():
         }
     )
     process = subprocess.Popen(
-        _entrypoint_command("mcp"),
+        _entrypoint_command("mcp", "--unowned"),
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -638,8 +762,7 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
         workspace_response = httpx.get(
             workspace_url, headers={"x-api-key": credential}, timeout=30
         )
-        assert workspace_response.status_code == 200
-        assert workspace_response.json()["slug"] == "meml"
+        assert workspace_response.status_code == 404
         assert (
             httpx.get(url, headers={"x-api-key": credential}, timeout=5).status_code
             == 200
@@ -649,22 +772,7 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
             headers={"x-api-key": credential},
             timeout=5,
         )
-        assert config_response.status_code == 200
-        assert config_response.json() == {
-            "recent_profile_index": 0,
-            "features": {"sidebar": False, "projects": False},
-            "profiles": [
-                {
-                    "name": "Local",
-                    "workspace_slug": "meml",
-                    "agent_prompt": None,
-                    "agent_prompts": {},
-                    "module_links": [],
-                    "recent_project_id": None,
-                    "recent_module_ids": {},
-                }
-            ],
-        }
+        assert config_response.status_code == 404
         assert (
             httpx.get(url, headers={"x-api-key": "wrong"}, timeout=5).status_code == 401
         )
@@ -710,6 +818,172 @@ def test_sidecar_migrates_authenticates_and_stops(tmp_path):
     finally:
         process.terminate()
         assert process.wait(timeout=10) == 0
+
+
+def test_owner_eof_releases_backend_resources_without_killing_tmux(tmp_path):
+    port = _free_port()
+    tmux_audit = tmp_path / "tmux-audit"
+    tmux_shim = tmp_path / "bin" / "tmux"
+    tmux_shim.parent.mkdir()
+    tmux_shim.write_text(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$TICKETRY_OWNER_DEATH_TMUX_AUDIT\"\n"
+    )
+    tmux_shim.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    environment = _isolated_sidecar_environment()
+    environment["PATH"] = f"{tmux_shim.parent}{os.pathsep}{environment.get('PATH', '')}"
+    environment["MUXED_APPROVED_TMUX_PATH"] = str(tmux_shim)
+    environment["TICKETRY_OWNER_DEATH_TMUX_AUDIT"] = str(tmux_audit)
+    read_fd, write_fd = os.pipe()
+    process = subprocess.Popen(
+        _sidecar_command(port, tmp_path, owner_fd=read_fd),
+        cwd=tmp_path,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        pass_fds=(read_fd,),
+    )
+    os.close(read_fd)
+    try:
+        _wait_for_readiness(process)
+        os.close(write_fd)
+        write_fd = -1
+        assert process.wait(timeout=10) == 0
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", port))
+        assert not tmux_audit.exists(), (
+            "owner-death ASGI shutdown must not issue a tmux command"
+        )
+    finally:
+        if write_fd >= 0:
+            os.close(write_fd)
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=10)
+
+
+def test_mcp_owner_eof_after_initialize_releases_the_listener():
+    port = _free_port()
+    read_fd, write_fd = os.pipe()
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "MCP_HOST": "127.0.0.1",
+            "MCP_PORT": str(port),
+            "MCP_TRANSPORT": "http",
+            "WORKTRACKER_BASE_URL": "http://127.0.0.1:1/api/work-tracker",
+            "WORKTRACKER_API_KEY": "owner-liveness-test",
+            "STUDIO_RUN_CONTROL_URL": "http://127.0.0.1:1",
+        }
+    )
+    process = subprocess.Popen(
+        _entrypoint_command("mcp", "--owner-fd", str(read_fd)),
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        pass_fds=(read_fd,),
+    )
+    os.close(read_fd)
+    try:
+        deadline = time.monotonic() + 10
+        response = None
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                output = process.stdout.read().decode() if process.stdout else ""
+                raise AssertionError(f"MCP exited before initialization:\n{output}")
+            try:
+                response = httpx.post(
+                    f"http://127.0.0.1:{port}/mcp",
+                    headers={"Accept": "application/json, text/event-stream"},
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2025-03-26",
+                            "capabilities": {},
+                            "clientInfo": {"name": "owner-test", "version": "1"},
+                        },
+                    },
+                    timeout=2,
+                )
+                break
+            except httpx.ConnectError:
+                time.sleep(0.05)
+        assert response is not None
+        assert response.status_code == 200
+
+        os.close(write_fd)
+        write_fd = -1
+        assert process.wait(timeout=10) in {0, -signal.SIGTERM}
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", port))
+    finally:
+        if write_fd >= 0:
+            os.close(write_fd)
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=10)
+
+
+def test_owner_eof_is_idempotent_with_sigterm(tmp_path):
+    read_fd, write_fd = os.pipe()
+    process = subprocess.Popen(
+        _sidecar_command(_free_port(), tmp_path, owner_fd=read_fd),
+        cwd=tmp_path,
+        env=_isolated_sidecar_environment(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        pass_fds=(read_fd,),
+    )
+    os.close(read_fd)
+    try:
+        _wait_for_readiness(process)
+        process.terminate()
+        os.close(write_fd)
+        write_fd = -1
+        assert process.wait(timeout=10) == 0
+    finally:
+        if write_fd >= 0:
+            os.close(write_fd)
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=10)
+
+
+def test_owner_eof_runs_asgi_lifespan_shutdown():
+    startup_ran = threading.Event()
+    shutdown_ran = threading.Event()
+
+    async def application(scope, receive, send):
+        assert scope["type"] == "lifespan"
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                startup_ran.set()
+                await send({"type": "lifespan.startup.complete"})
+            elif message["type"] == "lifespan.shutdown":
+                shutdown_ran.set()
+                await send({"type": "lifespan.shutdown.complete"})
+                return
+
+    read_fd, write_fd = os.pipe()
+
+    def close_owner_after_startup():
+        assert startup_ran.wait(timeout=5)
+        os.close(write_fd)
+
+    closer = threading.Thread(target=close_owner_after_startup)
+    closer.start()
+    with sidecar_entrypoint.OwnerLiveness(read_fd) as owner_liveness:
+        sidecar_entrypoint.serve(
+            _free_port(),
+            owner_liveness,
+            application=application,
+        )
+    closer.join(timeout=5)
+
+    assert not closer.is_alive()
+    assert shutdown_ran.is_set()
 
 
 def _wait_for_readiness(process: subprocess.Popen[bytes]) -> None:
@@ -921,14 +1195,14 @@ def test_packaged_posture_is_forced_and_secret_survives_restarts(tmp_path):
         }
 
         loopback_response = httpx.get(
-            f"http://127.0.0.1:{port}/api/config",
+            f"http://127.0.0.1:{port}/api/work-tracker/projects",
             headers=api_headers,
             timeout=5,
         )
         assert loopback_response.status_code == 200
 
         rejected_host = httpx.get(
-            f"http://127.0.0.1:{port}/api/config",
+            f"http://127.0.0.1:{port}/api/work-tracker/projects",
             headers={**api_headers, "Host": "untrusted.invalid"},
             timeout=5,
         )

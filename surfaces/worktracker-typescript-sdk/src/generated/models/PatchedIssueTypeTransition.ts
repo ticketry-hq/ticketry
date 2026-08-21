@@ -16,53 +16,31 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * One transition row plus the revision guard carried by write bodies.
+ * The mutable transition field plus its mandatory revision guard.
  * @export
  * @interface PatchedIssueTypeTransition
  */
 export interface PatchedIssueTypeTransition {
     /**
      *
-     * @type {number}
-     * @memberof PatchedIssueTypeTransition
-     */
-    readonly id?: number;
-    /**
-     *
-     * @type {string}
-     * @memberof PatchedIssueTypeTransition
-     */
-    readonly issue_type?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof PatchedIssueTypeTransition
-     */
-    from_state?: string;
-    /**
-     *
-     * @type {string}
-     * @memberof PatchedIssueTypeTransition
-     */
-    to_state?: string;
-    /**
-     *
      * @type {boolean}
      * @memberof PatchedIssueTypeTransition
      */
-    agent_allowed?: boolean;
+    agent_allowed: boolean;
     /**
      *
      * @type {number}
      * @memberof PatchedIssueTypeTransition
      */
-    workflow_revision?: number;
+    workflow_revision: number;
 }
 
 /**
  * Check if a given object implements the PatchedIssueTypeTransition interface.
  */
 export function instanceOfPatchedIssueTypeTransition(value: object): value is PatchedIssueTypeTransition {
+    if (!('agent_allowed' in value) || value['agent_allowed'] === undefined) return false;
+    if (!('workflow_revision' in value) || value['workflow_revision'] === undefined) return false;
     return true;
 }
 
@@ -76,12 +54,8 @@ export function PatchedIssueTypeTransitionFromJSONTyped(json: any, ignoreDiscrim
     }
     return {
 
-        'id': json['id'] == null ? undefined : json['id'],
-        'issue_type': json['issue_type'] == null ? undefined : json['issue_type'],
-        'from_state': json['from_state'] == null ? undefined : json['from_state'],
-        'to_state': json['to_state'] == null ? undefined : json['to_state'],
-        'agent_allowed': json['agent_allowed'] == null ? undefined : json['agent_allowed'],
-        'workflow_revision': json['workflow_revision'] == null ? undefined : json['workflow_revision'],
+        'agent_allowed': json['agent_allowed'],
+        'workflow_revision': json['workflow_revision'],
     };
 }
 
@@ -89,15 +63,13 @@ export function PatchedIssueTypeTransitionToJSON(json: any): PatchedIssueTypeTra
     return PatchedIssueTypeTransitionToJSONTyped(json, false);
 }
 
-export function PatchedIssueTypeTransitionToJSONTyped(value?: Omit<PatchedIssueTypeTransition, 'id'|'issue_type'> | null, ignoreDiscriminator: boolean = false): any {
+export function PatchedIssueTypeTransitionToJSONTyped(value?: PatchedIssueTypeTransition | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'from_state': value['from_state'],
-        'to_state': value['to_state'],
         'agent_allowed': value['agent_allowed'],
         'workflow_revision': value['workflow_revision'],
     };

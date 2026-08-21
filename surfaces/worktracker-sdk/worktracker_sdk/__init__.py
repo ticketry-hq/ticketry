@@ -11,7 +11,6 @@ from worktracker_sdk.generated import (
     StatesApi,
     WorkflowsApi,
     WorkItemsApi,
-    WorkspaceApi,
 )
 from worktracker_sdk.root_api import (
     DependencyGraphNodeOut,
@@ -46,5 +45,4 @@ __all__ = [
     "StatesApi",
     "WorkflowsApi",
     "WorkItemsApi",
-    "WorkspaceApi",
 ]

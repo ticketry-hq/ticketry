@@ -14,3 +14,4 @@ export {
   useSubtreeRunCapabilitiesQuery,
 } from "./queries";
 export { useSettingsStore } from "./store";
+export { visibleIssueTypes } from "./visibleIssueTypes";

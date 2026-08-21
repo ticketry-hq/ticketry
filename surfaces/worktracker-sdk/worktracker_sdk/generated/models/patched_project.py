@@ -28,15 +28,14 @@ from pydantic_core import to_jsonable_python
 
 class PatchedProject(BaseModel):
     """
-    The single project shape; workspace selection is create-only input.
+    The installation-wide project shape.
     """ # noqa: E501
     id: Optional[UUID] = None
     name: Optional[Annotated[str, Field(strict=True, max_length=255)]] = None
     slug: Optional[Annotated[str, Field(strict=True, max_length=64)]] = None
     description: Optional[StrictStr] = None
-    workspace_slug: Optional[Annotated[str, Field(strict=True, max_length=64)]] = None
-    manual_module_order: Optional[StrictBool] = None
-    __properties: ClassVar[List[str]] = ["id", "name", "slug", "description", "workspace_slug", "manual_module_order"]
+    onboarding_required: Optional[StrictBool] = None
+    __properties: ClassVar[List[str]] = ["id", "name", "slug", "description", "onboarding_required"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -73,7 +72,7 @@ class PatchedProject(BaseModel):
         """
         excluded_fields: Set[str] = set([
             "id",
-            "manual_module_order",
+            "onboarding_required",
         ])
 
         _dict = self.model_dump(
@@ -97,7 +96,6 @@ class PatchedProject(BaseModel):
             "name": obj.get("name"),
             "slug": obj.get("slug"),
             "description": obj.get("description"),
-            "workspace_slug": obj.get("workspace_slug"),
-            "manual_module_order": obj.get("manual_module_order")
+            "onboarding_required": obj.get("onboarding_required")
         })
         return _obj

@@ -9,7 +9,6 @@ export interface ModuleLink {
 
 export interface Profile {
   name: string;
-  workspace_slug: string;
   agent_prompt: string | null;
   agent_prompts: Record<string, string>;
   module_links: ModuleLink[];
@@ -60,14 +59,5 @@ export interface RunningAgentCountsPayload {
 }
 
 export type AgentName = "claude" | "agy" | "codex" | "gemini";
-
-export interface ConfigPayload {
-  recent_profile_index: number | null;
-  profiles: Profile[];
-  features: {
-    sidebar: boolean;
-    projects: boolean;
-  };
-}
 
 export type TaskId = string;

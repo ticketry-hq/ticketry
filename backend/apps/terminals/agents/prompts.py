@@ -10,7 +10,6 @@ import re
 from typing import Optional
 
 from apps.documents.design_docs import module_dir_name
-from apps.settings_store.config import Profile, config, module_link_path
 from studio_server.contracts import ModuleSummary, TaskSummary
 
 
@@ -24,6 +23,12 @@ _DESIGN_DOC_VISUAL_CONTRACT = (
     "numbered sequence steps. Keep a requirement-trace table that highlights its "
     "matching diagram nodes, a color-coded file change-map tree, and a closing green "
     "acceptance-signal callout."
+)
+
+_SINGLE_PROJECT_MCP_GUIDANCE = (
+    "Ticketry has one installation project in this version. Use the Project ID "
+    "above for every project-scoped MCP call. Do not list projects, ask the user "
+    "to choose one, or look for another project."
 )
 
 
@@ -46,8 +51,8 @@ def build_context_prompt(
     module_id: Optional[str] = None,
     additional_prompt: Optional[str] = None,
     design_dir: Optional[str] = None,
-    profile: Optional[Profile] = None,
     workflow_prompt: Optional[str] = None,
+    resolved_module_folder: Optional[str] = None,
 ) -> str:
     """Build a context prompt string from a TaskSummary."""
     name = task.name or "Untitled"
@@ -62,18 +67,9 @@ def build_context_prompt(
     work_item_id = task.id
     seq = task.sequence_id
     ticket_ref = f" (ticket #{seq})" if seq else ""
-    # A launch resolves its profile immediately before building the prompt.
-    # Prefer that fresh profile over the process-start configuration snapshot,
-    # whose prompt overrides may be stale after a Settings save.
-    active_profile = profile if profile is not None else config.current_profile
-    workspace_slug = getattr(active_profile, "workspace_slug", "")
-    module_folder = ""
-    if active_profile and module_id:
-        module_folder = module_link_path(active_profile, module_id) or ""
+    module_folder = resolved_module_folder or ""
 
-    # A selected workflow prompt is opaque project-owned guidance. Profile
-    # prompt maps are retained only as upgrade input and never participate in
-    # launch-time resolution.
+    # A selected workflow prompt is opaque project-owned guidance.
     prompt_prefix = ""
     state_prompt = workflow_prompt
 
@@ -86,7 +82,6 @@ def build_context_prompt(
         f"Task: {name}\n"
         f"Work Item ID: {work_item_id}\n"
         f"Project ID: {project_id}\n"
-        f"Workspace Slug: {workspace_slug}\n"
         f"Module ID: {module_id or ''}\n"
         f"Local Module Folder: {module_folder or ''}\n"
         f"State: {state_name}\n"
@@ -101,14 +96,16 @@ def build_context_prompt(
     if design_dir and state_name.lower() != "ideas":
         final_prompt += _design_dir_block(design_dir)
 
-    final_prompt += "Available tools: WorkTracker MCP server; coding agent status tool."
+    final_prompt += (
+        "Available tools: WorkTracker MCP server; coding agent status tool.\n"
+        f"{_SINGLE_PROJECT_MCP_GUIDANCE}"
+    )
     return final_prompt
 
 
 def build_planning_context_prompt(
     module: ModuleSummary,
     tasks: list[TaskSummary],
-    workspace_slug: str,
     project_id: str,
     folder: Optional[str],
     design_dir: Optional[str] = None,
@@ -139,11 +136,11 @@ def build_planning_context_prompt(
     return (
         f"You are a planning assistant helping design new features for the '{module.name}' module.\n\n"
         f"Context:\n"
-        f"  Workspace: {workspace_slug}\n"
         f"  Project ID: {project_id}\n"
         f"  Module ID: {module.id}\n"
         f"  Local Codebase: {folder or '(not set)'}\n\n"
         f"Existing tasks in this module:\n{tasks_summary}\n\n"
+        f"{_SINGLE_PROJECT_MCP_GUIDANCE}\n\n"
         f"Your job:\n"
         f"  1. Start by asking the user what they want to build.\n"
         f"  2. Use the WorkTracker MCP server to look up related tasks in the module or project "
@@ -162,7 +159,6 @@ def build_planning_context_prompt(
 
 def build_instant_change_prompt(
     module: ModuleSummary,
-    workspace_slug: str,
     project_id: str,
     folder: Optional[str],
     user_input: str,
@@ -173,7 +169,6 @@ def build_instant_change_prompt(
     """Build a prompt for a small, instant change inside a module.
 
     :param module: Module the change targets.
-    :param workspace_slug: WorkTracker workspace slug.
     :param project_id: WorkTracker project ID.
     :param folder: Local codebase folder for the module, if set.
     :param user_input: The user's free-form change request.
@@ -246,7 +241,6 @@ def build_instant_change_prompt(
     return (
         f"You are an agent making a small, instant change in the '{module.name}' module.\n\n"
         f"Context:\n"
-        f"  Workspace: {workspace_slug}\n"
         f"  Project ID:  {project_id}\n"
         f"  Module ID:   {module.id}\n"
         f"  Local Codebase: {folder or '(not set)'}\n\n"
@@ -263,7 +257,7 @@ def build_doc_chat_prompt(
     doc_rel_path: str,
     module_id: Optional[str] = None,
     user_input: Optional[str] = None,
-    profile: Optional[Profile] = None,
+    resolved_module_folder: Optional[str] = None,
 ) -> str:
     """Prompt for a doc-scoped overlay agent editing one generated doc (#625).
 
@@ -280,13 +274,10 @@ def build_doc_chat_prompt(
         directory (which is the run's working directory).
     :param module_id: module whose local folder is named for orientation.
     :param user_input: the user's requested change, if supplied on summon.
-    :param profile: freshly selected launch profile; the process snapshot is
-        used only for direct callers that do not supply one.
     :return: the doc-chat prompt string.
     """
 
-    active_profile = profile if profile is not None else config.current_profile
-    module_folder = module_link_path(active_profile, module_id) or ""
+    module_folder = resolved_module_folder or ""
 
     prompt = (
         f"You are editing one generated design document in place.\n\n"

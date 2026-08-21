@@ -26,13 +26,13 @@ export interface ReplacedViewer {
      * @type {string}
      * @memberof ReplacedViewer
      */
-    viewer_id: string;
+    readonly viewer_id: string;
     /**
      *
      * @type {string}
      * @memberof ReplacedViewer
      */
-    transport: string;
+    readonly transport: string;
 }
 
 /**
@@ -63,14 +63,12 @@ export function ReplacedViewerToJSON(json: any): ReplacedViewer {
     return ReplacedViewerToJSONTyped(json, false);
 }
 
-export function ReplacedViewerToJSONTyped(value?: ReplacedViewer | null, ignoreDiscriminator: boolean = false): any {
+export function ReplacedViewerToJSONTyped(value?: Omit<ReplacedViewer, 'viewer_id'|'transport'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'viewer_id': value['viewer_id'],
-        'transport': value['transport'],
     };
 }

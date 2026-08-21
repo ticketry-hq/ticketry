@@ -4,8 +4,8 @@ import { useModalStore, type StandardModalType } from "../../../app/modal/modalS
 import {
   getModuleFolder,
   setModuleFolder,
-  useConfig,
-} from "../../studio/stores/configStore";
+  useModuleLinks,
+} from "../../module-links";
 import { MODAL_ACTIONS } from "../../../app/navigation/keymapRegistry";
 import { studioRuntime, type StudioRuntime } from "../../../runtime";
 import {
@@ -30,22 +30,19 @@ export function ModuleFolder({
   payload?: ModuleFolderPayload;
   runtime?: StudioRuntime;
 }) {
-  const { profiles, recentProfileIndex } = useConfig();
+  const moduleLinks = useModuleLinks();
   const popModal = useModalStore((s) => s.popModal);
   const pushModal = useModalStore((s) => s.pushModal);
 
-  const profile =
-    recentProfileIndex !== null ? profiles[recentProfileIndex] : null;
   const moduleId = payload?.moduleId;
-  const initial = moduleId ? (getModuleFolder(profile, moduleId) ?? "") : "";
+  const initial = moduleId ? (getModuleFolder(moduleId) ?? "") : "";
 
   const [savedValue, setSavedValue] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const saveInFlight = useRef(false);
   const selection = useModuleFolderSelection({
-    profiles,
-    recentProfileIndex,
+    moduleLinks,
     initialValue: initial,
     runtime,
   });

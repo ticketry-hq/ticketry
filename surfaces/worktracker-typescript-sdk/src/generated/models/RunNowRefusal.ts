@@ -31,7 +31,7 @@ import {
 } from './CommittedState.js';
 
 /**
- *
+ * Stable partial-outcome envelope returned by every Run Now refusal.
  * @export
  * @interface RunNowRefusal
  */

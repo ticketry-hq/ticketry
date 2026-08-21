@@ -6,6 +6,23 @@ describe("clientStore", () => {
     vi.resetModules();
   });
 
+  it("restores and persists Modules sidebar visibility", async () => {
+    localStorage.setItem("studio.sidebarVisible:v1", "false");
+    localStorage.setItem("studio.sidebarVisible:v2", "true");
+    const { useClientStore } = await import("../state/clientStore");
+
+    expect(useClientStore.getState().sidebarVisible).toBe(true);
+    expect(localStorage.getItem("studio.sidebarVisible:v1")).toBe("false");
+
+    useClientStore.getState().toggleSidebar();
+    expect(useClientStore.getState().sidebarVisible).toBe(false);
+    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("false");
+
+    useClientStore.getState().setSidebarVisible(true);
+    expect(useClientStore.getState().sidebarVisible).toBe(true);
+    expect(localStorage.getItem("studio.sidebarVisible:v2")).toBe("true");
+  });
+
   it("migrates legacy collapsed state names to live ids once", async () => {
     localStorage.setItem(
       "studio.collapsedStates:v1",

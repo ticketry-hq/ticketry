@@ -20,7 +20,7 @@ import {
   createNavigationContext,
   type NavigationContext,
 } from "./navigationContext";
-import { getModulesSnapshot } from "../../features/projects";
+import { getVisibleModulesSnapshot } from "../../features/module-tabs";
 import { useStudioStore } from "../../features/projects/store";
 import { useClientStore } from "../../state/clientStore";
 import { startRunNowForSelectedItem } from "../../features/work-items";
@@ -40,12 +40,20 @@ export function routeModulePositionNavigation(
   const position = Number(actionId.slice(MODULE_POSITION_ACTION_PREFIX.length));
   if (!Number.isInteger(position) || position < 1 || position > 10) return false;
 
+  const selected = selectModuleAtPosition(position);
+  if (selected) event.preventDefault();
+  return selected;
+}
+
+/** Selects the module tab at a one-based position for keyboard entry points. */
+export function selectModuleAtPosition(position: number): boolean {
+  if (!Number.isInteger(position) || position < 1 || position > 10) return false;
+
   const projectId = useStudioStore.getState().selectedProjectId;
   const ui = useClientStore.getState();
-  const module = getModulesSnapshot(projectId)[position - 1];
+  const module = getVisibleModulesSnapshot(projectId)[position - 1];
   if (!module || module.id === ui.selectedModuleId) return false;
 
-  event.preventDefault();
   void ui.selectModule(module.id);
   return true;
 }

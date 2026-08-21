@@ -41,6 +41,8 @@ def test_composite_write_rejects_reasoning_not_permitted_for_model(
         {
             "workflow_revision": 0,
             "prompt": "Implement the selected work item.",
+            "required_skills": ["to-spec"],
+            "entry_skill": "to-spec",
             "model": str(model.id),
             "reasoning": str(rejected.id),
         },
@@ -107,6 +109,8 @@ def test_composite_crud_returns_the_row_and_persists_ordinary_flag_fields(
         {
             "workflow_revision": 0,
             "prompt": "Implement the selected work item.",
+            "required_skills": ["to-spec"],
+            "entry_skill": "to-spec",
             "model": str(model.id),
             "reasoning": str(allowed.id),
             "auto_start": True,
@@ -120,6 +124,7 @@ def test_composite_crud_returns_the_row_and_persists_ordinary_flag_fields(
     assert created.json()["state"] == str(state.id)
     assert created.json()["model"] == str(model.id)
     assert created.json()["reasoning"] == str(allowed.id)
+    assert created.json()["entry_skill"] == "to-spec"
     assert created.json()["auto_start"] is True
     assert created.json()["subtree_run_enabled"] is True
     assert "launch_bindings" not in created.json()
@@ -137,6 +142,31 @@ def test_composite_crud_returns_the_row_and_persists_ordinary_flag_fields(
         headers=auth,
     )
     assert deleted.status_code == 204
+    assert not LaunchBinding.objects.exists()
+
+
+def test_composite_write_rejects_entry_skill_outside_required_skills(
+    client, auth, task_type, state
+):
+    url = (
+        f"/api/work-tracker/issue-types/{task_type.id}/workflow-settings/"
+        f"launch-bindings/{state.id}"
+    )
+
+    response = _put(
+        client,
+        url,
+        {
+            "workflow_revision": 0,
+            "prompt": "Write the specification.",
+            "required_skills": ["to-spec"],
+            "entry_skill": "to-tickets",
+        },
+        auth,
+    )
+
+    assert response.status_code == 400
+    assert "entry_skill" in response.json()
     assert not LaunchBinding.objects.exists()
 
 
@@ -207,3 +237,129 @@ def test_global_default_write_validates_the_catalog_triple(client, auth):
         headers=auth,
     )
     assert valid.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("model_name", "reasoning_name"),
+    (
+        ("gpt-5.6-sol", "ultra"),
+        ("gpt-5.6-terra", "low"),
+        ("gpt-5.6-luna", "max"),
+        ("gpt-5.6-luna", None),
+    ),
+)
+def test_global_default_accepts_codex_5_6_catalog_triples(
+    client, auth, model_name, reasoning_name
+):
+    catalog = {
+        "activated_providers": ["codex"],
+        "global_default": {
+            "provider": "codex",
+            "model": model_name,
+            "reasoning": reasoning_name,
+        },
+    }
+
+    response = client.put(
+        "/api/settings/provider-catalog",
+        data=json.dumps({"value": catalog}),
+        content_type="application/json",
+        headers=auth,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"value": catalog}
+    assert client.get("/api/settings/provider-catalog", headers=auth).json() == {
+        "value": catalog
+    }
+
+
+def test_global_default_rejects_luna_with_ultra(client, auth):
+    response = client.put(
+        "/api/settings/provider-catalog",
+        data=json.dumps(
+            {
+                "value": {
+                    "activated_providers": ["codex"],
+                    "global_default": {
+                        "provider": "codex",
+                        "model": "gpt-5.6-luna",
+                        "reasoning": "ultra",
+                    },
+                }
+            }
+        ),
+        content_type="application/json",
+        headers=auth,
+    )
+
+    assert response.status_code == 422
+    assert "not permitted" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("model_name", "reasoning_name"),
+    (
+        ("gpt-5.6-sol", "ultra"),
+        ("gpt-5.6-terra", "low"),
+        ("gpt-5.6-luna", "max"),
+        ("gpt-5.6-luna", None),
+    ),
+)
+def test_launch_binding_accepts_codex_5_6_catalog_triples(
+    client, auth, task_type, state, model_name, reasoning_name
+):
+    model = AgentModel.objects.get(provider__slug="codex", name=model_name)
+    reasoning = (
+        ReasoningLevel.objects.get(name=reasoning_name)
+        if reasoning_name is not None
+        else None
+    )
+    url = (
+        f"/api/work-tracker/issue-types/{task_type.id}/workflow-settings/"
+        f"launch-bindings/{state.id}"
+    )
+
+    response = _put(
+        client,
+        url,
+        {
+            "workflow_revision": 0,
+            "prompt": "Implement the selected work item.",
+            "model": str(model.id),
+            "reasoning": str(reasoning.id) if reasoning else None,
+        },
+        auth,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["model"] == str(model.id)
+    assert response.json()["reasoning"] == (str(reasoning.id) if reasoning else None)
+    persisted = LaunchBinding.objects.get()
+    assert persisted.model_id == model.id
+    assert persisted.reasoning_id == (reasoning.id if reasoning else None)
+
+
+def test_launch_binding_rejects_luna_with_ultra(client, auth, task_type, state):
+    model = AgentModel.objects.get(provider__slug="codex", name="gpt-5.6-luna")
+    ultra = ReasoningLevel.objects.get(name="ultra")
+    url = (
+        f"/api/work-tracker/issue-types/{task_type.id}/workflow-settings/"
+        f"launch-bindings/{state.id}"
+    )
+
+    response = _put(
+        client,
+        url,
+        {
+            "workflow_revision": 0,
+            "prompt": "Implement the selected work item.",
+            "model": str(model.id),
+            "reasoning": str(ultra.id),
+        },
+        auth,
+    )
+
+    assert response.status_code == 400
+    assert "not permitted" in str(response.json()["reasoning"])
+    assert not LaunchBinding.objects.exists()

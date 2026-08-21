@@ -16,8 +16,9 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import StrictBytes, StrictInt, StrictStr
+from pydantic import Field, StrictBytes, StrictStr
 from typing import Optional, Tuple, Union
+from typing_extensions import Annotated
 from worktracker_sdk.generated.models.digest import Digest
 from worktracker_sdk.generated.models.document_list import DocumentList
 from worktracker_sdk.generated.models.fs_entries import FsEntries
@@ -61,6 +62,7 @@ class DocumentsApi:
     ) -> bytes:
         """docs_retrieve
 
+        List, update, and serve registered documents.
 
         :param asset_path: (required)
         :type asset_path: str
@@ -132,6 +134,7 @@ class DocumentsApi:
     ) -> ApiResponse[bytes]:
         """docs_retrieve
 
+        List, update, and serve registered documents.
 
         :param asset_path: (required)
         :type asset_path: str
@@ -203,6 +206,7 @@ class DocumentsApi:
     ) -> RESTResponseType:
         """docs_retrieve
 
+        List, update, and serve registered documents.
 
         :param asset_path: (required)
         :type asset_path: str
@@ -337,6 +341,7 @@ class DocumentsApi:
     ) -> Digest:
         """docs_update
 
+        List, update, and serve registered documents.
 
         :param doc_id: (required)
         :type doc_id: str
@@ -376,7 +381,7 @@ class DocumentsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "Digest",
             '404': "ErrorEnvelope",
-            '409': "ErrorEnvelope",
+            '409': "DocumentConflict",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -409,6 +414,7 @@ class DocumentsApi:
     ) -> ApiResponse[Digest]:
         """docs_update
 
+        List, update, and serve registered documents.
 
         :param doc_id: (required)
         :type doc_id: str
@@ -448,7 +454,7 @@ class DocumentsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "Digest",
             '404': "ErrorEnvelope",
-            '409': "ErrorEnvelope",
+            '409': "DocumentConflict",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -481,6 +487,7 @@ class DocumentsApi:
     ) -> RESTResponseType:
         """docs_update
 
+        List, update, and serve registered documents.
 
         :param doc_id: (required)
         :type doc_id: str
@@ -520,7 +527,7 @@ class DocumentsApi:
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "Digest",
             '404': "ErrorEnvelope",
-            '409': "ErrorEnvelope",
+            '409': "DocumentConflict",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -614,11 +621,10 @@ class DocumentsApi:
     @validate_call
     def documents_retrieve(
         self,
-        module_id: Optional[StrictStr] = None,
-        profile: Optional[StrictInt] = None,
-        project_id: Optional[StrictStr] = None,
-        scope: Optional[StrictStr] = None,
-        task_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        project_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        scope: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        task_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -634,11 +640,10 @@ class DocumentsApi:
     ) -> DocumentList:
         """documents_retrieve
 
+        List, update, and serve registered documents.
 
         :param module_id:
         :type module_id: str
-        :param profile:
-        :type profile: int
         :param project_id:
         :type project_id: str
         :param scope:
@@ -669,7 +674,6 @@ class DocumentsApi:
 
         _param = self._documents_retrieve_serialize(
             module_id=module_id,
-            profile=profile,
             project_id=project_id,
             scope=scope,
             task_id=task_id,
@@ -697,11 +701,10 @@ class DocumentsApi:
     @validate_call
     def documents_retrieve_with_http_info(
         self,
-        module_id: Optional[StrictStr] = None,
-        profile: Optional[StrictInt] = None,
-        project_id: Optional[StrictStr] = None,
-        scope: Optional[StrictStr] = None,
-        task_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        project_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        scope: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        task_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -717,11 +720,10 @@ class DocumentsApi:
     ) -> ApiResponse[DocumentList]:
         """documents_retrieve
 
+        List, update, and serve registered documents.
 
         :param module_id:
         :type module_id: str
-        :param profile:
-        :type profile: int
         :param project_id:
         :type project_id: str
         :param scope:
@@ -752,7 +754,6 @@ class DocumentsApi:
 
         _param = self._documents_retrieve_serialize(
             module_id=module_id,
-            profile=profile,
             project_id=project_id,
             scope=scope,
             task_id=task_id,
@@ -780,11 +781,10 @@ class DocumentsApi:
     @validate_call
     def documents_retrieve_without_preload_content(
         self,
-        module_id: Optional[StrictStr] = None,
-        profile: Optional[StrictInt] = None,
-        project_id: Optional[StrictStr] = None,
-        scope: Optional[StrictStr] = None,
-        task_id: Optional[StrictStr] = None,
+        module_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        project_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        scope: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
+        task_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -800,11 +800,10 @@ class DocumentsApi:
     ) -> RESTResponseType:
         """documents_retrieve
 
+        List, update, and serve registered documents.
 
         :param module_id:
         :type module_id: str
-        :param profile:
-        :type profile: int
         :param project_id:
         :type project_id: str
         :param scope:
@@ -835,7 +834,6 @@ class DocumentsApi:
 
         _param = self._documents_retrieve_serialize(
             module_id=module_id,
-            profile=profile,
             project_id=project_id,
             scope=scope,
             task_id=task_id,
@@ -859,7 +857,6 @@ class DocumentsApi:
     def _documents_retrieve_serialize(
         self,
         module_id,
-        profile,
         project_id,
         scope,
         task_id,
@@ -888,10 +885,6 @@ class DocumentsApi:
         if module_id is not None:
 
             _query_params.append(('module_id', module_id))
-
-        if profile is not None:
-
-            _query_params.append(('profile', profile))
 
         if project_id is not None:
 
@@ -961,6 +954,7 @@ class DocumentsApi:
     ) -> FsEntries:
         """fs_complete_retrieve
 
+        List, update, and serve registered documents.
 
         :param path:
         :type path: str
@@ -1027,6 +1021,7 @@ class DocumentsApi:
     ) -> ApiResponse[FsEntries]:
         """fs_complete_retrieve
 
+        List, update, and serve registered documents.
 
         :param path:
         :type path: str
@@ -1093,6 +1088,7 @@ class DocumentsApi:
     ) -> RESTResponseType:
         """fs_complete_retrieve
 
+        List, update, and serve registered documents.
 
         :param path:
         :type path: str

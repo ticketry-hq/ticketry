@@ -54,6 +54,7 @@ class SystemApi:
     ) -> Health:
         """healthz_retrieve
 
+        Process-level system operations with no persistence dependency.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -116,6 +117,7 @@ class SystemApi:
     ) -> ApiResponse[Health]:
         """healthz_retrieve
 
+        Process-level system operations with no persistence dependency.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -178,6 +180,7 @@ class SystemApi:
     ) -> RESTResponseType:
         """healthz_retrieve
 
+        Process-level system operations with no persistence dependency.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request

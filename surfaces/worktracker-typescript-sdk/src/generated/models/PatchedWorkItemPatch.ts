@@ -24,7 +24,7 @@ import {
 } from './OriginEnum.js';
 
 /**
- * Fields supported by the domain service's guarded partial update.
+ * Model-derived allowlist for the guarded work-item partial update.
  * @export
  * @interface PatchedWorkItemPatch
  */

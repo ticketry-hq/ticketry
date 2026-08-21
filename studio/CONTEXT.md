@@ -119,10 +119,22 @@ _Avoid_: Repo path, module directory, worktree, project folder
 
 **Module tab strip**:
 The single module switcher row spanning the Stories and Workspace panes, listing
-every module of the active project in the canonical module order, with module
-creation at its leftmost point. Selecting a tab is the same act as selecting
-that module anywhere else.
-_Avoid_: Pane header tabs, open-tab set, browser-style tabs
+the profile's visible modules of the active project in the canonical module
+order, with module creation at its leftmost point. Selecting a tab is the same
+act as selecting that module anywhere else. The strip may be empty when every
+tab has been hidden.
+_Avoid_: Pane header tabs, browser-style tabs
+
+**Hidden module tab**:
+A module removed from the module tab strip via the tab's close affordance,
+without deleting or archiving the module. The module keeps its place in the
+canonical module order, stays in the Modules sidebar (where its module
+activity badge still appears), and selecting it in the sidebar restores its
+tab and selects it. The hidden set is installation data stored by the backend
+and shared by every client of the installation, and it is never undone by
+agent activity. Keyboard position shortcuts count visible tabs only, so a
+hidden module has no position shortcut.
+_Avoid_: Closed module, archived module, removed module
 
 **Canonical module order**:
 The one project-wide module order every module surface — sidebar, tab strip,
@@ -140,6 +152,14 @@ first module drag, seeded from the order visible at that moment. It belongs to
 the project, not the user, and once set it is never reshuffled by agent
 activity.
 _Avoid_: Pinned modules, per-user module order, sort preference
+
+**Module jump badge**:
+A small keycap hint shown inline on a module tab while the Command key is held
+alone, naming the chord that jumps to that module. It appears only where the
+module jump bindings themselves are available, disappears the moment another
+modifier joins, the key is released, or the window loses focus, and is never
+focusable or interactive.
+_Avoid_: Shortcut overlay, hint bar, command indicator
 
 **Module activity badge**:
 The per-module aggregate count of non-terminal agent runs — task-bound and
@@ -264,17 +284,15 @@ share ports, origins, or state.
 _Avoid_: Dev window, second app copy, port profile
 
 **Edit view**:
-The two-column Studio layout — Stories pane beside the Task workspace — used
-whenever installation configuration disables the sidebar, and shown when a
-configured sidebar is hidden by the user's visibility preference. It has its
+The two-column Studio layout with the Stories pane beside the Task workspace,
+shown when the user's persisted layout choice hides the sidebar. It has its
 own modal, three-zone keyboard model.
 _Avoid_: Focused view, zen mode, two-pane mode
 
 **Full sidebar view**:
-The Studio layout that adds the installation-configured sidebar panes beside
-the Edit view work area and uses pane-focus navigation. It is available only
-when installation configuration enables the sidebar; the user's visibility
-preference then chooses between this layout and the Edit view.
+The Studio layout that adds the Modules sidebar beside the Edit view work area
+and uses pane-focus navigation. It is shown when the user's persisted layout
+choice shows the sidebar.
 _Avoid_: Default view, navigation mode, three-pane mode
 
 **Navigation zone**:
@@ -299,6 +317,14 @@ only chord Studio intercepts is Cmd+Esc — which leaves typing mode and returns
 to the un-engaged active tab body, still the focused navigation zone. Left then
 returns to the Stories list.
 _Avoid_: Insert mode, terminal focus, raw input mode
+
+**Workspace tab order**:
+The arrangement of a work item's Task workspace tabs — Details, documents and
+terminal tabs alike — as set by dragging tabs horizontally within the strip.
+Stored per work item and shared by every client of the installation. New tabs
+join at the right end; a reopened tab returns to its remembered place. The
+live-terminal cycle visits terminals in this order.
+_Avoid_: Tab order (unqualified), launch order (that's only the default)
 
 **Active tab**:
 The tab each ticket remembers as last-selected in its Task workspace. Entering

@@ -4,6 +4,7 @@ import { queryClient } from "../../shared/query/queryClient";
 import { queryKeys } from "../../shared/query/keys";
 import { loadStates, reloadStates } from "../../shared/query/stateCatalog";
 import type { IssueType, SubtreeRunCapabilityMap } from "../../shared/api/types";
+import { visibleIssueTypes } from "./visibleIssueTypes";
 
 // Project settings server state: the issue-type catalog and the subtree-run
 // capability map. Workflow states are NOT duplicated here — they live in the
@@ -19,7 +20,7 @@ const capabilitiesKey = (projectId: string) =>
   ["settings", projectId, "subtree-run"] as const;
 
 async function fetchIssueTypes(projectId: string): Promise<IssueType[]> {
-  return bySortOrder(await api.listIssueTypes(projectId));
+  return bySortOrder(visibleIssueTypes(await api.listIssueTypes(projectId)));
 }
 
 export function loadIssueTypes(
@@ -83,7 +84,7 @@ export function getCapabilitiesSnapshot(
  * reorder has to survive until the server responds.
  */
 export function setIssueTypes(projectId: string, issueTypes: IssueType[]): void {
-  queryClient.setQueryData(issueTypesKey(projectId), issueTypes);
+  queryClient.setQueryData(issueTypesKey(projectId), visibleIssueTypes(issueTypes));
 }
 
 /** Write the issue-type catalog in canonical sort order (server responses). */
@@ -91,7 +92,10 @@ export function setIssueTypesSorted(
   projectId: string,
   issueTypes: IssueType[],
 ): void {
-  queryClient.setQueryData(issueTypesKey(projectId), bySortOrder(issueTypes));
+  queryClient.setQueryData(
+    issueTypesKey(projectId),
+    bySortOrder(visibleIssueTypes(issueTypes)),
+  );
 }
 
 export function setCapabilities(

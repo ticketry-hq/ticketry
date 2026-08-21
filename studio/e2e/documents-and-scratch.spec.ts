@@ -6,7 +6,7 @@ import {
   openModule,
   openWorkItem,
   responseJson,
-  selectModuleForProfile,
+  linkModuleFolder,
 } from "./support";
 
 type ApiRow = {
@@ -76,9 +76,8 @@ test.describe.serial("Documents and Local scratch workspace", () => {
       },
     ));
 
-    await selectModuleForProfile(
+    await linkModuleFolder(
       request,
-      project.id,
       moduleRow.id,
       moduleFolder,
     );

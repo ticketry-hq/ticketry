@@ -4,6 +4,20 @@ A standalone [FastMCP](https://github.com/jlowin/fastmcp) server wired directly
 to the owned worktracker backend. The run-scoped `terminate_current_run` tool
 also forwards its request authorization to Studio's terminal authority.
 
+One server instance belongs to one Studio instance. `MCP_PORT` and
+`STUDIO_RUN_CONTROL_URL` must name the same install's ports: two Studio
+installs on one machine share the run records and the credential-signing
+secret, so a run-scoped call answered by the wrong backend is *accepted*, and
+acts on a run whose terminal that backend does not own. The desktop supervisor
+pairs the two ports for the packaged app; a source checkout inherits the
+defaults below and must not be left holding `8123` for an install it does not
+serve. Studio refuses a termination for a run owned by another runtime
+(`run_owned_by_other_runtime`) rather than reporting one that did not happen.
+
+Ticketry exposes one installation project in this version. Studio launch
+prompts supply its Project ID. `list_projects` remains available for other MCP
+clients, but returns only that project and is not a project-selection step.
+
 ## Backend
 
 All calls go to the owned worktracker HTTP API:

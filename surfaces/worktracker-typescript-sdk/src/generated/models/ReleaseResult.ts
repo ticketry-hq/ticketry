@@ -26,7 +26,7 @@ export interface ReleaseResult {
      * @type {boolean}
      * @memberof ReleaseResult
      */
-    released: boolean;
+    readonly released: boolean;
 }
 
 /**
@@ -55,13 +55,12 @@ export function ReleaseResultToJSON(json: any): ReleaseResult {
     return ReleaseResultToJSONTyped(json, false);
 }
 
-export function ReleaseResultToJSONTyped(value?: ReleaseResult | null, ignoreDiscriminator: boolean = false): any {
+export function ReleaseResultToJSONTyped(value?: Omit<ReleaseResult, 'released'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'released': value['released'],
     };
 }

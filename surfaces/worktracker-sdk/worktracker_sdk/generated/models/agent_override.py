@@ -70,6 +70,11 @@ class AgentOverride(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # set to None if agent (nullable) is None
+        # and model_fields_set contains the field
+        if self.agent is None and "agent" in self.model_fields_set:
+            _dict['agent'] = None
+
         return _dict
 
     @classmethod

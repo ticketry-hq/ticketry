@@ -10,7 +10,6 @@ from django.test import Client, override_settings
 from apps.execution import driver, run_now
 from apps.execution.models import GraphRun, LaunchedTask
 from apps.runs.models import AgentRun
-from apps.settings_store.config import NoConfigurationSelected
 from apps.terminals.agents.skills.preflight import RequiredSkillUnavailable
 from apps.terminals.authorization import issue_run_authorization
 from apps.terminals.launch import LaunchUnavailable
@@ -25,7 +24,6 @@ from worktracker.models import (
     Provider,
     ReasoningLevel,
     State,
-    Workspace,
 )
 
 
@@ -39,10 +37,7 @@ def client():
 
 @pytest.fixture
 def project():
-    workspace = Workspace.objects.create(id=uuid.uuid4(), slug="meml", name="meml")
-    return Project.objects.create(
-        id=uuid.uuid4(), workspace=workspace, name="meml", slug="MEML"
-    )
+    return Project.objects.create(id=uuid.uuid4(), name="meml", slug="MEML")
 
 
 @pytest.fixture
@@ -131,6 +126,37 @@ def _agent_run(issue, run_id: str, *, active: bool) -> AgentRun:
         ended_at=None if active else "2026-08-08T10:05:00+00:00",
         scope="task",
     )
+
+
+@override_settings(
+    WORKTRACKER_DISABLE_AUTH=False,
+    WORKTRACKER_API_TOKEN="run-now-secret",
+)
+def test_run_now_requires_the_default_api_key(client):
+    path = f"/api/work-tracker/work-items/{uuid.uuid4()}/run-now"
+
+    rejected = client.post(path, data={}, content_type="application/json")
+    accepted = client.post(
+        path,
+        data={},
+        content_type="application/json",
+        HTTP_X_API_KEY="run-now-secret",
+    )
+
+    assert rejected.status_code == 401
+    assert accepted.status_code == 404
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_run_now_rejects_invalid_origin_through_the_drf_serializer(client):
+    response = client.post(
+        f"/api/work-tracker/work-items/{uuid.uuid4()}/run-now",
+        data={"origin": "system"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 422
+    assert "origin" in response.json()
 
 
 @override_settings(WORKTRACKER_DISABLE_AUTH=True)
@@ -357,23 +383,6 @@ def test_run_now_preflight_refusals_leave_the_story_unchanged(
         run_now,
         "preflight_task_launch",
         lambda **_kwargs: (_ for _ in ()).throw(
-            NoConfigurationSelected("No profile selected.")
-        ),
-    )
-    no_profile = client.post(
-        f"/api/work-tracker/work-items/{issue.id}/run-now",
-        data={},
-        content_type="application/json",
-    )
-    assert no_profile.status_code == 400
-    assert no_profile.json()["code"] == "no_profile_selected"
-    issue.refresh_from_db()
-    assert issue.state_id == ideas.id
-
-    monkeypatch.setattr(
-        run_now,
-        "preflight_task_launch",
-        lambda **_kwargs: (_ for _ in ()).throw(
             RequiredSkillUnavailable(
                 provider="codex",
                 skill="research",
@@ -486,3 +495,33 @@ def test_run_now_late_launch_failure_reports_committed_state_without_rollback(
     issue.refresh_from_db()
     assert issue.state_id == implement.id
     assert not AgentRun.objects.filter(issue=issue).exists()
+
+
+@override_settings(WORKTRACKER_DISABLE_AUTH=True)
+def test_run_now_reports_prompt_delivery_failure_after_committing_state(
+    client, project, module, monkeypatch
+):
+    from apps.terminals.launch import PromptDeliveryFailed
+
+    issue, _ideas, implement = _story(project, module)
+    monkeypatch.setattr(run_now, "preflight_task_launch", lambda **_kwargs: object())
+
+    async def failed_delivery(**_kwargs):
+        raise PromptDeliveryFailed(reason="readiness_timeout")
+
+    monkeypatch.setattr(driver, "spawn_run", failed_delivery)
+    response = client.post(
+        f"/api/work-tracker/work-items/{issue.id}/run-now",
+        data={},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "target_id": str(issue.id),
+        "committed_state": {"id": str(implement.id), "name": "Implement"},
+        "run": None,
+        "detail": "prompt_delivery_failed",
+        "code": "prompt_delivery_failed",
+        "reason": "readiness_timeout",
+    }

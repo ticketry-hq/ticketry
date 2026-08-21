@@ -218,7 +218,7 @@ Exactly four values persist, which is the contract today and does not change:
 
 | Key | Holds |
 | --- | --- |
-| `studio.sidebarVisible:v1` | `sidebarVisible` |
+| `studio.sidebarVisible:v2` | `sidebarVisible` |
 | `studio.panelLayout:v1` | `panelLayout`, debounced 400 ms |
 | `studio.expandedSubtasks:v1` | `expandedIdsByModule`, whole map |
 | `studio.collapsedStates:v2` | `collapsedStateIds` — **new version** |

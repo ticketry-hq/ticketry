@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import * as api from "../../shared/api/client";
 import { ApiError } from "../../shared/api/client";
-import * as recentProjects from "./utilities/recentProjects";
 import { toast } from "../../state/clientStore";
 import { useClientStore } from "../../state/clientStore";
 import {
@@ -13,7 +12,6 @@ import {
   loadProjects,
   updateProjectRecord,
 } from "./queries";
-import { markModuleCreated } from "./internal/newlyCreatedModules";
 import type {
   Module,
   Project,
@@ -22,7 +20,11 @@ import type {
   View,
 } from "../../shared/api/types";
 import { loadIssueTypes } from "../settings";
-import { getConfigSnapshot } from "../studio/stores/configStore";
+import { readLastSelectedModule } from "../../state/persistence";
+import {
+  getVisibleModulesSnapshot,
+  loadModulePresentations,
+} from "../module-tabs/queries";
 
 const VIEWS: View[] = ["backlog", "settings"];
 
@@ -49,7 +51,7 @@ interface StudioState {
   selectProject: (id: string) => Promise<void>;
   setView: (view: View) => void;
 
-  // Re-fetch + re-sort the selected project's modules (after a create, #919).
+  // Re-fetch the selected project's server-ordered modules (after a create, #919).
   reloadModules: () => Promise<void>;
   // Create a module in the selected project, reload the list, and return the
   // created module so the caller can auto-select it (#919 Slice A).
@@ -91,9 +93,6 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   async selectProject(id) {
     if (get().selectedProjectId === id) return;
-    // "Used" = updated on every project switch (#665); the MRU order survives
-    // reload and drives both startup selection and post-delete redirect.
-    recentProjects.touch(id);
     set({ selectedProjectId: id, error: null });
     useClientStore.setState({
       selectedModuleId: null,
@@ -101,17 +100,22 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       workspaceSelection: { kind: "task" },
     });
     try {
-      await loadModules(id);
-      const { recentProfileIndex, profiles } = getConfigSnapshot();
-      const recentModuleId =
-        recentProfileIndex === null
-          ? undefined
-          : profiles[recentProfileIndex]?.recent_module_ids?.[id];
-      if (
-        recentModuleId &&
-        getModulesSnapshot(id).some((module) => module.id === recentModuleId)
-      ) {
-        await useClientStore.getState().selectModule(recentModuleId);
+      await Promise.all([loadModules(id), loadModulePresentations()]);
+      const recentModuleId = readLastSelectedModule();
+      const modules = getModulesSnapshot(id);
+      const visible = getVisibleModulesSnapshot(id);
+      const rememberedModule = modules.find(
+        (module) => module.id === recentModuleId,
+      );
+      if (rememberedModule) {
+        const target = visible.some((module) => module.id === rememberedModule.id)
+          ? rememberedModule
+          : visible[0];
+        if (target) {
+          await useClientStore.getState().selectModule(target.id);
+        } else {
+          useClientStore.getState().deselectModule();
+        }
       }
     } catch (e) {
       set({ error: errMessage(e) });
@@ -151,9 +155,6 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     );
     if (!moduleType) throw new Error("The Module issue type is unavailable.");
     const created = await api.createModule(projectId, name, moduleType.id);
-    // Recorded before the reload so the canonical order that reload produces
-    // already leads with the new module, in either ordering mode (#366).
-    markModuleCreated(projectId, created.id);
     // Reload so both normal create and guided create preserve the same ordering.
     await loadModules(projectId).catch(() => {});
     return created;
@@ -200,7 +201,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     // The open project is gone: drop any selection it owned (not auto-cleared)
     // and resolve the MRU survivor for the caller to navigate to.
     useClientStore.getState().selectionClear();
-    const targetId = recentProjects.resolveStartProject(getProjectsSnapshot(), id);
+    const targetId = getProjectsSnapshot().find((project) => project.id !== id)?.id ?? null;
     return { redirect: true, targetId };
   },
 }));

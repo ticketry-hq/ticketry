@@ -118,7 +118,9 @@ def test_run_now_refusals_document_the_partial_outcome():
     refusal_ref = "#/components/schemas/RunNowRefusal"
 
     for status in ("400", "404", "409", "422", "503"):
-        assert operation["responses"][status]["content"]["application/json"]["schema"] == {
+        assert operation["responses"][status]["content"]["application/json"][
+            "schema"
+        ] == {
             "$ref": refusal_ref,
         }
 
@@ -181,29 +183,24 @@ def test_module_archived_filter_and_issue_type_reassignment_body_are_declared():
     )
 
 
-def test_project_contract_exposes_a_read_only_module_ordering_mode():
+def test_module_presentation_contract_owns_rank_and_first_drag_baseline():
     schemas = _schema()["components"]["schemas"]
     project = schemas["Project"]
-
-    assert project["properties"]["manual_module_order"]["type"] == "boolean"
-    assert project["properties"]["manual_module_order"]["readOnly"] is True
-    assert "manual_module_order" in project["required"]
-    # A project's ordering mode flips through the module reorder domain
-    # operation, so the general project update must not accept it as input —
-    # the patch shape carries it read-only, exactly as it carries ``id``.
-    patched = schemas["PatchedProject"]["properties"]["manual_module_order"]
-    assert patched["readOnly"] is True
-
-
-def test_reorder_contract_exposes_the_optional_first_drag_baseline():
-    reorder = _schema()["components"]["schemas"]["WorkItemReorder"]
+    presentation = schemas["ModulePresentation"]
+    reorder = schemas["ModulePresentationReorder"]
     baseline = reorder["properties"]["initial_order_ids"]
 
+    assert "manual_module_order" not in project["properties"]
+    assert presentation["properties"]["module_id"]["readOnly"] is True
+    assert presentation["properties"]["rank"]["readOnly"] is True
     assert baseline["type"] == "array"
     assert baseline["items"]["format"] == "uuid"
-    # Only a module's very first drag sends it, so it must stay optional for
-    # every ordinary within-column task reorder.
     assert "initial_order_ids" not in reorder.get("required", [])
+
+    paths = _schema()["paths"]
+    assert "/work-tracker/module-presentations" in paths
+    assert "/work-tracker/module-presentations/{module_id}" in paths
+    assert "/work-tracker/module-presentations/{module_id}/reorder" in paths
 
 
 def test_deleted_composite_routes_are_absent():

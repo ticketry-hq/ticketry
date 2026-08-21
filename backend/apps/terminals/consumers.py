@@ -39,7 +39,6 @@ from apps.terminals.validation import (
     AttachRequest,
     _validate_init,
 )
-from apps.settings_store.config import NoConfigurationSelected
 
 
 logger = logging.getLogger(__name__)
@@ -146,9 +145,6 @@ class TerminalConsumer(AsyncWebsocketConsumer):
                 await self.send(text_data=json.dumps(payload))
             finally:
                 await self.close(code=1008)
-            return
-        except NoConfigurationSelected:
-            await self._send_error("no_profile_selected", close_code=1008)
             return
         except LaunchUnavailable as exc:
             logger.warning("persisted spawn failed: %s", exc)

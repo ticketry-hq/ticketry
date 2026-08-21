@@ -75,7 +75,7 @@ describe("createWorkTrackerClient", () => {
 
     await client.workflows.createIssueTypeTransition({
       typeId: "type/1",
-      issueTypeTransition: {
+      issueTypeTransitionCreate: {
         from_state: "todo",
         to_state: "done",
         agent_allowed: true,
@@ -116,15 +116,27 @@ describe("createWorkTrackerClient", () => {
     expect(new Headers(init.headers).has("content-type")).toBe(false);
   });
 
-  it("exposes workspace onboarding before project selection", async () => {
-    const workspace = {
-      id: "w1", name: "MEML", slug: "meml", onboarding_required: true,
+  it("exposes Module links through the typed client", async () => {
+    const link = {
+      id: "link-1",
+      module_id: "module-1",
+      local_path: "/repos/ticketry",
+      created_at: "2026-08-19T00:00:00Z",
+      updated_at: "2026-08-19T00:00:00Z",
     };
-    const fetch = vi.fn().mockResolvedValue(response(workspace));
+    const fetch = vi.fn().mockResolvedValue(response(link));
     const client = createWorkTrackerClient({ baseUrl: "/api/work-tracker", fetch });
 
-    await expect(client.workspace.retrieveWorkspace()).resolves.toEqual(workspace);
-    expect(fetch.mock.calls[0][0]).toBe("/api/work-tracker/workspace");
+    await expect(
+      client.moduleLinks.moduleLinksUpsert({
+        moduleId: "module/1",
+        moduleLinkWrite: { local_path: link.local_path },
+      }),
+    ).resolves.toEqual(link);
+    expect(fetch.mock.calls[0][0]).toBe("/api/module-links/module%2F1");
+    expect(JSON.parse(String(fetch.mock.calls[0][1].body))).toEqual({
+      local_path: "/repos/ticketry",
+    });
   });
 
   it("resolves empty 204 responses as undefined", async () => {
@@ -200,35 +212,6 @@ describe("createAgentStatusClient", () => {
     });
     expect(new Headers(fetch.mock.calls[0][1].headers).get("content-type"))
       .toBe("application/json");
-  });
-
-  it("returns the typed project snapshot and supports task scope", async () => {
-    const snapshot = {
-      scope: { project_id: "p1", task_id: "t/1" },
-      runs: [{
-        agent_run_id: "r1",
-        task_id: "t/1",
-        module_id: "m1",
-        state: "working" as const,
-        updated_at: "2026-07-12T15:00:00Z",
-      }],
-      automation_attempts: [],
-      at: "2026-07-12T15:01:00Z",
-    };
-    const fetch = vi.fn().mockResolvedValue(response(snapshot));
-    const client = createAgentStatusClient({
-      baseUrl: "/api/",
-      apiKey: "secret",
-      fetch,
-    });
-
-    await expect(client.getAgentStatus({ projectId: "p1", taskId: "t/1" }))
-      .resolves.toEqual(snapshot);
-    expect(fetch.mock.calls[0][0]).toBe(
-      "/api/runs/agent-status?project_id=p1&task_id=t%2F1",
-    );
-    expect(new Headers(fetch.mock.calls[0][1].headers).get("x-api-key"))
-      .toBe("secret");
   });
 
   it("retries one automation attempt through the typed status client", async () => {

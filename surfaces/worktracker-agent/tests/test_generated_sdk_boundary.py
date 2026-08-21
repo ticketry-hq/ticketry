@@ -22,6 +22,7 @@ from worktracker_sdk.generated.exceptions import ApiException
 from worktracker_sdk.root_api import ExecutionApi, LaunchApi, RevisionedDeleteApi
 
 from worktracker_agent.api.service import WorktrackerService
+from worktracker_agent.api.schemas import WorktrackerConfig
 
 
 AGENT_ROOT = Path(__file__).parents[1]
@@ -97,6 +98,8 @@ def test_default_service_builds_generated_per_tag_clients():
     # /api/work-tracker/work-tracker/... and 404'd every read.
     assert service.sdk.api_client.configuration.host == "https://worktracker.test/api"
     assert service.sdk.api_client.configuration.api_key == {"ApiKeyAuth": "secret"}
+    assert "workspace_slug" not in WorktrackerConfig.model_fields
+    assert not hasattr(service, "workspace_slug")
 
 
 def test_service_accepts_either_form_of_configured_base_url():

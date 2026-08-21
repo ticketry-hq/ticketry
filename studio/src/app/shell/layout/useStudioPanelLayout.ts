@@ -1,12 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { ImperativePanelGroupHandle } from "react-resizable-panels";
-import {
-  isSidebarEnabled,
-  sidebarPaneComposition,
-  useConfig,
-} from "../../../features/studio/stores/configStore";
 import { useClientStore } from "../../../state/clientStore";
 import {
+  DEFAULT_SIDEBAR_PANE_COMPOSITION,
   DEFAULT_PANEL_LAYOUT,
   mergeOuterPanelLayout,
   mergeWorkAreaLayout,
@@ -15,11 +11,7 @@ import {
 } from "./layoutMath";
 
 export function useStudioPanelLayout() {
-  const config = useConfig();
-  const paneComposition = sidebarPaneComposition(
-    config.features.projects,
-    isSidebarEnabled(config),
-  );
+  const paneComposition = DEFAULT_SIDEBAR_PANE_COMPOSITION;
   const sidebarVisible = useClientStore((state) => state.sidebarVisible);
   const panelLayout = useClientStore((state) => state.panelLayout);
   const setPanelLayout = useClientStore((state) => state.setPanelLayout);

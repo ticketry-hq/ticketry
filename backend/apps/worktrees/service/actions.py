@@ -48,7 +48,6 @@ def create(
     task_name: Optional[str] = None,
     ticket_seq: Optional[int] = None,
     ephemeral: bool = False,
-    workspace_slug: Optional[str] = None,
     project_id: Optional[str] = None,
     module_id: Optional[str] = None,
 ) -> Union[Worktree, NoWorktree]:
@@ -91,7 +90,6 @@ def create(
         base_commit=base_commit,
         status="active",
         ephemeral=ephemeral,
-        workspace_slug=workspace_slug,
         project_id=project_id,
         module_id=module_id,
         ticket_seq=ticket_seq,

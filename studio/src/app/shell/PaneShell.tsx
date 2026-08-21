@@ -1,8 +1,4 @@
 import { forwardRef, useEffect, useRef } from "react";
-import {
-  isSidebarEnabled,
-  useConfig,
-} from "../../features/studio/stores/configStore";
 import type { FocusedPane } from "../../state/clientStore";
 import { useClientStore } from "../../state/clientStore";
 
@@ -24,13 +20,12 @@ export const PaneShell = forwardRef<HTMLDivElement, PaneShellProps>(
     const editViewZone = useClientStore((s) => s.editViewZone);
     const navigationModality = useClientStore((s) => s.navigationModality);
     const sidebarVisible = useClientStore((s) => s.sidebarVisible);
-    const sidebarEnabled = isSidebarEnabled(useConfig());
     const setFocusedPane = useClientStore((s) => s.setFocusedPane);
     const setEditViewZone = useClientStore((s) => s.setEditViewZone);
     const setNavigationModality = useClientStore((s) => s.setNavigationModality);
     const innerRef = useRef<HTMLDivElement | null>(null);
 
-    const isEditView = !sidebarEnabled || !sidebarVisible;
+    const isEditView = !sidebarVisible;
     const isStoriesZone = isEditView && pane === "tasks";
     const isWorkspaceZoneHost =
       isEditView && pane === "details-or-terminal";

@@ -15,7 +15,7 @@ import {
   ModuleFolderSelection,
   useModuleFolderSelection,
 } from "../agents/terminal/ModuleFolderSelection";
-import { setModuleFolder, useConfig } from "../studio/stores/configStore";
+import { setModuleFolder, useModuleLinks } from "../module-links";
 
 const REFUSAL_MESSAGE: Record<string, string> = {
   module_folder_unset: "This module has no folder yet.",
@@ -23,7 +23,6 @@ const REFUSAL_MESSAGE: Record<string, string> = {
     "This module's folder is not a complete filesystem path.",
   module_folder_missing: "This module's folder no longer exists.",
   module_folder_not_a_directory: "This module's folder is not a directory.",
-  no_profile_selected: "No profile is selected, so no folder is configured.",
 };
 
 export function ModuleFolderRequired({
@@ -35,8 +34,8 @@ export function ModuleFolderRequired({
   reason: string;
   onLinked: () => void;
 }) {
-  const { profiles, recentProfileIndex } = useConfig();
-  const selection = useModuleFolderSelection({ profiles, recentProfileIndex });
+  const moduleLinks = useModuleLinks();
+  const selection = useModuleFolderSelection({ moduleLinks });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = selection.value.trim();

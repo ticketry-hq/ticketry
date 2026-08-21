@@ -19,6 +19,8 @@ from typing_extensions import Annotated
 from typing import List
 from uuid import UUID
 from worktracker_sdk.generated.models.launch_binding import LaunchBinding
+from worktracker_sdk.generated.models.launch_binding_write import LaunchBindingWrite
+from worktracker_sdk.generated.models.workflow_revision import WorkflowRevision
 
 from worktracker_sdk.generated.api_client import ApiClient, RequestSerialized
 from worktracker_sdk.generated.api_response import ApiResponse
@@ -43,6 +45,7 @@ class LaunchBindingsApi:
         self,
         state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -58,12 +61,14 @@ class LaunchBindingsApi:
     ) -> None:
         """delete_launch_binding
 
-        Revision-guarded upsert/delete at the row's composite domain key.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param state_id: (required)
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -89,6 +94,7 @@ class LaunchBindingsApi:
         _param = self._delete_launch_binding_serialize(
             state_id=state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -114,6 +120,7 @@ class LaunchBindingsApi:
         self,
         state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -129,12 +136,14 @@ class LaunchBindingsApi:
     ) -> ApiResponse[None]:
         """delete_launch_binding
 
-        Revision-guarded upsert/delete at the row's composite domain key.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param state_id: (required)
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -160,6 +169,7 @@ class LaunchBindingsApi:
         _param = self._delete_launch_binding_serialize(
             state_id=state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -185,6 +195,7 @@ class LaunchBindingsApi:
         self,
         state_id: UUID,
         type_id: UUID,
+        workflow_revision: WorkflowRevision,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -200,12 +211,14 @@ class LaunchBindingsApi:
     ) -> RESTResponseType:
         """delete_launch_binding
 
-        Revision-guarded upsert/delete at the row's composite domain key.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param state_id: (required)
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
+        :param workflow_revision: (required)
+        :type workflow_revision: WorkflowRevision
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -231,6 +244,7 @@ class LaunchBindingsApi:
         _param = self._delete_launch_binding_serialize(
             state_id=state_id,
             type_id=type_id,
+            workflow_revision=workflow_revision,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -251,6 +265,7 @@ class LaunchBindingsApi:
         self,
         state_id,
         type_id,
+        workflow_revision,
         _request_auth,
         _content_type,
         _headers,
@@ -280,9 +295,26 @@ class LaunchBindingsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
+        if workflow_revision is not None:
+            _body_params = workflow_revision
 
 
 
+        # set the HTTP header `Content-Type`
+        if _content_type:
+            _header_params['Content-Type'] = _content_type
+        else:
+            _default_content_type = (
+                self.api_client.select_header_content_type(
+                    [
+                        'application/json',
+                        'application/x-www-form-urlencoded',
+                        'multipart/form-data'
+                    ]
+                )
+            )
+            if _default_content_type is not None:
+                _header_params['Content-Type'] = _default_content_type
 
         # authentication setting
         _auth_settings: List[str] = [
@@ -326,7 +358,7 @@ class LaunchBindingsApi:
     ) -> List[LaunchBinding]:
         """list_launch_bindings
 
-        Canonical project-scoped collection read.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -393,7 +425,7 @@ class LaunchBindingsApi:
     ) -> ApiResponse[List[LaunchBinding]]:
         """list_launch_bindings
 
-        Canonical project-scoped collection read.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -460,7 +492,7 @@ class LaunchBindingsApi:
     ) -> RESTResponseType:
         """list_launch_bindings
 
-        Canonical project-scoped collection read.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param project_id: (required)
         :type project_id: UUID
@@ -573,7 +605,7 @@ class LaunchBindingsApi:
         self,
         state_id: UUID,
         type_id: UUID,
-        launch_binding: LaunchBinding,
+        launch_binding_write: LaunchBindingWrite,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -589,14 +621,14 @@ class LaunchBindingsApi:
     ) -> LaunchBinding:
         """upsert_launch_binding
 
-        Revision-guarded upsert/delete at the row's composite domain key.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param state_id: (required)
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
-        :param launch_binding: (required)
-        :type launch_binding: LaunchBinding
+        :param launch_binding_write: (required)
+        :type launch_binding_write: LaunchBindingWrite
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -622,7 +654,7 @@ class LaunchBindingsApi:
         _param = self._upsert_launch_binding_serialize(
             state_id=state_id,
             type_id=type_id,
-            launch_binding=launch_binding,
+            launch_binding_write=launch_binding_write,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -648,7 +680,7 @@ class LaunchBindingsApi:
         self,
         state_id: UUID,
         type_id: UUID,
-        launch_binding: LaunchBinding,
+        launch_binding_write: LaunchBindingWrite,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -664,14 +696,14 @@ class LaunchBindingsApi:
     ) -> ApiResponse[LaunchBinding]:
         """upsert_launch_binding
 
-        Revision-guarded upsert/delete at the row's composite domain key.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param state_id: (required)
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
-        :param launch_binding: (required)
-        :type launch_binding: LaunchBinding
+        :param launch_binding_write: (required)
+        :type launch_binding_write: LaunchBindingWrite
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -697,7 +729,7 @@ class LaunchBindingsApi:
         _param = self._upsert_launch_binding_serialize(
             state_id=state_id,
             type_id=type_id,
-            launch_binding=launch_binding,
+            launch_binding_write=launch_binding_write,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -723,7 +755,7 @@ class LaunchBindingsApi:
         self,
         state_id: UUID,
         type_id: UUID,
-        launch_binding: LaunchBinding,
+        launch_binding_write: LaunchBindingWrite,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -739,14 +771,14 @@ class LaunchBindingsApi:
     ) -> RESTResponseType:
         """upsert_launch_binding
 
-        Revision-guarded upsert/delete at the row's composite domain key.
+        Project reads and revision-guarded composite-key upsert/delete.
 
         :param state_id: (required)
         :type state_id: UUID
         :param type_id: (required)
         :type type_id: UUID
-        :param launch_binding: (required)
-        :type launch_binding: LaunchBinding
+        :param launch_binding_write: (required)
+        :type launch_binding_write: LaunchBindingWrite
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -772,7 +804,7 @@ class LaunchBindingsApi:
         _param = self._upsert_launch_binding_serialize(
             state_id=state_id,
             type_id=type_id,
-            launch_binding=launch_binding,
+            launch_binding_write=launch_binding_write,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -793,7 +825,7 @@ class LaunchBindingsApi:
         self,
         state_id,
         type_id,
-        launch_binding,
+        launch_binding_write,
         _request_auth,
         _content_type,
         _headers,
@@ -823,8 +855,8 @@ class LaunchBindingsApi:
         # process the header parameters
         # process the form parameters
         # process the body parameter
-        if launch_binding is not None:
-            _body_params = launch_binding
+        if launch_binding_write is not None:
+            _body_params = launch_binding_write
 
 
         # set the HTTP header `Accept`

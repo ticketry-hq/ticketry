@@ -26,7 +26,7 @@ const FIXED_BINDINGS: readonly EffectiveBinding[] = [
 const ESSENTIALS: readonly { id: string; label: string }[] = [
   { id: "global:open-agent", label: "Launch agent" },
   { id: "global:plan", label: "Plan a feature" },
-  { id: "capture:edit-view.commit", label: "Engage body" },
+  { id: "capture:edit-view.commit", label: "Enter edit-view selection" },
   { id: "capture:edit-view.body-disengage", label: "Disengage body" },
   { id: "capture:cycle-terminal-forward", label: "Next terminal" },
   { id: "capture:toggle-terminal-panel", label: "Toggle terminal panel" },

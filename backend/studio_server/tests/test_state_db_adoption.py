@@ -27,13 +27,13 @@ from apps.documents.models import DesignDocument
 from apps.runs.models import AgentRun
 from apps.settings_store.models import AppSetting
 from apps.terminals.models import AgentTerminalSession
-from worktracker.models import Issue, IssueType, Project, Workspace
+from worktracker.models import Issue, IssueType, Project
 
 
 _SCHEMA_OBJECTS = (
     "agent_runs",
     "agent_terminal_sessions",
-    "idx_agent_terminal_sessions_task_created",
+    "idx_terminal_task_created",
     "app_settings",
     "design_documents",
     "idx_design_documents_task",
@@ -276,8 +276,10 @@ def test_fake_initial_adopts_existing_database_without_data_change(
             ("runs", "0012_remove_legacy_agentrun_run_kind"),
             ("runs", "0013_agentrun_optional_agent"),
             ("runs", "0014_agentrun_launch_metadata"),
+            ("runs", "0015_agentrun_initial_prompt"),
             ("settings_store", "0001_initial"),
             ("settings_store", "0002_migrate_profile_prompt_authority"),
+            ("settings_store", "0003_module_link"),
             ("terminals", "0001_initial"),
             ("terminals", "0002_agent_run_viewer_lease"),
             ("terminals", "0003_agentterminalsession_runtime_cleanup_pending"),
@@ -285,6 +287,7 @@ def test_fake_initial_adopts_existing_database_without_data_change(
             ("terminals", "0005_terminal_output_activity"),
             ("terminals", "0006_terminal_session_optional_agent"),
             ("terminals", "0007_restore_agent_run_fk_cascade"),
+            ("terminals", "0008_rename_terminal_task_index"),
         ]
 
     # The unreferencable legacy run and its terminal mirror are intentionally
@@ -319,11 +322,8 @@ def test_fresh_migrate_sets_pragmas_and_database_cascade(
         cursor.execute("PRAGMA foreign_keys")
         assert cursor.fetchone() == (1,)
 
-    workspace = Workspace.objects.using(alias).create(
-        id=uuid.uuid4(), slug="state-adoption", name="State adoption"
-    )
     project = Project.objects.using(alias).create(
-        id=uuid.uuid4(), workspace=workspace, name="Project", slug="PROJECT"
+        id=uuid.uuid4(), name="Project", slug="PROJECT"
     )
     issue_type = IssueType.objects.using(alias).create(
         id=uuid.uuid4(), project=project, name="Module", level="module"

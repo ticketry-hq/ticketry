@@ -87,6 +87,11 @@ test("committed artifact declares itself authoritative and removes provenance", 
     Done: [],
     Cancelled: [],
   });
+  assert.deepEqual(artifact.entrySkills, {
+    Grill: "grill-with-docs",
+    Spec: "to-spec",
+    Tickets: "to-tickets",
+  });
 });
 
 test("derives state and issue-type expectations from the artifact", () => {
@@ -101,6 +106,10 @@ test("derives state and issue-type expectations from the artifact", () => {
     }
     value.requiredSkills[newStateName] = value.requiredSkills[oldStateName];
     delete value.requiredSkills[oldStateName];
+    if (Object.hasOwn(value.entrySkills, oldStateName)) {
+      value.entrySkills[newStateName] = value.entrySkills[oldStateName];
+      delete value.entrySkills[oldStateName];
+    }
     for (const workflow of Object.values(value.workflows)) {
       if (workflow.start === oldStateName) workflow.start = newStateName;
       workflow.states = workflow.states.map((name) =>
@@ -199,6 +208,28 @@ const rejectionFixtures = [
       value.requiredSkills.Grill.push("not-in-the-pinned-snapshot");
     },
     message: /Required skill 'not-in-the-pinned-snapshot'.*not provided by the pinned snapshot/,
+  },
+  {
+    name: "entry skill absent from pinned snapshot",
+    mutate: (value) => {
+      value.requiredSkills.Spec = ["not-in-the-pinned-snapshot"];
+      value.entrySkills.Spec = "not-in-the-pinned-snapshot";
+    },
+    message: /Entry skill 'not-in-the-pinned-snapshot'.*not provided by the pinned snapshot/,
+  },
+  {
+    name: "entry skill absent from required skills",
+    mutate: (value) => {
+      value.entrySkills.Spec = "to-tickets";
+    },
+    message: /Entry skill 'to-tickets'.*must also be declared in requiredSkills/,
+  },
+  {
+    name: "entry skill for unknown state",
+    mutate: (value) => {
+      value.entrySkills.Unknown = "to-spec";
+    },
+    message: /Entry-skills map declares unknown state 'Unknown'/,
   },
   {
     name: "missing prompt cell",

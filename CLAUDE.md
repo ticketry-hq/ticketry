@@ -12,6 +12,11 @@ Use the application’s canonical runtime scripts. `scripts/dev.sh studio` start
 the browser frontend; `npm run desktop:dev` and `pnpm dev` rebuild the sidecar
 and launch the desktop application.
 
+Ticketry currently exposes one installation project. Agents using WorkTracker
+MCP must use the Project ID from their launch context. Do not list projects,
+ask the user to choose one, or look for another project. `list_projects` exists
+only for clients without launch context and returns the installation project.
+
 ## Code structure — governing rules
 
 The file tree is the primary map of this project. Someone should be able to
@@ -52,6 +57,7 @@ Install from the repository root, then run:
 ```bash
 npm run typecheck
 npm run test --workspace @worktracker/studio
+npm run test:native-clipboard --workspace @worktracker/studio
 npm run build --workspace @worktracker/studio
 ```
 

@@ -81,7 +81,7 @@ def inject_claude_lifecycle_settings(
     argv: list[str],
     agent_run_id: str,
     lifecycle_url: str = DEFAULT_LIFECYCLE_URL,
-    mcp_url: str = DEFAULT_MCP_URL,
+    mcp_url: str | None = DEFAULT_MCP_URL,
 ) -> list[str]:
     """Splice inline lifecycle and MCP config into a Claude launch command.
 
@@ -92,17 +92,21 @@ def inject_claude_lifecycle_settings(
         :func:`terminals.agents.commands.get_agent_command`.
     :param agent_run_id: Durable id for this run's lifecycle events.
     :param lifecycle_url: Ingress URL the hook posts events to.
-    :param mcp_url: WorkTracker MCP HTTP endpoint.
+    :param mcp_url: WorkTracker MCP HTTP endpoint, or ``None`` when this
+        instance has no MCP service to point the run at.
     :return: The argv with ``--settings <json>`` inserted after the executable.
     """
 
     settings = build_claude_lifecycle_settings(agent_run_id, lifecycle_url)
     settings_json = json.dumps(settings, separators=(",", ":"))
+
+    # Insert right after the executable so Claude's own flags still follow.
+
+    if mcp_url is None:
+        return [argv[0], "--settings", settings_json, *argv[1:]]
+
     authorization = issue_run_authorization(agent_run_id)
     mcp_json = json.dumps(
         build_claude_mcp_config(mcp_url, authorization), separators=(",", ":")
     )
-
-    # Insert right after the executable so Claude's own flags still follow.
-
     return [argv[0], "--settings", settings_json, "--mcp-config", mcp_json, *argv[1:]]

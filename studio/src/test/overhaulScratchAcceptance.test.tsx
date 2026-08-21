@@ -58,7 +58,6 @@ describe("overhaul acceptance — module scratch workspace", () => {
         details={<SelectedTicketDetails />}
         launchContext={{
           kind: "scratch",
-          profileReady: true,
           onChooseMode: launch,
         }}
       />,

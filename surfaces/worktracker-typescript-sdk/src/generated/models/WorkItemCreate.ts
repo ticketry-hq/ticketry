@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * Input for the one project-scoped work-item create.
+ * Model-derived input for the project-scoped work-item create.
  * @export
  * @interface WorkItemCreate
  */

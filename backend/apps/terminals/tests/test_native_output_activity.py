@@ -249,8 +249,7 @@ def test_the_application_operation_reports_one_viewer_observation(
     )
     runtime.feed_output("run-native-api", b"native output\n")
 
-    body = terminals_api.ViewerOutputReportBody(agent_run_id="run-native-api")
-    assert terminals_api.report_viewer_output(body) == {
+    assert terminals_api.report_viewer_output(agent_run_id="run-native-api") == {
         "agent_run_id": "run-native-api",
         "observed": True,
     }

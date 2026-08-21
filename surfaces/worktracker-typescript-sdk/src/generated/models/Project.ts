@@ -16,7 +16,7 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * The single project shape; workspace selection is create-only input.
+ * The installation-wide project shape.
  * @export
  * @interface Project
  */
@@ -47,16 +47,10 @@ export interface Project {
     description?: string;
     /**
      *
-     * @type {string}
-     * @memberof Project
-     */
-    workspace_slug?: string;
-    /**
-     *
      * @type {boolean}
      * @memberof Project
      */
-    readonly manual_module_order: boolean;
+    readonly onboarding_required: boolean;
 }
 
 /**
@@ -66,7 +60,7 @@ export function instanceOfProject(value: object): value is Project {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if (!('slug' in value) || value['slug'] === undefined) return false;
-    if (!('manual_module_order' in value) || value['manual_module_order'] === undefined) return false;
+    if (!('onboarding_required' in value) || value['onboarding_required'] === undefined) return false;
     return true;
 }
 
@@ -84,8 +78,7 @@ export function ProjectFromJSONTyped(json: any, ignoreDiscriminator: boolean): P
         'name': json['name'],
         'slug': json['slug'],
         'description': json['description'] == null ? undefined : json['description'],
-        'workspace_slug': json['workspace_slug'] == null ? undefined : json['workspace_slug'],
-        'manual_module_order': json['manual_module_order'],
+        'onboarding_required': json['onboarding_required'],
     };
 }
 
@@ -93,7 +86,7 @@ export function ProjectToJSON(json: any): Project {
     return ProjectToJSONTyped(json, false);
 }
 
-export function ProjectToJSONTyped(value?: Omit<Project, 'id'|'manual_module_order'> | null, ignoreDiscriminator: boolean = false): any {
+export function ProjectToJSONTyped(value?: Omit<Project, 'id'|'onboarding_required'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
@@ -103,6 +96,5 @@ export function ProjectToJSONTyped(value?: Omit<Project, 'id'|'manual_module_ord
         'name': value['name'],
         'slug': value['slug'],
         'description': value['description'],
-        'workspace_slug': value['workspace_slug'],
     };
 }

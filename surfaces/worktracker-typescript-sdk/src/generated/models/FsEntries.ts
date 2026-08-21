@@ -26,7 +26,7 @@ export interface FsEntries {
      * @type {Array<string>}
      * @memberof FsEntries
      */
-    entries: Array<string>;
+    readonly entries: Array<string>;
 }
 
 /**
@@ -55,13 +55,12 @@ export function FsEntriesToJSON(json: any): FsEntries {
     return FsEntriesToJSONTyped(json, false);
 }
 
-export function FsEntriesToJSONTyped(value?: FsEntries | null, ignoreDiscriminator: boolean = false): any {
+export function FsEntriesToJSONTyped(value?: Omit<FsEntries, 'entries'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'entries': value['entries'],
     };
 }

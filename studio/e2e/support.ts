@@ -162,39 +162,13 @@ export async function createWorkItem(
   ));
 }
 
-export async function selectModuleForProfile(
+export async function linkModuleFolder(
   request: APIRequestContext,
-  projectId: string,
   moduleId: string,
-  moduleFolder?: string,
+  moduleFolder: string,
 ): Promise<void> {
-  const config = await responseJson<{
-    recent_profile_index: number | null;
-    profiles: Array<{
-      module_links: Array<{ module_id: string; path: string }>;
-      recent_module_ids: Record<string, string>;
-      [key: string]: unknown;
-    }>;
-  }>(await request.get("/api/config"));
-  const index = config.recent_profile_index ?? 0;
-  const profile = config.profiles[index];
-  expect(profile, "active local profile").toBeTruthy();
-  const moduleLinks = moduleFolder
-    ? [
-        ...profile.module_links.filter((link) => link.module_id !== moduleId),
-        { module_id: moduleId, path: moduleFolder },
-      ]
-    : profile.module_links;
-  await responseJson(await request.put(`/api/config/profiles/${index}`, {
-    data: {
-      ...profile,
-      recent_project_id: projectId,
-      recent_module_ids: {
-        ...profile.recent_module_ids,
-        [projectId]: moduleId,
-      },
-      module_links: moduleLinks,
-    },
+  await responseJson(await request.put(`/api/module-links/${moduleId}`, {
+    data: { local_path: moduleFolder },
   }));
 }
 

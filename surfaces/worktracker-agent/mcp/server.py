@@ -23,8 +23,16 @@ def _import_fastmcp():
 FastMCP = _import_fastmcp()
 from worktracker_agent.mcp.tools_adapter import generate_worktracker_tools  # noqa: E402
 
+MCP_INSTRUCTIONS = """\
+Ticketry currently exposes one installation project. Use the Project ID in the
+agent's launch context for every project-scoped tool. Do not ask the user to
+choose a project and do not search for or create another one. If launch context
+is unavailable, list_projects returns the sole installation project.
+"""
+
+
 # Initialize FastMCP
-mcp = FastMCP("worktracker-agent")
+mcp = FastMCP("worktracker-agent", instructions=MCP_INSTRUCTIONS)
 
 
 def mcp_ping() -> dict[str, str]:

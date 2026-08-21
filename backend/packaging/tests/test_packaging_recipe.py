@@ -31,12 +31,16 @@ def _execute_spec(monkeypatch, *, package_datas=()):
     captured = {}
 
     class Analysis:
-        def __init__(self, _scripts, *, binaries, datas, hiddenimports, **_kwargs):
+        def __init__(
+            self, _scripts, *, binaries, datas, hiddenimports, pathex, **_kwargs
+        ):
             self.scripts = []
             self.pure = []
             self.binaries = binaries
             self.datas = datas
             captured["datas"] = list(datas)
+            captured["hiddenimports"] = list(hiddenimports)
+            captured["pathex"] = list(pathex)
 
     class PYZ:
         def __init__(self, _pure):
@@ -55,11 +59,11 @@ def _execute_spec(monkeypatch, *, package_datas=()):
             "EXE": EXE,
         },
     )
-    return captured["datas"]
+    return captured
 
 
 def test_reviewed_defaults_are_an_explicit_direct_sidecar_input(monkeypatch):
-    datas = _execute_spec(monkeypatch)
+    datas = _execute_spec(monkeypatch)["datas"]
     explicit_entries = [
         (Path(source).resolve(), destination)
         for source, destination in datas
@@ -94,3 +98,10 @@ def test_sidecar_packaging_rejects_database_artifacts_in_any_form(monkeypatch):
 
     for database_path in database_paths:
         assert database_path in str(error.value)
+
+
+def test_sidecar_packaging_includes_owner_liveness_module(monkeypatch):
+    manifest = _execute_spec(monkeypatch)
+
+    assert "owner_liveness" in manifest["hiddenimports"]
+    assert str(PACKAGING_DIR) in manifest["pathex"]

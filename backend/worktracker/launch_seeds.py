@@ -17,6 +17,7 @@ DEFAULT_AUTO_START_BY_STATE = {
     state["name"]: state.get("autoStart", False)
     for state in REVIEWED_DEFAULTS["states"]
 }
+DEFAULT_ENTRY_SKILL_BY_STATE = REVIEWED_DEFAULTS["entrySkills"]
 
 # Compatibility for older callers that only understand one prompt per state.
 # Story is the canonical task type and therefore remains the legacy projection.

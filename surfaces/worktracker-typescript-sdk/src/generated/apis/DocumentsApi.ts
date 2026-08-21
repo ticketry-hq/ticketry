@@ -21,6 +21,11 @@ import {
     DigestToJSON,
 } from '../models/Digest.js';
 import {
+    type DocumentConflict,
+    DocumentConflictFromJSON,
+    DocumentConflictToJSON,
+} from '../models/DocumentConflict.js';
+import {
     type DocumentList,
     DocumentListFromJSON,
     DocumentListToJSON,
@@ -53,7 +58,6 @@ export interface DocsUpdateRequest {
 
 export interface DocumentsRetrieveRequest {
     moduleId?: string;
-    profile?: number;
     projectId?: string;
     scope?: string;
     taskId?: string;
@@ -80,7 +84,7 @@ export interface DocumentsApiInterface {
     docsRetrieveRequestOpts(requestParameters: DocsRetrieveRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * List, update, and serve registered documents.
      * @param {string} assetPath
      * @param {string} docId
      * @param {*} [options] Override http request option.
@@ -90,6 +94,7 @@ export interface DocumentsApiInterface {
     docsRetrieveRaw(requestParameters: DocsRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>>;
 
     /**
+     * List, update, and serve registered documents.
      */
     docsRetrieve(requestParameters: DocsRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob>;
 
@@ -103,7 +108,7 @@ export interface DocumentsApiInterface {
     docsUpdateRequestOpts(requestParameters: DocsUpdateRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * List, update, and serve registered documents.
      * @param {string} docId
      * @param {SaveDocument} saveDocument
      * @param {*} [options] Override http request option.
@@ -113,13 +118,13 @@ export interface DocumentsApiInterface {
     docsUpdateRaw(requestParameters: DocsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Digest>>;
 
     /**
+     * List, update, and serve registered documents.
      */
     docsUpdate(requestParameters: DocsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Digest>;
 
     /**
      * Creates request options for documentsRetrieve without sending the request
      * @param {string} [moduleId]
-     * @param {number} [profile]
      * @param {string} [projectId]
      * @param {string} [scope]
      * @param {string} [taskId]
@@ -129,9 +134,8 @@ export interface DocumentsApiInterface {
     documentsRetrieveRequestOpts(requestParameters: DocumentsRetrieveRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * List, update, and serve registered documents.
      * @param {string} [moduleId]
-     * @param {number} [profile]
      * @param {string} [projectId]
      * @param {string} [scope]
      * @param {string} [taskId]
@@ -142,6 +146,7 @@ export interface DocumentsApiInterface {
     documentsRetrieveRaw(requestParameters: DocumentsRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DocumentList>>;
 
     /**
+     * List, update, and serve registered documents.
      */
     documentsRetrieve(requestParameters: DocumentsRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DocumentList>;
 
@@ -154,7 +159,7 @@ export interface DocumentsApiInterface {
     fsCompleteRetrieveRequestOpts(requestParameters: FsCompleteRetrieveRequest): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * List, update, and serve registered documents.
      * @param {string} [path]
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -163,6 +168,7 @@ export interface DocumentsApiInterface {
     fsCompleteRetrieveRaw(requestParameters: FsCompleteRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<FsEntries>>;
 
     /**
+     * List, update, and serve registered documents.
      */
     fsCompleteRetrieve(requestParameters: FsCompleteRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<FsEntries>;
 
@@ -209,6 +215,7 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
     }
 
     /**
+     * List, update, and serve registered documents.
      */
     async docsRetrieveRaw(requestParameters: DocsRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
         const requestOptions = await this.docsRetrieveRequestOpts(requestParameters);
@@ -218,6 +225,7 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
     }
 
     /**
+     * List, update, and serve registered documents.
      */
     async docsRetrieve(requestParameters: DocsRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
         const response = await this.docsRetrieveRaw(requestParameters, initOverrides);
@@ -266,6 +274,7 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
     }
 
     /**
+     * List, update, and serve registered documents.
      */
     async docsUpdateRaw(requestParameters: DocsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Digest>> {
         const requestOptions = await this.docsUpdateRequestOpts(requestParameters);
@@ -275,6 +284,7 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
     }
 
     /**
+     * List, update, and serve registered documents.
      */
     async docsUpdate(requestParameters: DocsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Digest> {
         const response = await this.docsUpdateRaw(requestParameters, initOverrides);
@@ -289,10 +299,6 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
 
         if (requestParameters['moduleId'] != null) {
             queryParameters['module_id'] = requestParameters['moduleId'];
-        }
-
-        if (requestParameters['profile'] != null) {
-            queryParameters['profile'] = requestParameters['profile'];
         }
 
         if (requestParameters['projectId'] != null) {
@@ -325,6 +331,7 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
     }
 
     /**
+     * List, update, and serve registered documents.
      */
     async documentsRetrieveRaw(requestParameters: DocumentsRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DocumentList>> {
         const requestOptions = await this.documentsRetrieveRequestOpts(requestParameters);
@@ -334,6 +341,7 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
     }
 
     /**
+     * List, update, and serve registered documents.
      */
     async documentsRetrieve(requestParameters: DocumentsRetrieveRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DocumentList> {
         const response = await this.documentsRetrieveRaw(requestParameters, initOverrides);
@@ -368,6 +376,7 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
     }
 
     /**
+     * List, update, and serve registered documents.
      */
     async fsCompleteRetrieveRaw(requestParameters: FsCompleteRetrieveRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<FsEntries>> {
         const requestOptions = await this.fsCompleteRetrieveRequestOpts(requestParameters);
@@ -377,6 +386,7 @@ export class DocumentsApi extends runtime.BaseAPI implements DocumentsApiInterfa
     }
 
     /**
+     * List, update, and serve registered documents.
      */
     async fsCompleteRetrieve(requestParameters: FsCompleteRetrieveRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<FsEntries> {
         const response = await this.fsCompleteRetrieveRaw(requestParameters, initOverrides);

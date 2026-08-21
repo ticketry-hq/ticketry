@@ -24,7 +24,7 @@ import {
 } from './OriginEnum.js';
 
 /**
- *
+ * Caller origin accepted by the guarded workflow transition.
  * @export
  * @interface RunNowRequest
  */

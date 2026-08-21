@@ -153,6 +153,15 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
     [updateState],
   );
 
+  useEffect(
+    () => () => {
+      serializedPayloadRef.current = null;
+      stateRef.current = { payload: null, targetId: null, intent: null };
+      targetElementsRef.current.clear();
+    },
+    [],
+  );
+
   const commitDrop = useCallback(
     (
       event: ReactDragEvent<HTMLElement> | DragEvent,
@@ -275,7 +284,7 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
         (event.target === document ||
           event.target === document.documentElement ||
           event.target === document.body);
-      if (leftDocument) clearAll();
+      if (leftDocument) clearResolvedTarget();
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -284,7 +293,7 @@ export function useAxisDragAndDrop<Payload, TargetId extends string>(
       window.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("dragleave", onDocumentDragLeave);
     };
-  }, [clearAll]);
+  }, [clearAll, clearResolvedTarget]);
 
   const getters = useMemo(() => {
     const sourceProps = new Map<string, DragSourceProps>();

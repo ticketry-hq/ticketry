@@ -15,9 +15,9 @@
  */
 
 /**
- * * `pending` - pending
- * * `succeeded` - succeeded
- * * `failed` - failed
+ * * `pending` - Pending
+ * * `succeeded` - Succeeded
+ * * `failed` - Failed
  * @export
  * @enum {string}
  */

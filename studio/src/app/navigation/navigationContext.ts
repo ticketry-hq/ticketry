@@ -1,8 +1,4 @@
 import {
-  getConfigSnapshot,
-  type ConfigSnapshot,
-} from "../../features/studio/stores/configStore";
-import {
   getModulesSnapshot,
   getProjectsSnapshot,
 } from "../../features/projects";
@@ -28,7 +24,6 @@ type Direction = 1 | -1;
 export interface NavigationContext {
   event: KeyboardEvent;
   taskRows: TreeRow[];
-  cfg: ConfigSnapshot;
   tasks: NavigationTasks;
   ui: ReturnType<typeof useClientStore.getState>;
 }
@@ -62,7 +57,6 @@ export function createNavigationContext(
   return {
     event,
     taskRows,
-    cfg: getConfigSnapshot(),
     tasks: {
       projects: getProjectsSnapshot(),
       modules: getModulesSnapshot(project.selectedProjectId),

@@ -57,7 +57,7 @@ class AttachmentsApi:
     ) -> List[Attachment]:
         """list_work_item_attachments
 
-        Read or append attachment rows without re-reading their work item.
+        Nested attachment collection for one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -124,7 +124,7 @@ class AttachmentsApi:
     ) -> ApiResponse[List[Attachment]]:
         """list_work_item_attachments
 
-        Read or append attachment rows without re-reading their work item.
+        Nested attachment collection for one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -191,7 +191,7 @@ class AttachmentsApi:
     ) -> RESTResponseType:
         """list_work_item_attachments
 
-        Read or append attachment rows without re-reading their work item.
+        Nested attachment collection for one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -320,7 +320,7 @@ class AttachmentsApi:
     ) -> Attachment:
         """upload_attachment
 
-        Read or append attachment rows without re-reading their work item.
+        Nested attachment collection for one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -395,7 +395,7 @@ class AttachmentsApi:
     ) -> ApiResponse[Attachment]:
         """upload_attachment
 
-        Read or append attachment rows without re-reading their work item.
+        Nested attachment collection for one work item.
 
         :param issue_id: (required)
         :type issue_id: str
@@ -470,7 +470,7 @@ class AttachmentsApi:
     ) -> RESTResponseType:
         """upload_attachment
 
-        Read or append attachment rows without re-reading their work item.
+        Nested attachment collection for one work item.
 
         :param issue_id: (required)
         :type issue_id: str

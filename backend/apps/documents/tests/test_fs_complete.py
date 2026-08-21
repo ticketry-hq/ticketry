@@ -1,6 +1,15 @@
 import os
 
 
+def test_completion_requires_authentication(client, settings):
+    settings.WORKTRACKER_API_TOKEN = "secret"
+    settings.WORKTRACKER_DISABLE_AUTH = False
+
+    response = client.get("/api/fs/complete", {"path": ""})
+
+    assert response.status_code == 401
+
+
 def test_trailing_slash_lists_dirs(client, tmp_path):
     (tmp_path / "alpha").mkdir()
     (tmp_path / "beta").mkdir()

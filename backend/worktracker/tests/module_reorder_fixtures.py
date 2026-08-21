@@ -10,9 +10,9 @@ import uuid
 
 import pytest
 
-from worktracker.models import Issue, IssueType, Project
+from worktracker.models import Issue, IssueType, ModulePresentation, Project
 from worktracker.services.queries import list_modules
-from worktracker.services.work_items import reorder_work_item
+from worktracker.services.module_reorder import reorder_module
 from worktracker.tests.conftest import BASE, post_json
 
 
@@ -44,9 +44,7 @@ def make_task(project, task_type, *, name="task", rank=""):
 def make_foreign_module(project, name="foreign"):
     """A module in a sibling project of the same workspace."""
 
-    other = Project.objects.create(
-        id=uuid.uuid4(), workspace=project.workspace, name="other", slug="OTHER"
-    )
+    other = Project.objects.create(id=uuid.uuid4(), name="other", slug="OTHER")
     foreign_type = IssueType.objects.create(
         id=uuid.uuid4(), project=other, name="Module", level="module"
     )
@@ -54,9 +52,14 @@ def make_foreign_module(project, name="foreign"):
 
 
 def reorder_request(client, auth, module_id, body):
-    """POST the reorder operation for one work item."""
+    """POST the reorder operation for one module presentation."""
 
-    return post_json(client, f"{BASE}/work-items/{module_id}/reorder", body, auth)
+    return post_json(
+        client,
+        f"{BASE}/module-presentations/{module_id}/reorder",
+        body,
+        auth,
+    )
 
 
 def module_names(project):
@@ -67,8 +70,11 @@ def module_names(project):
 
 def ranks_by_name(project):
     return {
-        module.name: module.rank
-        for module in Issue.objects.filter(project=project, type="module")
+        presentation.module.name: presentation.rank
+        for presentation in ModulePresentation.objects.filter(
+            module__project=project,
+            module__type="module",
+        ).select_related("module")
     }
 
 
@@ -76,9 +82,7 @@ def ranks_by_name(project):
 def modules(project, module_type):
     """Three automatic-mode modules, visible newest-created-first: c, b, a."""
 
-    return {
-        name: make_module(project, module_type, name) for name in ("a", "b", "c")
-    }
+    return {name: make_module(project, module_type, name) for name in ("a", "b", "c")}
 
 
 def baseline(modules, *names):
@@ -88,7 +92,7 @@ def baseline(modules, *names):
 def seed_manual(modules, *names):
     """Turn the project manual with the supplied order already applied."""
 
-    reorder_work_item(
+    reorder_module(
         modules[names[-1]].id,
         before_id=modules[names[-2]].id,
         after_id=None,

@@ -18,19 +18,24 @@ import pprint
 import re  # noqa: F401
 import json
 
+from datetime import datetime
 from pydantic import BaseModel, ConfigDict, StrictStr
 from typing import Any, ClassVar, Dict, List
+from uuid import UUID
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
 class ModuleLink(BaseModel):
     """
-    ModuleLink
+    Explicit public allowlist for a host-local Module link.
     """ # noqa: E501
-    module_id: StrictStr
-    path: StrictStr
-    __properties: ClassVar[List[str]] = ["module_id", "path"]
+    id: UUID
+    module_id: UUID
+    local_path: StrictStr
+    created_at: datetime
+    updated_at: datetime
+    __properties: ClassVar[List[str]] = ["id", "module_id", "local_path", "created_at", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -62,8 +67,16 @@ class ModuleLink(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
+        * OpenAPI `readOnly` fields are excluded.
         """
         excluded_fields: Set[str] = set([
+            "id",
+            "module_id",
+            "created_at",
+            "updated_at",
         ])
 
         _dict = self.model_dump(
@@ -83,7 +96,10 @@ class ModuleLink(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
+            "id": obj.get("id"),
             "module_id": obj.get("module_id"),
-            "path": obj.get("path")
+            "local_path": obj.get("local_path"),
+            "created_at": obj.get("created_at"),
+            "updated_at": obj.get("updated_at")
         })
         return _obj

@@ -9,6 +9,8 @@ import type {
   IssueTypeCreate,
   IssueTypePatch,
   Module,
+  ModulePresentation,
+  ModuleLink,
   Project,
   ProjectCreate,
   ProjectPatch,
@@ -29,7 +31,7 @@ import type {
   WorkItemDetail,
   WorkItemFilters,
   WorkItemPatch,
-  Workspace,
+  WorkspaceTabOrder,
 } from "./types";
 import {
   instanceOfRunNowRefusal,
@@ -40,25 +42,6 @@ import { runtimeConfiguration } from "../../runtime";
 import { authenticatedHostFetch } from "./authenticatedHostFetch";
 
 export { documentUrl as docUrl } from "./documentUrl";
-
-interface StudioProfile {
-  name: string;
-  workspace_slug: string;
-  agent_prompt: string | null;
-  agent_prompts: Record<string, string>;
-  module_links: Array<{ module_id: string; path: string }>;
-  recent_project_id?: string | null;
-  recent_module_ids?: Record<string, string>;
-}
-
-interface StudioConfigPayload {
-  recent_profile_index: number | null;
-  profiles: StudioProfile[];
-  features: {
-    sidebar: boolean;
-    projects: boolean;
-  };
-}
 
 export function apiBase(): string {
   return runtimeConfiguration().endpoints.workTrackerApi;
@@ -182,32 +165,12 @@ export function moduleTreeFromWorkItems(
   return { rootIds, children, order };
 }
 
-// Host configuration operations live in this same request layer even though
-// their routes are mounted outside /api/work-tracker.
-export const getConfig = () =>
-  call(() => sdk().configuration.configRetrieve()) as Promise<StudioConfigPayload>;
-
-export const postProfile = (body: Partial<StudioProfile>) =>
-  call(() => sdk().configuration.configProfilesCreate({ profile: body as never })) as Promise<StudioConfigPayload>;
-
-export const putProfile = (index: number, body: Partial<StudioProfile>) =>
-  call(() => sdk().configuration.configProfilesUpdate({ index, profile: body as never })) as Promise<StudioConfigPayload>;
-
-export const deleteProfile = (index: number) =>
-  call(() => sdk().configuration.configProfilesDestroy({ index })) as Promise<StudioConfigPayload>;
-
-export const patchConfig = (body: { recent_profile_index: number }) =>
-  call(() => sdk().configuration.configPartialUpdate({ patchedRecentIndex: body })) as Promise<StudioConfigPayload>;
-
 export const listProjects = () =>
   call<Project[]>(async () => (await sdk().projects.listProjects()) as Project[]);
 
-export const getWorkspace = () =>
-  call<Workspace>(async () => (await sdk().workspace.retrieveWorkspace()) as Workspace);
-
-export const acknowledgeOnboarding = () =>
-  call<Workspace>(async () =>
-    (await sdk().workspace.acknowledgeWorkspaceOnboarding()) as Workspace
+export const acknowledgeProjectOnboarding = (projectId: string) =>
+  call<Project>(async () =>
+    (await sdk().projects.acknowledgeProjectOnboarding({ projectId })) as Project
   );
 
 export const createProject = (body: ProjectCreate) =>
@@ -241,6 +204,26 @@ export const listModules = (projectId: string) =>
     (await sdk().modules.listModules({ projectId })) as Module[]
   );
 
+export const listModuleLinks = () =>
+  call<ModuleLink[]>(async () =>
+    (await sdk().moduleLinks.moduleLinksList()) as ModuleLink[]
+  );
+
+export const upsertModuleLink = (moduleId: string, localPath: string) =>
+  call<ModuleLink>(async () =>
+    (await sdk().moduleLinks.moduleLinksUpsert({
+      moduleId,
+      moduleLinkWrite: { local_path: localPath },
+    })) as ModuleLink
+  );
+
+export const validateModuleFolder = (path: string) =>
+  call(() =>
+    sdk().settings.configFoldersValidateCreate({
+      moduleFolderValidation: { path },
+    }),
+  );
+
 export const createModule = (projectId: string, name: string, issueTypeId: string) =>
   call<Module>(async () =>
     (await sdk().modules.createModule({
@@ -265,13 +248,6 @@ export const createModuleSummary = (
       project_id: module.project_id,
     };
   });
-
-export const getModuleActivity = (
-  projectId: string,
-): Promise<Record<string, string>> =>
-  call(() => sdk().runs.runsModuleActivityRetrieve({ projectId }))
-    .then((value) => value as Record<string, string>)
-    .catch(() => ({}));
 
 export const listStates = (projectId: string) =>
   call<State[]>(async () =>
@@ -328,6 +304,28 @@ export const getWorkItemAttachments = (
     )) as unknown as Attachment[],
   );
 
+export const getWorkspaceTabOrder = (
+  workItemId: string,
+  signal?: AbortSignal,
+) =>
+  call<WorkspaceTabOrder>(() =>
+    sdk().workItems.getWorkspaceTabOrder(
+      { issueId: workItemId },
+      signal ? { signal } : undefined,
+    ) as unknown as Promise<WorkspaceTabOrder>,
+  );
+
+export const updateWorkspaceTabOrder = (
+  workItemId: string,
+  workspaceTabOrder: WorkspaceTabOrder,
+) =>
+  call<WorkspaceTabOrder>(() =>
+    sdk().workItems.updateWorkspaceTabOrder({
+      issueId: workItemId,
+      workspaceTabOrder,
+    }) as unknown as Promise<WorkspaceTabOrder>,
+  );
+
 export const createWorkItem = (projectId: string, body: WorkItemCreate) =>
   call<WorkItem>(async () =>
     (await sdk().workItems.createWorkItem({
@@ -366,6 +364,39 @@ export const reorderWorkItem = (
       issueId: id,
       workItemReorder: neighbors,
     })) as unknown as WorkItem
+  );
+
+export const reorderModulePresentation = (
+  moduleId: string,
+  neighbors: {
+    before_id: string | null;
+    after_id: string | null;
+    initial_order_ids?: string[] | null;
+  },
+) =>
+  call<ModulePresentation>(async () =>
+    (await sdk().modulePresentations.reorderModulePresentation({
+      moduleId,
+      modulePresentationReorder: neighbors,
+    })) as unknown as ModulePresentation
+  );
+
+export const listModulePresentations = (signal?: AbortSignal) =>
+  call<ModulePresentation[]>(async () =>
+    (await sdk().modulePresentations.listModulePresentations({
+      signal,
+    })) as unknown as ModulePresentation[]
+  );
+
+export const updateModulePresentation = (
+  moduleId: string,
+  body: { tab_hidden: boolean },
+) =>
+  call<ModulePresentation>(async () =>
+    (await sdk().modulePresentations.updateModulePresentation({
+      moduleId,
+      modulePresentationWrite: body,
+    })) as unknown as ModulePresentation
   );
 
 export const getTasks = async (projectId: string, moduleId: string) => {
@@ -572,16 +603,12 @@ export const getLaunchProviderCapabilities = (): Promise<ProviderCapabilities[]>
       );
       return {
         agent: provider.slug,
-        accepts_model: true,
-        accepts_any_model: false,
-        model_aliases: providerModels.map((model) => model.name),
-        model_prefixes: [],
-        reasoning_levels: [...new Set(
-          providerModels.flatMap((model) =>
-            (model.permitted_reasoning_levels ?? []).map(
-              (level) => reasoningNames.get(level) ?? level,
-            )),
-        )],
+        models: providerModels.map((model) => ({
+          name: model.name,
+          reasoning_levels: (model.permitted_reasoning_levels ?? []).map(
+            (level) => reasoningNames.get(level) ?? level,
+          ),
+        })),
         supports_unattended: provider.supports_unattended,
       };
     });
@@ -624,6 +651,7 @@ interface CanonicalLaunchBinding {
   state: string;
   prompt?: string;
   required_skills?: unknown;
+  entry_skill?: string | null;
   model?: string | null;
   reasoning?: string | null;
   auto_start?: boolean;
@@ -691,6 +719,7 @@ function assembleScopedWorkflowSettings(
               (skill): skill is string => typeof skill === "string",
             )
           : [],
+        entry_skill: binding.entry_skill ?? null,
         agent: provider?.slug ?? null,
         model: model?.name ?? null,
         reasoning: binding.reasoning
@@ -931,6 +960,7 @@ export const upsertIssueTypeWorkflowLaunchBinding = (
       body: JSON.stringify({
         prompt: binding.prompt,
         required_skills: binding.required_skills,
+        entry_skill: binding.entry_skill,
         model: resolved.model,
         reasoning: resolved.reasoning,
         workflow_revision: workflowRevision,

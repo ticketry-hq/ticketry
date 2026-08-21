@@ -6,8 +6,7 @@ import os
 
 from django.db import close_old_connections
 
-from apps.settings_store import config as cfgmod
-from apps.settings_store.config import module_link_path, resolve_profile_index
+from apps.settings_store.module_links import resolve_module_path
 from apps.terminals.agents.registry import UnknownAgent, get_adapter
 from apps.terminals.agents.skills.preflight import ResolvedSkills, resolve_required_skills
 from apps.terminals.launch_configuration import (
@@ -45,13 +44,11 @@ def preflight_task_launch(
     module_id: str,
     launch_configuration: ResolvedLaunchConfiguration,
 ) -> ResolvedSkills:
-    """Validate profile, provider, and skills before a composed state move."""
+    """Validate module path, provider, and skills before a composed state move."""
 
     agent = launch_configuration.agent
     enforce_provider_activation(agent)
-    config = cfgmod.Config()
-    profile = config.profiles[resolve_profile_index(config, None)]
-    module_folder = module_link_path(profile, module_id)
+    module_folder = resolve_module_path(module_id)
     cwd = (
         module_folder
         if module_folder and os.path.isdir(module_folder)

@@ -51,7 +51,23 @@ class StudioRunControlService:
                 "error": "run_control_invalid_response",
                 "status_code": response.status_code,
             }
-        return body
+        if response.is_success:
+            return body
+        # Studio reports a refused termination as an ordinary HTTP error, whose
+        # body carries no ``ok`` flag. An agent reads this dict, not the status
+        # code, so a refusal must be stated in the same shape as the failures
+        # this service raises itself — otherwise "not terminated" reads as
+        # success to the one caller that matters.
+        return {
+            **body,
+            "ok": False,
+            "error": (
+                body.get("code")
+                or body.get("error")
+                or body.get("detail")
+                or "run_control_failed"
+            ),
+        }
 
 
 def get_studio_run_control_service() -> StudioRunControlService:

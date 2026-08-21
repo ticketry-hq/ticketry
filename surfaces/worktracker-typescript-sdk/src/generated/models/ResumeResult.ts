@@ -26,13 +26,13 @@ export interface ResumeResult {
      * @type {string}
      * @memberof ResumeResult
      */
-    agent_run_id: string;
+    readonly agent_run_id: string;
     /**
      *
      * @type {string}
      * @memberof ResumeResult
      */
-    resumed_from: string;
+    readonly resumed_from: string;
 }
 
 /**
@@ -63,14 +63,12 @@ export function ResumeResultToJSON(json: any): ResumeResult {
     return ResumeResultToJSONTyped(json, false);
 }
 
-export function ResumeResultToJSONTyped(value?: ResumeResult | null, ignoreDiscriminator: boolean = false): any {
+export function ResumeResultToJSONTyped(value?: Omit<ResumeResult, 'agent_run_id'|'resumed_from'> | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'agent_run_id': value['agent_run_id'],
-        'resumed_from': value['resumed_from'],
     };
 }

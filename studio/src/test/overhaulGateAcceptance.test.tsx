@@ -11,7 +11,14 @@ function testFiles(directory: string): string[] {
 }
 
 describe("overhaul acceptance gate", () => {
-  it("keeps one executable acceptance case for each formerly manual behavior", () => {
+  it("keeps the acceptance matrix and executable markers in parity", () => {
+    const matrixIds = Array.from(
+      readFileSync(
+        join(process.cwd(), "docs", "overhaul-acceptance.md"),
+        "utf8",
+      ).matchAll(/^\|\s*(\d+)\s*\|/gm),
+      (match) => match[1].padStart(2, "0"),
+    );
     const counts = new Map<string, number>();
     for (const file of testFiles(join(process.cwd(), "src", "test"))) {
       const source = readFileSync(file, "utf8");
@@ -22,13 +29,12 @@ describe("overhaul acceptance gate", () => {
       }
     }
 
-    expect(Object.fromEntries(counts)).toEqual(
-      Object.fromEntries(
-        Array.from({ length: 126 }, (_, index) => [
-          String(index + 1).padStart(2, "0"),
-          1,
-        ]),
-      ),
-    );
+    expect(
+      Array.from(counts)
+        .filter(([, count]) => count > 1)
+        .map(([id]) => id),
+    ).toEqual([]);
+    expect(Array.from(counts.keys()).sort((a, b) => Number(a) - Number(b)))
+      .toEqual(matrixIds);
   });
 });

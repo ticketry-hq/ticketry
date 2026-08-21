@@ -2,10 +2,15 @@ import { act, renderHook } from "@testing-library/react";
 import type { DragEvent as ReactDragEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  transientDocumentDragLeave,
+  transientDocumentDragLeaveTargets,
+} from "../../test/moduleDragGestures";
+import {
   useAxisDragAndDrop,
   type AxisDragAndDropController,
   type DragAxis,
   type DragPayloadCodec,
+  type ResolvedDrop,
 } from "./useAxisDragAndDrop";
 
 interface Payload {
@@ -86,7 +91,14 @@ function startDrag(
 
 function renderController(
   axis: DragAxis,
-  options: { disabled?: boolean; onDrop?: ReturnType<typeof vi.fn> } = {},
+  options: {
+    disabled?: boolean;
+    onDrop?: (
+      payload: Payload,
+      resolved: ResolvedDrop<string>,
+      event: ReactDragEvent<HTMLElement> | DragEvent,
+    ) => void;
+  } = {},
 ) {
   return renderHook(
     ({ disabled }) =>
@@ -225,7 +237,11 @@ describe("useAxisDragAndDrop", () => {
 
       // Past every target along the axis is genuinely away from the surface.
       dispatchDocumentDrag("dragover", transfer, beyond);
-      expect(result.current).toMatchObject({ targetId: null, intent: null });
+      expect(result.current).toMatchObject({
+        payload: { id: "source" },
+        targetId: null,
+        intent: null,
+      });
 
       dispatchDocumentDrag("dragover", transfer, outside);
       dispatchDocumentDrag("drop", transfer, outside);
@@ -259,6 +275,55 @@ describe("useAxisDragAndDrop", () => {
       intent: null,
     });
   });
+
+  it.each(transientDocumentDragLeaveTargets)(
+    "resumes the same typed drag after a transient %s leave",
+    (leaveTarget) => {
+      const onDrop = vi.fn();
+      const { result } = renderController("horizontal", { onDrop });
+      mountTargets(result, "horizontal", ["first", "second"]);
+      const payload = { id: "original" };
+      const transfer = startDrag(result, payload);
+
+      dispatchDocumentDrag("dragover", transfer, {
+        clientX: 120,
+        clientY: -80,
+      });
+      expect(result.current).toMatchObject({
+        payload,
+        targetId: "second",
+        intent: "near",
+      });
+
+      transientDocumentDragLeave(transfer, leaveTarget);
+      expect(result.current).toMatchObject({
+        payload,
+        targetId: null,
+        intent: null,
+      });
+
+      dispatchDocumentDrag("dragover", transfer, {
+        clientX: 180,
+        clientY: -80,
+      });
+      dispatchDocumentDrag("drop", transfer, {
+        clientX: 180,
+        clientY: -80,
+      });
+
+      expect(onDrop).toHaveBeenCalledOnce();
+      expect(onDrop).toHaveBeenCalledWith(
+        payload,
+        { targetId: "second", intent: "far" },
+        expect.anything(),
+      );
+      expect(result.current).toMatchObject({
+        payload: null,
+        targetId: null,
+        intent: null,
+      });
+    },
+  );
 
   it("rejects foreign and malformed payloads", () => {
     const { result } = renderController("vertical");
@@ -327,12 +392,13 @@ describe("useAxisDragAndDrop", () => {
     });
   });
 
-  it("clears target and intent when a drag is cancelled", () => {
+  it("keeps source drag end authoritative after a transient leave", () => {
     const { result } = renderController("vertical");
     const transfer = startDrag(result);
     const sourceProps = result.current.getDragSourceProps({ id: "source" });
     const targetProps = result.current.getDropTargetProps("target");
     act(() => targetProps.onDragOver(dragEvent(transfer)));
+    transientDocumentDragLeave(transfer);
 
     act(() => sourceProps.onDragEnd(dragEvent(transfer)));
 
@@ -343,7 +409,7 @@ describe("useAxisDragAndDrop", () => {
     });
   });
 
-  it("clears target and intent on escape", () => {
+  it("keeps Escape authoritative after a transient leave", () => {
     const { result } = renderController("vertical");
     const transfer = startDrag(result);
     act(() =>
@@ -351,6 +417,7 @@ describe("useAxisDragAndDrop", () => {
         .getDropTargetProps("target")
         .onDragOver(dragEvent(transfer)),
     );
+    transientDocumentDragLeave(transfer);
 
     act(() =>
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
@@ -363,22 +430,38 @@ describe("useAxisDragAndDrop", () => {
     });
   });
 
-  it("clears target and intent when the drag leaves the surface", () => {
-    const { result } = renderController("vertical");
+  it("keeps disablement authoritative after a transient leave", () => {
+    const { result, rerender } = renderController("vertical");
     const transfer = startDrag(result);
     act(() =>
       result.current
         .getDropTargetProps("target")
         .onDragOver(dragEvent(transfer)),
     );
+    transientDocumentDragLeave(transfer);
 
-    act(() => document.dispatchEvent(new Event("dragleave", { bubbles: true })));
+    rerender({ disabled: true });
 
     expect(result.current).toMatchObject({
       payload: null,
       targetId: null,
       intent: null,
     });
+  });
+
+  it("keeps teardown authoritative after a transient leave", () => {
+    const onDrop = vi.fn();
+    const { result, unmount } = renderController("vertical", { onDrop });
+    const transfer = startDrag(result);
+    const targetProps = result.current.getDropTargetProps("target");
+    act(() => targetProps.onDragOver(dragEvent(transfer)));
+    transientDocumentDragLeave(transfer);
+    act(() => targetProps.onDragOver(dragEvent(transfer)));
+
+    unmount();
+    act(() => targetProps.onDrop(dragEvent(transfer)));
+
+    expect(onDrop).not.toHaveBeenCalled();
   });
 
   it(

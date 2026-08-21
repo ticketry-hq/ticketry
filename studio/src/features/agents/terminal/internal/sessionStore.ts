@@ -667,6 +667,12 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       // that has none cannot be represented as one (#665).
       throw new Error(`run ${session.agent_run_id} has no agent to attach`);
     }
+    // Background hydration honors a deliberately closed tab before it calls
+    // this method. A direct caller is an explicit reopen action, so the old
+    // dismissal must not hide the newly attached tab.
+    if (run.scope === "task" && run.task_id) {
+      removeDismissedRun(run.task_id, session.agent_run_id);
+    }
     const { sessions } = get();
     const existingId = get().sessionByRun[session.agent_run_id];
     const existing = existingId ? sessions[existingId] : undefined;

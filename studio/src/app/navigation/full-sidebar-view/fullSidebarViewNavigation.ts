@@ -28,6 +28,8 @@ import {
   selectLiveTerminalStop,
   type LiveTerminalCycleDirection,
 } from "../../../features/studio/lib/liveTerminalCycle";
+import { loadWorkspaceTabOrder } from "../../../features/workspace-tabs/queries";
+import type { WorkspaceTabOrder } from "../../../features/workspace-tabs/types";
 import {
   selectModuleTaskOrder,
   taskRevealPath,
@@ -42,6 +44,9 @@ import {
   selectedTaskIndex,
   selectTaskAt,
 } from "../navigationContext";
+import {
+  activateSelectedWorkItem,
+} from "../workItemActivation";
 
 const FOCUSED_PANE_ACTIONS: Record<FocusedPane, ReadonlySet<string>> = {
   projects: new Set(["projects.next", "projects.previous", "projects.activate"]),
@@ -50,11 +55,14 @@ const FOCUSED_PANE_ACTIONS: Record<FocusedPane, ReadonlySet<string>> = {
     "tasks.next",
     "tasks.previous",
     "tasks.activate",
+    "tasks.choose-provider",
     "tasks.expand",
     "tasks.collapse",
   ]),
   "details-or-terminal": new Set(),
 };
+
+let liveTerminalCycleQueue = Promise.resolve();
 
 export function focusedPaneActionIds(pane: FocusedPane): ReadonlySet<string> {
   return FOCUSED_PANE_ACTIONS[pane];
@@ -67,11 +75,11 @@ export function routeFullSidebarViewCaptureNavigation(
   actionId: string | null,
 ): boolean {
   if (actionId === "cycle-terminal-forward") {
-    cycleLiveTerminal(event, taskRows, "forward");
+    queueLiveTerminalCycle(event, taskRows, "forward");
     return true;
   }
   if (actionId === "cycle-terminal-backward") {
-    cycleLiveTerminal(event, taskRows, "backward");
+    queueLiveTerminalCycle(event, taskRows, "backward");
     return true;
   }
   if (
@@ -88,13 +96,14 @@ export function routeFullSidebarViewFocusedPaneNavigation(
   event: KeyboardEvent,
   taskRows: TreeRow[],
   actionId: string | null,
+  selectSidebarModule: (moduleId: string) => void,
 ): boolean {
   const ctx = createNavigationContext(event, taskRows);
   switch (ctx.ui.focusedPane) {
     case "projects":
       return routeProjectsPane(ctx, actionId);
     case "modules":
-      return routeModulesPane(ctx, actionId);
+      return routeModulesPane(ctx, actionId, selectSidebarModule);
     case "tasks":
       return routeTasksPane(ctx, actionId);
     case "details-or-terminal":
@@ -102,13 +111,20 @@ export function routeFullSidebarViewFocusedPaneNavigation(
   }
 }
 
-function cycleLiveTerminal(
+function queueLiveTerminalCycle(
   event: KeyboardEvent,
   taskRows: TreeRow[],
   direction: LiveTerminalCycleDirection,
 ): void {
   consume(event);
+  const runCycle = () => cycleLiveTerminal(taskRows, direction);
+  liveTerminalCycleQueue = liveTerminalCycleQueue.then(runCycle, runCycle);
+}
 
+async function cycleLiveTerminal(
+  taskRows: TreeRow[],
+  direction: LiveTerminalCycleDirection,
+): Promise<void> {
   const projectId = useStudioStore.getState().selectedProjectId;
   const ui = useClientStore.getState();
   const tree = getModuleTreeSnapshot(projectId, ui.selectedModuleId);
@@ -119,14 +135,46 @@ function cycleLiveTerminal(
   const terminal = useTerminalStore.getState();
   const tabs = useWorkspaceTabsStore.getState();
   const workspace = useTicketWorkspaceStore.getState();
+  const taskIds = ui.storySearchQuery.trim()
+    ? undefined
+    : selectModuleTaskOrder(tree, itemsById, getStatesSnapshot(projectId));
+  const candidateStops = selectLiveTerminalStops({
+    moduleId: ui.selectedModuleId,
+    taskRows,
+    taskOrder: taskIds,
+    agentStatus: useAgentStatusStore.getState(),
+    sessions: terminal.sessions,
+  });
+  const orderedTaskIds = Array.from(new Set(
+    candidateStops.map((stop) => stop.taskId),
+  ));
+  try {
+    await Promise.all(orderedTaskIds.map(loadWorkspaceTabOrder));
+  } catch {
+    // A cycle with an unknown saved order can disagree with the visible strip.
+    // Stay put until every work item that contributes a stop has loaded.
+    return;
+  }
+  const terminalOrderByTask = Object.fromEntries(
+    orderedTaskIds.map((taskId) => {
+      const order = queryClient.getQueryData<WorkspaceTabOrder>(
+        queryKeys.workspaceTabs.byWorkItem(taskId),
+      )?.order ?? [];
+      return [
+        taskId,
+        order.flatMap((identity) =>
+          identity.kind === "terminal" ? [identity.id] : [],
+        ),
+      ];
+    }),
+  );
   const stops = selectLiveTerminalStops({
     moduleId: ui.selectedModuleId,
     taskRows,
-    taskOrder: ui.storySearchQuery.trim()
-      ? undefined
-      : selectModuleTaskOrder(tree, itemsById, getStatesSnapshot(projectId)),
+    taskOrder: taskIds,
     agentStatus: useAgentStatusStore.getState(),
     sessions: terminal.sessions,
+    terminalOrderByTask,
   });
   const currentSessionId = ui.selectedTaskId
     ? tabs.activeByTask[ui.selectedTaskId] ?? null
@@ -189,6 +237,7 @@ function routeProjectsPane(
 function routeModulesPane(
   { event, tasks, ui }: NavigationContext,
   actionId: string | null,
+  selectSidebarModule: (moduleId: string) => void,
 ): boolean {
   if (actionId === "modules.next" || actionId === "modules.previous") {
     consume(event);
@@ -208,13 +257,13 @@ function routeModulesPane(
   const module = tasks.modules.find((candidate) => candidate.id === moduleId);
   if (event.shiftKey && module) {
     consume(event);
-    void tasks.selectModule(module.id);
+    selectSidebarModule(module.id);
     startInstantChangeFlow();
     return true;
   }
 
   consume(event);
-  if (module) void tasks.selectModule(module.id);
+  if (module) selectSidebarModule(module.id);
   return true;
 }
 
@@ -228,7 +277,9 @@ function routeTasksPane(
     case "tasks.previous":
       return moveTaskSelection(ctx, -1);
     case "tasks.activate":
-      return openAgentPicker(ctx);
+      return activateTask(ctx);
+    case "tasks.choose-provider":
+      return chooseTaskProvider(ctx);
     case "tasks.expand":
       return expandOrEnterTask(ctx);
     case "tasks.collapse":
@@ -236,6 +287,54 @@ function routeTasksPane(
     default:
       return false;
   }
+}
+
+function activateTask(ctx: NavigationContext): boolean {
+  const row = currentTaskRow(ctx);
+  if (!row) {
+    consume(ctx.event);
+    return true;
+  }
+  const { selectedProjectId, selectedModuleId } = ctx.tasks;
+  if (
+    selectedProjectId &&
+    selectedModuleId &&
+    ctx.tasks.itemsById[row.id] &&
+    activateSelectedWorkItem(
+      {
+        projectId: selectedProjectId,
+        moduleId: selectedModuleId,
+        taskId: row.id,
+      },
+      "open-default-terminal",
+    )
+  ) {
+    consume(ctx.event);
+    return true;
+  }
+  return openAgentPicker(ctx);
+}
+
+function chooseTaskProvider(ctx: NavigationContext): boolean {
+  consume(ctx.event);
+  const row = currentTaskRow(ctx);
+  const { selectedProjectId, selectedModuleId } = ctx.tasks;
+  if (
+    row &&
+    selectedProjectId &&
+    selectedModuleId &&
+    ctx.tasks.itemsById[row.id]
+  ) {
+    activateSelectedWorkItem(
+      {
+        projectId: selectedProjectId,
+        moduleId: selectedModuleId,
+        taskId: row.id,
+      },
+      "choose-provider",
+    );
+  }
+  return true;
 }
 
 function openAgentPicker(ctx: NavigationContext): boolean {
@@ -254,20 +353,10 @@ function openAgentPicker(ctx: NavigationContext): boolean {
     taskId: row.id,
   };
 
-  if (ctx.event.shiftKey) {
-    useModalStore.getState().pushModal({
-      type: "prompt-input",
-      payload: {
-        next: "agent-picker",
-        nextPayload: { mode: "open-with-prompt", ...launchContext },
-      },
-    });
-  } else {
-    useModalStore.getState().pushModal({
-      type: "agent-picker",
-      payload: { mode: "open", ...launchContext },
-    });
-  }
+  useModalStore.getState().pushModal({
+    type: "agent-picker",
+    payload: { mode: "open", ...launchContext },
+  });
   return true;
 }
 

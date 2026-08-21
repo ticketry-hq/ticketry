@@ -32,6 +32,7 @@ def _run(
     ended_at: str | None,
     provider_session_id: str | None,
     cwd: str,
+    initial_prompt: str | None = "Continue the original task.",
 ) -> AgentRun:
     return AgentRun(
         id=run_id,
@@ -42,6 +43,7 @@ def _run(
         status="terminated" if ended_at is not None else "running",
         started_at="2026-05-29T10:00:00",
         ended_at=ended_at,
+        initial_prompt=initial_prompt,
         cwd=cwd,
         provider_session_id=provider_session_id,
         design_dir="/repo/design",
@@ -124,6 +126,8 @@ async def test_resume_happy_path_prepares_provider_command_without_old_terminal(
     assert captured["scope"] == "docchat"
     assert captured["doc_rel_path"] is None
     assert captured["provider_session_id"] == PROVIDER_SESSION_ID
+    assert captured["staged_prompt"] == "continue"
+    assert "initial_prompt" not in captured
     assert "resumed_from" not in captured
     assert captured["issue_id"] == fixture_issue_id(
         project_id=PROJECT_ID, module_id=MODULE_ID, task_id=TASK_ID
@@ -176,6 +180,7 @@ def test_resume_persists_fresh_run_and_terminal_with_provider_continuity(
     assert resumed.lifecycle_state == "starting"
     assert resumed.provider_session_id == PROVIDER_SESSION_ID
     assert resumed.resumed_from is None
+    assert resumed.initial_prompt is None
     # A resume continues one conversation, so it reports the state and model
     # that conversation began in rather than re-reading current policy (#693).
     assert (resumed.launch_state, resumed.launch_model) == ("Grill", "sonnet")
@@ -187,6 +192,9 @@ def test_resume_persists_fresh_run_and_terminal_with_provider_continuity(
     assert request.agent_run_id == new_run_id
     assert OLD_RUN_ID not in request.command
     assert PROVIDER_SESSION_ID in request.command
+    assert "Continue the original task." not in request.command
+    assert runtime.submitted == []
+    assert runtime.staged == [(new_run_id, "continue")]
 
 
 async def test_resume_unknown_run_raises_resume_unavailable() -> None:
@@ -194,6 +202,36 @@ async def test_resume_unknown_run_raises_resume_unavailable() -> None:
         await launch_module.resume_provider_conversation("missing")
 
     assert excinfo.value.reason == "unknown_run"
+
+
+async def test_resume_legacy_run_without_recorded_prompt_stages_continue(
+    tmp_path, monkeypatch
+) -> None:
+    """Runs created before prompt capture get the same unsubmitted draft."""
+
+    cwd = tmp_path / "repo"
+    cwd.mkdir()
+    await runs_dao.insert_agent_run(
+        _run(
+            cwd=str(cwd),
+            provider_session_id=PROVIDER_SESSION_ID,
+            ended_at="2026-05-29T10:05:00",
+            initial_prompt=None,
+        )
+    )
+    await terminals_dao.insert_terminal_session(_session())
+    _patch_resume_adapter(
+        monkeypatch,
+        resume_fn=lambda sid: ["claude", "--resume", sid],
+    )
+    captured = _capture_launch(monkeypatch)
+
+    new_run_id = await launch_module.resume_provider_conversation(OLD_RUN_ID)
+
+    assert new_run_id == captured["agent_run_id"]
+    assert captured["argv"] == ["claude", "--resume", PROVIDER_SESSION_ID]
+    assert captured["staged_prompt"] == "continue"
+    assert "initial_prompt" not in captured
 
 
 async def test_resume_active_run_raises_resume_unavailable(tmp_path, monkeypatch) -> None:

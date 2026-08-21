@@ -22,6 +22,8 @@ class AgentRun(models.Model):
     ended_at = models.CharField(null=True)
     exit_code = models.IntegerField(null=True)
     error = models.CharField(null=True)
+    # Exact launch prompt passed to the provider command.
+    initial_prompt = models.TextField(null=True)
     cwd = models.CharField(null=True)
     provider_session_id = models.CharField(null=True)
     lifecycle_state = models.CharField(null=True)

@@ -175,6 +175,7 @@ def make_issue_type(**over):
         level="task",
         color="#222",
         sort_order=0,
+        is_pathfind=False,
     )
     data.update(over)
     return SimpleNamespace(**data)

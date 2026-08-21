@@ -36,7 +36,7 @@ export interface SystemApiInterface {
     healthzRetrieveRequestOpts(): Promise<runtime.RequestOpts>;
 
     /**
-     *
+     * Process-level system operations with no persistence dependency.
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof SystemApiInterface
@@ -44,6 +44,7 @@ export interface SystemApiInterface {
     healthzRetrieveRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Health>>;
 
     /**
+     * Process-level system operations with no persistence dependency.
      */
     healthzRetrieve(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Health>;
 
@@ -74,6 +75,7 @@ export class SystemApi extends runtime.BaseAPI implements SystemApiInterface {
     }
 
     /**
+     * Process-level system operations with no persistence dependency.
      */
     async healthzRetrieveRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Health>> {
         const requestOptions = await this.healthzRetrieveRequestOpts();
@@ -83,6 +85,7 @@ export class SystemApi extends runtime.BaseAPI implements SystemApiInterface {
     }
 
     /**
+     * Process-level system operations with no persistence dependency.
      */
     async healthzRetrieve(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Health> {
         const response = await this.healthzRetrieveRaw(initOverrides);

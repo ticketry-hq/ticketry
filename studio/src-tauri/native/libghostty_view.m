@@ -8,9 +8,15 @@ static const uint16_t kMuxedEscapeKeyCode = 0x35;
 static const uint16_t kMuxedGraveKeyCode = 0x32;
 static const uint16_t kMuxedEKeyCode = 0x0E;
 
+// Hardware positions for 1 through 9, followed by 0, on a Mac keyboard.
+static const uint16_t kMuxedModulePositionKeyCodes[] = {
+    0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19, 0x1D,
+};
+
 @interface MuxedGhosttyView : NSView {
  @public
   ghostty_surface_t _surface;
+  muxed_ghostty_surface_owner_s _surfaceOwner;
   atomic_uint_fast64_t _redrawGeneration;
   // Main-thread only: gestures are delivered and disabled on AppKit's thread,
   // so a disabled view can no longer reach its owner's callback context.
@@ -50,6 +56,19 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   if (key_code == kMuxedEKeyCode && chord == NSEventModifierFlagCommand) {
     return MUXED_GHOSTTY_CHORD_SETTINGS;
   }
+  // Cmd+Escape leaves typing mode. The view has always handed the keyboard
+  // back for it; reporting it as a chord is what lets Studio's engaged state
+  // follow the keyboard instead of being left behind (#753).
+  if (key_code == kMuxedEscapeKeyCode && chord == NSEventModifierFlagCommand) {
+    return MUXED_GHOSTTY_CHORD_BODY_DISENGAGE;
+  }
+  if (chord == NSEventModifierFlagCommand) {
+    for (uint8_t index = 0; index < 10; index++) {
+      if (key_code == kMuxedModulePositionKeyCodes[index]) {
+        return MUXED_GHOSTTY_CHORD_MODULE_POSITION_1 + index;
+      }
+    }
+  }
   return MUXED_GHOSTTY_CHORD_NONE;
 }
 
@@ -78,6 +97,7 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   atomic_init(&_redrawGeneration, 0);
   _processExitCallback = processExitCallback;
   _processExitContext = processExitContext;
+  muxed_ghostty_surface_owner_init(&_surfaceOwner, self);
   [parent addSubview:self positioned:NSWindowAbove relativeTo:nil];
 
   // The target window is authoritative. The view must already belong to it
@@ -88,7 +108,7 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   ghostty_surface_config_s config = ghostty_surface_config_new();
   config.platform_tag = GHOSTTY_PLATFORM_MACOS;
   config.platform.macos.nsview = self;
-  config.userdata = self;
+  config.userdata = &_surfaceOwner;
   config.scale_factor = scale;
   config.command = command;
   config.wait_after_command = true;
@@ -99,6 +119,7 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
     [self release];
     return nil;
   }
+  muxed_ghostty_surface_owner_activate(&_surfaceOwner, _surface);
 
   ghostty_surface_set_content_scale(_surface, scale, scale);
   muxed_focus_trace(self, "view created", _acceptsInput);
@@ -107,8 +128,12 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
 
 - (void)dealloc {
   if (_surface != NULL) {
-    ghostty_surface_free(_surface);
+    ghostty_surface_t surface = _surface;
     _surface = NULL;
+    // Surface teardown may synchronously ask the runtime for host services.
+    // Make every such request unavailable before libghostty begins teardown.
+    muxed_ghostty_surface_owner_invalidate(&_surfaceOwner);
+    ghostty_surface_free(surface);
   }
   [super dealloc];
 }
@@ -178,14 +203,51 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
   atomic_fetch_add_explicit(&_redrawGeneration, 1, memory_order_release);
 }
 
+static ghostty_input_key_s muxed_ghostty_key_event(NSEvent *event,
+                                                   ghostty_input_action_e action) {
+  ghostty_input_key_s key = {0};
+  key.action = action;
+  key.keycode = event.keyCode;
+  key.mods = ghostty_mods(event.modifierFlags);
+  key.consumed_mods =
+      ghostty_mods(event.modifierFlags &
+                   ~(NSEventModifierFlagControl | NSEventModifierFlagCommand));
+  NSString *unshifted = [event charactersByApplyingModifiers:0];
+  if (unshifted.length == 1)
+    key.unshifted_codepoint = [unshifted characterAtIndex:0];
+
+  NSString *text = event.characters;
+  if (text.length == 1) {
+    unichar scalar = [text characterAtIndex:0];
+    if (scalar < 0x20 || (scalar >= 0xF700 && scalar <= 0xF8FF)) text = nil;
+  }
+  key.text = text.UTF8String;
+  return key;
+}
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+  if (!_acceptsInput || _surface == NULL || event.type != NSEventTypeKeyDown)
+    return NO;
+
+  // NSWindow asks the whole view tree for key equivalents. With two visible
+  // terminals, an unfocused view must not claim Cmd+V (or any other Ghostty
+  // binding) before AppKit reaches the terminal that actually owns input.
+  if (self.window.firstResponder != self) return NO;
+
+  // AppKit offers Command-modified keys to this path before keyDown. Ask
+  // libghostty whether it owns the event so bindings such as Cmd++ reach the
+  // native surface instead of falling through to the WebView's zoom handler.
+  ghostty_input_key_s key =
+      muxed_ghostty_key_event(event, GHOSTTY_ACTION_PRESS);
+  ghostty_binding_flags_e flags = 0;
+  if (!ghostty_surface_key_is_binding(_surface, key, &flags)) return NO;
+
+  [self keyDown:event];
+  return YES;
+}
+
 - (void)keyDown:(NSEvent *)event {
   if (!_acceptsInput || _surface == NULL) return;
-  if ((event.modifierFlags & NSEventModifierFlagCommand) &&
-      event.keyCode == kMuxedEscapeKeyCode) {
-    muxed_focus_trace(self, "disengaged by cmd-escape", _acceptsInput);
-    [self.window makeFirstResponder:self.superview];
-    return;
-  }
   // Studio chords must survive an engaged terminal (#667, #735): the WebView
   // never sees a key while this view is first responder, so each chord is
   // recognised here, hands the keyboard back, and is reported to Studio.
@@ -199,22 +261,8 @@ uint8_t muxed_ghostty_studio_chord(uint64_t modifier_flags, uint16_t key_code) {
     return;
   }
 
-  ghostty_input_key_s key = {0};
-  key.action = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS;
-  key.keycode = event.keyCode;
-  key.mods = ghostty_mods(event.modifierFlags);
-  key.consumed_mods =
-      ghostty_mods(event.modifierFlags &
-                   ~(NSEventModifierFlagControl | NSEventModifierFlagCommand));
-  NSString *unshifted = [event charactersByApplyingModifiers:0];
-  if (unshifted.length == 1) key.unshifted_codepoint = [unshifted characterAtIndex:0];
-
-  NSString *text = event.characters;
-  if (text.length == 1) {
-    unichar scalar = [text characterAtIndex:0];
-    if (scalar < 0x20 || (scalar >= 0xF700 && scalar <= 0xF8FF)) text = nil;
-  }
-  key.text = text.UTF8String;
+  ghostty_input_key_s key = muxed_ghostty_key_event(
+      event, event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS);
   ghostty_surface_key(_surface, key);
 }
 
@@ -274,12 +322,12 @@ static bool runtime_action(ghostty_app_t app, ghostty_target_s target,
       target.tag != GHOSTTY_TARGET_SURFACE)
     return false;
 
-  MuxedGhosttyView *view = ghostty_surface_userdata(target.target.surface);
+  muxed_ghostty_surface_owner_s *owner =
+      ghostty_surface_userdata(target.target.surface);
+  MuxedGhosttyView *view = muxed_ghostty_owned_viewer(owner);
   if (view == nil) return false;
   if (view->_processExitCallback != NULL)
     view->_processExitCallback(view->_processExitContext,
                                action.action.child_exited.exit_code);
   return true;
 }
-
-

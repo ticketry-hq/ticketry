@@ -14,7 +14,7 @@ import {
   openModule,
   openWorkItem,
   responseJson,
-  selectModuleForProfile,
+  linkModuleFolder,
   type ApiRow,
   type ModuleRow,
   type ProjectRow,
@@ -99,9 +99,8 @@ async function seedProject(request: APIRequestContext): Promise<void> {
     `/api/work-tracker/projects/${fixture.project.id}/modules`,
     { data: { name: names.secondModule, issue_type_id: moduleType!.id } },
   ));
-  await selectModuleForProfile(
+  await linkModuleFolder(
     request,
-    fixture.project.id,
     fixture.module.id,
     fixture.folder,
   );
@@ -172,7 +171,8 @@ test.describe("complete browser application", () => {
     page,
   }) => {
     await openModule(page, names.module);
-    await page.getByRole("button", { name: "Add module" }).click();
+    await page.getByRole("button", { name: "Open module picker" }).click();
+    await page.getByRole("option", { name: "Create new module" }).click();
 
     const dialog = page.getByRole("dialog", { name: "Add Module" });
     await expect(dialog).toBeVisible();

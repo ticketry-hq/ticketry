@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 class WorktrackerConfig(BaseModel):
     base_url: str
     api_key: Optional[str] = None
-    workspace_slug: Optional[str] = None
 
 class WorktrackerProject(BaseModel):
     id: UUID

@@ -9,8 +9,7 @@ from django.db import transaction
 from pydantic import BaseModel
 
 from apps.errors import ApplicationError
-from apps.settings_store import dao, service
-from apps.settings_store.module_folder_validation import validate_module_folder
+from apps.settings_store import dao
 from apps.settings_store.provider_catalog import (
     PROVIDER_CATALOG_KEY,
     PROVIDER_CATALOG_SCOPE,
@@ -18,15 +17,10 @@ from apps.settings_store.provider_catalog import (
     parse_provider_catalog,
     validate_global_launch_default,
 )
-from apps.settings_store.schemas import ProfileBody
 
 
 KEYBINDINGS_SCOPE = "host"
 KEYBINDINGS_KEY = "keybindings"
-
-
-class SettingValueBody(BaseModel):
-    value: Any
 
 
 class ProviderCatalogWrite(ProviderCatalog):
@@ -40,22 +34,6 @@ class ProviderCatalogBody(BaseModel):
 CONFIGURABLE_PROVIDER_SLUGS = ("claude", "codex", "gemini")
 
 
-class RecentIndexBody(BaseModel):
-    recent_profile_index: int
-
-
-class ModuleFolderValidationBody(BaseModel):
-    path: str
-
-
-def _raise_index_out_of_range() -> None:
-    raise ApplicationError(
-        400,
-        "index_out_of_range",
-        code="index_out_of_range",
-    )
-
-
 async def get_keybindings():
     value = await dao.get_setting(KEYBINDINGS_SCOPE, KEYBINDINGS_KEY)
     if value is None:
@@ -66,14 +44,14 @@ async def get_keybindings():
         return {"value": None}
 
 
-async def put_keybindings(body: SettingValueBody):
+async def put_keybindings(value: Any):
     await dao.upsert_setting(
         scope=KEYBINDINGS_SCOPE,
         key=KEYBINDINGS_KEY,
-        value=json.dumps(body.value),
+        value=json.dumps(value),
         updated_at=datetime.now(timezone.utc).isoformat(),
     )
-    return {"value": body.value}
+    return {"value": value}
 
 
 async def get_provider_catalog():
@@ -130,36 +108,3 @@ async def put_provider_catalog(body: ProviderCatalogBody):
     except ValueError as exc:
         raise ApplicationError(422, str(exc)) from exc
     return {"value": value}
-
-
-async def get_config():
-    return service.list_config()
-
-
-async def add_profile(body: ProfileBody):
-    return service.add_profile(body.model_dump())
-
-
-async def replace_profile(index: int, body: ProfileBody):
-    try:
-        return service.replace_profile(index, body.model_dump())
-    except service.IndexOutOfRange:
-        _raise_index_out_of_range()
-
-
-async def delete_profile(index: int):
-    try:
-        return service.delete_profile(index)
-    except service.IndexOutOfRange:
-        _raise_index_out_of_range()
-
-
-async def patch_config(body: RecentIndexBody):
-    try:
-        return service.set_recent_index(body.recent_profile_index)
-    except service.IndexOutOfRange:
-        _raise_index_out_of_range()
-
-
-async def validate_folder(body: ModuleFolderValidationBody):
-    return await sync_to_async(validate_module_folder)(body.path)

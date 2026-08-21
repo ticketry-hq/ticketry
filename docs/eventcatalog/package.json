@@ -11,7 +11,11 @@
     "preview": "node scripts/run-eventcatalog.mjs preview"
   },
   "dependencies": {
-    "@eventcatalog/core": "4.3.3",
-    "vite": "8.1.5"
+    "@eventcatalog/core": "4.7.3",
+    "vite": "8.2.1"
+  },
+  "overrides": {
+    "@auth/core": "0.41.3",
+    "rolldown": "1.2.4"
   }
 }

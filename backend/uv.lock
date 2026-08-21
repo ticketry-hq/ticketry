@@ -1839,7 +1839,7 @@ wheels = [
 
 [[package]]
 name = "studio-server"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "channels" },
@@ -1858,6 +1858,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "daphne" },
+    { name = "mcp" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-django" },
@@ -1878,6 +1879,7 @@ requires-dist = [
     { name = "drf-spectacular", specifier = ">=0.28" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "libtmux", specifier = "==0.37.0" },
+    { name = "mcp", marker = "extra == 'dev'", specifier = ">=1.29,<2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "ptyprocess", specifier = ">=0.7.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
@@ -2362,7 +2364,7 @@ wheels = [
 
 [[package]]
 name = "worktracker-agent"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "../surfaces/worktracker-agent" }
 dependencies = [
     { name = "fastmcp" },
@@ -2384,7 +2386,7 @@ dev = [{ name = "pytest", specifier = ">=8,<9" }]
 
 [[package]]
 name = "worktracker-sdk"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "../surfaces/worktracker-sdk" }
 dependencies = [
     { name = "pydantic" },

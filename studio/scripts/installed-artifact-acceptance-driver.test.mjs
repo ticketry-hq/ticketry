@@ -43,7 +43,7 @@ const PACKAGED_SKILLS = [
   "to-tickets",
 ];
 
-async function fixture() {
+async function fixture({ issueRows = "module-1|module\ntask-1|task" } = {}) {
   const sandboxRoot = await mkdtemp(path.join(tmpdir(), "ticketry-driver-test-"));
   const dataDirectory = path.join(sandboxRoot, "home", ".config", "worktracker-studio");
   const appPath = path.join(sandboxRoot, "Applications", "Ticketry.app");
@@ -61,6 +61,7 @@ async function fixture() {
 
   let upgradeSentinel = "";
   let durableStored = "";
+  const sqlStatements = [];
   const context = {
     appPath,
     dataDirectory,
@@ -106,7 +107,8 @@ async function fixture() {
     sandboxRoot,
     sidecarLog,
     sqlite: async (_database, sql) => {
-      if (sql.includes("SELECT count(*) FROM worktracker_workspace")) return "1";
+      sqlStatements.push(sql);
+      if (sql.includes("SELECT count(*) FROM worktracker_project")) return "1";
       if (sql.includes("INSERT OR REPLACE INTO acceptance_evidence")) {
         upgradeSentinel = sql.match(/VALUES \('upgrade', '([^']+)'\)/)?.[1] ?? "";
         return "";
@@ -114,7 +116,7 @@ async function fixture() {
       if (sql.includes("SELECT value FROM acceptance_evidence")) return upgradeSentinel;
       if (sql.includes("SELECT id FROM worktracker_project")) return "project-1";
       if (sql.includes("SELECT id,type FROM worktracker_issue")) {
-        return "module-1|module\ntask-1|task";
+        return issueRows;
       }
       if (sql.includes("INSERT INTO agent_terminal_sessions")) {
         const session = sql.match(/'pt-acceptance-run-[^']+'/)?.[0]?.slice(1, -1);
@@ -144,7 +146,7 @@ async function fixture() {
       return value;
     },
   };
-  return { context, sandboxRoot };
+  return { context, sandboxRoot, sqlStatements };
 }
 
 async function withFixture(run) {
@@ -156,7 +158,7 @@ async function withFixture(run) {
   }
 }
 
-test("clean_install launches a fresh data directory and reaches its workspace", async () => {
+test("clean_install launches a fresh data directory and reaches its project", async () => {
   await withFixture(async (context) => {
     assert.equal(await cleanInstallScenario(context), true);
   });
@@ -228,6 +230,25 @@ test("durable_agent_terminal_flow keeps repository, run, and tmux evidence acros
   await withFixture(async (context) => {
     assert.equal(await durableAgentTerminalFlowScenario(context), true);
   });
+});
+
+test("durable_agent_terminal_flow provisions work items for a fresh project", async () => {
+  const { context, sandboxRoot, sqlStatements } = await fixture({ issueRows: "" });
+  try {
+    assert.equal(await durableAgentTerminalFlowScenario(context), true);
+    assert.equal(
+      sqlStatements.filter((sql) => sql.includes("INSERT INTO worktracker_issue")).length,
+      2,
+    );
+    assert.equal(
+      sqlStatements.some((sql) => sql.includes(
+        "runtime_cleanup_pending, output_sequence",
+      )),
+      true,
+    );
+  } finally {
+    await rm(sandboxRoot, { recursive: true, force: true });
+  }
 });
 
 test("uninstall_preserves_data removes only the installed app", async () => {

@@ -107,9 +107,9 @@ On macOS, `pnpm run deploy` builds an ad-hoc-signed application and replaces
 app, and the previous bundle is restored if the final move fails. Quit Ticketry
 before deploying so the next launch uses the new bundle.
 
-macOS desktop builds are currently **unsigned and not notarized**, and no
-binary releases are published yet. Build from source with the commands above.
-Gatekeeper will block a copied unsigned build; see
+macOS desktop releases are currently **unsigned and not notarized**. Private
+GitHub Release builds are available to repository collaborators. Gatekeeper
+will block a downloaded unsigned build; see
 [`studio/release/OPERATIONS.md`](studio/release/OPERATIONS.md) for the
 quarantine workaround and the full release policy.
 

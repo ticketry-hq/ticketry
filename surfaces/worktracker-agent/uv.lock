@@ -1533,7 +1533,7 @@ wheels = [
 
 [[package]]
 name = "worktracker-agent"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
@@ -1560,7 +1560,7 @@ dev = [{ name = "pytest", specifier = ">=8,<9" }]
 
 [[package]]
 name = "worktracker-sdk"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "../worktracker-sdk" }
 dependencies = [
     { name = "pydantic" },

@@ -6,18 +6,24 @@ def preserve_manual_module_order(apps, schema_editor):
     Project = apps.get_model("worktracker", "Project")
     Issue = apps.get_model("worktracker", "Issue")
     ModulePresentation = apps.get_model("worktracker", "ModulePresentation")
+    alias = schema_editor.connection.alias
 
-    manual_project_ids = Project.objects.filter(manual_module_order=True).values_list(
-        "id", flat=True
+    manual_project_ids = (
+        Project.objects.using(alias)
+        .filter(manual_module_order=True)
+        .values_list("id", flat=True)
     )
     presentations = [
         ModulePresentation(module_id=module.id, rank=module.rank)
-        for module in Issue.objects.filter(
+        for module in Issue.objects.using(alias).filter(
             project_id__in=manual_project_ids,
             type="module",
         )
     ]
-    ModulePresentation.objects.bulk_create(presentations, batch_size=500)
+    ModulePresentation.objects.using(alias).bulk_create(
+        presentations,
+        batch_size=500,
+    )
 
 
 class Migration(migrations.Migration):
